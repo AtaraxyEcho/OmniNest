@@ -518,33 +518,29 @@ public class FileUploadSessionService {
         return stored;
     }
 
+    private FileUploadCancellationService cancellationService;
+
+    /**
+     * 取消上传会话；状态机实现见 {@link FileUploadCancellationService}。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param uploadId 上传会话 ID
+     */
     public void cancelSession(UUID ownerUserId, String uploadId) {
-        FileUploadSession session = findSession(ownerUserId, uploadId);
-        if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
-            return;
+        cancellationService().cancel(ownerUserId, uploadId);
+    }
+
+    private FileUploadCancellationService cancellationService() {
+        if (cancellationService == null) {
+            cancellationService = new FileUploadCancellationService(
+                    fileUploadSessionRepository,
+                    fileUploadPartRepository,
+                    storageQuotaService,
+                    objectStorageClient,
+                    transactionTemplate
+            );
         }
-        ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
-        // 外部中止在数据库事务之外执行：失败时记录保持原样，客户端可重试取消。
-        if (isDirectUpload(session)) {
-            if (objectStorageClient.objectExists(key)) {
-                objectStorageClient.removeObject(key);
-            }
-        } else {
-            objectStorageClient.abortMultipartUpload(key, session.getUploadId());
-        }
-        transactionTemplate.executeWithoutResult(status -> {
-            FileUploadSession current = fileUploadSessionRepository
-                    .findForUpdateByUploadIdAndOwnerUserId(uploadId, ownerUserId)
-                    .orElse(null);
-            if (current == null || UploadStatus.COMPLETED.getValue().equals(current.getStatus())) {
-                return;
-            }
-            fileUploadPartRepository.deleteByUploadSessionId(current.getId());
-            if (current.getQuotaReservationId() != null) {
-                storageQuotaService.releaseReservation("UPLOAD", current.getId());
-            }
-            fileUploadSessionRepository.delete(current);
-        });
+        return cancellationService;
     }
 
     /**
@@ -582,14 +578,15 @@ public class FileUploadSessionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片不存在"));
         if (isCompletedPart(part)) {
             return new FileUploadPartDto(part.getPartNumber(), part.getSizeBytes(),
-                    part.getStatus(), part.getETag(), null);
+                    part.getStatus(), part.getETag(), null, null);
         }
         ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
+        Instant expiresAt = Instant.now().plus(uploadSettings.presignedUrlTtl());
         String url = objectStorageClient.createMultipartUploadPartUrl(
                 key, session.getUploadId(), partNumber, uploadSettings.presignedUrlTtl()
         ).toString();
         return new FileUploadPartDto(part.getPartNumber(), part.getSizeBytes(),
-                part.getStatus(), part.getETag(), url);
+                part.getStatus(), part.getETag(), url, expiresAt);
     }
 
     private void checkBandwidthLimit(UUID ownerUserId) {
@@ -1104,22 +1101,29 @@ public class FileUploadSessionService {
         }
 
         ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
+        Instant expiresAt = includeUrls ? Instant.now().plus(uploadSettings.presignedUrlTtl()) : null;
         return parts.stream()
                 .sorted(Comparator.comparingInt(FileUploadPart::getPartNumber))
-                .map(part -> new FileUploadPartDto(
-                        part.getPartNumber(),
-                        part.getSizeBytes(),
-                        part.getStatus(),
-                        part.getETag(),
-                        includeUrls && part.getPartNumber() <= presignLimit && !isCompletedPart(part)
-                                ? objectStorageClient.createMultipartUploadPartUrl(
-                                        key,
-                                        session.getUploadId(),
-                                        part.getPartNumber(),
-                                        uploadSettings.presignedUrlTtl()
-                                ).toString()
-                                : null
-                ))
+                .map(part -> {
+                    boolean presign = includeUrls
+                            && part.getPartNumber() <= presignLimit
+                            && !isCompletedPart(part);
+                    return new FileUploadPartDto(
+                            part.getPartNumber(),
+                            part.getSizeBytes(),
+                            part.getStatus(),
+                            part.getETag(),
+                            presign
+                                    ? objectStorageClient.createMultipartUploadPartUrl(
+                                            key,
+                                            session.getUploadId(),
+                                            part.getPartNumber(),
+                                            uploadSettings.presignedUrlTtl()
+                                    ).toString()
+                                    : null,
+                            presign ? expiresAt : null
+                    );
+                })
                 .toList();
     }
 

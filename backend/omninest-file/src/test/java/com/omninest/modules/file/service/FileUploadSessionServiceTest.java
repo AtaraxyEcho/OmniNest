@@ -789,6 +789,8 @@ class FileUploadSessionServiceTest {
         session.setStatus(UploadStatus.COMPLETED.getValue());
         when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
 
         service.cancelSession(OWNER_ID, "upload-123");
 
@@ -818,8 +820,11 @@ class FileUploadSessionServiceTest {
 
     @Test
     void cancelSessionKeepsRecordWhenObjectStorageAbortFails() {
+        FileUploadSession session = session();
         when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
-                .thenReturn(Optional.of(session()));
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
         Mockito.doThrow(new IllegalStateException("storage unavailable"))
                 .when(objectStorageClient)
                 .abortMultipartUpload(any(), any());
@@ -831,6 +836,36 @@ class FileUploadSessionServiceTest {
         verify(uploadPartRepository, Mockito.never()).deleteByUploadSessionId(SESSION_ID);
         verify(storageQuotaService, Mockito.never()).releaseReservation("UPLOAD", SESSION_ID);
         verify(uploadSessionRepository, Mockito.never()).delete(any());
+    }
+
+    @Test
+    void cancelSessionRejectsFinalizingSession() {
+        FileUploadSession session = session();
+        session.setStatus(UploadStatus.FINALIZING.getValue());
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.cancelSession(OWNER_ID, "upload-123"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("正在完成或安全扫描");
+
+        verify(objectStorageClient, Mockito.never()).abortMultipartUpload(any(), any());
+        verify(uploadSessionRepository, Mockito.never()).delete(any());
+    }
+
+    @Test
+    void cancelSessionRejectsScanningSession() {
+        FileUploadSession session = session();
+        session.setStatus(UploadStatus.SCANNING.getValue());
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.cancelSession(OWNER_ID, "upload-123"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("正在完成或安全扫描");
+
+        verify(uploadPartRepository, Mockito.never()).deleteByUploadSessionId(SESSION_ID);
+        verify(storageQuotaService, Mockito.never()).releaseReservation("UPLOAD", SESSION_ID);
     }
 
     @Test

@@ -115,6 +115,34 @@ void main() {
         totalPages: 1,
       ),
     );
+    when(
+      () => repository.listByLocationPage(
+        any(),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenAnswer((invocation) async {
+      final location = invocation.positionalArguments.first as String;
+      final group =
+          groups.where((item) => item.groupKey == location).firstOrNull;
+      final items =
+          group == null
+              ? const <PhotoItem>[]
+              : group.photos.isNotEmpty
+              ? group.photos
+              : (window().where((photo) {
+                final city = photo.gpsLocation?['city']?.toString().trim();
+                final key = city == null || city.isEmpty ? '未知位置' : city;
+                return key == location;
+              }).toList());
+      return PhotoPage(
+        items: items,
+        page: 0,
+        size: 60,
+        totalElements: group?.photoCount ?? items.length,
+        totalPages: 1,
+      );
+    });
   }
 
   _MockPhotoRepository repositoryWith(List<PhotoGroup> groups) {
@@ -165,21 +193,7 @@ void main() {
     ProviderContainer? container;
     final groups = serverGroups();
     final repository = _MockPhotoRepository();
-    when(
-      () => repository.getGroups(
-        any(),
-        page: any(named: 'page'),
-        size: any(named: 'size'),
-      ),
-    ).thenAnswer(
-      (invocation) async => PhotoGroupPage(
-        items: groups,
-        page: 0,
-        size: 200,
-        totalElements: groups.length,
-        totalPages: 1,
-      ),
-    );
+    stubGroups(repository, groups);
     await _pumpView(
       tester,
       ProviderScope(
@@ -250,7 +264,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PhotoGridTile), findsNWidgets(1));
-    // 明细计数只说已渲染的张数：卡片上的服务端总数（2）不该在这里冒充可见结果。
-    expect(find.text('1 张照片'), findsOneWidget);
+    // 详情使用服务端真实总数；已渲染但未翻到第二页时数量与卡片一致。
+    expect(find.text('2 张照片'), findsOneWidget);
   });
 }

@@ -12,6 +12,7 @@ class MovieProgressSyncService {
   final MoviePlaybackService _playbackService;
   Timer? _timer;
   String? _videoItemId;
+  bool _syncing = false;
 
   /// 启动周期性进度同步。重复调用会先取消旧定时器。
   ///
@@ -26,11 +27,12 @@ class MovieProgressSyncService {
     required bool Function(int position, int duration) computeCompleted,
     bool Function()? shouldSkip,
     void Function()? onSyncFailed,
+    void Function()? onSyncSucceeded,
   }) {
     stop();
     _videoItemId = videoItemId;
     _timer = Timer.periodic(interval, (_) async {
-      if (shouldSkip?.call() ?? false) {
+      if (_syncing || (shouldSkip?.call() ?? false)) {
         return;
       }
       final position = readPositionSeconds();
@@ -38,6 +40,7 @@ class MovieProgressSyncService {
       if (position <= 0 && duration <= 0) {
         return;
       }
+      _syncing = true;
       try {
         await _playbackService.updateProgress(
           videoItemId: videoItemId,
@@ -45,9 +48,12 @@ class MovieProgressSyncService {
           durationSeconds: duration,
           completed: computeCompleted(position, duration),
         );
+        onSyncSucceeded?.call();
       } on Exception {
         // 进度同步失败不打断播放，下次周期重试。
         onSyncFailed?.call();
+      } finally {
+        _syncing = false;
       }
     });
   }

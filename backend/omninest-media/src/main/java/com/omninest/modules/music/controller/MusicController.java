@@ -780,31 +780,6 @@ public class MusicController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
-    @PostMapping("/api/v1/music/platform/netease/login/qr")
-    ApiResponse<QrLoginSession> createNeteaseQrLogin() {
-        return ApiResponse.success(musicPlatformAccountService.createNeteaseQrLogin(
-                currentUserContext.requireCurrentUserId()
-        ));
-    }
-
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
-    @GetMapping("/api/v1/music/platform/netease/login/qr/check")
-    ApiResponse<QrLoginStatus> checkNeteaseQrLogin(@RequestParam @Size(max = 512) String key) {
-        return ApiResponse.success(musicPlatformAccountService.checkNeteaseQrLogin(
-                currentUserContext.requireCurrentUserId(),
-                key
-        ));
-    }
-
-
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
-    @PostMapping("/api/v1/music/platform/{platform}/logout")
-    ApiResponse<Void> platformLogout(@PathVariable String platform) {
-        musicPlatformAccountService.disconnect(currentUserContext.requireCurrentUserId(), platform);
-        return ApiResponse.success();
-    }
-
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platform/{platform}/info")
     CompletableFuture<ApiResponse<PlatformUserInfo>> platformInfo(

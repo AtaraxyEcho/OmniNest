@@ -271,7 +271,7 @@ mixin FileApiBrowse on FileApiBase {
         remaining = 0;
       }
     }
-    return utf8.decode(bytes.takeBytes(), allowMalformed: true);
+    return decodeTextFileBytes(bytes.takeBytes());
   }
 
   Future<void> deleteFile(String fileId) async {

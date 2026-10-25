@@ -580,6 +580,24 @@ public class PhotoLibraryController {
         ));
     }
 
+    @Operation(summary = "按地点分页获取照片", description = "按地点分组键分页返回照片，避免地点详情只展示分组预览")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/locations/page")
+    ApiResponse<PageResponse<PhotoItemDto>> locationPhotos(
+            @RequestParam String location,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoItemDto> result = libraryService.listLocationPage(userId, location, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
+    }
+
     // ─── 标签 ───
 
     @Operation(summary = "获取标签列表", description = "返回用户照片中使用的所有标签")
@@ -677,6 +695,15 @@ public class PhotoLibraryController {
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
         editService.revertToVersion(userId, photoId, versionId);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "恢复原始照片", description = "清除编辑版本指针，恢复未经编辑的原始照片")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PostMapping("/api/v1/photos/{photoId}/versions/revert-original")
+    ApiResponse<Void> revertToOriginal(@PathVariable UUID photoId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        editService.revertToOriginal(userId, photoId);
         return ApiResponse.success();
     }
 
@@ -927,7 +954,8 @@ public class PhotoLibraryController {
                 Map.of(),
                 null,
                 item.motionState(),
-                null
+                null,
+                false
         );
     }
 

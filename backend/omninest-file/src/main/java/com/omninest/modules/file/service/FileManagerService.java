@@ -305,12 +305,11 @@ public class FileManagerService {
      */
     private void chargeQuotaForCopy(UUID userId, SpaceType spaceType, long bytes, long fileCount) {
         if (spaceType == SpaceType.SHARED) {
-            sharedSpaceQuotaService.checkQuota(bytes);
+            // increaseUsage 内部以条件更新复核容量，预检只用于尽早失败，不能作为并发上限。
             sharedSpaceQuotaService.increaseUsage(bytes, fileCount);
             return;
         }
-        storageQuotaService.checkQuota(userId, bytes);
-        storageQuotaService.incrementUsage(userId, bytes);
+        storageQuotaService.chargeUsage(userId, bytes);
     }
 
     private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {

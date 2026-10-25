@@ -28,6 +28,7 @@ public class FileLifecycleGuard {
     private final FileNodeRepository fileNodeRepository;
     private final FilePermissionService filePermissionService;
     private final SharedSpaceService sharedSpaceService;
+    private final FileDownloadService fileDownloadService;
 
     /**
      * 校验当前用户可以读取活动文件。
@@ -42,6 +43,24 @@ public class FileLifecycleGuard {
         if (!node.getOwnerUserId().equals(userId)) {
             requireReadableByNonOwner(userId, node);
         }
+        return toDescriptor(node);
+    }
+
+    /**
+     * 校验当前用户可以下载活动文件。
+     *
+     * <p>预览只需要浏览权限，原始文件下载还必须满足共享空间 {@code CAN_DOWNLOAD}
+     * 或定向分享接收关系。直接流式输出原文件的接口必须走本方法，不能只调用
+     * {@link #requireReadable}。</p>
+     *
+     * @param userId 当前用户 ID
+     * @param fileNodeId 文件节点 ID
+     * @return 文件描述符
+     */
+    @Transactional(readOnly = true)
+    public FileDescriptor requireDownloadable(UUID userId, UUID fileNodeId) {
+        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileNodeId);
+        requireIdle(node);
         return toDescriptor(node);
     }
 

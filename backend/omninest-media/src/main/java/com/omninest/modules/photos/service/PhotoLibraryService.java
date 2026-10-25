@@ -649,6 +649,55 @@ public class PhotoLibraryService {
     }
 
     /**
+     * 按地点分组键分页查询照片。
+     *
+     * @param ownerUserId 用户标识
+     * @param location 地点分组键
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 照片轻量列表分页
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoItemDto> listLocationPage(
+            UUID ownerUserId,
+            String location,
+            int page,
+            int size
+    ) {
+        String normalizedLocation = location == null || location.isBlank()
+                ? "未知位置"
+                : location.trim();
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 200));
+        long total = photoItemRepository.countByLocation(ownerUserId, normalizedLocation);
+        if (total == 0) {
+            return new PageImpl<>(List.of(), PageRequest.of(safePage, safeSize), 0);
+        }
+        List<UUID> ids = photoItemRepository.findIdsByLocation(
+                ownerUserId,
+                normalizedLocation,
+                safeSize,
+                (long) safePage * safeSize
+        );
+        if (ids.isEmpty()) {
+            return new PageImpl<>(List.of(), PageRequest.of(safePage, safeSize), total);
+        }
+        Set<UUID> favoriteIds = Set.copyOf(
+                favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, ids));
+        Map<UUID, PhotoItem> itemsById = photoItemRepository
+                .findActiveByOwnerUserIdAndIdIn(ownerUserId, ids)
+                .stream()
+                .collect(Collectors.toMap(PhotoItem::getId, item -> item));
+        List<PhotoItem> orderedItems = ids.stream()
+                .map(itemsById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        List<PhotoItemDto> content = photoDtoAssembler.mapPhotoItemDtos(
+                ownerUserId, orderedItems, favoriteIds);
+        return new PageImpl<>(content, PageRequest.of(safePage, safeSize), total);
+    }
+
+    /**
      * 分页查询可加入相册的候选照片，排除已在该相册内的照片。
      *
      * @param ownerUserId 用户标识

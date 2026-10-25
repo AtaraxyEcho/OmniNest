@@ -112,7 +112,18 @@ public class FileDownloadService {
         return fileContentAccessService.createDownloadUrl(node);
     }
 
-    private FileNode requireDownloadableNode(UUID userId, UUID fileId) {
+    /**
+     * 校验当前用户具备下载权限并返回可下载节点。
+     *
+     * <p>与只读预览不同，这里要求共享空间成员具备 {@code CAN_DOWNLOAD}，
+     * 个人空间文件必须存在定向分享接收关系。供需要直接流式输出原文件的
+     * 业务模块复用，避免用浏览权限绕过下载权限位。</p>
+     *
+     * @param userId 当前用户
+     * @param fileId 文件节点 ID
+     * @return 可下载节点
+     */
+    public FileNode requireDownloadableNode(UUID userId, UUID fileId) {
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, userId)
                 .orElseGet(() -> fileNodeRepository.findByIdAndDeletedFalse(fileId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在")));

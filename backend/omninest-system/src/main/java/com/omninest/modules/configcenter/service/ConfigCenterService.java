@@ -22,9 +22,14 @@ import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.repository.ConfigEntryRepository;
 import com.omninest.modules.configcenter.repository.ConfigHistoryRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -63,8 +68,30 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                         ErrorCode.CONFIG_NOT_FOUND,
                         "配置目录未初始化，请先执行配置目录升级脚本"
                 ));
-        ConfigDefinitionCatalog.definitions().forEach(this::saveDefault);
-        encryptLegacySensitiveValues();
+        List<ConfigEntry> existingEntries = configEntryRepository.findAll();
+        Map<String, ConfigEntry> entriesByKey = existingEntries.stream()
+                .collect(Collectors.toMap(
+                        ConfigEntry::getConfigKey,
+                        entry -> entry,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        List<ConfigEntry> allEntries = new ArrayList<>(existingEntries);
+        List<ConfigEntry> catalogEntries = new ArrayList<>();
+        for (ConfigDefinition definition : ConfigDefinitionCatalog.definitions()) {
+            ConfigEntry entry = entriesByKey.get(definition.key());
+            if (entry == null) {
+                entry = new ConfigEntry();
+                entry.setConfigKey(definition.key());
+                entry.setConfigValue(definition.defaultValue());
+                entriesByKey.put(definition.key(), entry);
+                allEntries.add(entry);
+            }
+            applyDefinitionMetadata(entry, definition);
+            catalogEntries.add(entry);
+        }
+        configEntryRepository.saveAll(catalogEntries);
+        encryptLegacySensitiveValues(allEntries);
     }
 
     @Transactional(readOnly = true)
@@ -110,8 +137,7 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         applyDefinitionMetadata(entry, definition);
         ConfigEntry saved = configEntryRepository.save(entry);
         configHistoryRepository.save(history(key, oldValue, storedValue, reason, changedBy));
-        runtimeConfigCache.evict(key);
-        publishRefresh(key);
+        evictAndPublishAfterCommit(key);
         return toDto(saved, definition);
     }
 
@@ -137,7 +163,9 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                     entry.setConfigValue(value);
                     configEntryRepository.save(entry);
                 });
-        runtimeConfigCache.evict(configKey);
+        // 播种不广播刷新事件（安装期 worker/scheduler 尚未启动），但必须等提交后再逐出，
+        // 否则并发读可能把旧值回填进缓存。
+        evictAfterCommit(configKey);
     }
 
     /**
@@ -209,8 +237,7 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                 "回滚至历史记录 " + historyId,
                 changedBy
         ));
-        runtimeConfigCache.evict(configKey);
-        publishRefresh(configKey);
+        evictAndPublishAfterCommit(configKey);
         log.info("配置回滚成功: key={}, historyId={}", configKey, historyId);
         return toDto(saved, definition);
     }
@@ -270,17 +297,6 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         return normalized.isBlank() ? "" : credentialCipher.encrypt(normalized);
     }
 
-    private void saveDefault(ConfigDefinition definition) {
-        ConfigEntry entry = configEntryRepository.findByConfigKey(definition.key()).orElse(null);
-        if (entry == null) {
-            entry = new ConfigEntry();
-            entry.setConfigKey(definition.key());
-            entry.setConfigValue(definition.defaultValue());
-        }
-        applyDefinitionMetadata(entry, definition);
-        configEntryRepository.save(entry);
-    }
-
     private void applyDefinitionMetadata(ConfigEntry entry, ConfigDefinition definition) {
         entry.setValueType(definition.valueType().getValue());
         entry.setCategory(definition.category());
@@ -289,34 +305,49 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         entry.setSensitive(definition.sensitive());
     }
 
-    private void encryptLegacySensitiveValues() {
-        List<ConfigEntry> sensitiveEntries = configEntryRepository.findAll().stream()
+    private void encryptLegacySensitiveValues(List<ConfigEntry> entries) {
+        List<ConfigEntry> sensitiveEntries = entries.stream()
                 .filter(ConfigEntry::isSensitive)
                 .toList();
+        if (sensitiveEntries.isEmpty()) {
+            return;
+        }
+        Set<String> sensitiveKeys = sensitiveEntries.stream()
+                .map(ConfigEntry::getConfigKey)
+                .collect(Collectors.toSet());
+        Map<String, List<ConfigHistory>> historiesByKey = configHistoryRepository
+                .findByConfigKeyIn(sensitiveKeys)
+                .stream()
+                .collect(Collectors.groupingBy(ConfigHistory::getConfigKey));
+        List<ConfigEntry> entriesToSave = new ArrayList<>();
         for (ConfigEntry entry : sensitiveEntries) {
             boolean migratedCurrentValue = hasPlaintextValue(entry.getConfigValue());
             if (migratedCurrentValue) {
                 entry.setConfigValue(credentialCipher.encrypt(entry.getConfigValue()));
-                configEntryRepository.save(entry);
+                entriesToSave.add(entry);
             }
-            encryptLegacyHistory(entry.getConfigKey());
+            List<ConfigHistory> histories = historiesByKey.getOrDefault(entry.getConfigKey(), List.of());
+            boolean historyChanged = false;
+            for (ConfigHistory history : histories) {
+                if (hasPlaintextValue(history.getOldValue())) {
+                    history.setOldValue(credentialCipher.encrypt(history.getOldValue()));
+                    historyChanged = true;
+                }
+                if (hasPlaintextValue(history.getNewValue())) {
+                    history.setNewValue(credentialCipher.encrypt(history.getNewValue()));
+                    historyChanged = true;
+                }
+            }
+            if (historyChanged) {
+                configHistoryRepository.saveAll(histories);
+            }
             if (migratedCurrentValue) {
                 log.info("已迁移敏感配置为密文存储: key={}", entry.getConfigKey());
             }
         }
-    }
-
-    private void encryptLegacyHistory(String configKey) {
-        List<ConfigHistory> histories = configHistoryRepository.findByConfigKey(configKey);
-        for (ConfigHistory history : histories) {
-            if (hasPlaintextValue(history.getOldValue())) {
-                history.setOldValue(credentialCipher.encrypt(history.getOldValue()));
-            }
-            if (hasPlaintextValue(history.getNewValue())) {
-                history.setNewValue(credentialCipher.encrypt(history.getNewValue()));
-            }
+        if (!entriesToSave.isEmpty()) {
+            configEntryRepository.saveAll(entriesToSave);
         }
-        configHistoryRepository.saveAll(histories);
     }
 
     private boolean hasPlaintextValue(String value) {
@@ -344,6 +375,34 @@ public class ConfigCenterService implements RuntimeConfigCommand {
      * 回查数据库，读到提交前的旧值再写回共享缓存，配置看似已改却在各节点上停留在旧值，
      * 直到下一次失效才自愈。无事务同步（如内置目录初始化）时按原样直接发送。</p>
      */
+    private void evictAndPublishAfterCommit(String key) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runtimeConfigCache.evict(key);
+                    publishRefresh(key);
+                }
+            });
+            return;
+        }
+        runtimeConfigCache.evict(key);
+        publishRefresh(key);
+    }
+
+    private void evictAfterCommit(String key) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runtimeConfigCache.evict(key);
+                }
+            });
+            return;
+        }
+        runtimeConfigCache.evict(key);
+    }
+
     private void publishRefresh(String key) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             publishRefreshEvent(key);

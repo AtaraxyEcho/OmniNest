@@ -901,7 +901,7 @@ public class ReaderItemService {
         if (item.getFileNodeId() == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "条目未关联文件");
         }
-        FileDescriptor fileNode = fileLifecycleGuard.requireReadable(ownerUserId, item.getFileNodeId());
+        FileDescriptor fileNode = fileLifecycleGuard.requireDownloadable(ownerUserId, item.getFileNodeId());
         // 使用条目标题和文件扩展名构建下载文件名
         String downloadFileName = buildDownloadFileName(item.getTitle(), fileNode.name());
         return new DownloadDescriptor(

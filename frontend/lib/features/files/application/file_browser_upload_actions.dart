@@ -715,12 +715,24 @@ extension FileBrowserUploadActions on FileBrowserController {
     FileUploadPart part,
   ) async {
     var uploadUrl = part.uploadUrl;
-    if (uploadUrl == null || uploadUrl.isEmpty) {
-      // 创建会话只预签名首批分片，其余分片在上传前逐个按需获取。
+    final expiresAt = part.uploadUrlExpiresAt;
+    final urlUsable =
+        uploadUrl != null &&
+        uploadUrl.isNotEmpty &&
+        (expiresAt == null ||
+            DateTime.now().isBefore(
+              expiresAt.subtract(const Duration(minutes: 1)),
+            ));
+    if (!urlUsable) {
+      // 创建会话只预签名首批分片，其余分片在上传前逐个按需获取；
+      // 暂停超过预签名有效期后也必须重新签发，不能复用已过期 URL。
       uploadUrl = await _repository.getUploadPartUrl(
         uploadId: runtime.session.uploadId,
         partNumber: part.partNumber,
       );
+    }
+    if (uploadUrl.isEmpty) {
+      throw const AppException(code: '8002', message: '上传地址不可用');
     }
     final start = (part.partNumber - 1) * runtime.session.partSizeBytes;
     final end = math.min(start + part.sizeBytes, runtime.session.sizeBytes);
@@ -753,13 +765,15 @@ extension FileBrowserUploadActions on FileBrowserController {
         eTag: eTag,
       );
       runtime.completedPartNumbers.add(part.partNumber);
+      // 先移除当前分片的在途字节，避免把已完成字节与同一分片重复相加。
+      runtime.inFlightBytes.remove(part.partNumber);
       final afterPartTask = _findLocalUploadTask(taskId);
       if (runtime.removed || afterPartTask == null) {
         return;
       }
       _upsertLocalUploadTask(
         afterPartTask.copyWith(
-          uploadedBytes: runtime.uploadedBytes,
+          uploadedBytes: runtime.uploadedBytes + runtime.inFlightBytesTotal,
           status: 'UPLOADING',
           messageCode: FileUploadTaskMessageCode.partCompleted,
           messageCurrent: part.partNumber,

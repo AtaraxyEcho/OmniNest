@@ -7,6 +7,7 @@ class FileUploadPartDto {
     required this.status,
     required this.uploadUrl,
     this.eTag,
+    this.uploadUrlExpiresAt,
   });
 
   factory FileUploadPartDto.fromJson(Map<String, dynamic> json) {
@@ -16,6 +17,10 @@ class FileUploadPartDto {
       status: json['status']?.toString() ?? 'PENDING',
       eTag: json['eTag']?.toString(),
       uploadUrl: json['uploadUrl']?.toString(),
+      uploadUrlExpiresAt:
+          DateTime.tryParse(
+            json['uploadUrlExpiresAt']?.toString() ?? '',
+          )?.toLocal(),
     );
   }
 
@@ -24,6 +29,7 @@ class FileUploadPartDto {
   final String status;
   final String? eTag;
   final String? uploadUrl;
+  final DateTime? uploadUrlExpiresAt;
 
   FileUploadPart toDomain() {
     return FileUploadPart(
@@ -32,6 +38,7 @@ class FileUploadPartDto {
       status: status,
       eTag: eTag,
       uploadUrl: uploadUrl,
+      uploadUrlExpiresAt: uploadUrlExpiresAt,
     );
   }
 }

@@ -169,8 +169,7 @@ class PhotoEditServiceTest {
         PhotoEditVersionDto result = applyEditedImage(ownerUserId, photoId, jpeg);
 
         assertThat(result.versionNumber()).isEqualTo(1);
-        verify(storageQuotaService).checkQuota(ownerUserId, jpeg.length);
-        verify(storageQuotaService).incrementUsage(ownerUserId, jpeg.length);
+        verify(storageQuotaService).chargeUsage(ownerUserId, jpeg.length);
         assertThat(storedPath.get()).doesNotExist();
     }
 

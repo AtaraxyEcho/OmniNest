@@ -262,4 +262,53 @@ public interface PhotoItemTimelineQueries {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("groupBy") String groupBy,
             @Param("zoneId") String zoneId);
+
+    /**
+     * 按地点分组键分页查询照片 ID。
+     *
+     * <p>地点键与分组聚合使用同一表达式：{@code gps_location.city} 为空时归入
+     * “未知位置”。先取 ID 再批量装配实体，避免原生查询投影 jsonb 字段。</p>
+     *
+     * @param ownerUserId 用户标识
+     * @param location 地点分组键
+     * @param limit 每页条数
+     * @param offset 偏移量
+     * @return 照片 ID 列表
+     */
+    @Query(value = """
+            SELECT p.id
+              FROM omni.photo_items p
+              JOIN omni.file_nodes f ON f.id = p.file_node_id
+             WHERE p.owner_user_id = :ownerUserId
+               AND f.is_deleted = false
+               AND p.deleted_at IS NULL
+               AND COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置') = :location
+             ORDER BY COALESCE(p.date_taken, p.created_at) DESC, p.id ASC
+             LIMIT :limit OFFSET :offset
+            """, nativeQuery = true)
+    List<UUID> findIdsByLocation(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("location") String location,
+            @Param("limit") int limit,
+            @Param("offset") long offset);
+
+    /**
+     * 统计指定地点分组键下的照片数量。
+     *
+     * @param ownerUserId 用户标识
+     * @param location 地点分组键
+     * @return 照片数量
+     */
+    @Query(value = """
+            SELECT COUNT(*)
+              FROM omni.photo_items p
+              JOIN omni.file_nodes f ON f.id = p.file_node_id
+             WHERE p.owner_user_id = :ownerUserId
+               AND f.is_deleted = false
+               AND p.deleted_at IS NULL
+               AND COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置') = :location
+            """, nativeQuery = true)
+    long countByLocation(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("location") String location);
 }

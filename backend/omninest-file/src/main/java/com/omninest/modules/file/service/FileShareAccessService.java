@@ -74,6 +74,7 @@ public class FileShareAccessService {
      * @param password 分享密码，可空
      * @return 分享预览信息
      */
+    @Deprecated(forRemoval = true)
     @Transactional(readOnly = true)
     public FileSharePreviewDto previewShare(String rawToken, String password) {
         String tokenHash = FileShareService.sha256(rawToken);
@@ -117,6 +118,7 @@ public class FileShareAccessService {
      * @param rawToken 分享明文 token
      * @param request 接受请求（目标目录与密码）
      */
+    @Deprecated(forRemoval = true)
     @Transactional(rollbackFor = Exception.class)
     public void acceptShare(UUID userId, String rawToken, AcceptShareRequest request) {
         String tokenHash = FileShareService.sha256(rawToken);

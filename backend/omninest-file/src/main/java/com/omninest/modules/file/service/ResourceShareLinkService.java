@@ -405,14 +405,22 @@ public class ResourceShareLinkService {
         if (password == null || password.isBlank()) {
             throw new BusinessException(ErrorCode.SHARE_PASSWORD_REQUIRED, "需要访问密码");
         }
-        String attemptKey = "share-pwd-attempt:" + link.getTokenHash() + ":"
-                + sha256(clientAddress == null || clientAddress.isBlank() ? "unknown" : clientAddress);
+        String address = sha256(clientAddress == null || clientAddress.isBlank() ? "unknown" : clientAddress);
+        String attemptKey = "share-pwd-attempt:" + link.getTokenHash() + ":" + address;
+        // 总额度只防止无限次 BCrypt 计算；成功解锁不消耗失败额度。
+        if (!rateLimitService.tryAcquire(
+                "share-pwd-total:" + link.getTokenHash() + ":" + address,
+                30,
+                Duration.ofMinutes(15))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+        if (passwordEncoder.matches(password, link.getPasswordHash())) {
+            return;
+        }
         if (!rateLimitService.tryAcquire(attemptKey, 5, Duration.ofMinutes(15))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
         }
-        if (!passwordEncoder.matches(password, link.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
-        }
+        throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
     }
 
     private void requireAuthenticationRateLimit(String tokenHash, String clientAddress) {

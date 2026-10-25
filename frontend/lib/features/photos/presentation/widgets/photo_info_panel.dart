@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,6 +93,27 @@ class PhotoInfoPanel extends ConsumerWidget {
               ..._buildAiSection(context, fresh),
               ..._buildDescriptionSection(context, fresh),
               _buildTagSection(context, ref, fresh),
+              if (fresh.edited) ...[
+                const SizedBox(height: 20),
+                TextButton.icon(
+                  onPressed:
+                      () => unawaited(
+                        _confirmRevertOriginal(context, ref, fresh),
+                      ),
+                  icon: const Icon(
+                    Icons.restore_rounded,
+                    size: 16,
+                    color: PhotosChromeColors.white59,
+                  ),
+                  label: Text(
+                    l10n.photosRevertOriginal,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: AppTypography.bodySmall,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -126,6 +149,42 @@ class PhotoInfoPanel extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmRevertOriginal(
+    BuildContext context,
+    WidgetRef ref,
+    PhotoItem fresh,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showFrameConfirmDialog(
+      context,
+      title: l10n.photosRevertOriginalTitle,
+      body: l10n.photosRevertOriginalBody,
+      confirmLabel: l10n.photosRevertOriginal,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .revertToOriginal(fresh.id);
+      if (!context.mounted) return;
+      ref.invalidate(photoDetailProvider(fresh.id));
+      showOmniFeedback(
+        context,
+        l10n.photosRevertOriginalDone,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception {
+      if (!context.mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.photosOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 
   /// 切换收藏；成功后刷新详情数据，面板经 provider watch 自动回显。

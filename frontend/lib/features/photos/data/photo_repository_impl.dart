@@ -150,11 +150,10 @@ class PhotoRepositoryImpl implements PhotoRepository {
   }) => _api.removePhotoFromAlbum(albumId: albumId, photoId: photoId);
 
   @override
-  Future<Map<String, dynamic>> triggerScan() => _api.triggerScan();
+  Future<PhotoScanJob> triggerScan() => _api.triggerScan();
 
   @override
-  Future<Map<String, dynamic>> getScanStatus(String jobId) =>
-      _api.getScanStatus(jobId);
+  Future<PhotoScanJob> getScanStatus(String jobId) => _api.getScanStatus(jobId);
 
   @override
   @override
@@ -170,6 +169,13 @@ class PhotoRepositoryImpl implements PhotoRepository {
   @override
   Future<PhotoGroupPage> getGroups(String by, {int page = 0, int size = 50}) =>
       _api.getGroups(by, page: page, size: size);
+
+  @override
+  Future<PhotoPage> listByLocationPage(
+    String location, {
+    int page = 0,
+    int size = 50,
+  }) => _api.listByLocationPage(location, page: page, size: size);
 
   @override
   Future<void> addTag(String photoId, String tag) => _api.addTag(photoId, tag);
@@ -231,6 +237,10 @@ class PhotoRepositoryImpl implements PhotoRepository {
   @override
   Future<void> revertToVersion(String photoId, String versionId) =>
       _api.revertToVersion(photoId, versionId);
+
+  @override
+  Future<void> revertToOriginal(String photoId) =>
+      _api.revertToOriginal(photoId);
 
   @override
   Future<PhotoShareLink> createAlbumShare(

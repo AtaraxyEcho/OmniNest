@@ -367,6 +367,9 @@ services:
   netease-music-api:
     image: ${OMNINEST_NETEASE_IMAGE:-omninest-netease-music-api}:${OMNINEST_IMAGE_TAG:-0.1.0}
     build: ../netease-api
+    # 第三方 Node 镜像只用于访问公网网易云接口，不能留在数据面网络。
+    networks:
+      - egress
     environment:
       TZ: Asia/Shanghai
     healthcheck:

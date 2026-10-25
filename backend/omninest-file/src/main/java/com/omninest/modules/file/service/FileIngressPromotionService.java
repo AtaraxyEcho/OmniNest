@@ -187,7 +187,7 @@ public class FileIngressPromotionService {
 
     private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
         try {
-            return transactionTemplate.execute(txStatus -> promoteInTransaction(item, sha256, event));
+            return copyAndPromote(item, sha256, event);
         } catch (BusinessException exception) {
             if (exception.errorCode() != ErrorCode.FILE_QUOTA_EXCEEDED) {
                 throw exception;
@@ -197,12 +197,49 @@ public class FileIngressPromotionService {
             settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
                     "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成",
                     "QUOTA_WARNING");
+            removeObjectQuietly(quarantineKey(item), "清理文件晋升配额失败对象失败");
             throw new FileIngressRejectedException("存储配额不足", exception);
         }
     }
 
-    private PromotionOutcome promoteInTransaction(
+    private PromotionOutcome copyAndPromote(
             FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
+        FileUploadSession session = item.getUploadSessionId() == null
+                ? null
+                : uploadSessionRepository.findById(item.getUploadSessionId()).orElse(null);
+        if (session != null && session.getSpaceType() == SpaceType.SHARED) {
+            // 复制对象前先做一次容量预检，避免超限时在对象存储留下无主副本；
+            // 真正的并发上限仍由 increaseUsage 的原子条件更新兜底。
+            sharedSpaceQuotaService.checkQuota(item.getSizeBytes());
+        }
+        ObjectStorageKey quarantineKey = quarantineKey(item);
+        ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
+        // 对象复制是外部网络 I/O，必须在数据库事务之外执行；事务只承担元数据落库。
+        // 以服务端核实的魔数类型重写对象元数据，关闭"申报 text/html 而魔数判为
+        // text/plain"时按存储 Content-Type 内联直出的窗口。
+        try {
+            objectStorageClient.copyObject(quarantineKey, targetKey, item.getMimeType());
+        } catch (RuntimeException exception) {
+            removeObjectQuietly(quarantineKey, "清理文件晋升失败隔离对象失败");
+            removeObjectQuietly(targetKey, "清理文件晋升失败对象失败");
+            throw exception;
+        }
+        try {
+            return transactionTemplate.execute(
+                    txStatus -> promoteInTransaction(item, sha256, event, quarantineKey, targetKey));
+        } catch (RuntimeException exception) {
+            removeObjectQuietly(quarantineKey, "清理文件晋升失败隔离对象失败");
+            removeObjectQuietly(targetKey, "清理文件晋升失败对象失败");
+            throw exception;
+        }
+    }
+
+    private PromotionOutcome promoteInTransaction(
+            FileIngressItem item,
+            String sha256,
+            FileSecurityScanRequestedEvent event,
+            ObjectStorageKey quarantineKey,
+            ObjectStorageKey targetKey) {
         FileUploadSession session = item.getUploadSessionId() == null
                 ? null
                 : uploadSessionRepository.findById(item.getUploadSessionId()).orElse(null);
@@ -210,16 +247,6 @@ public class FileIngressPromotionService {
             // 配额结算以服务端核实的实际大小为准
             session.setTotalSizeBytes(item.getSizeBytes());
         }
-        if (session != null && session.getSpaceType() == SpaceType.SHARED) {
-            // 复制对象前先做一次容量预检，避免超限时在对象存储留下无主副本；
-            // 真正的并发上限仍由 increaseUsage 的原子条件更新兜底。
-            sharedSpaceQuotaService.checkQuota(session.getTotalSizeBytes());
-        }
-        ObjectStorageKey quarantineKey = quarantineKey(item);
-        ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
-        // 以服务端核实的魔数类型重写对象元数据：下载侧判定与存储层直出行为一致，
-        // 关闭"申报 text/html 而魔数判为 text/plain"时按存储 Content-Type 内联直出的窗口
-        objectStorageClient.copyObject(quarantineKey, targetKey, item.getMimeType());
         FileObject savedObject = fileObjectRepository.save(toFileObject(item, sha256));
         boolean versionUpload = event.asVersionOfFileId() != null;
         FileNode promotedNode = versionUpload

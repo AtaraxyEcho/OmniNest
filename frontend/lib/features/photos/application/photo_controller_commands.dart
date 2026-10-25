@@ -181,6 +181,17 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     }
   }
 
+  /// 恢复原始照片。
+  Future<void> revertToOriginal(String photoId) async {
+    try {
+      await _repo.revertToOriginal(photoId);
+      await refresh();
+    } on Exception catch (e) {
+      _setError(describeUserFacingError(e).message);
+      rethrow;
+    }
+  }
+
   /// 创建相册分享链接
   Future<PhotoShareLink> createAlbumShare(
     String albumId, {
@@ -484,12 +495,12 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
   }
 
   /// 触发照片扫描
-  Future<Map<String, dynamic>> triggerScan() async {
+  Future<PhotoScanJob> triggerScan() async {
     return _repo.triggerScan();
   }
 
   /// 查询扫描状态
-  Future<Map<String, dynamic>> getScanStatus(String jobId) async {
+  Future<PhotoScanJob> getScanStatus(String jobId) async {
     return _repo.getScanStatus(jobId);
   }
 

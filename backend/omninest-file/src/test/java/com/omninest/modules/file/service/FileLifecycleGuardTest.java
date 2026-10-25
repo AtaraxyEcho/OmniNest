@@ -35,8 +35,10 @@ class FileLifecycleGuardTest {
     private final FileNodeRepository fileNodeRepository = Mockito.mock(FileNodeRepository.class);
     private final FilePermissionService filePermissionService = Mockito.mock(FilePermissionService.class);
     private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
+    private final FileDownloadService fileDownloadService = Mockito.mock(FileDownloadService.class);
     private final FileLifecycleGuard guard =
-            new FileLifecycleGuard(fileNodeRepository, filePermissionService, sharedSpaceService);
+            new FileLifecycleGuard(fileNodeRepository, filePermissionService, sharedSpaceService,
+                    fileDownloadService);
 
     private FileNode node(SpaceType spaceType, boolean shared) {
         FileNode node = new FileNode();
@@ -120,5 +122,18 @@ class FileLifecycleGuardTest {
         assertThatThrownBy(() -> guard.requireReadable(MEMBER_ID, NODE_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    void downloadableUsesDownloadPredicateInsteadOfBrowseOnly() {
+        FileNode node = node(SpaceType.SHARED, false);
+        when(fileDownloadService.requireDownloadableNode(MEMBER_ID, NODE_ID))
+                .thenReturn(node);
+
+        FileDescriptor descriptor = guard.requireDownloadable(MEMBER_ID, NODE_ID);
+
+        assertThat(descriptor.id()).isEqualTo(NODE_ID);
+        verify(fileDownloadService).requireDownloadableNode(MEMBER_ID, NODE_ID);
+        verify(sharedSpaceService, never()).validateBrowsePermission(any());
     }
 }

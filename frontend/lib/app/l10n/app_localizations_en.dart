@@ -296,6 +296,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationNoTitle => 'No title';
 
   @override
+  String get notificationLoadFailed => 'Failed to load notifications';
+
+  @override
   String get notificationEmpty => 'No notifications';
 
   @override
@@ -8420,6 +8423,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosEditSaved => 'Edit saved';
 
   @override
+  String get photosRevertOriginal => 'Revert to original';
+
+  @override
+  String get photosRevertOriginalTitle => 'Revert to the original photo?';
+
+  @override
+  String get photosRevertOriginalBody =>
+      'This clears the current edit. You can still reapply edits from version history.';
+
+  @override
+  String get photosRevertOriginalDone => 'Original photo restored';
+
+  @override
   String get photosSaveFailed => 'Save failed, please try again later';
 
   @override
@@ -10817,6 +10833,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosLocationsUnknown => 'Unknown location';
 
   @override
+  String get photosGeocodeUnavailable =>
+      'Could not resolve the photo location. Check the offline place database and try again.';
+
+  @override
   String get photosDeleteShort => 'Delete';
 
   @override
@@ -11084,7 +11104,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoProgressSyncDeferred =>
-      'Progress was not synced and kept on this device';
+      'Progress was not synced. It will retry when online.';
 
   @override
   String get readerTtsUnavailable =>

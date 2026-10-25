@@ -115,8 +115,7 @@ public class PhotoEditService {
      * {@code FilePurgeStateService#isQuotaCountedNode} 的派生路径判定同源，三处必须同口径。</p>
      */
     private void chargeEditVersionQuota(UUID ownerUserId, long bytes) {
-        storageQuotaService.checkQuota(ownerUserId, bytes);
-        storageQuotaService.incrementUsage(ownerUserId, bytes);
+        storageQuotaService.chargeUsage(ownerUserId, bytes);
     }
 
     /**
@@ -135,14 +134,13 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权编辑此照片");
         }
 
-        int nextVersion = nextVersionNumber(photoId);
-        String fileName = photoId + "_v" + nextVersion + ".jpg";
         // 二次编辑必须从当前活动的全分辨率文件起步：从 coverFileId 起步会把已经编辑过的照片
         // 反复压回缩略图分辨率（缩略图任务产出上限 1024px）。
         UUID sourceFileId = photo.activeOrSourceFileId();
+        String fileName = photoId + "_edit_" + UUID.randomUUID() + ".jpg";
 
         // 图像解码、变换与对象存储写入在事务外执行
-        UUID fileId = transformAndStore(
+        StoredEdit stored = transformAndStore(
                 ownerUserId,
                 photoId,
                 sourceFileId,
@@ -150,32 +148,14 @@ public class PhotoEditService {
                 request
         );
 
-        // DB 持久化使用短事务
-        PhotoEditVersion version = new PhotoEditVersion();
-        version.setOwnerUserId(ownerUserId);
-        version.setPhotoId(photoId);
-        version.setVersionNumber(nextVersion);
-        version.setEditType(request.editType());
-        version.setEditParams(request.editParams());
-        version.setFileId(fileId);
-        transactionTemplate.executeWithoutResult(status -> {
-            editVersionRepository.save(version);
-            photo.setCoverFileId(fileId);
-            photo.setActiveFileId(fileId);
-            photoItemRepository.save(photo);
-            enforceMaxVersions(ownerUserId, photoId);
-            syncEventService.record(
-                    ownerUserId,
-                    SyncScope.PHOTOS,
-                    "PHOTO_ITEM",
-                    photoId.toString(),
-                    SyncAction.UPDATED,
-                    photo.getVersion(),
-                    Map.of("editVersion", nextVersion)
-            );
-        });
-
-        return toDto(version);
+        return persistVersion(
+                ownerUserId,
+                photo,
+                stored.fileId(),
+                stored.sizeBytes(),
+                request.editType(),
+                request.editParams()
+        );
     }
 
     /**
@@ -213,8 +193,7 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "图像编辑任务过多，请稍后重试");
         }
 
-        int nextVersion = nextVersionNumber(photoId);
-        String fileName = photoId + "_v" + nextVersion + ".jpg";
+        String fileName = photoId + "_edit_" + UUID.randomUUID() + ".jpg";
         UUID fileId;
         Path staged = null;
         long storedBytes;
@@ -241,34 +220,70 @@ public class PhotoEditService {
             deleteQuietly(staged);
             editSlots.release();
         }
-        chargeEditVersionQuota(ownerUserId, storedBytes);
 
+        return persistVersion(
+                ownerUserId,
+                photo,
+                fileId,
+                storedBytes,
+                "EXTERNAL",
+                Map.of("source", "pro_image_editor")
+        );
+    }
+
+    /**
+     * 在短事务内分配版本号、计入配额并保存版本与照片状态。
+     *
+     * <p>版本号与配额必须和版本行、照片指针在同一事务内提交。事务失败时已写入对象存储的
+     * 派生文件必须回收，否则会留下配额未计但对象存在的孤儿资产。</p>
+     */
+    private PhotoEditVersionDto persistVersion(
+            UUID ownerUserId,
+            PhotoItem photo,
+            UUID fileId,
+            long sizeBytes,
+            String editType,
+            Map<String, Object> editParams
+    ) {
         PhotoEditVersion version = new PhotoEditVersion();
         version.setOwnerUserId(ownerUserId);
-        version.setPhotoId(photoId);
-        version.setVersionNumber(nextVersion);
-        version.setEditType("EXTERNAL");
-        version.setEditParams(Map.of("source", "pro_image_editor"));
+        version.setPhotoId(photo.getId());
+        version.setEditType(editType);
+        version.setEditParams(editParams);
         version.setFileId(fileId);
-
-        transactionTemplate.executeWithoutResult(status -> {
-            editVersionRepository.save(version);
-            photo.setCoverFileId(fileId);
-            photo.setActiveFileId(fileId);
-            photoItemRepository.save(photo);
-            enforceMaxVersions(ownerUserId, photoId);
-            syncEventService.record(
-                    ownerUserId,
-                    SyncScope.PHOTOS,
-                    "PHOTO_ITEM",
-                    photoId.toString(),
-                    SyncAction.UPDATED,
-                    photo.getVersion(),
-                    Map.of("editVersion", nextVersion)
-            );
-        });
-
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                int versionNumber = nextVersionNumber(photo.getId());
+                version.setVersionNumber(versionNumber);
+                chargeEditVersionQuota(ownerUserId, sizeBytes);
+                editVersionRepository.save(version);
+                photo.setCoverFileId(fileId);
+                photo.setActiveFileId(fileId);
+                photoItemRepository.save(photo);
+                enforceMaxVersions(ownerUserId, photo.getId());
+                syncEventService.record(
+                        ownerUserId,
+                        SyncScope.PHOTOS,
+                        "PHOTO_ITEM",
+                        photo.getId().toString(),
+                        SyncAction.UPDATED,
+                        photo.getVersion(),
+                        Map.of("editVersion", versionNumber)
+                );
+            });
+        } catch (RuntimeException exception) {
+            deleteDerivedQuietly(ownerUserId, fileId);
+            throw exception;
+        }
         return toDto(version);
+    }
+
+    private void deleteDerivedQuietly(UUID ownerUserId, UUID fileId) {
+        try {
+            derivedAssetStorageService.deleteOwned(ownerUserId, fileId);
+        } catch (RuntimeException exception) {
+            log.warn("编辑事务失败后清理派生文件失败: fileId={}", fileId);
+        }
     }
 
     /**
@@ -302,14 +317,50 @@ public class PhotoEditService {
         if (!version.getPhotoId().equals(photoId)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "版本与照片不匹配");
         }
-        PhotoItem photo = photoItemRepository.findById(photoId)
+        PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         photo.setCoverFileId(version.getFileId());
         photo.setActiveFileId(version.getFileId());
         photoItemRepository.save(photo);
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.PHOTOS,
+                "PHOTO_ITEM",
+                photoId.toString(),
+                SyncAction.UPDATED,
+                photo.getVersion(),
+                Map.of("activeVersion", version.getVersionNumber())
+        );
     }
 
-    private UUID transformAndStore(
+    /**
+     * 恢复未经编辑的原始照片。
+     *
+     * <p>非破坏性编辑的版本链不包含 v0，必须提供显式入口把活动指针清空并回退封面，
+     * 否则用户首次编辑后无法回到原图。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param photoId 照片 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void revertToOriginal(UUID ownerUserId, UUID photoId) {
+        PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
+        photo.setActiveFileId(null);
+        photo.setCoverFileId(photo.getFileNodeId());
+        photoItemRepository.save(photo);
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.PHOTOS,
+                "PHOTO_ITEM",
+                photoId.toString(),
+                SyncAction.UPDATED,
+                photo.getVersion(),
+                Map.of("activeVersion", 0)
+        );
+    }
+
+    private StoredEdit transformAndStore(
             UUID ownerUserId,
             UUID photoId,
             UUID sourceFileId,
@@ -338,8 +389,7 @@ public class PhotoEditService {
                     "image/jpeg",
                     editedFile
             );
-            chargeEditVersionQuota(ownerUserId, Files.size(editedFile));
-            return fileId;
+            return new StoredEdit(fileId, Files.size(editedFile));
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {
@@ -418,6 +468,9 @@ public class PhotoEditService {
     }
 
     private record EditSource(BufferedImage image, int subsample) {
+    }
+
+    private record StoredEdit(UUID fileId, long sizeBytes) {
     }
 
     /**

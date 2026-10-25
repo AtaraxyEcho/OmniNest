@@ -50,12 +50,13 @@ class ComposeNetworkTopologyTest {
             "deploy/dev/docker-compose.yml", new ExpectedTopology(
                     Set.of("postgres", "redis", "rabbitmq", "minio", "clamav", "netease-music-api",
                             "rclone", "vision-sidecar"),
-                    Set.of("rclone")),
+                    Set.of("rclone", "netease-music-api")),
             "deploy/prod/docker-compose.yml", new ExpectedTopology(
                     Set.of("nginx", "certbot", "backend-api", "backend-worker", "backend-scheduler", "postgres",
                             "redis", "rabbitmq", "minio", "clamav", "netease-music-api",
                             "rclone", "vision-sidecar"),
-                    Set.of("rclone", "backend-api", "backend-worker", "backend-scheduler"))
+                    Set.of("rclone", "backend-api", "backend-worker", "backend-scheduler",
+                            "netease-music-api"))
     );
 
     private record ExpectedTopology(Set<String> services, Set<String> egressMembers) {

@@ -38,6 +38,7 @@ final authClientProvider = Provider<AuthClient>((ref) {
       validateStatus: (status) => status != null && status < 500,
     ),
   );
+  ref.onDispose(() => dio.close(force: true));
   return AuthClient(dio);
 });
 

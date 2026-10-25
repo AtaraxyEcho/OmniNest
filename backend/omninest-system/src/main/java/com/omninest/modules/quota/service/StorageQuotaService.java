@@ -163,8 +163,42 @@ public class StorageQuotaService {
         }
         UserAccountSummary owner = userStorageCommand.incrementUsage(userId, bytes);
         evictProfileCacheAfterCommit(userId);
+        notifyQuotaStatus(userId, owner);
+    }
 
-        // 检查配额状态，发送预警通知
+    /**
+     * 原子计入一笔实际用量。
+     *
+     * <p>受限账户先以条件更新预留，再在同一事务内结算为已用字节。并发请求不会
+     * 同时通过 {@link #checkQuota} 后一起写入，避免配额被写超。无限额账户直接累加。</p>
+     *
+     * @param userId 用户 ID
+     * @param bytes 实际使用字节数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void chargeUsage(UUID userId, long bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        UserAccountSummary owner = userAccountQuery.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        if (owner.superAdmin() || owner.quotaBytes() <= 0) {
+            UserAccountSummary updated = userStorageCommand.incrementUsage(userId, bytes);
+            evictProfileCacheAfterCommit(userId);
+            notifyQuotaStatus(userId, updated);
+            return;
+        }
+        if (!userStorageCommand.tryReserveStorage(userId, bytes)
+                || !userStorageCommand.settleStorageReservation(userId, bytes, bytes)) {
+            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
+        }
+        UserAccountSummary updated = userAccountQuery.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        evictProfileCacheAfterCommit(userId);
+        notifyQuotaStatus(userId, updated);
+    }
+
+    private void notifyQuotaStatus(UUID userId, UserAccountSummary owner) {
         try {
             QuotaStatus status = storageQuotaPolicy.resolveStatus(
                     owner.usedBytes(),

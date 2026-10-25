@@ -37,6 +37,7 @@ class PhotoItem {
     this.contentAnalysis,
     this.motionState,
     this.motionVideoUrl,
+    this.edited = false,
   });
 
   final String id;
@@ -76,6 +77,9 @@ class PhotoItem {
 
   /// 动态视频播放地址，仅详情接口且 READY 状态返回。
   final String? motionVideoUrl;
+
+  /// 是否存在编辑产物；详情接口返回，列表接口可能没有该字段。
+  final bool edited;
 
   /// 是否已提取出可播放的动态视频。
   bool get isMotionReady =>
@@ -141,6 +145,7 @@ class PhotoItem {
               : null,
       motionState: json['motionState']?.toString(),
       motionVideoUrl: json['motionVideoUrl']?.toString(),
+      edited: json['edited'] == true,
     );
   }
 
@@ -183,6 +188,7 @@ class PhotoItem {
       contentAnalysis: contentAnalysis,
       motionState: motionState,
       motionVideoUrl: motionVideoUrl,
+      edited: edited,
     );
   }
 
@@ -441,6 +447,38 @@ class PhotoDashboard {
           _asList(json['favoritePhotos']).map(PhotoItem.fromJson).toList(),
     );
   }
+}
+
+/// 照片扫描任务状态。
+class PhotoScanJob {
+  const PhotoScanJob({
+    required this.id,
+    required this.status,
+    required this.scannedFiles,
+    required this.createdAt,
+    required this.updatedAt,
+    this.message,
+  });
+
+  factory PhotoScanJob.fromJson(Map<String, dynamic> json) {
+    return PhotoScanJob(
+      id: json['id']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      scannedFiles: _asInt(json['scannedFiles']),
+      message: json['message']?.toString(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
+    );
+  }
+
+  final String id;
+  final String status;
+  final int scannedFiles;
+  final String? message;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 }
 
 int _asInt(Object? value) {

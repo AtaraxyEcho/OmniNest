@@ -289,6 +289,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationNoTitle => '无标题';
 
   @override
+  String get notificationLoadFailed => '通知加载失败';
+
+  @override
   String get notificationEmpty => '暂无通知';
 
   @override
@@ -8171,6 +8174,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosEditSaved => '编辑已保存';
 
   @override
+  String get photosRevertOriginal => '恢复原图';
+
+  @override
+  String get photosRevertOriginalTitle => '恢复原始照片？';
+
+  @override
+  String get photosRevertOriginalBody => '将清除当前编辑效果；之后仍可从版本历史重新应用编辑。';
+
+  @override
+  String get photosRevertOriginalDone => '已恢复原图';
+
+  @override
   String get photosSaveFailed => '保存失败，请稍后重试';
 
   @override
@@ -10485,6 +10500,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosLocationsUnknown => '未知位置';
 
   @override
+  String get photosGeocodeUnavailable => '未能解析拍摄地点，请检查离线地名库后重试';
+
+  @override
   String get photosDeleteShort => '删除';
 
   @override
@@ -10745,7 +10763,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoEpisodeCheckLibrarySource => '检查库源';
 
   @override
-  String get videoProgressSyncDeferred => '进度未能同步，已暂存本机';
+  String get videoProgressSyncDeferred => '进度未同步，联网后将自动重试';
 
   @override
   String get readerTtsUnavailable => '朗读不可用，请检查系统 TTS 或稍后重试';

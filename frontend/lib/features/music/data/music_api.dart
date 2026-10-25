@@ -408,10 +408,11 @@ class MusicApi {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
     }
-    await apiClient.dio.put<Map<String, dynamic>>(
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/music/position',
       data: {'trackId': trackId, 'positionSeconds': positionSeconds},
     );
+    parseEnvelope(response.data);
   }
 
   /// 获取指定可播放对象的跨设备进度。

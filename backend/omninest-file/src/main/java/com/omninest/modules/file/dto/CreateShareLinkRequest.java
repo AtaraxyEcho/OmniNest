@@ -2,6 +2,7 @@ package com.omninest.modules.file.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -21,7 +22,9 @@ public record CreateShareLinkRequest(
                 example = "2026-09-26T00:00:00Z"
         ) String expiresAt,
         @Schema(description = "最大访问次数", example = "100") Integer maxAccessCount,
-        @Schema(description = "指定接收用户 ID 列表") List<UUID> recipientUserIds
+        @Schema(description = "指定接收用户 ID 列表，最多 100 人")
+        @Size(max = 100, message = "分享接收人不能超过 100 人")
+        List<UUID> recipientUserIds
 ) {
     private static final DateTimeFormatter LEGACY_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

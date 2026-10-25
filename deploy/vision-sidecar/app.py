@@ -6,6 +6,7 @@ OmniNest 图像识别侧车服务。
 import asyncio
 import ctypes
 import gc
+import hashlib
 import hmac
 import io
 import logging
@@ -19,7 +20,7 @@ from typing import Annotated, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 import onnxruntime as ort
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from PIL import Image
 from pydantic import BaseModel, Field
 from rapidocr_onnxruntime import RapidOCR
@@ -28,6 +29,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("omninest-vision-sidecar")
 
 SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token"
+SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp"
+SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature"
+SIDECAR_CLOCK_SKEW_SECONDS = 300
 SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
 MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
@@ -392,12 +396,31 @@ class ContentAnalysis(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _require_sidecar_token(
+def _sidecar_signature(timestamp: int, method: str, path: str) -> str:
+    canonical = f"{timestamp}\n{method}\n{path}".encode()
+    return hmac.new(SIDECAR_SECRET.encode(), canonical, hashlib.sha256).hexdigest()
+
+
+def _require_sidecar_auth(
+    request: Request,
     token: Annotated[str | None, Header(alias=SIDECAR_TOKEN_HEADER)] = None,
+    timestamp: Annotated[str | None, Header(alias=SIDECAR_TIMESTAMP_HEADER)] = None,
+    signature: Annotated[str | None, Header(alias=SIDECAR_SIGNATURE_HEADER)] = None,
 ) -> None:
     if not SIDECAR_SECRET:
         raise HTTPException(status_code=503, detail="AI sidecar authentication is not configured")
     if token is None or not hmac.compare_digest(token, SIDECAR_SECRET):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if timestamp is None or signature is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        timestamp_value = int(timestamp)
+    except ValueError as exception:
+        raise HTTPException(status_code=401, detail="Unauthorized") from exception
+    if abs(time.time() - timestamp_value) > SIDECAR_CLOCK_SKEW_SECONDS:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    expected = _sidecar_signature(timestamp_value, request.method, request.url.path)
+    if not hmac.compare_digest(signature, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -679,12 +702,15 @@ app = FastAPI(title="OmniNest Image Analysis Sidecar", version="6.0.0", lifespan
 
 
 @app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/ready")
 async def ready():
+    # 只暴露健康与版本信息；模型档位、文件状态留在内部诊断接口/日志。
     return {
         "status": "ok",
-        "visionProfile": VISION_PROFILE,
-        "visionModelState": _vision_model_state(VISION_PROFILE),
         "pipelineVersion": current_content_pipeline_version(),
         "ocrVersion": OCR_PIPELINE_VERSION,
     }
@@ -693,7 +719,7 @@ async def ready():
 @app.post(
     "/analyze-content",
     response_model=ContentAnalysis,
-    dependencies=[Depends(_require_sidecar_token)],
+    dependencies=[Depends(_require_sidecar_auth)],
 )
 async def analyze_content(
     image: UploadFile = File(...),

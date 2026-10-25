@@ -107,8 +107,6 @@ abstract interface class FileRepository {
     int size = 10,
   });
 
-  Future<List<FileShareLink>> listShareLinks();
-
   Future<FileShareLink> createShareLink({
     required String resourceId,
     String resourceType,

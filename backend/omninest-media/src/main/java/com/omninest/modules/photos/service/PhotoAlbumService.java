@@ -439,7 +439,8 @@ public class PhotoAlbumService {
                 dto.providerMetadata(),
                 dto.contentAnalysis(),
                 dto.motionState(),
-                originalQuality ? dto.motionVideoUrl() : null
+                originalQuality ? dto.motionVideoUrl() : null,
+                dto.edited()
         );
     }
 

@@ -51,6 +51,32 @@ void main() {
       expect(adapter.lastQueryParams, {'q': 'flutter', 'limit': 5});
     });
 
+    test('search maps the file-index shape to file results', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': [
+            {
+              'fileId': 'file-1',
+              'title': '季度报告.pdf',
+              'snippet': '…季度财务…',
+              'score': 0.92,
+            },
+          ],
+        },
+      );
+      final api = SearchApi(_apiClient(adapter));
+
+      final result = await api.search('季度');
+
+      expect(result, hasLength(1));
+      expect(result.single.id, 'file-1');
+      expect(result.single.type, 'file');
+      expect(result.single.title, '季度报告.pdf');
+      expect(result.single.subtitle, '…季度财务…');
+    });
+
     test('search returns empty list when data is null', () async {
       final adapter = _CapturingHttpClientAdapter(
         body: {'code': 200, 'message': 'success', 'data': null},

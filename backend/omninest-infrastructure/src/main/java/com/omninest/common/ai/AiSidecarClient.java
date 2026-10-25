@@ -17,10 +17,15 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -42,6 +47,9 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final int MAX_ERROR_SUMMARY_CHARS = 512;
     private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
     private static final String SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token";
+    private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
+    private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     private final AiSidecarProperties properties;
     private final TempStagingPort tempStagingPort;
@@ -212,7 +220,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     }
 
     private String sendMultipart(URI uri, byte[] imageBytes, String filename, int timeoutSeconds) {
-        String secret = requireSecret();
         String boundary = "----OmniNest" + UUID.randomUUID().toString().replace("-", "");
         Path multipartFile = null;
         try {
@@ -222,7 +229,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                     .uri(uri)
                     .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 600)))
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .header(SIDECAR_TOKEN_HEADER, secret)
+                    .headers(authHeaders("POST", uri.getPath()))
                     .POST(HttpRequest.BodyPublishers.ofFile(multipartFile))
                     .build();
             return sendRequest(request);
@@ -277,6 +284,32 @@ public class AiSidecarClient implements ImageAnalysisGateway {
             return new String[0];
         }
         return new String[]{SIDECAR_TOKEN_HEADER, secret};
+    }
+
+    /**
+     * 生成推理请求的防重放头：静态令牌 + 秒级时间戳 + 方法/路径 HMAC。
+     *
+     * <p>签名不覆盖 multipart 请求体，避免为几十 MB 图片再做一遍哈希；时间戳窗口
+     * 把捕获的请求限制在 5 分钟内，路径绑定阻止把推理签名挪用到其他接口。</p>
+     */
+    private String[] authHeaders(String method, String path) {
+        String secret = requireSecret();
+        long timestamp = Instant.now().getEpochSecond();
+        String canonical = timestamp + "\n" + method + "\n" + path;
+        String signature;
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
+            signature = HexFormat.of().formatHex(
+                    mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("图像分析侧车请求签名失败", exception);
+        }
+        return new String[]{
+                SIDECAR_TOKEN_HEADER, secret,
+                SIDECAR_TIMESTAMP_HEADER, Long.toString(timestamp),
+                SIDECAR_SIGNATURE_HEADER, signature
+        };
     }
 
     private String requireSecret() {

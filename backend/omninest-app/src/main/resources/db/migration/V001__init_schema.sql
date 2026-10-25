@@ -2824,6 +2824,8 @@ ALTER TABLE "omni"."file_objects" ADD CONSTRAINT "chk_file_objects_size" CHECK (
 
 ALTER TABLE "omni"."file_objects" ADD CONSTRAINT "file_objects_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX "idx_file_objects_created_at" ON "omni"."file_objects" ("created_at", "size_bytes");
+
 CREATE INDEX "idx_file_ingress_items_status_next_scan" ON "omni"."file_ingress_items" USING btree (
   "status" "pg_catalog"."text_ops" ASC NULLS LAST,
   "next_scan_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
@@ -2876,6 +2878,10 @@ CREATE INDEX "idx_file_upload_sessions_owner_status" ON "omni"."file_upload_sess
 CREATE INDEX "idx_file_upload_sessions_upload_id" ON "omni"."file_upload_sessions" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "upload_id" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_file_upload_sessions_status_updated" ON "omni"."file_upload_sessions" USING btree (
+  "status" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "updated_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
 );
 CREATE UNIQUE INDEX "uq_file_upload_sessions_ingress_item" ON "omni"."file_upload_sessions" USING btree (
   "ingress_item_id"

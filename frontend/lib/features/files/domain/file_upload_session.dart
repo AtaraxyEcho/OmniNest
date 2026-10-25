@@ -5,6 +5,7 @@ class FileUploadPart {
     required this.status,
     required this.uploadUrl,
     this.eTag,
+    this.uploadUrlExpiresAt,
   });
 
   final int partNumber;
@@ -12,6 +13,7 @@ class FileUploadPart {
   final String status;
   final String? eTag;
   final String? uploadUrl;
+  final DateTime? uploadUrlExpiresAt;
 }
 
 class FileUploadPartsInfo {

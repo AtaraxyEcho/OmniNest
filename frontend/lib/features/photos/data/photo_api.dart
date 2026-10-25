@@ -329,19 +329,19 @@ class PhotoApi {
   }
 
   /// 触发照片扫描任务
-  Future<Map<String, dynamic>> triggerScan() async {
+  Future<PhotoScanJob> triggerScan() async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/photos/scan',
     );
-    return parseData(response.data);
+    return PhotoScanJob.fromJson(parseData(response.data));
   }
 
   /// 查询扫描任务状态
-  Future<Map<String, dynamic>> getScanStatus(String jobId) async {
+  Future<PhotoScanJob> getScanStatus(String jobId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/photos/scan/$jobId/status',
     );
-    return parseData(response.data);
+    return PhotoScanJob.fromJson(parseData(response.data));
   }
 
   /// 重建所有缩略图
@@ -382,6 +382,18 @@ class PhotoApi {
       queryParameters: {'by': by, 'page': page, 'size': size},
     );
     return PhotoGroupPage.fromJson(parseData(response.data));
+  }
+
+  Future<PhotoPage> listByLocationPage(
+    String location, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/locations/page',
+      queryParameters: {'location': location, 'page': page, 'size': size},
+    );
+    return PhotoPage.fromJson(parseData(response.data));
   }
 
   /// 添加标签
@@ -521,6 +533,14 @@ class PhotoApi {
       '/photos/$photoId/versions/$versionId/revert',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '回滚照片版本失败');
+  }
+
+  /// 恢复未经编辑的原始照片。
+  Future<void> revertToOriginal(String photoId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/photos/$photoId/versions/revert-original',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '恢复原图失败');
   }
 
   /// 创建相册分享链接

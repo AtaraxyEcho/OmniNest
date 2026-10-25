@@ -62,6 +62,16 @@ class ApiClient {
           handler.next(options);
         },
         onResponse: (response, handler) async {
+          if (_isUnrecoverableSession401(response)) {
+            handler.reject(
+              DioException.badResponse(
+                statusCode: 401,
+                requestOptions: response.requestOptions,
+                response: response,
+              ),
+            );
+            return;
+          }
           if (!_shouldRefresh(response)) {
             handler.next(response);
             return;
@@ -171,6 +181,34 @@ class ApiClient {
 
   String? _currentAccessToken() {
     return currentAccessToken();
+  }
+
+  /// 会话已经确认失效后，后续 401 必须与首个失败请求保持相同的异常语义。
+  ///
+  /// <p>业务级 401（分享密码、2FA 复核）仍交由调用方解析信封，不能在这里
+  /// 统一拒绝；只处理令牌已被拒绝且不会再次刷新的会话失效。</p>
+  bool _isUnrecoverableSession401(Response<dynamic> response) {
+    if (response.statusCode != 401 || !_refreshRejected) {
+      return false;
+    }
+    if (response.requestOptions.extra[skipAuthorizationKey] == true) {
+      return false;
+    }
+    final path = response.requestOptions.path;
+    if (path.contains('/auth/login') ||
+        path.contains('/auth/register') ||
+        path.contains('/auth/refresh')) {
+      return false;
+    }
+    final data = response.data;
+    if (data is Map) {
+      final errorName = data['errorName']?.toString();
+      if (errorName == 'PASSWORD_INVALID' ||
+          errorName == 'SHARE_PASSWORD_REQUIRED') {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _shouldRefresh(Response<dynamic> response) {

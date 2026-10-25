@@ -203,25 +203,21 @@ class AdminOperationsApi {
   }
 
   Future<AdminStorageManagementView> storage() async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/storage',
-    );
-    final storageView = parseStorageResponse(response.data);
-    final locationsResponse = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/storage/locations',
-    );
-    final data = parseEnvelope(locationsResponse.data)['data'];
+    final responses = await Future.wait([
+      apiClient.dio.get<Map<String, dynamic>>('/admin/storage'),
+      apiClient.dio.get<Map<String, dynamic>>('/admin/storage/locations'),
+      apiClient.dio.get<Map<String, dynamic>>('/admin/storage/mounts'),
+    ]);
+    final storageView = parseStorageResponse(responses[0].data);
+    final locationsData = parseEnvelope(responses[1].data)['data'];
     final locations =
-        data is List
-            ? data
+        locationsData is List
+            ? locationsData
                 .whereType<Map<String, dynamic>>()
                 .map(AdminStorageLocation.fromJson)
                 .toList()
             : <AdminStorageLocation>[];
-    final mountsResponse = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/storage/mounts',
-    );
-    final mountsData = parseEnvelope(mountsResponse.data)['data'];
+    final mountsData = parseEnvelope(responses[2].data)['data'];
     final trustedMounts =
         mountsData is List
             ? mountsData

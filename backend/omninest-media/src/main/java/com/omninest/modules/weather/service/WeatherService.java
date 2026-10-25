@@ -253,9 +253,8 @@ public class WeatherService {
             return withLocationName(future.get(6, TimeUnit.SECONDS), effectiveDisplayName);
         } catch (Exception e) {
             log.warn("天气请求未在超时内完成: location={}", requestKey, e);
-            if (owned.get()) {
-                future.cancel(true);
-            }
+            // 不取消共享 future：等待者超时只影响本次调用，后台任务仍可在
+            // 内部 5 秒超时后收敛并写入缓存，避免把同 key 的并发请求一起打成空结果。
             return WeatherDto.empty();
         }
     }

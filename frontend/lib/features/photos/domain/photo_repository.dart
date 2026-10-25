@@ -128,10 +128,10 @@ abstract interface class PhotoRepository {
   });
 
   /// 触发照片扫描任务
-  Future<Map<String, dynamic>> triggerScan();
+  Future<PhotoScanJob> triggerScan();
 
   /// 查询扫描任务状态
-  Future<Map<String, dynamic>> getScanStatus(String jobId);
+  Future<PhotoScanJob> getScanStatus(String jobId);
 
   /// 重建所有缩略图
   Future<String> regenerateThumbnails();
@@ -141,6 +141,15 @@ abstract interface class PhotoRepository {
 
   /// 按维度分页查询照片分组。
   Future<PhotoGroupPage> getGroups(String by, {int page = 0, int size = 50});
+
+  /// 按地点分组键分页查询照片。
+  Future<PhotoPage> listByLocationPage(
+    String location, {
+    int page = 0,
+    int size = 50,
+  }) {
+    throw UnimplementedError('listByLocationPage');
+  }
 
   /// 添加标签
   Future<void> addTag(String photoId, String tag);
@@ -189,6 +198,11 @@ abstract interface class PhotoRepository {
 
   /// 回滚到指定版本
   Future<void> revertToVersion(String photoId, String versionId);
+
+  /// 清除编辑产物，恢复未经编辑的原始照片。
+  Future<void> revertToOriginal(String photoId) {
+    throw UnimplementedError('revertToOriginal');
+  }
 
   /// 创建相册分享链接
   Future<PhotoShareLink> createAlbumShare(

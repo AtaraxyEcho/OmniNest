@@ -51,7 +51,8 @@ public final class PhotoDtos {
             Map<String, Object> providerMetadata,
             PhotoContentAnalysisDto contentAnalysis,
             String motionState,
-            String motionVideoUrl
+            String motionVideoUrl,
+            boolean edited
     ) {
         /**
          * 从 PhotoItem 实体和已解析的关联数据创建 DTO。
@@ -133,7 +134,8 @@ public final class PhotoDtos {
                     photo.getProviderMetadata(),
                     contentAnalysis,
                     photo.getMotionState(),
-                    motionVideoUrl
+                    motionVideoUrl,
+                    photo.getActiveFileId() != null
             );
         }
     }

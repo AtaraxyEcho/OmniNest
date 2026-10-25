@@ -222,8 +222,12 @@ void main() {
       throwsA(isA<DioException>()),
     );
     for (var attempt = 0; attempt < 2; attempt++) {
-      final response = await client.dio.get<Map<String, dynamic>>('/secure');
-      expect(response.data?['code'], 401);
+      // 会话已被判定失效后，后续 401 与首个失败请求一样抛异常，
+      // 不能再以普通 Response 返回而让上层误判成功。
+      await expectLater(
+        client.dio.get<Map<String, dynamic>>('/secure'),
+        throwsA(isA<DioException>()),
+      );
     }
     expect(refreshCount, 1);
 

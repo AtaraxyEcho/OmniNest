@@ -43,9 +43,13 @@ class ShareAccessSessionServiceTest {
     @Test
     void rejectsTamperedSignatureAndWrongResourceType() {
         var issued = service.issue("hash-1", "FILE", null);
-        int last = issued.token().length() - 1;
-        String tampered = issued.token().substring(0, last)
-                + (issued.token().charAt(last) == 'A' ? 'B' : 'A');
+        // 篡改签名段的第一个字符；末尾字符可能是 base64 填充位，改动后仍解码成同一字节，
+        // 会让断言偶发通过。
+        int signatureStart = issued.token().indexOf('.') + 1;
+        char replacement = issued.token().charAt(signatureStart) == 'A' ? 'B' : 'A';
+        String tampered = issued.token().substring(0, signatureStart)
+                + replacement
+                + issued.token().substring(signatureStart + 1);
 
         assertThatThrownBy(() -> service.require(tampered, "hash-1", "FILE"))
                 .isInstanceOf(BusinessException.class);

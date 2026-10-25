@@ -66,13 +66,6 @@ mixin FileApiShares on FileApiBase {
     );
   }
 
-  Future<List<FileShareLink>> listShareLinks() async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/files/shares',
-    );
-    return parseShareLinkPageResponse(response.data);
-  }
-
   Future<FileShareLink> createShareLink({
     required String resourceId,
     String resourceType = 'FILE',
@@ -145,12 +138,35 @@ mixin FileApiShares on FileApiBase {
     String? password,
     String? sessionToken,
   }) async {
-    final issued = sessionToken ?? await _ensureShareSession(token, password);
+    final explicitSession = sessionToken;
+    var issued =
+        explicitSession ??
+        _cachedShareSession(token) ??
+        await _ensureShareSession(token, password);
+    try {
+      return _parseSharePreview(await _loadSharePreview(token, issued));
+    } on Object catch (error) {
+      if (explicitSession != null || !_isShareSessionInvalid(error)) {
+        rethrow;
+      }
+      _shareSessionTokens.remove(token);
+      issued = await _ensureShareSession(token, password);
+      return _parseSharePreview(await _loadSharePreview(token, issued));
+    }
+  }
+
+  Future<Map<String, dynamic>> _loadSharePreview(
+    String token,
+    String session,
+  ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/s/$token/preview',
-      options: Options(headers: {'X-OmniNest-Share-Session': issued}),
+      options: Options(headers: {'X-OmniNest-Share-Session': session}),
     );
-    final data = parseData(response.data);
+    return parseData(response.data);
+  }
+
+  FileSharePreview _parseSharePreview(Map<String, dynamic> data) {
     return FileSharePreview(
       shareId: data['shareId']?.toString() ?? '',
       fileName: data['fileName']?.toString() ?? AppErrorCodes.unnamedFile,
@@ -167,36 +183,86 @@ mixin FileApiShares on FileApiBase {
     String? targetParentId,
     String? sessionToken,
   }) async {
-    final issued =
-        sessionToken ??
-        _shareSessionTokens[token] ??
+    final explicitSession = sessionToken;
+    var issued =
+        explicitSession ??
+        _cachedShareSession(token) ??
         await _ensureShareSession(token, password);
+    try {
+      await _acceptShareOnce(token, issued, targetParentId);
+    } on Object catch (error) {
+      if (explicitSession != null || !_isShareSessionInvalid(error)) {
+        rethrow;
+      }
+      _shareSessionTokens.remove(token);
+      issued = await _ensureShareSession(token, password);
+      await _acceptShareOnce(token, issued, targetParentId);
+    }
+  }
+
+  Future<void> _acceptShareOnce(
+    String token,
+    String session,
+    String? targetParentId,
+  ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/s/$token/accept',
       data: {
         if (targetParentId != null && targetParentId.isNotEmpty)
           'targetParentId': targetParentId,
       },
-      options: Options(headers: {'X-OmniNest-Share-Session': issued}),
+      options: Options(headers: {'X-OmniNest-Share-Session': session}),
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '保存分享文件失败');
   }
 
+  String? _cachedShareSession(String token) {
+    final cached = _shareSessionTokens[token];
+    if (cached == null) {
+      return null;
+    }
+    if (!cached.isUsable) {
+      _shareSessionTokens.remove(token);
+      return null;
+    }
+    return cached.token;
+  }
+
+  bool _isShareSessionInvalid(Object error) {
+    String? code;
+    if (error is AppException) {
+      code = error.details['errorName']?.toString() ?? error.code;
+    } else if (error is DioException) {
+      final body = error.response?.data;
+      if (body is Map) {
+        code = body['errorName']?.toString() ?? body['code']?.toString();
+      }
+      code ??= error.response?.statusCode?.toString();
+    }
+    return code == AppErrorCodes.shareSessionInvalid ||
+        code == 'UNAUTHORIZED' ||
+        code == '401';
+  }
+
   Future<String> _ensureShareSession(String token, String? password) async {
-    // 已有会话直接复用，避免带密码重复 authorize 造成访问次数重复扣减。
-    final existing = _shareSessionTokens[token];
-    if (existing != null && existing.isNotEmpty) {
+    // 已有会话在有效期内直接复用，避免带密码重复 authorize 造成访问次数重复扣减。
+    final existing = _cachedShareSession(token);
+    if (existing != null) {
       return existing;
     }
     final authorization = await apiClient.dio.post<Map<String, dynamic>>(
       '/s/$token/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
     );
-    final issued = parseData(authorization.data)['sessionToken']?.toString();
+    final data = parseData(authorization.data);
+    final issued = data['sessionToken']?.toString();
     if (issued == null || issued.isEmpty) {
       throw StateError(AppErrorCodes.shareSessionInvalid);
     }
-    _shareSessionTokens[token] = issued;
+    _shareSessionTokens[token] = _CachedShareSession(
+      issued,
+      DateTime.tryParse(data['expiresAt']?.toString() ?? '')?.toLocal(),
+    );
     return issued;
   }
 }

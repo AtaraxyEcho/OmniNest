@@ -44,7 +44,8 @@ class PhotoSharePolicyTest {
                 null,
                 null,
                 "READY",
-                "https://example/motion.mp4"
+                "https://example/motion.mp4",
+                true
         );
     }
 

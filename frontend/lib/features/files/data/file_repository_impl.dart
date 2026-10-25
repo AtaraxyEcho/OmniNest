@@ -218,11 +218,6 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
-  Future<List<FileShareLink>> listShareLinks() {
-    return fileApi.listShareLinks();
-  }
-
-  @override
   Future<FileShareLink> createShareLink({
     required String resourceId,
     String resourceType = 'FILE',

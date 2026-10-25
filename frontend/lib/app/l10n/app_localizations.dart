@@ -632,6 +632,12 @@ abstract class AppLocalizations {
   /// **'No title'**
   String get notificationNoTitle;
 
+  /// No description provided for @notificationLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load notifications'**
+  String get notificationLoadFailed;
+
   /// No description provided for @notificationEmpty.
   ///
   /// In en, this message translates to:
@@ -15353,6 +15359,30 @@ abstract class AppLocalizations {
   /// **'Edit saved'**
   String get photosEditSaved;
 
+  /// No description provided for @photosRevertOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to original'**
+  String get photosRevertOriginal;
+
+  /// No description provided for @photosRevertOriginalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to the original photo?'**
+  String get photosRevertOriginalTitle;
+
+  /// No description provided for @photosRevertOriginalBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This clears the current edit. You can still reapply edits from version history.'**
+  String get photosRevertOriginalBody;
+
+  /// No description provided for @photosRevertOriginalDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Original photo restored'**
+  String get photosRevertOriginalDone;
+
   /// No description provided for @photosSaveFailed.
   ///
   /// In en, this message translates to:
@@ -19672,6 +19702,12 @@ abstract class AppLocalizations {
   /// **'Unknown location'**
   String get photosLocationsUnknown;
 
+  /// No description provided for @photosGeocodeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resolve the photo location. Check the offline place database and try again.'**
+  String get photosGeocodeUnavailable;
+
   /// No description provided for @photosDeleteShort.
   ///
   /// In en, this message translates to:
@@ -20167,7 +20203,7 @@ abstract class AppLocalizations {
   /// No description provided for @videoProgressSyncDeferred.
   ///
   /// In en, this message translates to:
-  /// **'Progress was not synced and kept on this device'**
+  /// **'Progress was not synced. It will retry when online.'**
   String get videoProgressSyncDeferred;
 
   /// No description provided for @readerTtsUnavailable.

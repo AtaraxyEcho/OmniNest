@@ -196,6 +196,18 @@ class _NotificationMobileViewState
         ),
       );
     }
+    if (state.loadFailed && state.items.isEmpty) {
+      final l10n = AppLocalizations.of(context);
+      return EnvEmptyState(
+        icon: OmniIcons.bell,
+        title: l10n.notificationLoadFailed,
+        actionLabel: l10n.commonRetry,
+        onAction:
+            () => ref
+                .read(notificationControllerProvider.notifier)
+                .load(size: 20),
+      );
+    }
     if (state.items.isEmpty) {
       final l10n = AppLocalizations.of(context);
       return EnvEmptyState(

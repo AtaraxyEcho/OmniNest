@@ -3,7 +3,9 @@
 import asyncio
 import io
 import os
+import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -263,36 +265,70 @@ class AnalysisPipelineTest(unittest.TestCase):
             with patch.object(app, "_read_cgroup_memory_limit", return_value=4 * 1024 * 1024 * 1024):
                 self.assertEqual("ram_plus_int8", app._resolve_safe_vision_profile())
 
-    def test_ready_reports_pipeline_version(self):
+    def test_ready_reports_pipeline_version_without_internal_model_state(self):
         response = asyncio.run(app.ready())
         self.assertEqual("ok", response["status"])
-        self.assertEqual(app.VISION_PROFILE, response["visionProfile"])
-        self.assertEqual(app._vision_model_state(app.VISION_PROFILE), response["visionModelState"])
         self.assertEqual(app.current_content_pipeline_version(), response["pipelineVersion"])
         self.assertEqual(app.OCR_PIPELINE_VERSION, response["ocrVersion"])
+        self.assertNotIn("visionProfile", response)
+        self.assertNotIn("visionModelState", response)
 
 
 class SidecarTokenTest(unittest.TestCase):
-    """验证推理接口认证。"""
+    """验证推理接口认证、时间戳与签名绑定。"""
 
-    def test_sidecar_token_is_required(self):
+    def _request(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            method="POST",
+            url=SimpleNamespace(path="/analyze-content"),
+        )
+
+    def test_sidecar_auth_requires_token_timestamp_and_signature(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             with self.assertRaises(HTTPException) as missing:
-                app._require_sidecar_token(None)
-            with self.assertRaises(HTTPException) as invalid:
-                app._require_sidecar_token("wrong-secret")
+                app._require_sidecar_auth(self._request(), None)
+            with self.assertRaises(HTTPException) as invalid_token:
+                app._require_sidecar_auth(self._request(), "wrong-secret")
+            timestamp = int(time.time())
+            with self.assertRaises(HTTPException) as missing_signature:
+                app._require_sidecar_auth(
+                    self._request(), "expected-secret", str(timestamp), None
+                )
 
         self.assertEqual(401, missing.exception.status_code)
-        self.assertEqual(401, invalid.exception.status_code)
+        self.assertEqual(401, invalid_token.exception.status_code)
+        self.assertEqual(401, missing_signature.exception.status_code)
 
-    def test_sidecar_token_accepts_exact_secret(self):
+    def test_sidecar_auth_accepts_valid_timestamp_and_signature(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
-            self.assertIsNone(app._require_sidecar_token("expected-secret"))
+            timestamp = int(time.time())
+            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
+            self.assertIsNone(app._require_sidecar_auth(
+                self._request(), "expected-secret", str(timestamp), signature
+            ))
+
+    def test_sidecar_auth_rejects_stale_timestamp_and_tampered_path(self):
+        with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
+            timestamp = int(time.time()) - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
+            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
+            with self.assertRaises(HTTPException) as stale:
+                app._require_sidecar_auth(
+                    self._request(), "expected-secret", str(timestamp), signature
+                )
+            fresh = int(time.time())
+            wrong_signature = app._sidecar_signature(fresh, "POST", "/health")
+            with self.assertRaises(HTTPException) as tampered:
+                app._require_sidecar_auth(
+                    self._request(), "expected-secret", str(fresh), wrong_signature
+                )
+
+        self.assertEqual(401, stale.exception.status_code)
+        self.assertEqual(401, tampered.exception.status_code)
 
     def test_missing_secret_is_reported_as_unavailable(self):
         with patch.object(app, "SIDECAR_SECRET", ""):
             with self.assertRaises(HTTPException) as context:
-                app._require_sidecar_token("anything")
+                app._require_sidecar_auth(self._request(), "anything")
         self.assertEqual(503, context.exception.status_code)
 
 

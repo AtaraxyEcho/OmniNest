@@ -243,12 +243,26 @@ public class ExternalImportExecutionService {
                     exception.errorCode().name(),
                     exception.getMessage()
             );
+            // 安全拒绝的临时大文件不能留到孤儿清理周期。
+            removeObjectQuietly(quarantineKey);
             throw exception;
         }
         ingressLifecycleService.markClean(ingressId, inspection.sha256());
         String effectiveMimeType = resolveDetectedMimeType(
                 prepResult.availableName, mimeType, inspection.detectedMimeType());
-        objectStorageClient.copyObject(quarantineKey, targetKey, effectiveMimeType);
+        try {
+            objectStorageClient.copyObject(quarantineKey, targetKey, effectiveMimeType);
+        } catch (RuntimeException exception) {
+            ingressLifecycleService.markFailed(
+                    ingressId,
+                    false,
+                    ErrorCode.FILE_UPLOAD_FAILED.name(),
+                    summarize(exception)
+            );
+            removeObjectQuietly(quarantineKey);
+            removeObjectQuietly(targetKey);
+            throw exception;
+        }
 
         // 事务内：创建 FileObject、FileNode
         try {
@@ -323,7 +337,7 @@ public class ExternalImportExecutionService {
         long speed = 0;
         if (last != null) {
             long elapsed = now - last.timestampMs();
-            if (elapsed > 0) {
+            if (elapsed > 0 && bytes > last.bytes()) {
                 speed = (bytes - last.bytes()) * 1000L / elapsed;
             }
         }
@@ -384,7 +398,8 @@ public class ExternalImportExecutionService {
         List<PartRange> parts = calculateParts(size);
         String uploadId = objectStorageClient.initiateMultipartUpload(key, mimeType);
 
-        AtomicLong partBytesRead = new AtomicLong(0);
+        AtomicLong transferredPartBytes = new AtomicLong(0);
+        ConcurrentHashMap<Integer, Long> inFlightPartBytes = new ConcurrentHashMap<>();
         AtomicReference<Throwable> error = new AtomicReference<>();
         int concurrency = Math.min(Math.max(1, multipartConcurrency), parts.size());
         Semaphore permits = new Semaphore(concurrency);
@@ -409,8 +424,13 @@ public class ExternalImportExecutionService {
                             raf.seek(part.offset());
                             InputStream partStream = ExternalImportStreams.bounded(
                                     raf, part.length(), bytesRead -> {
-                                long total = baseTransferred + partBytesRead.get() + bytesRead;
-                                updateTransferredBytes(taskId, total);
+                                Long previous = inFlightPartBytes.put(part.partNumber(), bytesRead);
+                                long delta = bytesRead - (previous == null ? 0L : previous);
+                                if (delta > 0) {
+                                    long total = baseTransferred
+                                            + transferredPartBytes.addAndGet(delta);
+                                    updateTransferredBytes(taskId, total);
+                                }
                             });
                             ObjectStorageCompletedPart completed =
                                     objectStorageClient.uploadPart(
@@ -421,7 +441,13 @@ public class ExternalImportExecutionService {
                                             part.length()
                                     );
                             completedParts.add(completed);
-                            partBytesRead.addAndGet(part.length());
+                            Long previous = inFlightPartBytes.remove(part.partNumber());
+                            long remaining = part.length() - (previous == null ? 0L : previous);
+                            if (remaining > 0) {
+                                long total = baseTransferred
+                                        + transferredPartBytes.addAndGet(remaining);
+                                updateTransferredBytes(taskId, total);
+                            }
                         }
                     } catch (InterruptedException exception) {
                         Thread.currentThread().interrupt();
@@ -429,6 +455,7 @@ public class ExternalImportExecutionService {
                     } catch (Throwable throwable) {
                         error.compareAndSet(null, throwable);
                     } finally {
+                        inFlightPartBytes.remove(part.partNumber());
                         if (acquired) {
                             permits.release();
                         }

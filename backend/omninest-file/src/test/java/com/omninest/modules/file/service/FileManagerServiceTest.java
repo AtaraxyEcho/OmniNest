@@ -610,8 +610,7 @@ class FileManagerServiceTest {
         assertThat(result.parentId()).isEqualTo(targetFolderId);
         assertThat(result.normalizedPath()).isEqualTo("/Documents/report.pdf");
         // 副本必须按新节点加计配额：彻底删除副本时无条件扣减，不加计就能把已用空间刷空。
-        verify(storageQuotaService).checkQuota(OWNER_ID, 2048L);
-        verify(storageQuotaService).incrementUsage(OWNER_ID, 2048L);
+        verify(storageQuotaService).chargeUsage(OWNER_ID, 2048L);
         verify(syncEventRecorder).record(argThat(
                 command -> command.action() == SyncAction.CREATED
                         && "FILE_NODE".equals(command.resourceType())));
@@ -744,7 +743,6 @@ class FileManagerServiceTest {
 
         assertThat(result.spaceType()).isEqualTo(SpaceType.SHARED.getValue());
         verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
-        verify(sharedSpaceQuotaService).checkQuota(2048L);
         verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
         verify(storageQuotaService, Mockito.never()).incrementUsage(any(), anyLong());
     }

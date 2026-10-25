@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -9,6 +8,7 @@ import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/application/file_download_url_provider.dart';
@@ -23,6 +23,17 @@ part 'file_api_shares.dart';
 part 'file_api_upload.dart';
 part 'file_api_external.dart';
 
+class _CachedShareSession {
+  const _CachedShareSession(this.token, this.expiresAt);
+
+  final String token;
+  final DateTime? expiresAt;
+
+  bool get isUsable =>
+      expiresAt == null ||
+      DateTime.now().isBefore(expiresAt!.subtract(const Duration(seconds: 30)));
+}
+
 abstract class FileApiBase {
   FileApiBase(this.apiClient, {Dio? uploadDio})
     : _uploadDio = uploadDio ?? Dio();
@@ -35,7 +46,8 @@ abstract class FileApiBase {
 
   final ApiClient apiClient;
   final Dio _uploadDio;
-  final Map<String, String> _shareSessionTokens = <String, String>{};
+  final Map<String, _CachedShareSession> _shareSessionTokens =
+      <String, _CachedShareSession>{};
 
   void close() => _uploadDio.close(force: true);
 

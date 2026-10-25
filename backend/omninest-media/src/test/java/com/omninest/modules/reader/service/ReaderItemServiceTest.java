@@ -504,7 +504,7 @@ class ReaderItemServiceTest {
         );
 
         when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_NODE_ID)).thenReturn(fileNode);
+        when(fileLifecycleGuard.requireDownloadable(OWNER_ID, FILE_NODE_ID)).thenReturn(fileNode);
         when(fileMetadataQueryService.findContentSha256(FILE_NODE_ID)).thenReturn(Optional.of("abc123"));
         when(fileQueryService.createReadableDownloadUrl(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(new FileDownloadUrlDto(

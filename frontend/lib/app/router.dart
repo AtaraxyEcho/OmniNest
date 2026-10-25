@@ -610,6 +610,18 @@ String? serverGateRedirectPath({
 }
 
 String _serverSetupLocation(Uri uri) {
+  // 配置加载期间深链先停在 /boot?redirect=...；配置完成后必须解包内层目标，
+  // 否则会把 /boot 自身再次编码进 redirect，最终被 _safeRedirectTarget 拒绝。
+  if (uri.path == '/boot') {
+    final inner = _safeRedirectTarget(uri.queryParameters['redirect']);
+    if (inner == null || inner == '/' || inner == '/portal') {
+      return '/server-setup';
+    }
+    return Uri(
+      path: '/server-setup',
+      queryParameters: {'redirect': inner},
+    ).toString();
+  }
   final target = uri.toString();
   if (target == '/' || uri.path == '/server-setup' || uri.path == '/login') {
     return '/server-setup';

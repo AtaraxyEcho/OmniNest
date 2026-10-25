@@ -85,20 +85,17 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
         setState(() => _selectedLocation = null);
       },
       child: _LocationDetail(
-        location: entry.displayName,
-        photos: entry.photos,
+        locationKey: entry.name,
+        displayName: entry.displayName,
+        initialPhotos: entry.photos,
         onBack: () => setState(() => _selectedLocation = null),
-        onOpenPhoto: (photo) {
+        onOpenPhoto: (photo, photos) {
           // 地点视图的浏览/幻灯片范围限定为当前地点的照片，
           // 与影集/时间线的区域隔离语义一致；幻灯片侧对 locations
           // 来源保留子集，不再回退全库替换。
           ref
               .read(photoBrowseScopeProvider.notifier)
-              .set(
-                entry.photos,
-                PhotoBrowseSource.locations,
-                sourceKey: entry.name,
-              );
+              .set(photos, PhotoBrowseSource.locations, sourceKey: entry.name);
           widget.onOpenPhoto(photo);
         },
         onToggleFavorite: widget.onToggleFavorite,
@@ -285,35 +282,135 @@ class _LocationCardState extends State<_LocationCard> {
   }
 }
 
-/// 二级页面：单地点照片瀑布流。
-class _LocationDetail extends StatelessWidget {
+/// 二级页面：单地点照片瀑布流，按地点分页加载。
+class _LocationDetail extends ConsumerStatefulWidget {
   const _LocationDetail({
-    required this.location,
-    required this.photos,
+    required this.locationKey,
+    required this.displayName,
+    required this.initialPhotos,
     required this.onBack,
     required this.onOpenPhoto,
     this.onToggleFavorite,
   });
 
-  final String location;
-  final List<PhotoItem> photos;
+  final String locationKey;
+  final String displayName;
+  final List<PhotoItem> initialPhotos;
   final VoidCallback onBack;
-  final ValueChanged<PhotoItem> onOpenPhoto;
+  final void Function(PhotoItem photo, List<PhotoItem> photos) onOpenPhoto;
   final ValueChanged<PhotoItem>? onToggleFavorite;
+
+  @override
+  ConsumerState<_LocationDetail> createState() => _LocationDetailState();
+}
+
+class _LocationDetailState extends ConsumerState<_LocationDetail> {
+  static const int _pageSize = 60;
+
+  final List<PhotoItem> _photos = <PhotoItem>[];
+  int _nextPage = 0;
+  int _totalCount = 0;
+  bool _loading = false;
+  bool _hasMore = true;
+  bool _failed = false;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _reset(widget.initialPhotos);
+    _loadNextPage();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LocationDetail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.locationKey != widget.locationKey) {
+      _reset(widget.initialPhotos);
+      _loadNextPage();
+    }
+  }
+
+  void _reset(List<PhotoItem> initialPhotos) {
+    _generation++;
+    _photos
+      ..clear()
+      ..addAll(initialPhotos);
+    _nextPage = 0;
+    _totalCount = initialPhotos.length;
+    _loading = false;
+    _hasMore = true;
+    _failed = false;
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_loading || !_hasMore) {
+      return;
+    }
+    final generation = _generation;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final page = await ref
+          .read(photoRepositoryProvider)
+          .listByLocationPage(
+            widget.locationKey,
+            page: _nextPage,
+            size: _pageSize,
+          );
+      if (!mounted || generation != _generation) {
+        return;
+      }
+      setState(() {
+        if (_nextPage == 0) {
+          _photos.clear();
+        }
+        final existingIds = _photos.map((photo) => photo.id).toSet();
+        _photos.addAll(
+          page.items.where((photo) => !existingIds.contains(photo.id)),
+        );
+        _totalCount = page.totalElements;
+        _nextPage = page.page + 1;
+        _hasMore = page.hasMore;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.metrics.axis == Axis.vertical &&
+        notification.metrics.maxScrollExtent > 0 &&
+        notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 480) {
+      _loadNextPage();
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.frameColors;
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           child: TextButton.icon(
-            onPressed: onBack,
+            onPressed: widget.onBack,
             icon: Icon(Icons.arrow_back_rounded, size: 18, color: colors.sub),
             label: Text(
-              AppLocalizations.of(context).photosLocationsBack,
+              l10n.photosLocationsBack,
               style: TextStyle(
                 color: colors.sub,
                 fontSize: AppTypography.bodyMedium,
@@ -328,7 +425,7 @@ class _LocationDetail extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                location,
+                widget.displayName,
                 style: TextStyle(
                   fontFamily: FramePalette.serifFamily,
                   fontFamilyFallback: FramePalette.serifFallback,
@@ -338,22 +435,45 @@ class _LocationDetail extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                AppLocalizations.of(
-                  context,
-                ).photosTagsPhotoCount(photos.length),
+                l10n.photosTagsPhotoCount(_totalCount),
                 style: TextStyle(
                   color: colors.muted,
                   fontSize: AppTypography.bodySmall,
                 ),
               ),
+              if (_loading) ...[
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.6,
+                    color: colors.muted,
+                  ),
+                ),
+              ],
+              if (_failed && _photos.isEmpty) ...[
+                const SizedBox(width: 10),
+                TextButton(
+                  onPressed: _loadNextPage,
+                  child: Text(l10n.commonRetry),
+                ),
+              ],
             ],
           ),
         ),
         Expanded(
-          child: FrameMasonryGrid(
-            photos: photos,
-            onOpenPhoto: onOpenPhoto,
-            onToggleFavorite: onToggleFavorite,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: FrameMasonryGrid(
+              photos: List<PhotoItem>.unmodifiable(_photos),
+              onOpenPhoto:
+                  (photo) => widget.onOpenPhoto(
+                    photo,
+                    List<PhotoItem>.unmodifiable(_photos),
+                  ),
+              onToggleFavorite: widget.onToggleFavorite,
+            ),
           ),
         ),
       ],

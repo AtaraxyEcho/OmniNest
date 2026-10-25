@@ -622,9 +622,10 @@ class MovieApi {
   }
 
   Future<void> deleteLibrarySource(String sourceId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/library-sources/$sourceId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除视频库源失败');
   }
 
   Future<ScrapeTask> scanLibrarySource(String sourceId) async {
@@ -886,17 +887,27 @@ class MovieApi {
     required Uint8List bytes,
     String? mimeType,
   }) async {
-    final dio = Dio();
-    await dio.put<void>(
-      presignedUrl,
-      data: bytes,
-      options: Options(
-        headers: {
-          if (mimeType != null) 'Content-Type': mimeType,
-          'Content-Length': bytes.length,
-        },
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(minutes: 10),
+        receiveTimeout: const Duration(seconds: 60),
       ),
     );
+    try {
+      await dio.put<void>(
+        presignedUrl,
+        data: bytes,
+        options: Options(
+          headers: {
+            if (mimeType != null) 'Content-Type': mimeType,
+            'Content-Length': bytes.length,
+          },
+        ),
+      );
+    } finally {
+      dio.close(force: true);
+    }
   }
 
   Future<FileUploadCompleteResult> completeUploadSession({

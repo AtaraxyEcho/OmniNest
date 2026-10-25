@@ -25,7 +25,8 @@ class ShareApi implements PublicShareRepository {
 
   /// 已认证的客户端：转存必须走统一刷新链路，分享浏览仍用匿名客户端。
   final Dio? _authDio;
-  final Map<String, String> _sessionTokens = <String, String>{};
+  final Map<String, ({String token, DateTime? expiresAt})> _sessionTokens =
+      <String, ({String token, DateTime? expiresAt})>{};
 
   void close() => _dio.close(force: true);
 
@@ -43,6 +44,7 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
+        _removeSessionIfInvalid(token, body);
         return SharePreviewResult.error(
           body?['message']?.toString() ?? AppErrorCodes.operationFailed,
         );
@@ -61,6 +63,7 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
+        _removeSessionIfInvalid(token, body);
         if (_isPasswordPrompt(body)) {
           return SharePreviewResult.needPassword(_messageOf(body));
         }
@@ -96,6 +99,7 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
+        _removeSessionIfInvalid(token, body);
         return ShareChildrenResult.error(
           body?['message']?.toString() ?? AppErrorCodes.operationFailed,
         );
@@ -115,6 +119,7 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
+        _removeSessionIfInvalid(token, body);
         return ShareChildrenResult.error(
           _isPasswordPrompt(body)
               ? AppErrorCodes.needPassword
@@ -155,6 +160,7 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
+        _removeSessionIfInvalid(token, body);
         return ShareAcceptResult.error(
           body?['message']?.toString() ?? AppErrorCodes.operationFailed,
         );
@@ -163,6 +169,7 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
+        _removeSessionIfInvalid(token, body);
         final msg = _messageOf(body);
         if (_isPasswordPrompt(body)) {
           return ShareAcceptResult.error(AppErrorCodes.needPassword);
@@ -195,6 +202,7 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
+        _removeSessionIfInvalid(token, body);
         return ShareAccessResult.failure(
           body?['message']?.toString() ?? AppErrorCodes.operationFailed,
         );
@@ -208,6 +216,7 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
+        _removeSessionIfInvalid(token, body);
         return ShareAccessResult.failure(
           _isPasswordPrompt(body)
               ? AppErrorCodes.needPassword
@@ -223,9 +232,14 @@ class ShareApi implements PublicShareRepository {
   Future<String?> _ensureSession(String token, String? password) async {
     // 已签发会话优先：带密码再调一次 /authorize 会重复消费分享访问次数。
     final existing = _sessionTokens[token];
-    if (existing != null && existing.isNotEmpty) {
-      return existing;
+    if (existing != null &&
+        (existing.expiresAt == null ||
+            DateTime.now().isBefore(
+              existing.expiresAt!.subtract(const Duration(seconds: 30)),
+            ))) {
+      return existing.token;
     }
+    _sessionTokens.remove(token);
     final response = await _dio.post<Map<String, dynamic>>(
       '/s/$token/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
@@ -242,8 +256,26 @@ class ShareApi implements PublicShareRepository {
     if (session == null || session.isEmpty) {
       throw StateError(AppErrorCodes.shareSessionInvalid);
     }
-    _sessionTokens[token] = session;
+    _sessionTokens[token] = (
+      token: session,
+      expiresAt:
+          DateTime.tryParse(data?['expiresAt']?.toString() ?? '')?.toLocal(),
+    );
     return session;
+  }
+
+  /// 会话失效时清掉缓存，下一次操作会重新走 /authorize。
+  void _removeSessionIfInvalid(String token, Map<String, dynamic>? body) {
+    if (body == null) {
+      return;
+    }
+    final errorName = body['errorName']?.toString();
+    final code = body['code'];
+    if (errorName == AppErrorCodes.shareSessionInvalid ||
+        errorName == 'UNAUTHORIZED' ||
+        code == 401) {
+      _sessionTokens.remove(token);
+    }
   }
 
   /// 判断业务信封是否需要用户补密码或提示密码错误。

@@ -109,6 +109,16 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                                         strokeWidth: 2,
                                       ),
                                     )
+                                    : state.loadFailed && state.items.isEmpty
+                                    ? _LoadError(
+                                      onRetry:
+                                          () => ref
+                                              .read(
+                                                notificationControllerProvider
+                                                    .notifier,
+                                              )
+                                              .load(size: _pageSize),
+                                    )
                                     : state.items.isEmpty
                                     ? const _EmptyState()
                                     : _NotificationFeed(
@@ -869,6 +879,40 @@ class _PageButtonState extends State<_PageButton> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 40,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.notificationLoadFailed,
+            style: TextStyle(
+              fontSize: AppTypography.bodyMedium,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(onPressed: onRetry, child: Text(l10n.commonRetry)),
+        ],
       ),
     );
   }

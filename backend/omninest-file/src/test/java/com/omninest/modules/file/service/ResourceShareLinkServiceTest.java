@@ -111,7 +111,8 @@ class ResourceShareLinkServiceTest {
                                 .isEqualTo(ErrorCode.PASSWORD_INVALID));
 
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(rateLimitService, org.mockito.Mockito.times(3)).tryAcquire(
+        // 认证双阈值 + 密码总额度 + 失败额度。
+        verify(rateLimitService, org.mockito.Mockito.times(4)).tryAcquire(
                 keyCaptor.capture(),
                 org.mockito.ArgumentMatchers.anyInt(),
                 any(Duration.class));

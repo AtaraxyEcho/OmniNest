@@ -48,11 +48,11 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
 
   void _openIfNeeded(PlaybackPlan plan) {
     _currentDurationSeconds = plan.durationSeconds;
-    // 首次加载时根据缓存状态设置默认音频模式
-    if (_loadedUrl == null && plan.hasAudioCache) {
-      _audioMode = 'cached';
-    } else if (_loadedUrl == null) {
-      _audioMode = 'original';
+    // 只在首次打开流时应用默认音频模式。切换音轨会把 _loadedUrl 置空，
+    // 不能再用它判断“首次加载”，否则用户选择会被立即覆盖回 cached。
+    if (!_initialAudioModeResolved) {
+      _initialAudioModeResolved = true;
+      _audioMode = plan.hasAudioCache ? 'cached' : 'original';
     }
     // Web 端有 streamUrl 时使用转码流，否则使用原始 URL
     final playbackUrl = _resolvePlaybackUrl(plan);

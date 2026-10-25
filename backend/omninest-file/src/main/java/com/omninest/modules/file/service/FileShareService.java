@@ -343,6 +343,9 @@ public class FileShareService {
         if (rawRecipients == null || rawRecipients.isEmpty()) {
             return List.of();
         }
+        if (rawRecipients.size() > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分享接收人不能超过 100 人");
+        }
         List<UUID> recipients = new ArrayList<>(new LinkedHashSet<>(rawRecipients));
         if (recipients.contains(ownerUserId)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不能分享给自己");

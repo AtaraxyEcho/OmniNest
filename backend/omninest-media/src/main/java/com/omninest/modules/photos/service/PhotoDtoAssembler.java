@@ -188,7 +188,8 @@ public class PhotoDtoAssembler {
                 Map.of(),
                 null,
                 item.motionState(),
-                null
+                null,
+                false
         );
     }
 

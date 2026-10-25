@@ -85,6 +85,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   bool _isFill = false;
   // 音频模式：'cached' = 使用缓存 AAC，'original' = 使用原始音频（实时转码）
   String _audioMode = 'cached';
+  bool _initialAudioModeResolved = false;
 
   // 拖动状态 — 解决进度条跳回起点
   bool _isSeeking = false;
@@ -169,6 +170,19 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         // PiP 态固定显示精简界面（画面 + 进度），隐藏交互控制层。
         _showControls = !inPipMode;
       });
+    });
+    // ref.listen 不会为进入页面时已经处于 AsyncData 的 Provider 补发事件；
+    // 二次进入缓存命中时主动开流，避免停在黑屏加载态。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final cachedPlan = ref.read(
+        moviePlaybackPlanProvider(widget.videoItemId),
+      );
+      if (cachedPlan is AsyncData<PlaybackPlan>) {
+        _openIfNeeded(cachedPlan.value);
+      }
     });
   }
 
@@ -479,11 +493,9 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                                     milliseconds:
                                         (v * dur.inMilliseconds).round(),
                                   );
-                                  _seekToPosition(target).then((_) {
-                                    if (mounted) {
-                                      setState(() => _isSeeking = false);
-                                    }
-                                  });
+                                  // 复位由 _seekToPosition 内部按 generation 执行；
+                                  // 旧 Seek 的 then 不能提前清掉新 Seek 的拖拽态。
+                                  unawaited(_seekToPosition(target));
                                 },
                                 onMouseActivity: _onMouseActivity,
                                 volume: volume,
@@ -596,6 +608,10 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     );
   }
 
+  void _clearProgressSyncWarning() {
+    _progressSyncWarned = false;
+  }
+
   void _startProgressSync(PlaybackPlan plan) {
     _progressSyncService.start(
       videoItemId: widget.videoItemId,
@@ -609,6 +625,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
           (position, duration) => isMoviePlaybackCompleted(position, duration),
       shouldSkip: () => _isSeeking,
       onSyncFailed: _notifyProgressSyncDeferred,
+      onSyncSucceeded: _clearProgressSyncWarning,
     );
   }
 
@@ -627,6 +644,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     if (!isWebPlatform) {
       await _player.seek(target);
       if (!mounted || generation != _seekGeneration) return;
+      setState(() => _isSeeking = false);
       return;
     }
     final asyncValue = _readPlaybackPlan();
@@ -637,6 +655,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     if (plan?.streamUrl == null || plan!.streamUrl!.isEmpty) {
       await _player.seek(target);
       if (!mounted || generation != _seekGeneration) return;
+      setState(() => _isSeeking = false);
       return;
     }
     // Web 端 fMP4 流模式：尝试原生 seek，失败则重新打开流
@@ -662,6 +681,12 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       _seekStart = targetSeconds;
       _loadedUrl = null;
     });
+    final currentPlan = _readPlaybackPlan();
+    if (currentPlan is AsyncData<PlaybackPlan>) {
+      _openIfNeeded(currentPlan.value);
+    } else {
+      setState(() => _isSeeking = false);
+    }
   }
 
   void _selectSubtitle(PlaybackSubtitle sub) {

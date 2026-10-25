@@ -357,9 +357,6 @@ class _FakeFileRepository
   }) async => recycleBin;
 
   @override
-  Future<List<FileShareLink>> listShareLinks() => throw UnimplementedError();
-
-  @override
   Future<List<SharedFileItem>> listSharedWithMe() => throw UnimplementedError();
 
   @override

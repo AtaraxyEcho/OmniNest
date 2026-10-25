@@ -96,6 +96,7 @@ class NotificationState {
     this.currentPage = 0,
     this.filter = NotificationFilter.all,
     this.isLoading = false,
+    this.loadFailed = false,
   });
 
   final List<NotificationDto> items;
@@ -112,6 +113,7 @@ class NotificationState {
   final NotificationFilter filter;
 
   final bool isLoading;
+  final bool loadFailed;
 
   NotificationState copyWith({
     List<NotificationDto>? items,
@@ -120,6 +122,7 @@ class NotificationState {
     int? currentPage,
     NotificationFilter? filter,
     bool? isLoading,
+    bool? loadFailed,
   }) {
     return NotificationState(
       items: items ?? this.items,
@@ -128,6 +131,7 @@ class NotificationState {
       currentPage: currentPage ?? this.currentPage,
       filter: filter ?? this.filter,
       isLoading: isLoading ?? this.isLoading,
+      loadFailed: loadFailed ?? this.loadFailed,
     );
   }
 }
@@ -150,12 +154,12 @@ class NotificationController extends Notifier<NotificationState> {
 
   Future<void>? _activeOperation;
   Future<void>? _realtimeRefresh;
+  int _loadGeneration = 0;
 
   bool get _unreadOnly => state.filter == NotificationFilter.unread;
 
   /// 加载通知列表（当前筛选）。
   Future<void> load({int page = 0, int size = 20}) async {
-    if (_activeOperation != null) return;
     final operation = _loadPage(page: page, size: size);
     _activeOperation = operation;
     try {
@@ -192,13 +196,18 @@ class NotificationController extends Notifier<NotificationState> {
       return;
     }
     state = state.copyWith(isLoading: true);
+    final generation = _loadGeneration;
+    final filter = state.filter;
     try {
-      final unreadOnly = _unreadOnly;
+      final unreadOnly = filter == NotificationFilter.unread;
       final result = await _api.list(
         page: nextPage,
         size: size,
         unreadOnly: unreadOnly,
       );
+      if (generation != _loadGeneration || filter != state.filter) {
+        return;
+      }
       // 实时刷新可能已替换列表：以当前列表为准按 id 去重后追加。
       final existingIds = state.items.map((item) => item.id).toSet();
       state = state.copyWith(
@@ -253,10 +262,15 @@ class NotificationController extends Notifier<NotificationState> {
 
   Future<void> _refreshPages(int size) async {
     final current = state;
+    final generation = _loadGeneration;
+    final unreadOnly = _unreadOnly;
     final pages = await Future.wait([
       for (var page = 0; page <= current.currentPage; page++)
-        _api.list(page: page, size: size, unreadOnly: _unreadOnly),
+        _api.list(page: page, size: size, unreadOnly: unreadOnly),
     ]);
+    if (generation != _loadGeneration || current.filter != state.filter) {
+      return;
+    }
     state = NotificationState(
       items: pages.expand((page) => page.items).toList(growable: false),
       total: pages.last.total,
@@ -287,23 +301,32 @@ class NotificationController extends Notifier<NotificationState> {
   }
 
   Future<void> _loadPage({required int page, required int size}) async {
+    final generation = ++_loadGeneration;
+    final filter = state.filter;
+    final unreadOnly = filter == NotificationFilter.unread;
     state = state.copyWith(isLoading: true);
     try {
-      final unreadOnly = _unreadOnly;
       final result = await _api.list(
         page: page,
         size: size,
         unreadOnly: unreadOnly,
       );
+      if (generation != _loadGeneration) {
+        return;
+      }
       state = NotificationState(
         items: result.items,
         total: result.total,
         allTotal: unreadOnly ? state.allTotal : result.total,
         currentPage: page,
-        filter: state.filter,
+        filter: filter,
+        loadFailed: false,
       );
     } catch (_) {
-      state = state.copyWith(isLoading: false);
+      if (generation != _loadGeneration) {
+        return;
+      }
+      state = state.copyWith(isLoading: false, loadFailed: true);
     }
   }
 

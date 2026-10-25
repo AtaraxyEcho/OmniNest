@@ -359,6 +359,22 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         // 详情重拉失败时保留已缓存曲目，不打断中心刷新。
       }
     }
+    // 刷新期间播放器仍在写入进度、缓冲与自动切歌；用最新状态覆盖回写，
+    // 否则会把几百毫秒前的 playbackView 快照重新盖回去。
+    final latest = state.asData?.value;
+    if (latest != null) {
+      next = next.copyWith(
+        currentItem: latest.currentItem,
+        playbackPlan: latest.playbackPlan,
+        isPlaying: latest.isPlaying,
+        playbackItems: latest.playbackItems,
+        playbackIndex: latest.playbackIndex,
+        playMode: latest.playMode,
+        queueSource: latest.queueSource,
+        clearCurrentTrack: latest.currentItem == null,
+        clearPlaybackPlan: latest.playbackPlan == null,
+      );
+    }
     state = AsyncData(next);
   }
 

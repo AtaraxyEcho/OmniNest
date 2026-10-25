@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test;
 
 class MediaPlaybackTokenServiceTest {
 
-    private final MediaPlaybackTokenService service = new MediaPlaybackTokenService();
+    private final MediaPlaybackTokenService service =
+            new MediaPlaybackTokenService("test-media-playback-secret-0123456789");
 
     @Test
     void videoTokenIsScopedToOneVideoItem() {

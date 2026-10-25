@@ -22,7 +22,23 @@ class SearchApi {
     ensureEnvelopeSuccess(data, fallbackMessage: '搜索失败');
     final items = data!['data'] as List<dynamic>? ?? [];
     return items
-        .map((e) => SearchResult.fromJson(e as Map<String, dynamic>))
+        .whereType<Map>()
+        .map((item) => _parse(Map<String, dynamic>.from(item)))
         .toList();
+  }
+
+  /// `/search` 当前是文件全文索引：返回 `fileId/title/snippet/score`。
+  /// 保留对旧聚合结构的兼容，避免其他端的通用结果被误判为空类型。
+  SearchResult _parse(Map<String, dynamic> json) {
+    final type = json['type']?.toString();
+    if (type != null && type.isNotEmpty) {
+      return SearchResult.fromJson(json);
+    }
+    return SearchResult(
+      id: json['fileId']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      subtitle: json['snippet']?.toString() ?? '',
+      type: 'file',
+    );
   }
 }

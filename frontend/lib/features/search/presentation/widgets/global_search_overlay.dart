@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +19,7 @@ import 'package:omninest/features/search/presentation/theme/search_overlay_color
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Ctrl+K 全局搜索命令面板。按 OmniNest Command Palette 设计稿复刻（浅/深主题）。
 bool _globalSearchOpen = false;
@@ -80,11 +83,32 @@ class _CommandPaletteDialog extends ConsumerStatefulWidget {
 }
 
 class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
+  static const String _recentQueriesKey = 'search.recent_queries.v1';
+
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   _PaletteTab _tab = _PaletteTab.all;
   int _highlight = 0;
   final List<String> _recentQueries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRecentQueries());
+  }
+
+  Future<void> _loadRecentQueries() async {
+    final preferences = await SharedPreferences.getInstance();
+    final saved = preferences.getStringList(_recentQueriesKey) ?? const [];
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _recentQueries
+        ..clear()
+        ..addAll(saved);
+    });
+  }
 
   @override
   void dispose() {
@@ -115,6 +139,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     if (_recentQueries.length > 8) {
       _recentQueries.removeRange(8, _recentQueries.length);
     }
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (preferences) =>
+            preferences.setStringList(_recentQueriesKey, _recentQueries),
+      ),
+    );
   }
 
   List<_Hit> _buildHits({
@@ -255,7 +285,17 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     }
 
     hits.addAll(_commands(l10n));
-    return hits;
+    // 本地看板与远端搜索会命中同一实体；按类型、目标路由和标题去重，
+    // 避免同一部电影/同一本书出现两三次。
+    final deduped = <_Hit>[];
+    final seen = <String>{};
+    for (final hit in hits) {
+      final key = '${hit.type}|${hit.route ?? ''}|${hit.title}';
+      if (seen.add(key)) {
+        deduped.add(hit);
+      }
+    }
+    return deduped;
   }
 
   _Hit _videoHit(MovieVideoItem item, {required String section}) {

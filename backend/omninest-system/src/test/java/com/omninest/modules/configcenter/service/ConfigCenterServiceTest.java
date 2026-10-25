@@ -71,9 +71,10 @@ class ConfigCenterServiceTest {
 
         service.initializeCatalog();
 
-        ArgumentCaptor<ConfigEntry> entries = ArgumentCaptor.forClass(ConfigEntry.class);
-        verify(configEntryRepository, atLeastOnce()).save(entries.capture());
-        assertThat(entries.getAllValues())
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConfigEntry>> entries = ArgumentCaptor.forClass(List.class);
+        verify(configEntryRepository, atLeastOnce()).saveAll(entries.capture());
+        assertThat(entries.getAllValues().stream().flatMap(List::stream).toList())
                 .extracting(ConfigEntry::getConfigKey)
                 .contains(
                         "share.enabled",
@@ -501,7 +502,7 @@ class ConfigCenterServiceTest {
         when(configEntryRepository.save(any(ConfigEntry.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(configEntryRepository.findAll()).thenReturn(List.of(sensitiveEntry));
-        when(configHistoryRepository.findByConfigKey("weather.qweather.key"))
+        when(configHistoryRepository.findByConfigKeyIn(ArgumentMatchers.any()))
                 .thenReturn(List.of(legacyHistory));
         when(credentialCipher.encrypt("legacy-old-key"))
                 .thenReturn("v1:old-iv:old-payload");

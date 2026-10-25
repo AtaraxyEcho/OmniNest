@@ -228,7 +228,13 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       if (!mounted) return;
       ref.invalidate(photoDetailProvider(photoId));
     } on Exception {
-      // 逆地理编码失败时静默降级：位置信息仅在成功时展示。
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosGeocodeUnavailable,
+      );
     }
   }
 
