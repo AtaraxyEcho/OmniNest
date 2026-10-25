@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.FileMetadataQueryService;
@@ -115,6 +116,22 @@ class ReaderFileCleanupServiceTest {
         verify(itemSourceRepository).deleteByReaderItemIdIn(List.of(ITEM_ID));
         verify(textChapterRepository).deleteByReaderItemIdIn(List.of(ITEM_ID));
         verify(itemRepository).deleteAllInBatch(List.of(item));
+        // 彻底删除不经过软删除事件，必须主动推送条目删除与阅读库失效。
+        verify(syncEventService).record(
+                OWNER_ID,
+                SyncScope.READER,
+                "READER_ITEM",
+                ITEM_ID.toString(),
+                SyncAction.DELETED,
+                item.getVersion(),
+                Map.of()
+        );
+        verify(syncEventService).invalidate(
+                OWNER_ID,
+                SyncScope.READER,
+                "READER_LIBRARY",
+                Map.of("reason", "PURGED")
+        );
     }
 
     @Test

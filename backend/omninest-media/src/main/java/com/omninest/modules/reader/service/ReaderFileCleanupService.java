@@ -1,5 +1,6 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
@@ -306,6 +307,10 @@ public class ReaderFileCleanupService implements
             return;
         }
         List<UUID> itemIds = items.stream().map(ReaderItem::getId).toList();
+        Set<UUID> owners = items.stream()
+                .map(ReaderItem::getOwnerUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         progressRepository.deleteByReaderItemIdIn(itemIds);
         bookshelfRepository.deleteByReaderItemIdIn(itemIds);
         bookmarkRepository.deleteByReaderItemIdIn(itemIds);
@@ -318,6 +323,25 @@ public class ReaderFileCleanupService implements
         itemSourceRepository.deleteByReaderItemIdIn(itemIds);
         textChapterRepository.deleteByReaderItemIdIn(itemIds);
         itemRepository.deleteAllInBatch(items);
+        // 彻底删除不经过软删除事件：必须主动推送条目删除与阅读库失效，
+        // 否则其他在线客户端会一直保留已删书籍，书架与仪表盘计数陈旧。
+        items.stream()
+                .filter(item -> item.getOwnerUserId() != null)
+                .forEach(item -> syncEventService.record(
+                        item.getOwnerUserId(),
+                        SyncScope.READER,
+                        "READER_ITEM",
+                        item.getId().toString(),
+                        SyncAction.DELETED,
+                        item.getVersion(),
+                        Map.of()
+                ));
+        owners.forEach(ownerUserId -> syncEventService.invalidate(
+                ownerUserId,
+                SyncScope.READER,
+                "READER_LIBRARY",
+                Map.of("reason", "PURGED")
+        ));
     }
 
     private void clearDanglingFileReferences(List<UUID> deletedFileIds) {

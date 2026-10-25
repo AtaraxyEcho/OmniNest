@@ -245,12 +245,14 @@ public class FileIngressPromotionService {
         if (session != null && target.getSpaceType() != session.getSpaceType()) {
             throw new BusinessException(ErrorCode.CONFLICT, "版本目标空间已变化，请重新开始上传");
         }
+        // 配额已由上传会话在 settleUploadQuota 按会话大小结算，这里不能再计一次。
         fileVersionService.saveNewVersion(
                 item.getOwnerUserId(),
                 asVersionOfFileId,
                 savedObject.getId(),
                 savedObject.getSizeBytes(),
-                null);
+                null,
+                false);
         return target;
     }
 
@@ -273,8 +275,11 @@ public class FileIngressPromotionService {
             FileNode promotedNode,
             boolean versionUpload
     ) {
-        UUID mediaAutoImportTaskId =
-                fileContentChangePublisher.publish(promotedNode, savedObject, item.getOwnerUserId());
+        // 版本上传已在 saveNewVersion 内发布过内容变更，重复发布会为同一文件
+        // 生成两份媒体导入、索引、缩略图与文本提取任务。
+        UUID mediaAutoImportTaskId = versionUpload
+                ? null
+                : fileContentChangePublisher.publish(promotedNode, savedObject, item.getOwnerUserId());
         session.setIngressItemId(item.getId());
         session.setResultFileNodeId(promotedNode.getId());
         session.setResultObjectId(savedObject.getId());

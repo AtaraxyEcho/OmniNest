@@ -3,7 +3,7 @@ package com.omninest.modules.backdrop.scheduler;
 import com.omninest.modules.backdrop.service.BackdropReconciliationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,8 +16,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && ${omninest.runtime.embedded-scheduler-enabled:false})")
+@ConditionalOnSchedulerRuntime
 public class BackdropReconciliationScheduler {
 
     private final BackdropReconciliationService backdropReconciliationService;

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
@@ -23,7 +24,7 @@ class MoviePlayerProgressBar extends StatefulWidget {
   final ValueNotifier<Duration> polledPosition;
   final int durationSeconds;
   final Duration playerDuration;
-  final double bufferProgress;
+  final ValueListenable<double> bufferProgress;
   final bool isSeeking;
   final double seekValue;
   final void Function(double) onSeekStart;
@@ -128,7 +129,7 @@ class _TimelineTrack extends StatelessWidget {
   });
 
   final double displayValue;
-  final double bufferProgress;
+  final ValueListenable<double> bufferProgress;
   final bool isActive;
   final void Function(double) onSeekStart;
   final void Function(double) onSeeking;
@@ -152,13 +153,18 @@ class _TimelineTrack extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Container(
-                height: 3,
-                width: constraints.maxWidth * bufferProgress.clamp(0.0, 1.0),
-                decoration: BoxDecoration(
-                  color: colors.playerTimelineBuffered,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+              ValueListenableBuilder<double>(
+                valueListenable: bufferProgress,
+                builder: (context, progress, _) {
+                  return Container(
+                    height: 3,
+                    width: constraints.maxWidth * progress.clamp(0.0, 1.0),
+                    decoration: BoxDecoration(
+                      color: colors.playerTimelineBuffered,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  );
+                },
               ),
               SliderTheme(
                 data: SliderThemeData(

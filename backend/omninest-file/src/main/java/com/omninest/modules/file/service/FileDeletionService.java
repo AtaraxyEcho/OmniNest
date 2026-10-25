@@ -258,7 +258,8 @@ public class FileDeletionService {
             );
         }
         if (!root.isDeleted()) {
-            fileQueryService.deleteNode(ownerUserId, fileNodeId);
+            // 软删除必须由实际操作人执行：共享空间要按操作者复核权限并写入 deleted_by。
+            fileQueryService.deleteNode(operatorId, fileNodeId);
         }
         UUID taskId = UUID.randomUUID();
         Instant requestedAt = Instant.now();
@@ -349,7 +350,8 @@ public class FileDeletionService {
 
         for (FileNode root : roots) {
             if (!root.isDeleted()) {
-                fileQueryService.deleteNode(root.getOwnerUserId(), root.getId());
+                // 与单文件路径一致：共享节点由操作者软删除，个人节点要求操作者即所有者。
+                fileQueryService.deleteNode(operatorId, root.getId());
             }
         }
 

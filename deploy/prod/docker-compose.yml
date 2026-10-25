@@ -3,6 +3,8 @@ name: omninest
 x-backend-environment: &backend-environment
   OMNINEST_PROFILE: prod
   OMNINEST_SERVER_PORT: "8080"
+  # 兜底把所有 JVM 临时文件收敛到处理卷，避免未显式接入 TempStagingPort 的路径写进 OverlayFS。
+  JAVA_TOOL_OPTIONS: "-Djava.io.tmpdir=/tmp/omninest-processing"
   OMNINEST_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-omninest}
   OMNINEST_DB_USER: ${POSTGRES_USER:-omninest}
   OMNINEST_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须显式配置}
@@ -109,7 +111,8 @@ x-backend-service: &backend-service
     # 探测与转码临时文件落到命名卷，避免数 GB 视频写满容器 OverlayFS。
     # 卷名与旧 ffmpeg 容器的 root-owned 卷区分：新卷由镜像目录初始化，属主是 omninest。
     - omninest-probe-cache:/tmp/omninest-probe
-    - omninest-transcode-cache:/tmp/omninest-processing/transcode
+    # 整个处理根目录落卷：转码、照片打包、EPUB 暂存与派生资产共用同一大容量临时卷。
+    - omninest-processing-cache:/tmp/omninest-processing
   # 后端是 rclone RC 的唯一调用方（见 x-backend-environment 的 OMNINEST_RCLONE_ENDPOINT），
   # 因此只有它同时挂在出网执行体所在的 egress 上；数据面服务与 nginx 都不进 egress。
   networks:
@@ -455,7 +458,7 @@ volumes:
   omninest-certbot-config:
   omninest-certbot-challenges:
   omninest-probe-cache:
-  omninest-transcode-cache:
+  omninest-processing-cache:
 
 networks:
   default:

@@ -5,12 +5,14 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FileVersion;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FileVersionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.file.repository.FileVersionRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +39,8 @@ public class FileVersionService {
     private final FileContentChangePublisher fileContentChangePublisher;
     private final FileNodeSupport fileNodeSupport;
     private final FileSyncEventWriter syncEventWriter;
+    private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
 
     /**
      * 将文件当前对象保存为历史版本，并把已上传的新对象设为当前对象。
@@ -55,6 +59,32 @@ public class FileVersionService {
             UUID newObjectId,
             long newObjectSizeBytes,
             String remark
+    ) {
+        return saveNewVersion(ownerUserId, fileNodeId, newObjectId, newObjectSizeBytes, remark, true);
+    }
+
+    /**
+     * 保存新版本，并由调用方决定是否在此路径结算配额。
+     *
+     * <p>入口晋升的版本对象已由上传会话按会话大小结算，不能再计一次；
+     * 直接调用版本接口的对象没有会话结算，必须在这里扣减。</p>
+     *
+     * @param ownerUserId 文件所有者
+     * @param fileNodeId 文件节点 ID
+     * @param newObjectId 新对象 ID
+     * @param newObjectSizeBytes 新对象大小
+     * @param remark 版本备注
+     * @param chargeQuota 是否在此路径结算配额
+     * @return 文件节点最新状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNodeDto saveNewVersion(
+            UUID ownerUserId,
+            UUID fileNodeId,
+            UUID newObjectId,
+            long newObjectSizeBytes,
+            String remark,
+            boolean chargeQuota
     ) {
         FileNode node = fileNodeRepository
                 .findOwnedForUpdate(fileNodeId, ownerUserId)
@@ -100,9 +130,26 @@ public class FileVersionService {
         }
         node.setUpdatedAt(Instant.now());
         FileNode saved = fileNodeRepository.save(node);
+        if (chargeQuota) {
+            chargeVersionQuota(saved, newObject.getSizeBytes());
+        }
         fileContentChangePublisher.publish(saved, newObject, ownerUserId);
         syncEventWriter.recordFileEvent(ownerUserId, fileNodeId, Map.of("version", nextVersionNo));
         return fileNodeSupport.toNodeDto(saved);
+    }
+
+    private void chargeVersionQuota(FileNode node, long bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            // 版本只增加对象字节，不增加文件数，避免 fileCount 虚增。
+            sharedSpaceQuotaService.checkQuota(bytes);
+            sharedSpaceQuotaService.increaseUsage(bytes, 0);
+            return;
+        }
+        storageQuotaService.checkQuota(node.getOwnerUserId(), bytes);
+        storageQuotaService.incrementUsage(node.getOwnerUserId(), bytes);
     }
 
     /**

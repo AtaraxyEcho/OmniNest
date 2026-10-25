@@ -1,8 +1,10 @@
 package com.omninest.worker.index;
 
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
 import com.omninest.modules.photos.service.PhotoIndexTaskService;
+import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -24,11 +26,13 @@ import org.springframework.amqp.core.MessageProperties;
 class SearchIndexRebuildConsumerTest {
 
     private final TaskRecordService taskRecordService = Mockito.mock(TaskRecordService.class);
+    private final TaskFailureRetryService failureRetryService = Mockito.mock(TaskFailureRetryService.class);
     private final SearchIndexRebuildService rebuildService = Mockito.mock(SearchIndexRebuildService.class);
     private final PhotoIndexTaskService photoIndexTaskService = Mockito.mock(PhotoIndexTaskService.class);
     private final Channel channel = Mockito.mock(Channel.class);
     private final SearchIndexRebuildConsumer consumer = new SearchIndexRebuildConsumer(
             taskRecordService,
+            failureRetryService,
             rebuildService,
             photoIndexTaskService
     );
@@ -80,7 +84,11 @@ class SearchIndexRebuildConsumerTest {
 
         consumer.handle(event, message(), channel);
 
-        Mockito.verify(taskRecordService).markFailed(taskId, "清空照片索引失败");
+        Mockito.verify(failureRetryService).handleFailure(
+                Mockito.eq(taskId),
+                Mockito.eq(QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY),
+                Mockito.eq(event),
+                Mockito.any(IllegalStateException.class));
         Mockito.verify(channel).basicAck(1L, false);
         Mockito.verify(taskRecordService, Mockito.never()).markCompleted(Mockito.eq(taskId), Mockito.any());
     }

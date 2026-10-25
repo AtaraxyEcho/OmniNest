@@ -104,7 +104,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   StreamSubscription<bool>? _bufferingSub;
   // 缓冲前是否正在播放（用于缓冲结束后自动恢复）
   bool _wasPlayingBeforeBuffering = false;
-  double _bufferProgress = 0.0;
+  // 缓冲进度只影响进度条，使用 ValueNotifier 局部刷新避免每次轮询重建整页。
+  final ValueNotifier<double> _bufferProgress = ValueNotifier<double>(0);
   Timer? _bufferPollTimer;
   // 位置轮询 — fMP4 流的 timeupdate 事件频率不足，定时器保证进度条平滑更新
   // 使用 ValueNotifier 避免 setState 重建整棵 widget 树（含 Video 组件）
@@ -185,6 +186,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     _positionPollTimer?.cancel();
     _subtitlePositionSub?.cancel();
     _activeCueIndex.dispose();
+    _bufferProgress.dispose();
     _polledPosition.dispose();
     _volumeListenable.dispose();
     _seekListenable.dispose();
@@ -289,6 +291,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     final isFullscreen =
         isDesktopPlatform ? chromeState.isFullscreen : fs.isFullscreen;
     final plan = ref.watch(moviePlaybackPlanProvider(widget.videoItemId));
+    // 播放计划到达时驱动播放器打开；build 本身只负责布局，
+    // 不在 widget 构建期注册帧末回调或改写播放器状态。
+    ref.listen(moviePlaybackPlanProvider(widget.videoItemId), (_, next) {
+      next.whenData(_openIfNeeded);
+    });
     final item =
         ref.watch(movieDetailProvider(widget.videoItemId)).asData?.value;
     final navigation = _watchEpisodeNavigation(item);
@@ -299,7 +306,6 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
           Positioned.fill(
             child: plan.when(
               data: (value) {
-                _openIfNeeded(value);
                 return _buildPlayer(
                   value,
                   isFullscreen: isFullscreen,

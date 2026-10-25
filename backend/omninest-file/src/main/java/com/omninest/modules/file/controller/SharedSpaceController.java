@@ -16,6 +16,8 @@ import com.omninest.modules.file.service.SharedSpaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -146,7 +148,9 @@ public class SharedSpaceController {
      * 共享空间配置更新请求。
      */
     public record SharedSpaceConfigRequest(
+            @Pattern(regexp = "\\d{1,19}|", message = "maxBytes 必须为字节数")
             String maxBytes,
+            @Pattern(regexp = "true|false|", message = "enabled 必须为 true 或 false")
             String enabled
     ) {}
 
@@ -154,13 +158,13 @@ public class SharedSpaceController {
      * 共享空间权限设置请求。
      */
     public record SharedSpacePermissionRequest(
-            Boolean canBrowse,
-            Boolean canUpload,
-            Boolean canDownload,
-            Boolean canDeleteOwn,
-            Boolean canDeleteAny,
-            Boolean canMoveTo,
-            Boolean canMoveFrom,
-            Boolean canCreateFolder
+            @NotNull Boolean canBrowse,
+            @NotNull Boolean canUpload,
+            @NotNull Boolean canDownload,
+            @NotNull Boolean canDeleteOwn,
+            @NotNull Boolean canDeleteAny,
+            @NotNull Boolean canMoveTo,
+            @NotNull Boolean canMoveFrom,
+            @NotNull Boolean canCreateFolder
     ) {}
 }

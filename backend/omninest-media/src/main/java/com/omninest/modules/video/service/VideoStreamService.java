@@ -405,11 +405,15 @@ public class VideoStreamService {
             String videoDemuxer, String videoUrl, String audioUrl, long startSeconds) {
         List<String> args = new ArrayList<>();
         if (startSeconds > 0) {
+            // -ss 是输入级参数，必须分别放在两个 -i 之前；只给视频 seek 会让音频
+            // 从头播放，缓存音轨模式下产生稳定的音画不同步。
+            args.addAll(List.of("-ss", String.valueOf(startSeconds)));
+        }
+        args.addAll(List.of("-f", videoDemuxer, "-i", videoUrl));
+        if (startSeconds > 0) {
             args.addAll(List.of("-ss", String.valueOf(startSeconds)));
         }
         args.addAll(List.of(
-                "-f", videoDemuxer,
-                "-i", videoUrl,
                 // 派生音频固定为 ADTS AAC，同样不允许自动探测。
                 "-f", "aac",
                 "-i", audioUrl,

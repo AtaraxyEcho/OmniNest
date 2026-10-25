@@ -2,6 +2,8 @@ package com.omninest.worker.video;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.omninest.modules.video.event.TranscodeRequestedEvent;
 import com.omninest.modules.video.service.TranscodeExecutionService;
 import com.rabbitmq.client.Channel;
@@ -24,8 +26,9 @@ class TranscodeConsumerTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
     private final TranscodeExecutionService executionService = Mockito.mock(TranscodeExecutionService.class);
+    private final TaskFailureRetryService failureRetryService = Mockito.mock(TaskFailureRetryService.class);
     private final Channel channel = Mockito.mock(Channel.class);
-    private final TranscodeConsumer consumer = new TranscodeConsumer(executionService);
+    private final TranscodeConsumer consumer = new TranscodeConsumer(executionService, failureRetryService);
 
     @Test
     void handleExecutesDefaultTranscodeAndAcknowledges() throws IOException {
@@ -70,14 +73,35 @@ class TranscodeConsumerTest {
     }
 
     @Test
-    void handleNacksUnexpectedFailure() throws IOException {
+    void handleSchedulesRetryOnUnexpectedFailure() throws IOException {
         TranscodeRequestedEvent event = event(false, false);
-        Mockito.doThrow(new IllegalStateException("transcoder unavailable"))
-                .when(executionService).execute(TASK_ID, VIDEO_ID, OWNER_ID);
+        IllegalStateException failure = new IllegalStateException("transcoder unavailable");
+        Mockito.doThrow(failure).when(executionService).execute(TASK_ID, VIDEO_ID, OWNER_ID);
 
         consumer.handle(event, message(), channel);
 
-        Mockito.verify(channel).basicNack(1L, false, false);
+        // 任务状态与下一次投递由统一失败裁决服务持有，消费者确认原消息避免 Broker 重投风暴。
+        Mockito.verify(failureRetryService).handleFailure(
+                TASK_ID, QueueNames.VIDEO_TRANSCODE_ROUTING_KEY, event, failure);
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void handleRequeuesOriginalMessageWhenFailureStateCannotBePersisted() throws IOException {
+        TranscodeRequestedEvent event = event(false, false);
+        Mockito.doThrow(new IllegalStateException("transcoder unavailable"))
+                .when(executionService).execute(TASK_ID, VIDEO_ID, OWNER_ID);
+        Mockito.when(failureRetryService.handleFailure(
+                        Mockito.eq(TASK_ID),
+                        Mockito.eq(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY),
+                        Mockito.eq(event),
+                        Mockito.any(Throwable.class)))
+                .thenThrow(new IllegalStateException("database unavailable"));
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(channel).basicNack(1L, false, true);
         Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 

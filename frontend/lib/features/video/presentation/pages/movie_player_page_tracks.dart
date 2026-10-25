@@ -139,8 +139,8 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
                 : _player.state.duration.inMilliseconds;
         if (durationMs > 0) {
           final progress = (buffer.inMilliseconds / durationMs).clamp(0.0, 1.0);
-          if ((progress - _bufferProgress).abs() > 0.001) {
-            _updateState(() => _bufferProgress = progress);
+          if ((progress - _bufferProgress.value).abs() > 0.001) {
+            _bufferProgress.value = progress;
           }
         }
       });

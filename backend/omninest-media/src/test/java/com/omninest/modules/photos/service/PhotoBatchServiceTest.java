@@ -1,6 +1,7 @@
 package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,6 +13,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -34,6 +37,7 @@ import com.omninest.modules.photos.repository.PhotoBatchTaskRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
@@ -87,6 +91,7 @@ class PhotoBatchServiceTest {
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final PhotoBatchDownloadProperties downloadProperties = new PhotoBatchDownloadProperties();
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
+    private final TempStagingPort tempStagingPort = mock(TempStagingPort.class);
     private final PhotoBatchService service = new PhotoBatchService(
             batchTaskRepository,
             photoItemRepository,
@@ -100,12 +105,16 @@ class PhotoBatchServiceTest {
             taskRecordService,
             syncEventService,
             downloadProperties,
-            transactionTemplate
+            transactionTemplate,
+            tempStagingPort
     );
 
     @BeforeEach
     void setUpTaskClaim() {
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
+        when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> Files.createTempFile(
+                        invocation.getArgument(1), invocation.getArgument(2)));
         // executeBatchTask 无外层事务，保存必须把携带推进后 version 的实例回传，
         // 桩模拟 Hibernate merge 行为；修复前返回值被丢弃，收尾保存仍带旧版本。
         when(batchTaskRepository.save(any(PhotoBatchTask.class))).thenAnswer(invocation -> {
@@ -357,7 +366,8 @@ class PhotoBatchServiceTest {
         when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(contentStream(new byte[]{1, 2, 3}));
 
-        service.executeBatchTask(TASK_ID, OWNER_ID);
+        assertThatThrownBy(() -> service.executeBatchTask(TASK_ID, OWNER_ID))
+                .isInstanceOf(BusinessException.class);
 
         assertThat(task.getStatus()).isEqualTo("FAILED");
         assertThat(task.getErrorMessage()).contains("大小与元数据不一致");
@@ -381,7 +391,8 @@ class PhotoBatchServiceTest {
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
         stubDownloadArchiveSource(photo());
 
-        constrainedService.executeBatchTask(TASK_ID, OWNER_ID);
+        assertThatThrownBy(() -> constrainedService.executeBatchTask(TASK_ID, OWNER_ID))
+                .isInstanceOf(BusinessException.class);
 
         assertThat(task.getStatus()).isEqualTo("FAILED");
         assertThat(task.getErrorMessage()).contains("临时磁盘空间不足");
@@ -498,7 +509,8 @@ class PhotoBatchServiceTest {
                 taskRecordService,
                 syncEventService,
                 properties,
-                transactionTemplate
+                transactionTemplate,
+                tempStagingPort
         );
     }
 

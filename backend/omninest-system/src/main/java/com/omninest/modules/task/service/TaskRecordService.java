@@ -443,6 +443,74 @@ public class TaskRecordService {
     }
 
     /**
+     * 消费者捕获执行异常后，在单个事务内裁决重试或死信。
+     *
+     * <p>业务执行体通常已经先调用 {@code markFailed} 写入失败原因，而
+     * {@code FAILED} 在常规状态机里是终态；这里允许 FAILED/RUNNING/QUEUED
+     * 继续进入 RETRY_WAIT 或 DLQ，已完成、已取消和已丢弃的任务保持原状。</p>
+     *
+     * @param taskId 任务 ID
+     * @param errorMessage 错误摘要
+     * @param stackSummary 脱敏堆栈摘要
+     * @param now 当前时间
+     * @return 裁决结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FailureResolution resolveFailure(
+            UUID taskId,
+            String errorMessage,
+            String stackSummary,
+            Instant now
+    ) {
+        TaskRecord record = taskRecordRepository.findByIdForUpdate(taskId).orElse(null);
+        if (record == null) {
+            return FailureResolution.ignored();
+        }
+        TaskStatus status = TaskStatus.fromValue(record.getStatus());
+        if (status == TaskStatus.COMPLETED
+                || status == TaskStatus.CANCELLED
+                || status == TaskStatus.DLQ
+                || status == TaskStatus.DISCARDED) {
+            return FailureResolution.ignored();
+        }
+        if (record.getRetryCount() >= record.getMaxRetries()) {
+            record.setStatus(TaskStatus.DLQ.getValue());
+            record.setErrorMessage(errorMessage);
+            record.setStackSummary(stackSummary);
+            record.setCompletedAt(now);
+            record.setNextRetryAt(null);
+            taskRecordRepository.save(record);
+            recordEvent(record, SyncAction.FAILED);
+            return new FailureResolution(true, true, record.getRetryCount(), null);
+        }
+        int retryCount = record.getRetryCount() + 1;
+        Instant nextRetryAt = now.plus(defaultRetryDelay(retryCount));
+        record.setRetryCount(retryCount);
+        record.setStatus(TaskStatus.RETRY_WAIT.getValue());
+        record.setErrorMessage(errorMessage);
+        record.setStackSummary(stackSummary);
+        record.setNextRetryAt(nextRetryAt);
+        record.setCompletedAt(null);
+        record.setHeartbeatAt(now);
+        taskRecordRepository.save(record);
+        recordEvent(record, SyncAction.UPDATED);
+        return new FailureResolution(true, false, retryCount, nextRetryAt);
+    }
+
+    /**
+     * 判断任务是否已达到重试上限，供执行体决定是否发送终态失败通知。
+     *
+     * @param taskId 任务 ID
+     * @return 已耗尽重试次数时返回 true
+     */
+    @Transactional(readOnly = true)
+    public boolean hasExhaustedRetries(UUID taskId) {
+        return taskRecordRepository.findById(taskId)
+                .map(record -> record.getRetryCount() >= record.getMaxRetries())
+                .orElse(false);
+    }
+
+    /**
      * 查询指定资源的活跃任务。
      *
      * @param ownerUserId 所属用户 ID

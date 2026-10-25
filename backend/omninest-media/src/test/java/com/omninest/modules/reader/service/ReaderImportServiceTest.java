@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -32,6 +34,7 @@ import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
+import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -96,6 +99,8 @@ class ReaderImportServiceTest {
     @Mock
     private TransactionTemplate transactionTemplate;
     @Mock
+    private TempStagingPort tempStagingPort;
+    @Mock
     private SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     @InjectMocks
@@ -111,6 +116,9 @@ class ReaderImportServiceTest {
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 ((TransactionCallback<Object>) invocation.getArgument(0)).doInTransaction(null));
         lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+        lenient().when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> Files.createTempFile(
+                        invocation.getArgument(1), invocation.getArgument(2)));
     }
 
     @Test

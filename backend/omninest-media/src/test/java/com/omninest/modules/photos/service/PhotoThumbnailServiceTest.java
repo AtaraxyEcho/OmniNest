@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
@@ -19,6 +20,7 @@ import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -32,11 +34,20 @@ class PhotoThumbnailServiceTest {
     private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final PhotoFileDetector fileDetector = new PhotoFileDetector();
     private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
+    private final TempStagingPort tempStagingPort = mock(TempStagingPort.class);
     private final PhotoSourceFileService sourceFileService = new PhotoSourceFileService(
             mock(FileQueryService.class),
             fileDetector,
-            inputGuard
+            inputGuard,
+            tempStagingPort
     );
+
+    @BeforeEach
+    void stubTempStaging() {
+        when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> Files.createTempFile(
+                        invocation.getArgument(1), invocation.getArgument(2)));
+    }
     private final PhotoThumbnailService service = new PhotoThumbnailService(
             storageService,
             fileLifecycleGuard,

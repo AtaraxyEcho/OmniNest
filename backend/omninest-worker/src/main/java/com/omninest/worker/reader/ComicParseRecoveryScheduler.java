@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
         + "('${omninest.runtime.role:api}' == 'api' && "
-        + "(${omninest.runtime.embedded-worker-enabled:false} || ${reader.comic-parser.consume-in-api:false}))")
+        + "(${omninest.runtime.embedded-scheduler-enabled:false} || ${reader.comic-parser.consume-in-api:false}))")
 public class ComicParseRecoveryScheduler {
 
     private static final String TASK_TYPE = "COMIC_PARSE";

@@ -26,6 +26,7 @@ class FilePurgeStateServiceTest {
     private static final UUID OBJECT_A = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final UUID OBJECT_B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
     private static final UUID OBJECT_C = UUID.fromString("00000000-0000-0000-0000-00000000000c");
+    private static final UUID DEFAULT_OWNER = UUID.fromString("00000000-0000-0000-0000-00000000000f");
 
     @Test
     @DisplayName("无历史版本时按节点自身大小释放")
@@ -169,7 +170,7 @@ class FilePurgeStateServiceTest {
         shared.setOwnerUserId(UUID.randomUUID());
 
         FilePurgeStateService.validateTaskNodes(
-                new FilePurgeRequestedEvent(taskId, owner, shared.getId()), List.of(shared));
+                new FilePurgeRequestedEvent(taskId, owner, shared.getId()), List.of(shared), true);
     }
 
     @Test
@@ -182,10 +183,65 @@ class FilePurgeStateServiceTest {
         personal.setOwnerUserId(UUID.randomUUID());
 
         assertThatThrownBy(() -> FilePurgeStateService.validateTaskNodes(
-                        new FilePurgeRequestedEvent(taskId, owner, personal.getId()), List.of(personal)))
+                        new FilePurgeRequestedEvent(taskId, owner, personal.getId()), List.of(personal), false))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
                 .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("共享空间粉碎任务允许其他上传者名下的个人衍生节点")
+    void allowsCrossOwnerDerivedNodesInSharedTask() {
+        UUID taskId = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        FileNode cover = fileNode(UUID.randomUUID(), OBJECT_A, 30L);
+        cover.setSpaceType(SpaceType.PERSONAL);
+        cover.setOwnerUserId(UUID.randomUUID());
+        cover.setSourceType("DERIVED");
+        cover.setNormalizedPath("/.metadata/PHOTO_ITEM/" + cover.getId() + "/THUMBNAIL/thumb.jpg");
+
+        FilePurgeStateService.validateTaskNodes(
+                new FilePurgeRequestedEvent(taskId, owner, cover.getId()), List.of(cover), true);
+    }
+
+    @Test
+    @DisplayName("共享空间粉碎任务仍拒绝其他用户的个人源文件")
+    void rejectsCrossOwnerSourceNodesEvenInSharedTask() {
+        UUID taskId = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        FileNode source = fileNode(UUID.randomUUID(), OBJECT_A, 1000L);
+        source.setSpaceType(SpaceType.PERSONAL);
+        source.setOwnerUserId(UUID.randomUUID());
+        source.setSourceType("UPLOAD");
+        source.setNormalizedPath("/other-user/secret.pdf");
+
+        assertThatThrownBy(() -> FilePurgeStateService.validateTaskNodes(
+                        new FilePurgeRequestedEvent(taskId, owner, source.getId()), List.of(source), true))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).errorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("多成员共享目录的配额按节点真实所有者分别释放")
+    void releasesQuotaPerNodeOwner() {
+        UUID uploaderA = UUID.randomUUID();
+        UUID uploaderB = UUID.randomUUID();
+        UUID nodeA = UUID.randomUUID();
+        UUID nodeB = UUID.randomUUID();
+        FileNode first = fileNode(nodeA, OBJECT_A, 1000L);
+        first.setOwnerUserId(uploaderA);
+        FileNode second = fileNode(nodeB, OBJECT_B, 700L);
+        second.setOwnerUserId(uploaderB);
+
+        Map<UUID, Long> released = FilePurgeStateService.quotaReleaseBytesByOwner(
+                List.of(first, second),
+                List.of(version(nodeB, OBJECT_C, 1)),
+                Map.of(OBJECT_A, 1000L, OBJECT_B, 700L, OBJECT_C, 300L));
+
+        assertThat(released)
+                .containsEntry(uploaderA, 1000L)
+                .containsEntry(uploaderB, 1000L);
     }
 
     @Test
@@ -212,6 +268,7 @@ class FilePurgeStateServiceTest {
     private static FileNode fileNode(UUID nodeId, UUID currentObjectId, long sizeBytes) {
         FileNode node = new FileNode();
         node.setId(nodeId);
+        node.setOwnerUserId(DEFAULT_OWNER);
         node.setNodeType(NodeType.FILE.getValue());
         node.setCurrentObjectId(currentObjectId);
         node.setSizeBytes(sizeBytes);

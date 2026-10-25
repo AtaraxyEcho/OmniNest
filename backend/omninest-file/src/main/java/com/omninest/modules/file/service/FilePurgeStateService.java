@@ -101,11 +101,13 @@ public class FilePurgeStateService {
     @Transactional(rollbackFor = Exception.class)
     public PurgeContext plan(FilePurgeRequestedEvent event) {
         boolean firstPlanningPass = !purgeEntryRepository.existsByTaskId(event.taskId());
+        boolean sharedTask = isSharedTask(event.taskId());
+        UUID operatorId = resolveOperatorId(event);
         long previousNodeCount;
         long currentNodeCount = fileNodeRepository.countByPurgeTaskId(event.taskId());
         do {
             previousNodeCount = currentNodeCount;
-            planAllTaskNodeBatches(event);
+            planAllTaskNodeBatches(event, sharedTask, operatorId);
             currentNodeCount = fileNodeRepository.countByPurgeTaskId(event.taskId());
         } while (currentNodeCount > previousNodeCount);
         if (firstPlanningPass) {
@@ -119,7 +121,11 @@ public class FilePurgeStateService {
         );
     }
 
-    private void planAllTaskNodeBatches(FilePurgeRequestedEvent event) {
+    private void planAllTaskNodeBatches(
+            FilePurgeRequestedEvent event,
+            boolean sharedTask,
+            UUID operatorId
+    ) {
         int pageNumber = 0;
         Page<FileNode> page;
         do {
@@ -128,14 +134,19 @@ public class FilePurgeStateService {
                     PageRequest.of(pageNumber, PLANNING_BATCH_SIZE)
             );
             if (!page.isEmpty()) {
-                planNodeBatch(event, page.getContent());
+                planNodeBatch(event, page.getContent(), sharedTask, operatorId);
             }
             pageNumber++;
         } while (page.hasNext());
     }
 
-    private void planNodeBatch(FilePurgeRequestedEvent event, List<FileNode> nodes) {
-        validateTaskNodes(event, nodes);
+    private void planNodeBatch(
+            FilePurgeRequestedEvent event,
+            List<FileNode> nodes,
+            boolean sharedTask,
+            UUID operatorId
+    ) {
+        validateTaskNodes(event, nodes, sharedTask);
         List<UUID> nodeIds = nodes.stream().map(FileNode::getId).toList();
         PurgeContext context = new PurgeContext(
                 event.taskId(),
@@ -174,10 +185,21 @@ public class FilePurgeStateService {
             fileNodeRepository.assignSharedIdsToPurge(
                     contributedNodeIds,
                     event.taskId(),
-                    event.ownerUserId(),
+                    operatorId,
                     FilePurgeState.RUNNING,
                     requestedAt
             );
+            if (sharedTask) {
+                // 成员上传文件的缩略图、封面与编辑版本落在其个人空间的 DERIVED 节点，
+                // 只按共享空间匹配会留下孤儿元数据与对象。
+                fileNodeRepository.assignContributedDerivedIdsToPurge(
+                        contributedNodeIds,
+                        event.taskId(),
+                        operatorId,
+                        FilePurgeState.RUNNING,
+                        requestedAt
+                );
+            }
         }
 
         List<FileVersion> versions = fileVersionRepository.findByFileNodeIdIn(nodeIds);
@@ -322,7 +344,9 @@ public class FilePurgeStateService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void finalizePurge(FilePurgeRequestedEvent event) {
-        long releasedBytes = 0L;
+        boolean sharedTask = isSharedTask(event.taskId());
+        UUID operatorId = resolveOperatorId(event);
+        Map<UUID, Long> releasedBytesByOwner = new LinkedHashMap<>();
         long deletedNodeCount = 0L;
         Set<UUID> candidateObjectIds = new HashSet<>();
         while (true) {
@@ -333,8 +357,10 @@ public class FilePurgeStateService {
             if (page.isEmpty()) {
                 break;
             }
-            FinalizationResult result = finalizeNodeBatch(event, page.getContent());
-            releasedBytes += result.releasedBytes();
+            FinalizationResult result = finalizeNodeBatch(
+                    event, page.getContent(), sharedTask, operatorId);
+            result.releasedBytesByOwner()
+                    .forEach((owner, bytes) -> releasedBytesByOwner.merge(owner, bytes, Long::sum));
             deletedNodeCount += result.nodeCount();
             candidateObjectIds.addAll(result.objectIds());
             entityManager.flush();
@@ -344,10 +370,14 @@ public class FilePurgeStateService {
         // 取不到版本对象大小，把已用配额永久留在高位；同时这里按全表引用复核，
         // 并发任务的节点或版本尚未删除时不能提前删行。
         int deletedObjectCount = deleteUnreferencedObjects(candidateObjectIds);
-        if (releasedBytes > 0L) {
-            storageQuotaService.decrementUsage(event.ownerUserId(), releasedBytes);
-        }
-        readThroughCache.invalidate("omninest:storage:stats:" + event.ownerUserId());
+        // 共享目录可能包含多个成员上传的文件，配额与缓存必须按节点真实所有者分别释放。
+        releasedBytesByOwner.forEach((owner, bytes) -> {
+            if (bytes > 0L) {
+                storageQuotaService.decrementUsage(owner, bytes);
+                readThroughCache.invalidate("omninest:storage:stats:" + owner);
+            }
+        });
+        long releasedBytes = releasedBytesByOwner.values().stream().mapToLong(Long::longValue).sum();
         taskRecordService.markCompleted(event.taskId(), Map.of(
                 "fileNodeCount", deletedNodeCount,
                 "objectCount", purgeEntryRepository.countByTaskId(event.taskId()),
@@ -379,8 +409,13 @@ public class FilePurgeStateService {
         return deleted;
     }
 
-    private FinalizationResult finalizeNodeBatch(FilePurgeRequestedEvent event, List<FileNode> nodes) {
-        validateTaskNodes(event, nodes);
+    private FinalizationResult finalizeNodeBatch(
+            FilePurgeRequestedEvent event,
+            List<FileNode> nodes,
+            boolean sharedTask,
+            UUID operatorId
+    ) {
+        validateTaskNodes(event, nodes, sharedTask);
         List<UUID> nodeIds = nodes.stream().map(FileNode::getId).toList();
         PurgeContext context = new PurgeContext(
                 event.taskId(),
@@ -403,12 +438,13 @@ public class FilePurgeStateService {
                 new FileNodesDeletedEvent(owner, List.copyOf(ids), deletedAt)));
         permissionRepository.deleteByFileNodeIdIn(nodeIds);
         fileVersionRepository.deleteByFileNodeIdIn(nodeIds);
-        long releasedBytes = quotaReleaseBytes(nodes, versions, sizeByObjectId(batchObjects));
+        Map<UUID, Long> releasedBytesByOwner =
+                quotaReleaseBytesByOwner(nodes, versions, sizeByObjectId(batchObjects));
         // 索引删除覆盖个人与共享两个索引目录，节点归属人不影响清理结果。
-        fileSearchIndexService.deleteFiles(nodeIds, event.ownerUserId());
+        fileSearchIndexService.deleteFiles(nodeIds, operatorId);
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
-        return new FinalizationResult(nodes.size(), releasedBytes, Set.copyOf(objectIds));
+        return new FinalizationResult(nodes.size(), releasedBytesByOwner, Set.copyOf(objectIds));
     }
 
     /**
@@ -428,17 +464,34 @@ public class FilePurgeStateService {
             List<FileVersion> versions,
             Map<UUID, Long> objectSizes
     ) {
-        long released = 0L;
+        return quotaReleaseBytesByOwner(nodes, versions, objectSizes).values().stream()
+                .mapToLong(Long::longValue)
+                .sum();
+    }
+
+    /**
+     * 按节点真实所有者分组计算应释放的配额。
+     *
+     * <p>共享目录可能包含多个成员上传的文件；把释放量全部记到任务发起者名下
+     * 会让发起者的已用量被多扣，而实际上传者的已用量永久停留。</p>
+     */
+    static Map<UUID, Long> quotaReleaseBytesByOwner(
+            List<FileNode> nodes,
+            List<FileVersion> versions,
+            Map<UUID, Long> objectSizes
+    ) {
+        Map<UUID, Long> releasedByOwner = new LinkedHashMap<>();
         Map<UUID, UUID> currentObjectByNodeId = new LinkedHashMap<>();
-        Set<UUID> personalNodeIds = new HashSet<>();
+        Map<UUID, UUID> ownerByPersonalNodeId = new LinkedHashMap<>();
         for (FileNode node : nodes) {
             if (!NodeType.FILE.getValue().equals(node.getNodeType())
                     || node.getSpaceType() != SpaceType.PERSONAL
-                    || !isQuotaCountedNode(node)) {
+                    || !isQuotaCountedNode(node)
+                    || node.getOwnerUserId() == null) {
                 continue;
             }
-            personalNodeIds.add(node.getId());
-            released += node.getSizeBytes();
+            ownerByPersonalNodeId.put(node.getId(), node.getOwnerUserId());
+            releasedByOwner.merge(node.getOwnerUserId(), node.getSizeBytes(), Long::sum);
             if (node.getCurrentObjectId() != null) {
                 currentObjectByNodeId.put(node.getId(), node.getCurrentObjectId());
             }
@@ -447,7 +500,8 @@ public class FilePurgeStateService {
         for (FileVersion version : versions) {
             UUID objectId = version.getObjectId();
             UUID nodeKey = version.getFileNodeId();
-            if (!personalNodeIds.contains(nodeKey)) {
+            UUID ownerUserId = ownerByPersonalNodeId.get(nodeKey);
+            if (ownerUserId == null) {
                 continue;
             }
             if (objectId == null || objectId.equals(currentObjectByNodeId.get(nodeKey))) {
@@ -457,9 +511,9 @@ public class FilePurgeStateService {
             if (!counted.add(objectId)) {
                 continue;
             }
-            released += objectSizes.getOrDefault(objectId, 0L);
+            releasedByOwner.merge(ownerUserId, objectSizes.getOrDefault(objectId, 0L), Long::sum);
         }
-        return released;
+        return releasedByOwner;
     }
 
     private static Map<UUID, Long> sizeByObjectId(List<FileObject> objects) {
@@ -524,18 +578,34 @@ public class FilePurgeStateService {
         return idsByOwner;
     }
 
-    static void validateTaskNodes(FilePurgeRequestedEvent event, List<FileNode> nodes) {
+    static void validateTaskNodes(
+            FilePurgeRequestedEvent event,
+            List<FileNode> nodes,
+            boolean sharedTask
+    ) {
         if (nodes.isEmpty()) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "永久删除任务没有关联文件");
         }
         // 共享空间目录可由不同成员上传子文件，owner_user_id 因此天然不一致；
-        // 只有个人空间节点必须与任务发起者一致。
+        // 共享任务的跨用户节点只允许 DERIVED（缩略图、封面、编辑版本），
+        // 个人空间源文件仍必须与任务发起者一致。
         boolean invalidOwner = nodes.stream()
                 .anyMatch(node -> node.getSpaceType() != SpaceType.SHARED
-                        && !event.ownerUserId().equals(node.getOwnerUserId()));
+                        && !event.ownerUserId().equals(node.getOwnerUserId())
+                        && !(sharedTask && SOURCE_TYPE_DERIVED.equals(node.getSourceType())));
         if (invalidOwner) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "永久删除任务文件归属不一致");
         }
+    }
+
+    private boolean isSharedTask(UUID taskId) {
+        return fileNodeRepository.existsByPurgeTaskIdAndSpaceType(taskId, SpaceType.SHARED);
+    }
+
+    private UUID resolveOperatorId(FilePurgeRequestedEvent event) {
+        return taskRecordService.findTaskRecord(event.taskId())
+                .map(record -> record.getOwnerUserId())
+                .orElse(event.ownerUserId());
     }
 
     private Map<UUID, FileObject> loadObjects(List<FileNode> nodes, List<FileVersion> versions) {
@@ -648,6 +718,10 @@ public class FilePurgeStateService {
     private record EntryKey(String bucketName, String objectKey, String minioVersionId) {
     }
 
-    private record FinalizationResult(long nodeCount, long releasedBytes, Set<UUID> objectIds) {
+    private record FinalizationResult(
+            long nodeCount,
+            Map<UUID, Long> releasedBytesByOwner,
+            Set<UUID> objectIds
+    ) {
     }
 }

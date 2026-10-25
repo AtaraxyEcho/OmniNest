@@ -4,6 +4,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -82,6 +83,7 @@ public class PhotoBatchService {
     private final MediaSyncEventService syncEventService;
     private final PhotoBatchDownloadProperties downloadProperties;
     private final TransactionTemplate transactionTemplate;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 创建批量任务并发布到 MQ 异步执行。
@@ -216,6 +218,9 @@ public class PhotoBatchService {
             failedTask.setErrorMessage(ex.getMessage());
             batchTaskRepository.save(failedTask);
             taskRecordService.markFailed(taskId, ex.getMessage(), ThrowableDescriber.describe(ex));
+            throw ex instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new IllegalStateException(ex.getMessage(), ex);
         }
     }
 
@@ -372,7 +377,8 @@ public class PhotoBatchService {
 
         Path zipFile = null;
         try {
-            zipFile = Files.createTempFile("omninest-photo-batch-", ".zip");
+            // 批量包最大可达数十 GB，必须落在独立处理卷而不是容器根 OverlayFS。
+            zipFile = tempStagingPort.createTempFile("photo-batch", "omninest-photo-batch-", ".zip");
             requireWorkspaceCapacity(zipFile, archivePlan.sourceBytes());
             task = writeArchive(zipFile, archivePlan.sources(), task);
             forceFile(zipFile);

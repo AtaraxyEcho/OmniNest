@@ -807,6 +807,36 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 将业务参与者贡献的跨用户派生节点关联到共享空间永久删除任务。
+     *
+     * <p>共享文件由成员 B 上传时，其缩略图、封面与编辑版本由 B 名下以
+     * PERSONAL + DERIVED 保存；只按任务发起者或 SHARED 空间匹配会漏掉这些节点，
+     * 物理对象删除后留下孤儿元数据。跨用户只接受 DERIVED 节点，避免误伤他人的源文件。</p>
+     *
+     * @param ids 文件节点 ID
+     * @param taskId 任务 ID
+     * @param deletedBy 记录到 deleted_by 的操作者
+     * @param state 生命周期状态
+     * @param requestedAt 请求时间
+     * @return 更新数量
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update FileNode node set node.deleted = true, "
+            + "node.deletedAt = coalesce(node.deletedAt, :requestedAt), "
+            + "node.deletedBy = coalesce(node.deletedBy, :deletedBy), "
+            + "node.purgeTaskId = :taskId, node.purgeState = :state, "
+            + "node.purgeRequestedAt = coalesce(node.purgeRequestedAt, :requestedAt) "
+            + "where node.spaceType = 'PERSONAL' and node.sourceType = 'DERIVED' "
+            + "and node.id in :ids and (node.purgeTaskId is null or node.purgeTaskId = :taskId)")
+    int assignContributedDerivedIdsToPurge(
+            @Param("ids") Collection<UUID> ids,
+            @Param("taskId") UUID taskId,
+            @Param("deletedBy") UUID deletedBy,
+            @Param("state") FilePurgeState state,
+            @Param("requestedAt") Instant requestedAt
+    );
+
+    /**
      * 批量更新任务节点生命周期状态。
      *
      * @param taskId 任务 ID
@@ -819,6 +849,15 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("taskId") UUID taskId,
             @Param("state") FilePurgeState state
     );
+
+    /**
+     * 判断永久删除任务是否包含指定空间的节点。
+     *
+     * @param taskId 永久删除任务 ID
+     * @param spaceType 空间类型
+     * @return 存在匹配节点时返回 true
+     */
+    boolean existsByPurgeTaskIdAndSpaceType(UUID taskId, SpaceType spaceType);
 
     /**
      * 统计仍由任务外节点引用的对象。
@@ -881,8 +920,23 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
               AND n.nodeType = 'FILE'
               AND n.sourceType <> 'DERIVED'
               AND n.mimeType LIKE 'image/%'
+              AND n.id > :afterId
+            ORDER BY n.id ASC
             """)
-    List<FileNode> findImageFilesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+    List<FileNode> findImageFilesByOwnerUserIdAfterId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("afterId") UUID afterId,
+            Pageable pageable);
+
+    @Query("""
+            SELECT count(n) FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.deleted = false
+              AND n.nodeType = 'FILE'
+              AND n.sourceType <> 'DERIVED'
+              AND n.mimeType LIKE 'image/%'
+            """)
+    long countImageFilesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     // ============================================================
     // 共享空间查询

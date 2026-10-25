@@ -190,8 +190,9 @@ profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上�
 
 独立 ffmpeg 容器已移除：探测、转码与抽帧都在 backend 容器本地执行，
 媒体内容内嵌的远程引用由强制 demuxer 与 `protocol_whitelist` 收口，
-不再依赖一张 internal 网兜底。探测与转码临时目录分别挂到
-`omninest-probe-cache` / `omninest-transcode-cache` 命名卷，避免数 GB 视频写满 OverlayFS。
+不再依赖一张 internal 网兜底。探测临时目录挂到 `omninest-probe-cache`，
+转码、照片批量打包、EPUB 暂存与派生资产统一落在 `omninest-processing-cache`
+命名卷的 `/tmp/omninest-processing`，避免大文件写满容器 OverlayFS。
 
 `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、宿主连不上），
 所以 `egress` 故意不设 `internal`；只挂 internal 网的服务一旦加上 `ports:` 会静默失效，

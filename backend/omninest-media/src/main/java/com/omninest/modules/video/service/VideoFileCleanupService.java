@@ -215,7 +215,9 @@ public class VideoFileCleanupService implements
         }
         List<UUID> videoItemIds = videos.stream().map(MediaVideoItem::getId).toList();
         List<String> videoKeys = videoItemIds.stream().map(UUID::toString).toList();
-        playbackCleanupService.deleteOwned(ownerUserId, MediaPlaybackType.VIDEO, videoKeys);
+        // 续播进度按观看者归属：共享或公共影视条目会被其他成员观看，
+        // 只删条目所有者那一份会在别人「继续观看」里留下死条目。
+        playbackCleanupService.deleteAllUsers(MediaPlaybackType.VIDEO, videoKeys);
         // 观看历史、收藏与合集条目按"观看者"归属：共享空间或公共影视库的条目会被其他成员
         // 引用，只删条目所有者那一份会在别人列表里留下指向已删条目的死引用。
         // 仪表盘计数按用户缓存 3 分钟，其余成员的统计在缓存到期后自洽。
@@ -337,7 +339,8 @@ public class VideoFileCleanupService implements
                 tvSeasonRepository.deleteAll(seasons);
             }
         }
-        seriesFavoriteRepository.deleteByOwnerUserIdAndSeriesIdIn(ownerUserId, seriesIds);
+        // 收藏按观看者归属，系列彻底删除后必须清理所有成员的收藏。
+        seriesFavoriteRepository.deleteBySeriesIdIn(seriesIds);
         deleteContentAssetRows(ownerUserId, ResourceType.TV_SERIES, seriesIds);
         tvSeriesRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, seriesIds);
         log.info("已清理孤立系列: count={}, ids={}", seriesIds.size(), seriesIds);

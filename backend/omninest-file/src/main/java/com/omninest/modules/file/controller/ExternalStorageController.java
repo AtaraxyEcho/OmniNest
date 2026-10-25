@@ -102,15 +102,23 @@ public class ExternalStorageController {
                 request.getHeader("X-Forwarded-For"),
                 request.getHeader("X-Real-IP")
         );
-        if (!rateLimitService.tryAcquire(
-                "ip:" + clientIp + ":external-oauth-callback", 20, Duration.ofMinutes(1))) {
-            throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
-        }
-        if (error != null && !error.isBlank()) {
+        try {
+            if (!rateLimitService.tryAcquire(
+                    "ip:" + clientIp + ":external-oauth-callback", 20, Duration.ofMinutes(1))) {
+                throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
+            }
+            if (error != null && !error.isBlank()) {
+                return oauthResultPage("error");
+            }
+            oauthService.handleCallback(providerCode, state, authorizationCode);
+            return oauthResultPage("success");
+        } catch (BusinessException exception) {
+            // 浏览器顶层标签页拿到 JSON 既无法关闭也无法回跳；过期 state、限流
+            // 与三方拒绝都统一回到前端结果页。
+            log.warn("OAuth 回调处理失败: providerCode={}, errorCode={}",
+                    providerCode, exception.errorCode());
             return oauthResultPage("error");
         }
-        oauthService.handleCallback(providerCode, state, authorizationCode);
-        return oauthResultPage("success");
     }
 
     /**

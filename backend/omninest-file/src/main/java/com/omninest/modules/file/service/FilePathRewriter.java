@@ -2,8 +2,10 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,12 +34,14 @@ public class FilePathRewriter {
      * @param spaceType 空间类型
      * @param oldPath 变更前根路径
      * @param newPath 变更后根路径
+     * @return 路径发生变化且需要重建搜索索引的文件节点 ID
      */
-    public void rewriteDescendantPaths(
+    public List<UUID> rewriteDescendantPaths(
             UUID ownerUserId, SpaceType spaceType, String oldPath, String newPath) {
         if (oldPath == null || oldPath.equals(newPath)) {
-            return;
+            return List.of();
         }
+        List<UUID> affectedFileIds = new ArrayList<>();
         String prefix = LikePatterns.escapeSpecials(oldPath + "/");
         UUID afterId = new UUID(0L, 0L);
         while (true) {
@@ -48,12 +52,16 @@ public class FilePathRewriter {
                             ownerUserId, spaceType, prefix, afterId,
                             PageRequest.of(0, REWRITE_BATCH_SIZE));
             if (batch.isEmpty()) {
-                return;
+                return affectedFileIds;
             }
             for (FileNode descendant : batch) {
                 descendant.setNormalizedPath(
                         newPath + descendant.getNormalizedPath().substring(oldPath.length()));
                 afterId = descendant.getId();
+                // 索引只收录文件：文件夹入队只会产生无效的索引任务。
+                if (NodeType.FILE.getValue().equals(descendant.getNodeType())) {
+                    affectedFileIds.add(descendant.getId());
+                }
             }
             fileNodeRepository.saveAll(batch);
         }

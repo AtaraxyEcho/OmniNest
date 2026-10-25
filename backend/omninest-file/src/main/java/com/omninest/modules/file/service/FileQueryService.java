@@ -177,11 +177,17 @@ public class FileQueryService {
         String newPath = resolveSiblingPath(node, newName);
         node.setName(newName);
         node.setNormalizedPath(newPath);
-        filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+        List<UUID> affectedFileIds = new ArrayList<>(
+                filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath));
         FileNode saved = fileNodeRepository.save(node);
-        // 更新 Lucene 搜索索引中的文件名，空间类型必须跟随节点本身，
-        // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
-        fileIndexSyncService.scheduleAfterCommit(ownerUserId, List.of(saved.getId()));
+        if (NodeType.FILE.getValue().equals(saved.getNodeType())) {
+            affectedFileIds.add(saved.getId());
+        }
+        if (!affectedFileIds.isEmpty()) {
+            // 更新 Lucene 搜索索引中的文件名与路径，空间类型必须跟随节点本身，
+            // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
+        }
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return assembler.toDto(saved);
     }
@@ -210,31 +216,43 @@ public class FileQueryService {
         String newPath = resolveChildPath(targetParent, node.getName());
         node.setParentId(targetParentId);
         node.setNormalizedPath(newPath);
-        filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+        List<UUID> affectedFileIds = new ArrayList<>(
+                filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath));
         FileNode saved = fileNodeRepository.save(node);
+        if (NodeType.FILE.getValue().equals(saved.getNodeType())) {
+            affectedFileIds.add(saved.getId());
+        }
+        if (!affectedFileIds.isEmpty()) {
+            // 移动后全局搜索仍按旧路径返回，必须重建文件索引。
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
+        }
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return assembler.toDto(saved);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void deleteNode(UUID ownerUserId, UUID fileId) {
-        FileNode node = lookup.findActiveNode(ownerUserId, fileId);
+    public void deleteNode(UUID actorUserId, UUID fileId) {
+        // 共享节点可能由其他成员上传：先按操作者名下的个人节点查找，
+        // 找不到再回退到共享空间并交由 deleteSharedFile 复核 CAN_DELETE_OWN/ANY。
+        FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, actorUserId)
+                .or(() -> fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileId, SpaceType.SHARED))
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         if (node.getSpaceType() == SpaceType.SHARED) {
             // 共享空间删除必须走 CAN_DELETE_OWN/CAN_DELETE_ANY 校验并扣减共享空间账本，
             // 个人删除路径既不知道权限矩阵也不维护 shared_space_usage。
-            sharedSpaceService.deleteSharedFile(fileId, ownerUserId);
+            sharedSpaceService.deleteSharedFile(fileId, actorUserId);
             return;
         }
         requireManagedNode(node);
         Instant deletedAt = Instant.now();
-        markDeleted(node, ownerUserId, deletedAt);
+        markDeleted(node, actorUserId, deletedAt);
         fileNodeRepository.save(node);
-        fileIndexSyncService.scheduleAfterCommit(ownerUserId, List.of(node.getId()));
-        eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, List.of(node.getId()), deletedAt));
+        fileIndexSyncService.scheduleAfterCommit(actorUserId, List.of(node.getId()));
+        eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(actorUserId, List.of(node.getId()), deletedAt));
 
         while (true) {
             List<UUID> descendantIds = fileNodeRepository.findActiveIdsByPathPrefix(
-                            ownerUserId,
+                            actorUserId,
                             node.getSpaceType(),
                             lookup.subtreePrefix(node),
                             PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
@@ -243,15 +261,15 @@ public class FileQueryService {
             if (descendantIds.isEmpty()) {
                 break;
             }
-            fileNodeRepository.softDeleteIds(ownerUserId, descendantIds, deletedAt);
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, descendantIds);
+            fileNodeRepository.softDeleteIds(actorUserId, descendantIds, deletedAt);
+            fileIndexSyncService.scheduleAfterCommit(actorUserId, descendantIds);
             eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(
-                    ownerUserId,
+                    actorUserId,
                     List.copyOf(descendantIds),
                     deletedAt
             ));
         }
-        recordFileEvent(ownerUserId, node.getId(), SyncAction.DELETED);
+        recordFileEvent(actorUserId, node.getId(), SyncAction.DELETED);
     }
 
     /**
@@ -546,6 +564,7 @@ public class FileQueryService {
         Map<UUID, FileNode> nodesById = fileNodeRepository
                 .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
+        List<UUID> affectedFileIds = new ArrayList<>();
         int movedCount = 0;
         for (UUID fileId : fileIds) {
             FileNode node = nodesById.get(fileId);
@@ -568,14 +587,23 @@ public class FileQueryService {
                     String newPath = resolveChildPath(targetParent, node.getName());
                     node.setParentId(targetParentId);
                     node.setNormalizedPath(newPath);
-                    filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+                    affectedFileIds.addAll(
+                            filePathRewriter.rewriteDescendantPaths(
+                                    ownerUserId, node.getSpaceType(), oldPath, newPath));
                     fileNodeRepository.save(node);
+                    if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+                        affectedFileIds.add(node.getId());
+                    }
                     movedCount++;
                 }
                 results.add(BatchItemResult.success(fileId));
             } catch (BusinessException exception) {
                 results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
             }
+        }
+        if (!affectedFileIds.isEmpty()) {
+            // 批量移动同样改变了文件路径，索引必须随事务提交重建。
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
         }
         if (movedCount > 0) {
             recordLibraryInvalidation(ownerUserId, SyncAction.UPDATED, movedCount);

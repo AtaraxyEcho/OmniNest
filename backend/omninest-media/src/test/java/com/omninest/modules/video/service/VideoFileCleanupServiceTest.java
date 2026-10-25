@@ -102,8 +102,7 @@ class VideoFileCleanupServiceTest {
 
         service.finalizePurge(purgeContext());
 
-        Mockito.verify(playbackCleanupService).deleteOwned(
-                OWNER_ID,
+        Mockito.verify(playbackCleanupService).deleteAllUsers(
                 MediaPlaybackType.VIDEO,
                 List.of(VIDEO_ITEM_ID.toString())
         );

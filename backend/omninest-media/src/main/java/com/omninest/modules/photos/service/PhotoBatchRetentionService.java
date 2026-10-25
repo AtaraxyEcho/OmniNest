@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -28,8 +28,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && ${omninest.runtime.embedded-scheduler-enabled:false})")
+@ConditionalOnSchedulerRuntime
 public class PhotoBatchRetentionService {
 
     private static final Set<String> TERMINAL_STATUSES = Set.of("COMPLETED", "FAILED");

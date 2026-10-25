@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
@@ -36,6 +37,7 @@ public class FileIngressStagingService {
     private final FileIngressLifecycleService ingressLifecycleService;
     private final FileIngressSafetyService ingressSafetyService;
     private final FileIngressItemRepository ingressItemRepository;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 将本地文件暂存至隔离桶并创建入库记录。
@@ -122,7 +124,8 @@ public class FileIngressStagingService {
         FileIngressItem item = requireItem(ingressItemId);
         Path tempFile = null;
         try {
-            tempFile = Files.createTempFile("ingress-staged-", safeSuffix(item.getTargetName()));
+            tempFile = tempStagingPort.createTempFile(
+                    "ingress", "ingress-staged-", safeSuffix(item.getTargetName()));
             try (InputStream inputStream =
                          objectStorageClient.getObject(quarantineKey(item))) {
                 inputStream.transferTo(Files.newOutputStream(tempFile));

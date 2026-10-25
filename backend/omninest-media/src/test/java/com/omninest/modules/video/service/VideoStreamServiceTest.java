@@ -192,6 +192,17 @@ class VideoStreamServiceTest {
     }
 
     @Test
+    void cachedAudioArgsSeekBothVideoAndAudioInputs() {
+        List<String> args = service.buildCachedAudioArgs(
+                "matroska", "http://minio/movie.mkv", "http://minio/audio.aac", 42L);
+
+        // -ss 必须分别出现在两个 -i 之前，否则音频从 0:00 开始并与视频错位。
+        assertThat(args).containsSubsequence(
+                "-ss", "42", "-f", "matroska", "-i", "http://minio/movie.mkv",
+                "-ss", "42", "-f", "aac", "-i", "http://minio/audio.aac");
+    }
+
+    @Test
     void streamCommandAppliesProtocolWhitelistBeforeInput() {
         when(ffmpegRuntime.isDisabled()).thenReturn(false);
 

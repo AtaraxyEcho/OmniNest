@@ -131,6 +131,64 @@ class TaskRecordServiceTest {
     }
 
     @Test
+    void resolveFailureReschedulesTaskMarkedFailedByBusinessCode() {
+        TaskRecord record = taskRecord(50);
+        record.setStatus(TaskStatus.FAILED.getValue());
+        record.setRetryCount(0);
+        record.setMaxRetries(3);
+        record.setCompletedAt(Instant.now());
+        Mockito.when(taskRecordRepository.findByIdForUpdate(record.getId()))
+                .thenReturn(Optional.of(record));
+        Mockito.when(taskRecordRepository.save(Mockito.any(TaskRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        FailureResolution resolution = service.resolveFailure(
+                record.getId(), "FFmpeg_TIMEOUT", "stack", Instant.now());
+
+        Assertions.assertThat(resolution.resolved()).isTrue();
+        Assertions.assertThat(resolution.deadLetter()).isFalse();
+        Assertions.assertThat(resolution.retryCount()).isEqualTo(1);
+        Assertions.assertThat(resolution.nextRetryAt()).isNotNull();
+        Assertions.assertThat(record.getStatus()).isEqualTo(TaskStatus.RETRY_WAIT.getValue());
+        Assertions.assertThat(record.getCompletedAt()).isNull();
+    }
+
+    @Test
+    void resolveFailureDeadLettersTaskAfterRetriesExhausted() {
+        TaskRecord record = taskRecord(50);
+        record.setStatus(TaskStatus.FAILED.getValue());
+        record.setRetryCount(3);
+        record.setMaxRetries(3);
+        Mockito.when(taskRecordRepository.findByIdForUpdate(record.getId()))
+                .thenReturn(Optional.of(record));
+        Mockito.when(taskRecordRepository.save(Mockito.any(TaskRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        FailureResolution resolution = service.resolveFailure(
+                record.getId(), "FFmpeg_TIMEOUT", "stack", Instant.now());
+
+        Assertions.assertThat(resolution.deadLetter()).isTrue();
+        Assertions.assertThat(resolution.nextRetryAt()).isNull();
+        Assertions.assertThat(record.getStatus()).isEqualTo(TaskStatus.DLQ.getValue());
+        Assertions.assertThat(record.getCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void resolveFailureIgnoresCompletedTask() {
+        TaskRecord record = taskRecord(100);
+        record.setStatus(TaskStatus.COMPLETED.getValue());
+        Mockito.when(taskRecordRepository.findByIdForUpdate(record.getId()))
+                .thenReturn(Optional.of(record));
+
+        FailureResolution resolution = service.resolveFailure(
+                record.getId(), "late failure", "stack", Instant.now());
+
+        Assertions.assertThat(resolution.resolved()).isFalse();
+        Assertions.assertThat(record.getStatus()).isEqualTo(TaskStatus.COMPLETED.getValue());
+        Mockito.verify(taskRecordRepository, Mockito.never()).save(record);
+    }
+
+    @Test
     void deleteTerminalTaskBatchUpdatedBeforeDeletesBoundedIds() {
         Instant cutoff = Instant.parse("2026-06-01T00:00:00Z");
         List<String> statuses = List.of(

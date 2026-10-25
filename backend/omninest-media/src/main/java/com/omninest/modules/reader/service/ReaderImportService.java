@@ -5,6 +5,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.processing.TempStagingPort;
 import org.springframework.beans.factory.annotation.Value;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -83,6 +84,7 @@ public class ReaderImportService {
     private final MediaSyncEventService syncEventService;
     private final TransactionTemplate transactionTemplate;
     private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * EPUB 自动归类时每文本条目平均正文字符阈值，低于该值判定为漫画。
@@ -837,7 +839,8 @@ public class ReaderImportService {
     private boolean isFixedLayoutEpub(FileDescriptor fileNode) {
         Path tempFile = null;
         try {
-            tempFile = Files.createTempFile("omninest-epub-detect-", ".epub");
+            tempFile = tempStagingPort.createTempFile(
+                    "reader-epub", "omninest-epub-detect-", ".epub");
             try (FileContentStream content = fileQueryService.openOwnedFileContent(
                     fileNode.ownerUserId(),
                     fileNode.id())) {

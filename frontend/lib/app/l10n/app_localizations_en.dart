@@ -11233,6 +11233,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorUnknown => 'Unknown error';
 
   @override
+  String get errorDownloadTicketInvalid =>
+      'The download link is invalid. Please retry';
+
+  @override
+  String get errorDownloadRangeInvalid =>
+      'The server cannot resume this download. Please retry';
+
+  @override
+  String get errorDownloadTicketChanged =>
+      'The file has changed. Please download it again';
+
+  @override
+  String get errorDownloadIncomplete =>
+      'The download did not complete. Please retry';
+
+  @override
+  String get errorDownloadSizeMismatch =>
+      'The downloaded file size does not match. Please retry';
+
+  @override
+  String get errorDownloadDigestMismatch =>
+      'The downloaded file failed integrity verification. Please retry';
+
+  @override
+  String get errorBookDownloadTimeout =>
+      'Book download timed out. Please retry';
+
+  @override
+  String get errorBookDownloadFailed => 'Book download failed. Please retry';
+
+  @override
   String get errorNeedPassword => 'Enter share password';
 
   @override

@@ -6,6 +6,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
 import com.omninest.modules.photos.service.PhotoIndexTaskService;
+import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Component;
 public class SearchIndexRebuildConsumer {
 
     private final TaskRecordService taskRecordService;
+    private final TaskFailureRetryService taskFailureRetryService;
     private final SearchIndexRebuildService rebuildService;
     private final PhotoIndexTaskService photoIndexTaskService;
 
@@ -65,8 +67,15 @@ public class SearchIndexRebuildConsumer {
         } catch (Throwable executionException) {
             log.error("索引重建任务失败: taskId={}, errorType={}",
                     event.taskId(), executionException.getClass().getSimpleName(), executionException);
-            taskRecordService.markFailed(event.taskId(), executionException.getMessage());
-            channel.basicAck(deliveryTag, false);
+            try {
+                taskFailureRetryService.handleFailure(
+                        event.taskId(), QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY, event, executionException);
+                channel.basicAck(deliveryTag, false);
+            } catch (RuntimeException stateException) {
+                log.error("索引重建失败状态写入失败，将重新投递原消息: taskId={}, errorType={}",
+                        event.taskId(), stateException.getClass().getSimpleName(), stateException);
+                channel.basicNack(deliveryTag, false, true);
+            }
         }
     }
 }

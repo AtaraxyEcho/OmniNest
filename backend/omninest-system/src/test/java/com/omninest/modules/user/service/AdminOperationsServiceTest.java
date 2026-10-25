@@ -347,7 +347,7 @@ class AdminOperationsServiceTest {
 
         assertThat(view.overview().activeTasks()).isEqualTo(2);
         assertThat(view.overview().queueDepth()).isEqualTo(5);
-        assertThat(view.overview().todayRequests()).isEqualTo(12);
+        assertThat(view.overview().todayAdminActions()).isEqualTo(12);
         assertThat(view.components()).extracting("name").contains("PostgreSQL", "RabbitMQ", "MinIO", "Worker");
         AdminOperationsDto.MonitoringComponent worker = view.components().stream()
                 .filter(component -> "Worker".equals(component.name()))

@@ -38,4 +38,12 @@ public interface MediaSeriesFavoriteRepository extends JpaRepository<MediaSeries
     List<MediaSeriesFavorite> findByOwnerUserIdAndSeriesIdIn(UUID ownerUserId, Collection<UUID> seriesIds);
 
     void deleteByOwnerUserIdAndSeriesIdIn(UUID ownerUserId, Collection<UUID> seriesIds);
+
+    /**
+     * 删除所有用户对指定系列的收藏：系列被彻底删除后，
+     * 其他成员的收藏会变成指向不存在系列的悬空引用。
+     *
+     * @param seriesIds 系列 ID 集合
+     */
+    void deleteBySeriesIdIn(Collection<UUID> seriesIds);
 }

@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
@@ -64,8 +65,6 @@ public class DerivedAssetStorageService {
      * 新增资产类型默认沿用小资产上限，确属完整内容产物时在此显式加入。
      */
     private static final Set<String> LARGE_ASSET_TYPES = Set.of("TRANSCODE", "DOWNLOAD");
-    private static final Path PROCESSING_ROOT = Path.of(
-            System.getProperty("java.io.tmpdir"), "omninest-derived");
     /**
      * 派生资产节点的来源类型标记。
      *
@@ -87,6 +86,7 @@ public class DerivedAssetStorageService {
     private final SafeUrlValidator safeUrlValidator;
     private final TransactionTemplate transactionTemplate;
     private final FileTransferLimitsProperties transferLimits;
+    private final TempStagingPort tempStagingPort;
 
     /** 在独立新事务中执行存储动作；并发流水线写入同一对象键时重试一次。 */
     private UUID storeInNewTransactionWithRetry(StoreAction action) {
@@ -379,8 +379,7 @@ public class DerivedAssetStorageService {
                      String assetType, String fileName, String mimeType, InputStream data, SpaceType spaceType) {
         Path tempFile = null;
         try {
-            Files.createDirectories(PROCESSING_ROOT);
-            tempFile = Files.createTempFile(PROCESSING_ROOT, "reader-cover-", ".img");
+            tempFile = tempStagingPort.createTempFile("derived", "reader-cover-", ".img");
             try (OutputStream out = Files.newOutputStream(tempFile)) {
                 copyBounded(data, out, MAX_FETCHED_DERIVED_ASSET_BYTES);
             }
@@ -650,12 +649,11 @@ public class DerivedAssetStorageService {
     }
 
     private DownloadedAsset persistResponse(HttpResponse<InputStream> response) throws IOException {
-        Files.createDirectories(PROCESSING_ROOT);
         long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
         if (contentLength > MAX_FETCHED_DERIVED_ASSET_BYTES) {
             throw new IOException("派生资源响应大小超出限制");
         }
-        Path tempFile = Files.createTempFile(PROCESSING_ROOT, "remote-", ".asset");
+        Path tempFile = tempStagingPort.createTempFile("derived", "remote-", ".asset");
         try {
             try (InputStream body = response.body()) {
                 try (OutputStream output = Files.newOutputStream(tempFile)) {

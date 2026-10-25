@@ -6,6 +6,9 @@ import com.omninest.modules.notification.dto.NotificationTypeDto;
 import com.omninest.modules.notification.service.NotificationTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +59,7 @@ public class NotificationTypeController {
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<NotificationTypeDto> update(
             @PathVariable UUID id,
-            @RequestBody UpdateTypeRequest request
+            @RequestBody @Valid UpdateTypeRequest request
     ) {
         return ApiResponse.success(notificationTypeService.update(
                 id,
@@ -73,10 +76,15 @@ public class NotificationTypeController {
      * 更新类型请求体。
      */
     public record UpdateTypeRequest(
+            @Size(min = 1, max = 64)
             String label,
+            @Size(max = 500)
             String description,
+            @Size(max = 64)
             String icon,
+            @Size(max = 32)
             String color,
+            @Min(0)
             Integer sortOrder,
             Boolean enabled
     ) {

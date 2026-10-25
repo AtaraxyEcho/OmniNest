@@ -104,6 +104,10 @@ public class PhotoFileCleanupService implements
                 .map(PhotoItem::getCoverFileId)
                 .filter(Objects::nonNull)
                 .toList());
+        writer.addFileNodeIds(photos.stream()
+                .map(PhotoItem::getMotionVideoFileNodeId)
+                .filter(Objects::nonNull)
+                .toList());
         writer.addFileNodeIds(editVersionRepository.findByPhotoIdIn(photoIds).stream()
                 .map(PhotoEditVersion::getFileId)
                 .toList());

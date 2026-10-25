@@ -3,7 +3,7 @@ package com.omninest.modules.quota.scheduler;
 import com.omninest.modules.quota.port.SharedSpaceUsageReconcile;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +14,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && ${omninest.runtime.embedded-scheduler-enabled:false})")
+@ConditionalOnSchedulerRuntime
 public class StorageQuotaScheduler {
 
     private final StorageQuotaService storageQuotaService;

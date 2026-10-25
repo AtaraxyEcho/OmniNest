@@ -140,7 +140,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     public FileNode createFolder(UUID parentFolderId, String folderName, UUID operatorId) {
         ensureSharedSpaceEnabled();
         validatePermission(operatorId, Action.CAN_CREATE_FOLDER);
-        String normalizedName = normalizeNodeName(folderName);
+        String normalizedName = SharedSpaceSupport.normalizeNodeName(folderName);
         boolean exists = fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                 SpaceType.SHARED, parentFolderId, normalizedName);
         if (exists) {
@@ -175,7 +175,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
         validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
 
-        String newName = normalizeNodeName(request.name());
+        String newName = SharedSpaceSupport.normalizeNodeName(request.name());
         if (node.getName().equals(newName)) {
             return node;
         }
@@ -559,8 +559,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         long fileCount = 0L;
         if (!rows.isEmpty()) {
             Object[] row = rows.getFirst();
-            totalBytes = toLong(row[0]);
-            fileCount = toLong(row[1]);
+            totalBytes = SharedSpaceSupport.toLong(row[0]);
+            fileCount = SharedSpaceSupport.toLong(row[1]);
         }
         // 账本与夜间重算都把历史版本对象计入字节，删除/移动同口径释放。
         totalBytes += node.getSpaceType() == SpaceType.SHARED
@@ -593,8 +593,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         long fileCount = 0L;
         if (!rows.isEmpty()) {
             Object[] row = rows.getFirst();
-            totalBytes = toLong(row[0]);
-            fileCount = toLong(row[1]);
+            totalBytes = SharedSpaceSupport.toLong(row[0]);
+            fileCount = SharedSpaceSupport.toLong(row[1]);
         }
         totalBytes += fileMetricsRepository.sumVersionBytesUnderPathInSpace(
                 SpaceType.SHARED.getValue(), prefix, true);
@@ -635,20 +635,6 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         if (!changed.isEmpty()) {
             fileNodeRepository.saveAll(changed);
         }
-    }
-
-    private long toLong(Object value) {
-        return value instanceof Number number ? number.longValue() : 0L;
-    }
-
-    private String normalizeNodeName(String name) {
-        String normalized = name == null ? "" : name.trim();
-        if (normalized.isEmpty() || ".".equals(normalized) || "..".equals(normalized)
-                || normalized.contains("/") || normalized.contains("\\")
-                || normalized.indexOf('\0') >= 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "文件名称不合法");
-        }
-        return normalized;
     }
 
     /**

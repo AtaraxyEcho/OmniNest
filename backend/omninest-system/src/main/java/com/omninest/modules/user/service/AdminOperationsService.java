@@ -285,7 +285,7 @@ public class AdminOperationsService {
         // DISCARDED 是管理员显式处置后的终态，不计入 failed/dlq 告警桶，避免已处置任务持续触发告警。
         long failedTasks = taskCounts.getOrDefault(TaskStatus.FAILED.getValue(), 0L);
         long dlqTasks = taskCounts.getOrDefault(TaskStatus.DLQ.getValue(), 0L);
-        long todayRequests = auditLogAdminRepository.countSince(
+        long todayAdminActions = auditLogAdminRepository.countSince(
                 LocalDate.now(systemInstanceConfigService.timeZone())
                         .atStartOfDay(systemInstanceConfigService.timeZone()).toInstant()
         );
@@ -305,7 +305,7 @@ public class AdminOperationsService {
                 snapshot.jvmHeapUsage(),
                 runningTasks,
                 queueDepth,
-                todayRequests
+                todayAdminActions
         );
         List<AdminConsoleSummaryDto.HealthItem> health = List.of(
                 healthItem("数据库", componentStatus("db"), componentDetail("db")),

@@ -9,6 +9,7 @@ import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
@@ -37,6 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class TranscodeExecutionService {
     private final MediaVideoItemRepository videoItemRepository;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final VideoTranscodeService videoTranscodeService;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final TransactionTemplate transactionTemplate;
@@ -76,8 +78,10 @@ public class TranscodeExecutionService {
         UUID derivedFileNodeId = null;
         try {
             // 阶段 1：Docker 转码（事务外，可能持续数分钟到数小时）
-            transcodedFile = videoTranscodeService.transcodeToH265(
-                    ownerUserId, finalSourceItem.getFileNodeId(), videoItemId);
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                transcodedFile = videoTranscodeService.transcodeToH265(
+                        ownerUserId, finalSourceItem.getFileNodeId(), videoItemId);
+            }
 
             // 阶段 2：通过文件模块保存派生资产。
             fileLifecycleGuard.requireOwnedWritable(ownerUserId, finalSourceItem.getFileNodeId());
@@ -113,8 +117,10 @@ public class TranscodeExecutionService {
                 return;
             }
             failH265Task(taskId, videoItemId, ownerUserId, exception);
+            throw propagate(exception);
         } catch (Exception e) {
             failH265Task(taskId, videoItemId, ownerUserId, e);
+            throw propagate(e);
         } finally {
             if (transcodedFile != null) {
                 try {
@@ -167,8 +173,10 @@ public class TranscodeExecutionService {
             // 阶段 1：仅提取音频轨道，文件处理不占用数据库事务。
             log.info("音频提取 Phase 1/3：开始 ffmpeg 提取音频: videoItemId={}", videoItemId);
             taskRecordService.updateProgress(taskId, 20);
-            transcodedFile = videoTranscodeService.extractAudioToAac(
-                    ownerUserId, sourceItem.getFileNodeId(), videoItemId);
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                transcodedFile = videoTranscodeService.extractAudioToAac(
+                        ownerUserId, sourceItem.getFileNodeId(), videoItemId);
+            }
             log.info("音频提取 Phase 1/3：ffmpeg 提取完成: videoItemId={}, size={}",
                     videoItemId, Files.size(transcodedFile));
 
@@ -211,10 +219,10 @@ public class TranscodeExecutionService {
                 return false;
             }
             failAudioTask(taskId, videoItemId, ownerUserId, exception);
-            return false;
+            throw propagate(exception);
         } catch (Exception e) {
             failAudioTask(taskId, videoItemId, ownerUserId, e);
-            return false;
+            throw propagate(e);
         } finally {
             if (transcodedFile != null) {
                 try {
@@ -311,8 +319,10 @@ public class TranscodeExecutionService {
             log.info("Web 优化 Phase 1/3：开始 ffmpeg 转码: videoItemId={}, videoCodec={}",
                     videoItemId, sourceItem.getVideoCodec());
             taskRecordService.updateProgress(taskId, 20);
-            transcodedFile = videoTranscodeService.transcodeToWebOptimized(
-                    ownerUserId, sourceItem.getFileNodeId(), videoItemId, sourceItem.getVideoCodec());
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                transcodedFile = videoTranscodeService.transcodeToWebOptimized(
+                        ownerUserId, sourceItem.getFileNodeId(), videoItemId, sourceItem.getVideoCodec());
+            }
             log.info("Web 优化 Phase 1/3：ffmpeg 转码完成: videoItemId={}, size={}",
                     videoItemId, Files.size(transcodedFile));
 
@@ -355,8 +365,10 @@ public class TranscodeExecutionService {
                 return;
             }
             failWebOptimizeTask(taskId, videoItemId, exception);
+            throw propagate(exception);
         } catch (Exception e) {
             failWebOptimizeTask(taskId, videoItemId, e);
+            throw propagate(e);
         } finally {
             if (transcodedFile != null) {
                 try {
@@ -424,21 +436,32 @@ public class TranscodeExecutionService {
     private void failH265Task(UUID taskId, UUID videoItemId, UUID ownerUserId, Exception exception) {
         log.error("H265 转码任务失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
         taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
-        notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
-                "视频转码失败", "转码失败: " + exception.getMessage(),
-                Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
+        // 重试由消费者裁决；只在重试额度耗尽时通知，避免每次失败重复打扰用户。
+        if (taskRecordService.hasExhaustedRetries(taskId)) {
+            notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
+                    "视频转码失败", "转码失败: " + exception.getMessage(),
+                    Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
+        }
     }
 
     private void failAudioTask(UUID taskId, UUID videoItemId, UUID ownerUserId, Exception exception) {
         log.error("音频转码任务失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
         taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
-        notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
-                "音频提取失败", "音频提取失败: " + exception.getMessage(),
-                Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
+        if (taskRecordService.hasExhaustedRetries(taskId)) {
+            notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
+                    "音频提取失败", "音频提取失败: " + exception.getMessage(),
+                    Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
+        }
     }
 
     private void failWebOptimizeTask(UUID taskId, UUID videoItemId, Exception exception) {
         log.error("Web 优化转码失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
         taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
+    }
+
+    private RuntimeException propagate(Exception exception) {
+        return exception instanceof RuntimeException runtimeException
+                ? runtimeException
+                : new IllegalStateException(exception.getMessage(), exception);
     }
 }

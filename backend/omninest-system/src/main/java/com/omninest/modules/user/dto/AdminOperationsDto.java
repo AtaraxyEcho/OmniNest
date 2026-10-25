@@ -210,7 +210,7 @@ public final class AdminOperationsDto {
             @Schema(description = "JVM 堆使用率", example = "55.3") double jvmHeapUsage,
             @Schema(description = "活跃任务数", example = "5") long activeTasks,
             @Schema(description = "队列深度", example = "10") long queueDepth,
-            @Schema(description = "今日请求数", example = "12345") long todayRequests
+            @Schema(description = "今日管理操作数", example = "12345") long todayAdminActions
     ) {
     }
 

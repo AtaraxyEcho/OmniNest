@@ -10887,6 +10887,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorUnknown => '未知错误';
 
   @override
+  String get errorDownloadTicketInvalid => '下载链接无效，请重试';
+
+  @override
+  String get errorDownloadRangeInvalid => '服务器无法续传该文件，请重试';
+
+  @override
+  String get errorDownloadTicketChanged => '文件版本已变化，请重新下载';
+
+  @override
+  String get errorDownloadIncomplete => '下载未完成，请重试';
+
+  @override
+  String get errorDownloadSizeMismatch => '下载文件大小校验失败，请重试';
+
+  @override
+  String get errorDownloadDigestMismatch => '下载文件完整性校验失败，请重试';
+
+  @override
+  String get errorBookDownloadTimeout => '书籍下载超时，请重试';
+
+  @override
+  String get errorBookDownloadFailed => '书籍下载失败，请重试';
+
+  @override
   String get errorNeedPassword => '请输入分享密码';
 
   @override

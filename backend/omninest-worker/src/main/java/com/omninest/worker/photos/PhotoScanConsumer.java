@@ -5,6 +5,7 @@ import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.event.PhotoScanEvent;
 import com.omninest.modules.photos.service.PhotoAdminService;
+import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
 public class PhotoScanConsumer {
 
     private final PhotoAdminService photoAdminService;
+    private final TaskFailureRetryService taskFailureRetryService;
 
     @RabbitListener(queues = QueueNames.PHOTO_SCAN_QUEUE)
     public void handle(PhotoScanEvent event, Message message, Channel channel) throws IOException {
@@ -33,7 +35,24 @@ public class PhotoScanConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("照片扫描处理失败: jobId={}", event.jobId(), e);
-            channel.basicNack(deliveryTag, false, false);
+            handleFailure(event, deliveryTag, channel, e);
+        }
+    }
+
+    private void handleFailure(
+            PhotoScanEvent event,
+            long deliveryTag,
+            Channel channel,
+            Throwable exception
+    ) throws IOException {
+        try {
+            taskFailureRetryService.handleFailure(
+                    event.jobId(), QueueNames.PHOTO_SCAN_ROUTING_KEY, event, exception);
+            channel.basicAck(deliveryTag, false);
+        } catch (RuntimeException stateException) {
+            log.error("照片扫描失败状态写入失败，将重新投递原消息: jobId={}, errorType={}",
+                    event.jobId(), stateException.getClass().getSimpleName(), stateException);
+            channel.basicNack(deliveryTag, false, true);
         }
     }
 }

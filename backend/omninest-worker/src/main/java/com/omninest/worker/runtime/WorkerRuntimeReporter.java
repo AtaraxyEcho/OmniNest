@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -26,7 +25,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "omninest.runtime", name = "role", havingValue = "worker")
+@ConditionalOnWorkerRuntime
 public class WorkerRuntimeReporter {
 
     private final WorkerRuntimeRegistry runtimeRegistry;

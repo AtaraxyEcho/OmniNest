@@ -42,8 +42,8 @@ class ComposeNetworkTopologyTest {
     private static final String EGRESS = "egress";
     private static final Path REPO_ROOT = findRepoRoot();
     private static final String PROBE_VOLUME = "omninest-probe-cache:/tmp/omninest-probe";
-    private static final String TRANSCODE_VOLUME =
-            "omninest-transcode-cache:/tmp/omninest-processing/transcode";
+    private static final String PROCESSING_VOLUME =
+            "omninest-processing-cache:/tmp/omninest-processing";
 
     /** 每张 compose 允许出现的全部服务，以及它们在 egress 上的成员；不在 egress 的服务即留在 default。 */
     private static final Map<String, ExpectedTopology> FILES = Map.of(
@@ -100,7 +100,7 @@ class ComposeNetworkTopologyTest {
     }
 
     @Test
-    @DisplayName("生产后端把探测与转码临时目录挂到命名卷")
+    @DisplayName("生产后端把探测与整个处理临时目录挂到命名卷")
     void backendUsesDedicatedTemporaryVolumes() throws IOException {
         Map<String, Object> root = load(REPO_ROOT.resolve("deploy/prod/docker-compose.yml"));
         Map<String, Object> services = services(root);
@@ -110,8 +110,12 @@ class ComposeNetworkTopologyTest {
             List<String> volumes = stringList(((Map<?, ?>) body).get("volumes"));
             assertTrue(volumes.contains(PROBE_VOLUME),
                     role + " 未挂载探测临时卷，ffprobe 首尾窗口会写进 OverlayFS: " + volumes);
-            assertTrue(volumes.contains(TRANSCODE_VOLUME),
-                    role + " 未挂载转码临时卷，数 GB 视频会写进 OverlayFS: " + volumes);
+            assertTrue(volumes.contains(PROCESSING_VOLUME),
+                    role + " 未挂载完整处理临时卷，转码与照片打包会写进 OverlayFS: " + volumes);
+            Map<String, Object> environment = environment(body);
+            assertEquals("-Djava.io.tmpdir=/tmp/omninest-processing",
+                    environment.get("JAVA_TOOL_OPTIONS"),
+                    role + " 未把 JVM 临时目录收敛到处理卷");
         }
     }
 

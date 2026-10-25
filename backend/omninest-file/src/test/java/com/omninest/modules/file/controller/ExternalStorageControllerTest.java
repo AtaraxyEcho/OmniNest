@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -113,18 +114,33 @@ class ExternalStorageControllerTest {
     }
 
     @Test
-    @DisplayName("匿名回调端点按客户端地址限流")
+    @DisplayName("匿名回调端点按客户端地址限流，并返回结果页而不是裸 JSON")
     void callbackIsRateLimitedByClientIp() {
         when(rateLimitService.tryAcquire(
                 "ip:203.0.113.7:external-oauth-callback", 20, Duration.ofMinutes(1)))
                 .thenReturn(false);
 
-        assertThatThrownBy(() -> controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> assertThat(((BusinessException) exception).errorCode())
-                        .isEqualTo(ErrorCode.RATE_LIMITED));
+        ResponseEntity<String> response = controller.oauthCallback(
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.TEXT_HTML);
+        assertThat(response.getBody()).contains("授权已取消或失败");
         verify(oauthService, never()).handleCallback(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("state 过期等业务异常回跳前端结果页，不渲染裸 JSON")
+    void callbackBusinessFailureRedirectsToErrorResult() {
+        setupProperties.setWebBaseUrl("https://nest.example.com");
+        doThrow(new BusinessException(ErrorCode.VALIDATION_FAILED, "state 已过期"))
+                .when(oauthService).handleCallback(CALLBACK_PROVIDER, "expired-state", "authorization-code");
+
+        ResponseEntity<String> response = controller.oauthCallback(
+                CALLBACK_PROVIDER, "expired-state", "authorization-code", null, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=error");
     }
 
     @Test

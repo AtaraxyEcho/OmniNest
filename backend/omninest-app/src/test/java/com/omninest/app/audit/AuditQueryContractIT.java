@@ -702,6 +702,30 @@ class AuditQueryContractIT {
     }
 
     @Test
+    @Transactional
+    @DisplayName("共享任务的跨用户个人衍生节点按 DERIVED 关联，不误伤他人个人源文件")
+    void sharedContributionAssignsCrossOwnerDerivedNodesOnly() {
+        UUID uploader = UUID.randomUUID();
+        UUID derivedNode = insertContributionNode(
+                uploader, "/.metadata/PHOTO_ITEM/" + UUID.randomUUID() + "/THUMBNAIL/t.jpg", "DERIVED", "PERSONAL");
+        UUID sourceNode = insertContributionNode(
+                uploader, "/private-" + UUID.randomUUID() + ".pdf", "LOCAL", "PERSONAL");
+        UUID taskId = UUID.randomUUID();
+
+        int updated = fileNodeRepository.assignContributedDerivedIdsToPurge(
+                List.of(derivedNode, sourceNode), taskId, UUID.randomUUID(),
+                FilePurgeState.RUNNING, Instant.now());
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM omni.file_nodes "
+                + "WHERE id = ? AND purge_task_id = ? AND is_deleted = true", derivedNode, taskId))
+                .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM omni.file_nodes "
+                + "WHERE id = ? AND purge_task_id IS NULL AND is_deleted = false", sourceNode))
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("定向分享接收关系在真库上覆盖单文件、文件夹后代，排除过期与兄弟前缀")
     void recipientAccessQueriesCoverFileAndFolderShares() {
         UUID owner = UUID.randomUUID();
@@ -744,6 +768,23 @@ class AuditQueryContractIT {
                      source_type, is_deleted, shared, space_type, created_at, updated_at, version)
                 VALUES (?, ?, 'FILE', ?, ?, 'application/octet-stream', 1024, 'LOCAL', ?, ?, ?, now(), now(), 0)
                 """, id, ownerUserId, path.substring(path.lastIndexOf('/') + 1), path, deleted, shared, spaceType);
+        return id;
+    }
+
+    private UUID insertContributionNode(
+            UUID ownerUserId,
+            String path,
+            String sourceType,
+            String spaceType
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO omni.file_nodes
+                    (id, owner_user_id, node_type, name, normalized_path, mime_type, size_bytes,
+                     source_type, is_deleted, shared, space_type, created_at, updated_at, version)
+                VALUES (?, ?, 'FILE', ?, ?, 'application/octet-stream', 1024, ?, false, false, ?,
+                        now(), now(), 0)
+                """, id, ownerUserId, path.substring(path.lastIndexOf('/') + 1), path, sourceType, spaceType);
         return id;
     }
 

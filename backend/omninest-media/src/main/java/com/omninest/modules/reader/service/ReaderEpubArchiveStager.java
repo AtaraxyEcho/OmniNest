@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileQueryService;
@@ -24,6 +25,7 @@ public class ReaderEpubArchiveStager {
 
     private final FileQueryService fileQueryService;
     private final ReaderArchiveSafetyPolicy archiveSafetyPolicy;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 将 EPUB 对象暂存到本地临时文件。
@@ -34,7 +36,7 @@ public class ReaderEpubArchiveStager {
     public StagedArchive stage(FileDescriptor fileNode) {
         Path tempFile = null;
         try {
-            tempFile = Files.createTempFile("omninest-epub-", ".epub");
+            tempFile = tempStagingPort.createTempFile("reader-epub", "omninest-epub-", ".epub");
             try (FileContentStream content = fileQueryService.openOwnedFileContent(
                     fileNode.ownerUserId(),
                     fileNode.id())) {

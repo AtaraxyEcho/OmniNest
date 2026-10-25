@@ -8,7 +8,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -20,8 +20,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && ${omninest.runtime.embedded-worker-enabled:false})")
+@ConditionalOnSchedulerRuntime
 public class FilePurgeRecoveryScheduler {
     private static final String TASK_TYPE = "FILE_PURGE";
     private static final int RECOVERY_BATCH_SIZE = 100;

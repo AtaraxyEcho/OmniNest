@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,6 +60,8 @@ class FileIngressPromotionServiceTest {
     private FileUploadSessionRepository uploadSessionRepository;
     private FileObjectRepository fileObjectRepository;
     private FileNodeRepository fileNodeRepository;
+    private FileVersionService fileVersionService;
+    private FileContentChangePublisher fileContentChangePublisher;
     private FilePostProcessingTaskService postProcessingTaskService;
     private StorageQuotaService storageQuotaService;
     private SharedSpaceQuotaService sharedSpaceQuotaService;
@@ -74,9 +77,9 @@ class FileIngressPromotionServiceTest {
         uploadSessionRepository = mock(FileUploadSessionRepository.class);
         fileObjectRepository = mock(FileObjectRepository.class);
         fileNodeRepository = mock(FileNodeRepository.class);
-        FileVersionService fileVersionService = mock(FileVersionService.class);
+        fileVersionService = mock(FileVersionService.class);
         postProcessingTaskService = mock(FilePostProcessingTaskService.class);
-        FileContentChangePublisher fileContentChangePublisher = new FileContentChangePublisher(postProcessingTaskService);
+        fileContentChangePublisher = new FileContentChangePublisher(postProcessingTaskService);
         storageQuotaService = mock(StorageQuotaService.class);
         sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
         objectStorageClient = mock(ObjectStorageClient.class);
@@ -323,12 +326,19 @@ class FileIngressPromotionServiceTest {
                 .thenReturn(Optional.of(target));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        FileObject[] savedObject = new FileObject[1];
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(UUID.randomUUID());
+            savedObject[0] = object;
             return object;
         });
         when(postProcessingTaskService.enqueueMediaAutoImport(any())).thenReturn(UUID.randomUUID());
+        Mockito.doAnswer(invocation -> {
+            fileContentChangePublisher.publish(target, savedObject[0], OWNER_ID);
+            return null;
+        }).when(fileVersionService).saveNewVersion(
+                eq(OWNER_ID), eq(target.getId()), any(), eq(512L), eq(null), eq(false));
 
         service.process(new FileSecurityScanRequestedEvent(
                 UUID.randomUUID(), OWNER_ID, INGRESS_ID, target.getId(), null));
@@ -336,6 +346,8 @@ class FileIngressPromotionServiceTest {
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
         // 版本上传只增加新对象字节，fileCount 不得增加，否则每次版本都会虚增一。
         verify(sharedSpaceQuotaService).increaseUsage(512L, 0L);
+        // 内容变更只由 saveNewVersion 发布一次，会话结果不得再次发布。
+        verify(postProcessingTaskService, times(1)).enqueueMediaAutoImport(any());
     }
 
     @Test

@@ -20428,6 +20428,54 @@ abstract class AppLocalizations {
   /// **'Unknown error'**
   String get errorUnknown;
 
+  /// No description provided for @errorDownloadTicketInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The download link is invalid. Please retry'**
+  String get errorDownloadTicketInvalid;
+
+  /// No description provided for @errorDownloadRangeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The server cannot resume this download. Please retry'**
+  String get errorDownloadRangeInvalid;
+
+  /// No description provided for @errorDownloadTicketChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The file has changed. Please download it again'**
+  String get errorDownloadTicketChanged;
+
+  /// No description provided for @errorDownloadIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not complete. Please retry'**
+  String get errorDownloadIncomplete;
+
+  /// No description provided for @errorDownloadSizeMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The downloaded file size does not match. Please retry'**
+  String get errorDownloadSizeMismatch;
+
+  /// No description provided for @errorDownloadDigestMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The downloaded file failed integrity verification. Please retry'**
+  String get errorDownloadDigestMismatch;
+
+  /// No description provided for @errorBookDownloadTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Book download timed out. Please retry'**
+  String get errorBookDownloadTimeout;
+
+  /// No description provided for @errorBookDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Book download failed. Please retry'**
+  String get errorBookDownloadFailed;
+
   /// No description provided for @errorNeedPassword.
   ///
   /// In en, this message translates to:

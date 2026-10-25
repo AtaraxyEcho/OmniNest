@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -49,7 +50,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
   final PlaybackPlan plan;
   final ValueNotifier<Duration> polledPosition;
   final Duration playerDuration;
-  final double bufferProgress;
+  final ValueListenable<double> bufferProgress;
   final bool isSeeking;
   final double seekValue;
   final void Function(double) onSeekStart;

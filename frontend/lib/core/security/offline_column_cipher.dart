@@ -9,7 +9,7 @@ export 'package:omninest/core/security/offline_text_cipher.dart';
 
 /// 创建当前平台的离线敏感列加密器。
 ///
-/// 原生平台使用系统安全存储中的主密钥；Web 使用标签页 sessionStorage
+/// 原生平台使用系统安全存储中的主密钥；Web 使用页面内存（不承诺离线）
 /// 的会话主密钥，关闭标签页即销毁。仅无安全存储能力的平台返回 null。
 OfflineTextCipher? createOfflineColumnCipher() {
   return platform_cipher.createOfflineColumnCipher();

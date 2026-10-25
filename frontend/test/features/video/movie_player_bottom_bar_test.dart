@@ -300,7 +300,7 @@ Future<void> _pumpBottomBar(
               ),
               polledPosition: position,
               playerDuration: const Duration(seconds: 120),
-              bufferProgress: 0.4,
+              bufferProgress: ValueNotifier<double>(0.4),
               isSeeking: false,
               seekValue: 0,
               onSeekStart: (_) {},

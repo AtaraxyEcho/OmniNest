@@ -2,10 +2,12 @@ package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.photos.config.PhotoMediaLimitsProperties;
@@ -23,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -36,11 +39,20 @@ class PhotoSourceFileServiceTest {
     private final PhotoFileDetector fileDetector = new PhotoFileDetector();
     private final PhotoMediaLimitsProperties properties = new PhotoMediaLimitsProperties();
     private final PhotoInputGuard inputGuard = new PhotoInputGuard(properties);
+    private final TempStagingPort tempStagingPort = mock(TempStagingPort.class);
     private final PhotoSourceFileService service = new PhotoSourceFileService(
             fileQueryService,
             fileDetector,
-            inputGuard
+            inputGuard,
+            tempStagingPort
     );
+
+    @BeforeEach
+    void stubTempStaging() {
+        when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> Files.createTempFile(
+                        invocation.getArgument(1), invocation.getArgument(2)));
+    }
 
     @Test
     void stageOwnedDeletesTemporaryFileWhenHandleCloses() throws Exception {

@@ -4,12 +4,13 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
+import com.omninest.modules.notification.dto.MarkReadRequest;
 import com.omninest.modules.notification.dto.NotificationDto;
 import com.omninest.modules.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -61,13 +62,12 @@ public class NotificationController {
     @Operation(summary = "标记通知已读", description = "批量标记指定通知为已读状态")
     @PutMapping("/api/v1/notifications/read")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
-    ApiResponse<Void> markRead(@RequestBody Map<String, List<UUID>> body) {
+    ApiResponse<Void> markRead(@RequestBody @Valid MarkReadRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        List<UUID> ids = body.get("ids");
-        if (ids == null || ids.isEmpty()) {
+        if (request.ids().isEmpty()) {
             return ApiResponse.success(null);
         }
-        notificationService.markRead(userId, ids);
+        notificationService.markRead(userId, request.ids());
         return ApiResponse.success(null);
     }
 

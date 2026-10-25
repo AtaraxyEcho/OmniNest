@@ -485,6 +485,8 @@ class FileQueryServiceTest {
         assertThat(renamed.name()).isEqualTo("Archive");
         assertThat(renamed.normalizedPath()).isEqualTo("/Archive");
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
+        // 文件夹本身不入索引，但其下文件必须按新路径重建索引。
+        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(child.getId()));
     }
 
     @Test
@@ -515,6 +517,37 @@ class FileQueryServiceTest {
                 ArgumentMatchers.eq("/S01\\_E01/"), ArgumentMatchers.any(), ArgumentMatchers.any());
         // 子节点路径重写仍按原始 oldPath 定位，转义串不得进 substring。
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
+    }
+
+    @Test
+    void moveFolderSchedulesDescendantFileIndexSync() {
+        UUID folderId = UUID.fromString("40000000-0000-0000-0000-00000000000c");
+        UUID targetFolderId = UUID.fromString("40000000-0000-0000-0000-00000000000d");
+        FileNode folder = node(OWNER_ID, null, "FOLDER", "Docs", "/Docs");
+        folder.setId(folderId);
+        FileNode targetFolder = node(OWNER_ID, null, "FOLDER", "Archive", "/Archive");
+        targetFolder.setId(targetFolderId);
+        FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/Docs/a.txt");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
+                .thenReturn(Optional.of(folder));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetFolderId, OWNER_ID))
+                .thenReturn(Optional.of(targetFolder));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, targetFolderId, "Docs"))
+                .thenReturn(false);
+        when(fileNodeRepository.findPersonalSubtreeAfterId(
+                ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
+                ArgumentMatchers.eq("/Docs/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of(child), List.of());
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileQueryService.moveNode(OWNER_ID, folderId, new MoveFileNodeRequest(targetFolderId));
+
+        assertThat(child.getNormalizedPath()).isEqualTo("/Archive/Docs/a.txt");
+        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(child.getId()));
     }
 
     @Test
@@ -1050,6 +1083,7 @@ class FileQueryServiceTest {
         assertThat(file.getNormalizedPath()).isEqualTo("/Archive/doc.pdf");
         assertThat(result).hasSize(1);
         assertThat(result.get(0).status()).isEqualTo("SUCCESS");
+        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(fileId));
     }
 
     @Test

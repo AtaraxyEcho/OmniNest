@@ -2,6 +2,7 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileQueryService;
 import java.io.IOException;
@@ -29,6 +30,7 @@ public class PhotoSourceFileService {
     private final FileQueryService fileQueryService;
     private final PhotoFileDetector fileDetector;
     private final PhotoInputGuard inputGuard;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 将用户拥有的照片文件流式写入受控临时文件。
@@ -67,7 +69,7 @@ public class PhotoSourceFileService {
         long maxBytes = inputGuard.maxFileBytes(raw);
         Path tempFile = null;
         try {
-            tempFile = Files.createTempFile("omninest-photo-source-", ".img");
+            tempFile = tempStagingPort.createTempFile("photo-source", "omninest-photo-source-", ".img");
             long actualSize = copyBounded(input, tempFile, maxBytes);
             inputGuard.validateFileSize(actualSize, raw);
             return new StagedPhotoFile(tempFile, fileName, actualSize, mimeType, raw);

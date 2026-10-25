@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -28,8 +28,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && ${omninest.runtime.embedded-scheduler-enabled:false})")
+@ConditionalOnSchedulerRuntime
 public class FileQuarantineReaperScheduler {
     private static final String RETENTION_DAYS_KEY = "security.quarantine.retention-days";
     private static final int DEFAULT_RETENTION_DAYS = 7;

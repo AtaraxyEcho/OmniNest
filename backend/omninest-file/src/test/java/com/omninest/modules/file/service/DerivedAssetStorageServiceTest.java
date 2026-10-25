@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.config.FileTransferLimitsProperties;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -24,8 +25,10 @@ import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -60,6 +63,37 @@ class DerivedAssetStorageServiceTest {
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
     private final PlatformTransactionManager platformTransactionManager = mock(PlatformTransactionManager.class);
 
+    private static TempStagingPort tempStagingPort() {
+        return new TempStagingPort() {
+            @Override
+            public Path createTempFile(String segment, String prefix, String suffix) {
+                try {
+                    return Files.createTempFile(prefix, suffix);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            }
+
+            @Override
+            public Path ensureDirectory(String segment) {
+                try {
+                    return Files.createTempDirectory(segment);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            }
+
+            @Override
+            public void deleteQuietly(Path path) {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // 测试替身只保证语义一致，失败无需向上传播。
+                }
+            }
+        };
+    }
+
     private void allowTransactionCallback() {
         when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 ((TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null));
@@ -80,7 +114,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
         LegacyObjectReference reference = new LegacyObjectReference(
                 "derived-assets",
@@ -117,7 +152,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         boolean deleted = service.deleteOwned(OWNER_ID, FILE_NODE_ID);
@@ -146,7 +182,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         int deletedCount = service.deleteOwnedBatch(
@@ -182,7 +219,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         assertThatThrownBy(() -> service.deleteOwned(OWNER_ID, FILE_NODE_ID))
@@ -217,7 +255,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         boolean available = service.isAvailable(
@@ -254,7 +293,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         UUID fileNodeId = service.store(
@@ -305,7 +345,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
         String logicalName = FILE_NODE_ID + "_h265.mp4";
 
@@ -370,7 +411,8 @@ class DerivedAssetStorageServiceTest {
                     fileNodeRepository,
                     safeUrlValidator,
                     transactionTemplate,
-                    new FileTransferLimitsProperties()
+                    new FileTransferLimitsProperties(),
+                    tempStagingPort()
             );
 
             UUID fileNodeId = service.storeRemote(new DerivedAssetRequest(
@@ -419,7 +461,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                limits
+                limits,
+                tempStagingPort()
         );
         allowStoreTransaction();
 
@@ -494,7 +537,8 @@ class DerivedAssetStorageServiceTest {
                 fileNodeRepository,
                 safeUrlValidator,
                 transactionTemplate,
-                new FileTransferLimitsProperties()
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
         );
 
         UUID fileNodeId = service.store(

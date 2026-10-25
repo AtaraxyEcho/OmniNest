@@ -29,6 +29,7 @@ import com.omninest.modules.file.domain.FileFavorite;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.domain.FileUploadSession;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.domain.SpaceType;
@@ -150,7 +151,8 @@ class FileManagerServiceTest {
             favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter, sharedSpaceService);
     private final FileVersionService fileVersionService = new FileVersionService(
             fileNodeRepository, fileObjectRepository, fileVersionRepository, uploadSessionRepository,
-            fileContentChangePublisher, fileNodeSupport, syncEventWriter);
+            fileContentChangePublisher, fileNodeSupport, syncEventWriter,
+            storageQuotaService, sharedSpaceQuotaService);
     private final FileShareService fileShareService = new FileShareService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
@@ -869,7 +871,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
                 .thenReturn(Optional.empty());
         when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, newObjectId))
-                .thenReturn(Optional.of(new com.omninest.modules.file.domain.FileUploadSession()));
+                .thenReturn(Optional.of(new FileUploadSession()));
         when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> {
@@ -885,6 +887,63 @@ class FileManagerServiceTest {
         assertThat(result.sizeBytes()).isEqualTo(200L);
         assertThat(result.mimeType()).isEqualTo("text/plain");
         verify(fileContentChangePublisher).publish(any(FileNode.class), any(FileObject.class), any(UUID.class));
+    }
+
+    @Test
+    void saveNewVersion_chargesQuotaOnDirectUploadPath() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID newObjectId = UUID.fromString("50000000-0000-0000-0000-000000000020");
+        FileObject newObject = new FileObject();
+        newObject.setId(newObjectId);
+        newObject.setObjectKey("uploads/" + OWNER_ID + "/session-2/report.pdf");
+        newObject.setSizeBytes(200L);
+        newObject.setMimeType("application/pdf");
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(newObjectId))
+                .thenReturn(Optional.of(newObject));
+        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
+                .thenReturn(Optional.empty());
+        when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, newObjectId))
+                .thenReturn(Optional.of(new FileUploadSession()));
+        when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, null, true);
+
+        // 直接版本接口没有上传会话结算，必须由版本服务扣减新增对象字节。
+        verify(storageQuotaService).checkQuota(OWNER_ID, 200L);
+        verify(storageQuotaService).incrementUsage(OWNER_ID, 200L);
+    }
+
+    @Test
+    void saveNewVersion_skipsQuotaWhenUploadSessionAlreadySettled() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID newObjectId = UUID.fromString("50000000-0000-0000-0000-000000000021");
+        FileObject newObject = new FileObject();
+        newObject.setId(newObjectId);
+        newObject.setObjectKey("users/" + OWNER_ID + "/files/report.pdf");
+        newObject.setSizeBytes(200L);
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(newObjectId))
+                .thenReturn(Optional.of(newObject));
+        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
+                .thenReturn(Optional.empty());
+        when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, null, false);
+
+        // 入口晋升已由 settleUploadQuota 结算，版本服务不得重复加计。
+        verify(storageQuotaService, never()).incrementUsage(any(), anyLong());
+        verify(sharedSpaceQuotaService, never()).increaseUsage(anyLong(), anyLong());
     }
 
     @Test

@@ -29,6 +29,7 @@ import com.omninest.modules.photos.event.PhotoThumbnailRegenerationEvent;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoScanJobRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import com.omninest.common.util.ThrowableDescriber;
@@ -81,6 +82,9 @@ public class PhotoAdminService {
     @Value("${omninest.concurrency.photo-scan:3}")
     int scanConcurrency = 3;
 
+    /** 扫描按主键游标分批读取图片节点，避免把全库实体一次性载入内存。 */
+    private static final int SCAN_PAGE_SIZE = 500;
+
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
             TaskStatus.RUNNING.getValue(),
@@ -103,6 +107,7 @@ public class PhotoAdminService {
     private final PhotoGeoService photoGeoService;
     private final PhotoAiTaskService photoAiTaskService;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final FilePostProcessingTaskService filePostProcessingTaskService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
@@ -134,7 +139,7 @@ public class PhotoAdminService {
                 .flatMap(task -> scanJobRepository.findByIdAndOwnerUserId(task.getId(), ownerUserId))
                 .orElse(null);
         if (existing != null) {
-            return toDto(existing);
+            return PhotoAdminSupport.toDto(existing);
         }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, ownerUserId, "PHOTO_SCAN", QueueNames.PHOTO_SCAN_ROUTING_KEY, Map.of(
@@ -158,7 +163,7 @@ public class PhotoAdminService {
                 event
         );
 
-        return toDto(job);
+        return PhotoAdminSupport.toDto(job);
     }
 
     /**
@@ -185,36 +190,29 @@ public class PhotoAdminService {
         try {
             // 个人相册扫描只处理本人文件：共享空间里他人的图片会以扫描者身份
             // 克隆出影子 PhotoItem，回收站清理时因底层 FileNode 不属于本人而永久失败。
-            List<FileDescriptor> nodes = fileMetadataQueryService.listOwnedImages(ownerUserId);
-
-            // 每文件独立事务，最多 3 路并发：Worker 连接池 8，保留心跳与其他消费者所需连接。
+            long totalFiles = fileMetadataQueryService.countOwnedImages(ownerUserId);
+            int totalForProgress = (int) Math.min(totalFiles, Integer.MAX_VALUE);
+            AtomicInteger processedCounter = new AtomicInteger();
             AtomicInteger importedCounter = new AtomicInteger();
-            Semaphore scanPermits = new Semaphore(Math.max(1, scanConcurrency));
-            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-                List<Future<?>> futures = nodes.stream()
-                        .<Future<?>>map(file -> executor.submit(() -> {
-                            scanPermits.acquireUninterruptibly();
-                            try {
-                                transactionTemplate.executeWithoutResult(status ->
-                                        importPhotoFile(ownerUserId, file)
-                                );
-                                importedCounter.incrementAndGet();
-                            } catch (Exception fileEx) {
-                                log.warn("单个文件导入失败，跳过: fileNodeId={}, error={}",
-                                        file.id(), fileEx.getMessage());
-                            } finally {
-                                scanPermits.release();
-                            }
-                        }))
-                        .toList();
-                for (Future<?> future : futures) {
-                    try {
-                        future.get();
-                    } catch (InterruptedException exception) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("照片扫描等待并发结果时被中断", exception);
-                    } catch (ExecutionException exception) {
-                        throw new IllegalStateException("照片扫描并发执行失败", exception.getCause());
+            // 扫描可能持续数十分钟；心跳线程按已处理数量刷新任务心跳，避免被恢复调度器
+            // 判定为僵尸任务后重复并发投递。
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(
+                    jobId,
+                    () -> PhotoAdminSupport.progressPercent(processedCounter.get(), totalForProgress))) {
+                UUID afterId = new UUID(0L, 0L);
+                while (true) {
+                    List<FileDescriptor> nodes = fileMetadataQueryService.listOwnedImagesPage(
+                            ownerUserId, afterId, SCAN_PAGE_SIZE);
+                    if (nodes.isEmpty()) {
+                        break;
+                    }
+                    importScanPage(ownerUserId, nodes, importedCounter);
+                    processedCounter.addAndGet(nodes.size());
+                    taskRecordService.updateProgress(
+                            jobId, PhotoAdminSupport.progressPercent(processedCounter.get(), totalForProgress));
+                    afterId = nodes.getLast().id();
+                    if (nodes.size() < SCAN_PAGE_SIZE) {
+                        break;
                     }
                 }
             }
@@ -253,10 +251,54 @@ public class PhotoAdminService {
             failedJob.setMessage("扫描失败: " + ex.getMessage());
             scanJobRepository.save(failedJob);
             taskRecordService.markFailed(jobId, ex.getMessage(), ThrowableDescriber.describe(ex));
-            // 发送扫描失败通知
-            notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
-                    "照片扫描失败", "扫描失败: " + ex.getMessage(),
-                    Map.of("jobId", jobId.toString()));
+            // 重试由消费者裁决；只在重试额度耗尽时通知，避免每次失败重复打扰用户。
+            if (taskRecordService.hasExhaustedRetries(jobId)) {
+                notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
+                        "照片扫描失败", "扫描失败: " + ex.getMessage(),
+                        Map.of("jobId", jobId.toString()));
+            }
+            throw ex instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new IllegalStateException(ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 导入一页图片文件；仍保持逐文件独立事务与有限并发。
+     */
+    private void importScanPage(
+            UUID ownerUserId,
+            List<FileDescriptor> nodes,
+            AtomicInteger importedCounter
+    ) {
+        Semaphore scanPermits = new Semaphore(Math.max(1, scanConcurrency));
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> futures = nodes.stream()
+                    .<Future<?>>map(file -> executor.submit(() -> {
+                        scanPermits.acquireUninterruptibly();
+                        try {
+                            transactionTemplate.executeWithoutResult(status ->
+                                    importPhotoFile(ownerUserId, file)
+                            );
+                            importedCounter.incrementAndGet();
+                        } catch (Exception fileEx) {
+                            log.warn("单个文件导入失败，跳过: fileNodeId={}, error={}",
+                                    file.id(), fileEx.getMessage());
+                        } finally {
+                            scanPermits.release();
+                        }
+                    }))
+                    .toList();
+            for (Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("照片扫描等待并发结果时被中断", exception);
+                } catch (ExecutionException exception) {
+                    throw new IllegalStateException("照片扫描并发执行失败", exception.getCause());
+                }
+            }
         }
     }
 
@@ -270,7 +312,7 @@ public class PhotoAdminService {
     @Transactional(readOnly = true)
     public PhotoScanJobDto scanJob(UUID ownerUserId, UUID jobId) {
         return scanJobRepository.findByIdAndOwnerUserId(jobId, ownerUserId)
-                .map(this::toDto)
+                .map(PhotoAdminSupport::toDto)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "扫描任务不存在"));
     }
 
@@ -341,7 +383,7 @@ public class PhotoAdminService {
         photo.setId(UUID.randomUUID());
         photo.setOwnerUserId(ownerUserId);
         photo.setFileNodeId(file.id());
-        photo.setTitle(titleFromFileName(file.name()));
+        photo.setTitle(PhotoAdminSupport.titleFromFileName(file.name()));
         photo.setFormat(fileDetector.extension(file.name()));
         // RAW 预览需要真实文件，保留暂存路径；常规图片流式读取，
         // EXIF 提取与内容哈希共用一次下载，封面交给缩略图任务异步生成回填。
@@ -691,7 +733,7 @@ public class PhotoAdminService {
      * 进度按每 25 张或最后一张写库，避免逐张更新 task_record。
      */
     private int reportThrottled(UUID taskId, int finished, int total, int lastReported) {
-        int percent = progressPercent(finished, total);
+        int percent = PhotoAdminSupport.progressPercent(finished, total);
         if (percent == lastReported || (finished % 25 != 0 && finished < total)) {
             return lastReported;
         }
@@ -731,13 +773,6 @@ public class PhotoAdminService {
         return coverFileId;
     }
 
-    private int progressPercent(int finished, int total) {
-        if (total <= 0) {
-            return 100;
-        }
-        return Math.min(100, (int) Math.round(finished * 100.0 / total));
-    }
-
     private String computeSha256(Path file) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -749,22 +784,5 @@ public class PhotoAdminService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 算法不可用", exception);
         }
-    }
-
-    private String titleFromFileName(String fileName) {
-        String name = fileName == null ? "Untitled" : fileName.trim();
-        int dotIndex = name.lastIndexOf('.');
-        return dotIndex <= 0 ? name : name.substring(0, dotIndex);
-    }
-
-    private PhotoScanJobDto toDto(PhotoScanJob job) {
-        return new PhotoScanJobDto(
-                job.getId(),
-                job.getStatus(),
-                job.getScannedFiles(),
-                job.getMessage(),
-                job.getCreatedAt(),
-                job.getUpdatedAt()
-        );
     }
 }

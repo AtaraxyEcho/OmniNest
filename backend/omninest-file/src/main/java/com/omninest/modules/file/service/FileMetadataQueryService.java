@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -167,9 +168,23 @@ public class FileMetadataQueryService {
      * @return 图片文件描述符列表
      */
     @Transactional(readOnly = true)
-    public List<FileDescriptor> listOwnedImages(UUID ownerUserId) {
-        return fileNodeRepository.findImageFilesByOwnerUserId(ownerUserId)
+    public List<FileDescriptor> listOwnedImagesPage(UUID ownerUserId, UUID afterId, int limit) {
+        return fileNodeRepository.findImageFilesByOwnerUserIdAfterId(
+                        ownerUserId,
+                        afterId == null ? new UUID(0L, 0L) : afterId,
+                        PageRequest.of(0, Math.max(1, limit)))
                 .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 统计用户待扫描的图片文件数。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 图片文件数量
+     */
+    @Transactional(readOnly = true)
+    public long countOwnedImages(UUID ownerUserId) {
+        return fileNodeRepository.countImageFilesByOwnerUserId(ownerUserId);
     }
 
     /**

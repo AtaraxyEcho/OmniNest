@@ -1,7 +1,9 @@
 package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -25,6 +27,7 @@ import com.omninest.modules.photos.domain.PhotoScanJob;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoScanJobRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.domain.TaskStatus;
 import java.time.Instant;
@@ -32,6 +35,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -67,6 +71,7 @@ class PhotoAdminServiceTest {
     private final PhotoGeoService photoGeoService = mock(PhotoGeoService.class);
     private final PhotoAiTaskService photoAiTaskService = mock(PhotoAiTaskService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
+    private final TaskHeartbeatRunner taskHeartbeatRunner = mock(TaskHeartbeatRunner.class);
     private final FilePostProcessingTaskService filePostProcessingTaskService =
             mock(FilePostProcessingTaskService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
@@ -89,6 +94,7 @@ class PhotoAdminServiceTest {
             photoGeoService,
             photoAiTaskService,
             taskRecordService,
+            taskHeartbeatRunner,
             filePostProcessingTaskService,
             syncEventService,
             readThroughCache,
@@ -99,7 +105,10 @@ class PhotoAdminServiceTest {
     void setUp() {
         service.initTransactionTemplate();
         when(taskRecordService.claimForExecution(JOB_ID, "SCANNING")).thenReturn(true);
-        when(fileMetadataQueryService.listOwnedImages(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedImagesPage(
+                eq(OWNER_ID), any(UUID.class), anyInt())).thenReturn(List.of());
+        when(taskHeartbeatRunner.start(eq(JOB_ID), any(IntSupplier.class)))
+                .thenReturn(mock(TaskHeartbeatRunner.Heartbeat.class));
         when(scanJobRepository.save(any(PhotoScanJob.class))).thenAnswer(invocation -> {
             PhotoScanJob saved = invocation.getArgument(0);
             // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
@@ -114,7 +123,9 @@ class PhotoAdminServiceTest {
         service.scanConcurrency = 1;
         PhotoScanJob job = queuedJob();
         when(scanJobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
-        when(fileMetadataQueryService.listOwnedImages(OWNER_ID)).thenReturn(List.of(
+        when(fileMetadataQueryService.countOwnedImages(OWNER_ID)).thenReturn(3L);
+        when(fileMetadataQueryService.listOwnedImagesPage(
+                eq(OWNER_ID), any(UUID.class), anyInt())).thenReturn(List.of(
                 descriptor("p1.jpg"), descriptor("p2.jpg"), descriptor("p3.jpg")));
         AtomicInteger active = new AtomicInteger();
         AtomicInteger maxActive = new AtomicInteger();
@@ -156,10 +167,12 @@ class PhotoAdminServiceTest {
     void executeScanJobFailurePathRewritesTerminalStateOnReloadedEntity() {
         PhotoScanJob job = queuedJob();
         when(scanJobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
-        when(fileMetadataQueryService.listOwnedImages(OWNER_ID))
+        when(fileMetadataQueryService.listOwnedImagesPage(
+                eq(OWNER_ID), any(UUID.class), anyInt()))
                 .thenThrow(new IllegalStateException("元数据查询不可用"));
 
-        service.executeScanJob(JOB_ID, OWNER_ID);
+        assertThatThrownBy(() -> service.executeScanJob(JOB_ID, OWNER_ID))
+                .isInstanceOf(IllegalStateException.class);
 
         // 失败收尾按 id 重新加载最新实体后写 FAILED，任务行不得停留在 RUNNING。
         verify(scanJobRepository, times(2)).findById(JOB_ID);
