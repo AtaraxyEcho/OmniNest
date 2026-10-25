@@ -1,18 +1,21 @@
 package com.omninest.modules.configcenter.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.configcenter.domain.ConfigSurface;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConfigCenterController {
     private final ConfigCenterService configCenterService;
     private final CurrentUserContext currentUserContext;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     @Operation(summary = "查询所有配置项", description = "获取系统配置中心的所有配置项列表")
     @GetMapping("/api/v1/admin/configs")
@@ -45,12 +50,17 @@ public class ConfigCenterController {
             @PathVariable String key,
             @Valid @RequestBody UpdateConfigRequest body
     ) {
-        return ApiResponse.success(configCenterService.update(
-                key,
-                body.value(),
-                body.reason(),
-                currentUserContext.requireCurrentUserId()
-        ));
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
+        ConfigEntryDto result = configCenterService.update(key, body.value(), body.reason(), actorUserId);
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_CONFIG_UPDATE",
+                "sys_config_entries",
+                null,
+                Map.of("key", key, "reason", body.reason() == null ? "" : body.reason())
+        );
+        return ApiResponse.success(result);
     }
 
     /**
@@ -75,7 +85,17 @@ public class ConfigCenterController {
     @PostMapping("/api/v1/admin/configs/history/{historyId}/rollback")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<ConfigEntryDto> rollback(@PathVariable UUID historyId) {
-        return ApiResponse.success(configCenterService.rollback(historyId, currentUserContext.requireCurrentUserId()));
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
+        ConfigEntryDto result = configCenterService.rollback(historyId, actorUserId);
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_CONFIG_ROLLBACK",
+                "sys_config_history",
+                historyId,
+                Map.of()
+        );
+        return ApiResponse.success(result);
     }
 
     public record UpdateConfigRequest(

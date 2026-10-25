@@ -225,6 +225,7 @@ final adminSessionPageProvider = FutureProvider.autoDispose
     });
 
 final adminLoginAuditProvider = FutureProvider<AdminLoginAuditView>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(adminOperationsApiProvider).loginAuditLogs();
 });
 
@@ -386,82 +387,79 @@ class AdminOperationsActions {
     ref.invalidate(adminTaskPageProvider);
   }
 
-  /// 逐条批量重试任务，失败项跳过，结束后统一刷新任务列表。
+  /// 每批并发数；避免 30~50 条操作串行等待，也不至于瞬时打满后端。
+  static const int _batchConcurrency = 4;
+
+  Future<AdminBatchResult> _runBatch(
+    Iterable<String> ids,
+    Future<void> Function(String id) action,
+  ) async {
+    final all = ids.toList(growable: false);
+    var successCount = 0;
+    final failedIds = <String>[];
+    for (var offset = 0; offset < all.length; offset += _batchConcurrency) {
+      final batch = all.skip(offset).take(_batchConcurrency).toList();
+      final results = await Future.wait(
+        batch.map((id) async {
+          try {
+            await action(id);
+            return true;
+          } on Object {
+            return false;
+          }
+        }),
+      );
+      for (var index = 0; index < batch.length; index++) {
+        if (results[index]) {
+          successCount++;
+        } else {
+          failedIds.add(batch[index]);
+        }
+      }
+    }
+    return (successCount: successCount, failedIds: failedIds);
+  }
+
+  /// 受限并发批量重试任务，失败项跳过，结束后统一刷新任务列表。
   Future<AdminBatchResult> batchRetryTasks(Iterable<String> taskIds) async {
-    var successCount = 0;
-    final failedIds = <String>[];
-    for (final taskId in taskIds) {
-      try {
-        await _api.retryTask(taskId);
-        successCount++;
-      } on Object {
-        failedIds.add(taskId);
-      }
-    }
-    if (successCount > 0) {
+    final result = await _runBatch(taskIds, _api.retryTask);
+    if (result.successCount > 0) {
       ref.invalidate(adminTasksProvider);
       ref.invalidate(adminTaskPageProvider);
     }
-    return (successCount: successCount, failedIds: failedIds);
+    return result;
   }
 
-  /// 逐条批量取消任务（仅排队/等待重试态生效），失败项跳过，结束后统一刷新。
+  /// 受限并发批量取消任务（仅排队/等待重试态生效），失败项跳过，结束后统一刷新。
   Future<AdminBatchResult> batchCancelTasks(Iterable<String> taskIds) async {
-    var successCount = 0;
-    final failedIds = <String>[];
-    for (final taskId in taskIds) {
-      try {
-        await _api.cancelTask(taskId);
-        successCount++;
-      } on Object {
-        failedIds.add(taskId);
-      }
-    }
-    if (successCount > 0) {
+    final result = await _runBatch(taskIds, _api.cancelTask);
+    if (result.successCount > 0) {
       ref.invalidate(adminTasksProvider);
       ref.invalidate(adminTaskPageProvider);
     }
-    return (successCount: successCount, failedIds: failedIds);
+    return result;
   }
 
-  /// 逐条批量重试死信任务，失败项跳过，结束后统一刷新死信与任务列表。
+  /// 受限并发批量重试死信任务，失败项跳过，结束后统一刷新死信与任务列表。
   Future<AdminBatchResult> batchRetryDlq(Iterable<String> taskIds) async {
-    var successCount = 0;
-    final failedIds = <String>[];
-    for (final taskId in taskIds) {
-      try {
-        await _api.retryDlq(taskId);
-        successCount++;
-      } on Object {
-        failedIds.add(taskId);
-      }
-    }
-    if (successCount > 0) {
+    final result = await _runBatch(taskIds, _api.retryDlq);
+    if (result.successCount > 0) {
       ref.invalidate(adminDlqProvider);
       ref.invalidate(adminTasksProvider);
       ref.invalidate(adminTaskPageProvider);
     }
-    return (successCount: successCount, failedIds: failedIds);
+    return result;
   }
 
-  /// 逐条批量丢弃死信任务（破坏性，终态不可重试），失败项跳过，结束后统一刷新。
+  /// 受限并发批量丢弃死信任务（破坏性，终态不可重试），失败项跳过，结束后统一刷新。
   Future<AdminBatchResult> batchDiscardDlq(Iterable<String> taskIds) async {
-    var successCount = 0;
-    final failedIds = <String>[];
-    for (final taskId in taskIds) {
-      try {
-        await _api.discardDlqTask(taskId);
-        successCount++;
-      } on Object {
-        failedIds.add(taskId);
-      }
-    }
-    if (successCount > 0) {
+    final result = await _runBatch(taskIds, _api.discardDlqTask);
+    if (result.successCount > 0) {
       ref.invalidate(adminDlqProvider);
       ref.invalidate(adminTasksProvider);
       ref.invalidate(adminTaskPageProvider);
     }
-    return (successCount: successCount, failedIds: failedIds);
+    return result;
   }
 
   /// 重试死信队列任务
@@ -578,25 +576,16 @@ class AdminOperationsActions {
     ref.invalidate(adminSessionPageProvider);
   }
 
-  /// 逐条批量强制下线会话，失败项跳过，结束后统一刷新会话列表。
+  /// 受限并发批量强制下线会话，失败项跳过，结束后统一刷新会话列表。
   Future<AdminBatchResult> batchRevokeSessions(
     Iterable<String> sessionIds,
   ) async {
-    var successCount = 0;
-    final failedIds = <String>[];
-    for (final sessionId in sessionIds) {
-      try {
-        await _api.revokeSession(sessionId);
-        successCount++;
-      } on Object {
-        failedIds.add(sessionId);
-      }
-    }
-    if (successCount > 0) {
+    final result = await _runBatch(sessionIds, _api.revokeSession);
+    if (result.successCount > 0) {
       ref.invalidate(adminSessionsProvider);
       ref.invalidate(adminSessionPageProvider);
     }
-    return (successCount: successCount, failedIds: failedIds);
+    return result;
   }
 
   Future<int> cleanupSessions(int retentionDays) async {

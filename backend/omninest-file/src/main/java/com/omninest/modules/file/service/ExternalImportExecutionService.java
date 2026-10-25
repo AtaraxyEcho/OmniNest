@@ -511,8 +511,8 @@ public class ExternalImportExecutionService {
 
         try {
             Files.createDirectories(tempDir);
-            externalStorageService.validateEndpointSafety(account);
-            externalStorageService.activateRemote(account);
+            // 后台导入可能晚于 OAuth access_token 过期，必须先刷新再激活 remote。
+            externalStorageService.prepareUsableRemote(account);
 
             String sourceFs = externalStorageService.resolveFs(account);
             String sourcePath = normalizeRclonePath(task.getSourcePath());
@@ -1056,22 +1056,36 @@ public class ExternalImportExecutionService {
     }
 
     private static final int MAX_NAME_COLLISION_ITERATIONS = 1000;
+    private static final int MAX_FILE_NAME_LENGTH = 255;
 
     private String resolveAvailableName(StorageImportTask task, UUID parentId, String requestedName) {
-        String name = requestedName;
-        int dotIndex = requestedName.lastIndexOf('.');
-        String baseName = dotIndex <= 0 ? requestedName : requestedName.substring(0, dotIndex);
-        String extension = dotIndex <= 0 ? "" : requestedName.substring(dotIndex);
+        String name = withNameSuffix(requestedName, "");
         int index = 1;
         while (nameExists(task, parentId, name)) {
+            String suffix = index > MAX_NAME_COLLISION_ITERATIONS
+                    ? " (" + UUID.randomUUID().toString().substring(0, 8) + ")"
+                    : " (" + index + ")";
+            name = withNameSuffix(requestedName, suffix);
             if (index > MAX_NAME_COLLISION_ITERATIONS) {
-                name = baseName + " (" + UUID.randomUUID().toString().substring(0, 8) + ")" + extension;
                 break;
             }
-            name = baseName + " (" + index + ")" + extension;
             index++;
         }
         return name;
+    }
+
+    /**
+     * 在扩展名前插入冲突后缀，并把总分片名截到 file_nodes.name 的 255 字符列宽。
+     */
+    private String withNameSuffix(String requestedName, String suffix) {
+        int dotIndex = requestedName.lastIndexOf('.');
+        String stem = dotIndex <= 0 ? requestedName : requestedName.substring(0, dotIndex);
+        String extension = dotIndex <= 0 ? "" : requestedName.substring(dotIndex);
+        int stemLimit = Math.max(1, MAX_FILE_NAME_LENGTH - suffix.length() - extension.length());
+        if (stem.length() > stemLimit) {
+            stem = stem.substring(0, stemLimit);
+        }
+        return stem + suffix + extension;
     }
 
     private boolean nameExists(StorageImportTask task, UUID parentId, String name) {

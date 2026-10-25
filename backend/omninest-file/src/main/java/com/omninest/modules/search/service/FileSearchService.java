@@ -78,8 +78,10 @@ public class FileSearchService {
             return List.of();
         }
         List<UUID> candidateIds = candidates.stream().map(SearchResultDto::fileId).toList();
-        Map<UUID, String> currentNames = new LinkedHashMap<>(
-                searchableFileQuery.findCurrentNames(ownerUserId, candidateIds));
+        Map<UUID, String> currentNames = new LinkedHashMap<>();
+        if (includePersonal) {
+            currentNames.putAll(searchableFileQuery.findCurrentNames(ownerUserId, candidateIds));
+        }
         if (includeShared) {
             currentNames.putAll(searchableFileQuery.findCurrentSharedNames(candidateIds));
         }

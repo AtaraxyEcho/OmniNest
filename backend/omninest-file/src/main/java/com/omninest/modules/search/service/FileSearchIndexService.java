@@ -403,11 +403,11 @@ public class FileSearchIndexService implements Closeable {
      * @param spaceType 空间类型
      */
     public void indexFileChunks(
-            UUID ownerUserId, UUID fileNodeId, String title, List<String> chunks, String spaceType) {
+            UUID fileNodeId, UUID ownerUserId, String title, List<String> chunks, String spaceType) {
         if (isUserPurged(ownerUserId)) {
             return;
         }
-        indexFileChunksInternal(ownerUserId, fileNodeId, title, chunks, spaceType);
+        indexFileChunksInternal(fileNodeId, ownerUserId, title, chunks, spaceType);
     }
 
     private void indexFileChunksInternal(
@@ -633,13 +633,20 @@ public class FileSearchIndexService implements Closeable {
         }
     }
 
+    private static final int MAX_SEARCH_TOKENS = 16;
+
     private List<SearchResultDto> collectHits(
             IndexSearcher searcher,
             String queryStr,
             int maxResults,
             String spaceType
     ) throws Exception {
-        List<String> tokens = analyzeTokens(queryStr);
+        // 每个 token 会生成两个 PrefixQuery；限制去重后的词元数，避免长文本触发
+        // Lucene TooManyClauses 与词典重写尖峰。
+        List<String> tokens = analyzeTokens(queryStr).stream()
+                .distinct()
+                .limit(MAX_SEARCH_TOKENS)
+                .toList();
         if (tokens.isEmpty()) {
             return List.of();
         }

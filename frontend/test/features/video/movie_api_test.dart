@@ -63,6 +63,42 @@ void main() {
     },
   );
 
+  test(
+    'subtitle loading decodes GBK and marks external URL as no-auth',
+    () async {
+      final adapter = _BytesHttpClientAdapter(
+        Uint8List.fromList(<int>[
+          0xD6,
+          0xD0,
+          0xCE,
+          0xC4,
+          0xD7,
+          0xD6,
+          0xC4,
+          0xBB,
+        ]),
+      );
+      final api = MovieApi(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+          readAccessToken: () => 'secret-jwt',
+          httpClientAdapter: adapter,
+        ),
+      );
+
+      final content = await api.loadSubtitle(
+        'https://storage.example/subtitle.srt',
+      );
+
+      expect(content, '中文字幕');
+      expect(adapter.lastHeaders?['Authorization'], isNull);
+      expect(adapter.lastSkipAuthorization, isTrue);
+    },
+  );
+
   test('subtitle loading truncates oversized responses to two MiB', () async {
     final adapter = _TextHttpClientAdapter(
       List<String>.filled(2 * 1024 * 1024 + 32, 'a').join(),
@@ -211,6 +247,35 @@ class _CapturingHttpClientAdapter implements HttpClientAdapter {
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+class _BytesHttpClientAdapter implements HttpClientAdapter {
+  _BytesHttpClientAdapter(this.content);
+
+  final Uint8List content;
+  Map<String, dynamic>? lastHeaders;
+  bool? lastSkipAuthorization;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    lastHeaders = Map<String, dynamic>.from(options.headers);
+    lastSkipAuthorization =
+        options.extra[ApiClient.skipAuthorizationKey] == true;
+    return ResponseBody.fromBytes(
+      content,
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.textPlainContentType],
       },
     );
   }

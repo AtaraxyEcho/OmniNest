@@ -175,6 +175,18 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
     int deleteInactiveBefore(@Param("cutoff") Instant cutoff);
 
     /**
+     * 分批取待清理的失效会话 ID，供管理端短事务删除。
+     */
+    @Query("select session.id from AuthActiveSession session "
+            + "where (session.revokedAt is not null and session.revokedAt < :cutoff) "
+            + "or session.expiresAt < :cutoff")
+    List<UUID> findIdsInactiveBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
+
+    @Modifying
+    @Query("delete from AuthActiveSession session where session.id in :ids")
+    int deleteByIds(@Param("ids") Collection<UUID> ids);
+
+    /**
      * 删除用户全部会话记录，供管理端物理删除空账户使用。
      *
      * @param userId 用户标识

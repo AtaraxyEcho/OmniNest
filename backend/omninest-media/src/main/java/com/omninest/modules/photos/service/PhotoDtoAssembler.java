@@ -189,7 +189,8 @@ public class PhotoDtoAssembler {
                 null,
                 item.motionState(),
                 null,
-                false
+                false,
+                null
         );
     }
 

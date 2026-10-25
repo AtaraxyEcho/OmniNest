@@ -2,6 +2,7 @@ package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuthLoginAudit;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -84,6 +85,16 @@ public interface AuthLoginAuditRepository extends JpaRepository<AuthLoginAudit, 
     @Modifying
     @Query("delete from AuthLoginAudit audit where audit.createdAt < :cutoff")
     int deleteCreatedBefore(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 分批取待清理的登录审计 ID，供管理端短事务删除。
+     */
+    @Query("select audit.id from AuthLoginAudit audit where audit.createdAt < :cutoff")
+    List<UUID> findIdsCreatedBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
+
+    @Modifying
+    @Query("delete from AuthLoginAudit audit where audit.id in :ids")
+    int deleteByIds(@Param("ids") Collection<UUID> ids);
 
     /**
      * 统计指定时间之前将被清理的登录审计数量，谓词与 deleteCreatedBefore 保持一致。

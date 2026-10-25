@@ -46,17 +46,17 @@ class QuotaStatusTest {
     }
 
     @Test
-    @DisplayName("临界状态：配额为零")
-    void resolveCriticalWhenQuotaIsZero() {
+    @DisplayName("无限制配额：零配额返回正常")
+    void resolveNormalWhenQuotaIsZero() {
         QuotaStatus status = QuotaStatus.resolve(0, 0, 80);
-        assertThat(status).isEqualTo(QuotaStatus.CRITICAL);
+        assertThat(status).isEqualTo(QuotaStatus.NORMAL);
     }
 
     @Test
-    @DisplayName("临界状态：配额为负数")
-    void resolveCriticalWhenQuotaIsNegative() {
+    @DisplayName("无限制配额：负数配额返回正常")
+    void resolveNormalWhenQuotaIsNegative() {
         QuotaStatus status = QuotaStatus.resolve(100, -1, 80);
-        assertThat(status).isEqualTo(QuotaStatus.CRITICAL);
+        assertThat(status).isEqualTo(QuotaStatus.NORMAL);
     }
 
     @Test

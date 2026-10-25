@@ -7,6 +7,7 @@ import com.omninest.modules.search.dto.SearchResultDto;
 import com.omninest.modules.search.service.FileSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,7 @@ public class SearchController {
     @GetMapping("/api/v1/search")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<SearchResultDto>> search(
-            @RequestParam String q,
+            @RequestParam @Size(max = 200, message = "搜索词不能超过 200 个字符") String q,
             @RequestParam(required = false) String spaceType) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileSearchService.search(ownerUserId, q, spaceType));

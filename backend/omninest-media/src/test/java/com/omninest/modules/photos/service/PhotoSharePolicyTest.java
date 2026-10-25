@@ -10,10 +10,18 @@ import org.junit.jupiter.api.Test;
 
 class PhotoSharePolicyTest {
 
+    private static final UUID PHOTO_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID FILE_NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID COVER_FILE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+
     private PhotoItemDto dto() {
+        return dto(COVER_FILE_ID);
+    }
+
+    private PhotoItemDto dto(UUID coverFileId) {
         return new PhotoItemDto(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                PHOTO_ID,
+                FILE_NODE_ID,
                 "t",
                 null,
                 100,
@@ -45,7 +53,8 @@ class PhotoSharePolicyTest {
                 null,
                 "READY",
                 "https://example/motion.mp4",
-                true
+                true,
+                coverFileId
         );
     }
 
@@ -72,5 +81,13 @@ class PhotoSharePolicyTest {
         assertThat(result.motionVideoUrl()).isNull();
         assertThat(result.coverUrl()).isEqualTo("https://example/cover");
         assertThat(result.gpsLatitude()).isEqualTo(1.5);
+    }
+
+    @Test
+    void applySharePolicy_hidesCoverWhenItPointsToOriginal() {
+        PhotoItemDto result = PhotoAlbumService.applySharePolicy(dto(FILE_NODE_ID), true, false);
+
+        assertThat(result.coverUrl()).isNull();
+        assertThat(result.sourceUrl()).isNull();
     }
 }

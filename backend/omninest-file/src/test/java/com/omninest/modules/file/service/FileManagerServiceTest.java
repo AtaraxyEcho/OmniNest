@@ -48,6 +48,7 @@ import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.notification.service.NotificationService;
 import java.io.ByteArrayInputStream;
@@ -71,6 +72,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -164,8 +166,13 @@ class FileManagerServiceTest {
                 storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
     private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
-            externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class),
-            mock(ExternalStorageOAuthService.class), mock(ExternalStorageEndpointGuard.class));
+            externalAccountRepository,
+            mock(StorageRemoteMetadataCacheRepository.class),
+            externalStorageService,
+            mock(ExternalStorageCredentialService.class),
+            mock(ExternalStorageOAuthService.class),
+            mock(ExternalStorageEndpointGuard.class),
+            mock(PlatformTransactionManager.class));
     private final FileManagerService fileManagerService = new FileManagerService(
             fileNodeRepository,
             accessRecordRepository,

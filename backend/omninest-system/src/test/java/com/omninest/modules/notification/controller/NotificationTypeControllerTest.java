@@ -1,13 +1,18 @@
 package com.omninest.modules.notification.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.audit.AdminAuditRecorder;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.modules.notification.domain.NotificationType;
 import com.omninest.modules.notification.repository.NotificationTypeRepository;
 import com.omninest.modules.notification.service.NotificationTypeService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +29,15 @@ class NotificationTypeControllerTest {
 
     private final NotificationTypeRepository repository = mock(NotificationTypeRepository.class);
     private final NotificationTypeService service = new NotificationTypeService(repository);
-    private final NotificationTypeController controller = new NotificationTypeController(service);
+    private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
+    private final FreshAdminActorVerifier adminActorGuard = mock(FreshAdminActorVerifier.class);
+    private final AdminAuditRecorder adminAuditRecorder = mock(AdminAuditRecorder.class);
+    private final NotificationTypeController controller = new NotificationTypeController(
+            service,
+            currentUserContext,
+            adminActorGuard,
+            adminAuditRecorder
+    );
 
     @Test
     void listEnabled_returnsOnlyEnabledTypes() {
@@ -51,7 +64,9 @@ class NotificationTypeControllerTest {
     @Test
     void update_updatesExistingType() {
         UUID id = UUID.randomUUID();
+        UUID actorUserId = UUID.randomUUID();
         NotificationType existing = type(id, "TASK_COMPLETED", "任务完成", true);
+        when(currentUserContext.requireCurrentUserId()).thenReturn(actorUserId);
         when(repository.findById(id)).thenReturn(Optional.of(existing));
         when(repository.save(ArgumentMatchers.any(NotificationType.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -67,6 +82,14 @@ class NotificationTypeControllerTest {
         assertThat(response.getData().color()).isEqualTo("#FFFFFF");
         assertThat(response.getData().sortOrder()).isEqualTo(10);
         assertThat(response.getData().enabled()).isFalse();
+        verify(adminActorGuard).requireFreshAdminActor(actorUserId);
+        verify(adminAuditRecorder).recordWithMetadata(
+                eq(actorUserId),
+                eq("ADMIN_NOTIFICATION_TYPE_UPDATE"),
+                eq("notification_types"),
+                eq(id),
+                any()
+        );
         verify(repository).save(existing);
     }
 

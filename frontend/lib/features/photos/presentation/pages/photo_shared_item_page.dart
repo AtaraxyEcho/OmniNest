@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -8,7 +10,11 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
@@ -308,40 +314,63 @@ class _SharedItemContent extends StatelessWidget {
                   ),
                 ),
               ),
+              if (photo.sourceUrl != null && photo.sourceUrl!.isNotEmpty)
+                IconButton(
+                  tooltip: AppLocalizations.of(context).filesDownload,
+                  icon: const Icon(Icons.download_rounded),
+                  onPressed:
+                      () => unawaited(_download(context, photo.sourceUrl!)),
+                ),
             ],
           ),
         ),
         // 照片大图
         Expanded(
-          child: Container(
-            color: context.photosColors.surfaceContainerLow,
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child:
-                  imageUrl != null && imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.contain,
-                        placeholder:
-                            (context, url) => Center(
-                              child: CircularProgressIndicator(
-                                color: context.photosColors.primaryContainer,
-                                strokeWidth: 2.5,
-                              ),
-                            ),
-                        errorWidget:
-                            (context, url, error) => Icon(
-                              Icons.broken_image_outlined,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final decodeWidth = quantizedDecodeWidth(
+                logicalWidth: constraints.maxWidth,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                max: 2048,
+              );
+              return Container(
+                color: context.photosColors.surfaceContainerLow,
+                padding: const EdgeInsets.all(24),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child:
+                        imageUrl != null && imageUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              memCacheWidth: decodeWidth,
+                              fit: BoxFit.contain,
+                              placeholder:
+                                  (context, url) => Center(
+                                    child: CircularProgressIndicator(
+                                      color:
+                                          context.photosColors.primaryContainer,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  ),
+                              errorWidget:
+                                  (context, url, error) => Icon(
+                                    Icons.broken_image_outlined,
+                                    color:
+                                        context.photosColors.onSurfaceVariant,
+                                    size: 48,
+                                  ),
+                            )
+                            : Icon(
+                              Icons.photo_outlined,
                               color: context.photosColors.onSurfaceVariant,
                               size: 48,
                             ),
-                      )
-                      : Icon(
-                        Icons.photo_outlined,
-                        color: context.photosColors.onSurfaceVariant,
-                        size: 48,
-                      ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         // 底部
@@ -356,6 +385,23 @@ class _SharedItemContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _download(BuildContext context, String url) async {
+    final l10n = AppLocalizations.of(context);
+    if (openDownloadUrl(url)) {
+      return;
+    }
+    final copied = await copyTextToClipboard(url);
+    if (!context.mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
     );
   }
 }

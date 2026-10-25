@@ -32,9 +32,13 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
@@ -162,8 +166,18 @@ public class BackdropAssetService {
      */
     @Transactional(readOnly = true)
     public List<BackdropAssetDto> listAssets(UUID ownerUserId) {
-        return backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId).stream()
-                .map(this::toDto)
+        List<BackdropAsset> assets =
+                backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        Set<UUID> fileIds = assets.stream()
+                .flatMap(asset -> Stream.of(asset.getFileNodeId(), asset.getThumbFileId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        // 原图与缩略图一次批量签名，避免每张壁纸 4 次单行查询。
+        Map<UUID, FileDownloadUrlDto> urls = fileIds.isEmpty()
+                ? Map.of()
+                : fileQueryService.createDownloadUrls(ownerUserId, fileIds);
+        return assets.stream()
+                .map(asset -> toDto(asset, urls))
                 .toList();
     }
 
@@ -612,16 +626,18 @@ public class BackdropAssetService {
      */
     public void completeStagedAsset(UUID ownerUserId, UUID assetId, UUID ingressItemId, String originalFileName) {
         Path stagingFile = null;
+        UUID publishedNodeId = null;
+        UUID thumbNodeId = null;
         try {
             stagingFile = ingressStagingService.copyToTempFile(ingressItemId);
             DetectedMedia media = detectMedia(stagingFile, extensionOf(originalFileName));
             // 先只读文件头校验像素上限，再落原片与生成缩略图。
             ImageDimensions dimensions = readImageDimensions(stagingFile, media);
-            UUID publishedNodeId = derivedAssetStorageService.store(
+            publishedNodeId = derivedAssetStorageService.store(
                     ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
                     originalFileName, media.mimeType(), stagingFile);
             // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
-            UUID thumbNodeId = generateAndStoreThumbnail(
+            thumbNodeId = generateAndStoreThumbnail(
                     ownerUserId, assetId, stagingFile, media, publishedNodeId);
             String videoCodec = probeVideoCodecForNotice(stagingFile, media);
             finalizePublishedAsset(
@@ -632,15 +648,23 @@ public class BackdropAssetService {
             ingressStagingService.markAvailable(ingressItemId, publishedNodeId);
             log.info("背景素材异步发布完成: userId={}, assetId={}", ownerUserId, assetId);
         } catch (IOException ex) {
+            deletePublishedOnFailure(ownerUserId, publishedNodeId, thumbNodeId);
             BusinessException wrapped = new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "背景素材暂存对象读取失败");
             failProcessingAsset(ownerUserId, assetId, wrapped);
             throw wrapped;
         } catch (RuntimeException ex) {
+            deletePublishedOnFailure(ownerUserId, publishedNodeId, thumbNodeId);
             failProcessingAsset(ownerUserId, assetId, ex);
             throw ex;
         } finally {
             deleteStagingQuietly(stagingFile);
         }
+    }
+
+    private void deletePublishedOnFailure(UUID ownerUserId, UUID publishedNodeId, UUID thumbNodeId) {
+        // DerivedAssetStorageService.store 使用独立事务提交；最终落库失败时必须显式回收。
+        deleteDerivedQuietly(ownerUserId, publishedNodeId);
+        deleteDerivedQuietly(ownerUserId, thumbNodeId);
     }
 
     private void failProcessingAsset(UUID ownerUserId, UUID assetId, RuntimeException cause) {
@@ -785,6 +809,27 @@ public class BackdropAssetService {
         // 默认下发原片:不擅自降质;客户端可选本地缓存降低网络抖动。
         FileDownloadUrlDto content = safeDownloadUrl(asset.getOwnerUserId(), asset.getFileNodeId());
         FileDownloadUrlDto thumb = safeDownloadUrl(asset.getOwnerUserId(), asset.getThumbFileId());
+        return toDto(asset, content, thumb);
+    }
+
+    private BackdropAssetDto toDto(
+            BackdropAsset asset,
+            Map<UUID, FileDownloadUrlDto> urls
+    ) {
+        FileDownloadUrlDto content = asset.getFileNodeId() == null
+                ? null
+                : urls.get(asset.getFileNodeId());
+        FileDownloadUrlDto thumb = asset.getThumbFileId() == null
+                ? null
+                : urls.get(asset.getThumbFileId());
+        return toDto(asset, content, thumb);
+    }
+
+    private BackdropAssetDto toDto(
+            BackdropAsset asset,
+            FileDownloadUrlDto content,
+            FileDownloadUrlDto thumb
+    ) {
         return new BackdropAssetDto(
                 asset.getId(),
                 asset.getTitle(),

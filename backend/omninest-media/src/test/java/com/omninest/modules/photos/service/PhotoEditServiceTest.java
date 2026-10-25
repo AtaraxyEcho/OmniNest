@@ -66,6 +66,7 @@ class PhotoEditServiceTest {
     private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
+    private final PhotoThumbnailService photoThumbnailService = mock(PhotoThumbnailService.class);
     private final PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(txManager);
     private final PhotoEditService service = new PhotoEditService(
@@ -77,6 +78,7 @@ class PhotoEditServiceTest {
             inputGuard,
             storageQuotaService,
             fileMetadataQueryService,
+            photoThumbnailService,
             transactionTemplate,
             5,
             2
@@ -92,6 +94,7 @@ class PhotoEditServiceTest {
         UUID photoId = UUID.randomUUID();
         UUID sourceFileId = UUID.randomUUID();
         UUID editedFileId = UUID.randomUUID();
+        UUID thumbnailFileId = UUID.randomUUID();
         Path sourceFile = createImage();
         PhotoItem photo = new PhotoItem();
         photo.setId(photoId);
@@ -124,6 +127,9 @@ class PhotoEditServiceTest {
             assertThat(Files.size(output)).isPositive();
             return editedFileId;
         });
+        when(photoThumbnailService.generateAndStoreFile(
+                eq(ownerUserId), eq(editedFileId), any(Path.class), anyString()))
+                .thenReturn(thumbnailFileId);
 
         PhotoEditVersionDto result = service.applyEdit(
                 ownerUserId,
@@ -132,7 +138,7 @@ class PhotoEditServiceTest {
         );
 
         assertThat(result.versionNumber()).isEqualTo(1);
-        assertThat(photo.getCoverFileId()).isEqualTo(editedFileId);
+        assertThat(photo.getCoverFileId()).isEqualTo(thumbnailFileId);
         assertThat(sourceFile).doesNotExist();
         assertThat(storedPath.get()).doesNotExist();
     }
@@ -142,6 +148,7 @@ class PhotoEditServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
         UUID editedFileId = UUID.randomUUID();
+        UUID thumbnailFileId = UUID.randomUUID();
         PhotoItem photo = new PhotoItem();
         photo.setId(photoId);
         photo.setOwnerUserId(ownerUserId);
@@ -165,10 +172,14 @@ class PhotoEditServiceTest {
             assertThat(staged).exists();
             return editedFileId;
         });
+        when(photoThumbnailService.generateAndStoreFile(
+                eq(ownerUserId), eq(editedFileId), any(Path.class), anyString()))
+                .thenReturn(thumbnailFileId);
 
         PhotoEditVersionDto result = applyEditedImage(ownerUserId, photoId, jpeg);
 
         assertThat(result.versionNumber()).isEqualTo(1);
+        assertThat(photo.getCoverFileId()).isEqualTo(thumbnailFileId);
         verify(storageQuotaService).chargeUsage(ownerUserId, jpeg.length);
         assertThat(storedPath.get()).doesNotExist();
     }
@@ -315,6 +326,7 @@ class PhotoEditServiceTest {
                 inputGuard,
                 storageQuotaService,
                 fileMetadataQueryService,
+                photoThumbnailService,
                 transactionTemplate,
                 5,
                 1
@@ -356,6 +368,7 @@ class PhotoEditServiceTest {
                 new PhotoInputGuard(limits),
                 storageQuotaService,
                 fileMetadataQueryService,
+                photoThumbnailService,
                 transactionTemplate,
                 5,
                 2

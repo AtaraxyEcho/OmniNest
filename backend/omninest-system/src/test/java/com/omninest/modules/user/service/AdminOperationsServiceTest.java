@@ -55,6 +55,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class AdminOperationsServiceTest {
     private final AuthUserRepository authUserRepository = mock(AuthUserRepository.class);
@@ -79,6 +82,8 @@ class AdminOperationsServiceTest {
     private final SystemMetricsCollector systemMetricsCollector = new SystemMetricsCollector();
     private final WorkerRuntimeRegistry workerRuntimeRegistry = availableWorkerRuntimeRegistry();
     private final SystemInstanceConfigService systemInstanceConfigService = mock(SystemInstanceConfigService.class);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
     private final AdminOperationsService service = new AdminOperationsService(
             authUserRepository,
             configCenterService,
@@ -97,8 +102,13 @@ class AdminOperationsServiceTest {
             adminActorGuard,
             systemMetricsCollector,
             workerRuntimeRegistry,
-            systemInstanceConfigService
+            systemInstanceConfigService,
+            transactionTemplate
     );
+
+    {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
     @BeforeEach

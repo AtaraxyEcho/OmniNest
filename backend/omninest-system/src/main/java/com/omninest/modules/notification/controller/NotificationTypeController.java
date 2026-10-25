@@ -1,15 +1,19 @@
 package com.omninest.modules.notification.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.notification.dto.NotificationTypeDto;
 import com.omninest.modules.notification.service.NotificationTypeService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class NotificationTypeController {
 
     private final NotificationTypeService notificationTypeService;
+    private final CurrentUserContext currentUserContext;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 查询所有启用的通知类型（前端动态渲染设置项）。
@@ -61,7 +68,9 @@ public class NotificationTypeController {
             @PathVariable UUID id,
             @RequestBody @Valid UpdateTypeRequest request
     ) {
-        return ApiResponse.success(notificationTypeService.update(
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
+        NotificationTypeDto result = notificationTypeService.update(
                 id,
                 request.label(),
                 request.description(),
@@ -69,7 +78,15 @@ public class NotificationTypeController {
                 request.color(),
                 request.sortOrder(),
                 request.enabled()
-        ));
+        );
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_NOTIFICATION_TYPE_UPDATE",
+                "notification_types",
+                id,
+                Map.of("enabled", request.enabled())
+        );
+        return ApiResponse.success(result);
     }
 
     /**

@@ -429,7 +429,7 @@ public class ExternalStorageService {
      * 确保远程可用：先复核端点安全策略（拦截历史遗留的不安全地址），再刷新 OAuth token，最后确保 rclone remote 存在。
      * token 发生刷新时强制重建 remote，使 rclone 侧拿到最新凭据。
      */
-    private void prepareUsableRemote(StorageExternalAccount account) {
+    public void prepareUsableRemote(StorageExternalAccount account) {
         validateEndpointSafety(account);
         boolean tokenRefreshed = maybeRefreshOAuthToken(account);
         ensureRemoteActivated(account, tokenRefreshed);

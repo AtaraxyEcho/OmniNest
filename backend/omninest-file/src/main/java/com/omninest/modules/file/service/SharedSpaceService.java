@@ -289,7 +289,9 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
 
     /**
      * 跨空间移动：共享 → 个人。
-     * 仅上传者本人或具有 CAN_DELETE_ANY 权限的管理员可操作。
+     *
+     * <p>只允许上传者本人移回自己的个人空间。管理员把他人文件改归属会让原属主的
+     * 照片、影视、音乐、阅读器记录与派生资产全部脱节；需要收入自己空间时使用复制。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public void moveToPersonalSpace(UUID fileNodeId, UUID targetUserId) {
@@ -297,10 +299,11 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         validatePermission(targetUserId, Action.CAN_BROWSE);
         FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileNodeId, SpaceType.SHARED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-        // 权限检查：上传者可移回自己的，管理员可移回任何人的
-        boolean isUploader = Objects.equals(node.getUploadedBy(), targetUserId);
-        Action action = isUploader ? Action.CAN_MOVE_FROM : Action.CAN_DELETE_ANY;
-        validatePermission(targetUserId, action);
+        if (!Objects.equals(node.getUploadedBy(), targetUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "仅上传者本人可将文件移回个人空间，请使用复制功能");
+        }
+        validatePermission(targetUserId, Action.CAN_MOVE_FROM);
         // 子孙节点在改空间后会退出 SHARED 查询条件，必须在变更前收集完整子树。
         String oldPath = node.getNormalizedPath();
         String descendantPrefix = oldPath + "/";

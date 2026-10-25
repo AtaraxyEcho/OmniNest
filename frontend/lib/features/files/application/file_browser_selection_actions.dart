@@ -134,9 +134,33 @@ extension FileBrowserSelectionActions on FileBrowserController {
     return _repository.listFiles(parentId: parentId);
   }
 
+  /// 分页拉取目录选择器节点；调用方自行过滤文件夹并续页。
+  Future<FileNodePage> listFolderOptionsPage(
+    String? parentId, {
+    int page = 0,
+    int size = 100,
+  }) {
+    return _repository.listFilesPage(
+      parentId: parentId,
+      page: page,
+      size: size,
+    );
+  }
+
   /// 拉取外部存储可用连接器列表（展示层不直连仓储）。
   Future<List<ExternalStorageConnector>> listExternalConnectors() {
     return _repository.listExternalConnectors();
+  }
+
+  /// 在指定父目录下建夹，供文件夹选择器跨层级使用。
+  Future<FileNode> createFolderInParent(String? parentId, String name) async {
+    final created = await _repository.createFolder(
+      parentId: parentId,
+      name: name,
+    );
+    registerFileEcho([created.id]);
+    await refreshFileNodesForCurrentSection();
+    return created;
   }
 
   Future<void> createFolder(String name) async {

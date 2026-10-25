@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/application/admin_user_controller.dart';
@@ -17,6 +18,7 @@ import 'package:omninest/features/notifications/application/notification_control
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
+import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
@@ -50,6 +52,7 @@ final List<ProviderOrFamily> _resetProviders = <ProviderOrFamily>[
   photoListProvider,
   photoFavoritesProvider,
   photoAlbumsProvider,
+  appBackdropControllerProvider,
   readerDashboardProvider,
   readerStatsProvider,
   readerStatsOverviewProvider,
@@ -100,6 +103,9 @@ final sessionResetCoordinatorProvider = Provider<void>((ref) {
     }
     // 静态进程内缓存不随 provider 销毁，换号必须显式清掉。
     ReaderCoverByteCache.clear();
+    clearReaderBookMemoryCaches();
+    // 云端壁纸索引在 backdrop controller 重建时按账号归属清理，避免在
+    // 同步会话监听里强行打开 drift 导致测试/冷启动竞态。
     // 会话级缓存只按文件/条目 ID 索引，不含账号归属：签名下载地址、文本预览、
     // 照片详情（含原图签名地址）与 data URI 解码结果都必须随账号切换失效。
     clearFileDownloadUrlCaches();

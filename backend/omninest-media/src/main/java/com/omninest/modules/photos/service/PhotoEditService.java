@@ -69,6 +69,7 @@ public class PhotoEditService {
     private final PhotoInputGuard inputGuard;
     private final StorageQuotaService storageQuotaService;
     private final FileMetadataQueryService fileMetadataQueryService;
+    private final PhotoThumbnailService photoThumbnailService;
     private final TransactionTemplate transactionTemplate;
     private final int maxHistoryVersions;
 
@@ -89,6 +90,7 @@ public class PhotoEditService {
             PhotoInputGuard inputGuard,
             StorageQuotaService storageQuotaService,
             FileMetadataQueryService fileMetadataQueryService,
+            PhotoThumbnailService photoThumbnailService,
             TransactionTemplate transactionTemplate,
             @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions,
             @Value("${photo.edit.max-concurrent:2}") int maxConcurrentEdits) {
@@ -100,6 +102,7 @@ public class PhotoEditService {
         this.inputGuard = inputGuard;
         this.storageQuotaService = storageQuotaService;
         this.fileMetadataQueryService = fileMetadataQueryService;
+        this.photoThumbnailService = photoThumbnailService;
         this.transactionTemplate = transactionTemplate;
         this.maxHistoryVersions = maxHistoryVersions;
         this.editSlots = new Semaphore(Math.max(1, maxConcurrentEdits), true);
@@ -152,6 +155,7 @@ public class PhotoEditService {
                 ownerUserId,
                 photo,
                 stored.fileId(),
+                stored.thumbnailFileId(),
                 stored.sizeBytes(),
                 request.editType(),
                 request.editParams()
@@ -195,6 +199,7 @@ public class PhotoEditService {
 
         String fileName = photoId + "_edit_" + UUID.randomUUID() + ".jpg";
         UUID fileId;
+        UUID thumbFileId = null;
         Path staged = null;
         long storedBytes;
         try {
@@ -214,6 +219,9 @@ public class PhotoEditService {
                     "image/jpeg",
                     staged
             );
+            // 编辑产物同样生成 1024px 缩略图，网格/相册不能回退到全尺寸原图。
+            thumbFileId = photoThumbnailService.generateAndStoreFile(
+                    ownerUserId, fileId, staged, fileName);
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {
@@ -225,6 +233,7 @@ public class PhotoEditService {
                 ownerUserId,
                 photo,
                 fileId,
+                thumbFileId,
                 storedBytes,
                 "EXTERNAL",
                 Map.of("source", "pro_image_editor")
@@ -241,6 +250,7 @@ public class PhotoEditService {
             UUID ownerUserId,
             PhotoItem photo,
             UUID fileId,
+            UUID thumbnailFileId,
             long sizeBytes,
             String editType,
             Map<String, Object> editParams
@@ -257,7 +267,10 @@ public class PhotoEditService {
                 version.setVersionNumber(versionNumber);
                 chargeEditVersionQuota(ownerUserId, sizeBytes);
                 editVersionRepository.save(version);
-                photo.setCoverFileId(fileId);
+                // 封面优先使用派生缩略图；生成失败时保留旧缩略图，不能把全尺寸编辑图写进列表。
+                if (thumbnailFileId != null) {
+                    photo.setCoverFileId(thumbnailFileId);
+                }
                 photo.setActiveFileId(fileId);
                 photoItemRepository.save(photo);
                 enforceMaxVersions(ownerUserId, photo.getId());
@@ -273,6 +286,7 @@ public class PhotoEditService {
             });
         } catch (RuntimeException exception) {
             deleteDerivedQuietly(ownerUserId, fileId);
+            deleteDerivedQuietly(ownerUserId, thumbnailFileId);
             throw exception;
         }
         return toDto(version);
@@ -319,7 +333,9 @@ public class PhotoEditService {
         }
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
-        photo.setCoverFileId(version.getFileId());
+        photo.setCoverFileId(
+                photoThumbnailService.findStoredThumbnailFileNodeId(ownerUserId, version.getFileId())
+                        .orElse(photo.getCoverFileId()));
         photo.setActiveFileId(version.getFileId());
         photoItemRepository.save(photo);
         syncEventService.record(
@@ -347,7 +363,9 @@ public class PhotoEditService {
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         photo.setActiveFileId(null);
-        photo.setCoverFileId(photo.getFileNodeId());
+        photo.setCoverFileId(
+                photoThumbnailService.findStoredThumbnailFileNodeId(ownerUserId, photo.getFileNodeId())
+                        .orElse(photo.getFileNodeId()));
         photoItemRepository.save(photo);
         syncEventService.record(
                 ownerUserId,
@@ -389,7 +407,9 @@ public class PhotoEditService {
                     "image/jpeg",
                     editedFile
             );
-            return new StoredEdit(fileId, Files.size(editedFile));
+            UUID thumbFileId = photoThumbnailService.generateAndStoreFile(
+                    ownerUserId, fileId, editedFile, fileName);
+            return new StoredEdit(fileId, thumbFileId, Files.size(editedFile));
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {
@@ -470,7 +490,7 @@ public class PhotoEditService {
     private record EditSource(BufferedImage image, int subsample) {
     }
 
-    private record StoredEdit(UUID fileId, long sizeBytes) {
+    private record StoredEdit(UUID fileId, UUID thumbnailFileId, long sizeBytes) {
     }
 
     /**

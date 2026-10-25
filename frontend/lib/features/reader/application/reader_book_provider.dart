@@ -477,6 +477,16 @@ const _chapterContentMemoryCacheLimit = 12;
 /// 在途加载去重：同一章并发请求共用一次 Future，避免重复解压/预处理。
 final _chapterContentInflight = <String, Future<ReaderChapterContent?>>{};
 
+/// 换号/登出时清空进程内章节与样式表缓存；这些键不含用户 ID。
+void clearReaderBookMemoryCaches() {
+  _readerBookMemoryGeneration++;
+  _chapterContentMemoryCache.clear();
+  _chapterContentInflight.clear();
+  _stylesheetPoolMemo.clear();
+}
+
+int _readerBookMemoryGeneration = 0;
+
 void _rememberChapterContent(String key, ReaderChapterContent content) {
   _chapterContentMemoryCache.remove(key);
   _chapterContentMemoryCache[key] = content;
@@ -513,6 +523,7 @@ Future<ReaderChapterContent?> getChapterContent(
   if (inflight != null) {
     return inflight;
   }
+  final generation = _readerBookMemoryGeneration;
   final future = _loadChapterContentFromStorage(
     ref,
     itemId: itemId,
@@ -520,10 +531,12 @@ Future<ReaderChapterContent?> getChapterContent(
     chapterIndex: matchedIndex,
     cacheKey: cacheKey,
     memoryKey: memoryKey,
+    generation: generation,
   );
   _chapterContentInflight[memoryKey] = future;
   try {
-    return await future;
+    final content = await future;
+    return generation == _readerBookMemoryGeneration ? content : null;
   } finally {
     _chapterContentInflight.remove(memoryKey);
   }
@@ -536,6 +549,7 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
   required int chapterIndex,
   required String cacheKey,
   required String memoryKey,
+  required int generation,
 }) async {
   // ── Layer 1: SQLite 章节缓存命中 ──
   final localStorage = ref.read(readerLocalStorageProvider);
@@ -580,6 +594,9 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
           cached.refs,
         ),
       );
+      if (generation != _readerBookMemoryGeneration) {
+        return null;
+      }
       _rememberChapterContent(memoryKey, content);
       return content;
     }
@@ -700,6 +717,9 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
       droppedImageCount: droppedImageCount,
       stylesheetCss: stylesheetCss,
     );
+    if (generation != _readerBookMemoryGeneration) {
+      return null;
+    }
     _rememberChapterContent(memoryKey, ready);
     return ready;
   } finally {

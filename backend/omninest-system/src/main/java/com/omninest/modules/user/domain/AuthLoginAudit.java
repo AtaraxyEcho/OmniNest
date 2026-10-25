@@ -26,7 +26,8 @@ public class AuthLoginAudit {
     @Id
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
+    /** 未知用户名的失败登录也必须可审计，因此允许为空。 */
+    @Column(name = "user_id")
     private UUID userId;
 
     @Column(nullable = false, length = 80)

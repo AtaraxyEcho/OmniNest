@@ -117,7 +117,13 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     if (!mounted) {
       return;
     }
-    if (session.isAuthenticated && _service.takePendingAccept(widget.token)) {
+    // 只有预览成功才允许消费待转存标记；需要提取码或加载出错时必须保留标记，
+    // 否则用户解锁后不会再自动继续转存。
+    if (_preview != null &&
+        !_needPassword &&
+        _error == null &&
+        session.isAuthenticated &&
+        _service.takePendingAccept(widget.token)) {
       // 登录回跳的自动转存沿用根目录，避免恢复流程里再弹出目录选择。
       await _acceptShare(askTarget: false);
     }

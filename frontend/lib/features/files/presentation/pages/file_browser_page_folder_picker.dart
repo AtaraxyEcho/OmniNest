@@ -22,44 +22,106 @@ class _FolderPickerDialog extends ConsumerStatefulWidget {
 class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
   String? _currentParentId;
   final List<_FolderBreadcrumb> _breadcrumbs = [];
+  final ScrollController _scrollController = ScrollController();
   List<FileNode> _folders = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  String? _error;
+  int _page = 0;
   int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadFolders();
+    _scrollController.addListener(_onScroll);
+    _loadFolders(reset: true);
   }
 
-  Future<void> _loadFolders() async {
+  Future<void> _loadFolders({bool reset = false}) async {
+    if (!reset && (_loading || _loadingMore || !_hasMore)) {
+      return;
+    }
     final generation = ++_loadGeneration;
     final parentId = _currentParentId;
+    final page = reset ? 0 : _page + 1;
     final controller = ref.read(fileBrowserControllerProvider.notifier);
-    setState(() => _loading = true);
+    setState(() {
+      if (reset) {
+        _folders = [];
+        _page = 0;
+        _hasMore = true;
+      }
+      _loading = reset;
+      _loadingMore = !reset;
+      _error = null;
+    });
     try {
-      final files = await controller.listFolderOptions(parentId);
+      final result = await controller.listFolderOptionsPage(
+        parentId,
+        page: page,
+      );
       if (!mounted || generation != _loadGeneration) {
         return;
       }
       setState(() {
-        _folders = files.where((f) => f.isFolder).toList();
+        final existingIds = _folders.map((folder) => folder.id).toSet();
+        _folders.addAll(
+          result.items.where(
+            (node) => node.isFolder && !existingIds.contains(node.id),
+          ),
+        );
+        _page = result.page;
+        _hasMore = result.hasNextPage;
         _loading = false;
+        _loadingMore = false;
       });
+      // 当前页只有普通文件时继续向后找目录，不能把“本页没有目录”显示成空文件夹。
+      if (_folders.isEmpty && _hasMore) {
+        _loadFolders();
+      }
     } catch (_) {
       if (!mounted || generation != _loadGeneration) {
         return;
       }
       setState(() {
-        _folders = [];
         _loading = false;
+        _loadingMore = false;
+        _error = AppLocalizations.of(context).filesLoadFailed('');
       });
     }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.extentAfter < 160) {
+      _loadFolders();
+    }
+  }
+
+  Future<void> _createFolder() async {
+    final l10n = AppLocalizations.of(context);
+    await _showNameDialog(
+      context: context,
+      title: l10n.filesNewFolder,
+      actionLabel: l10n.filesCreate,
+      labelText: l10n.filesFolderName,
+      initialValue: l10n.filesNewFolderDefault,
+      onSubmit: (name) async {
+        await ref
+            .read(fileBrowserControllerProvider.notifier)
+            .createFolderInParent(_currentParentId, name);
+        if (!mounted) {
+          return;
+        }
+        await _loadFolders(reset: true);
+      },
+    );
   }
 
   @override
   void dispose() {
     _loadGeneration++;
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -68,7 +130,7 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
       _breadcrumbs.add(_FolderBreadcrumb(id: folder.id, name: folder.name));
       _currentParentId = folder.id;
     });
-    _loadFolders();
+    _loadFolders(reset: true);
   }
 
   void _goToBreadcrumb(int index) {
@@ -81,7 +143,7 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
         _currentParentId = _breadcrumbs[index].id;
       }
     });
-    _loadFolders();
+    _loadFolders(reset: true);
   }
 
   @override
@@ -130,8 +192,40 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
               // 文件夹列表
               Expanded(
                 child:
-                    _loading
+                    _loading && _folders.isEmpty
                         ? const Center(child: CircularProgressIndicator())
+                        : _error != null && _folders.isEmpty
+                        ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.cloud_off_outlined,
+                                size: 36,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withValues(alpha: 0.5),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () => _loadFolders(reset: true),
+                                child: Text(l10n.commonRetry),
+                              ),
+                            ],
+                          ),
+                        )
                         : _folders.isEmpty
                         ? Center(
                           child: Column(
@@ -159,8 +253,23 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
                           ),
                         )
                         : ListView.builder(
-                          itemCount: _folders.length,
+                          controller: _scrollController,
+                          itemCount: _folders.length + (_loadingMore ? 1 : 0),
                           itemBuilder: (context, index) {
+                            if (index >= _folders.length) {
+                              return const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
                             final folder = _folders[index];
                             final excluded = widget.excludeIds.contains(
                               folder.id,
@@ -204,6 +313,11 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: _createFolder,
+          icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+          label: Text(l10n.filesNewFolder),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.filesCancel),

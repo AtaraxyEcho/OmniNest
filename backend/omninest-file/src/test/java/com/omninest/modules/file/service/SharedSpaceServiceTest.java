@@ -413,8 +413,8 @@ class SharedSpaceServiceTest {
         }
 
         @Test
-        @DisplayName("具有 CAN_DELETE_ANY 的管理员可以整体迁回混合上传者的目录")
-        void moveToPersonalSpace_adminCanMoveMixedUploaders() {
+        @DisplayName("管理员也不能把他人共享文件整体迁入个人空间")
+        void moveToPersonalSpace_adminCannotTakeOthersFiles() {
             stubPermission(USER_B, true, false, false, false, true, false, false, false);
             FileNode folder = sharedFolder(FOLDER_ID, USER_A, "Project");
             FileNode child = sharedFile(CHILD_FILE_ID, USER_A, "b.txt", 128L);
@@ -426,12 +426,11 @@ class SharedSpaceServiceTest {
                     SpaceType.SHARED, "/Project/"))
                     .thenReturn(List.of(child));
 
-            service.moveToPersonalSpace(FOLDER_ID, USER_B);
-
-            assertThat(child.getSpaceType()).isEqualTo(SpaceType.PERSONAL);
-            assertThat(child.getOwnerUserId()).isEqualTo(USER_B);
-            assertThat(child.getUploadedBy()).isNull();
-            assertThat(child.getNormalizedPath()).isEqualTo("/Project/b.txt");
+            assertThatThrownBy(() -> service.moveToPersonalSpace(FOLDER_ID, USER_B))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("仅上传者本人");
+            verify(fileNodeRepository, never()).save(folder);
+            verify(fileNodeRepository, never()).save(child);
         }
 
         @Test

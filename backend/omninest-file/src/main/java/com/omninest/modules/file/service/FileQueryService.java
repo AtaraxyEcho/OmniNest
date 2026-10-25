@@ -733,6 +733,10 @@ public class FileQueryService {
         node.setDeleted(true);
         node.setDeletedBy(deletedBy);
         node.setDeletedAt(deletedAt);
+        // 软删除会撤销分享与授权；恢复后不能留下“已分享”的假状态。
+        node.setShared(false);
+        node.setSharedAt(null);
+        node.setUpdatedAt(deletedAt);
     }
 
     private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {

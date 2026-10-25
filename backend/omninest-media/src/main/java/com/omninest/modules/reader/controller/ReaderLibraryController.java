@@ -1,6 +1,7 @@
 package com.omninest.modules.reader.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.reader.domain.ReaderItem;
@@ -39,12 +40,14 @@ import com.omninest.modules.reader.service.ReaderStatsService;
 import com.omninest.modules.reader.service.ReaderTextManifestService;
 import com.omninest.modules.reader.service.ReaderTextParseSubmissionService;
 import com.omninest.modules.reader.service.ReaderTxtChapterTextService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
@@ -88,6 +91,8 @@ public class ReaderLibraryController {
     private final ReaderTextManifestService textManifestService;
     private final ReaderTxtChapterTextService chapterTextService;
     private final ReaderTextParseSubmissionService textParseSubmissionService;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     // ==================== Dashboard ====================
 
@@ -419,7 +424,16 @@ public class ReaderLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     @PutMapping("/api/v1/admin/reader/items/{itemId}/metadata")
     ApiResponse<Void> updateItemMetadata(@PathVariable UUID itemId, @Valid @RequestBody UpdateItemMetadataRequest request) {
-        readerItemService.updateMetadataAsAdmin(currentUserContext.requireCurrentUserId(), itemId, request);
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
+        readerItemService.updateMetadataAsAdmin(actorUserId, itemId, request);
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_READER_METADATA_UPDATE",
+                "reader_items",
+                itemId,
+                Map.of()
+        );
         return ApiResponse.success();
     }
 

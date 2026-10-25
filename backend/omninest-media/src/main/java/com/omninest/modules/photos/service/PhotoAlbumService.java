@@ -406,6 +406,10 @@ public class PhotoAlbumService {
         if (includeLocation && originalQuality) {
             return dto;
         }
+        // coverFileId 缺失或等于源文件时，coverUrl 实际就是原图：隐私限制下不能下发。
+        boolean coverIsOriginal = dto.coverFileId() == null
+                || dto.coverFileId().equals(dto.fileNodeId());
+        String coverUrl = coverIsOriginal ? null : dto.coverUrl();
         return new PhotoItemDto(
                 dto.id(),
                 dto.fileNodeId(),
@@ -430,7 +434,7 @@ public class PhotoAlbumService {
                 includeLocation ? dto.gpsLocation() : null,
                 dto.format(),
                 dto.fileSize(),
-                dto.coverUrl(),
+                coverUrl,
                 originalQuality ? dto.sourceUrl() : null,
                 dto.metadataStatus(),
                 dto.favorite(),
@@ -440,7 +444,8 @@ public class PhotoAlbumService {
                 dto.contentAnalysis(),
                 dto.motionState(),
                 originalQuality ? dto.motionVideoUrl() : null,
-                dto.edited()
+                dto.edited(),
+                dto.coverFileId()
         );
     }
 

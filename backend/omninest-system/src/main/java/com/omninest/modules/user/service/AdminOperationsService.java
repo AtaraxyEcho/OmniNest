@@ -40,6 +40,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.IntSupplier;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -96,6 +100,10 @@ public class AdminOperationsService {
     private final SystemMetricsCollector systemMetricsCollector;
     private final WorkerRuntimeRegistry workerRuntimeRegistry;
     private final SystemInstanceConfigService systemInstanceConfigService;
+    private final TransactionTemplate transactionTemplate;
+
+    private static final int CLEANUP_BATCH_SIZE = 1000;
+    private static final int CLEANUP_MAX_BATCHES = 100;
 
     public AdminOperationsDto.ConfigManagementView configs() {
         return new AdminOperationsDto.ConfigManagementView(configCenterService.list());
@@ -700,11 +708,10 @@ public class AdminOperationsService {
      * @param retentionDays 保留天数
      * @return 删除数量
      */
-    @Transactional(rollbackFor = Exception.class)
     public int cleanupAuditLogs(UUID actorUserId, int retentionDays) {
         adminActorGuard.requireFreshAdminActor(actorUserId);
         Instant cutoff = cleanupCutoff(retentionDays);
-        int deleted = auditLogAdminRepository.deleteCreatedBefore(cutoff);
+        int deleted = deleteAuditLogBatches(cutoff);
         auditLogService.recordWithMetadata(
                 actorUserId,
                 "ADMIN_AUDIT_LOG_CLEANUP",
@@ -722,10 +729,9 @@ public class AdminOperationsService {
      * @param retentionDays 保留天数
      * @return 删除数量
      */
-    @Transactional(rollbackFor = Exception.class)
     public int cleanupLoginAuditLogs(UUID actorUserId, int retentionDays) {
         adminActorGuard.requireFreshAdminActor(actorUserId);
-        int deleted = loginAuditRepository.deleteCreatedBefore(cleanupCutoff(retentionDays));
+        int deleted = deleteLoginAuditBatches(cleanupCutoff(retentionDays));
         auditLogService.recordWithMetadata(
                 actorUserId,
                 "ADMIN_LOGIN_AUDIT_CLEANUP",
@@ -736,6 +742,43 @@ public class AdminOperationsService {
         return deleted;
     }
 
+    private int deleteAuditLogBatches(Instant cutoff) {
+        return deleteInBatches(() -> {
+            List<UUID> ids = auditLogAdminRepository.findIdsCreatedBefore(
+                    cutoff, PageRequest.of(0, CLEANUP_BATCH_SIZE));
+            return ids.isEmpty() ? 0 : auditLogAdminRepository.deleteByIds(ids);
+        });
+    }
+
+    private int deleteLoginAuditBatches(Instant cutoff) {
+        return deleteInBatches(() -> {
+            List<UUID> ids = loginAuditRepository.findIdsCreatedBefore(
+                    cutoff, PageRequest.of(0, CLEANUP_BATCH_SIZE));
+            return ids.isEmpty() ? 0 : loginAuditRepository.deleteByIds(ids);
+        });
+    }
+
+    private int deleteSessionBatches(Instant cutoff) {
+        return deleteInBatches(() -> {
+            List<UUID> ids = activeSessionRepository.findIdsInactiveBefore(
+                    cutoff, PageRequest.of(0, CLEANUP_BATCH_SIZE));
+            return ids.isEmpty() ? 0 : activeSessionRepository.deleteByIds(ids);
+        });
+    }
+
+    private int deleteInBatches(IntSupplier deleteBatch) {
+        int total = 0;
+        for (int batch = 0; batch < CLEANUP_MAX_BATCHES; batch++) {
+            Integer deleted = transactionTemplate.execute(status -> deleteBatch.getAsInt());
+            int count = deleted == null ? 0 : deleted;
+            total += count;
+            if (count < CLEANUP_BATCH_SIZE) {
+                break;
+            }
+        }
+        return total;
+    }
+
     /**
      * 清理指定保留天数之外的过期或已撤销会话。
      *
@@ -743,10 +786,9 @@ public class AdminOperationsService {
      * @param retentionDays 保留天数
      * @return 删除数量
      */
-    @Transactional(rollbackFor = Exception.class)
     public int cleanupSessions(UUID actorUserId, int retentionDays) {
         adminActorGuard.requireFreshAdminActor(actorUserId);
-        int deleted = activeSessionRepository.deleteInactiveBefore(cleanupCutoff(retentionDays));
+        int deleted = deleteSessionBatches(cleanupCutoff(retentionDays));
         auditLogService.recordWithMetadata(
                 actorUserId,
                 "ADMIN_SESSION_CLEANUP",

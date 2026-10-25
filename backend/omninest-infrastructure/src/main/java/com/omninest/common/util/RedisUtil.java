@@ -238,6 +238,10 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
             Thread.currentThread().interrupt();
             throw new IllegalStateException("等待缓存回源被中断: key=" + key, interrupted);
         } catch (ExecutionException | TimeoutException failed) {
+            if (failed instanceof TimeoutException) {
+                // 加载线程可能永久卡死；摘掉超时的单飞占位，允许后续请求重新加载。
+                loading.remove(key, inFlight);
+            }
             log.warn("等待缓存回源失败: key={}", key, failed);
             Throwable cause = failed.getCause() == null ? failed : failed.getCause();
             if (cause instanceof RuntimeException runtimeException) {

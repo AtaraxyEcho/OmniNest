@@ -52,7 +52,8 @@ public final class PhotoDtos {
             PhotoContentAnalysisDto contentAnalysis,
             String motionState,
             String motionVideoUrl,
-            boolean edited
+            boolean edited,
+            UUID coverFileId
     ) {
         /**
          * 从 PhotoItem 实体和已解析的关联数据创建 DTO。
@@ -135,7 +136,8 @@ public final class PhotoDtos {
                     contentAnalysis,
                     photo.getMotionState(),
                     motionVideoUrl,
-                    photo.getActiveFileId() != null
+                    photo.getActiveFileId() != null,
+                    photo.getCoverFileId()
             );
         }
     }

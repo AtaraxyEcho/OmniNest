@@ -5,9 +5,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.modules.configcenter.domain.ConfigSurface;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.List;
@@ -19,9 +21,13 @@ import org.junit.jupiter.api.Test;
 class ConfigCenterControllerTest {
     private final ConfigCenterService configCenterService = mock(ConfigCenterService.class);
     private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
+    private final FreshAdminActorVerifier adminActorGuard = mock(FreshAdminActorVerifier.class);
+    private final AdminAuditRecorder adminAuditRecorder = mock(AdminAuditRecorder.class);
     private final ConfigCenterController controller = new ConfigCenterController(
             configCenterService,
-            currentUserContext
+            currentUserContext,
+            adminActorGuard,
+            adminAuditRecorder
     );
 
     @Test

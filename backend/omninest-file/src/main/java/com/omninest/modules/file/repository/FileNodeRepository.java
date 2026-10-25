@@ -388,7 +388,8 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update FileNode node set node.deleted = true, node.deletedAt = :deletedAt, "
-            + "node.deletedBy = :ownerUserId, node.shared = false, node.sharedAt = null "
+            + "node.deletedBy = :ownerUserId, node.shared = false, node.sharedAt = null, "
+            + "node.updatedAt = :deletedAt, node.version = node.version + 1 "
             + "where node.ownerUserId = :ownerUserId and node.id in :ids and node.deleted = false")
     int softDeleteIds(
             @Param("ownerUserId") UUID ownerUserId,

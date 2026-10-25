@@ -756,8 +756,14 @@ public class AuthService {
                             String deviceId, String deviceName,
                             String ipAddress, String userAgent,
                             String result, String failureReason) {
-        loginAuditService.record(user, username, clientPlatform, deviceId, deviceName,
-                ipAddress, userAgent, result, failureReason);
+        // 审计落库失败不得改变认证结果或把未知用户名暴露成 409/500。
+        try {
+            loginAuditService.record(user, username, clientPlatform, deviceId, deviceName,
+                    ipAddress, userAgent, result, failureReason);
+        } catch (RuntimeException exception) {
+            log.warn("登录审计写入失败，不影响认证结果: username={}, result={}, errorType={}",
+                    username, result, exception.getClass().getSimpleName());
+        }
     }
 
     private String normalizeUsername(String rawUsername) {

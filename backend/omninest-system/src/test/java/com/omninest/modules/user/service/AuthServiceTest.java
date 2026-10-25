@@ -358,6 +358,21 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("未知用户名仍返回统一 401，即使审计写入失败")
+        void loginFailsWithUnauthorizedWhenAuditWriteFails() {
+            when(authUserRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+            doThrow(new IllegalStateException("audit database unavailable"))
+                    .when(loginAuditService).record(any(), anyString(), anyString(), any(), any(),
+                            any(), any(), anyString(), anyString());
+
+            assertThatThrownBy(() -> service.login(
+                    new LoginRequest("ghost", "pass"), "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(exception -> assertThat(((BusinessException) exception).errorCode())
+                            .isEqualTo(ErrorCode.UNAUTHORIZED));
+        }
+
+        @Test
         @DisplayName("登录失败：账号已禁用")
         void loginFailsWhenAccountDisabled() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));

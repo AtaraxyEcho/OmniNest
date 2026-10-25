@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -8,6 +7,7 @@ import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -303,6 +303,11 @@ class MovieApi {
         responseType: ResponseType.stream,
         headers: {'Range': 'bytes=0-${_subtitleMaxBytes - 1}'},
         validateStatus: (status) => status == 200 || status == 206,
+        // 外挂字幕通常是对象存储预签名地址，不能把 Bearer JWT 和历史请求头带过去。
+        extra:
+            Uri.tryParse(url)?.hasAuthority == true
+                ? const {ApiClient.skipAuthorizationKey: true}
+                : null,
       ),
     );
     final body = response.data;
@@ -323,7 +328,7 @@ class MovieApi {
         remaining = 0;
       }
     }
-    return utf8.decode(bytes.takeBytes(), allowMalformed: true);
+    return decodeTextFileBytes(bytes.takeBytes());
   }
 
   Future<List<VideoScrapeCandidate>> scrapeCandidates(String fileNodeId) async {

@@ -2,6 +2,7 @@ package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuditLog;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -80,6 +81,16 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
     @Modifying
     @Query("delete from AuditLog audit where audit.createdAt < :cutoff")
     int deleteCreatedBefore(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 分批取待清理的审计日志 ID，供管理端短事务删除。
+     */
+    @Query("select audit.id from AuditLog audit where audit.createdAt < :cutoff")
+    List<UUID> findIdsCreatedBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
+
+    @Modifying
+    @Query("delete from AuditLog audit where audit.id in :ids")
+    int deleteByIds(@Param("ids") Collection<UUID> ids);
 
     /**
      * 统计指定时间之前将被清理的审计日志数量，谓词与 deleteCreatedBefore 保持一致。

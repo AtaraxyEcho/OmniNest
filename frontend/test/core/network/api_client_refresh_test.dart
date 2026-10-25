@@ -103,6 +103,32 @@ void main() {
     expect(refreshCount, 0);
   });
 
+  test('绝对外部 URL 默认不携带 JWT 或 withCredentials', () async {
+    var refreshCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => 'private-jwt',
+      refreshSession: () async {
+        refreshCount++;
+        return true;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<String>(
+      'https://storage.example/book.epub?signature=test',
+      options: Options(responseType: ResponseType.plain),
+    );
+
+    expect(response.statusCode, 401);
+    expect(adapter.externalAuthorization, isNull);
+    expect(refreshCount, 0);
+  });
+
   test('403 按权限拒绝原样返回，不轮换刷新令牌也不重放请求', () async {
     var refreshCount = 0;
     final adapter = _ReplayAdapter();

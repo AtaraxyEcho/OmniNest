@@ -1,5 +1,6 @@
 package com.omninest.modules.user.service;
 
+import com.omninest.common.security.FreshAdminActorVerifier;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class UserAdminActorVerifier implements AdminActorVerifier {
+public class UserAdminActorVerifier implements AdminActorVerifier, FreshAdminActorVerifier {
 
     private final AdminActorGuard adminActorGuard;
 

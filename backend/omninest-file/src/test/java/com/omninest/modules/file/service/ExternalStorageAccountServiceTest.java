@@ -17,11 +17,15 @@ import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.dto.CreateExternalStorageRequest;
 import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * ExternalStorageAccountService 单元测试。
@@ -35,17 +39,28 @@ class ExternalStorageAccountServiceTest {
 
     private final StorageExternalAccountRepository externalAccountRepository =
             mock(StorageExternalAccountRepository.class);
+    private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository =
+            mock(StorageRemoteMetadataCacheRepository.class);
     private final ExternalStorageService externalStorageService = mock(ExternalStorageService.class);
     private final ExternalStorageCredentialService credentialService =
             mock(ExternalStorageCredentialService.class);
     private final ExternalStorageOAuthService oauthService = mock(ExternalStorageOAuthService.class);
     private final ExternalStorageEndpointGuard endpointGuard = mock(ExternalStorageEndpointGuard.class);
 
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final ExternalStorageAccountService service = new ExternalStorageAccountService(
-            externalAccountRepository, externalStorageService, credentialService, oauthService, endpointGuard);
+            externalAccountRepository,
+            remoteMetadataCacheRepository,
+            externalStorageService,
+            credentialService,
+            oauthService,
+            endpointGuard,
+            transactionManager
+    );
 
     @BeforeEach
     void setUpSave() {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(externalAccountRepository.save(any(StorageExternalAccount.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(credentialService.encrypt(any())).thenReturn("encrypted");

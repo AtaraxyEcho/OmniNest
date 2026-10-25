@@ -25,11 +25,9 @@ public enum QuotaStatus {
      * @return 配额状态
      */
     public static QuotaStatus resolve(long usedBytes, long quotaBytes, int warningPercent) {
-        if (quotaBytes < 0) {
-            return CRITICAL;
-        }
-        if (quotaBytes == 0) {
-            return CRITICAL;
+        // 0 或负数表示无限制，与 RuntimeStorageQuotaPolicy 和 StorageQuotaService 同口径。
+        if (quotaBytes <= 0) {
+            return NORMAL;
         }
         double usagePercent = (double) usedBytes / quotaBytes * 100;
         if (usagePercent >= 95) {

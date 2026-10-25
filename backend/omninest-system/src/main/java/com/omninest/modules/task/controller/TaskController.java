@@ -3,14 +3,17 @@ package com.omninest.modules.task.controller;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.task.dto.TaskDto;
 import com.omninest.modules.task.dto.TaskSummaryDto;
 import com.omninest.modules.task.service.TaskQueryService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class TaskController {
     private final TaskQueryService taskQueryService;
     private final CurrentUserContext currentUserContext;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 分页查询任务列表，支持可选的状态过滤
@@ -95,7 +100,16 @@ public class TaskController {
     @PostMapping("/api/v1/tasks/dlq/{taskId}/retry")
     @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<Void> retryDlqEntry(@PathVariable UUID taskId) {
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         taskQueryService.retryDlqEntry(taskId);
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_DLQ_RETRY",
+                "sys_tasks",
+                taskId,
+                Map.of()
+        );
         return ApiResponse.success();
     }
 

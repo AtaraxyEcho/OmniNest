@@ -74,6 +74,9 @@ final appBackdropControllerProvider =
 /// 服务端素材库与用户偏好(scope=backdrop)是事实来源,drift 行为离线缓存与
 /// 内置壁纸登记;本机文件导入链路已退役,素材统一经服务端流转。
 class AppBackdropController extends AsyncNotifier<AppBackdropState> {
+  /// 本地 server 壁纸缓存属于上一次构建的登录账号；换号或冷启动首次登录都要清掉。
+  static String? _serverAssetsOwner;
+
   /// 签名 URL 过期时间(内存态,避免为过期检测扩大 drift schema)。
   final Map<String, DateTime> _urlExpiresAt = <String, DateTime>{};
 
@@ -100,15 +103,15 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   void _syncProcessingPoll() {
     final hasProcessing =
         state.asData?.value.backdrops.any(
-              (backdrop) => backdrop.status == AppBackdropAssetStatus.processing,
-            ) ??
+          (backdrop) => backdrop.status == AppBackdropAssetStatus.processing,
+        ) ??
         false;
     if (!hasProcessing) {
       _stopProcessingPoll();
       return;
     }
-    final deadline = _processingPollDeadline ??=
-        DateTime.now().add(_processingPollTimeout);
+    final deadline =
+        _processingPollDeadline ??= DateTime.now().add(_processingPollTimeout);
     if (DateTime.now().isAfter(deadline)) {
       _stopProcessingPoll();
       return;
@@ -131,6 +134,12 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     ref.watch(appBackdropSelectionTargetProvider);
     final session = await ref.watch(authSessionProvider.future);
     final userId = session.user?.id;
+    if (userId != null && _serverAssetsOwner != userId) {
+      _serverAssetsOwner = userId;
+      await repository.clearBackdrops().catchError((Object _) {
+        // 本地缓存清理失败不应阻断壁纸设置加载。
+      });
+    }
     await _registerBundledBackdrop(repository);
     // read 而非 watch:偏好 save 会更新 state,若 watch(future) 会导致本控制器
     // 在每次选中/启用后整树重建 → 反复 refresh → 视频会话被打断。

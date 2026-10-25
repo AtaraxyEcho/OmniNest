@@ -1,10 +1,11 @@
 package com.omninest.common.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ScanOptions;
@@ -32,31 +33,24 @@ public class RedisRuntimeConfigCache implements RuntimeConfigCache {
     private static final int LOCAL_CACHE_MAX_ENTRIES = 512;
 
     private final StringRedisTemplate redisTemplate;
-    private final ConcurrentHashMap<String, LocalEntry> localCache = new ConcurrentHashMap<>();
-
-    private record LocalEntry(String value, long expireAtMillis) {
-        private boolean expired() {
-            return System.currentTimeMillis() >= expireAtMillis;
-        }
-    }
+    private final Cache<String, String> localCache = Caffeine.newBuilder()
+            .maximumSize(LOCAL_CACHE_MAX_ENTRIES)
+            .expireAfterWrite(LOCAL_TTL)
+            .build();
 
     /**
      * {@inheritDoc}
      */
     @Override
     public Optional<String> get(String key) {
-        LocalEntry local = localCache.get(key);
+        String local = localCache.getIfPresent(key);
         if (local != null) {
-            if (!local.expired()) {
-                return Optional.ofNullable(local.value());
-            }
-            localCache.remove(key, local);
+            return Optional.of(local);
         }
         try {
             String value = redisTemplate.opsForValue().get(KEY_PREFIX + key);
             if (value != null) {
-                localCache.put(key, new LocalEntry(value, System.currentTimeMillis() + LOCAL_TTL.toMillis()));
-                evictLocalIfNeeded();
+                localCache.put(key, value);
             }
             return Optional.ofNullable(value);
         } catch (RuntimeException exception) {
@@ -70,8 +64,7 @@ public class RedisRuntimeConfigCache implements RuntimeConfigCache {
      */
     @Override
     public void put(String key, String value) {
-        localCache.put(key, new LocalEntry(value, System.currentTimeMillis() + LOCAL_TTL.toMillis()));
-        evictLocalIfNeeded();
+        localCache.put(key, value);
         try {
             redisTemplate.opsForValue().set(KEY_PREFIX + key, value, TTL);
         } catch (RuntimeException exception) {
@@ -79,28 +72,12 @@ public class RedisRuntimeConfigCache implements RuntimeConfigCache {
         }
     }
 
-    private void evictLocalIfNeeded() {
-        if (localCache.size() <= LOCAL_CACHE_MAX_ENTRIES) {
-            return;
-        }
-        localCache.entrySet().removeIf(entry -> entry.getValue().expired());
-        if (localCache.size() <= LOCAL_CACHE_MAX_ENTRIES) {
-            return;
-        }
-        localCache.entrySet().stream()
-                .sorted((a, b) -> Long.compare(a.getValue().expireAtMillis, b.getValue().expireAtMillis))
-                .limit(localCache.size() - LOCAL_CACHE_MAX_ENTRIES)
-                .map(entry -> entry.getKey())
-                .toList()
-                .forEach(localCache::remove);
-    }
-
     /**
      * {@inheritDoc}
      */
     @Override
     public void evict(String key) {
-        localCache.remove(key);
+        localCache.invalidate(key);
         try {
             redisTemplate.delete(KEY_PREFIX + key);
             log.debug("已清除配置缓存: key={}", key);
@@ -114,7 +91,7 @@ public class RedisRuntimeConfigCache implements RuntimeConfigCache {
      */
     @Override
     public void evictAll() {
-        localCache.clear();
+        localCache.invalidateAll();
         try {
             ScanOptions options = ScanOptions.scanOptions()
                     .match(KEY_PREFIX + "*")

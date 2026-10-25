@@ -2,6 +2,7 @@ package com.omninest.modules.photos.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
@@ -47,6 +48,7 @@ import com.omninest.modules.photos.service.GeoDatasetService;
 import com.omninest.modules.photos.service.PhotoLibraryService;
 import com.omninest.modules.photos.service.PhotoRelationService;
 import com.omninest.modules.photos.service.PhotosRuntimeConfigService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -95,6 +97,8 @@ public class PhotoLibraryController {
     private final CurrentUserContext currentUserContext;
     private final ClientIpResolver clientIpResolver;
     private final RateLimitService rateLimitService;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     // ─── 浏览 ───
 
@@ -185,14 +189,32 @@ public class PhotoLibraryController {
             @Valid @RequestBody GeoDatasetService.GeoImportRequest body
     ) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(geoDatasetService.createImportTask(body, operatorId));
+        adminActorGuard.requireFreshAdminActor(operatorId);
+        GeoDatasetService.GeoImportCreated result = geoDatasetService.createImportTask(body, operatorId);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "ADMIN_PHOTO_GEO_IMPORT",
+                "photo_geo_dataset",
+                null,
+                Map.of()
+        );
+        return ApiResponse.success(result);
     }
 
     @Operation(summary = "重载离线地名索引", description = "将本实例内存索引重载到当前已发布数据集")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
     @PostMapping("/api/v1/admin/photos/geo/reload")
     ApiResponse<Map<String, Object>> reloadGeoIndex() {
+        UUID operatorId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(operatorId);
         String datasetVersion = geoDatasetService.reloadCurrentPublished();
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "ADMIN_PHOTO_GEO_RELOAD",
+                "photo_geo_dataset",
+                null,
+                Map.of("datasetVersion", datasetVersion == null ? "" : datasetVersion)
+        );
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("datasetVersion", datasetVersion);
         return ApiResponse.success(body);
@@ -206,7 +228,16 @@ public class PhotoLibraryController {
             @RequestParam(required = false) Integer batchSize
     ) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(geoDatasetService.createBackfillTask(operatorId, batchSize));
+        adminActorGuard.requireFreshAdminActor(operatorId);
+        GeoDatasetService.GeoBackfillCreated result = geoDatasetService.createBackfillTask(operatorId, batchSize);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "ADMIN_PHOTO_GEO_BACKFILL",
+                "photo_geo_dataset",
+                null,
+                Map.of("batchSize", batchSize == null ? 0 : batchSize)
+        );
+        return ApiResponse.success(result);
     }
 
     @Operation(summary = "保存外部编辑结果", description = "接收编辑器产出的整图流并存为新编辑版本")
@@ -955,7 +986,8 @@ public class PhotoLibraryController {
                 null,
                 item.motionState(),
                 null,
-                false
+                false,
+                null
         );
     }
 

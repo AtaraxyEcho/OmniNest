@@ -1,12 +1,14 @@
 package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
@@ -33,6 +35,8 @@ public class SearchIndexRebuildController {
     private final SearchIndexRebuildService searchIndexRebuildService;
     private final CurrentUserContext currentUserContext;
     private final RateLimitService rateLimitService;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 管理员触发全站搜索索引重建：受理后异步清空索引并按存量文件重新派发，接口只返回任务 ID。
@@ -42,10 +46,19 @@ public class SearchIndexRebuildController {
     @PostMapping("/rebuild")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<Map<String, Object>> rebuildIndex() {
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         if (!rateLimitService.tryAcquire("search:rebuild", 3, Duration.ofHours(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "重建操作过于频繁，请稍后再试");
         }
-        UUID taskId = searchIndexRebuildService.start(currentUserContext.requireCurrentUserId());
+        UUID taskId = searchIndexRebuildService.start(actorUserId);
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "ADMIN_SEARCH_INDEX_REBUILD",
+                "search_index",
+                taskId,
+                Map.of()
+        );
         return ApiResponse.success(Map.of(
                 "taskId", taskId.toString(),
                 "message", "全站索引重建已受理，正在按存量文件与照片重新派发索引任务"

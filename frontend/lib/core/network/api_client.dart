@@ -24,6 +24,7 @@ class ApiClient {
        _readAccessToken = readAccessToken,
        _refreshSession = refreshSession,
        _readPermissions = readPermissions,
+       _apiBaseUri = Uri.tryParse(environment.apiBaseUrl),
        dio = Dio(
          BaseOptions(
            baseUrl: environment.apiBaseUrl,
@@ -41,6 +42,10 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          // 绝对 URL 指向对象存储/CDN 时，Bearer JWT 与 withCredentials 都不能外带。
+          if (_isExternalOrigin(options.uri)) {
+            options.extra[skipAuthorizationKey] = true;
+          }
           final skipAuthorization = options.extra[skipAuthorizationKey] == true;
           // 每个后端请求生成 X-Request-Id 与日志关联；skipAuthorization 的请求
           // 目标是外部地址（对象存储预签名等），自定义头会触发不必要的跨源预检
@@ -126,6 +131,8 @@ class ApiClient {
   static const _retriedKey = 'omninest.authRetried';
 
   /// 外部签名地址使用此标记，避免向对象存储泄露 JWT。
+  final Uri? _apiBaseUri;
+
   static const skipAuthorizationKey = 'omninest.skipAuthorization';
 
   final Dio dio;
@@ -187,6 +194,30 @@ class ApiClient {
   ///
   /// <p>业务级 401（分享密码、2FA 复核）仍交由调用方解析信封，不能在这里
   /// 统一拒绝；只处理令牌已被拒绝且不会再次刷新的会话失效。</p>
+  bool _isExternalOrigin(Uri uri) {
+    if (!uri.hasAuthority) {
+      return false;
+    }
+    final base = _apiBaseUri;
+    if (base == null || !base.hasAuthority) {
+      return false;
+    }
+    int effectivePort(Uri value) {
+      if (value.hasPort) {
+        return value.port;
+      }
+      return switch (value.scheme) {
+        'https' => 443,
+        'http' => 80,
+        _ => -1,
+      };
+    }
+
+    return uri.scheme != base.scheme ||
+        uri.host != base.host ||
+        effectivePort(uri) != effectivePort(base);
+  }
+
   bool _isUnrecoverableSession401(Response<dynamic> response) {
     if (response.statusCode != 401 || !_refreshRejected) {
       return false;
