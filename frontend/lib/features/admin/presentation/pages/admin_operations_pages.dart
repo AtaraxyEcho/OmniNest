@@ -44,6 +44,7 @@ part 'admin_operations_storage_mounts.dart';
 part 'admin_operations_external_storage.dart';
 part 'admin_operations_library.dart';
 part 'admin_operations_sessions.dart';
+part 'admin_operations_dlq.dart';
 
 // ── 详情弹窗共享组件 ──────────────────────────────────────────────────
 

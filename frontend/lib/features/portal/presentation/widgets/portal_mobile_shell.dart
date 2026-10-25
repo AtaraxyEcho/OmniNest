@@ -50,6 +50,7 @@ part 'portal_mobile_system_widgets.dart';
 part 'portal_mobile_quick_actions.dart';
 part 'portal_mobile_weather_card.dart';
 part 'portal_mobile_hosted_content.dart';
+part 'portal_mobile_hosted_recent.dart';
 
 /// 取舞台（`.app-frame`）与内容列（`.content-scroll`）两个限宽里的较紧者。
 ///

@@ -528,13 +528,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadRecent, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.recentMeta ?? const FilesSubPageMeta();
       final result = await _repository.listRecentFilesPage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           recentFiles: result.items,
           recentMeta: _metaOfNodePage(result),
@@ -548,13 +548,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadFavorites, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.favoritesMeta ?? const FilesSubPageMeta();
       final result = await _repository.listFavoriteFilesPage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           favoriteFiles: result.items,
           favoritesMeta: _metaOfNodePage(result),
@@ -568,7 +568,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadRecycleBin, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final spaceType = current?.spaceType ?? 'PERSONAL';
       final meta = current?.recycleMeta ?? const FilesSubPageMeta();
       final result = await _repository.listRecycleBinPage(
@@ -576,7 +576,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           recycleBin: result.items,
           recycleMeta: _metaOfNodePage(result),
@@ -601,7 +601,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     )
     emit,
   }) async {
-    final current = state.asData?.value;
+    final current = _currentState;
     if (current == null || current.isBusy || current.section != section) {
       return;
     }
@@ -614,7 +614,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
     await _runAction(operation, () async {
       final result = await fetch(meta.page + 1, meta.size);
-      final latest = state.asData?.value;
+      final latest = _currentState;
       if (latest == null ||
           latest.section != section ||
           metaOf(latest).page != meta.page) {
@@ -636,7 +636,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
                 totalPages: result.page + 1,
               )
               : _metaOfNodePage(result);
-      state = AsyncData(emit(latest, merged, effectiveMeta));
+      _emitState(emit(latest, merged, effectiveMeta));
     });
   }
 
@@ -669,7 +669,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   /// 回收站滚动续载：沿用当前空间类型，不跨空间续页。
   Future<void> loadMoreRecycleBin() async {
-    final spaceType = state.asData?.value.spaceType ?? 'PERSONAL';
+    final spaceType = _currentState?.spaceType ?? 'PERSONAL';
     await _loadMoreNodePage(
       operation: FileOperation.loadRecycleBin,
       section: FileManagerSection.recycleBin,
@@ -689,7 +689,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   /// 与我共享滚动续载：下一页按 shareId 去重后追加。
   Future<void> loadMoreSharedWithMe() async {
-    final current = state.asData?.value;
+    final current = _currentState;
     final meta = current?.sharedWithMeMeta;
     if (current == null ||
         meta == null ||
@@ -703,7 +703,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         page: meta.page + 1,
         size: meta.size,
       );
-      final latest = state.asData?.value;
+      final latest = _currentState;
       if (latest == null || latest.sharedWithMeMeta.page != meta.page) {
         return;
       }
@@ -728,7 +728,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
                 totalElements: result.totalElements,
                 totalPages: result.totalPages,
               );
-      state = AsyncData(
+      _emitState(
         latest.copyWith(sharedWithMe: merged, sharedWithMeMeta: effectiveMeta),
       );
     });
@@ -737,13 +737,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> showSharedWithMe({int? page, int? size}) async {
     _applySectionOptimistically(FileManagerSection.sharedWithMe);
     await _runAction(FileOperation.loadShared, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.sharedWithMeMeta ?? const FilesSubPageMeta();
       final result = await _repository.listSharedWithMePage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           sharedWithMe: result.items,
           sharedWithMeMeta: FilesSubPageMeta(
@@ -762,9 +762,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadSharedSpace, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final usage = await _repository.getSharedSpaceUsage();
-      state = AsyncData(
+      _emitState(
         _liveOr(
           current,
         ).copyWith(sharedSpaceUsage: usage, sharedSpaceBreadcrumbs: []),
@@ -776,9 +776,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.openSharedFolder, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final currentBreadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
-      state = AsyncData(
+      _emitState(
         _liveOr(
           current,
         ).copyWith(sharedSpaceBreadcrumbs: [...currentBreadcrumbs, folder]),
@@ -789,12 +789,12 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> goToSharedSpaceBreadcrumb(int index) async {
     _clearSelection();
     _clearInspection();
-    final current = state.asData?.value;
+    final current = _currentState;
     final breadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
     if (index < 0 || index > breadcrumbs.length) return;
     final targetBreadcrumbs = breadcrumbs.sublist(0, index);
     await _runAction(FileOperation.navigateSharedUp, () async {
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(sharedSpaceBreadcrumbs: targetBreadcrumbs),
       );
     });
@@ -819,22 +819,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       await _repository.deleteSharedFile(file.id);
       // 删除后必须重拉当前目录，否则已删节点会留在共享空间列表直到手动刷新。
       await refreshFileNodesForCurrentSection();
-      final current = state.asData?.value;
+      final current = _currentState;
       final usage = await _repository.getSharedSpaceUsage();
-      state = AsyncData(_liveOr(current).copyWith(sharedSpaceUsage: usage));
+      _emitState(_liveOr(current).copyWith(sharedSpaceUsage: usage));
     });
   }
 
   Future<void> showMyShares({int? page, int? size}) async {
     _applySectionOptimistically(FileManagerSection.myShares);
     await _runAction(FileOperation.loadMyShares, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.sharesMeta ?? const FilesSubPageMeta();
       final result = await _repository.listMySharesPage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           myShares: result.items,
           sharesMeta: FilesSubPageMeta(
@@ -854,14 +854,14 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> showShareLinks({int? page, int? size}) async {
     _applySectionOptimistically(FileManagerSection.myShares);
     await _runAction(FileOperation.loadShareLinks, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.sharesMeta ?? const FilesSubPageMeta();
       // 全部链接与我的分享同端点同 service：直接复用分页查询。
       final result = await _repository.listMySharesPage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           shareLinks: result.items,
           sharesMeta: FilesSubPageMeta(
@@ -879,22 +879,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> showStorageStats() async {
     _applySectionOptimistically(FileManagerSection.storageStats);
     await _runAction(FileOperation.loadStorageStats, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final stats = await _repository.storageStats();
-      state = AsyncData(_liveOr(current).copyWith(storageStats: stats));
+      _emitState(_liveOr(current).copyWith(storageStats: stats));
     });
   }
 
   Future<void> showUploadQueue({int? page, int? size}) async {
     _applySectionOptimistically(FileManagerSection.uploadQueue);
     await _runAction(FileOperation.loadUploadQueue, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final meta = current?.uploadQueueMeta ?? const FilesSubPageMeta();
       final result = await _repository.listUploadQueuePage(
         page: page ?? 0,
         size: size ?? meta.size,
       );
-      state = AsyncData(
+      _emitState(
         _liveOr(current).copyWith(
           uploadQueue: result.items,
           uploadQueueMeta: FilesSubPageMeta(
@@ -911,11 +911,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> showExternalStorage() async {
     _applySectionOptimistically(FileManagerSection.externalStorage);
     await _runAction(FileOperation.loadExternalStorage, () async {
-      final current = state.asData?.value;
+      final current = _currentState;
       final externalAccounts = await _repository.listExternalStorages();
-      state = AsyncData(
-        _liveOr(current).copyWith(externalAccounts: externalAccounts),
-      );
+      _emitState(_liveOr(current).copyWith(externalAccounts: externalAccounts));
     });
   }
 

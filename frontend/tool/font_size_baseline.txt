@@ -16,4 +16,4 @@ lib/app/theme/feature/music_backdrop_theme.dart 1
 lib/core/feedback/omni_feedback.dart 1
 lib/core/widgets/mobile_appearance_options.dart 1
 lib/core/widgets/mobile_sample_kit.dart 16
-lib/core/widgets/mobile_ui.dart 3
+lib/core/widgets/mobile_env_widgets.dart 3

@@ -184,9 +184,16 @@ void main() {
 
   group('P0: 破坏性确认调用链（零覆盖修复）', () {
     test('粉碎流程走 _confirmTypedAndRun 而非 _confirmAndRun', () {
+      // 预览弹窗已拆到同库 part 文件，源码接线检查需覆盖两处。
       final ws =
           File(
             'lib/features/files/presentation/pages/file_browser_page_workspace.dart',
+          ).readAsStringSync() +
+          File(
+            'lib/features/files/presentation/pages/file_browser_page_workspace_preview.dart',
+          ).readAsStringSync() +
+          File(
+            'lib/features/files/presentation/pages/file_browser_page_workspace_rows.dart',
           ).readAsStringSync();
       final batch =
           File(
