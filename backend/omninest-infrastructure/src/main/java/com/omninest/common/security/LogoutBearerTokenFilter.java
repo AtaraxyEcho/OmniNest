@@ -39,7 +39,9 @@ final class LogoutBearerTokenFilter extends OncePerRequestFilter {
     }
 
     static boolean isLogoutRequest(HttpServletRequest request) {
-        return LOGOUT_PATH.equals(request.getServletPath());
+        // 部分转发/测试场景 servletPath 为空串，必须兼容 requestURI。
+        return request.getServletPath() != null && LOGOUT_PATH.equals(request.getServletPath())
+                || request.getRequestURI() != null && request.getRequestURI().endsWith(LOGOUT_PATH);
     }
 
     @Override

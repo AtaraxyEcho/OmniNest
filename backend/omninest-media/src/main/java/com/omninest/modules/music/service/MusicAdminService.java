@@ -33,12 +33,13 @@ import com.omninest.modules.music.repository.MusicAlbumRepository;
 import com.omninest.modules.music.repository.MusicArtistRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
+import com.omninest.modules.reader.service.TxtContentDecoder;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -112,6 +113,7 @@ public class MusicAdminService {
     private final PlatformTransactionManager transactionManager;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final MusicCoverRetentionService coverRetentionService;
+    private final TxtContentDecoder txtContentDecoder;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -330,7 +332,13 @@ public class MusicAdminService {
         var artist = catalogService.resolveArtist(ownerUserId, artistName, null, null);
         var album = catalogService.resolveAlbum(ownerUserId, albumTitle, artistName, null, null, null, null);
 
-        track.setTitle(request.title().trim());
+        if (request.title() != null) {
+            String title = request.title().trim();
+            if (title.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "曲目标题不能为空");
+            }
+            track.setTitle(title);
+        }
         track.setArtistName(artistName);
         track.setAlbumTitle(albumTitle);
         if (request.genre() != null) {
@@ -765,10 +773,16 @@ public class MusicAdminService {
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
                 file.ownerUserId(),
                 file.id())) {
+            // 外挂 .lrc 大量使用 GBK/GB18030 与带 BOM 的 UTF-16：沿用阅读器的字符集嗅探，
+            // 不能按 UTF-8 硬解。
+            Charset charset = txtContentDecoder.detectCharset(file);
             String text = new String(
                     content.inputStream().readNBytes(512 * 1024),
-                    StandardCharsets.UTF_8
+                    charset
             ).trim();
+            if (!text.isEmpty() && text.charAt(0) == '﻿') {
+                text = text.substring(1).trim();
+            }
             return text.isBlank() ? null : text;
         } catch (IOException | RuntimeException exception) {
             log.warn("读取文本对象失败: fileNodeId={}", file.id(), exception);
@@ -954,9 +968,9 @@ public class MusicAdminService {
     }
 
     private int scanProgress(MusicScanJob job) {
+        // 失败任务不是“已完成”：进度必须停在真实扫描位置，避免进度条瞬间跳满。
         return switch (job.getStatus()) {
             case "COMPLETED" -> 100;
-            case "FAILED" -> 100;
             case "RUNNING" -> 50;
             default -> 0;
         };

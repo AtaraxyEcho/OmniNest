@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -86,6 +87,8 @@ class MusicAdminServiceTest {
             mock(DerivedAssetStorageService.class);
     private final MusicCoverRetentionService coverRetentionService =
             mock(MusicCoverRetentionService.class);
+    private final com.omninest.modules.reader.service.TxtContentDecoder txtContentDecoder =
+            mock(com.omninest.modules.reader.service.TxtContentDecoder.class);
     private final MusicAdminService adminService = new MusicAdminService(new MediaProcessingLimitsProperties(),
             scanJobRepository,
             trackRepository,
@@ -104,11 +107,14 @@ class MusicAdminServiceTest {
             readThroughCache,
             transactionManager,
             derivedAssetStorageService,
-            coverRetentionService
+            coverRetentionService,
+            txtContentDecoder
     );
 
     MusicAdminServiceTest() {
         adminService.initTransactionTemplate();
+        Mockito.when(txtContentDecoder.detectCharset(Mockito.any()))
+                .thenReturn(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @BeforeEach

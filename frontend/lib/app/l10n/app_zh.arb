@@ -2745,6 +2745,7 @@
   },
   "readerImportFailed": "导入失败，请稍后重试",
   "readerImportFailedWithReason": "《{name}》导入失败：{reason}",
+  "readerImportNoReadableFiles": "没有可读取的文件",
   "@readerImportFailedWithReason": {
     "placeholders": {
       "name": {},
@@ -4856,6 +4857,7 @@
   "videoEmptyImportMedia": "导入媒体",
   "videoSearchScopeLoadedOnly": "仅筛选已加载的 {count} 部",
   "videoSearchNoHitsLoadMore": "未在已加载结果中找到，可继续加载更多或清空筛选",
+  "videoSeriesLoadMore": "加载更多剧集",
   "@videoSearchScopeLoadedOnly": {
     "placeholders": {
       "count": {

@@ -40,7 +40,7 @@ class MusicDeckTrackList extends StatefulWidget {
   final bool scrollable;
   final VoidCallback? onReachEnd;
   final Widget? footer;
-  final VoidCallback? onLongPress;
+  final ValueChanged<MusicPlayableItem>? onLongPress;
   final Set<String>? selectedIds;
 
   @override
@@ -144,7 +144,8 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
           widget.onAddToPlaylist == null || item.ref is! LocalMusicRef
               ? null
               : () => widget.onAddToPlaylist!(item),
-      onLongPress: widget.onLongPress,
+      onLongPress:
+          widget.onLongPress == null ? null : () => widget.onLongPress!(item),
       checked: widget.selectedIds?.contains(item.track.id),
     );
   }

@@ -15,7 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.slf4j.MDC;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * 管理审计日志写入服务测试：变更上下文载荷序列化与请求上下文补充。
@@ -26,7 +28,10 @@ class AdminAuditLogServiceTest {
 
     private final AdminAuditLogRepository adminAuditLogRepository = Mockito.mock(AdminAuditLogRepository.class);
     private final AdminSyncEventService adminSyncEventService = Mockito.mock(AdminSyncEventService.class);
-    private final AdminAuditLogService service = new AdminAuditLogService(adminAuditLogRepository, adminSyncEventService);
+    private final com.omninest.common.security.ClientIpResolver clientIpResolver =
+            Mockito.mock(com.omninest.common.security.ClientIpResolver.class);
+    private final AdminAuditLogService service = new AdminAuditLogService(
+            adminAuditLogRepository, adminSyncEventService, clientIpResolver);
 
     @Test
     void recordWithPayloadSerializesContextAsJson() {
@@ -42,7 +47,7 @@ class AdminAuditLogServiceTest {
         ArgumentCaptor<String> detailCaptor = ArgumentCaptor.forClass(String.class);
         verify(adminAuditLogRepository).insert(
                 eq(actorUserId), eq("ADMIN_CONFIG_UPDATE"), eq("config_entries"), eq(resourceId),
-                eq(Map.of()), detailCaptor.capture());
+                isNull(), eq(Map.of()), detailCaptor.capture());
         assertThat(detailCaptor.getValue())
                 .contains("\"oldValue\":\"100\"")
                 .contains("\"newValue\":\"180\"")
@@ -61,7 +66,7 @@ class AdminAuditLogServiceTest {
 
         verify(adminAuditLogRepository).insert(
                 eq(actorUserId), eq("ADMIN_TASK_RETRY"), eq("sys_tasks"), isNull(),
-                eq(Map.of()), isNull());
+                isNull(), eq(Map.of()), isNull());
     }
 
     @Test
@@ -73,9 +78,39 @@ class AdminAuditLogServiceTest {
 
         verify(adminAuditLogRepository).insert(
                 eq(actorUserId), eq("ADMIN_SESSION_REVOKE"), eq("auth_active_sessions"), eq(resourceId),
-                eq(Map.of()));
+                isNull(), eq(Map.of()), isNull());
+        // record() 不写 detail_payload：只禁止“带非空载荷”的写入，不禁止带请求上下文的常规记录。
         verify(adminAuditLogRepository, Mockito.never()).insert(
-                any(), anyString(), anyString(), any(), any(), any());
+                any(), anyString(), anyString(), any(), any(), any(), Mockito.notNull());
         verify(adminSyncEventService).record("ADMIN_SESSION_REVOKE", "auth_active_sessions", resourceId);
+    }
+
+    @Test
+    void recordWritesSourceIpUserAgentAndRequestIdColumns() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        MDC.put("requestId", requestId.toString());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.1.2.3");
+        request.addHeader("User-Agent", "OmniNest-Test/1.0");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        try {
+            Mockito.when(clientIpResolver.resolve(Mockito.anyString(), Mockito.any(), Mockito.any()))
+                    .thenReturn("10.1.2.3");
+
+            service.record(actorUserId, "ADMIN_SETTING_UPDATE", "config_entries", null);
+
+            ArgumentCaptor<AdminAuditLogRepository.AuditRequestContext> contextCaptor =
+                    ArgumentCaptor.forClass(AdminAuditLogRepository.AuditRequestContext.class);
+            verify(adminAuditLogRepository).insert(
+                    eq(actorUserId), eq("ADMIN_SETTING_UPDATE"), eq("config_entries"), isNull(),
+                    contextCaptor.capture(), eq(Map.of()), isNull());
+            assertThat(contextCaptor.getValue().ipAddress()).isEqualTo("10.1.2.3");
+            assertThat(contextCaptor.getValue().userAgent()).isEqualTo("OmniNest-Test/1.0");
+            assertThat(contextCaptor.getValue().requestId()).isEqualTo(requestId);
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+            MDC.clear();
+        }
     }
 }

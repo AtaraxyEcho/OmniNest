@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -234,6 +235,7 @@ public final class ReaderDtos {
             @Size(max = 2000, message = "note 长度不能超过 2000")
             String note,
             @Size(max = 16, message = "color 长度不能超过 16")
+            @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
             String color,
             @Size(max = 120, message = "clientOperationId 长度不能超过 120")
             String clientOperationId
@@ -245,6 +247,7 @@ public final class ReaderDtos {
             @Size(max = 2000, message = "note 长度不能超过 2000")
             String note,
             @Size(max = 16, message = "color 长度不能超过 16")
+            @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
             String color
     ) {
     }

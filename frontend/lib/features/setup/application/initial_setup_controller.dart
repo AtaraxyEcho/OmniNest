@@ -25,10 +25,13 @@ class InitialSetupController extends AsyncNotifier<InitialSetupStatus> {
   }
 
   /// 生成安装向导两步验证秘钥。
-  Future<TwoFactorSetupData> newTwoFactorSecret({String? username}) {
+  Future<TwoFactorSetupData> newTwoFactorSecret({
+    required String setupToken,
+    String? username,
+  }) {
     return ref
         .read(initialSetupApiProvider)
-        .newTwoFactorSecret(username: username);
+        .newTwoFactorSecret(setupToken: setupToken, username: username);
   }
 
   /// 创建超管；要求两步验证时返回一次性备份码，否则返回 null。

@@ -12,6 +12,7 @@ import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
+import com.omninest.modules.task.support.TaskSensitiveTextMasker;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthLoginAudit;
 import com.omninest.modules.user.domain.AuthUser;
@@ -131,20 +132,56 @@ public class AdminOperationsService {
      * @return 任务管理视图
      */
     @Transactional(readOnly = true)
-    public AdminOperationsDto.TaskManagementView tasks() {
+    public AdminOperationsDto.TaskManagementView tasks(UUID actorUserId) {
         return new AdminOperationsDto.TaskManagementView(
-                toTaskRecordItems(taskRecordRepository.findRecent(DEFAULT_TASK_LIMIT))
+                toTaskRecordItems(taskRecordRepository.findRecent(DEFAULT_TASK_LIMIT), actorUserId)
         );
     }
 
-    private List<AdminOperationsDto.TaskRecordItem> toTaskRecordItems(List<Object[]> rows) {
-        return rows.stream().map(row -> new AdminOperationsDto.TaskRecordItem(
-                toUuid(row[0]), toText(row[1]), AdminOperationDescription.task(toText(row[1]), toText(row[4])),
-                toText(row[2]), toInt(row[3]),
-                toText(row[4]), toText(row[5]), toInt(row[6]),
-                toInstant(row[7]), toInstant(row[8]),
-                toUuidOrNull(row[9]), toText(row[10])
-        )).toList();
+    private List<AdminOperationsDto.TaskRecordItem> toTaskRecordItems(List<Object[]> rows, UUID actorUserId) {
+        return rows.stream().map(row -> {
+            String errorSummary = toText(row[5]);
+            UUID ownerUserId = toUuidOrNull(row[9]);
+            if (ownerUserId != null && !ownerUserId.equals(actorUserId)) {
+                errorSummary = TaskSensitiveTextMasker.mask(errorSummary);
+            }
+            return new AdminOperationsDto.TaskRecordItem(
+                    toUuid(row[0]), toText(row[1]), AdminOperationDescription.task(toText(row[1]), toText(row[4])),
+                    toText(row[2]), toInt(row[3]),
+                    toText(row[4]), errorSummary, toInt(row[6]),
+                    toInstant(row[7]), toInstant(row[8]),
+                    ownerUserId, toText(row[10])
+            );
+        }).toList();
+    }
+
+    /**
+     * 跨用户任务返回前按归属脱敏错误摘要，与分页视图保持同一口径。
+     */
+    private AdminOperationsDto.TaskRecordItem maskCrossOwnerSummary(
+            AdminOperationsDto.TaskRecordItem item,
+            UUID actorUserId
+    ) {
+        if (item == null
+                || item.ownerUserId() == null
+                || item.ownerUserId().equals(actorUserId)
+                || item.errorSummary() == null) {
+            return item;
+        }
+        return new AdminOperationsDto.TaskRecordItem(
+                item.id(),
+                item.taskType(),
+                item.description(),
+                item.status(),
+                item.progress(),
+                item.routingKey(),
+                TaskSensitiveTextMasker.mask(item.errorSummary()),
+                item.retryCount(),
+                item.createdAt(),
+                item.updatedAt(),
+                item.ownerUserId(),
+                item.ownerLabel()
+        );
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -168,7 +205,7 @@ public class AdminOperationsService {
                 0
         );
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
-        return retried;
+        return maskCrossOwnerSummary(retried, actorUserId);
     }
 
     /**
@@ -198,7 +235,7 @@ public class AdminOperationsService {
                 taskId,
                 Map.of("reason", TASK_CANCEL_REASON, "previousStatus", currentStatus)
         );
-        return cancelled;
+        return maskCrossOwnerSummary(cancelled, actorUserId);
     }
 
     /**
@@ -227,7 +264,7 @@ public class AdminOperationsService {
                 taskId,
                 Map.of("previousStatus", currentStatus)
         );
-        return discarded;
+        return maskCrossOwnerSummary(discarded, actorUserId);
     }
 
     /**

@@ -120,6 +120,27 @@ class ExternalStorageServiceTest {
     }
 
     @Test
+    void browseExternalStorage_returnsPathWithParentPrefix() {
+        StorageExternalAccount account = buildAccount("S3", ExternalStorageStatus.ACTIVE.getValue());
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(Optional.of(account));
+        String remoteName = "omni-" + ACCOUNT_ID.toString().replace("-", "").substring(0, 8);
+        when(rcloneGateway.listRemoteNames()).thenReturn(List.of(remoteName + ":"));
+        RcloneGateway.DirectoryEntry child = new RcloneGateway.DirectoryEntry(
+                "2026", "2026", true, 0L, null, null, null, Map.of());
+        when(rcloneGateway.listDirectory(eq(remoteName + ":"), eq("photos"), eq(false)))
+                .thenReturn(List.of(child));
+
+        ExternalFileListDto result = service.browse(OWNER_ID, ACCOUNT_ID, "/photos");
+
+        assertThat(result.items()).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.name()).isEqualTo("2026");
+                    assertThat(item.path()).isEqualTo("photos/2026");
+                });
+    }
+
+    @Test
     void browseExternalStorage_reusesDirectorySnapshotWithinTtl() {
         StorageExternalAccount account = buildAccount("S3", ExternalStorageStatus.ACTIVE.getValue());
         when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))

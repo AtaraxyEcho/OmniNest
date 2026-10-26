@@ -40,7 +40,22 @@ class ContinueSection extends StatelessWidget {
             message: AppLocalizations.of(context).videoNoContinueRecord,
           )
         else if (MediaQuery.sizeOf(context).width < 600)
-          ContinueCard(item: items.first, width: double.infinity)
+          // 窄屏同样要能看到全部续看记录：横向滚动，而不是只留第一条。
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (index, item) in items.indexed)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      right: index == items.length - 1 ? 0 : 12,
+                    ),
+                    child: ContinueCard(item: item, width: 300),
+                  ),
+              ],
+            ),
+          )
         else
           Wrap(
             spacing: 18,

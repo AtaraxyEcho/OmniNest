@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
@@ -525,68 +526,72 @@ class _InProgressList extends StatelessWidget {
           )
         else
           for (final item in items)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: rc.onSurface,
-                            fontSize: AppTypography.bodyMedium,
-                            height: 1.3,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (item.authorName?.isNotEmpty == true)
+            InkWell(
+              // 与阅读管理页一致：点正在读的书直接继续阅读。
+              onTap: () => context.push('/reader/items/${item.id}'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            item.authorName!,
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: rc.onSurfaceVariant,
-                              fontSize: AppTypography.labelSmall,
-                              height: 1.2,
+                              color: rc.onSurface,
+                              fontSize: AppTypography.bodyMedium,
+                              height: 1.3,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                      ],
+                          if (item.authorName?.isNotEmpty == true)
+                            Text(
+                              item.authorName!,
+                              style: TextStyle(
+                                color: rc.onSurfaceVariant,
+                                fontSize: AppTypography.labelSmall,
+                                height: 1.2,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 80,
-                    child: Container(
-                      height: 1,
-                      color: rc.outlineVariant,
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: (item.progressPercent ?? 0).clamp(
-                          0.0,
-                          1.0,
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 80,
+                      child: Container(
+                        height: 1,
+                        color: rc.outlineVariant,
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: (item.progressPercent ?? 0).clamp(
+                            0.0,
+                            1.0,
+                          ),
+                          child: Container(height: 1, color: rc.reading),
                         ),
-                        child: Container(height: 1, color: rc.reading),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 34,
-                    child: Text(
-                      '${((item.progressPercent ?? 0) * 100).round()}%',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: rc.onSurfaceVariant,
-                        // ignore: font_size_whitelist
-                        fontSize: 10,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 34,
+                      child: Text(
+                        '${((item.progressPercent ?? 0) * 100).round()}%',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: rc.onSurfaceVariant,
+                          // ignore: font_size_whitelist
+                          fontSize: 10,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
       ],

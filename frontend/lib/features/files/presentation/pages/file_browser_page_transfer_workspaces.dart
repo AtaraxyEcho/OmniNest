@@ -150,7 +150,9 @@ class _UploadQueueWorkspace extends ConsumerWidget {
                                     : null,
                           )
                         else if (task.status == 'RUNNING' ||
-                            task.status == 'PENDING')
+                            task.status == 'UPLOADING' ||
+                            task.status == 'PENDING' ||
+                            task.status == 'QUEUED')
                           _SubAction(
                             label: l10n.filesPauseUpload,
                             onTap:
@@ -348,8 +350,9 @@ class _UploadProgressCell extends StatelessWidget {
 /// 上传状态统一文案。
 String _uploadStatusLabel(AppLocalizations l10n, String status) {
   return switch (status.toUpperCase()) {
-    'RUNNING' => l10n.filesStatusRunning,
-    'PENDING' => l10n.filesStatusPending,
+    // 上传动作写入的是 UPLOADING/QUEUED，与传输队列的 RUNNING/PENDING 是同一语义。
+    'RUNNING' || 'UPLOADING' => l10n.filesStatusRunning,
+    'PENDING' || 'QUEUED' => l10n.filesStatusPending,
     'PAUSED' => l10n.filesStatusPaused,
     'COMPLETED' => l10n.filesStatusCompleted,
     'FAILED' => l10n.filesStatusFailed,
@@ -361,9 +364,9 @@ String _uploadStatusLabel(AppLocalizations l10n, String status) {
 /// 上传状态语义色。
 _BadgeTone _uploadStatusTone(String status) {
   return switch (status.toUpperCase()) {
-    'COMPLETED' || 'RUNNING' => _BadgeTone.good,
+    'COMPLETED' || 'RUNNING' || 'UPLOADING' => _BadgeTone.good,
     'FAILED' || 'CONFLICT' => _BadgeTone.bad,
-    'PAUSED' || 'PENDING' => _BadgeTone.warn,
+    'PAUSED' || 'PENDING' || 'QUEUED' => _BadgeTone.warn,
     _ => _BadgeTone.neutral,
   };
 }

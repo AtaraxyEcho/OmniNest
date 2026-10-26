@@ -24,10 +24,22 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
   final FlutterTts _tts = FlutterTts();
   TtsState _state = TtsState.stopped;
 
+  /// 最近一次 speak 传入文本在整章中的起点，以及平台回调报告的相对偏移。
+  int _spokenBaseOffset = 0;
+  int _currentOffset = 0;
+
   @override
   void initState() {
     super.initState();
+    _tts.setProgressHandler((text, start, end, word) {
+      final absolute = _spokenBaseOffset + start;
+      if (absolute >= 0 && absolute <= widget.text.length) {
+        _currentOffset = absolute;
+      }
+    });
     _tts.setCompletionHandler(() {
+      _currentOffset = 0;
+      _spokenBaseOffset = 0;
       if (mounted) setState(() => _state = TtsState.stopped);
     });
     _tts.setPauseHandler(() {
@@ -59,12 +71,19 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
       if (!mounted) return;
       await _tts.setLanguage(_detectLanguage(widget.text));
       if (!mounted) return;
-      await _tts.speak(widget.text);
+      await _speakFrom(0);
       if (mounted) setState(() => _state = TtsState.playing);
     } on Exception catch (e) {
       if (kDebugMode) readerDebugLog('TTS: restart failed: $e');
       _reportUnavailable();
     }
+  }
+
+  Future<void> _speakFrom(int offset) async {
+    final bounded = offset.clamp(0, widget.text.length);
+    _spokenBaseOffset = bounded;
+    _currentOffset = bounded;
+    await _tts.speak(widget.text.substring(bounded));
   }
 
   /// 根据文本内容自动检测语言，中文返回 zh-CN，其他返回 en-US。
@@ -82,9 +101,16 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
         await _tts.pause();
         if (mounted) setState(() => _state = TtsState.paused);
       } else if (_state == TtsState.paused) {
+        final speed =
+            ref.read(readerTtsSpeedControllerProvider).value ??
+            ReaderTtsSpeedController.defaultSpeed;
+        await _tts.setSpeechRate(speed);
+        if (!mounted) return;
         await _tts.setLanguage(_detectLanguage(widget.text));
         if (!mounted) return;
-        await _tts.speak(widget.text);
+        // 从暂停位置续读：整章重读会让用户丢失上下文。
+        final resumeAt = _currentOffset.clamp(0, widget.text.length);
+        await _speakFrom(resumeAt);
         if (mounted) setState(() => _state = TtsState.playing);
       } else {
         final speed =
@@ -94,7 +120,7 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
         if (!mounted) return;
         await _tts.setLanguage(_detectLanguage(widget.text));
         if (!mounted) return;
-        await _tts.speak(widget.text);
+        await _speakFrom(0);
         if (mounted) setState(() => _state = TtsState.playing);
       }
     } on Exception catch (e) {

@@ -70,8 +70,8 @@ public class BackdropAssetService {
     private static final String RESOURCE_TYPE = "BACKDROP";
     // 包内共享：对账服务按派生路径定位原始节点回填引用。
     static final String ASSET_TYPE_ORIGINAL = "ORIGINAL";
-    private static final String ASSET_TYPE_PLAYBACK = "PLAYBACK";
-    private static final String ASSET_TYPE_THUMBNAIL = "THUMBNAIL";
+    static final String ASSET_TYPE_PLAYBACK = "PLAYBACK";
+    static final String ASSET_TYPE_THUMBNAIL = "THUMBNAIL";
     // 包内共享：对账服务自愈素材时需要按同一预留口径结算配额。
     static final String RESERVATION_SOURCE_TYPE = "BACKDROP_UPLOAD";
     private static final String ORIGINAL_BASE_NAME = "original";

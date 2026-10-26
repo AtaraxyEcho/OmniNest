@@ -6392,6 +6392,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get readerImportNoReadableFiles => '没有可读取的文件';
+
+  @override
   String get readerImportFromFile => '从设备导入';
 
   @override
@@ -10781,6 +10784,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoSearchNoHitsLoadMore => '未在已加载结果中找到，可继续加载更多或清空筛选';
+
+  @override
+  String get videoSeriesLoadMore => '加载更多剧集';
 
   @override
   String get readerGoToLibrary => '去书库';

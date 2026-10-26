@@ -19,6 +19,8 @@ import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -93,9 +95,24 @@ public class WeatherController {
         return ApiResponse.success(weather);
     }
 
+    /**
+     * 判断查询位置是否为经纬度坐标。
+     *
+     * <p>GPS 坐标可能恰好是整数度（如 {@code 116,40}），不能要求必须带小数；
+     * 越界坐标按普通地名处理，避免把非法值透传给上游。</p>
+     */
     private boolean isLatLon(String location) {
-        return location.matches("^-?\\d{1,3}\\.\\d+,\\s*-?\\d{1,3}\\.\\d+$");
+        Matcher matcher = LAT_LON_PATTERN.matcher(location);
+        if (!matcher.matches()) {
+            return false;
+        }
+        double latitude = Double.parseDouble(matcher.group(1));
+        double longitude = Double.parseDouble(matcher.group(2));
+        return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
     }
+
+    private static final Pattern LAT_LON_PATTERN =
+            Pattern.compile("^(-?\\d{1,3}(?:\\.\\d+)?),\\s*(-?\\d{1,3}(?:\\.\\d+)?)$");
 
     private String resolveClientIp(HttpServletRequest request) {
         return clientIpResolver.resolve(

@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.event.FileIndexSyncEvent;
 import com.omninest.modules.file.event.FileUploadedEvent;
@@ -106,6 +107,28 @@ class FileIndexSyncServiceTest {
     }
 
     @Test
+    void syncSkipsFolderNodesInSubtreeWithoutAbortingTheBatch() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID folderId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        FileNode folder = activeNode(ownerUserId, folderId, "子目录");
+        folder.setNodeType(NodeType.FOLDER.getValue());
+        folder.setCurrentObjectId(null);
+        Mockito.when(fileNodeRepository.findAllById(List.of(folderId, fileId))).thenReturn(List.of(
+                folder,
+                activeNode(ownerUserId, fileId, "目录下的文件.pdf")
+        ));
+
+        int processed = service.sync(ownerUserId, List.of(folderId, fileId));
+
+        Assertions.assertThat(processed).isEqualTo(1);
+        ArgumentCaptor<FileUploadedEvent> captor = ArgumentCaptor.captor();
+        Mockito.verify(filePostProcessingTaskService).enqueueReindex(captor.capture());
+        Assertions.assertThat(captor.getValue().fileNodeId()).isEqualTo(fileId);
+        Mockito.verifyNoInteractions(fileSearchIndexService);
+    }
+
+    @Test
     void syncWithoutNodesDoesNothing() {
         Assertions.assertThat(service.sync(UUID.randomUUID(), List.of())).isZero();
 
@@ -119,6 +142,7 @@ class FileIndexSyncServiceTest {
         node.setSpaceType(SpaceType.PERSONAL);
         node.setName(name);
         node.setMimeType("application/pdf");
+        node.setNodeType(NodeType.FILE.getValue());
         node.setSizeBytes(2048L);
         node.setCurrentObjectId(UUID.randomUUID());
         node.setDeleted(false);

@@ -2,8 +2,6 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.messaging.DomainEventPublisher;
-import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.common.storage.ObjectStorageBuckets;
@@ -85,7 +83,6 @@ public class ExternalImportExecutionService {
     private final StorageQuotaService storageQuotaService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final ObjectStorageClient objectStorageClient;
-    private final DomainEventPublisher domainEventPublisher;
     private final FilePostProcessingTaskService postProcessingTaskService;
     private final RcloneGateway rcloneGateway;
     private final LocalExternalStorageSettings localStorageSettings;
@@ -976,7 +973,9 @@ public class ExternalImportExecutionService {
                 Instant.now()
         );
         postProcessingTaskService.enqueueMediaAutoImport(event);
-        domainEventPublisher.publishTask(QueueNames.FILE_INDEX_ROUTING_KEY, event);
+        // 与上传、版本保存走同一后处理管线：索引、文本提取与缩略图都要落 sys_tasks 记录，
+        // 否则 Worker 侧失败既不会重试也不会进死信。
+        postProcessingTaskService.enqueuePostProcess(event, fileNode.getMimeType());
     }
 
     // ========== 辅助方法 ==========

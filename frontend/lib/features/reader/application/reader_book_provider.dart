@@ -115,7 +115,10 @@ _queryParseProgress(ReaderApi api, String itemId, bool isComic) async {
   }
   final manifest = await api.getTextManifest(itemId);
   final parseTask = manifest.parseTask;
-  final finished = manifest.importStatus != ReaderImportStatus.parsing;
+  // 排队中的条目同样未完成：只看 parsing 会让轮询在第一帧就退出。
+  final finished =
+      manifest.importStatus != ReaderImportStatus.pending &&
+      manifest.importStatus != ReaderImportStatus.parsing;
   return (
     progress: parseTask?.progress ?? 0,
     finished: finished,

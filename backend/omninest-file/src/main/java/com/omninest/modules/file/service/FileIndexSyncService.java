@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.event.FileIndexSyncEvent;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -84,6 +85,12 @@ public class FileIndexSyncService {
             FileNode node = nodesById.get(fileNodeId);
             if (node == null || node.isDeleted()) {
                 removals.add(fileNodeId);
+                continue;
+            }
+            // 子树同步会把文件夹一起送进来：文件夹没有内容对象，进入后处理会在构造载荷时
+            // 抛空指针并让同批剩余文件全部中断。
+            if (!NodeType.FILE.getValue().equalsIgnoreCase(node.getNodeType())
+                    || node.getCurrentObjectId() == null) {
                 continue;
             }
             filePostProcessingTaskService.enqueueReindex(FileUploadedEvent.fromNode(node));

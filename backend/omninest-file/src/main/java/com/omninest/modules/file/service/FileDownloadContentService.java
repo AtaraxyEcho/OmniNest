@@ -5,6 +5,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
@@ -96,6 +97,24 @@ class FileDownloadContentService {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
         }
         return fileContentAccessService.open(node);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireDownloadable(UUID userId, UUID fileId) {
+        fileDownloadService.requireDownloadableNode(userId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public FileContentStream openDownloadableFileContent(UUID userId, UUID fileId) {
+        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileId);
+        return fileContentAccessService.open(node);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<FileContentRange> openDownloadableFileRange(
+            UUID userId, UUID fileId, long offset, long length) {
+        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileId);
+        return fileContentAccessService.openRange(node, offset, length);
     }
 
     @Transactional(readOnly = true)

@@ -51,6 +51,26 @@ class StorageLocationServiceTest {
     }
 
     @Test
+    void listAccessibleIncludesUserScopedLocationsAssignedToCurrentUser() {
+        Mockito.when(runtimeConfigService.isEnabled()).thenReturn(true);
+        UUID userId = UUID.randomUUID();
+        StorageLocation system = systemLocation("media", ".");
+        StorageLocation assigned = systemLocation("media", "Movies");
+        assigned.setScopeType("USER");
+        assigned.setScopeId(userId);
+        StorageLocation otherUser = systemLocation("media", "Music");
+        otherUser.setScopeType("USER");
+        otherUser.setScopeId(UUID.randomUUID());
+        Mockito.when(locationRepository.findAllByOrderByNameAsc())
+                .thenReturn(List.of(system, assigned, otherUser));
+
+        var accessible = service.listAccessible(userId);
+
+        assertThat(accessible).extracting(location -> location.id())
+                .containsExactly(system.getId(), assigned.getId());
+    }
+
+    @Test
     void disabledRuntimeRejectsLocationAccessBeforeRepositoryLookup() {
         Mockito.when(runtimeConfigService.isEnabled()).thenReturn(false);
 

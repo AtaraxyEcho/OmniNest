@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -89,6 +90,7 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
     List<UUID> findIdsCreatedBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
 
     @Modifying
+    @Transactional
     @Query("delete from AuditLog audit where audit.id in :ids")
     int deleteByIds(@Param("ids") Collection<UUID> ids);
 

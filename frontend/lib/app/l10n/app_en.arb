@@ -2871,6 +2871,7 @@
   },
   "readerImportFailed": "Import failed, please try again later",
   "readerImportFailedWithReason": "Failed to import {name}: {reason}",
+  "readerImportNoReadableFiles": "No readable files selected",
   "@readerImportFailedWithReason": {
     "placeholders": {
       "name": {},
@@ -4988,6 +4989,7 @@
   "videoEmptyImportMedia": "Import media",
   "videoSearchScopeLoadedOnly": "Filtering only {count} loaded titles",
   "videoSearchNoHitsLoadMore": "Not found in loaded results. Load more or clear filters",
+  "videoSeriesLoadMore": "Load more",
   "@videoSearchScopeLoadedOnly": {
     "placeholders": {
       "count": {

@@ -624,7 +624,7 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
       child: Text(
         item.title.trim().isEmpty
             ? '?'
-            : item.title.trim().substring(0, 1).toUpperCase(),
+            : item.title.trim().characters.first.toUpperCase(),
         style: TextStyle(
           color: context.readerColors.onSurfaceVariant,
           fontSize: AppTypography.titleLarge,

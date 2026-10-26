@@ -84,12 +84,22 @@ public class BackdropReconciliationService {
                     asset.setFailReason("原始对象缺失，对账标记");
                     log.warn("背景素材卡死标记失败: assetId={} 原始节点引用无法回填", asset.getId());
                     backdropAssetRepository.save(asset);
+                    releaseReservationQuietly(asset);
                     return;
                 }
                 // 自愈必须留下可用数据：从既有 ORIGINAL 派生节点回填 fileNodeId，
                 // 否则素材会以 READY 但空引用的状态发布，内容 URL 无法生成；
                 // 回填后按上传口径结算预留配额，结算失败仅记日志，预留行由过期回收兜底。
                 asset.setFileNodeId(originalNodeId);
+                // 已生成的派生资产同样要回填，否则自愈后视频壁纸缺播放流、所有壁纸缺缩略图。
+                if (asset.getThumbFileId() == null) {
+                    asset.setThumbFileId(findDerivedNodeId(
+                            asset.getId(), nodeRefs, BackdropAssetService.ASSET_TYPE_THUMBNAIL));
+                }
+                if (asset.getPlaybackFileId() == null) {
+                    asset.setPlaybackFileId(findDerivedNodeId(
+                            asset.getId(), nodeRefs, BackdropAssetService.ASSET_TYPE_PLAYBACK));
+                }
                 asset.setStatus(BackdropAssetStatus.READY);
                 asset.setFailReason(null);
                 backdropAssetRepository.save(asset);
@@ -100,6 +110,7 @@ public class BackdropReconciliationService {
                 asset.setFailReason("原始对象缺失，对账标记");
                 log.warn("背景素材卡死标记失败: assetId={} 对象不存在", asset.getId());
                 backdropAssetRepository.save(asset);
+                releaseReservationQuietly(asset);
             }
             return;
         }
@@ -119,12 +130,25 @@ public class BackdropReconciliationService {
      * @return 原始节点 ID；不存在时返回 null
      */
     private UUID findOriginalNodeId(UUID assetId, List<DerivedAssetStorageService.DerivedNodeRef> nodeRefs) {
-        String originalMarker = "/" + assetId + "/" + BackdropAssetService.ASSET_TYPE_ORIGINAL + "/";
+        return findDerivedNodeId(assetId, nodeRefs, BackdropAssetService.ASSET_TYPE_ORIGINAL);
+    }
+
+    private UUID findDerivedNodeId(
+            UUID assetId, List<DerivedAssetStorageService.DerivedNodeRef> nodeRefs, String assetType) {
+        String marker = "/" + assetId + "/" + assetType + "/";
         return nodeRefs.stream()
-                .filter(nodeRef -> nodeRef.normalizedPath().contains(originalMarker))
+                .filter(nodeRef -> nodeRef.normalizedPath().contains(marker))
                 .map(DerivedAssetStorageService.DerivedNodeRef::fileNodeId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private void releaseReservationQuietly(BackdropAsset asset) {
+        try {
+            storageQuotaService.releaseReservation(BackdropAssetService.RESERVATION_SOURCE_TYPE, asset.getId());
+        } catch (RuntimeException ex) {
+            log.warn("背景素材对账释放配额预留失败,预留行由过期回收兜底: assetId={}", asset.getId(), ex);
+        }
     }
 
     private void settleReservationQuietly(BackdropAsset asset) {

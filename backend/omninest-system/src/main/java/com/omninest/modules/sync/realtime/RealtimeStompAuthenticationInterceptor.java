@@ -14,7 +14,6 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -122,11 +121,23 @@ public class RealtimeStompAuthenticationInterceptor implements ChannelIntercepto
     }
 
     private void requireAuthentication(StompHeaderAccessor accessor) {
-        if (!(accessor.getUser() instanceof Authentication authentication)
+        if (!(accessor.getUser() instanceof JwtAuthenticationToken authentication)
                 || !authentication.isAuthenticated()
                 || authentication.getAuthorities().stream().noneMatch(authority ->
                         TokenAuthorityMapper.ACCESS_TOKEN_AUTHORITY.equals(authority.getAuthority()))) {
             throw new RealtimeAuthenticationException("实时连接尚未认证");
+        }
+        // 长连接不能让 CONNECT 成为唯一一次校验：令牌过期或会话被强制下线后，
+        // 后续帧必须立即失效。
+        Jwt jwt = authentication.getToken();
+        Instant expiresAt = jwt.getExpiresAt();
+        if (expiresAt == null || !expiresAt.isAfter(Instant.now())) {
+            throw new RealtimeAuthenticationException("实时连接凭证已过期");
+        }
+        UUID userId = parseUuid(jwt.getSubject(), "JWT sub 无效");
+        UUID sid = parseUuid(jwt.getClaimAsString("sid"), "JWT sid 无效");
+        if (sessionRevocationChecker.isRevoked(userId, sid)) {
+            throw new RealtimeAuthenticationException("实时连接会话已撤销");
         }
     }
 

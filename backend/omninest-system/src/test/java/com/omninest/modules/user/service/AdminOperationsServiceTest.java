@@ -160,7 +160,7 @@ class AdminOperationsServiceTest {
         );
         when(externalStorageAdministration.listAccounts()).thenReturn(List.of(externalAccount));
 
-        var taskView = service.tasks();
+        var taskView = service.tasks(actorUserId);
         assertThat(taskView.items()).extracting("id").containsExactly(taskId);
         assertThat(taskView.items())
                 .extracting(AdminOperationsDto.TaskRecordItem::ownerUserId,

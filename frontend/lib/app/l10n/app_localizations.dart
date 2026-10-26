@@ -12047,6 +12047,12 @@ abstract class AppLocalizations {
   /// **'Failed to import {name}: {reason}'**
   String readerImportFailedWithReason(Object name, Object reason);
 
+  /// No description provided for @readerImportNoReadableFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'No readable files selected'**
+  String get readerImportNoReadableFiles;
+
   /// No description provided for @readerImportFromFile.
   ///
   /// In en, this message translates to:
@@ -20235,6 +20241,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not found in loaded results. Load more or clear filters'**
   String get videoSearchNoHitsLoadMore;
+
+  /// No description provided for @videoSeriesLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get videoSeriesLoadMore;
 
   /// No description provided for @readerGoToLibrary.
   ///

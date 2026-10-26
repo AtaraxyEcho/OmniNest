@@ -10,6 +10,7 @@ import 'package:omninest/app/route/boot_page.dart';
 import 'package:omninest/app/web_initial_location.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
+import 'package:omninest/core/auth/redirect_target.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
@@ -180,9 +181,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute(
         '/files/preview/:fileId',
         (state) => MobileHostedRoute(
-          child: FilePreviewRoutePage(
-            fileId: state.pathParameters['fileId']!,
-          ),
+          child: FilePreviewRoutePage(fileId: state.pathParameters['fileId']!),
         ),
       ),
       // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
@@ -724,28 +723,4 @@ bool _isPublicPath(String path) {
       path.startsWith('/s/');
 }
 
-String? _safeRedirectTarget(String? redirect) {
-  if (redirect == null || redirect.isEmpty) {
-    return null;
-  }
-  // 反斜杠与协议相对地址都可能被浏览器解释成外部跳转；控制路由不能作为登录回跳目标。
-  if (!redirect.startsWith('/') ||
-      redirect.startsWith('//') ||
-      redirect.contains('\\') ||
-      redirect.contains(RegExp(r'[\x00-\x1f\x7f]'))) {
-    return null;
-  }
-  final uri = Uri.tryParse(redirect);
-  if (uri == null) {
-    return null;
-  }
-  final path = uri.path;
-  if (path == '/login' ||
-      path.startsWith('/login/') ||
-      path == '/boot' ||
-      path == '/setup' ||
-      path == '/server-setup') {
-    return null;
-  }
-  return redirect;
-}
+String? _safeRedirectTarget(String? redirect) => safeRedirectTarget(redirect);

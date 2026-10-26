@@ -393,54 +393,47 @@ Widget _hostedHomeBody(
   required Set<MusicPlatform> sources,
   required bool dailyVisible,
   required ValueChanged<MusicDeckSection> onSectionChanged,
+  required ValueChanged<MusicDeckCollectionSelection> onOpenCollection,
 }) {
   final track = center.activeTrack;
-  // 播放会话在测试环境无服务器配置：NOW PLAYING 卡不读会话位置，
-  // 进度文本用 0:00 / 总时长（样例即静态卡片）。
-  const position = Duration.zero;
+  final player = ref.watch(musicAudioPlaybackProvider);
   final duration =
       track == null
           ? Duration.zero
           : Duration(seconds: track.durationSeconds ?? 0);
   final controller = ref.read(musicCenterControllerProvider.notifier);
-  // 每日推荐按已启用平台取最近播放：传空集合会让这一栏在任何时候都不出现。
-  final recentPlayables = _recentItems(center, sources);
-  final dailyFirst = recentPlayables.firstOrNull;
   return SingleChildScrollView(
     padding: const EdgeInsets.only(bottom: 96),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (track != null)
-          SampleNowPlayingCard(
-            eyebrow: l10n.musicDeckNowPlaying,
-            title: track.title,
-            subtitle: track.artistName,
-            imageUrl: track.coverUrl,
-            progress:
-                duration.inMilliseconds > 0
-                    ? position.inMilliseconds / duration.inMilliseconds
-                    : 0,
-            progressText:
-                '${_formatShortDuration(position)} / ${_formatShortDuration(duration)}',
-            onTap: () => context.push('/music/now-playing'),
-          ),
-        if (dailyVisible && recentPlayables.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          _SectionTitle(title: l10n.musicDailyRecommendationTitle),
-          const SizedBox(height: 12),
-          SampleRail(
-            children: [
-              for (final item in recentPlayables.take(8))
-                SampleAlbumCard(
-                  imageUrl: item.track.coverUrl,
-                  title: item.track.title,
-                  subtitle: item.track.artistName,
-                  onTap: () => controller.playItems([item]),
-                  onPlay: () => controller.playItems([item]),
-                  showPlayOverlay: item == dailyFirst,
+          // 进度跟随播放会话的实时位置，而不是恒为 0:00。
+          MusicThrottledPositionBuilder(
+            player: player,
+            builder:
+                (context, position) => SampleNowPlayingCard(
+                  eyebrow: l10n.musicDeckNowPlaying,
+                  title: track.title,
+                  subtitle: track.artistName,
+                  imageUrl: track.coverUrl,
+                  progress:
+                      duration.inMilliseconds > 0
+                          ? (position.inMilliseconds / duration.inMilliseconds)
+                              .clamp(0.0, 1.0)
+                          : 0,
+                  progressText:
+                      '${_formatShortDuration(position)} / '
+                      '${_formatShortDuration(duration)}',
+                  onTap: () => context.push('/music/now-playing'),
                 ),
-            ],
+          ),
+        if (dailyVisible) ...[
+          const SizedBox(height: 24),
+          // 每日推荐用在线平台的推荐结果；没有推荐时才整栏隐藏。
+          _DailyRecommendationSection(
+            recommendation: ref.watch(musicDailyRecommendationProvider),
+            onOpenCollection: onOpenCollection,
           ),
         ],
         const SizedBox(height: 24),

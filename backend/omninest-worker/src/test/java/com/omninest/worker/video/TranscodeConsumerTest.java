@@ -27,8 +27,11 @@ class TranscodeConsumerTest {
 
     private final TranscodeExecutionService executionService = Mockito.mock(TranscodeExecutionService.class);
     private final TaskFailureRetryService failureRetryService = Mockito.mock(TaskFailureRetryService.class);
+    private final com.omninest.modules.task.service.TaskRecordService taskRecordService =
+            Mockito.mock(com.omninest.modules.task.service.TaskRecordService.class);
     private final Channel channel = Mockito.mock(Channel.class);
-    private final TranscodeConsumer consumer = new TranscodeConsumer(executionService, failureRetryService);
+    private final TranscodeConsumer consumer =
+            new TranscodeConsumer(executionService, failureRetryService, taskRecordService);
 
     @Test
     void handleExecutesDefaultTranscodeAndAcknowledges() throws IOException {
@@ -70,6 +73,21 @@ class TranscodeConsumerTest {
 
         Mockito.verify(channel).basicAck(1L, false);
         Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void handleCancelsTaskWhenSourceVideoWasDeleted() throws IOException {
+        TranscodeRequestedEvent event = event(false, false);
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "源视频不存在"))
+                .when(executionService).execute(TASK_ID, VIDEO_ID, OWNER_ID);
+
+        consumer.handle(event, message(), channel);
+
+        // 源视频消失时任务必须进入取消终态，否则会被恢复调度反复重投直到进死信。
+        Mockito.verify(taskRecordService).markCancelled(TASK_ID);
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never())
+                .basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
     }
 
     @Test

@@ -15,10 +15,10 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
  * STOMP 实时认证拦截器单元测试。
@@ -126,13 +126,33 @@ class RealtimeStompAuthenticationInterceptorTest {
     }
 
     private StompHeaderAccessor authenticatedAccessor(StompCommand command) {
+        UUID userId = UUID.randomUUID();
+        UUID sid = UUID.randomUUID();
+        Mockito.when(revocationChecker.isRevoked(userId, sid)).thenReturn(false);
+        Jwt jwt = jwt(userId, sid, Instant.now().plusSeconds(600));
         StompHeaderAccessor accessor = accessor(command);
-        accessor.setUser(UsernamePasswordAuthenticationToken.authenticated(
-                UUID.randomUUID().toString(),
-                "n/a",
-                List.of(new SimpleGrantedAuthority(TokenAuthorityMapper.ACCESS_TOKEN_AUTHORITY))
+        accessor.setUser(new JwtAuthenticationToken(
+                jwt,
+                List.of(new SimpleGrantedAuthority(TokenAuthorityMapper.ACCESS_TOKEN_AUTHORITY)),
+                userId.toString()
         ));
         return accessor;
+    }
+
+    @Test
+    void subscribeRejectsSessionRevokedAfterConnect() {
+        StompHeaderAccessor accessor = authenticatedAccessor(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/user/queue/sync");
+        UUID userId = UUID.fromString(accessor.getUser().getName());
+        UUID sid = UUID.fromString(
+                ((JwtAuthenticationToken) accessor.getUser()).getToken().getClaimAsString("sid"));
+        Mockito.when(revocationChecker.isRevoked(userId, sid)).thenReturn(true);
+
+        assertThatThrownBy(() -> interceptor.preSend(
+                message(accessor),
+                Mockito.mock(MessageChannel.class)
+        )).isInstanceOf(RealtimeAuthenticationException.class)
+                .hasMessageContaining("已撤销");
     }
 
     private Message<byte[]> message(StompHeaderAccessor accessor) {

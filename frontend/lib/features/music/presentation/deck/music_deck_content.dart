@@ -22,6 +22,7 @@ import 'package:omninest/features/music/application/music_daily_recommendation_c
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
 import 'package:omninest/features/music/application/music_artist_albums_controller.dart';
 import 'package:omninest/features/music/application/music_selection_controller.dart';
+import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -184,6 +185,7 @@ class _HomeContent extends ConsumerWidget {
         sources: sources,
         dailyVisible: dailySectionVisible,
         onSectionChanged: onSectionChanged,
+        onOpenCollection: onOpenCollection,
       );
     }
     // 桌面态卡片已带播放条避让，仅留小余量；紧凑态播放条在布局流内，保留完整避让。
@@ -510,9 +512,9 @@ class _LibraryContent extends ConsumerWidget {
               onLongPress:
                   selection.selectionMode
                       ? null
-                      : () => ref
+                      : (item) => ref
                           .read(musicSelectionControllerProvider.notifier)
-                          .enterSelectionMode(center.tracks.first.id),
+                          .enterSelectionMode(item.track.id),
               onPlay: (index) {
                 if (selection.selectionMode) {
                   final item = _libraryItems(center, platform, sources)[index];

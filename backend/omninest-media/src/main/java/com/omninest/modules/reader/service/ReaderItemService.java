@@ -343,6 +343,16 @@ public class ReaderItemService {
                 Map.of("itemId", itemId.toString(), "sourceFilesRetained", true)
         );
         taskRecordService.markCompleted(taskId, Map.of("sourceFilesRetained", true));
+        // 软删除同样要推送条目级事件：其他在线客户端的书架只靠库级失效无法精确移除已删条目。
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.READER,
+                "READER_ITEM",
+                itemId.toString(),
+                SyncAction.DELETED,
+                item.getVersion(),
+                Map.of()
+        );
         syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
         registerPageAssetCleanupAfterCommit(pageAssets);
         registerChapterAssetCleanupAfterCommit(chapterAssetIds);

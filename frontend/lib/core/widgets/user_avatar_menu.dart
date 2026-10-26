@@ -78,7 +78,10 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
     final authState = ref.watch(authSessionProvider);
     final user = authState.asData?.value.user;
     final displayName = user?.displayName ?? user?.username ?? '?';
-    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final initial =
+        displayName.isNotEmpty
+            ? displayName.characters.first.toUpperCase()
+            : '?';
     final avatarUrl = user?.avatarUrl;
 
     if (widget.directToProfile) {
@@ -140,7 +143,9 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
         );
         final displayName = user?.displayName ?? user?.username ?? '?';
         final initial =
-            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+            displayName.isNotEmpty
+                ? displayName.characters.first.toUpperCase()
+                : '?';
         final role = user?.role ?? 'MEMBER';
         return Material(
           color: colors.surfaceContainerLow,
@@ -564,11 +569,15 @@ class _UserHeader extends StatelessWidget {
                       fit: BoxFit.cover,
                       cacheWidth: quantizedDecodeWidth(
                         logicalWidth: 44,
-                        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                          context,
+                        ),
                       ),
                       cacheHeight: quantizedDecodeWidth(
                         logicalWidth: 44,
-                        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                          context,
+                        ),
                       ),
                       errorBuilder:
                           (_, _, _) => _AvatarFallback(initial: initial),

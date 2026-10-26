@@ -80,6 +80,13 @@ final class RuntimeRoleResolver {
                 || (value.startsWith("'") && value.endsWith("'")))) {
             return value.substring(1, value.length() - 1).trim();
         }
+        // 未加引号的值允许行尾注释（OMNINEST_ROLE=worker # 后台角色），
+        // 只有空白后的 # 才算注释起点，避免误伤值内的 #。
+        for (int index = 1; index < value.length(); index++) {
+            if (value.charAt(index) == '#' && Character.isWhitespace(value.charAt(index - 1))) {
+                return value.substring(0, index).trim();
+            }
+        }
         return value;
     }
 }

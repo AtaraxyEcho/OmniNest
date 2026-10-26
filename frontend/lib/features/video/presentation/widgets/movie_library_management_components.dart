@@ -283,7 +283,17 @@ class _VideoLibrarySourceDialogState
     setState(() => _saving = true);
     try {
       final actions = ref.read(videoLibrarySourceActionsProvider);
-      if (mountMode) {
+      final editingSource = widget.source;
+      if (editingSource != null) {
+        // 编辑态只更新原来源；调用 create 会重复建库或撞唯一约束。
+        await actions.update(
+          source: editingSource,
+          name: name,
+          relativeRoot: path,
+          libraryType: _libraryType,
+          enabled: _enabled,
+        );
+      } else if (mountMode) {
         await actions.create(
           name: name,
           mountKey: mountKey,

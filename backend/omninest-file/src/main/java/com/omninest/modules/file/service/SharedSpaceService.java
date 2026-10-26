@@ -737,6 +737,9 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     @Transactional(rollbackFor = Exception.class)
     public void updateConfig(UUID operatorId, String maxBytes, String enabled) {
         adminActorVerifier.requireFreshAdminActor(operatorId);
+        if ((maxBytes == null || maxBytes.isBlank()) && (enabled == null || enabled.isBlank())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "至少需要提供一项共享空间配置");
+        }
         if (maxBytes != null && !maxBytes.isBlank()) {
             runtimeConfigCommand.updateValue(
                     "share.max-bytes", maxBytes, "管理员更新共享空间容量", operatorId);
@@ -751,8 +754,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 "shared_space_config",
                 SHARED_SPACE_CONFIG_AUDIT_ID,
                 Map.of(
-                        "maxBytes", maxBytes == null ? "" : maxBytes,
-                        "enabled", enabled == null ? "" : enabled));
+                        "maxBytes", maxBytes == null ? "" : maxBytes, "enabled", enabled == null ? "" : enabled));
     }
 
     /**

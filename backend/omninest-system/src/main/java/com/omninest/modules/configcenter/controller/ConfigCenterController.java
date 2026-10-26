@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,14 +53,17 @@ public class ConfigCenterController {
     ) {
         UUID actorUserId = currentUserContext.requireCurrentUserId();
         adminActorGuard.requireFreshAdminActor(actorUserId);
+        // 先取旧值上下文：敏感配置的旧值与新值必须以掩码进入审计载荷。
+        ConfigCenterService.ConfigAuditContext auditContext = configCenterService.auditContext(key);
         ConfigEntryDto result = configCenterService.update(key, body.value(), body.reason(), actorUserId);
-        adminAuditRecorder.recordWithMetadata(
-                actorUserId,
-                "ADMIN_CONFIG_UPDATE",
-                "sys_config_entries",
-                null,
-                Map.of("key", key, "reason", body.reason() == null ? "" : body.reason())
-        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("key", key);
+        payload.put("oldValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : auditContext.oldValue());
+        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : body.value());
+        payload.put("reason", body.reason());
+        payload.put("changeBy", actorUserId.toString());
+        adminAuditRecorder.recordWithPayload(
+                actorUserId, "ADMIN_CONFIG_UPDATE", "sys_config_entries", null, payload);
         return ApiResponse.success(result);
     }
 
@@ -88,13 +92,15 @@ public class ConfigCenterController {
         UUID actorUserId = currentUserContext.requireCurrentUserId();
         adminActorGuard.requireFreshAdminActor(actorUserId);
         ConfigEntryDto result = configCenterService.rollback(historyId, actorUserId);
-        adminAuditRecorder.recordWithMetadata(
-                actorUserId,
-                "ADMIN_CONFIG_ROLLBACK",
-                "sys_config_history",
-                historyId,
-                Map.of()
-        );
+        // 至少记录回滚到哪个配置键与回滚后的值，否则审计无法追溯变更对象。
+        ConfigCenterService.ConfigAuditContext auditContext = configCenterService.auditContext(result.key());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("key", result.key());
+        payload.put("historyId", historyId.toString());
+        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : result.value());
+        payload.put("changeBy", actorUserId.toString());
+        adminAuditRecorder.recordWithPayload(
+                actorUserId, "ADMIN_CONFIG_ROLLBACK", "sys_config_history", historyId, payload);
         return ApiResponse.success(result);
     }
 

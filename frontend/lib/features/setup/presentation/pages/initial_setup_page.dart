@@ -102,7 +102,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
     try {
       final setup = await ref
           .read(initialSetupProvider.notifier)
-          .newTwoFactorSecret(username: _usernameController.text.trim());
+          .newTwoFactorSecret(
+            setupToken: _setupTokenController.text.trim(),
+            username: _usernameController.text.trim(),
+          );
       if (!mounted) return;
       setState(() {
         _totpSetup = setup;

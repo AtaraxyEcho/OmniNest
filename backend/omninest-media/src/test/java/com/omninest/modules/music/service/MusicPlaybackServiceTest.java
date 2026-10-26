@@ -11,9 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileLifecycleGuard;
-import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
@@ -34,14 +32,15 @@ class MusicPlaybackServiceTest {
     private static final UUID FILE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
     private final MusicTrackRepository trackRepository = mock(MusicTrackRepository.class);
-    private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final com.omninest.modules.file.service.FilePlaybackContentService filePlaybackContentService =
+            mock(com.omninest.modules.file.service.FilePlaybackContentService.class);
     private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final MusicPlatformService musicPlatformService = mock(MusicPlatformService.class);
     private final MusicPlaybackSessionService playbackSessionService = mock(MusicPlaybackSessionService.class);
     private final MediaPlaybackProgressService progressService = mock(MediaPlaybackProgressService.class);
     private final MusicPlaybackService playbackService = new MusicPlaybackService(
             trackRepository,
-            fileQueryService,
+            filePlaybackContentService,
             fileLifecycleGuard,
             musicPlatformService,
             playbackSessionService,
@@ -61,17 +60,11 @@ class MusicPlaybackServiceTest {
 
         Instant expiresAt = Instant.parse("2026-05-21T11:00:00Z");
         when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
-        when(fileQueryService.createDownloadUrlForShared(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
-                FILE_ID,
-                "night-drive.flac",
-                "http://localhost:9000/night-drive.flac",
-                expiresAt
-        ));
         when(playbackSessionService.createLocalPlan(
                 OWNER_ID,
                 TRACK_ID,
-                "http://localhost:9000/night-drive.flac",
-                expiresAt,
+                null,
+                null,
                 245,
                 "flac"
         )).thenReturn(new MusicPlaybackPlanDto(
@@ -90,6 +83,8 @@ class MusicPlaybackServiceTest {
         assertThat(plan.expiresAt()).isEqualTo(expiresAt);
         assertThat(plan.durationSeconds()).isEqualTo(245);
         assertThat(plan.format()).isEqualTo("flac");
+        // 播放网关直接读 File 内容，计划里不再携带面向浏览器的下载地址。
+        verify(filePlaybackContentService).requireDownloadable(OWNER_ID, FILE_ID);
     }
 
     @Test

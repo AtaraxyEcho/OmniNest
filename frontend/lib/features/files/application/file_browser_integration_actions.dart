@@ -259,13 +259,16 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   }) async {
     await _runAction(FileOperation.createImportTask, () async {
       final current = _currentState;
-      final isShared = spaceType == 'SHARED';
+      final targetSpace = spaceType ?? 'PERSONAL';
+      // 目标父目录只在“导入到当前空间”时有效：跨空间导入必须落到目标空间根目录，
+      // 否则会把另一空间的文件夹 ID 传给后端。
+      final sameSpace = targetSpace == (current?.spaceType ?? 'PERSONAL');
       final task = await _repository.createImportTask(
         accountId,
         sourcePath: sourcePath,
         sourceKind: sourceKind,
-        targetParentId: isShared ? null : current?.parentId,
-        spaceType: spaceType ?? 'PERSONAL',
+        targetParentId: sameSpace ? current?.parentId : null,
+        spaceType: targetSpace,
       );
       final live = _liveOr(current);
       _emitState(

@@ -12,8 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.messaging.DomainEventPublisher;
-import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.common.storage.ObjectStorageBuckets;
@@ -79,7 +77,6 @@ class ExternalImportExecutionServiceTest {
     private final FileObjectRepository fileObjectRepository = mock(FileObjectRepository.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
-    private final DomainEventPublisher domainEventPublisher = mock(DomainEventPublisher.class);
     private final FilePostProcessingTaskService postProcessingTaskService =
             mock(FilePostProcessingTaskService.class);
     private final RcloneGateway rcloneGateway = mock(RcloneGateway.class);
@@ -95,7 +92,7 @@ class ExternalImportExecutionServiceTest {
 
     private final ExternalImportExecutionService service = new ExternalImportExecutionService(
             importTaskRepository, ingressItemRepository, accountRepository, fileNodeRepository, fileObjectRepository,
-            storageQuotaService, mock(SharedSpaceQuotaService.class), objectStorageClient, domainEventPublisher, postProcessingTaskService,
+            storageQuotaService, mock(SharedSpaceQuotaService.class), objectStorageClient, postProcessingTaskService,
             rcloneGateway, localStorageSettings, externalStorageService,
             objectStorageBuckets, transactionTemplate, notificationService, taskRecordService,
             fileTreeScanner, ingressSafetyService, ingressLifecycleService
@@ -357,12 +354,14 @@ class ExternalImportExecutionServiceTest {
         try {
             service.registerUploadEvents(uploadedNode(), uploadedObject());
 
-            verify(domainEventPublisher, Mockito.never()).publishTask(anyString(), any());
+            verify(postProcessingTaskService, Mockito.never())
+                    .enqueuePostProcess(any(), anyString());
 
             TransactionSynchronizationManager.getSynchronizations()
                     .forEach(TransactionSynchronization::afterCommit);
 
-            verify(domainEventPublisher).publishTask(eq(QueueNames.FILE_INDEX_ROUTING_KEY), any());
+            verify(postProcessingTaskService).enqueueMediaAutoImport(any());
+            verify(postProcessingTaskService).enqueuePostProcess(any(), eq("video/x-matroska"));
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
@@ -372,7 +371,8 @@ class ExternalImportExecutionServiceTest {
     void uploadEventsArePublishedImmediatelyWithoutTransactionSynchronization() {
         service.registerUploadEvents(uploadedNode(), uploadedObject());
 
-        verify(domainEventPublisher).publishTask(eq(QueueNames.FILE_INDEX_ROUTING_KEY), any());
+        verify(postProcessingTaskService).enqueueMediaAutoImport(any());
+        verify(postProcessingTaskService).enqueuePostProcess(any(), eq("video/x-matroska"));
     }
 
 }

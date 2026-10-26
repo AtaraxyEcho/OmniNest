@@ -204,9 +204,31 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // 进度列转弹性后吸收富余，超过旧固定宽 220-12 的可读上界。
+    // 只取本地任务那一行：服务端队列的 UPLOADING row 也显示同一状态文案。
+    // 由近到远找第一个同时包含文件名与状态徽章的 Row。
+    final rowCandidates = find.ancestor(
+      of: find.text('local-upload.bin'),
+      matching: find.byType(Row),
+    );
+    late final Finder localRow;
+    for (var index = 0; index < rowCandidates.evaluate().length; index++) {
+      final candidate = rowCandidates.at(index);
+      if (find
+          .descendant(of: candidate, matching: find.text('执行中'))
+          .evaluate()
+          .isNotEmpty) {
+        localRow = candidate;
+        break;
+      }
+    }
     final uploadBars =
         tester
-            .renderObjectList<RenderBox>(find.byType(LinearProgressIndicator))
+            .renderObjectList<RenderBox>(
+              find.descendant(
+                of: localRow,
+                matching: find.byType(LinearProgressIndicator),
+              ),
+            )
             .where((box) => box.size.height == 2)
             .toList();
     expect(uploadBars, isNotEmpty, reason: '上传行应渲染 2px 进度条');
@@ -214,7 +236,9 @@ void main() {
     final barRight = bar.localToGlobal(Offset.zero).dx + bar.size.width;
     final statusLeft =
         tester
-            .renderObject<RenderBox>(find.text('执行中'))
+            .renderObject<RenderBox>(
+              find.descendant(of: localRow, matching: find.text('执行中')),
+            )
             .localToGlobal(Offset.zero)
             .dx;
     expect(barRight, lessThan(statusLeft), reason: '进度条与状态徽章不得相连');

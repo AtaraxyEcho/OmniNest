@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -238,12 +239,44 @@ public class AuthController {
         if (sameSite == null || sameSite.isBlank() || "Strict".equalsIgnoreCase(sameSite.trim())) {
             return;
         }
-        String origin = request.getHeader("Origin");
-        if (origin == null || origin.isBlank()) {
-            return;
+        String origin = normalizeOrigin(request.getHeader("Origin"));
+        if (origin == null) {
+            origin = originFromReferer(request.getHeader("Referer"));
+        }
+        if (origin == null) {
+            // 不带来源头时只有“确实携带 Refresh Cookie”的请求必须拒绝：
+            // 原生客户端两种头与 Cookie 都没有，放行不影响它们。
+            String cookieValue = readRefreshCookie(request);
+            if (cookieValue == null || cookieValue.isBlank()) {
+                return;
+            }
+            throw new BusinessException(ErrorCode.FORBIDDEN, "请求缺少来源标识");
         }
         if (!browserSecurityPolicy.allowedOrigins().contains(origin)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "请求来源不被允许");
+        }
+    }
+
+    private String normalizeOrigin(String rawOrigin) {
+        if (rawOrigin == null || rawOrigin.isBlank()) {
+            return null;
+        }
+        return rawOrigin.trim();
+    }
+
+    private String originFromReferer(String referer) {
+        if (referer == null || referer.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(referer.trim());
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return null;
+            }
+            String port = uri.getPort() < 0 ? "" : ":" + uri.getPort();
+            return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + uri.getHost() + port;
+        } catch (IllegalArgumentException exception) {
+            return null;
         }
     }
 

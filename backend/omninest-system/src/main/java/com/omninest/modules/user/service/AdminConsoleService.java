@@ -49,6 +49,7 @@ public class AdminConsoleService {
     private final StorageQuotaService storageQuotaService;
     private final SystemMetricsCollector systemMetricsCollector;
     private final HealthEndpoint healthEndpoint;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     @Transactional(readOnly = true)
     public AdminConsoleSummaryDto summary() {
@@ -139,7 +140,9 @@ public class AdminConsoleService {
 
     private AdminConsoleSummaryDto.TaskStats taskStats() {
         Map<String, Long> counts = taskRecordRepository.countGroupedByStatus();
-        long queued = counts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L);
+        // RETRY_WAIT 同样是排队态：漏掉它会让总数与 queued 都低估。
+        long queued = counts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L)
+                + counts.getOrDefault(TaskStatus.RETRY_WAIT.getValue(), 0L);
         long running = counts.getOrDefault(TaskStatus.RUNNING.getValue(), 0L);
         long completed = counts.getOrDefault(TaskStatus.COMPLETED.getValue(), 0L);
         long failed = counts.getOrDefault(TaskStatus.FAILED.getValue(), 0L);
@@ -206,7 +209,8 @@ public class AdminConsoleService {
     public AdminAnalyticsDto analytics(int days) {
         return new AdminAnalyticsDto(
                 toDailyMetrics(analyticsRepository.dailyUserGrowth(days)),
-                toDailyTaskMetrics(analyticsRepository.dailyTaskThroughput(days)),
+                toDailyTaskMetrics(analyticsRepository.dailyTaskThroughput(
+                        days, systemInstanceConfigService.timeZone().getId())),
                 toDailyMetrics(analyticsRepository.dailyStorageGrowth(days)),
                 systemLoadSnapshot()
         );

@@ -5,13 +5,16 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileContentRef;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.repository.FileContentRefRepository;
 import com.omninest.modules.file.repository.StorageLocationRepository;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -91,6 +94,35 @@ public class LocalFileContentProvider implements FileContentProvider {
         }
     }
 
+    /**
+     * 本地只读文件同样需要区间读：音乐播放等业务在服务端按 Range 转发字节，
+     * 不能退化为整文件加载。
+     */
+    @Override
+    public Optional<FileContentRange> openRange(FileNode node, long offset, long length) {
+        ResolvedContent content = resolve(node);
+        try {
+            long total = Files.size(content.path());
+            if (offset < 0 || offset >= total || length <= 0) {
+                return Optional.empty();
+            }
+            InputStream input = Files.newInputStream(content.path());
+            try {
+                input.skipNBytes(offset);
+            } catch (IOException exception) {
+                input.close();
+                throw exception;
+            }
+            long boundedLength = Math.min(length, total - offset);
+            return Optional.of(new FileContentRange(
+                    new BoundedInputStream(input, boundedLength),
+                    total
+            ));
+        } catch (IOException e) {
+            throw unavailable();
+        }
+    }
+
     private ResolvedContent resolve(FileNode node) {
         if (!runtimeConfigService.isEnabled()) {
             throw unavailable("本地媒体功能未启用");
@@ -116,5 +148,53 @@ public class LocalFileContentProvider implements FileContentProvider {
     }
 
     private record ResolvedContent(FileContentRef reference, StorageLocation location, Path path) {
+    }
+
+    /**
+     * 只允许读取指定字节数的包装流，读完即视为流结束。
+     */
+    private static final class BoundedInputStream extends FilterInputStream {
+        private long remaining;
+
+        private BoundedInputStream(InputStream input, long remaining) {
+            super(input);
+            this.remaining = remaining;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int value = super.read();
+            if (value >= 0) {
+                remaining--;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int read = super.read(buffer, offset, (int) Math.min(length, remaining));
+            if (read > 0) {
+                remaining -= read;
+            }
+            return read;
+        }
+
+        @Override
+        public long skip(long count) throws IOException {
+            long skipped = super.skip(Math.min(count, remaining));
+            remaining -= skipped;
+            return skipped;
+        }
+
+        @Override
+        public int available() throws IOException {
+            return (int) Math.min(super.available(), remaining);
+        }
     }
 }

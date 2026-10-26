@@ -4,9 +4,9 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationEdgeDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationNodeDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationsDto;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import com.omninest.modules.photos.repository.PhotoRelationEdgeProjection;
 import com.omninest.modules.photos.repository.PhotoRelationNodeProjection;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +30,7 @@ public class PhotoRelationService {
     private static final int MAX_NODES_PER_TYPE = 400;
 
     private final PhotoItemRepository photoItemRepository;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     /**
      * 统计当前用户照片库中各实体对的关系边。
@@ -39,7 +40,8 @@ public class PhotoRelationService {
      */
     @Transactional(readOnly = true)
     public PhotoRelationsDto relations(UUID ownerUserId) {
-        String zoneId = ZoneId.systemDefault().getId();
+        // 与时间线统计同一口径：实例配置时区（容器内 systemDefault 通常是 UTC）。
+        String zoneId = systemInstanceConfigService.timeZone().getId();
         List<PhotoRelationNodeDto> nodes = new ArrayList<>();
         List<PhotoRelationEdgeDto> edges = new ArrayList<>();
         boolean truncated = false;

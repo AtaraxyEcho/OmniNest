@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 进程内照片详情缓存。
@@ -37,5 +38,14 @@ class PhotoDetailMemoryCache {
 }
 
 final photoDetailMemoryCacheProvider = Provider<PhotoDetailMemoryCache>((ref) {
-  return PhotoDetailMemoryCache();
+  final cache = PhotoDetailMemoryCache();
+  // 退出登录后同一进程可能切到另一个账号：进程内详情缓存必须立刻失效。
+  ref.listen(authSessionProvider, (previous, next) {
+    final wasAuthenticated = previous?.value?.isAuthenticated ?? false;
+    final isAuthenticated = next.value?.isAuthenticated ?? false;
+    if (wasAuthenticated && !isAuthenticated) {
+      cache.clear();
+    }
+  });
+  return cache;
 });

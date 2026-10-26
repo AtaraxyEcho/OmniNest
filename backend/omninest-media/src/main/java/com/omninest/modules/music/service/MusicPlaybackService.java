@@ -2,9 +2,8 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileLifecycleGuard;
-import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.service.FilePlaybackContentService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
@@ -32,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MusicPlaybackService {
     private final MusicTrackRepository trackRepository;
-    private final FileQueryService fileQueryService;
+    private final FilePlaybackContentService filePlaybackContentService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final MusicPlatformService musicPlatformService;
     private final MusicPlaybackSessionService playbackSessionService;
@@ -49,15 +48,15 @@ public class MusicPlaybackService {
     public MusicPlaybackPlanDto playbackPlan(UUID ownerUserId, UUID trackId) {
         log.info("生成播放计划: trackId={}, userId={}", trackId, ownerUserId);
         MusicTrack track = requireReadableTrack(ownerUserId, trackId);
-        FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrlForShared(
-                ownerUserId,
-                track.getFileNodeId()
-        );
+        // 本地曲库由播放网关在服务端按 Range 直接读 File 内容：任何面向浏览器的下载地址
+        // （本地只读的相对路径、MinIO 的 publicEndpoint）在容器内都不可回环请求。
+        // 这里只做下载权限预检，会话本身不保存外部地址。
+        filePlaybackContentService.requireDownloadable(ownerUserId, track.getFileNodeId());
         return playbackSessionService.createLocalPlan(
                 ownerUserId,
                 track.getId(),
-                downloadUrl.downloadUrl(),
-                downloadUrl.expiresAt(),
+                null,
+                null,
                 track.getDurationSeconds(),
                 track.getFormat()
         );

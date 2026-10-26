@@ -11,6 +11,9 @@ import 'package:omninest/platform/platform_capabilities.dart';
 class DesktopHotkeyService {
   DesktopHotkeyService();
 
+  /// 进程级单例：注册方与退出清理必须持有同一实例才能注销。
+  static final DesktopHotkeyService instance = DesktopHotkeyService();
+
   static const MethodChannel _hotkeyChannel = MethodChannel(
     'dev.leanflutter.plugins/hotkey_manager',
   );

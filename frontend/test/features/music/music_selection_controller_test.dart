@@ -97,9 +97,9 @@ void main() {
                     }
                   },
                   onLongPress:
-                      () => ref
+                      (item) => ref
                           .read(musicSelectionControllerProvider.notifier)
-                          .enterSelectionMode('track-1'),
+                          .enterSelectionMode(item.track.id),
                   selectedIds:
                       latest == null
                           ? null

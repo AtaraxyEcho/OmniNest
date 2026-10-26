@@ -6596,6 +6596,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get readerImportNoReadableFiles => 'No readable files selected';
+
+  @override
   String get readerImportFromFile => 'Import from device';
 
   @override
@@ -11125,6 +11128,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get videoSearchNoHitsLoadMore =>
       'Not found in loaded results. Load more or clear filters';
+
+  @override
+  String get videoSeriesLoadMore => 'Load more';
 
   @override
   String get readerGoToLibrary => 'Go to library';

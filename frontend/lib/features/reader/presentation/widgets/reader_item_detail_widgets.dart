@@ -124,7 +124,7 @@ class CoverFallback extends StatelessWidget {
             Text(
               item.title.trim().isEmpty
                   ? 'R'
-                  : item.title.trim().substring(0, 1).toUpperCase(),
+                  : item.title.trim().characters.first.toUpperCase(),
               style: TextStyle(
                 color: context.readerColors.onSurface,
                 fontSize: AppTypography.displayLarge,

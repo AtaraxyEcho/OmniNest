@@ -108,7 +108,8 @@ public class AdminOperationsController {
     @GetMapping("/api/v1/admin/tasks")
     @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<AdminOperationsDto.TaskManagementView> tasks() {
-        return ApiResponse.success(adminOperationsService.tasks());
+        return ApiResponse.success(
+                adminOperationsService.tasks(currentUserContext.requireCurrentUserId()));
     }
 
     @Operation(summary = "分页查询后台任务")

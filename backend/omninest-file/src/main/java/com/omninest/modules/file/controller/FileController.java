@@ -1,6 +1,8 @@
 package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.PageClamps;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.ClientIpResolver;
@@ -151,7 +153,12 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        SpaceType type = SpaceType.fromValue(spaceType);
+        SpaceType type;
+        try {
+            type = SpaceType.fromValue(spaceType);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的空间类型: " + spaceType);
+        }
         var files = fileQueryService.listRecycleBinPage(ownerUserId, type, page, size);
         return ApiResponse.success(PageResponse.of(
                 files.getContent(),
@@ -459,11 +466,8 @@ public class FileController {
     ApiResponse<List<FileDownloadUrlDto>> createDownloadUrls(
             @Valid @RequestBody BatchDownloadUrlRequest request) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        List<UUID> fileIds = request.fileIds().stream()
-                .map(UUID::fromString)
-                .toList();
         return ApiResponse.success(
-                List.copyOf(fileQueryService.createDownloadUrls(ownerUserId, fileIds).values()));
+                List.copyOf(fileQueryService.createDownloadUrls(ownerUserId, request.fileIds()).values()));
     }
 
     @Operation(summary = "列出共享给我的文件", description = "列出其他用户共享给当前用户的文件")

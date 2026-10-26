@@ -39,7 +39,17 @@ class _ImportFromDeviceButtonState
         }
         files.add(await file.toXFile(mimeType: _mimeTypeFor(file.name)));
       }
-      if (files.isEmpty) throw StateError('No readable files selected');
+      if (files.isEmpty) {
+        // StateError 不继承 Exception，抛出后不会被下面的 catch 接住，
+        // 用户会看到“点了没反应”。这里直接给出提示并结束。
+        if (mounted) {
+          showReaderSnackBar(
+            context,
+            AppLocalizations.of(context).readerImportNoReadableFiles,
+          );
+        }
+        return;
+      }
       if (!mounted) {
         return;
       }

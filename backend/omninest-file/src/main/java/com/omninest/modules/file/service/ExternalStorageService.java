@@ -167,7 +167,7 @@ public class ExternalStorageService {
         List<ExternalFileItemDto> items = rcloneGateway.listDirectory(fs, remote, false).stream()
                 .map(entry -> new ExternalFileItemDto(
                         entry.name(),
-                        entry.name(),
+                        joinRemotePath(remote, entry.name()),
                         entry.directory(),
                         entry.sizeBytes(),
                         entry.modifiedAt(),
@@ -626,6 +626,14 @@ public class ExternalStorageService {
         if (!ExternalStorageStatus.ACTIVE.getValue().equals(account.getStatus())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "外部存储账户已禁用");
         }
+    }
+
+    /**
+     * 拼接远端相对路径：非递归列举只返回条目名，二级目录必须带上父级前缀，
+     * 否则再次浏览或导入会被当成根目录下的同名条目。
+     */
+    private String joinRemotePath(String remote, String name) {
+        return remote == null || remote.isBlank() ? name : remote + "/" + name;
     }
 
     private String normalizePath(String path) {

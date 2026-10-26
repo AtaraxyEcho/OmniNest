@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/auth/login_page_controller.dart';
+import 'package:omninest/core/auth/redirect_target.dart';
 import 'package:omninest/core/auth/login_two_factor_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -157,16 +158,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   String? _redirectLocation() {
-    final redirect = GoRouterState.of(context).uri.queryParameters['redirect'];
-    if (redirect == null || redirect.isEmpty) {
-      return null;
-    }
-    if (!redirect.startsWith('/') ||
-        redirect.startsWith('//') ||
-        redirect.startsWith('/login')) {
-      return null;
-    }
-    return redirect;
+    // 与路由守卫共用同一判据：反斜杠、控制字符与内部状态页一律拒绝。
+    return safeRedirectTarget(
+      GoRouterState.of(context).uri.queryParameters['redirect'],
+    );
   }
 }
 

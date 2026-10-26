@@ -180,7 +180,7 @@ public class StorageLocationService {
         }
         return storageLocationRepository.findAllByOrderByNameAsc().stream()
                 .filter(StorageLocation::isEnabled)
-                .filter(location -> SYSTEM.equals(location.getScopeType()))
+                .filter(location -> isInScope(location, userId))
                 .map(this::toDescriptor)
                 .toList();
     }

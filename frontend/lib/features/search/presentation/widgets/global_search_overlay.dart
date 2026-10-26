@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/command_palette_colors.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -93,7 +94,11 @@ class _CommandPaletteDialog extends ConsumerStatefulWidget {
 }
 
 class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
-  static const String _recentQueriesKey = 'search.recent_queries.v1';
+  /// 搜索历史按账号隔离：同一设备切换账号不能看到上一个人的搜索词。
+  String get _recentQueriesKey {
+    final userId = ref.read(authSessionProvider).value?.user?.id;
+    return 'search.recent_queries.v2.${userId ?? 'anonymous'}';
+  }
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();

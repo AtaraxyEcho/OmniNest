@@ -708,14 +708,14 @@ class _PortalRecentPhotoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: () => context.push('/photos'),
+        onTap: () => context.push('/photos/${item.id}'),
         child: Row(
           children: [
             SizedBox.square(
               dimension: 44,
               child: PortalMediaThumbnail(
                 imageUrl: item.coverUrl,
-                cacheKey: 'portal-preview:photo:${item.id}',
+                cacheKey: 'portal-preview:photos:${item.id}',
                 cacheWidth: 132,
                 borderRadius: BorderRadius.circular(6),
                 fallback: Container(

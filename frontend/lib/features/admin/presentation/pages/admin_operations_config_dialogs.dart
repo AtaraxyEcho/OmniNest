@@ -156,9 +156,10 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
             )
           else if (widget.entry.allowedValues.isNotEmpty)
             AppDropdown<String>(
+              // 以输入控制器的当前值为准：绑定 entry.value 会让用户的选择不显示。
               value:
-                  widget.entry.allowedValues.contains(widget.entry.value)
-                      ? widget.entry.value
+                  widget.entry.allowedValues.contains(_valueController.text)
+                      ? _valueController.text
                       : widget.entry.allowedValues.first,
               label: l10n.adminConfigValue,
               items: [
@@ -167,7 +168,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
               ],
               onChanged: (value) {
                 if (value != null) {
-                  _valueController.text = value;
+                  setState(() => _valueController.text = value);
                 }
               },
             )

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationEdgeDto;
@@ -27,7 +28,13 @@ class PhotoRelationServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
     private final PhotoItemRepository repository = Mockito.mock(PhotoItemRepository.class);
-    private final PhotoRelationService service = new PhotoRelationService(repository);
+    private final com.omninest.modules.user.service.SystemInstanceConfigService systemInstanceConfigService =
+            mock(com.omninest.modules.user.service.SystemInstanceConfigService.class);
+    private final PhotoRelationService service = new PhotoRelationService(repository, systemInstanceConfigService);
+
+    {
+        when(systemInstanceConfigService.timeZone()).thenReturn(java.time.ZoneId.of("Asia/Shanghai"));
+    }
 
     @Test
     void assemblesTypedEdgesFromRepositoryProjections() {

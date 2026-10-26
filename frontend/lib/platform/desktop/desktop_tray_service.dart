@@ -13,6 +13,7 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
+import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
 import 'package:omninest/platform/desktop/desktop_tray_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -173,6 +174,12 @@ class DesktopTrayService with TrayListener, WindowListener {
   }
 
   Future<void> _cleanupBeforeExit() async {
+    try {
+      // 媒体键注册在进程级单例上，退出前注销，避免残留全局热键。
+      await DesktopHotkeyService.instance.dispose();
+    } on Object catch (error) {
+      devLog('媒体键注销失败（忽略继续退出）: $error');
+    }
     try {
       await _tray.destroy();
     } on Object catch (error) {

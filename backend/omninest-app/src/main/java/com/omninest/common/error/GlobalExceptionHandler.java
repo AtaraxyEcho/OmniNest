@@ -163,9 +163,10 @@ public class GlobalExceptionHandler {
         if (path == null || path.contains("/admin/")) {
             return false;
         }
-        // 读取接口的 403 是权限回归信号，必须保留 WARN。
+        // 读取与删除接口的 403 是权限回归/越权尝试信号，必须保留 WARN。
         if ("GET".equalsIgnoreCase(request.getMethod())
-                || "HEAD".equalsIgnoreCase(request.getMethod())) {
+                || "HEAD".equalsIgnoreCase(request.getMethod())
+                || "DELETE".equalsIgnoreCase(request.getMethod())) {
             return false;
         }
         return path.startsWith("/api/v1/me")

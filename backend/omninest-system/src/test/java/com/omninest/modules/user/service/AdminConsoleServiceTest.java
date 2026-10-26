@@ -56,7 +56,8 @@ class AdminConsoleServiceTest {
             analyticsRepository,
             storageQuotaService,
             systemMetricsCollector,
-            healthEndpoint
+            healthEndpoint,
+            mock(SystemInstanceConfigService.class)
     );
 
     @Test

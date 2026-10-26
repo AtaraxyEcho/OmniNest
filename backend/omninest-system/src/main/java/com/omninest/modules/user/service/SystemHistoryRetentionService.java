@@ -18,7 +18,6 @@ import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 在 Scheduler 角色中分批清理终态任务、Outbox 投递记录、文件物理删除条目、
@@ -44,8 +43,8 @@ public class SystemHistoryRetentionService {
      * 按配置的保留时间和批次数量清理系统历史记录。
      */
     @Scheduled(cron = "${omninest.history-retention.cleanup-cron:0 30 3 * * *}")
-    @Transactional(rollbackFor = Exception.class)
     public void cleanup() {
+        // 不在此处开事务：每批删除各自在短事务中提交，否则数百批会合并成一个巨型事务。
         if (!properties.isEnabled()) {
             return;
         }

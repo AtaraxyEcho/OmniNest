@@ -35,12 +35,62 @@ public class AdminAuditLogRepository {
             Map<String, Object> metadata,
             String detailPayload
     ) {
+        insert(actorUserId, action, resourceType, resourceId, null, null, null, metadata, detailPayload);
+    }
+
+    /**
+     * 插入审计日志并写入来源 IP、User-Agent 与请求标识。
+     *
+     * @param requestContext 请求链路上下文，无请求线程时传 {@code null}
+     */
+    public void insert(
+            UUID actorUserId,
+            String action,
+            String resourceType,
+            UUID resourceId,
+            AuditRequestContext requestContext,
+            Map<String, Object> metadata,
+            String detailPayload
+    ) {
+        insert(
+                actorUserId,
+                action,
+                resourceType,
+                resourceId,
+                requestContext == null ? null : requestContext.ipAddress(),
+                requestContext == null ? null : requestContext.userAgent(),
+                requestContext == null ? null : requestContext.requestId(),
+                metadata,
+                detailPayload
+        );
+    }
+
+    /**
+     * 审计日志来源上下文：来源 IP、User-Agent 与请求标识。
+     */
+    public record AuditRequestContext(String ipAddress, String userAgent, UUID requestId) {
+    }
+
+    private void insert(
+            UUID actorUserId,
+            String action,
+            String resourceType,
+            UUID resourceId,
+            String ipAddress,
+            String userAgent,
+            UUID requestId,
+            Map<String, Object> metadata,
+            String detailPayload
+    ) {
         AuditLog log = new AuditLog();
         log.setId(UUID.randomUUID());
         log.setActorUserId(actorUserId);
         log.setAction(action);
         log.setResourceType(resourceType);
         log.setResourceId(resourceId);
+        log.setIpAddress(ipAddress);
+        log.setUserAgent(userAgent);
+        log.setRequestId(requestId);
         log.setMetadata(metadata == null ? Map.of() : metadata);
         log.setDetailPayload(detailPayload);
         entityManager.persist(log);

@@ -1,4 +1,6 @@
 import 'package:omninest/core/errors/envelope_guard.dart';
+import 'package:omninest/core/version/app_version_compare.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -46,7 +48,30 @@ class AppVersionApi {
     if (data is! Map) {
       throw const AppException(code: 'INVALID_RESPONSE', message: '版本信息格式不正确');
     }
-    return AppVersionInfo.fromJson(Map<String, dynamic>.from(data));
+    final info = AppVersionInfo.fromJson(Map<String, dynamic>.from(data));
+    final latestVersion = info.latestVersion;
+    if (latestVersion == null) {
+      return info;
+    }
+    final localVersion = await _localVersion();
+    if (localVersion == null || isNewerVersion(latestVersion, localVersion)) {
+      return info;
+    }
+    // 服务端配置的版本不高于当前安装版本时不算“发现新版本”，
+    // 否则降级场景也会引导用户下载更旧的包。
+    return AppVersionInfo(
+      releaseNotesUrl: info.releaseNotesUrl,
+      downloadUrl: info.downloadUrl,
+    );
+  }
+
+  Future<String?> _localVersion() async {
+    try {
+      return (await PackageInfo.fromPlatform()).version;
+    } on Object {
+      // 测试或缺少平台通道时退回服务端结论，不因取不到本地版本而阻断检查更新。
+      return null;
+    }
   }
 }
 

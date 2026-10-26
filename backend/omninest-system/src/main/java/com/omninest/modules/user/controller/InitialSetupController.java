@@ -59,9 +59,12 @@ public class InitialSetupController {
     @Operation(summary = "安装向导生成两步验证秘钥", description = "仅在首次安装未完成时可用，返回 Base32 秘钥与 otpauth URI")
     @PostMapping("/api/v1/setup/2fa/secret")
     ApiResponse<TwoFactorSetupResponse> newTwoFactorSecret(
+            @RequestHeader(name = SETUP_TOKEN_HEADER, required = false) String setupToken,
             @RequestBody(required = false) Map<String, String> body,
             HttpServletRequest servletRequest
     ) {
+        // 与创建超管同门槛：安装令牌、限流、再生成秘钥，避免匿名扫描器消耗配额。
+        initialSetupService.validateSetupToken(setupToken);
         String remoteAddress = resolveClientIp(servletRequest);
         if (!rateLimitService.tryAcquire(
                 "setup:2fa:ip:" + remoteAddress,

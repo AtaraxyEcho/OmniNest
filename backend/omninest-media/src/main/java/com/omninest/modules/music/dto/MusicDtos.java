@@ -278,7 +278,7 @@ public final class MusicDtos {
      * （优先于 coverFileId）。歌词：lyricsRaw 传空字符串表示清空原文与译文。</p>
      */
     public record UpdateMusicTrackRequest(
-            @NotBlank String title,
+            @Size(max = 500, message = "曲目标题过长") String title,
             String artistName,
             String albumTitle,
             String genre,

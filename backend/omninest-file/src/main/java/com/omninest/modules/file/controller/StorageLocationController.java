@@ -3,6 +3,7 @@ package com.omninest.modules.file.controller;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.StorageLocationDtos.CreateStorageLocationRequest;
 import com.omninest.modules.file.dto.StorageLocationDtos.StorageLocationDescriptor;
@@ -41,6 +42,7 @@ public class StorageLocationController {
     private final StorageLocationService storageLocationService;
     private final StorageDirectoryService storageDirectoryService;
     private final CurrentUserContext currentUserContext;
+    private final FreshAdminActorVerifier adminActorGuard;
 
     @Operation(summary = "列出全部存储位置")
     @GetMapping("/api/v1/admin/storage/locations")
@@ -65,6 +67,8 @@ public class StorageLocationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size
     ) {
+        // 浏览宿主机挂载结构属于高敏读操作：按数据库档案复核操作者当前仍是管理员。
+        adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
         return ApiResponse.success(storageDirectoryService.listMountChildren(mountKey, parent, page, size));
     }
 

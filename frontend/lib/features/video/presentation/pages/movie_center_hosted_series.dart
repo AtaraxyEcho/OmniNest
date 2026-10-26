@@ -74,7 +74,7 @@ class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
               sliver: SliverToBoxAdapter(
                 child: SampleRail(
                   children: [
-                    for (final item in effective.take(12))
+                    for (final item in effective)
                       SamplePosterCard(
                         imageUrl: item.posterUrl,
                         title: item.title,
@@ -89,6 +89,23 @@ class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
                             () => context.push(movieSeriesDetailRoute(item.id)),
                       ),
                   ],
+                ),
+              ),
+            ),
+          if (!_favoritesOnly && paging.hasMore)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: TextButton(
+                    // 加载中同样渲染按钮但禁用：静态可点区域，不加第二个转圈。
+                    onPressed:
+                        paging.isLoadingMore
+                            ? null
+                            : () =>
+                                controller.loadMoreSeries(anime: widget.anime),
+                    child: Text(l10n.videoSeriesLoadMore),
+                  ),
                 ),
               ),
             ),

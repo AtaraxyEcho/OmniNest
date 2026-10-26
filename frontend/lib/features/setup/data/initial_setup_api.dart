@@ -25,11 +25,14 @@ class InitialSetupApi {
   }
 
   /// 安装向导生成两步验证秘钥，返回秘钥与扫码 URI。
-  Future<TwoFactorSetupData> newTwoFactorSecret({String? username}) async {
+  Future<TwoFactorSetupData> newTwoFactorSecret({
+    required String setupToken,
+    String? username,
+  }) async {
     final response = await _client.dio.post<Map<String, dynamic>>(
       '/setup/2fa/secret',
       data: username == null ? null : {'username': username},
-      options: _publicOptions,
+      options: _publicOptions.copyWith(headers: {'X-Setup-Token': setupToken}),
     );
     final data = _parseEnvelope(response.data)['data'];
     if (data is! Map<String, dynamic>) {

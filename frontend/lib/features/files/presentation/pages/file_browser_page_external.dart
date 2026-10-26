@@ -648,14 +648,17 @@ Future<void> _openAuthorizationUrl(
   String url,
 ) async {
   var opened = false;
-  if (kIsWeb) {
+  final uri = Uri.tryParse(url);
+  // 只允许 http/https：服务端配置被篡改成自定义 scheme 时不交给系统处理。
+  final schemeAllowed =
+      uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+  if (!schemeAllowed) {
+    opened = false;
+  } else if (kIsWeb) {
     opened = openDownloadUrl(url);
   } else {
     try {
-      opened = await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } on Exception {
       opened = false;
     }

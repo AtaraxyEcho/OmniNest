@@ -32,7 +32,7 @@ Future<void> bootstrapDesktopShell() async {
   );
   await trayService.init();
   // E1：系统级媒体键（播放/暂停、上一首、下一首），命令由音乐播放会话层桥接。
-  await DesktopHotkeyService().registerMediaKeys();
+  await DesktopHotkeyService.instance.registerMediaKeys();
   unawaited(_registerDeepLinkProtocol());
   devLog('桌面壳层初始化完成：托盘与关闭确认流程已启用');
 }

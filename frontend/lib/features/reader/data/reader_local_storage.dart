@@ -611,8 +611,10 @@ class ReaderLocalStorage {
   /// 清理超过指定天数的章节缓存
   Future<void> cleanOldChapters({int maxAgeDays = 30}) async {
     final cutoff = DateTime.now().subtract(Duration(days: maxAgeDays));
-    await (_db.delete(_db.cachedReaderChapters)
-      ..where((t) => t.cachedAt.isSmallerThanValue(cutoff))).go();
+    // 只清当前账号的离线章节：同设备其他账号的缓存不归本次清理负责。
+    await (_db.delete(_db.cachedReaderChapters)..where(
+      (t) => t.cachedAt.isSmallerThanValue(cutoff) & _ownedByUser(t.userId),
+    )).go();
     await _dropOrphanStylesheetPools();
   }
 

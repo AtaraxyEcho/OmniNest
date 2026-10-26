@@ -42,21 +42,22 @@ public class AdminAnalyticsRepository {
      * 近 N 天每日任务状态分布（空日期补零）。
      */
     @SuppressWarnings("unchecked")
-    public List<Object[]> dailyTaskThroughput(int days) {
+    public List<Object[]> dailyTaskThroughput(int days, String zoneId) {
+        // 分桶按实例配置时区：会话时区通常是 UTC，直接 date_trunc 会让每日边界错位。
         Query query = entityManager.createNativeQuery("""
                 select to_char(series_day, 'YYYY-MM-DD') as date,
                        coalesce(completed, 0) as completed,
                        coalesce(failed, 0) as failed,
                        coalesce(running, 0) as running
                 from generate_series(
-                    date_trunc('day', now()) - make_interval(days => :days - 1),
-                    date_trunc('day', now()),
+                    date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1),
+                    date_trunc('day', now() AT TIME ZONE :zoneId),
                     interval '1 day'
                 ) series_day
                 left join (
-                    select date_trunc('day', updated_at) as d,
+                    select date_trunc('day', updated_at AT TIME ZONE :zoneId) as d,
                            count(*) filter (where status = 'COMPLETED') as completed,
-                           count(*) filter (where status = 'FAILED') as failed,
+                           count(*) filter (where status = 'FAILED' or status = 'DLQ') as failed,
                            count(*) filter (where status = 'RUNNING') as running
                     from omni.sys_tasks
                     where updated_at >= now() - make_interval(days => :days)
@@ -65,6 +66,7 @@ public class AdminAnalyticsRepository {
                 order by series_day
                 """);
         query.setParameter("days", days);
+        query.setParameter("zoneId", zoneId);
         return query.getResultList();
     }
 

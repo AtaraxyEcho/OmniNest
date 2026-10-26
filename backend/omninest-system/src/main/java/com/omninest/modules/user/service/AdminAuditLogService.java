@@ -2,6 +2,7 @@ package com.omninest.modules.user.service;
 
 import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.modules.user.repository.AdminAuditLogRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,6 +30,7 @@ public class AdminAuditLogService implements AdminAuditRecorder {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
     private final AdminSyncEventService adminSyncEventService;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 记录管理审计日志。
@@ -40,7 +42,8 @@ public class AdminAuditLogService implements AdminAuditRecorder {
      */
     @Transactional(rollbackFor = Exception.class)
     public void record(UUID actorUserId, String action, String resourceType, UUID resourceId) {
-        adminAuditLogRepository.insert(actorUserId, action, resourceType, resourceId, Map.of());
+        adminAuditLogRepository.insert(
+                actorUserId, action, resourceType, resourceId, currentRequestContext(), Map.of(), null);
         adminSyncEventService.record(action, resourceType, resourceId);
     }
 
@@ -62,7 +65,8 @@ public class AdminAuditLogService implements AdminAuditRecorder {
             UUID resourceId,
             Map<String, Object> metadata
     ) {
-        adminAuditLogRepository.insert(actorUserId, action, resourceType, resourceId, metadata);
+        adminAuditLogRepository.insert(
+                actorUserId, action, resourceType, resourceId, currentRequestContext(), metadata, null);
         adminSyncEventService.record(action, resourceType, resourceId);
     }
 
@@ -91,7 +95,8 @@ public class AdminAuditLogService implements AdminAuditRecorder {
         Map<String, Object> enriched = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
         appendRequestContext(enriched);
         String detailPayload = enriched.isEmpty() ? null : JsonSupport.toJson(enriched);
-        adminAuditLogRepository.insert(actorUserId, action, resourceType, resourceId, Map.of(), detailPayload);
+        adminAuditLogRepository.insert(
+                actorUserId, action, resourceType, resourceId, currentRequestContext(), Map.of(), detailPayload);
         adminSyncEventService.record(action, resourceType, resourceId);
     }
 
@@ -113,6 +118,41 @@ public class AdminAuditLogService implements AdminAuditRecorder {
                         ? userAgent.substring(0, USER_AGENT_MAX_LENGTH)
                         : userAgent);
             }
+        }
+    }
+
+    /**
+     * 解析本次调用的请求来源信息，供审计表的 ip_address / user_agent / request_id 列使用。
+     *
+     * <p>无请求上下文（定时任务、消息消费者）时返回 {@code null}，三列留空。</p>
+     */
+    private AdminAuditLogRepository.AuditRequestContext currentRequestContext() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servletAttributes)) {
+            return null;
+        }
+        String ipAddress = clientIpResolver.resolve(
+                servletAttributes.getRequest().getRemoteAddr(),
+                servletAttributes.getRequest().getHeader("X-Forwarded-For"),
+                servletAttributes.getRequest().getHeader("X-Real-IP")
+        );
+        String userAgent = currentUserAgent();
+        if (userAgent != null && userAgent.length() > USER_AGENT_MAX_LENGTH) {
+            userAgent = userAgent.substring(0, USER_AGENT_MAX_LENGTH);
+        }
+        return new AdminAuditLogRepository.AuditRequestContext(ipAddress, userAgent, parseRequestId());
+    }
+
+    private UUID parseRequestId() {
+        String requestId = currentRequestId();
+        if (requestId == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(requestId);
+        } catch (IllegalArgumentException exception) {
+            log.debug("请求标识不是 UUID，审计 request_id 列留空");
+            return null;
         }
     }
 

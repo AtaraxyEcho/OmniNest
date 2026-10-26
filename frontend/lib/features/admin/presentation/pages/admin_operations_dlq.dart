@@ -92,7 +92,10 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
-        severity: OmniFeedbackSeverity.warning,
+        severity:
+            result.failedIds.isEmpty
+                ? OmniFeedbackSeverity.success
+                : OmniFeedbackSeverity.warning,
       );
     } on Object {
       if (!mounted) return;
@@ -132,7 +135,10 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
-        severity: OmniFeedbackSeverity.warning,
+        severity:
+            result.failedIds.isEmpty
+                ? OmniFeedbackSeverity.success
+                : OmniFeedbackSeverity.warning,
       );
     } on Object {
       if (!mounted) return;

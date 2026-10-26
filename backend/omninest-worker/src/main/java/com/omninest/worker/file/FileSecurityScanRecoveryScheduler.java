@@ -43,12 +43,12 @@ public class FileSecurityScanRecoveryScheduler {
                 ChronoUnit.SECONDS
         );
         taskRecordService.listStaleRunningTaskIds(TASK_TYPE, cutoff, RECOVERY_BATCH_SIZE)
-                .forEach(this::recoverOne);
+                .forEach(taskId -> recoverOne(taskId, cutoff));
     }
 
-    private void recoverOne(UUID taskId) {
+    private void recoverOne(UUID taskId, Instant cutoff) {
         try {
-            retryService.recoverStaleTask(taskId, Instant.now().minusSeconds(staleHeartbeatSeconds));
+            retryService.recoverStaleTask(taskId, cutoff);
         } catch (RuntimeException exception) {
             log.error("文件安全扫描超时任务恢复失败: taskId={}, errorType={}",
                     taskId, exception.getClass().getSimpleName());

@@ -36,7 +36,12 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "/api/v1/auth/logout".equals(request.getServletPath());
+        String servletPath = request.getServletPath();
+        if (servletPath != null && "/api/v1/auth/logout".equals(servletPath)) {
+            return true;
+        }
+        String requestUri = request.getRequestURI();
+        return requestUri != null && requestUri.endsWith("/api/v1/auth/logout");
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskFailureRetryService;
+import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.event.TranscodeRequestedEvent;
 import com.omninest.modules.video.service.TranscodeExecutionService;
 import com.rabbitmq.client.Channel;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
 public class TranscodeConsumer {
     private final TranscodeExecutionService transcodeExecutionService;
     private final TaskFailureRetryService taskFailureRetryService;
+    private final TaskRecordService taskRecordService;
 
     @RabbitListener(queues = QueueNames.VIDEO_TRANSCODE_QUEUE, containerFactory = "transcodeListenerContainerFactory")
     public void handle(TranscodeRequestedEvent event, Message message, Channel channel) throws IOException {
@@ -46,7 +48,8 @@ public class TranscodeConsumer {
                 }
                 if (ErrorCode.FILE_NOT_FOUND.equals(e.errorCode())
                         || ErrorCode.FILE_LIFECYCLE_CONFLICT.equals(e.errorCode())) {
-                    log.info("源视频已删除或正在永久删除，跳过转码消息: taskId={}", event.taskId());
+                    taskRecordService.markCancelled(event.taskId());
+                    log.info("源视频已删除或正在永久删除，取消转码任务: taskId={}", event.taskId());
                     channel.basicAck(deliveryTag, false);
                     return;
                 }

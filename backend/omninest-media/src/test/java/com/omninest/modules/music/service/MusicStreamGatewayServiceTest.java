@@ -33,9 +33,16 @@ class MusicStreamGatewayServiceTest {
     private final MusicPlaybackSessionService sessionService = mock(MusicPlaybackSessionService.class);
     private final MusicOnlineSourceUrlPolicy sourceUrlPolicy = mock(MusicOnlineSourceUrlPolicy.class);
 
+    private final com.omninest.modules.music.repository.MusicTrackRepository trackRepository =
+            mock(com.omninest.modules.music.repository.MusicTrackRepository.class);
+    private final com.omninest.modules.file.service.FilePlaybackContentService filePlaybackContentService =
+            mock(com.omninest.modules.file.service.FilePlaybackContentService.class);
+
     private final MusicStreamGatewayService service = new MusicStreamGatewayService(
             sessionService,
-            sourceUrlPolicy
+            sourceUrlPolicy,
+            trackRepository,
+            filePlaybackContentService
     );
 
     @Test
@@ -94,12 +101,14 @@ class MusicStreamGatewayServiceTest {
     }
 
     private void stubLocalSession(String sourceUrl) {
+        // 本地曲库已改为服务端直读 File 内容；这里保留上游 HTTP 转发用例，
+        // 因此以在线来源构造会话（同样走 sendWithRedirects 分支）。
         MusicPlaybackSession session = new MusicPlaybackSession(
                 SESSION_ID,
                 OWNER_ID,
-                UUID.randomUUID(),
-                MusicPlaybackSourceType.LOCAL,
                 null,
+                MusicPlaybackSourceType.ONLINE,
+                "netease",
                 sourceUrl,
                 Instant.now().plusSeconds(600),
                 180,

@@ -2,6 +2,11 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.dto.FileContentRange;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.service.FilePlaybackContentService;
+import com.omninest.modules.music.domain.MusicTrack;
+import com.omninest.modules.music.repository.MusicTrackRepository;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -11,8 +16,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -35,6 +42,8 @@ public class MusicStreamGatewayService {
 
     private final MusicPlaybackSessionService sessionService;
     private final MusicOnlineSourceUrlPolicy sourceUrlPolicy;
+    private final MusicTrackRepository trackRepository;
+    private final FilePlaybackContentService filePlaybackContentService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -65,6 +74,9 @@ public class MusicStreamGatewayService {
             String range,
             boolean headRequest
     ) {
+        if (session.sourceType() == MusicPlaybackSourceType.LOCAL) {
+            return streamLocalSession(session, range, headRequest);
+        }
         HttpResponse<InputStream> upstreamResponse = null;
         try {
             upstreamResponse = sendWithRedirects(session, range);
@@ -111,6 +123,179 @@ public class MusicStreamGatewayService {
             closeQuietly(upstreamResponse);
             log.warn("音乐播放流输出失败: sessionId={}, message={}", session.sessionId(), exception.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * 本地曲库直接读取 File 模块内容并按 Range 输出。
+     *
+     * <p>不能用面向浏览器的下载地址做服务端回环：本地只读来源签发的是相对路径，
+     * MinIO 使用 publicEndpoint，二者在容器内都请求不到。</p>
+     */
+    private ResponseEntity<StreamingResponseBody> streamLocalSession(
+            MusicPlaybackSession session,
+            String range,
+            boolean headRequest
+    ) {
+        MusicTrack track = session.trackId() == null
+                ? null
+                : trackRepository.findById(session.trackId()).orElse(null);
+        if (track == null || track.getFileNodeId() == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        UUID requesterUserId = session.ownerUserId();
+        UUID fileNodeId = track.getFileNodeId();
+        long totalBytes;
+        try (FileContentStream probe = filePlaybackContentService.openFileContent(requesterUserId, fileNodeId)) {
+            totalBytes = probe.sizeBytes();
+        } catch (BusinessException exception) {
+            return localFailure(exception);
+        } catch (IOException exception) {
+            log.warn("本地曲目探测失败: sessionId={}, errorType={}",
+                    session.sessionId(), exception.getClass().getSimpleName());
+            return ResponseEntity.internalServerError().build();
+        }
+        String contentType = guessContentType("", session.format());
+        if (range == null || range.isBlank()) {
+            FileContentStream content;
+            try {
+                content = filePlaybackContentService.openFileContent(requesterUserId, fileNodeId);
+            } catch (BusinessException exception) {
+                return localFailure(exception);
+            }
+            return localBody(
+                    content,
+                    content.inputStream(),
+                    content.sizeBytes(),
+                    contentType,
+                    HttpStatus.OK,
+                    null,
+                    headRequest
+            );
+        }
+        ByteRange parsed = parseRange(range, totalBytes);
+        if (parsed == null) {
+            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */" + totalBytes)
+                    .build();
+        }
+        Optional<FileContentRange> slice = filePlaybackContentService.openFileRange(
+                requesterUserId, fileNodeId, parsed.start(), parsed.length());
+        if (slice.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */" + totalBytes)
+                    .build();
+        }
+        FileContentRange content = slice.get();
+        return localBody(
+                content,
+                content.inputStream(),
+                parsed.length(),
+                contentType,
+                HttpStatus.PARTIAL_CONTENT,
+                "bytes " + parsed.start() + "-" + parsed.end() + "/" + content.totalBytes(),
+                headRequest
+        );
+    }
+
+    private ResponseEntity<StreamingResponseBody> localBody(
+            AutoCloseable handle,
+            InputStream input,
+            long contentLength,
+            String contentType,
+            HttpStatus status,
+            String contentRange,
+            boolean headRequest
+    ) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status)
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .header(HttpHeaders.CONTENT_LENGTH, Long.toString(contentLength))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate")
+                .header(HttpHeaders.PRAGMA, "no-cache");
+        if (contentRange != null) {
+            builder.header(HttpHeaders.CONTENT_RANGE, contentRange);
+        }
+        if (headRequest) {
+            closeLocalQuietly(handle);
+            return builder.build();
+        }
+        StreamingResponseBody body = outputStream -> {
+            try {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+                outputStream.flush();
+            } catch (AsyncRequestNotUsableException exception) {
+                log.debug("本地曲目客户端已断开: message={}", exception.getMessage());
+            } catch (IOException exception) {
+                if (isClientDisconnect(exception)) {
+                    log.debug("本地曲目流已中断: message={}", exception.getMessage());
+                } else {
+                    log.warn("本地曲目流输出失败: message={}", exception.getMessage());
+                }
+            } finally {
+                closeLocalQuietly(handle);
+            }
+        };
+        return builder.body(body);
+    }
+
+    private void closeLocalQuietly(AutoCloseable handle) {
+        try {
+            handle.close();
+        } catch (Exception exception) {
+            log.debug("关闭本地曲目流失败: errorType={}", exception.getClass().getSimpleName());
+        }
+    }
+
+    private ResponseEntity<StreamingResponseBody> localFailure(BusinessException exception) {
+        HttpStatus status = ErrorCode.FILE_NOT_FOUND.equals(exception.errorCode())
+                ? HttpStatus.NOT_FOUND
+                : HttpStatus.FORBIDDEN;
+        return ResponseEntity.status(status).build();
+    }
+
+    private ByteRange parseRange(String header, long totalBytes) {
+        String value = header.trim();
+        if (!value.regionMatches(true, 0, "bytes=", 0, 6) || totalBytes <= 0) {
+            return null;
+        }
+        String spec = value.substring(6).trim();
+        int dash = spec.indexOf('-');
+        if (dash < 0) {
+            return null;
+        }
+        String startPart = spec.substring(0, dash).trim();
+        String endPart = spec.substring(dash + 1).trim();
+        try {
+            long start;
+            long end;
+            if (startPart.isEmpty()) {
+                long suffix = Long.parseLong(endPart);
+                if (suffix <= 0) {
+                    return null;
+                }
+                start = Math.max(0, totalBytes - suffix);
+                end = totalBytes - 1;
+            } else {
+                start = Long.parseLong(startPart);
+                end = endPart.isEmpty() ? totalBytes - 1 : Long.parseLong(endPart);
+            }
+            if (start < 0 || start >= totalBytes || end < start) {
+                return null;
+            }
+            return new ByteRange(start, Math.min(end, totalBytes - 1));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private record ByteRange(long start, long end) {
+        private long length() {
+            return end - start + 1;
         }
     }
 

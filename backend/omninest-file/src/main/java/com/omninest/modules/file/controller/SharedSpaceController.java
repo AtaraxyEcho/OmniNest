@@ -148,7 +148,7 @@ public class SharedSpaceController {
      * 共享空间配置更新请求。
      */
     public record SharedSpaceConfigRequest(
-            @Pattern(regexp = "\\d{1,19}|", message = "maxBytes 必须为字节数")
+            @Pattern(regexp = "[1-9]\\d{0,18}|", message = "maxBytes 必须为正整数字节数")
             String maxBytes,
             @Pattern(regexp = "true|false|", message = "enabled 必须为 true 或 false")
             String enabled

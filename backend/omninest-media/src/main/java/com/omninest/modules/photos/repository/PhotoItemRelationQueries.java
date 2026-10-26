@@ -54,7 +54,7 @@ public interface PhotoItemRelationQueries {
                    e.weight AS "weight"
               FROM (
                     SELECT ai.album_id AS source_key,
-                           TO_CHAR(p.date_taken AT TIME ZONE :zoneId, 'YYYY-MM') AS target_key,
+                           TO_CHAR(COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId, 'YYYY-MM') AS target_key,
                            COUNT(*) AS weight
                       FROM omni.photo_album_items ai
                       JOIN omni.photo_items p
@@ -62,7 +62,6 @@ public interface PhotoItemRelationQueries {
                       JOIN omni.file_nodes f ON f.id = p.file_node_id
                      WHERE ai.owner_user_id = :ownerUserId
                        AND f.is_deleted = false
-                       AND p.date_taken IS NOT NULL
                        AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
@@ -103,14 +102,13 @@ public interface PhotoItemRelationQueries {
                    e.target_key AS "targetKey",
                    e.weight AS "weight"
               FROM (
-                    SELECT TO_CHAR(p.date_taken AT TIME ZONE :zoneId, 'YYYY-MM') AS source_key,
+                    SELECT TO_CHAR(COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId, 'YYYY-MM') AS source_key,
                            COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置') AS target_key,
                            COUNT(*) AS weight
                       FROM omni.photo_items p
                       JOIN omni.file_nodes f ON f.id = p.file_node_id
                      WHERE p.owner_user_id = :ownerUserId
                        AND f.is_deleted = false
-                       AND p.date_taken IS NOT NULL
                        AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
@@ -136,14 +134,13 @@ public interface PhotoItemRelationQueries {
             @Param("limit") int limit);
 
     @Query(value = """
-            SELECT TO_CHAR(p.date_taken AT TIME ZONE :zoneId, 'YYYY-MM') AS "key",
+            SELECT TO_CHAR(COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId, 'YYYY-MM') AS "key",
                    CAST(NULL AS varchar) AS "label",
                    COUNT(*) AS "weight"
               FROM omni.photo_items p
               JOIN omni.file_nodes f ON f.id = p.file_node_id
              WHERE p.owner_user_id = :ownerUserId
                AND f.is_deleted = false
-               AND p.date_taken IS NOT NULL
                AND p.deleted_at IS NULL
              GROUP BY 1
              ORDER BY 1 ASC
