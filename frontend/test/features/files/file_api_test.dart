@@ -262,6 +262,31 @@ void main() {
     expect(content, 'preview content');
   });
 
+  test('shared preview uses the shared download authorization endpoint', () async {
+    final apiAdapter = _CapturingHttpClientAdapter(
+      body: {
+        'code': 200,
+        'message': 'success',
+        'data': {'downloadUrl': 'http://minio/shared.txt'},
+      },
+    );
+    final api = FileApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: apiAdapter,
+      ),
+    );
+    addTearDown(api.close);
+
+    final url = await api.downloadSharedUrl('file-1');
+
+    expect(apiAdapter.lastPath, '/files/file-1/download-url/shared');
+    expect(url, 'http://minio/shared.txt');
+  });
+
   test('text preview truncates oversized responses to one MiB', () async {
     final apiAdapter = _CapturingHttpClientAdapter(
       body: {

@@ -376,6 +376,25 @@ class FileSearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("SearcherManager 缓存能感知清空与重新提交的新段")
+    void searchManagerSeesClearAndNewCommits() {
+        UUID first = UUID.randomUUID();
+        service.indexFile(first, USER_A, "第一版", "缓存刷新前的内容", "PERSONAL");
+        assertThat(service.search(USER_A, "第一版", 10))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(first);
+
+        assertThat(service.clearIndex(USER_A)).isEqualTo(1);
+        assertThat(service.search(USER_A, "第一版", 10)).isEmpty();
+
+        UUID second = UUID.randomUUID();
+        service.indexFile(second, USER_A, "第二版", "重新提交后的内容", "PERSONAL");
+        assertThat(service.search(USER_A, "第二版", 10))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(second);
+    }
+
+    @Test
     @DisplayName("用户索引缓存超过容量后关闭旧资源并可从磁盘重新打开")
     void indexCache_exceedsCapacity_evictsAndReopensIndex() throws Exception {
         service.close();

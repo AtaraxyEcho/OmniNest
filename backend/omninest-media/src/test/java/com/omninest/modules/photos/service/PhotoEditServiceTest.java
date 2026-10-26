@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,7 +17,9 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.config.PhotoMediaLimitsProperties;
 import com.omninest.modules.photos.domain.PhotoEditVersion;
@@ -61,6 +64,7 @@ class PhotoEditServiceTest {
     private final PhotoEditVersionRepository editVersionRepository = mock(PhotoEditVersionRepository.class);
     private final PhotoItemRepository photoItemRepository = mock(PhotoItemRepository.class);
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
+    private final FileDeletionService fileDeletionService = mock(FileDeletionService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final PhotoSourceFileService sourceFileService = mock(PhotoSourceFileService.class);
     private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
@@ -73,6 +77,7 @@ class PhotoEditServiceTest {
             editVersionRepository,
             photoItemRepository,
             storageService,
+            fileDeletionService,
             syncEventService,
             sourceFileService,
             inputGuard,
@@ -322,6 +327,38 @@ class PhotoEditServiceTest {
     }
 
     @Test
+    void enforceMaxVersionsSchedulesPurgeWhenObjectStorageDeleteFails() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID evictedFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.countByPhotoId(photoId)).thenReturn(6L);
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId))
+                .thenReturn(versionsWithEvictedFile(photoId, ownerUserId, evictedFileId));
+        when(fileMetadataQueryService.findById(evictedFileId))
+                .thenReturn(Optional.of(descriptorWithSize(ownerUserId, evictedFileId, 4096L)));
+        when(storageService.deleteOwned(ownerUserId, evictedFileId))
+                .thenThrow(new IllegalStateException("minio unavailable"));
+        when(storageService.store(
+                eq(ownerUserId), anyString(), eq(photoId), anyString(), anyString(),
+                eq("image/jpeg"), any(Path.class)
+        )).thenReturn(UUID.randomUUID());
+
+        applyEditedImage(ownerUserId, photoId, jpegBytes());
+
+        verify(fileDeletionService).deletePermanently(
+                eq(ownerUserId),
+                eq(evictedFileId),
+                eq(false),
+                any(FilePurgeOrigin.class),
+                isNull()
+        );
+    }
+
+    @Test
     void rejectsConcurrentEditsWhenHeapHeavySlotsAreExhausted() throws Exception {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
@@ -351,6 +388,7 @@ class PhotoEditServiceTest {
                 editVersionRepository,
                 photoItemRepository,
                 storageService,
+                fileDeletionService,
                 syncEventService,
                 sourceFileService,
                 inputGuard,
@@ -393,6 +431,7 @@ class PhotoEditServiceTest {
                 editVersionRepository,
                 photoItemRepository,
                 storageService,
+                fileDeletionService,
                 syncEventService,
                 sourceFileService,
                 new PhotoInputGuard(limits),

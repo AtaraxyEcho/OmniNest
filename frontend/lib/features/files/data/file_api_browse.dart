@@ -250,9 +250,27 @@ mixin FileApiBrowse on FileApiBase {
     return data['downloadUrl'] as String;
   }
 
+  /// 共享空间/定向分享文件的下载地址；所有者调用也会回退到普通下载地址。
+  Future<String> downloadSharedUrl(String fileId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/$fileId/download-url/shared',
+    );
+    final data = parseData(response.data);
+    return data['downloadUrl'] as String;
+  }
+
   /// 通过签名地址读取有界文本预览。
   Future<String> loadTextPreview(String fileId) async {
     final url = await downloadUrl(fileId);
+    return _readTextPreview(url);
+  }
+
+  Future<String> loadSharedTextPreview(String fileId) async {
+    final url = await downloadSharedUrl(fileId);
+    return _readTextPreview(url);
+  }
+
+  Future<String> _readTextPreview(String url) async {
     final response = await _uploadDio.get<ResponseBody>(
       url,
       options: Options(

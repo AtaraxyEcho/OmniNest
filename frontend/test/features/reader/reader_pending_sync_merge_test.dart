@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/security/offline_text_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
@@ -10,6 +11,7 @@ import 'package:omninest/features/reader/data/reader_sync_queue.dart';
 import 'package:omninest/features/reader/domain/reader_annotation.dart';
 import 'package:omninest/features/reader/domain/reader_bookmark.dart';
 import 'package:omninest/features/reader/domain/reader_note.dart';
+import '../../support/test_offline_cipher.dart';
 
 class MockReaderApi extends Mock implements ReaderApi {}
 
@@ -22,12 +24,14 @@ void main() {
   late ReaderLocalStorage storage;
   late MockReaderApi api;
   late ReaderDataManager manager;
+  late OfflineTextCipher cipher;
 
   setUp(() {
     db = LocalDatabase(NativeDatabase.memory());
-    storage = ReaderLocalStorage(db, userId: 'user-1');
+    cipher = createTestOfflineCipher();
+    storage = ReaderLocalStorage(db, textCipher: cipher, userId: 'user-1');
     api = MockReaderApi();
-    ReaderSyncQueue.init(db, userId: 'user-1');
+    ReaderSyncQueue.init(db, textCipher: cipher, userId: 'user-1');
     manager = ReaderDataManager(api: api, localStorage: storage);
     registerFallbackValue('');
   });

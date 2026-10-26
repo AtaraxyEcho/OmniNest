@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
+import 'package:omninest/features/files/data/file_providers.dart';
+import 'package:omninest/features/files/domain/file_node.dart';
 
 /// 会话内复用 presigned download URL 的内存缓存。
 /// Provider 保持 autoDispose（页面退出即释放），URL 在缓存 TTL 内可被重建复用，
@@ -94,6 +96,28 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
         _downloadUrlFailedAt[fileId] = DateTime.now();
         return null;
       }
+    });
+
+/// 预览页专用的下载地址：共享文件走共享授权端点，个人文件沿用列表缓存。
+final filePreviewDownloadUrlProvider = FutureProvider.autoDispose
+    .family<String?, FileNode>((ref, file) async {
+      if (file.spaceType != SpaceType.shared) {
+        return ref.watch(fileDownloadUrlProvider(file.id).future);
+      }
+      try {
+        return await ref.read(fileApiProvider).downloadSharedUrl(file.id);
+      } catch (_) {
+        return null;
+      }
+    });
+
+/// 预览页专用文本内容：共享文件同样需要共享授权端点签名。
+final filePreviewTextProvider = FutureProvider.autoDispose
+    .family<String, FileNode>((ref, file) {
+      if (file.spaceType != SpaceType.shared) {
+        return ref.watch(fileTextPreviewProvider(file.id).future);
+      }
+      return ref.read(fileApiProvider).loadSharedTextPreview(file.id);
     });
 
 /// 按文件 ID 加载有界文本预览。

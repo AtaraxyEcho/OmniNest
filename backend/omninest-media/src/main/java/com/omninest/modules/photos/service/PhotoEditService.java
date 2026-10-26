@@ -6,7 +6,9 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoEditVersion;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -59,6 +61,7 @@ public class PhotoEditService {
     private final PhotoEditVersionRepository editVersionRepository;
     private final PhotoItemRepository photoItemRepository;
     private final DerivedAssetStorageService derivedAssetStorageService;
+    private final FileDeletionService fileDeletionService;
     private final MediaSyncEventService syncEventService;
     private final PhotoSourceFileService sourceFileService;
     private final PhotoInputGuard inputGuard;
@@ -80,6 +83,7 @@ public class PhotoEditService {
             PhotoEditVersionRepository editVersionRepository,
             PhotoItemRepository photoItemRepository,
             DerivedAssetStorageService derivedAssetStorageService,
+            FileDeletionService fileDeletionService,
             MediaSyncEventService syncEventService,
             PhotoSourceFileService sourceFileService,
             PhotoInputGuard inputGuard,
@@ -92,6 +96,7 @@ public class PhotoEditService {
         this.editVersionRepository = editVersionRepository;
         this.photoItemRepository = photoItemRepository;
         this.derivedAssetStorageService = derivedAssetStorageService;
+        this.fileDeletionService = fileDeletionService;
         this.syncEventService = syncEventService;
         this.sourceFileService = sourceFileService;
         this.inputGuard = inputGuard;
@@ -592,7 +597,7 @@ public class PhotoEditService {
             UUID thumbnailFileId = photoThumbnailService
                     .findStoredThumbnailFileNodeId(ownerUserId, version.getFileId())
                     .orElse(null);
-            evicted.add(new EvictedVersion(version.getFileId(), thumbnailFileId, sizeBytes));
+            evicted.add(new EvictedVersion(photoId, version.getFileId(), thumbnailFileId, sizeBytes));
         }
         editVersionRepository.deleteAll(toDelete);
         return evicted;
@@ -605,20 +610,11 @@ public class PhotoEditService {
      * 交给每日对账重算，避免与对账重复扣减。</p>
      */
     private void cleanupEvictedVersion(UUID ownerUserId, EvictedVersion evicted) {
-        boolean deleted;
-        try {
-            deleted = derivedAssetStorageService.deleteOwned(ownerUserId, evicted.fileId());
-        } catch (RuntimeException ex) {
-            log.warn("旧编辑版本派生文件清理失败: fileId={}", evicted.fileId(), ex);
-            return;
-        }
+        boolean deleted = deleteEvictedNode(
+                ownerUserId, evicted.photoId(), evicted.fileId(), "主图");
         if (evicted.thumbnailFileId() != null) {
-            try {
-                derivedAssetStorageService.deleteOwned(ownerUserId, evicted.thumbnailFileId());
-            } catch (RuntimeException ex) {
-                log.warn("旧编辑版本缩略图清理失败: fileId={}, thumbnailFileId={}",
-                        evicted.fileId(), evicted.thumbnailFileId(), ex);
-            }
+            deleteEvictedNode(
+                    ownerUserId, evicted.photoId(), evicted.thumbnailFileId(), "缩略图");
         }
         if (deleted && evicted.sizeBytes() > 0) {
             try {
@@ -630,13 +626,44 @@ public class PhotoEditService {
     }
 
     /**
+     * 删除被淘汰版本的派生节点；对象存储失败时登记 FILE_PURGE 补偿任务，
+     * 由任务重试与每日配额对账兜底，避免节点永久失去清理线索。
+     */
+    private boolean deleteEvictedNode(UUID ownerUserId, UUID photoId, UUID fileId, String assetLabel) {
+        try {
+            return derivedAssetStorageService.deleteOwned(ownerUserId, fileId);
+        } catch (RuntimeException ex) {
+            log.warn("旧编辑版本{}清理失败，登记补偿任务: fileId={}", assetLabel, fileId, ex);
+            try {
+                fileDeletionService.deletePermanently(
+                        ownerUserId,
+                        fileId,
+                        false,
+                        new FilePurgeOrigin("PHOTOS", photoId),
+                        null
+                );
+                log.warn("旧编辑版本{}已登记补偿清理任务: fileId={}", assetLabel, fileId);
+            } catch (RuntimeException scheduleFailure) {
+                log.warn("旧编辑版本{}补偿任务登记失败: fileId={}", assetLabel, fileId, scheduleFailure);
+            }
+            return false;
+        }
+    }
+
+    /**
      * 被淘汰版本的待清理资产。
      *
+     * @param photoId 所属照片 ID
      * @param fileId 主图节点 ID
      * @param thumbnailFileId 缩略图节点 ID，可为 null
      * @param sizeBytes 主图字节数
      */
-    private record EvictedVersion(UUID fileId, UUID thumbnailFileId, long sizeBytes) {
+    private record EvictedVersion(
+            UUID photoId,
+            UUID fileId,
+            UUID thumbnailFileId,
+            long sizeBytes
+    ) {
     }
 
     /**

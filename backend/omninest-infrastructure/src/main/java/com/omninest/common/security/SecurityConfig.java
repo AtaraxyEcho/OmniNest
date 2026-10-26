@@ -1,19 +1,20 @@
 package com.omninest.common.security;
 
-import com.omninest.common.json.JsonSupport;
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.config.SecurityProperties;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.json.JsonSupport;
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -31,6 +32,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -101,6 +104,8 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             SessionRevocationChecker sessionRevocationChecker,
+            BearerTokenResolver bearerTokenResolver,
+            LogoutBearerTokenFilter logoutBearerTokenFilter,
             @Value("${springdoc.api-docs.enabled:true}") boolean apiDocsEnabled
     ) throws Exception {
         http
@@ -166,9 +171,11 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, accessDeniedException) ->
                                 writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN))
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
-                        jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())
-                ))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                )
+                .addFilterBefore(logoutBearerTokenFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(
                         new SessionRevocationFilter(sessionRevocationChecker),
                         BearerTokenAuthenticationFilter.class
@@ -186,6 +193,39 @@ public class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwtAuthorityConverter());
         return converter;
+    }
+
+    /**
+     * 登出端点不交给资源服务器解析 Bearer：过期或无效令牌不能把幂等登出挡成 401。
+     * 其他端点保持默认解析行为。
+     */
+    @Bean
+    BearerTokenResolver bearerTokenResolver() {
+        DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+        return request -> LogoutBearerTokenFilter.isLogoutRequest(request)
+                ? null
+                : delegate.resolve(request);
+    }
+
+    /**
+     * 登出请求的尽力 Bearer 解析；有效令牌按 sid 吊销会话，过期/无效令牌被忽略。
+     */
+    @Bean
+    LogoutBearerTokenFilter logoutBearerTokenFilter(JwtDecoder jwtDecoder) {
+        return new LogoutBearerTokenFilter(jwtDecoder, jwtAuthenticationConverter());
+    }
+
+    /**
+     * 该过滤器只作为安全链内的一环运行，禁止 Spring Boot 再把它注册成全局 Servlet Filter。
+     */
+    @Bean
+    FilterRegistrationBean<LogoutBearerTokenFilter> logoutBearerTokenFilterRegistration(
+            LogoutBearerTokenFilter logoutBearerTokenFilter
+    ) {
+        FilterRegistrationBean<LogoutBearerTokenFilter> registration =
+                new FilterRegistrationBean<>(logoutBearerTokenFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

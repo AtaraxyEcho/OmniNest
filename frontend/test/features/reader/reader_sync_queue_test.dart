@@ -4,12 +4,14 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/core/security/offline_text_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/data/reader_sync_queue.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import '../../support/test_offline_cipher.dart';
 
 class MockReaderApi extends Mock implements ReaderApi {}
 
@@ -17,12 +19,14 @@ void main() {
   late LocalDatabase db;
   late ReaderLocalStorage storage;
   late MockReaderApi api;
+  late OfflineTextCipher cipher;
 
   setUp(() {
     db = LocalDatabase(NativeDatabase.memory());
-    storage = ReaderLocalStorage(db, userId: 'user-1');
+    cipher = createTestOfflineCipher();
+    storage = ReaderLocalStorage(db, textCipher: cipher, userId: 'user-1');
     api = MockReaderApi();
-    ReaderSyncQueue.init(db, userId: 'user-1');
+    ReaderSyncQueue.init(db, textCipher: cipher, userId: 'user-1');
   });
 
   tearDown(() async {
@@ -275,12 +279,17 @@ void main() {
     // 服务端进度是 last-write-wins：旧行重放只会用过期位置覆盖新位置，
     // 且离线期间每次失败都留下一行，重放时对同一本书逐条发 PUT。
     expect(progressRows, hasLength(2));
-    final item1 =
-        progressRows
-            .where((row) => row.payload.contains('"itemId":"item-1"'))
-            .toList();
+    final item1 = <Map<String, dynamic>>[];
+    for (final row in progressRows) {
+      final payload =
+          jsonDecode(await cipher.decrypt('user-1', row.payload))
+              as Map<String, dynamic>;
+      if (payload['itemId'] == 'item-1') {
+        item1.add(payload);
+      }
+    }
     expect(item1, hasLength(1));
-    expect(item1.single.payload.contains('"charOffset":900'), isTrue);
+    expect(item1.single['charOffset'], 900);
   });
 
   test('flush 清理重试耗尽的进度失败行，保留笔记失败行', () async {
@@ -584,6 +593,9 @@ void main() {
       hasLength(1),
       reason: '同一本书仍然只保留一条，但留下的必须是记录时刻更新的那条',
     );
-    expect(jsonDecode(rows.single.payload)['charOffset'], 900);
+    final payload =
+        jsonDecode(await cipher.decrypt('user-1', rows.single.payload))
+            as Map<String, dynamic>;
+    expect(payload['charOffset'], 900);
   });
 }

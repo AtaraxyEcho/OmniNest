@@ -59,6 +59,7 @@ public class PhotoFileCleanupService implements
     private final PhotoAlbumRepository albumRepository;
     private final PhotoTagRepository tagRepository;
     private final PhotoEditVersionRepository editVersionRepository;
+    private final PhotoThumbnailService photoThumbnailService;
     private final PhotoContentLabelRepository contentLabelRepository;
     private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository;
     private final PhotoSearchIndexService photoSearchIndexService;
@@ -110,9 +111,22 @@ public class PhotoFileCleanupService implements
                 .map(PhotoItem::getMotionVideoFileNodeId)
                 .filter(Objects::nonNull)
                 .toList());
-        writer.addFileNodeIds(editVersionRepository.findByPhotoIdIn(photoIds).stream()
+        List<PhotoEditVersion> versions = editVersionRepository.findByPhotoIdIn(photoIds);
+        writer.addFileNodeIds(versions.stream()
                 .map(PhotoEditVersion::getFileId)
+                .filter(Objects::nonNull)
                 .toList());
+        // 每个编辑版本还带一份 1024px 派生缩略图；只贡献主图会让缩略图永久失去清理线索。
+        List<UUID> thumbnailFileIds = new ArrayList<>();
+        for (PhotoEditVersion version : versions) {
+            if (version.getFileId() == null) {
+                continue;
+            }
+            photoThumbnailService
+                    .findStoredThumbnailFileNodeId(version.getOwnerUserId(), version.getFileId())
+                    .ifPresent(thumbnailFileIds::add);
+        }
+        writer.addFileNodeIds(thumbnailFileIds);
     }
 
     /**

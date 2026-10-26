@@ -104,7 +104,7 @@ class _ImagePreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final urlAsync = ref.watch(fileDownloadUrlProvider(file.id));
+    final urlAsync = ref.watch(filePreviewDownloadUrlProvider(file));
     return urlAsync.when(
       data: (url) {
         if (url == null || url.isEmpty) {
@@ -157,7 +157,7 @@ class _VideoPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final urlAsync = ref.watch(fileDownloadUrlProvider(file.id));
+    final urlAsync = ref.watch(filePreviewDownloadUrlProvider(file));
     return urlAsync.when(
       data: (url) {
         if (url == null || url.isEmpty) {
@@ -240,7 +240,7 @@ class _AudioPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final urlAsync = ref.watch(fileDownloadUrlProvider(file.id));
+    final urlAsync = ref.watch(filePreviewDownloadUrlProvider(file));
     return urlAsync.when(
       data: (url) {
         if (url == null || url.isEmpty) {
@@ -522,7 +522,7 @@ class _TextPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final contentAsync = ref.watch(fileTextPreviewProvider(file.id));
+    final contentAsync = ref.watch(filePreviewTextProvider(file));
     return contentAsync.when(
       data:
           (content) => SelectionArea(
@@ -565,19 +565,19 @@ class _PdfPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final urlAsync = ref.watch(fileDownloadUrlProvider(file.id));
+    final urlAsync = ref.watch(filePreviewDownloadUrlProvider(file));
     return urlAsync.when(
       loading: () => const AppLoading(),
       error:
           (error, stackTrace) => _MediaPreviewFailure(
             message: describeUserFacingError(error).message,
-            onRetry: () => ref.invalidate(fileDownloadUrlProvider(file.id)),
+            onRetry: () => ref.invalidate(filePreviewDownloadUrlProvider(file)),
           ),
       data: (url) {
         if (url == null || url.isEmpty) {
           return _MediaPreviewFailure(
             message: l10n.filesPdfDownloadHint,
-            onRetry: () => ref.invalidate(fileDownloadUrlProvider(file.id)),
+            onRetry: () => ref.invalidate(filePreviewDownloadUrlProvider(file)),
           );
         }
         return Column(
@@ -595,7 +595,7 @@ class _PdfPreview extends ConsumerWidget {
                             message: l10n.filesPdfDownloadHint,
                             onRetry:
                                 () => ref.invalidate(
-                                  fileDownloadUrlProvider(file.id),
+                                  filePreviewDownloadUrlProvider(file),
                                 ),
                           ),
                 ),

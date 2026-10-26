@@ -47,6 +47,8 @@ class PhotoFileCleanupServiceTest {
     private final PhotoTagRepository tagRepository = Mockito.mock(PhotoTagRepository.class);
     private final PhotoEditVersionRepository editVersionRepository =
             Mockito.mock(PhotoEditVersionRepository.class);
+    private final PhotoThumbnailService photoThumbnailService =
+            Mockito.mock(PhotoThumbnailService.class);
     private final PhotoContentLabelRepository contentLabelRepository =
             Mockito.mock(PhotoContentLabelRepository.class);
     private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository =
@@ -63,6 +65,7 @@ class PhotoFileCleanupServiceTest {
             albumRepository,
             tagRepository,
             editVersionRepository,
+            photoThumbnailService,
             contentLabelRepository,
             contentAnalysisRunRepository,
             photoSearchIndexService,

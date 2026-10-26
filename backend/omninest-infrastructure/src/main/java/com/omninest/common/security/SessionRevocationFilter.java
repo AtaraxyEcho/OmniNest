@@ -31,6 +31,14 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
 
     private final SessionRevocationChecker revocationChecker;
 
+    /**
+     * 登出必须幂等：即使当前会话已被撤销，也要允许控制器清 Cookie 与吊销刷新令牌。
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "/api/v1/auth/logout".equals(request.getServletPath());
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
             HttpServletResponse response, FilterChain chain) throws ServletException, IOException {

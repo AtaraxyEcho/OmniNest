@@ -343,10 +343,15 @@ class ReaderSyncQueue {
 
   /// 通用入队
   static Future<void> _enqueue(String type, Map<String, dynamic> data) async {
-    if ((_userId == null || _userId!.isEmpty) &&
-        _sensitiveOperationTypes.contains(type)) {
-      // 空 userId 的行登出时按账号清理不到，载荷又含正文；未绑定登录用户时拒绝入队。
-      throw StateError('阅读同步队列未绑定登录用户，拒绝写入敏感同步项');
+    if (_sensitiveOperationTypes.contains(type)) {
+      if (_userId == null || _userId!.isEmpty) {
+        // 空 userId 的行登出时按账号清理不到，载荷又含正文；未绑定登录用户时拒绝入队。
+        throw StateError('阅读同步队列未绑定登录用户，拒绝写入敏感同步项');
+      }
+      if (_textCipher == null) {
+        // 无加密器时不再退化为明文落库；Web 生产环境使用标签页会话密钥。
+        throw StateError('阅读同步队列缺少敏感列加密器，拒绝明文写入同步项');
+      }
     }
     await _database
         .into(_database.syncOperations)
@@ -497,8 +502,8 @@ class ReaderSyncQueue {
   /// 序列化队列载荷。
   ///
   /// 笔记/批注的标题、正文与摘录属于敏感内容，SQLite 本身不加密且失败行会长期
-  /// 保留，因此落库前用列加密器加密；未注入加密器（Web）或未登录时保持明文，
-  /// 与 [ReaderLocalStorage] 的口径一致。
+  /// 保留，因此落库前用列加密器加密；敏感操作在缺少加密器或用户绑定时由
+  /// [_enqueue] 直接拒绝，不再退化为明文。
   static Future<String> _serializePayload(Map<String, dynamic> data) async {
     final encoded = jsonEncode(data);
     final cipher = _textCipher;
@@ -509,19 +514,24 @@ class ReaderSyncQueue {
     return cipher.encrypt(userId, encoded);
   }
 
-  /// 反序列化队列载荷；解密或解析失败返回 null，由调用方按原语义处理。
+  /// 反序列化队列载荷；密文无法解开时回退明文（兼容升级前已落库的行），
+  /// 仍无法解析则返回 null，由调用方按原语义处理。
   static Future<Map<String, dynamic>?> _decodePayload(
     SyncOperation operation,
   ) async {
+    final cipher = _textCipher;
+    final userId = _userId;
+    final stored = operation.payload;
+    if (cipher != null && userId != null && userId.isNotEmpty) {
+      try {
+        final plain = await cipher.decrypt(userId, stored);
+        return jsonDecode(plain) as Map<String, dynamic>;
+      } catch (_) {
+        // 旧版本可能以明文写入；继续尝试明文解析，不能把历史行直接判坏。
+      }
+    }
     try {
-      final cipher = _textCipher;
-      final userId = _userId;
-      final stored = operation.payload;
-      final plain =
-          cipher == null || userId == null || userId.isEmpty
-              ? stored
-              : await cipher.decrypt(userId, stored);
-      return jsonDecode(plain) as Map<String, dynamic>;
+      return jsonDecode(stored) as Map<String, dynamic>;
     } on FormatException {
       return null;
     } on TypeError {
