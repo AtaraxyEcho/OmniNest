@@ -28,8 +28,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          fileTextPreviewProvider(
-            file.id,
+          filePreviewTextProvider(
+            file,
           ).overrideWith((ref) async => 'bounded preview'),
         ],
         child: _testApp(const FilePreviewPage(file: file)),
@@ -45,7 +45,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          fileTextPreviewProvider(file.id).overrideWith((ref) async {
+          filePreviewTextProvider(file).overrideWith((ref) async {
             throw const AppException(
               code: 'TEXT_PREVIEW_FAILED',
               message: '文本预览不可用',
@@ -77,7 +77,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          fileDownloadUrlProvider(pdfFile.id).overrideWith(
+          filePreviewDownloadUrlProvider(pdfFile).overrideWith(
             (ref) async => 'http://localhost:9000/user-files/report.pdf',
           ),
         ],

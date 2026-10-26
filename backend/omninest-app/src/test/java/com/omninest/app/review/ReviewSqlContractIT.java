@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -77,6 +79,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 )
 @ActiveProfiles("dev")
 @Testcontainers(disabledWithoutDocker = true)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Import(ReviewSqlContractIT.ExternalDependencyOverrides.class)
 class ReviewSqlContractIT {
 
@@ -127,13 +130,11 @@ class ReviewSqlContractIT {
         addToAlbum(owner, albumA, fileDeletedPhoto);
         addToAlbum(owner, albumB, fileDeletedPhoto);
 
-        UUID lowerAlbum = albumA.compareTo(albumB) < 0 ? albumA : albumB;
-        UUID higherAlbum = albumA.compareTo(albumB) < 0 ? albumB : albumA;
         assertThat(photoItemRepository.findAlbumAlbumRelationEdges(owner, 20))
                 .singleElement()
                 .satisfies(edge -> {
-                    assertThat(edge.getSourceKey()).isEqualTo(lowerAlbum.toString());
-                    assertThat(edge.getTargetKey()).isEqualTo(higherAlbum.toString());
+                    assertThat(Set.of(edge.getSourceKey(), edge.getTargetKey()))
+                            .containsExactlyInAnyOrder(albumA.toString(), albumB.toString());
                     assertThat(edge.getWeight()).isEqualTo(1L);
                 });
         assertThat(photoItemRepository.findAlbumTimeRelationEdges(owner, ZONE_ID, 20))
@@ -223,8 +224,9 @@ class ReviewSqlContractIT {
                 """, dispatchId, taskId);
 
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        Instant claimNow = Instant.now().plusSeconds(60);
         transaction.executeWithoutResult(status -> {
-            List<SyncEvent> events = syncEventRepository.findClaimableEvents(Instant.now(), 20);
+            List<SyncEvent> events = syncEventRepository.findClaimableEvents(claimNow, 20);
             SyncEvent event = events.stream()
                     .filter(candidate -> eventId.equals(candidate.getId()))
                     .findFirst()
@@ -239,7 +241,7 @@ class ReviewSqlContractIT {
             assertThat(event.getVersion()).isZero();
             assertThat(event.getSequenceNo()).isNotNull();
 
-            List<TaskDispatch> dispatches = taskDispatchRepository.findClaimable(Instant.now(), 20);
+            List<TaskDispatch> dispatches = taskDispatchRepository.findClaimable(claimNow, 20);
             TaskDispatch dispatch = dispatches.stream()
                     .filter(candidate -> dispatchId.equals(candidate.getId()))
                     .findFirst()

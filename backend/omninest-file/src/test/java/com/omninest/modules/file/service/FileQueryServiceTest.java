@@ -131,6 +131,7 @@ class FileQueryServiceTest {
                 new FilePathRewriter(fileNodeRepository),
                 lookup,
                 assembler,
+                shareRecipientAccessService,
                 listQueryService,
                 downloadService,
                 new FileRestoreSupport(fileNodeRepository, lookup)
@@ -1353,6 +1354,30 @@ class FileQueryServiceTest {
 
         assertThat(service.mediaInfo(OWNER_ID, fileId).height()).isEqualTo(720);
         verify(probeService, times(1)).probe(ArgumentMatchers.anyString(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void getFileNodeAllowsDirectShareRecipient() {
+        FileNode shared = node(OTHER_OWNER_ID, null, "FILE", "shared.txt", "/shared.txt");
+        shared.setSpaceType(SpaceType.PERSONAL);
+        when(fileNodeRepository.findByIdAndDeletedFalse(shared.getId())).thenReturn(Optional.of(shared));
+        when(shareRecipientAccessService.canAccessRecipientNode(OWNER_ID, shared)).thenReturn(true);
+
+        FileNodeDto result = fileQueryService.getFileNode(OWNER_ID, shared.getId());
+
+        assertThat(result.name()).isEqualTo("shared.txt");
+    }
+
+    @Test
+    void getFileNodeHidesPersonalNodeWithoutRecipientShare() {
+        FileNode foreign = node(OTHER_OWNER_ID, null, "FILE", "private.txt", "/private.txt");
+        foreign.setSpaceType(SpaceType.PERSONAL);
+        when(fileNodeRepository.findByIdAndDeletedFalse(foreign.getId())).thenReturn(Optional.of(foreign));
+        when(shareRecipientAccessService.canAccessRecipientNode(OWNER_ID, foreign)).thenReturn(false);
+
+        assertThatThrownBy(() -> fileQueryService.getFileNode(OWNER_ID, foreign.getId()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FILE_NOT_FOUND));
     }
 
     private FileNode node(UUID ownerId, UUID parentId, String type, String name, String normalizedPath) {

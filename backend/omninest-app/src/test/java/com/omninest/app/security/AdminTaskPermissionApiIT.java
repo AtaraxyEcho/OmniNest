@@ -47,6 +47,7 @@ import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 任务权限 API 隔离集成测试。
@@ -75,6 +76,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         }
 )
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 @Import(AdminTaskPermissionApiIT.ExternalDependencyOverrides.class)
 class AdminTaskPermissionApiIT {

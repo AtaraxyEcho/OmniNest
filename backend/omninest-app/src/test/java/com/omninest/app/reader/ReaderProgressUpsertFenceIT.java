@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 阅读进度写入围栏的真库集成测试。
@@ -64,6 +65,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         }
 )
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 @Transactional
 @Import(ReaderProgressUpsertFenceIT.ExternalDependencyOverrides.class)

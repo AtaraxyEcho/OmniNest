@@ -49,6 +49,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 通知邮件通道在真实 SMTP 服务上的投递验证。
@@ -85,6 +86,7 @@ import org.testcontainers.utility.MountableFile;
         }
 )
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 @Import(NotificationEmailDeliveryIT.ExternalDependencyOverrides.class)
 class NotificationEmailDeliveryIT {

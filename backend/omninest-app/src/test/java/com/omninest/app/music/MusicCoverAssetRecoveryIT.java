@@ -33,6 +33,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 音乐封面资产回收的真库集成测试。
@@ -61,6 +62,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         }
 )
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 @Import(MusicCoverAssetRecoveryIT.ExternalDependencyOverrides.class)
 class MusicCoverAssetRecoveryIT {

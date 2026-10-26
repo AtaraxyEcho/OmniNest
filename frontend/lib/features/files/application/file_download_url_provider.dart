@@ -98,12 +98,9 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
       }
     });
 
-/// 预览页专用的下载地址：共享文件走共享授权端点，个人文件沿用列表缓存。
+/// 预览页专用的下载地址：共享端点同时覆盖所有者、共享空间成员和定向分享接收者。
 final filePreviewDownloadUrlProvider = FutureProvider.autoDispose
     .family<String?, FileNode>((ref, file) async {
-      if (file.spaceType != SpaceType.shared) {
-        return ref.watch(fileDownloadUrlProvider(file.id).future);
-      }
       try {
         return await ref.read(fileApiProvider).downloadSharedUrl(file.id);
       } catch (_) {
@@ -111,14 +108,11 @@ final filePreviewDownloadUrlProvider = FutureProvider.autoDispose
       }
     });
 
-/// 预览页专用文本内容：共享文件同样需要共享授权端点签名。
+/// 预览页专用文本内容：使用与共享下载相同的授权端点签名。
 final filePreviewTextProvider = FutureProvider.autoDispose
-    .family<String, FileNode>((ref, file) {
-      if (file.spaceType != SpaceType.shared) {
-        return ref.watch(fileTextPreviewProvider(file.id).future);
-      }
-      return ref.read(fileApiProvider).loadSharedTextPreview(file.id);
-    });
+    .family<String, FileNode>(
+      (ref, file) => ref.read(fileApiProvider).loadSharedTextPreview(file.id),
+    );
 
 /// 按文件 ID 加载有界文本预览。
 final fileTextPreviewProvider = FutureProvider.autoDispose

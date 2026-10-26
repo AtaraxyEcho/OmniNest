@@ -66,6 +66,7 @@ public class FileQueryService {
     private final FilePathRewriter filePathRewriter;
     private final FileNodeLookupSupport lookup;
     private final FileNodeDtoAssembler assembler;
+    private final FileShareRecipientAccessService shareRecipientAccessService;
     private final FileListQueryService listQueryService;
     private final FileDownloadContentService downloadContentService;
     private final FileRestoreSupport restoreSupport;
@@ -104,9 +105,12 @@ public class FileQueryService {
         FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         if (!node.getOwnerUserId().equals(ownerUserId)) {
-            // 共享文件对具备浏览权限的成员可见；不可用时同样返回 NOT_FOUND，
-            // 避免 403/404 差异成为共享节点存在性探测通道。
-            if (node.getSpaceType() != SpaceType.SHARED || !sharedSpaceService.canBrowse(ownerUserId)) {
+            // 共享空间成员按浏览权限；个人空间文件只允许定向分享接收者预览。
+            boolean accessible = node.getSpaceType() == SpaceType.SHARED
+                    ? sharedSpaceService.canBrowse(ownerUserId)
+                    : shareRecipientAccessService.canAccessRecipientNode(ownerUserId, node);
+            if (!accessible) {
+                // 不可用时统一 NOT_FOUND，避免 403/404 差异成为存在性探测通道。
                 throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
             }
         }

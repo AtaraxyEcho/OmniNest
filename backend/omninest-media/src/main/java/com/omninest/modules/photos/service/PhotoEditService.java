@@ -644,7 +644,8 @@ public class PhotoEditService {
                 );
                 log.warn("旧编辑版本{}已登记补偿清理任务: fileId={}", assetLabel, fileId);
             } catch (RuntimeException scheduleFailure) {
-                log.warn("旧编辑版本{}补偿任务登记失败: fileId={}", assetLabel, fileId, scheduleFailure);
+                log.error("旧编辑版本{}补偿任务登记失败，需依赖后续对账清理: ownerUserId={}, photoId={}, fileId={}",
+                        assetLabel, ownerUserId, photoId, fileId, scheduleFailure);
             }
             return false;
         }

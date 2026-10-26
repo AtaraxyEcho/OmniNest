@@ -13,12 +13,14 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 在真实 PostgreSQL 中验证结构化载荷容量约束。
  *
  * @author OmniNest
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 class JsonPayloadCapacityFlywayMigrationTest {
     private static final int EXPECTED_ACTIVE_CAPACITY_CONSTRAINTS = 43;

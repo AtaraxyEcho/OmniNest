@@ -37,6 +37,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 媒体库标题关键词查询的真库集成测试，覆盖影视（条目与系列）、音乐曲目与照片三条 LIKE 路径。
@@ -73,6 +74,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         }
 )
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 @Import(MediaLibraryKeywordQueryIT.ExternalDependencyOverrides.class)
 class MediaLibraryKeywordQueryIT {

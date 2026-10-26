@@ -16,12 +16,14 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 在当前 Flyway 基线上验证全部 JPA 实体映射。
  *
  * @author OmniNest
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 class JpaBaselineSchemaValidationTest {
     private static final String IMAGE = "postgres:18-alpine";
