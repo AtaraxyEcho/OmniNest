@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.time.Instant;
 import java.util.List;
@@ -118,10 +119,7 @@ public class ReaderImportService {
         ContentProbe probe = null;
         if (findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null
                 && findAttachedComicItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null) {
-            probe = new ContentProbe(
-                    computeSha256Stream(fileNode),
-                    resolveContentKind(fileNode, fileType, contentKindOverride)
-            );
+            probe = prepareContentProbe(fileNode, fileType, contentKindOverride);
         }
         ContentProbe effectiveProbe = probe;
         return transactionTemplate.execute(status -> importInTransaction(
@@ -159,13 +157,83 @@ public class ReaderImportService {
      * @return 承载该分卷的作品条目，无则 {@code null}
      */
     private ReaderItem findAttachedComicItem(UUID ownerUserId, UUID fileNodeId, SpaceType spaceType) {
-        for (ReaderItemSource attached : sourceRepository.findByFileNodeIdIn(List.of(fileNodeId))) {
-            ReaderItem parent = itemRepository.findById(attached.getReaderItemId()).orElse(null);
+        List<ReaderItemSource> attached = sourceRepository.findByFileNodeIdIn(List.of(fileNodeId));
+        if (attached.isEmpty()) {
+            return null;
+        }
+        List<UUID> itemIds = attached.stream()
+                .map(ReaderItemSource::getReaderItemId)
+                .distinct()
+                .toList();
+        Map<UUID, ReaderItem> parents = new HashMap<>();
+        for (ReaderItem parent : itemRepository.findAllById(itemIds)) {
+            parents.put(parent.getId(), parent);
+        }
+        for (ReaderItemSource source : attached) {
+            ReaderItem parent = parents.get(source.getReaderItemId());
             if (parent != null && isSameSpaceScope(ownerUserId, parent, spaceType)) {
                 return parent;
             }
         }
         return null;
+    }
+
+    /**
+     * 事务外预计算内容指纹与内容形态。
+     *
+     * <p>EPUB 需要整包落盘才能判断固定版式；把哈希与版式判断放在同一次落盘流上，
+     * 避免为同一文件连续从对象存储下载两遍。已持久化摘要时只落盘一次。</p>
+     */
+    private ContentProbe prepareContentProbe(
+            FileDescriptor fileNode,
+            String fileType,
+            String contentKindOverride) {
+        String normalizedOverride = normalizeContentKindOverride(contentKindOverride);
+        if (normalizedOverride != null) {
+            validateContentKindOverride(fileType, normalizedOverride);
+        }
+        String cachedHash = fileMetadataQueryService.findContentSha256(fileNode.id()).orElse(null);
+        if (FILE_TYPE_EPUB.equals(fileType) && normalizedOverride == null) {
+            Path tempFile = null;
+            try {
+                tempFile = tempStagingPort.createTempFile(
+                        "reader-epub", "omninest-epub-probe-", ".epub");
+                try (FileContentStream content = fileQueryService.openOwnedFileContent(
+                        fileNode.ownerUserId(),
+                        fileNode.id())) {
+                    archiveSafetyPolicy.copyArchive(
+                            content.inputStream(),
+                            tempFile,
+                            fileNode.sizeBytes()
+                    );
+                }
+                String contentHash = cachedHash != null ? cachedHash : computeSha256File(tempFile);
+                String contentKind;
+                try {
+                    contentKind = fileDetector.detectContentKind(tempFile, textCharsThreshold);
+                } catch (RuntimeException ex) {
+                    log.debug("EPUB fixed-layout 探测失败，回退格式判定: {}", ex.getMessage());
+                    contentKind = fileDetector.detectContentKind(fileType);
+                }
+                return new ContentProbe(contentHash, contentKind);
+            } catch (IOException ex) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
+            } finally {
+                if (tempFile != null) {
+                    try {
+                        Files.deleteIfExists(tempFile);
+                    } catch (IOException ex) {
+                        log.warn("EPUB 内容探测临时文件删除失败: errorType={}",
+                                ex.getClass().getSimpleName());
+                    }
+                }
+            }
+        }
+        String contentHash = cachedHash != null ? cachedHash : computeSha256Stream(fileNode);
+        String contentKind = normalizedOverride != null
+                ? normalizedOverride
+                : detectContentKind(fileNode, fileType);
+        return new ContentProbe(contentHash, contentKind);
     }
 
     private ReaderItem importInTransaction(
@@ -808,17 +876,30 @@ public class ReaderImportService {
     }
 
     private String computeSha256Stream(FileDescriptor fileNode) {
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(
+                fileNode.ownerUserId(),
+                fileNode.id())) {
+            return computeSha256(content.inputStream());
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
+        }
+    }
+
+    private String computeSha256File(Path file) {
+        try (InputStream input = Files.newInputStream(file)) {
+            return computeSha256(input);
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
+        }
+    }
+
+    private String computeSha256(InputStream stream) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                    fileNode.ownerUserId(),
-                    fileNode.id())) {
-                InputStream stream = content.inputStream();
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = stream.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read);
-                }
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
             }
             byte[] hash = digest.digest();
             StringBuilder hex = new StringBuilder(64);
@@ -828,8 +909,6 @@ public class ReaderImportService {
             return hex.toString();
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException("SHA-256 不可用", ex);
-        } catch (IOException ex) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
         }
     }
 

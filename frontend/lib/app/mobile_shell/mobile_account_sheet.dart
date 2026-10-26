@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -53,6 +54,16 @@ class MobileAccountAvatar extends ConsumerWidget {
                           Image.network(
                             avatarUrl,
                             fit: BoxFit.cover,
+                            cacheWidth: quantizedDecodeWidth(
+                              logicalWidth: 43,
+                              devicePixelRatio:
+                                  MediaQuery.devicePixelRatioOf(context),
+                            ),
+                            cacheHeight: quantizedDecodeWidth(
+                              logicalWidth: 43,
+                              devicePixelRatio:
+                                  MediaQuery.devicePixelRatioOf(context),
+                            ),
                             errorBuilder:
                                 (_, _, _) => _initials(context, initials, 13),
                           )
@@ -213,6 +224,16 @@ class _AccountProfileRow extends ConsumerWidget {
                       Image.network(
                         avatarUrl,
                         fit: BoxFit.cover,
+                        cacheWidth: quantizedDecodeWidth(
+                          logicalWidth: 50,
+                          devicePixelRatio:
+                              MediaQuery.devicePixelRatioOf(context),
+                        ),
+                        cacheHeight: quantizedDecodeWidth(
+                          logicalWidth: 50,
+                          devicePixelRatio:
+                              MediaQuery.devicePixelRatioOf(context),
+                        ),
                         errorBuilder:
                             (_, _, _) => _initials(context, initials, 15),
                       )

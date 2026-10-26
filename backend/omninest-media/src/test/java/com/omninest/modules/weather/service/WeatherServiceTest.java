@@ -49,8 +49,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.JsonNode;
@@ -170,25 +168,21 @@ class WeatherServiceTest {
     /**
      * 根据 URI 路径返回不同响应
      */
-    @SuppressWarnings("unchecked")
     private void stubRestTemplateWithResponses(Map<String, String> pathToResponse) {
-        when(restTemplate.exchange(
+        when(restTemplate.execute(
             any(URI.class),
             any(HttpMethod.class),
             any(),
-            (Class<Object>) any()
+            any()
         )).thenAnswer(invocation -> {
             URI uri = invocation.getArgument(0);
             String uriStr = uri.toString();
             for (var entry : pathToResponse.entrySet()) {
                 if (uriStr.contains(entry.getKey())) {
-                    return new ResponseEntity<>(
-                        entry.getValue().getBytes(StandardCharsets.UTF_8),
-                        HttpStatus.OK
-                    );
+                    return entry.getValue().getBytes(StandardCharsets.UTF_8);
                 }
             }
-            return new ResponseEntity<>("{}".getBytes(StandardCharsets.UTF_8), HttpStatus.OK);
+            return "{}".getBytes(StandardCharsets.UTF_8);
         });
     }
 
@@ -436,11 +430,11 @@ class WeatherServiceTest {
         void geoTransportFailureDoesNotMarkLocationMissing() {
             stubConfigs(baseConfigs());
             stubJwtCache();
-            when(restTemplate.exchange(
+            when(restTemplate.execute(
                     any(URI.class),
                     any(HttpMethod.class),
                     any(),
-                    (Class<Object>) any()
+                    any()
             )).thenThrow(new RuntimeException("network down"));
 
             WeatherDto result = weatherService.getRealtimeWeather("贵阳");
@@ -623,7 +617,7 @@ class WeatherServiceTest {
 
             ArgumentCaptor<URI> captor = ArgumentCaptor.forClass(URI.class);
             verify(restTemplate, times(5))
-                    .exchange(captor.capture(), any(HttpMethod.class), any(), (Class<Object>) any());
+                    .execute(captor.capture(), any(HttpMethod.class), any(), any());
             return captor.getAllValues().stream().map(URI::toString).toList();
         }
 

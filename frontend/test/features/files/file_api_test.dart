@@ -347,8 +347,6 @@ void main() {
       'sizeBytes': 1048576,
       'mimeType': 'application/zip',
       'status': 'CREATED',
-      'bucket': 'omninest-files',
-      'objectKey': 'users/root/uploads/archive.zip',
       'uploadUrl': 'http://localhost:9000/omninest-files/archive.zip',
       'expiresAt': '2026-05-20T12:30:00Z',
     });

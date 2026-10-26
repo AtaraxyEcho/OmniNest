@@ -141,6 +141,12 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   int _currentPage = 0;
   String? _currentPhotoId;
 
+  // 浏览序列与居中列表引用不变时复用解析结果与索引表，避免每次重建都线性扫描。
+  List<PhotoItem>? _cachedBrowsePhotos;
+  List<PhotoItem>? _cachedCenterPhotos;
+  String? _cachedAnchorId;
+  Map<String, int> _pageIndexById = const {};
+
   /// 上次对齐 PageView 的照片 id；仅锚点变化时 jump，避免手势中抢页。
   String? _lastPageAnchorId;
 
@@ -614,10 +620,23 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           ),
         ) ??
         const <PhotoItem>[];
-    final pages = _resolvePages(browseScope, centerPhotos);
-    _pages = pages;
     final anchorId = _currentPhotoId ?? widget.photo.id;
-    final index = pages.indexWhere((p) => p.id == anchorId);
+    final List<PhotoItem> pages;
+    if (identical(browseScope.photos, _cachedBrowsePhotos) &&
+        identical(centerPhotos, _cachedCenterPhotos) &&
+        anchorId == _cachedAnchorId) {
+      pages = _pages;
+    } else {
+      pages = _resolvePages(browseScope, centerPhotos);
+      _cachedBrowsePhotos = browseScope.photos;
+      _cachedCenterPhotos = centerPhotos;
+      _cachedAnchorId = anchorId;
+      _pageIndexById = {
+        for (var i = 0; i < pages.length; i++) pages[i].id: i,
+      };
+    }
+    _pages = pages;
+    final index = _pageIndexById[anchorId] ?? -1;
     _currentPage = index < 0 ? 0 : index.clamp(0, pages.length - 1);
     final current = _pages[_currentPage];
     final currentFresh =

@@ -41,6 +41,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.SearcherFactory;
+import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
@@ -82,6 +84,12 @@ public class FileSearchIndexService implements Closeable {
     private final Cache<UUID, UserIndexState> userIndexes;
 
     /**
+     * 只读检索器缓存：每次搜索都重新打开 DirectoryReader 会在连续输入时反复解析段文件，
+     * 这里按索引目录复用 SearcherManager，并在目录删除或缓存淘汰时关闭句柄。
+     */
+    private final Cache<Path, CachedSearcher> searchers;
+
+    /**
      * 创建文件搜索索引服务。
      *
      * @param indexPath 索引根目录
@@ -101,6 +109,14 @@ public class FileSearchIndexService implements Closeable {
                 .expireAfterAccess(USER_INDEX_IDLE_TTL)
                 .executor(Runnable::run)
                 .removalListener(removalListener)
+                .build();
+        RemovalListener<Path, CachedSearcher> searcherRemovalListener =
+                (path, searcher, cause) -> closeSearcher(searcher);
+        this.searchers = Caffeine.<Path, CachedSearcher>newBuilder()
+                .maximumSize(Math.max(8, maxCachedUserIndexes + 1))
+                .expireAfterAccess(USER_INDEX_IDLE_TTL)
+                .executor(Runnable::run)
+                .removalListener(searcherRemovalListener)
                 .build();
     }
 
@@ -612,25 +628,102 @@ public class FileSearchIndexService implements Closeable {
 
     private List<SearchResultDto> searchDirectory(
             Path userDir, String queryStr, int maxResults, String spaceType) {
-        if (!Files.exists(userDir)) {
+        if (!Files.exists(userDir) || !indexExists(userDir)) {
             return List.of();
         }
-        // 搜索一律只读打开索引目录：API 与 Worker 共挂同一 Lucene 卷时，读取路径若构造
-        // IndexWriter 就会与 Worker 抢 write.lock，抢锁失败被吞掉后表现为搜索静默返回空结果。
-        // Worker 每次写入都 commit，因此 open(directory) 读到的就是最新已提交段。
-        try (Directory directory = new NIOFSDirectory(userDir)) {
-            if (!DirectoryReader.indexExists(directory)) {
-                return List.of();
-            }
-            try (DirectoryReader reader = DirectoryReader.open(directory)) {
-                return collectHits(new IndexSearcher(reader), queryStr, maxResults, spaceType);
-            }
-        } catch (Exception e) {
+        CachedSearcher cached;
+        try {
+            cached = searchers.get(userDir, path -> {
+                try {
+                    return openSearcher(path);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
+        } catch (RuntimeException exception) {
+            log.warn("打开用户索引检索器失败: indexKeyHash={}, errorType={}",
+                    Integer.toHexString(userDir.toString().hashCode()),
+                    exception.getClass().getSimpleName());
+            return List.of();
+        }
+        SearcherManager manager = cached.manager();
+        IndexSearcher searcher = null;
+        try {
+            manager.maybeRefresh();
+            searcher = manager.acquire();
+            return collectHits(searcher, queryStr, maxResults, spaceType);
+        } catch (Exception exception) {
+            // 目录被删除或重建时旧检索器可能失效，丢弃缓存让下一次请求重新打开。
+            searchers.invalidate(userDir);
             log.error("Lucene 搜索失败: indexKeyHash={}, queryLength={}, errorType={}",
                     Integer.toHexString(userDir.toString().hashCode()), queryStr.length(),
-                    e.getClass().getSimpleName(), e);
+                    exception.getClass().getSimpleName(), exception);
             return List.of();
+        } finally {
+            if (searcher != null) {
+                try {
+                    manager.release(searcher);
+                } catch (IOException exception) {
+                    log.warn("释放文件索引 searcher 失败: errorType={}",
+                            exception.getClass().getSimpleName());
+                }
+            }
         }
+    }
+
+    private boolean indexExists(Path userDir) {
+        try (Directory directory = new NIOFSDirectory(userDir)) {
+            return DirectoryReader.indexExists(directory);
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
+    private CachedSearcher openSearcher(Path userDir) throws IOException {
+        Directory directory = new NIOFSDirectory(userDir);
+        DirectoryReader reader = null;
+        try {
+            reader = DirectoryReader.open(directory);
+            return new CachedSearcher(new SearcherManager(reader, new SearcherFactory()), directory);
+        } catch (IOException | RuntimeException exception) {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException closeFailure) {
+                    exception.addSuppressed(closeFailure);
+                }
+            }
+            try {
+                directory.close();
+            } catch (IOException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
+            throw exception;
+        }
+    }
+
+    private void closeSearcher(CachedSearcher searcher) {
+        if (searcher == null) {
+            return;
+        }
+        try {
+            searcher.manager().close();
+        } catch (IOException exception) {
+            log.warn("关闭文件索引 SearcherManager 失败: errorType={}",
+                    exception.getClass().getSimpleName());
+        }
+        try {
+            searcher.directory().close();
+        } catch (IOException exception) {
+            log.warn("关闭文件索引只读目录失败: errorType={}",
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 只读检索器与其底层目录；目录需单独关闭，SearcherManager 只负责 reader。
+     */
+    private record CachedSearcher(SearcherManager manager, Directory directory) {
     }
 
     private static final int MAX_SEARCH_TOKENS = 16;
@@ -779,6 +872,8 @@ public class FileSearchIndexService implements Closeable {
         markUserPurged(ownerUserId);
         userIndexes.invalidate(ownerUserId);
         userIndexes.cleanUp();
+        searchers.invalidate(getUserIndexPath(ownerUserId));
+        searchers.cleanUp();
         try {
             deleteDirectory(getUserIndexPath(ownerUserId));
             log.info("已删除用户搜索索引目录: indexKeyHash={}",
@@ -846,6 +941,9 @@ public class FileSearchIndexService implements Closeable {
             }
             userIndexes.invalidateAll();
             userIndexes.cleanUp();
+            // 先关闭只读句柄再删目录，Windows 上仍被打开的段文件无法删除。
+            searchers.invalidateAll();
+            searchers.cleanUp();
 
             // 删除磁盘上的所有用户索引目录
             if (Files.exists(basePath) && Files.isDirectory(basePath)) {
@@ -918,6 +1016,8 @@ public class FileSearchIndexService implements Closeable {
     public void close() {
         userIndexes.invalidateAll();
         userIndexes.cleanUp();
+        searchers.invalidateAll();
+        searchers.cleanUp();
         analyzer.close();
     }
 

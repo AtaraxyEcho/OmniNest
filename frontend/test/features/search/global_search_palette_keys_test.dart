@@ -88,8 +88,16 @@ Future<void> _closePalette(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// 数字页签快捷键必须带 Alt：裸数字属于搜索词。
+Future<void> _pressDigit(WidgetTester tester, LogicalKeyboardKey key) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('数字键跳到对应筛选页签', (tester) async {
+  testWidgets('Alt+数字键跳到对应筛选页签', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -101,13 +109,11 @@ void main() {
     expect(find.text('维修手册.pdf'), findsOneWidget);
 
     // 4 = 图书：文件档必须被筛掉。
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
-    await tester.pumpAndSettle();
+    await _pressDigit(tester, LogicalKeyboardKey.digit4);
     expect(find.text('维修手册.pdf'), findsNothing);
 
     // 6 = 文件：命中回到列表。
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit6);
-    await tester.pumpAndSettle();
+    await _pressDigit(tester, LogicalKeyboardKey.digit6);
     expect(find.text('维修手册.pdf'), findsOneWidget);
     await _closePalette(tester);
   });
@@ -123,8 +129,7 @@ void main() {
     expect(find.text('维修手册.pdf'), findsOneWidget);
 
     // 文件(6) → 照片(5)：后滚一档，文件档不再出现。
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit6);
-    await tester.pumpAndSettle();
+    await _pressDigit(tester, LogicalKeyboardKey.digit6);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
@@ -135,8 +140,7 @@ void main() {
     // 前滚两档到视频仍看不到文件档，再直落文件档页签确认可回。
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit6);
-    await tester.pumpAndSettle();
+    await _pressDigit(tester, LogicalKeyboardKey.digit6);
     expect(find.text('维修手册.pdf'), findsOneWidget);
     await _closePalette(tester);
   });
@@ -149,8 +153,7 @@ void main() {
     await tester.pumpWidget(_harness());
     await _openPalette(tester);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit7);
-    await tester.pumpAndSettle();
+    await _pressDigit(tester, LogicalKeyboardKey.digit7);
 
     expect(find.text('维修手册.pdf'), findsNothing);
     await _closePalette(tester);

@@ -31,7 +31,14 @@ public interface PhotoItemRelationQueries {
                         ON a2.photo_id = a1.photo_id AND a2.owner_user_id = a1.owner_user_id
                      WHERE a1.owner_user_id = :ownerUserId
                        AND a2.album_id > a1.album_id
-                       AND EXISTS (SELECT 1 FROM omni.photo_items pi WHERE pi.id = a1.photo_id AND pi.deleted_at IS NULL)
+                       AND EXISTS (
+                           SELECT 1
+                             FROM omni.photo_items pi
+                             JOIN omni.file_nodes fi ON fi.id = pi.file_node_id
+                            WHERE pi.id = a1.photo_id
+                              AND pi.deleted_at IS NULL
+                              AND fi.is_deleted = false
+                       )
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -52,7 +59,9 @@ public interface PhotoItemRelationQueries {
                       FROM omni.photo_album_items ai
                       JOIN omni.photo_items p
                         ON p.id = ai.photo_id AND p.owner_user_id = ai.owner_user_id
+                      JOIN omni.file_nodes f ON f.id = p.file_node_id
                      WHERE ai.owner_user_id = :ownerUserId
+                       AND f.is_deleted = false
                        AND p.date_taken IS NOT NULL
                        AND p.deleted_at IS NULL
                      GROUP BY 1, 2
@@ -76,7 +85,9 @@ public interface PhotoItemRelationQueries {
                       FROM omni.photo_album_items ai
                       JOIN omni.photo_items p
                         ON p.id = ai.photo_id AND p.owner_user_id = ai.owner_user_id
+                      JOIN omni.file_nodes f ON f.id = p.file_node_id
                      WHERE ai.owner_user_id = :ownerUserId
+                       AND f.is_deleted = false
                        AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
@@ -96,7 +107,9 @@ public interface PhotoItemRelationQueries {
                            COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置') AS target_key,
                            COUNT(*) AS weight
                       FROM omni.photo_items p
+                      JOIN omni.file_nodes f ON f.id = p.file_node_id
                      WHERE p.owner_user_id = :ownerUserId
+                       AND f.is_deleted = false
                        AND p.date_taken IS NOT NULL
                        AND p.deleted_at IS NULL
                      GROUP BY 1, 2
@@ -127,7 +140,9 @@ public interface PhotoItemRelationQueries {
                    CAST(NULL AS varchar) AS "label",
                    COUNT(*) AS "weight"
               FROM omni.photo_items p
+              JOIN omni.file_nodes f ON f.id = p.file_node_id
              WHERE p.owner_user_id = :ownerUserId
+               AND f.is_deleted = false
                AND p.date_taken IS NOT NULL
                AND p.deleted_at IS NULL
              GROUP BY 1
@@ -144,7 +159,9 @@ public interface PhotoItemRelationQueries {
                    CAST(NULL AS varchar) AS "label",
                    COUNT(*) AS "weight"
               FROM omni.photo_items p
+              JOIN omni.file_nodes f ON f.id = p.file_node_id
              WHERE p.owner_user_id = :ownerUserId
+               AND f.is_deleted = false
                AND p.deleted_at IS NULL
              GROUP BY 1
              ORDER BY 3 DESC, 1 ASC

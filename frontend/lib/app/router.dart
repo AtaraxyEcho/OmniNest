@@ -19,6 +19,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_scene_contro
 import 'package:omninest/app/mobile_shell/workspace_tools_page.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/features/files/presentation/pages/file_preview_route_page.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_center_page.dart';
@@ -174,6 +175,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      // 搜索结果直接打开文件预览：命中项只有文件 ID，先回源节点再渲染。
+      _animatedRoute(
+        '/files/preview/:fileId',
+        (state) => MobileHostedRoute(
+          child: FilePreviewRoutePage(
+            fileId: state.pathParameters['fileId']!,
+          ),
+        ),
       ),
       // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
       // 覆盖层自带近乎实底的深色底，因此包 hosted 作用域并列入壳层自有路径，

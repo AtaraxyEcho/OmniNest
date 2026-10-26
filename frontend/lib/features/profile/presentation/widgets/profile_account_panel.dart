@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_edit_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_section_card.dart';
@@ -146,6 +147,14 @@ class _AvatarBlock extends StatelessWidget {
                   ? Image.network(
                     avatarUrl!,
                     fit: BoxFit.cover,
+                    cacheWidth: quantizedDecodeWidth(
+                      logicalWidth: 64,
+                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                    ),
+                    cacheHeight: quantizedDecodeWidth(
+                      logicalWidth: 64,
+                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                    ),
                     errorBuilder: (_, _, _) => _initial(initial, scheme),
                   )
                   : _initial(initial, scheme),

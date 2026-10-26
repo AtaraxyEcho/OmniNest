@@ -266,14 +266,19 @@ public class ReaderItemService {
     private List<UUID> cascadeFileNodeIds(UUID ownerUserId, ReaderItem item) {
         LinkedHashSet<UUID> candidates = new LinkedHashSet<>();
         candidates.add(item.getFileNodeId());
-        sourceRepository.findByReaderItemId(item.getId()).stream()
+        List<UUID> volumeFileIds = sourceRepository.findByReaderItemId(item.getId()).stream()
                 .map(ReaderItemSource::getFileNodeId)
                 .filter(Objects::nonNull)
                 .filter(fileNodeId -> !fileNodeId.equals(item.getFileNodeId()))
-                .filter(fileNodeId -> fileMetadataQueryService.findById(fileNodeId)
-                        .map(descriptor -> ownerUserId.equals(descriptor.ownerUserId()))
-                        .orElse(false))
-                .forEach(candidates::add);
+                .distinct()
+                .toList();
+        if (!volumeFileIds.isEmpty()) {
+            // 分卷归属要批量判定：逐条 findById 在几十卷的有声书/漫画上就是几十次查询。
+            fileMetadataQueryService.findAllByIds(volumeFileIds).stream()
+                    .filter(descriptor -> ownerUserId.equals(descriptor.ownerUserId()))
+                    .map(descriptor -> descriptor.id())
+                    .forEach(candidates::add);
+        }
         return List.copyOf(candidates);
     }
 
@@ -319,8 +324,8 @@ public class ReaderItemService {
         annotationRepository.deleteByReaderItemIdIn(itemIds);
         noteRepository.deleteByReaderItemIdIn(itemIds);
         sessionRepository.deleteByReaderItemIdIn(itemIds);
-        // 与 deleteItemsCompletely 同一顺序：先页面对象再页面，否则残留的资产元数据指向已消失的页面
-        pageAssetRepository.deleteByReaderItemIdIn(itemIds);
+        // 页面资产行必须留到派生文件清理成功之后再删：先删行再清对象，
+        // 一旦对象存储删除失败就失去唯一定位派生节点的线索，形成永久孤儿。
         pageRepository.deleteByReaderItemIdIn(itemIds);
         catalogRepository.deleteByReaderItemIdIn(itemIds);
         sourceRepository.deleteByReaderItemIdIn(itemIds);
@@ -820,8 +825,10 @@ public class ReaderItemService {
             Map<UUID, String> spaceTypeMap,
             Map<UUID, ? extends ReaderProgress> progressMap
     ) {
+        // 封面是派生私有资产，不能走 /files/{id}/download-url（派生节点会被拒绝且返回 JSON）。
+        // 统一指向阅读器封面端点，客户端按鉴权图片组件加载。
         String coverUrl = item.getCoverFileId() != null
-                ? "/files/" + item.getCoverFileId() + "/download-url"
+                ? "/api/v1/reader/items/" + item.getId() + "/cover"
                 : null;
 
         // 从预加载映射获取空间类型，默认 PERSONAL

@@ -135,7 +135,15 @@ public class ClamAvScanner {
         if (response.isBlank()) {
             return ScanResult.error("扫描服务未返回结果");
         }
-        return ScanResult.error(response);
+        return ScanResult.error(summarizeResponse(response));
+    }
+
+    /**
+     * 扫描服务异常响应可能包含完整文件路径，进入日志前压平并截断。
+     */
+    private static String summarizeResponse(String response) {
+        String flattened = response.replaceAll("\\s+", " ").trim();
+        return flattened.length() <= 256 ? flattened : flattened.substring(0, 256) + "...";
     }
 
     /**

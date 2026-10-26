@@ -218,7 +218,7 @@ class ReaderImportServiceTest {
                 .thenReturn(Optional.of(sharedFileNode("系列 第02卷.cbz", OWNER_ID)));
         when(fileDetector.detectType("系列 第02卷.cbz")).thenReturn("CBZ");
         when(sourceRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID))).thenReturn(List.of(attached));
-        when(itemRepository.findById(SOURCE_ITEM_ID)).thenReturn(Optional.of(parent));
+        when(itemRepository.findAllById(List.of(SOURCE_ITEM_ID))).thenReturn(List.of(parent));
         when(fileMetadataQueryService.findById(DUP_FILE_NODE_ID))
                 .thenReturn(Optional.of(sharedFileNode(DUP_FILE_NODE_ID, "系列 第01卷.cbz", OTHER_USER_ID)));
         when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, SOURCE_ITEM_ID)).thenReturn(false);
@@ -543,7 +543,6 @@ class ReaderImportServiceTest {
         // TXT 文件不能被强制导入为漫画，避免进入错误解析引擎
         when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(personalFileNode("book.txt")));
         when(fileDetector.detectType("book.txt")).thenReturn("TXT");
-        stubReadFileBytes();
 
         assertThatThrownBy(() -> importService.importFile(OWNER_ID, FILE_NODE_ID, false, "COMIC"))
                 .isInstanceOf(BusinessException.class)

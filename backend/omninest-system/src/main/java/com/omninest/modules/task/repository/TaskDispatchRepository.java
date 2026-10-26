@@ -48,7 +48,21 @@ public interface TaskDispatchRepository extends JpaRepository<TaskDispatch, UUID
      * @return 可领取记录
      */
     @Query(value = """
-            SELECT dispatch.*
+            SELECT dispatch.id,
+                   dispatch.task_id,
+                   dispatch.exchange_name,
+                   dispatch.routing_key,
+                   dispatch.payload,
+                   dispatch.status,
+                   dispatch.attempt_count,
+                   dispatch.next_attempt_at,
+                   dispatch.locked_by,
+                   dispatch.locked_until,
+                   dispatch.published_at,
+                   dispatch.last_error_code,
+                   dispatch.created_at,
+                   dispatch.updated_at,
+                   dispatch.version
             FROM omni.sys_task_dispatches dispatch
             WHERE (dispatch.status = 'PENDING' AND dispatch.next_attempt_at <= :now)
                OR (dispatch.status = 'PUBLISHING' AND dispatch.locked_until < :now)

@@ -49,6 +49,8 @@ public class PhotoSearchIndexService implements Closeable {
     private static final String FIELD_TAGS = "tags";
     private static final String FIELD_AI_LABELS = "aiLabels";
     private static final String FIELD_OCR_TEXT = "ocrText";
+    /** 与文件搜索同一上限：每个词元会展开多个前缀查询，长文本必须截断。 */
+    private static final int MAX_SEARCH_TOKENS = 16;
 
     private final Path indexPath;
     private final Directory directory;
@@ -260,7 +262,10 @@ public class PhotoSearchIndexService implements Closeable {
             // 只读实例没有本地 commit，必须在每次检索前检查目录是否有新段。
             manager.maybeRefresh();
             searcher = manager.acquire();
-            List<String> tokens = analyzeTokens(queryStr);
+            List<String> tokens = analyzeTokens(queryStr).stream()
+                    .distinct()
+                    .limit(MAX_SEARCH_TOKENS)
+                    .toList();
             if (tokens.isEmpty()) {
                 return results;
             }

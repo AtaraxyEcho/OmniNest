@@ -127,6 +127,7 @@
     "notificationFilterAllLabel": "全部",
   "notificationFilterUnreadLabel": "未读",
 "notificationMarkAllRead": "全部已读",
+  "notificationMarkAllReadFailed": "全部标为已读失败，请重试。",
   "notificationDelete": "删除通知",
   "notificationClearAll": "清空通知",
   "notificationClearConfirmTitle": "清空全部通知？",

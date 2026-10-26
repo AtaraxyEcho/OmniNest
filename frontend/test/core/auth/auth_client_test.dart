@@ -1,8 +1,42 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+
+class _CapturingLogoutAdapter implements HttpClientAdapter {
+  RequestOptions? lastRequest;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    lastRequest = options;
+    return ResponseBody.fromString(
+      jsonEncode({'code': 200, 'message': 'success', 'data': null}),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+String _jwtWithExpiry(DateTime expiry) {
+  String segment(Object value) => base64Url
+      .encode(utf8.encode(jsonEncode(value)))
+      .replaceAll('=', '');
+  return '${segment({'alg': 'HS256'})}.${segment({'exp': expiry.millisecondsSinceEpoch ~/ 1000})}.sig';
+}
 
 void main() {
   late AuthClient authClient;
@@ -57,5 +91,48 @@ void main() {
       }),
       throwsA(isA<AppException>()),
     );
+  });
+
+  test('logout keeps cookie credentials and drops expired access token', () async {
+    final adapter = _CapturingLogoutAdapter();
+    final client = AuthClient(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await client.logout(
+      refreshToken: 'refresh-token',
+      accessToken: _jwtWithExpiry(
+        DateTime.now().subtract(const Duration(minutes: 1)),
+      ),
+    );
+
+    expect(adapter.lastRequest?.headers['Authorization'], isNull);
+    expect(adapter.lastRequest?.extra['withCredentials'], isTrue);
+  });
+
+  test('logout sends bearer only while access token is still valid', () async {
+    final adapter = _CapturingLogoutAdapter();
+    final client = AuthClient(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+    final token = _jwtWithExpiry(
+      DateTime.now().add(const Duration(minutes: 5)),
+    );
+
+    await client.logout(refreshToken: 'refresh-token', accessToken: token);
+
+    expect(adapter.lastRequest?.headers['Authorization'], 'Bearer $token');
   });
 }

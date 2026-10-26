@@ -900,13 +900,28 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("select node from FileNode node where node.purgeTaskId = :purgeTaskId order by node.id")
     List<FileNode> findByPurgeTaskIdForUpdate(@Param("purgeTaskId") UUID purgeTaskId);
 
+    /**
+     * 判断同一用户下是否还有其它活动节点引用该内容对象。
+     *
+     * <p>复制会复用 {@code currentObjectId}，同一对象在同一用户下可以对应多个活动节点，
+     * 因此这里只能做存在性判断，不能返回单条实体。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param objectId 文件对象 ID
+     * @param excludeNodeId 需要排除的节点 ID，可为 null
+     * @return 存在其它活动节点时返回 true
+     */
     @Query("""
-            SELECT n FROM FileNode n
-            WHERE n.ownerUserId = :ownerUserId AND n.currentObjectId = :objectId AND n.deleted = false
+            SELECT COUNT(n) > 0 FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.currentObjectId = :objectId
+              AND n.deleted = false
+              AND (:excludeNodeId IS NULL OR n.id <> :excludeNodeId)
             """)
-    Optional<FileNode> findActiveByOwnerUserIdAndObjectId(
+    boolean existsActiveByOwnerUserIdAndObjectId(
             @Param("ownerUserId") UUID ownerUserId,
-            @Param("objectId") UUID objectId
+            @Param("objectId") UUID objectId,
+            @Param("excludeNodeId") UUID excludeNodeId
     );
 
     /**

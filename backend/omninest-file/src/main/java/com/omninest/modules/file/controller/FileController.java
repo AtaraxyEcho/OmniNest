@@ -124,6 +124,14 @@ public class FileController {
                 files.getTotalElements()));
     }
 
+    @Operation(summary = "获取文件节点", description = "按 ID 获取当前用户可见的文件或文件夹节点")
+    @GetMapping("/api/v1/files/{fileId}")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<FileNodeDto> getFileNode(@PathVariable UUID fileId) {
+        return ApiResponse.success(
+                fileQueryService.getFileNode(currentUserContext.requireCurrentUserId(), fileId));
+    }
+
     @Operation(summary = "创建文件夹", description = "在指定父目录下创建新文件夹")
     @PostMapping("/api/v1/files/folders")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")

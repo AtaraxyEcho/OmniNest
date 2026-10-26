@@ -136,6 +136,13 @@ class FileUploadSessionServiceTest {
                 sharedSpaceService,
                 sharedSpaceQuotaService,
                 fileContentChangePublisher,
+                new FileUploadCancellationService(
+                        uploadSessionRepository,
+                        uploadPartRepository,
+                        storageQuotaService,
+                        objectStorageClient,
+                        transactionTemplate()
+                ),
                 transactionTemplate()
         );
     }

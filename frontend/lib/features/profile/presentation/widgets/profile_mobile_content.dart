@@ -14,6 +14,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/version/app_version_api.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -647,6 +648,16 @@ class _ProfileIdentityHeader extends StatelessWidget {
                           ? Image.network(
                             avatarUrl!,
                             fit: BoxFit.cover,
+                            cacheWidth: quantizedDecodeWidth(
+                              logicalWidth: 76,
+                              devicePixelRatio:
+                                  MediaQuery.devicePixelRatioOf(context),
+                            ),
+                            cacheHeight: quantizedDecodeWidth(
+                              logicalWidth: 76,
+                              devicePixelRatio:
+                                  MediaQuery.devicePixelRatioOf(context),
+                            ),
                             errorBuilder:
                                 (_, _, _) => _AvatarFallback(initial: initial),
                           )

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/workstation_scope.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -410,6 +411,14 @@ class _SquareAvatar extends StatelessWidget {
               ? Image.network(
                 avatarUrl!,
                 fit: BoxFit.cover,
+                cacheWidth: quantizedDecodeWidth(
+                  logicalWidth: size,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                ),
+                cacheHeight: quantizedDecodeWidth(
+                  logicalWidth: size,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                ),
                 errorBuilder: (_, _, _) => _initial(initial, scheme),
               )
               : _initial(initial, scheme),

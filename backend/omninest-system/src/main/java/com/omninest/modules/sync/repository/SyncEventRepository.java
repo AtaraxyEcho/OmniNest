@@ -56,7 +56,24 @@ public interface SyncEventRepository extends JpaRepository<SyncEvent, UUID> {
      * @return 可认领事件
      */
     @Query(value = """
-            SELECT event.*
+            SELECT event.id,
+                   event.sequence_no,
+                   event.recipient_user_id,
+                   event.scope,
+                   event.resource_type,
+                   event.resource_id,
+                   event.action,
+                   event.resource_version,
+                   event.payload,
+                   event.publish_status,
+                   event.publish_attempts,
+                   event.available_at,
+                   event.locked_by,
+                   event.locked_until,
+                   event.published_at,
+                   event.created_at,
+                   event.updated_at,
+                   event.version
             FROM omni.sync_events event
             WHERE (event.publish_status = 'PENDING' AND event.available_at <= :now)
                OR (event.publish_status = 'PUBLISHING' AND event.locked_until < :now)

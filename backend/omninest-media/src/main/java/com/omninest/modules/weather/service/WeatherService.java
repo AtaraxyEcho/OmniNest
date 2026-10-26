@@ -20,6 +20,7 @@ import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLoc
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -48,7 +49,6 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -469,15 +469,46 @@ public class WeatherService {
         headers.set("Accept", "application/json");
         headers.set("Accept-Encoding", "gzip");
 
-        var response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
-
-        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-            String body = decompressGzip(response.getBody());
-            if (body.trim().startsWith("{")) {
-                return JsonSupport.readTree(body);
-            }
+        // 响应体必须边读边限长：exchange(byte[].class) 会先把上游返回全部堆进内存，
+        // 恶意或异常的超大响应在解压限长生效前就已经造成内存峰值。
+        byte[] raw = restTemplate.execute(
+                uri,
+                HttpMethod.GET,
+                request -> request.getHeaders().putAll(headers),
+                response -> readBoundedResponse(response.getBody())
+        );
+        if (raw == null || raw.length == 0) {
+            return null;
+        }
+        String body = decompressGzip(raw);
+        if (body.trim().startsWith("{")) {
+            return JsonSupport.readTree(body);
         }
         return null;
+    }
+
+    /**
+     * 读取有上限的原始响应体；超过上限直接放弃，避免未压缩响应撑爆堆内存。
+     */
+    private byte[] readBoundedResponse(InputStream input) throws IOException {
+        if (input == null) {
+            return new byte[0];
+        }
+        try (InputStream source = input;
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int total = 0;
+            int read;
+            while ((read = source.read(buffer)) != -1) {
+                total += read;
+                if (total > MAX_RAW_RESPONSE_SIZE) {
+                    log.warn("天气响应体超过大小限制({} bytes)，丢弃响应", MAX_RAW_RESPONSE_SIZE);
+                    return null;
+                }
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        }
     }
 
     // ==================== 响应解析 ====================
@@ -773,6 +804,7 @@ public class WeatherService {
     }
 
     private static final int MAX_DECOMPRESSED_SIZE = 1024 * 1024;
+    private static final int MAX_RAW_RESPONSE_SIZE = 256 * 1024;
 
     private String decompressGzip(byte[] data) {
         if (data.length >= 2 && (data[0] & 0xFF) == 0x1f && (data[1] & 0xFF) == 0x8b) {
@@ -791,7 +823,8 @@ public class WeatherService {
                 }
                 return out.toString(StandardCharsets.UTF_8);
             } catch (Exception e) {
-                log.debug("GZIP 解压失败，回退原始字节", e);
+                log.debug("GZIP 解压失败，丢弃响应", e);
+                return "";
             }
         }
         return new String(data, StandardCharsets.UTF_8);

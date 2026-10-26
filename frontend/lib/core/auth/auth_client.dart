@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/core/auth/auth_models.dart';
@@ -100,6 +102,7 @@ class AuthClient {
   /// 原生端传入本地保存的刷新令牌，Web 端留空走 Cookie 通道。
   /// [accessToken] 用于刷新令牌丢失时按 sid 吊销当前会话。
   Future<void> logout({String? refreshToken, String? accessToken}) async {
+    final credentialOptions = _credentialOptions();
     await _dio.post<Map<String, dynamic>>(
       '/auth/logout',
       data:
@@ -108,12 +111,40 @@ class AuthClient {
               : {'refreshToken': refreshToken},
       options: Options(
         headers: {
-          ...?_credentialOptions().headers,
-          if (accessToken != null && accessToken.isNotEmpty)
+          ...?credentialOptions.headers,
+          // 过期 Access Token 会被资源服务器在控制器前直接拒绝为 401，
+          // 导致 Cookie 与服务端刷新会话都清不掉；过期时只依赖刷新令牌/Cookie。
+          if (_shouldAttachAccessToken(accessToken))
             'Authorization': 'Bearer $accessToken',
         },
+        extra: credentialOptions.extra,
       ),
     );
+  }
+
+  bool _shouldAttachAccessToken(String? accessToken) {
+    if (accessToken == null || accessToken.isEmpty) {
+      return false;
+    }
+    final parts = accessToken.split('.');
+    if (parts.length < 2) {
+      return false;
+    }
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is! Map<String, dynamic>) {
+        return false;
+      }
+      final exp = payload['exp'];
+      if (exp is! num) {
+        return true;
+      }
+      return DateTime.now().millisecondsSinceEpoch < exp.toInt() * 1000;
+    } catch (_) {
+      return false;
+    }
   }
 
   AuthTokenResponse parseAuthResponse(Map<String, dynamic>? body) {

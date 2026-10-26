@@ -343,6 +343,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationMarkAllRead => '全部已读';
 
   @override
+  String get notificationMarkAllReadFailed => '全部标为已读失败，请重试。';
+
+  @override
   String get notificationDelete => '删除通知';
 
   @override

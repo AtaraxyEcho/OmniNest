@@ -15,21 +15,16 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoEditVersionDto;
 import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
-import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.AffineTransform;
 import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
-import java.awt.image.ByteLookupTable;
-import java.awt.image.ConvolveOp;
-import java.awt.image.DataBufferInt;
-import java.awt.image.Kernel;
-import java.awt.image.LookupOp;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -261,6 +256,7 @@ public class PhotoEditService {
         version.setEditType(editType);
         version.setEditParams(editParams);
         version.setFileId(fileId);
+        List<EvictedVersion> evicted = new ArrayList<>();
         try {
             transactionTemplate.executeWithoutResult(status -> {
                 int versionNumber = nextVersionNumber(photo.getId());
@@ -273,7 +269,7 @@ public class PhotoEditService {
                 }
                 photo.setActiveFileId(fileId);
                 photoItemRepository.save(photo);
-                enforceMaxVersions(ownerUserId, photo.getId());
+                evicted.addAll(enforceMaxVersions(ownerUserId, photo.getId()));
                 syncEventService.record(
                         ownerUserId,
                         SyncScope.PHOTOS,
@@ -288,6 +284,11 @@ public class PhotoEditService {
             deleteDerivedQuietly(ownerUserId, fileId);
             deleteDerivedQuietly(ownerUserId, thumbnailFileId);
             throw exception;
+        }
+        // 对象存储删除必须等版本行提交后再做：事务回滚时版本仍指向这些文件，
+        // 提前删对象只会留下指向空内容的版本记录。
+        for (EvictedVersion item : evicted) {
+            cleanupEvictedVersion(ownerUserId, item);
         }
         return toDto(version);
     }
@@ -429,20 +430,22 @@ public class PhotoEditService {
             if (source == null) {
                 return false;
             }
-            BufferedImage image = source.image();
+            // 统一转成三通道 RGB 画布：索引色 PNG/GIF 的 type 为 0 或 TYPE_BYTE_INDEXED，
+            // 直接构造同类型画布或套单表 LookupOp 会抛 ImagingOpException。
+            BufferedImage image = PhotoEditImageOps.copyToIntRgb(source.image());
             BufferedImage result = switch (editType.toUpperCase()) {
                 case "ROTATE" -> applyRotation(image, params);
                 case "CROP" -> applyCrop(image, params, source.subsample());
-                case "BRIGHTNESS" -> applyBrightness(image, params);
-                case "CONTRAST" -> applyContrast(image, params);
-                case "FILTER" -> applyFilter(image, params);
-                case "SATURATION" -> applySaturation(image, params);
+                case "BRIGHTNESS" -> PhotoEditImageOps.applyBrightness(image, params);
+                case "CONTRAST" -> PhotoEditImageOps.applyContrast(image, params);
+                case "FILTER" -> PhotoEditImageOps.applyFilter(image, params);
+                case "SATURATION" -> PhotoEditImageOps.applySaturation(image, params);
                 default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的编辑类型: " + editType);
             };
             inputGuard.validateDimensions(result.getWidth(), result.getHeight());
             // 带透明通道的源图（PNG/WebP 解码为 ARGB）无法直接写 JPEG：OpenJDK 的 JPEG writer
             // 不支持含 Alpha 的色彩空间，ImageIO.write 会直接返回 false，表现为「编辑操作失败」。
-            return ImageIO.write(ensureOpaqueRgb(result), "jpg", outputFile.toFile());
+            return ImageIO.write(PhotoEditImageOps.ensureOpaqueRgb(result), "jpg", outputFile.toFile());
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -491,48 +494,6 @@ public class PhotoEditService {
     }
 
     private record StoredEdit(UUID fileId, UUID thumbnailFileId, long sizeBytes) {
-    }
-
-    /**
-     * 在 ARGB/RGB 整型画布上逐像素处理，避免 getRGB/setRGB 的逐点颜色模型转换。
-     */
-    private BufferedImage copyToIntRgb(BufferedImage image) {
-        BufferedImage result = new BufferedImage(
-                image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D graphics = result.createGraphics();
-        try {
-            graphics.drawImage(image, 0, 0, null);
-        } finally {
-            graphics.dispose();
-        }
-        return result;
-    }
-
-    private int[] pixelData(BufferedImage image) {
-        return ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
-    }
-
-    /**
-     * 将可能含透明通道的图像铺到白色底上转成 RGB。
-     *
-     * <p>裁剪、亮度、对比度与卷积滤镜都保留源图类型，只有 saturation/灰度/怀旧分支自带 RGB 画布，
-     * 因此写出前统一兜一次。</p>
-     */
-    private BufferedImage ensureOpaqueRgb(BufferedImage image) {
-        if (!image.getColorModel().hasAlpha()) {
-            return image;
-        }
-        BufferedImage rgb = new BufferedImage(
-                image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D graphics = rgb.createGraphics();
-        try {
-            graphics.setColor(Color.WHITE);
-            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
-            graphics.drawImage(image, 0, 0, null);
-        } finally {
-            graphics.dispose();
-        }
-        return rgb;
     }
 
     /**
@@ -601,29 +562,6 @@ public class PhotoEditService {
         return op.filter(image, null);
     }
 
-    /** 饱和度调整：factor 1 为原图，0 为灰度，2 为两倍饱和度。 */
-    private BufferedImage applySaturation(BufferedImage image, Map<String, Object> params) {
-        float factor = ((Number) params.getOrDefault("factor", 1.0f)).floatValue();
-        BufferedImage result = copyToIntRgb(image);
-        int[] pixels = pixelData(result);
-        for (int index = 0; index < pixels.length; index++) {
-            int rgb = pixels[index];
-            int r = (rgb >> 16) & 0xFF;
-            int g = (rgb >> 8) & 0xFF;
-            int b = rgb & 0xFF;
-            float gray = 0.299f * r + 0.587f * g + 0.114f * b;
-            int nr = clampColor(Math.round(gray + (r - gray) * factor));
-            int ng = clampColor(Math.round(gray + (g - gray) * factor));
-            int nb = clampColor(Math.round(gray + (b - gray) * factor));
-            pixels[index] = (nr << 16) | (ng << 8) | nb;
-        }
-        return result;
-    }
-
-    private int clampColor(int value) {
-        return Math.min(255, Math.max(0, value));
-    }
-
     private BufferedImage applyCrop(BufferedImage image, Map<String, Object> params, int subsample) {
         int scale = Math.max(1, subsample);
         int x = ((Number) params.getOrDefault("x", 0)).intValue() / scale;
@@ -637,99 +575,68 @@ public class PhotoEditService {
         return image.getSubimage(x, y, w, h);
     }
 
-    private BufferedImage applyBrightness(BufferedImage image, Map<String, Object> params) {
-        float factor = ((Number) params.getOrDefault("factor", 1.0f)).floatValue();
-        byte[] lookup = new byte[256];
-        for (int i = 0; i < 256; i++) {
-            lookup[i] = (byte) Math.min(255, Math.max(0, (int) (i * factor)));
-        }
-        LookupOp op = new LookupOp(new ByteLookupTable(0, lookup), null);
-        return op.filter(image, null);
-    }
-
-    private BufferedImage applyContrast(BufferedImage image, Map<String, Object> params) {
-        float factor = ((Number) params.getOrDefault("factor", 1.0f)).floatValue();
-        byte[] lookup = new byte[256];
-        for (int i = 0; i < 256; i++) {
-            int val = (int) (((i - 128) * factor) + 128);
-            lookup[i] = (byte) Math.min(255, Math.max(0, val));
-        }
-        LookupOp op = new LookupOp(new ByteLookupTable(0, lookup), null);
-        return op.filter(image, null);
-    }
-
-    private BufferedImage applyFilter(BufferedImage image, Map<String, Object> params) {
-        String filterName = (String) params.getOrDefault("name", "none");
-        return switch (filterName.toLowerCase()) {
-            case "grayscale" -> applyGrayscale(image);
-            case "sepia" -> applySepia(image);
-            case "blur" -> applyBlur(image);
-            case "sharpen" -> applySharpen(image);
-            default -> image;
-        };
-    }
-
-    private BufferedImage applyGrayscale(BufferedImage image) {
-        BufferedImage result = copyToIntRgb(image);
-        int[] pixels = pixelData(result);
-        for (int index = 0; index < pixels.length; index++) {
-            int rgb = pixels[index];
-            int r = (rgb >> 16) & 0xFF;
-            int g = (rgb >> 8) & 0xFF;
-            int b = rgb & 0xFF;
-            int gray = (int) (0.299 * r + 0.587 * g + 0.114 * b);
-            pixels[index] = (gray << 16) | (gray << 8) | gray;
-        }
-        return result;
-    }
-
-    private BufferedImage applySepia(BufferedImage image) {
-        BufferedImage result = copyToIntRgb(image);
-        int[] pixels = pixelData(result);
-        for (int index = 0; index < pixels.length; index++) {
-            int rgb = pixels[index];
-            int r = (rgb >> 16) & 0xFF;
-            int g = (rgb >> 8) & 0xFF;
-            int b = rgb & 0xFF;
-            int newR = Math.min(255, (int) (0.393 * r + 0.769 * g + 0.189 * b));
-            int newG = Math.min(255, (int) (0.349 * r + 0.686 * g + 0.168 * b));
-            int newB = Math.min(255, (int) (0.272 * r + 0.534 * g + 0.131 * b));
-            pixels[index] = (newR << 16) | (newG << 8) | newB;
-        }
-        return result;
-    }
-
-    private BufferedImage applyBlur(BufferedImage image) {
-        float[] kernel = {
-                1f / 9, 1f / 9, 1f / 9,
-                1f / 9, 1f / 9, 1f / 9,
-                1f / 9, 1f / 9, 1f / 9
-        };
-        ConvolveOp op = new ConvolveOp(new Kernel(3, 3, kernel), ConvolveOp.EDGE_NO_OP, null);
-        return op.filter(image, null);
-    }
-
-    private BufferedImage applySharpen(BufferedImage image) {
-        float[] kernel = {
-                0, -1, 0,
-                -1, 5, -1,
-                0, -1, 0
-        };
-        ConvolveOp op = new ConvolveOp(new Kernel(3, 3, kernel), ConvolveOp.EDGE_NO_OP, null);
-        return op.filter(image, null);
-    }
-
-    private void enforceMaxVersions(UUID ownerUserId, UUID photoId) {
+    private List<EvictedVersion> enforceMaxVersions(UUID ownerUserId, UUID photoId) {
         List<PhotoEditVersion> versions = editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId);
         if (versions.size() <= maxHistoryVersions) {
-            return;
+            return List.of();
         }
-        List<PhotoEditVersion> toDelete = versions.subList(maxHistoryVersions, versions.size());
-        // 同步清理已删除版本的派生文件，避免 MinIO 孤儿对象。
+        List<PhotoEditVersion> toDelete = new ArrayList<>(versions.subList(maxHistoryVersions, versions.size()));
+        List<EvictedVersion> evicted = new ArrayList<>(toDelete.size());
         for (PhotoEditVersion version : toDelete) {
-            refundDeletedVersionQuota(ownerUserId, version);
+            if (version.getFileId() == null) {
+                continue;
+            }
+            long sizeBytes = fileMetadataQueryService.findById(version.getFileId())
+                    .map(FileDescriptor::sizeBytes)
+                    .orElse(0L);
+            UUID thumbnailFileId = photoThumbnailService
+                    .findStoredThumbnailFileNodeId(ownerUserId, version.getFileId())
+                    .orElse(null);
+            evicted.add(new EvictedVersion(version.getFileId(), thumbnailFileId, sizeBytes));
         }
         editVersionRepository.deleteAll(toDelete);
+        return evicted;
+    }
+
+    /**
+     * 事务提交后回收被淘汰版本的主图与派生缩略图。
+     *
+     * <p>配额只在主图节点确实删除成功后按写入口径扣减；删除失败保留用量，
+     * 交给每日对账重算，避免与对账重复扣减。</p>
+     */
+    private void cleanupEvictedVersion(UUID ownerUserId, EvictedVersion evicted) {
+        boolean deleted;
+        try {
+            deleted = derivedAssetStorageService.deleteOwned(ownerUserId, evicted.fileId());
+        } catch (RuntimeException ex) {
+            log.warn("旧编辑版本派生文件清理失败: fileId={}", evicted.fileId(), ex);
+            return;
+        }
+        if (evicted.thumbnailFileId() != null) {
+            try {
+                derivedAssetStorageService.deleteOwned(ownerUserId, evicted.thumbnailFileId());
+            } catch (RuntimeException ex) {
+                log.warn("旧编辑版本缩略图清理失败: fileId={}, thumbnailFileId={}",
+                        evicted.fileId(), evicted.thumbnailFileId(), ex);
+            }
+        }
+        if (deleted && evicted.sizeBytes() > 0) {
+            try {
+                storageQuotaService.decrementUsage(ownerUserId, evicted.sizeBytes());
+            } catch (RuntimeException ex) {
+                log.warn("旧编辑版本配额退还失败: fileId={}", evicted.fileId(), ex);
+            }
+        }
+    }
+
+    /**
+     * 被淘汰版本的待清理资产。
+     *
+     * @param fileId 主图节点 ID
+     * @param thumbnailFileId 缩略图节点 ID，可为 null
+     * @param sizeBytes 主图字节数
+     */
+    private record EvictedVersion(UUID fileId, UUID thumbnailFileId, long sizeBytes) {
     }
 
     /**
@@ -745,33 +652,6 @@ public class PhotoEditService {
         return editVersionRepository.findFirstByPhotoIdOrderByVersionNumberDesc(photoId)
                 .map(version -> version.getVersionNumber() + 1)
                 .orElse(1);
-    }
-
-    /**
-     * 物理删除超出保留上限的派生版本节点，并按写入时加计的字节退还配额。
-     *
-     * <p>写入时 {@code chargeEditVersionQuota} 对派生节点全额加计，节点被物理删除后
-     * 不再进入 {@code sumFileSizeForUsers} 重算基数；此处必须在节点确实删除成功后按同一
-     * 口径扣减，否则实时用量长期虚高。删除失败或节点缺失时不退还，避免与每日对账重复扣减。</p>
-     */
-    private void refundDeletedVersionQuota(UUID ownerUserId, PhotoEditVersion version) {
-        if (version.getFileId() == null) {
-            return;
-        }
-        long sizeBytes = fileMetadataQueryService.findById(version.getFileId())
-                .map(FileDescriptor::sizeBytes)
-                .orElse(0L);
-        boolean deleted;
-        try {
-            deleted = derivedAssetStorageService.deleteOwned(ownerUserId, version.getFileId());
-        } catch (RuntimeException ex) {
-            log.warn("旧编辑版本派生文件清理失败: versionId={}, fileId={}",
-                    version.getId(), version.getFileId(), ex);
-            return;
-        }
-        if (deleted && sizeBytes > 0) {
-            storageQuotaService.decrementUsage(ownerUserId, sizeBytes);
-        }
     }
 
     private PhotoEditVersionDto toDto(PhotoEditVersion version) {

@@ -90,6 +90,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   // 拖动状态 — 解决进度条跳回起点
   bool _isSeeking = false;
   bool _progressSyncWarned = false;
+  /// 正常退出已同步过最终进度；dispose 不再重复发同一次请求。
+  bool _finalProgressSynced = false;
   // seek 后保留起始位置，防止 _openIfNeeded 重新从头打开
   int _seekStart = 0;
 
@@ -204,7 +206,9 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     _polledPosition.dispose();
     _volumeListenable.dispose();
     _seekListenable.dispose();
-    unawaited(_syncCurrentProgress());
+    if (!_finalProgressSynced) {
+      unawaited(_syncCurrentProgress());
+    }
     unawaited(PipService.instance().setVideoPlaybackActive(active: false));
     _pipListenerDisposer?.call();
     _player.dispose();
@@ -272,6 +276,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
 
   Future<void> _syncAndRefreshHistory() async {
     await _syncCurrentProgress();
+    _finalProgressSynced = true;
     if (!mounted) {
       return;
     }

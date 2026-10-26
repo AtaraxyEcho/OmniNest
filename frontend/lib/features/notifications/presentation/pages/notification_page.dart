@@ -165,8 +165,19 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     }
   }
 
-  Future<void> _markAllRead() {
-    return ref.read(notificationControllerProvider.notifier).markAllRead();
+  Future<void> _markAllRead() async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(notificationControllerProvider.notifier).markAllRead();
+    } catch (_) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          l10n.notificationMarkAllReadFailed,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
   }
 
   Future<void> _deleteNotification(NotificationDto notification) async {

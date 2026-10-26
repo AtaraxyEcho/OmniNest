@@ -140,7 +140,7 @@ public interface PhotoItemTimelineQueries {
             WITH grouped_photos AS (
                 SELECT CASE
                            WHEN :groupBy = 'DATE'
-                               THEN TO_CHAR(p.date_taken AT TIME ZONE :zoneId, 'YYYY-MM')
+                               THEN TO_CHAR(COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId, 'YYYY-MM')
                            WHEN :groupBy = 'LOCATION'
                                THEN COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置')
                            WHEN :groupBy = 'FORMAT'
@@ -175,7 +175,6 @@ public interface PhotoItemTimelineQueries {
                    AND f.is_deleted = false
                    AND p.deleted_at IS NULL
                    AND (:groupBy <> 'TAG' OR t.id IS NOT NULL)
-                   AND (:groupBy <> 'DATE' OR p.date_taken IS NOT NULL)
             ), group_page AS (
                 SELECT gp.group_key,
                        COUNT(*) AS photo_count
@@ -191,7 +190,7 @@ public interface PhotoItemTimelineQueries {
                        page.photo_count,
                        ROW_NUMBER() OVER (
                            PARTITION BY gp.group_key
-                           ORDER BY gp.created_at DESC, gp.id ASC
+                           ORDER BY COALESCE(gp.date_taken, gp.created_at) DESC, gp.id ASC
                        ) AS preview_rank
                   FROM grouped_photos gp
                   JOIN group_page page ON page.group_key = gp.group_key
@@ -218,7 +217,7 @@ public interface PhotoItemTimelineQueries {
               FROM ranked r
              WHERE r.preview_rank <= 4
              ORDER BY CASE WHEN CAST(:groupBy AS text) = 'DATE' THEN r.group_key END DESC,
-                      r.group_key ASC, r.created_at DESC, r.id ASC
+                      r.group_key ASC, COALESCE(r.date_taken, r.created_at) DESC, r.id ASC
             """, nativeQuery = true)
     List<PhotoGroupPreviewProjection> findGroupPreviewPage(
             @Param("ownerUserId") UUID ownerUserId,

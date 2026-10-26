@@ -54,6 +54,17 @@ public class RcloneRcClient implements RcloneGateway {
     // ========== 核心调用 ==========
 
     /**
+     * 错误响应可能包含远端路径或凭据报错原文：压平换行并截断，避免整段进入任务表与日志。
+     */
+    private static String summarizeErrorBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        String flattened = body.replaceAll("\\s+", " ").trim();
+        return flattened.length() <= 512 ? flattened : flattened.substring(0, 512) + "...";
+    }
+
+    /**
      * 同步调用 Rclone RC API。
      */
     private JsonNode call(String endpoint, Map<String, Object> params) {
@@ -66,7 +77,8 @@ public class RcloneRcClient implements RcloneGateway {
             );
             if (response.statusCode() >= 400) {
                 throw new IllegalStateException(
-                        "Rclone RC 调用失败，状态码=" + response.statusCode() + "，响应=" + response.body()
+                        "Rclone RC 调用失败，状态码=" + response.statusCode()
+                                + "，响应=" + summarizeErrorBody(response.body())
                 );
             }
             if (response.body() == null || response.body().isBlank()) {
@@ -75,7 +87,7 @@ public class RcloneRcClient implements RcloneGateway {
             JsonNode body = JsonSupport.readTree(response.body());
             String error = JsonSupport.textOrNull(body, "error");
             if (error != null && !error.isBlank()) {
-                throw new IllegalStateException("Rclone RC 错误: " + error);
+                throw new IllegalStateException("Rclone RC 错误: " + summarizeErrorBody(error));
             }
             return body;
         } catch (InterruptedException exception) {

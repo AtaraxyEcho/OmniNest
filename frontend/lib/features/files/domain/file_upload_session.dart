@@ -69,8 +69,6 @@ class FileUploadSession {
     required this.totalParts,
     required this.mimeType,
     required this.status,
-    required this.bucket,
-    required this.objectKey,
     required this.uploadUrl,
     required this.parts,
     required this.expiresAt,
@@ -85,8 +83,6 @@ class FileUploadSession {
   final int totalParts;
   final String mimeType;
   final String status;
-  final String bucket;
-  final String objectKey;
   final String? uploadUrl;
   final List<FileUploadPart> parts;
   final DateTime? expiresAt;

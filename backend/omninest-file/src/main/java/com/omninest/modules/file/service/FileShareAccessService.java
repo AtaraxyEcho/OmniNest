@@ -433,12 +433,8 @@ public class FileShareAccessService {
     }
 
     private void acceptFileShare(UUID userId, FileNode source, UUID targetParentId) {
-        if (source.getCurrentObjectId() != null) {
-            fileNodeRepository.findActiveByOwnerUserIdAndObjectId(userId, source.getCurrentObjectId())
-                    .ifPresent(existing -> {
-                        throw new BusinessException(ErrorCode.CONFLICT, "文件已存在，请先彻底删除后再保存");
-                    });
-        }
+        // 去重判据统一为目标目录同名冲突：文件夹转存与普通复制都允许同一内容对象
+        // 存在多个节点，单文件转存按全空间对象唯一会与它们互相矛盾。
         FileNode targetParent = resolveAcceptTargetParent(userId, targetParentId);
         if (fileNodeSupport.sameNameExists(
                 userId, SpaceType.PERSONAL, targetParentId, source.getName())) {

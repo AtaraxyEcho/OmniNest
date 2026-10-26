@@ -9,9 +9,11 @@ import 'package:omninest/app/router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/command_palette_colors.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/domain/reader_dashboard.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
@@ -61,6 +63,8 @@ class _Hit {
     required this.type,
     required this.route,
     this.thumbnailUrl,
+    this.readerItemId,
+    this.musicTrackId,
     this.progress,
     this.trailing,
   });
@@ -70,6 +74,12 @@ class _Hit {
   final String type;
   final String? route;
   final String? thumbnailUrl;
+
+  /// 阅读封面是鉴权接口，不能直接交给 Image.network 当 URL 用。
+  final String? readerItemId;
+
+  /// 音乐命中在跳转后按曲目 ID 起播，避免只落到音乐首页。
+  final String? musicTrackId;
   final double? progress;
   final String? trailing;
 }
@@ -147,6 +157,23 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
+  /// 激活一条命中：历史词回填搜索框，其它目标先补齐上下文再跳转。
+  void _activateHit(_Hit hit, String query) {
+    if (hit.trailing == 'query') {
+      _controller.text = hit.title;
+      ref.read(searchQueryProvider.notifier).updateQuery(hit.title);
+      setState(() => _highlight = 0);
+      return;
+    }
+    final trackId = hit.musicTrackId;
+    if (trackId != null && trackId.isNotEmpty) {
+      // 先起播再跳页：音乐页无需再按搜索词重新定位。
+      unawaited(ref.read(musicPortalActionsProvider).playTrackById(trackId));
+    }
+    _remember(query);
+    _go(hit.route);
+  }
+
   List<_Hit> _buildHits({
     required MovieDashboard? dashboard,
     required ReaderDashboard? reader,
@@ -203,7 +230,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
             subtitle: l10n.videoSectionContinueWatching,
             type: 'book',
             route: '/reader/items/${item.id}',
-            thumbnailUrl: item.coverUrl,
+            readerItemId: item.id,
           ),
         );
       }
@@ -214,7 +241,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
             subtitle: l10n.searchGroupBook,
             type: 'book',
             route: '/reader/items/${item.id}',
-            thumbnailUrl: item.coverUrl,
+            readerItemId: item.id,
           ),
         );
       }
@@ -242,6 +269,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
             subtitle: track.artistName,
             type: 'music',
             route: '/music',
+            musicTrackId: track.id,
             thumbnailUrl: track.listCoverUrl ?? track.coverUrl,
           ),
         );
@@ -255,7 +283,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
             title: node.name,
             subtitle: l10n.searchGroupFile,
             type: 'file',
-            route: '/files',
+            route: '/files/preview/${node.id}',
           ),
         );
       }
@@ -268,7 +296,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
           subtitle: item.subtitle,
           type: item.type,
           route: switch (item.type) {
-            'file' => '/files',
+            'file' => '/files/preview/${item.id}',
             'book' => '/reader/items/${item.id}',
             // 分集进剧集详情选集；禁止用分集 id 打开影片详情。
             'video' => movieDetailRouteFromIds(
@@ -279,7 +307,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
             'music' => '/music',
             _ => null,
           },
-          thumbnailUrl: item.thumbnailUrl,
+          readerItemId: item.type == 'book' ? item.id : null,
+          musicTrackId: item.type == 'music' ? item.id : null,
+          thumbnailUrl: item.type == 'book' ? null : item.thumbnailUrl,
         ),
       );
     }
@@ -322,7 +352,16 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   }
 
   /// 数字键 1~7 直达对应页签；返回是否消费了这次按键。
+  ///
+  /// 必须带 Alt/Ctrl/Meta：搜索词本身经常包含年份、卷号与格式数字，
+  /// 裸数字不能从输入框手里抢走。
   bool _selectTabByDigit(LogicalKeyboardKey key) {
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isAltPressed &&
+        !keyboard.isControlPressed &&
+        !keyboard.isMetaPressed) {
+      return false;
+    }
     const digits = <LogicalKeyboardKey>[
       LogicalKeyboardKey.digit1,
       LogicalKeyboardKey.digit2,
@@ -443,14 +482,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
           }
           if (event.logicalKey == LogicalKeyboardKey.enter) {
             final hit = filtered[_highlight.clamp(0, filtered.length - 1)];
-            if (hit.trailing == 'query') {
-              _controller.text = hit.title;
-              ref.read(searchQueryProvider.notifier).updateQuery(hit.title);
-              setState(() => _highlight = 0);
-            } else {
-              _remember(query);
-              _go(hit.route);
-            }
+            _activateHit(hit, query);
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -509,8 +541,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                                     hit,
                                     selected: index == highlight,
                                     onTap: () {
-                                      _remember(query);
-                                      _go(hit.route);
+                                      _activateHit(hit, query);
                                     },
                                   );
                                 }
@@ -519,16 +550,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                                   hit,
                                   selected: index == highlight,
                                   onTap: () {
-                                    if (hit.trailing == 'query') {
-                                      _controller.text = hit.title;
-                                      ref
-                                          .read(searchQueryProvider.notifier)
-                                          .updateQuery(hit.title);
-                                      setState(() => _highlight = 0);
-                                    } else {
-                                      _remember(query);
-                                      _go(hit.route);
-                                    }
+                                    _activateHit(hit, query);
                                   },
                                 );
                               },
@@ -604,10 +626,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                     setState(() => _highlight = 0);
                   },
                   onSubmitted: (value) {
-                    _remember(value);
-                    if (filteredSafe().isNotEmpty) {
-                      _go(filteredSafe().first.route);
+                    final hits = filteredSafe();
+                    if (hits.isEmpty) {
+                      return;
                     }
+                    final index = _highlight.clamp(0, hits.length - 1);
+                    _activateHit(hits[index], value);
                   },
                 ),
               ),
@@ -643,13 +667,13 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
 
   Widget _filterBar(CommandPaletteColors p, AppLocalizations l10n) {
     final tabs = <(_PaletteTab, String, String)>[
-      (_PaletteTab.all, l10n.searchScopeAll, '1'),
-      (_PaletteTab.video, l10n.searchGroupVideo, '2'),
-      (_PaletteTab.music, l10n.searchGroupMusic, '3'),
-      (_PaletteTab.book, l10n.searchGroupBook, '4'),
-      (_PaletteTab.photo, l10n.searchGroupPhoto, '5'),
-      (_PaletteTab.file, l10n.searchGroupFile, '6'),
-      (_PaletteTab.command, l10n.searchGroupCommand, '7'),
+      (_PaletteTab.all, l10n.searchScopeAll, 'Alt+1'),
+      (_PaletteTab.video, l10n.searchGroupVideo, 'Alt+2'),
+      (_PaletteTab.music, l10n.searchGroupMusic, 'Alt+3'),
+      (_PaletteTab.book, l10n.searchGroupBook, 'Alt+4'),
+      (_PaletteTab.photo, l10n.searchGroupPhoto, 'Alt+5'),
+      (_PaletteTab.file, l10n.searchGroupFile, 'Alt+6'),
+      (_PaletteTab.command, l10n.searchGroupCommand, 'Alt+7'),
     ];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -747,6 +771,55 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
+  Widget _hitThumbnail(CommandPaletteColors p, _Hit hit) {
+    final fallback = ColoredBox(
+      color: p.surfaceMuted,
+      child: Icon(Icons.movie_outlined, size: 18, color: p.inkMuted),
+    );
+    final readerItemId = hit.readerItemId;
+    if (readerItemId != null && readerItemId.isNotEmpty) {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final cacheWidth = quantizedDecodeWidth(
+        logicalWidth: 116,
+        devicePixelRatio: dpr,
+      );
+      return ref
+          .watch(coverBytesProvider(readerItemId))
+          .when(
+            data:
+                (bytes) =>
+                    bytes == null || bytes.isEmpty
+                        ? fallback
+                        : Image.memory(
+                          bytes,
+                          fit: BoxFit.cover,
+                          cacheWidth: cacheWidth,
+                          errorBuilder: (_, _, _) => fallback,
+                        ),
+            loading: () => fallback,
+            error: (_, _) => fallback,
+          );
+    }
+    final url = hit.thumbnailUrl;
+    if (url == null || url.isEmpty) {
+      return fallback;
+    }
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      cacheWidth: quantizedDecodeWidth(
+        logicalWidth: 116,
+        devicePixelRatio: dpr,
+      ),
+      cacheHeight: quantizedDecodeWidth(
+        logicalWidth: 68,
+        devicePixelRatio: dpr,
+      ),
+      errorBuilder: (_, _, _) => fallback,
+    );
+  }
+
   Widget _mediaCard(
     CommandPaletteColors p,
     _Hit hit, {
@@ -775,29 +848,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                   child: SizedBox(
                     width: 116,
                     height: 68,
-                    child:
-                        (hit.thumbnailUrl?.isEmpty ?? true)
-                            ? ColoredBox(
-                              color: p.surfaceMuted,
-                              child: Icon(
-                                Icons.movie_outlined,
-                                size: 18,
-                                color: p.inkMuted,
-                              ),
-                            )
-                            : Image.network(
-                              hit.thumbnailUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder:
-                                  (_, _, _) => ColoredBox(
-                                    color: p.surfaceMuted,
-                                    child: Icon(
-                                      Icons.movie_outlined,
-                                      size: 18,
-                                      color: p.inkMuted,
-                                    ),
-                                  ),
-                            ),
+                    child: _hitThumbnail(p, hit),
                   ),
                 ),
                 const SizedBox(width: 12),

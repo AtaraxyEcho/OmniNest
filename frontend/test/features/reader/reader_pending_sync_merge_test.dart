@@ -25,9 +25,9 @@ void main() {
 
   setUp(() {
     db = LocalDatabase(NativeDatabase.memory());
-    storage = ReaderLocalStorage(db);
+    storage = ReaderLocalStorage(db, userId: 'user-1');
     api = MockReaderApi();
-    ReaderSyncQueue.init(db);
+    ReaderSyncQueue.init(db, userId: 'user-1');
     manager = ReaderDataManager(api: api, localStorage: storage);
     registerFallbackValue('');
   });
@@ -431,5 +431,81 @@ void main() {
     );
     expect(pending.deletingIds, contains('server-note-vanishing'));
     expect(pending.updatingPayloads, isEmpty);
+  });
+
+  test('创建回包后把队列中指向 localId 的更新改写为服务端 ID', () async {
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'local-ann-queued',
+        readerItemId: 'item-1',
+        startOffset: 10,
+        endOffset: 20,
+        note: '初始备注',
+        color: '#FFEB3B',
+        createdAt: DateTime(2026, 7, 1),
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationCreate(
+      localId: 'local-ann-queued',
+      itemId: 'item-1',
+      startOffset: 10,
+      endOffset: 20,
+      note: '初始备注',
+      color: '#FFEB3B',
+    );
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'local-ann-queued',
+      note: '离线排队的新备注',
+      color: '#00FF00',
+    );
+    when(
+      () => api.createAnnotation(
+        itemId: any(named: 'itemId'),
+        chapterId: any(named: 'chapterId'),
+        startOffset: any(named: 'startOffset'),
+        endOffset: any(named: 'endOffset'),
+        highlightText: any(named: 'highlightText'),
+        note: any(named: 'note'),
+        color: any(named: 'color'),
+        clientOperationId: any(named: 'clientOperationId'),
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'server-ann-queued',
+        readerItemId: 'item-1',
+        startOffset: 10,
+        endOffset: 20,
+        note: '初始备注',
+        color: '#FFEB3B',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+    );
+    when(
+      () => api.updateAnnotation(
+        any(),
+        note: any(named: 'note'),
+        color: any(named: 'color'),
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'server-ann-queued',
+        readerItemId: 'item-1',
+        startOffset: 10,
+        endOffset: 20,
+        note: '离线排队的新备注',
+        color: '#00FF00',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateAnnotation(
+        'server-ann-queued',
+        note: '离线排队的新备注',
+        color: '#00FF00',
+      ),
+    ).called(1);
   });
 }

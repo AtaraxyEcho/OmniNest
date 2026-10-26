@@ -279,17 +279,28 @@ public class TaskRedispatchService {
         );
     }
 
+    /**
+     * 重建漫画解析事件。
+     *
+     * <p>事件里的文件操作用户是源文件节点的真实所有者：共享分卷可能由其他成员上传，
+     * 用任务归属人会触发 Worker 的文件所有权守卫并静默取消任务。无内容哈希的任务
+     * 在入队时按空串落库，重投必须同样接受空值。</p>
+     */
     private Map<String, Object> comicParsePayload(UUID taskId, Map<String, Object> payload) {
-        return Map.of(
-                "taskId", taskId.toString(),
-                "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                "itemId", requiredUuid(payload, "itemId").toString(),
-                "sourceId", requiredUuid(payload, "sourceId").toString(),
-                "fileNodeId", requiredUuid(payload, "fileNodeId").toString(),
-                "fileFormat", requiredText(payload, "fileFormat"),
-                "contentHash", requiredText(payload, "contentHash"),
-                "isRetry", true
-        );
+        UUID fileOwnerId = nullableUuid(payload.getOrDefault("fileOwnerId", payload.get("ownerUserId")));
+        if (fileOwnerId == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少可重试载荷字段: fileOwnerId");
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("taskId", taskId.toString());
+        event.put("ownerUserId", fileOwnerId.toString());
+        event.put("itemId", requiredUuid(payload, "itemId").toString());
+        event.put("sourceId", requiredUuid(payload, "sourceId").toString());
+        event.put("fileNodeId", requiredUuid(payload, "fileNodeId").toString());
+        event.put("fileFormat", requiredText(payload, "fileFormat"));
+        event.put("contentHash", optionalText(payload, "contentHash", ""));
+        event.put("isRetry", true);
+        return event;
     }
 
     /**

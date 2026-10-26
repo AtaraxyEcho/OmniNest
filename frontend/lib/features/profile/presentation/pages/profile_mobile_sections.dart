@@ -579,3 +579,91 @@ class _PmAboutSection extends StatelessWidget {
     );
   }
 }
+
+/// 头像圆片（有图用图，无图取首字母）。
+///
+/// [onTap] 非空时该圆片即为按钮，读屏必须能播报动作含义，故同时要求
+/// [semanticLabel]（例如「个人信息」或「更换头像」）。
+class _ProfileAvatarChip extends StatelessWidget {
+  const _ProfileAvatarChip({
+    required this.avatarUrl,
+    required this.name,
+    this.size = 40,
+    this.onTap,
+    this.semanticLabel,
+  });
+
+  final String? avatarUrl;
+  final String name;
+  final double size;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl;
+    final initials =
+        name.trim().isNotEmpty
+            ? name.trim().characters.first.toUpperCase()
+            : '?';
+    final body = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: context.env.avatarBg,
+        shape: BoxShape.circle,
+      ),
+      child:
+          url != null && url.isNotEmpty
+              ? ClipOval(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  cacheWidth: quantizedDecodeWidth(
+                    logicalWidth: size,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  ),
+                  cacheHeight: quantizedDecodeWidth(
+                    logicalWidth: size,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  ),
+                  errorBuilder:
+                      (_, _, _) => Center(
+                        child: Text(
+                          initials,
+                          style: TextStyle(
+                            fontSize:
+                                size * 0.33, // ignore: font_size_whitelist
+                            fontWeight: FontWeight.w700,
+                            color: context.env.avatarFg,
+                          ),
+                        ),
+                      ),
+                ),
+              )
+              : Center(
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    fontSize: size * 0.33, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w700,
+                    color: context.env.avatarFg,
+                  ),
+                ),
+              ),
+    );
+    if (onTap == null) {
+      return body;
+    }
+    // 头像圆片无文字标签：补按钮角色与动作名称，读屏才能说出这是按钮。
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: body,
+      ),
+    );
+  }
+}

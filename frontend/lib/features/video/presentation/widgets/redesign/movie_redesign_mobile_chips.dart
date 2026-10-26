@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -354,6 +355,16 @@ class MovieMobileCinemaHero extends StatelessWidget {
               Image.network(
                 posterUrl!,
                 fit: BoxFit.cover,
+                cacheWidth: quantizedDecodeWidth(
+                  logicalWidth: MediaQuery.sizeOf(context).width,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  max: 2560,
+                ),
+                cacheHeight: quantizedDecodeWidth(
+                  logicalWidth: 348,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  max: 2048,
+                ),
                 errorBuilder: (_, _, _) => ColoredBox(color: context.env.stage),
               )
             else

@@ -92,6 +92,27 @@ public class FileQueryService {
         return listQueryService.listRecycleBinPage(ownerUserId, spaceType, page, size);
     }
 
+    /**
+     * 按 ID 查询当前用户可见的文件节点，供搜索结果等精确跳转使用。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param fileId 文件节点 ID
+     * @return 文件节点 DTO
+     */
+    @Transactional(readOnly = true)
+    public FileNodeDto getFileNode(UUID ownerUserId, UUID fileId) {
+        FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        if (!node.getOwnerUserId().equals(ownerUserId)) {
+            // 共享文件对具备浏览权限的成员可见；不可用时同样返回 NOT_FOUND，
+            // 避免 403/404 差异成为共享节点存在性探测通道。
+            if (node.getSpaceType() != SpaceType.SHARED || !sharedSpaceService.canBrowse(ownerUserId)) {
+                throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
+            }
+        }
+        return assembler.toDto(node);
+    }
+
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
         return downloadContentService.createDownloadUrl(ownerUserId, fileId);

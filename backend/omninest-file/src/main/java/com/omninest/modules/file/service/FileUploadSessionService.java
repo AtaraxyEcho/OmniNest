@@ -97,6 +97,7 @@ public class FileUploadSessionService {
     private final SharedSpaceService sharedSpaceService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final FileContentChangePublisher fileContentChangePublisher;
+    private final FileUploadCancellationService cancellationService;
     private final TransactionTemplate transactionTemplate;
 
     public FileUploadPolicyDto uploadPolicy() {
@@ -518,8 +519,6 @@ public class FileUploadSessionService {
         return stored;
     }
 
-    private FileUploadCancellationService cancellationService;
-
     /**
      * 取消上传会话；状态机实现见 {@link FileUploadCancellationService}。
      *
@@ -527,20 +526,7 @@ public class FileUploadSessionService {
      * @param uploadId 上传会话 ID
      */
     public void cancelSession(UUID ownerUserId, String uploadId) {
-        cancellationService().cancel(ownerUserId, uploadId);
-    }
-
-    private FileUploadCancellationService cancellationService() {
-        if (cancellationService == null) {
-            cancellationService = new FileUploadCancellationService(
-                    fileUploadSessionRepository,
-                    fileUploadPartRepository,
-                    storageQuotaService,
-                    objectStorageClient,
-                    transactionTemplate
-            );
-        }
-        return cancellationService;
+        cancellationService.cancel(ownerUserId, uploadId);
     }
 
     /**
@@ -1066,8 +1052,6 @@ public class FileUploadSessionService {
                 session.getTotalParts(),
                 session.getMimeType(),
                 session.getStatus(),
-                session.getTargetBucket(),
-                session.getTargetObjectKey(),
                 uploadUrl,
                 partDtos,
                 session.getExpiresAt()

@@ -1,6 +1,14 @@
 part of 'file_api.dart';
 
 mixin FileApiBrowse on FileApiBase {
+  /// 按 ID 获取单个文件节点，供搜索结果等精确跳转使用。
+  Future<FileNode> getFileNode(String fileId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/$fileId',
+    );
+    return parseFileNodeResponse(response.data);
+  }
+
   Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
     // 非分页遗留入口（全局搜索兜底等）按后端分页上限取近似全量首页。
     final page = await listFilesPage(

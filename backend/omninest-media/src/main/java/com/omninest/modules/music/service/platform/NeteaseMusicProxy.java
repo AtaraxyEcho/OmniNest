@@ -87,6 +87,12 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             "standard"
     );
 
+    /** 整次播放地址探测的时间预算，避免切歌时串行等待多档音质。 */
+    private static final Duration PLAYBACK_URL_TIMEOUT = Duration.ofSeconds(8);
+
+    /** 降档只保留两个关键落点，避免从最高档逐级串行探测九次。 */
+    private static final List<String> QUALITY_FALLBACKS = List.of("exhigh", "standard");
+
     private final MusicRuntimeConfigService configService;
     private final MusicPlatformCredentialService credentialService;
     private final SafeUrlValidator safeUrlValidator;
@@ -161,16 +167,23 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             return new PlaybackUrlResult(null, null, null, "歌曲ID为空");
         }
         try {
-            // 凭据查询与解密在循环外只做一次，避免最多 9 个音质档位重复查库。
+            // 凭据查询与解密在循环外只做一次，避免重复查库。
             String userCookie = cookie(ownerUserId);
-            // 从请求音质开始向下探测
             int startIndex = startIndexForQuality(quality);
-            for (int i = startIndex; i < QUALITY_LEVELS.size(); i++) {
-                String level = QUALITY_LEVELS.get(i);
+            List<String> candidates = playbackQualityCandidates(startIndex);
+            long deadline = System.nanoTime() + PLAYBACK_URL_TIMEOUT.toNanos();
+            for (String level : candidates) {
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    log.info("网易云播放URL探测超出时间预算: songId={}", songId);
+                    break;
+                }
+                Duration requestTimeout = Duration.ofMillis(Math.max(
+                        1, Math.min(REQUEST_TIMEOUT.toMillis(), remainingNanos / 1_000_000)));
                 String path = "/song/url/v1?id=" + encode(songId)
                         + "&level=" + level
                         + "&timestamp=" + System.currentTimeMillis();
-                JsonNode json = requestJson(path, userCookie);
+                JsonNode json = requestJson(path, userCookie, requestTimeout);
                 if (json == null) {
                     continue;
                 }
@@ -705,12 +718,22 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      * @return JSON 响应，失败返回 null
      */
     private JsonNode requestJson(String path, String cookie) throws IOException, InterruptedException {
-        return request(path, cookie).body();
+        return request(path, cookie, REQUEST_TIMEOUT).body();
+    }
+
+    private JsonNode requestJson(String path, String cookie, Duration timeout)
+            throws IOException, InterruptedException {
+        return request(path, cookie, timeout).body();
     }
 
     private NeteaseApiResponse request(String path, String cookie) throws IOException, InterruptedException {
+        return request(path, cookie, REQUEST_TIMEOUT);
+    }
+
+    private NeteaseApiResponse request(String path, String cookie, Duration timeout)
+            throws IOException, InterruptedException {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(requestUri(path))
-                .timeout(REQUEST_TIMEOUT)
+                .timeout(timeout)
                 .header("Accept", "application/json")
                 .header("Referer", "https://music.163.com/")
                 .header("User-Agent", USER_AGENT)
@@ -1011,6 +1034,23 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         }
         // 未识别的音质从最高开始探测
         return 0;
+    }
+
+    /**
+     * 构造至多三档的探测序列：请求档位 + exhigh + standard。
+     *
+     * <p>中间档位通常与请求档位同属 VIP 权限层，逐档串行只会拉长切歌等待。
+     */
+    private List<String> playbackQualityCandidates(int startIndex) {
+        List<String> candidates = new ArrayList<>(3);
+        candidates.add(QUALITY_LEVELS.get(startIndex));
+        for (String fallback : QUALITY_FALLBACKS) {
+            int index = QUALITY_LEVELS.indexOf(fallback);
+            if (index >= startIndex && !candidates.contains(fallback)) {
+                candidates.add(fallback);
+            }
+        }
+        return candidates.size() <= 3 ? candidates : candidates.subList(0, 3);
     }
 
     /**

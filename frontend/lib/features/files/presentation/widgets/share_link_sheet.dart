@@ -11,6 +11,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -59,6 +60,11 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
     FileShareLink? existingShare,
   }) {
     final l10n = AppLocalizations.of(context);
+    // 弹窗可能被遮罩、下滑或外层关闭键关闭；统一在打开时清空上一份分享状态，
+    // 避免快速切换文件时短暂显示上一个文件的链接。
+    ProviderScope.containerOf(context, listen: false)
+        .read(shareLinkControllerProvider.notifier)
+        .reset();
     // 面板经根导航器呈现，默认拿不到壳层暗皮肤与 Files 环境重绑；
     // 在调用点捕获宿主环境，面板子树内重放。
     final ambience = MobileSheetAmbience.capture(context);
@@ -274,6 +280,11 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     AsyncValue<FileShareLink?> shareState, {
     required bool hosted,
   }) {
+    final l10n = AppLocalizations.of(context);
+    final errorMessage =
+        shareState.hasError
+            ? describeUserFacingError(shareState.error!, l10n: l10n).message
+            : null;
     if (hosted) {
       return _HostedCreateSection(
         enablePassword: _enablePassword,
@@ -292,10 +303,9 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         maxAccessController: _maxAccessController,
         busy: shareState.isLoading,
         onSubmit: _createShareLink,
-        errorMessage: shareState.hasError ? '${shareState.error}' : null,
+        errorMessage: errorMessage,
       );
     }
-    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -380,7 +390,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         if (shareState.hasError) ...[
           const SizedBox(height: 8),
           Text(
-            '${l10n.filesCreateFailed}：${shareState.error}',
+            '${l10n.filesCreateFailed}：$errorMessage',
             style: TextStyle(
               color: context.filesColors.error,
               fontSize: AppTypography.bodyMedium,
@@ -707,7 +717,12 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         if (shareState.hasError) ...[
           const SizedBox(height: 6),
           Text(
-            '${shareState.error}',
+            shareState.hasError
+                ? describeUserFacingError(
+                  shareState.error!,
+                  l10n: AppLocalizations.of(context),
+                ).message
+                : '',
             style: TextStyle(
               fontSize: AppTypography.bodySmall,
               color: context.filesColors.error,

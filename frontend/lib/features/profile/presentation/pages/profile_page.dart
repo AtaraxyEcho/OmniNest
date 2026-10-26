@@ -15,6 +15,7 @@ import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';

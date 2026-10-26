@@ -34,6 +34,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -574,11 +576,21 @@ public class FileShareService {
     @Transactional(readOnly = true)
     public List<FilePermissionDto> listPermissions(UUID ownerUserId, UUID fileId) {
         fileNodeSupport.findOwnedNode(ownerUserId, fileId);
-        return filePermissionService.listAllPermissions(fileId).stream()
+        var permissions = filePermissionService.listAllPermissions(fileId);
+        Set<UUID> granteeIds = permissions.stream()
+                .map(permission -> permission.getGranteeUserId())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> usernames = granteeIds.isEmpty()
+                ? Map.of()
+                : userAccountQuery.findUsernames(granteeIds);
+        return permissions.stream()
                 .map(p -> new FilePermissionDto(
                         p.getFileNodeId(),
                         p.getGranteeUserId(),
-                        resolveGranteeUsername(p.getGranteeUserId()),
+                        p.getGranteeUserId() == null
+                                ? null
+                                : usernames.getOrDefault(p.getGranteeUserId(), "未知用户"),
                         p.isAllowView(),
                         p.isAllowDownload(),
                         p.isAllowShare(),
@@ -600,14 +612,6 @@ public class FileShareService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 算法不可用", exception);
         }
-    }
-
-    private String resolveGranteeUsername(UUID granteeUserId) {
-        if (granteeUserId == null) {
-            return null;
-        }
-        return userAccountQuery.findUsername(granteeUserId)
-                .orElse("未知用户");
     }
 
     /**

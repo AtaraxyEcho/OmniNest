@@ -201,7 +201,7 @@ void main() {
   });
 
   test('未注入加密器时（Web）载荷保持明文', () async {
-    ReaderSyncQueue.init(db);
+    ReaderSyncQueue.init(db, userId: 'user-1');
 
     await ReaderSyncQueue.enqueueNoteCreate(
       localId: 'local-2',
@@ -213,5 +213,19 @@ void main() {
     final operation = await singleOperation();
     expect(operation.payload.startsWith('enc:v1:'), isFalse);
     expect(operation.payload.contains('明文正文'), isTrue);
+  });
+
+  test('未绑定登录用户时拒绝入队含正文的同步项', () async {
+    ReaderSyncQueue.init(db);
+
+    await expectLater(
+      ReaderSyncQueue.enqueueNoteCreate(
+        localId: 'local-3',
+        itemId: 'item-1',
+        title: '标题',
+        content: '不应落库',
+      ),
+      throwsStateError,
+    );
   });
 }

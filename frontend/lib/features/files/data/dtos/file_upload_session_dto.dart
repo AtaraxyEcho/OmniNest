@@ -54,8 +54,6 @@ class FileUploadSessionDto {
     required this.totalParts,
     required this.mimeType,
     required this.status,
-    required this.bucket,
-    required this.objectKey,
     required this.uploadUrl,
     required this.parts,
     required this.expiresAt,
@@ -73,8 +71,6 @@ class FileUploadSessionDto {
       totalParts: _asInt(json['totalParts']),
       mimeType: json['mimeType']?.toString() ?? 'application/octet-stream',
       status: json['status']?.toString() ?? 'CREATED',
-      bucket: json['bucket']?.toString() ?? '',
-      objectKey: json['objectKey']?.toString() ?? '',
       uploadUrl: json['uploadUrl']?.toString(),
       parts:
           rawParts is List
@@ -98,8 +94,6 @@ class FileUploadSessionDto {
   final int totalParts;
   final String mimeType;
   final String status;
-  final String bucket;
-  final String objectKey;
   final String? uploadUrl;
   final List<FileUploadPart> parts;
   final DateTime? expiresAt;
@@ -115,8 +109,6 @@ class FileUploadSessionDto {
       totalParts: totalParts,
       mimeType: mimeType,
       status: status,
-      bucket: bucket,
-      objectKey: objectKey,
       uploadUrl: uploadUrl,
       parts: parts,
       expiresAt: expiresAt,

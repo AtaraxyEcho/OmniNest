@@ -10,6 +10,7 @@ import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
@@ -456,6 +457,14 @@ class _AvatarWidget extends StatelessWidget {
             ? Image.network(
               avatarUrl!,
               fit: BoxFit.cover,
+              cacheWidth: quantizedDecodeWidth(
+                logicalWidth: size,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+              ),
+              cacheHeight: quantizedDecodeWidth(
+                logicalWidth: size,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+              ),
               errorBuilder: (_, _, _) => _AvatarFallback(initial: initial),
             )
             : _AvatarFallback(initial: initial);
@@ -553,6 +562,14 @@ class _UserHeader extends StatelessWidget {
                     ? Image.network(
                       avatarUrl!,
                       fit: BoxFit.cover,
+                      cacheWidth: quantizedDecodeWidth(
+                        logicalWidth: 44,
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                      ),
+                      cacheHeight: quantizedDecodeWidth(
+                        logicalWidth: 44,
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                      ),
                       errorBuilder:
                           (_, _, _) => _AvatarFallback(initial: initial),
                     )

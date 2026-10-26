@@ -10,6 +10,7 @@ import com.omninest.modules.file.repository.FileUploadPartRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -21,7 +22,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * @author OmniNest
  */
-final class FileUploadCancellationService {
+@Service
+public class FileUploadCancellationService {
 
     private final FileUploadSessionRepository sessionRepository;
     private final FileUploadPartRepository partRepository;
@@ -29,7 +31,7 @@ final class FileUploadCancellationService {
     private final ObjectStorageClient objectStorageClient;
     private final TransactionTemplate transactionTemplate;
 
-    FileUploadCancellationService(
+    public FileUploadCancellationService(
             FileUploadSessionRepository sessionRepository,
             FileUploadPartRepository partRepository,
             StorageQuotaService storageQuotaService,

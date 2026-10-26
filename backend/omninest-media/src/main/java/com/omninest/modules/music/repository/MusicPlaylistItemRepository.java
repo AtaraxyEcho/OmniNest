@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +14,20 @@ import org.springframework.data.repository.query.Param;
 
 public interface MusicPlaylistItemRepository extends JpaRepository<MusicPlaylistItem, UUID> {
     List<MusicPlaylistItem> findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(UUID ownerUserId, UUID playlistId);
+
+    /**
+     * 数据库分页读取歌单曲目，避免为单页请求加载整单条目。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param playlistId 歌单标识
+     * @param pageable 分页参数
+     * @return 当前页歌单项
+     */
+    Page<MusicPlaylistItem> findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
+            UUID ownerUserId,
+            UUID playlistId,
+            Pageable pageable
+    );
 
     /**
      * 查询歌单首条目（排序最前），用于封面取值，避免加载整单条目。

@@ -56,6 +56,18 @@ class ReaderSyncQueue {
     opNoteDelete,
   ];
 
+  /// 含笔记/批注正文的敏感操作：未绑定登录用户时不得以空 userId 落库。
+  static const Set<String> _sensitiveOperationTypes = {
+    opBookmarkCreate,
+    opBookmarkDelete,
+    opAnnotationCreate,
+    opAnnotationUpdate,
+    opAnnotationDelete,
+    opNoteCreate,
+    opNoteUpdate,
+    opNoteDelete,
+  };
+
   /// "服务端已经没有这条记录"的业务错误名（后端 `ErrorCode` 枚举名）。
   ///
   /// 书签/批注/笔记的删除入口都以 `MEDIA_NOT_FOUND` 报缺失，`NOT_FOUND` 与
@@ -331,6 +343,11 @@ class ReaderSyncQueue {
 
   /// 通用入队
   static Future<void> _enqueue(String type, Map<String, dynamic> data) async {
+    if ((_userId == null || _userId!.isEmpty) &&
+        _sensitiveOperationTypes.contains(type)) {
+      // 空 userId 的行登出时按账号清理不到，载荷又含正文；未绑定登录用户时拒绝入队。
+      throw StateError('阅读同步队列未绑定登录用户，拒绝写入敏感同步项');
+    }
     await _database
         .into(_database.syncOperations)
         .insert(
@@ -386,6 +403,17 @@ class ReaderSyncQueue {
           table.status.isIn(const ['pending', 'failed']) &
           _ownedByCurrentUser(table.userId),
     )).get();
+  }
+
+  /// 派发前重读一次队列行：创建回包可能已把后续操作的 localId 改写成服务端 ID。
+  static Future<SyncOperation?> _reloadPendingOperation(int id) async {
+    final rows =
+        await (_database.select(_database.syncOperations)
+          ..where((table) => table.id.equals(id))).get();
+    if (rows.isEmpty || rows.first.status != 'pending') {
+      return null;
+    }
+    return rows.first;
   }
 
   /// 按类型取出待重放的 reader 操作，按入队时间升序。
@@ -577,27 +605,33 @@ class ReaderSyncQueue {
     ];
 
     for (final op in pending) {
+      // 创建回包会把后续更新/删除的 localId 改写成服务端 ID；pending 是本轮
+      // 开始时取的快照，派发前必须重读最新载荷，否则仍会带着临时 ID 发出去。
+      final current = await _reloadPendingOperation(op.id);
+      if (current == null) {
+        continue;
+      }
       try {
-        await _dispatch(api, op);
-        await _markCompleted(op.id);
+        await _dispatch(api, current);
+        await _markCompleted(current.id);
       } on AppException catch (error) {
         if (error.code == AppErrorCodes.forbidden) {
           // 无 activity:write 的角色：书签/标注/笔记保留本地（本地优先
           // 模型，本地即真值），跳过远端同步，不做无意义重试。
-          await _markCompleted(op.id);
-        } else if (_isIdempotentDeleteFailure(op, error)) {
+          await _markCompleted(current.id);
+        } else if (_isIdempotentDeleteFailure(current, error)) {
           // 记录多半在另一台设备上已经删掉了：补发永远不会成功，留着失败行会
           // 长期占表，并让本地删除一直显示"尚未同步"。
-          await _markCompleted(op.id);
+          await _markCompleted(current.id);
         } else {
-          await _markFailed(op);
+          await _markFailed(current);
         }
       } on FormatException {
-        await _markFailed(op);
+        await _markFailed(current);
       } on TypeError {
-        await _markFailed(op);
+        await _markFailed(current);
       } on Exception {
-        await _markFailed(op);
+        await _markFailed(current);
       }
     }
     if (pending.isNotEmpty) {
@@ -777,11 +811,17 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == bookmark.id) {
       return;
     }
+    final rewritten = await _rewritePendingReference(
+      localId: localId,
+      serverId: bookmark.id,
+      types: const {opBookmarkDelete},
+      field: 'bookmarkId',
+    );
     final replaced = await _localStorage.replaceBookmarkId(
       localId: localId,
       serverBookmark: bookmark,
     );
-    if (!replaced) {
+    if (!replaced && !rewritten.contains(opBookmarkDelete)) {
       await enqueueBookmarkDelete(bookmarkId: bookmark.id);
     }
   }
@@ -793,6 +833,14 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == annotation.id) {
       return;
     }
+    // 创建在途期间用户已排队的更新/删除仍指向 localId；服务端真 ID 回来后
+    // 必须先改写这些操作，否则它们会带着临时 ID 必定失败。
+    final rewritten = await _rewritePendingReference(
+      localId: localId,
+      serverId: annotation.id,
+      types: const {opAnnotationUpdate, opAnnotationDelete},
+      field: 'annotationId',
+    );
     // 旧行由替换事务自己读出：本地行在 HTTP 在途期间被删时返回 null，
     // 此时服务端刚创建的记录要补发删除，也不能再为一条已删记录排更新。
     final local = await _localStorage.replaceAnnotationId(
@@ -800,7 +848,9 @@ class ReaderSyncQueue {
       serverAnnotation: annotation,
     );
     if (local == null) {
-      await enqueueAnnotationDelete(annotationId: annotation.id);
+      if (!rewritten.contains(opAnnotationDelete)) {
+        await enqueueAnnotationDelete(annotationId: annotation.id);
+      }
       return;
     }
     final note = local.note ?? annotation.note;
@@ -818,12 +868,20 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == note.id) {
       return;
     }
+    final rewritten = await _rewritePendingReference(
+      localId: localId,
+      serverId: note.id,
+      types: const {opNoteUpdate, opNoteDelete},
+      field: 'noteId',
+    );
     final local = await _localStorage.replaceNoteId(
       localId: localId,
       serverNote: note,
     );
     if (local == null) {
-      await enqueueNoteDelete(noteId: note.id);
+      if (!rewritten.contains(opNoteDelete)) {
+        await enqueueNoteDelete(noteId: note.id);
+      }
       return;
     }
     if (local.title != note.title || local.content != note.content) {
@@ -833,6 +891,38 @@ class ReaderSyncQueue {
         content: local.content,
       );
     }
+  }
+
+  /// 把队列中指向客户端临时 ID 的更新/删除操作改写到服务端真实 ID。
+  ///
+  /// 只处理当前账号的 pending/failed 行；已完成行会在 flush 末尾清理。
+  static Future<Set<String>> _rewritePendingReference({
+    required String localId,
+    required String serverId,
+    required Set<String> types,
+    required String field,
+  }) async {
+    final operations =
+        await (_database.select(_database.syncOperations)..where(
+          (table) =>
+              table.type.isIn(types) &
+              table.status.isIn(const ['pending', 'failed']) &
+              _ownedByCurrentUser(table.userId),
+        )).get();
+    final rewritten = <String>{};
+    for (final operation in operations) {
+      final payload = await _decodePayload(operation);
+      if (payload == null || payload[field] != localId) {
+        continue;
+      }
+      payload[field] = serverId;
+      await (_database.update(_database.syncOperations)
+        ..where((table) => table.id.equals(operation.id))).write(
+        SyncOperationsCompanion(payload: Value(await _serializePayload(payload))),
+      );
+      rewritten.add(operation.type);
+    }
+    return rewritten;
   }
 
   static Future<void> _markCompleted(int id) {

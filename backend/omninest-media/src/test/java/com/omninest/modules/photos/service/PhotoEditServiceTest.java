@@ -292,6 +292,36 @@ class PhotoEditServiceTest {
     }
 
     @Test
+    void enforceMaxVersionsDeletesEvictedThumbnail() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID evictedFileId = UUID.randomUUID();
+        UUID evictedThumbnailId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.countByPhotoId(photoId)).thenReturn(6L);
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId))
+                .thenReturn(versionsWithEvictedFile(photoId, ownerUserId, evictedFileId));
+        when(fileMetadataQueryService.findById(evictedFileId))
+                .thenReturn(Optional.of(descriptorWithSize(ownerUserId, evictedFileId, 4096L)));
+        when(photoThumbnailService.findStoredThumbnailFileNodeId(ownerUserId, evictedFileId))
+                .thenReturn(Optional.of(evictedThumbnailId));
+        when(storageService.deleteOwned(ownerUserId, evictedFileId)).thenReturn(true);
+        when(storageService.deleteOwned(ownerUserId, evictedThumbnailId)).thenReturn(true);
+        when(storageService.store(
+                eq(ownerUserId), anyString(), eq(photoId), anyString(), anyString(),
+                eq("image/jpeg"), any(Path.class)
+        )).thenReturn(UUID.randomUUID());
+
+        applyEditedImage(ownerUserId, photoId, jpegBytes());
+
+        // 淘汰版本的主图与 1024px 缩略图必须一起回收，否则每次淘汰都泄漏一份派生对象。
+        verify(storageService).deleteOwned(ownerUserId, evictedThumbnailId);
+    }
+
+    @Test
     void rejectsConcurrentEditsWhenHeapHeavySlotsAreExhausted() throws Exception {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();

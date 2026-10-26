@@ -468,8 +468,6 @@ class FileManagerServiceTest {
         source.setCurrentObjectId(OBJECT_ID);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
-                .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> {
                     FileNode saved = invocation.getArgument(0);
@@ -498,7 +496,7 @@ class FileManagerServiceTest {
     }
 
     @Test
-    void acceptShareRejectsDuplicateFile() {
+    void acceptShareRejectsDuplicateNameInTargetFolder() {
         ShareLink link = shareLink("doc.pdf", null);
         when(rateLimitService.tryAcquire(any(), ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
@@ -506,14 +504,13 @@ class FileManagerServiceTest {
         source.setCurrentObjectId(OBJECT_ID);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
-        FileNode existing = node("doc.pdf", "application/pdf", 2048);
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
-                .thenReturn(Optional.of(existing));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                RECIPIENT_ID, SpaceType.PERSONAL, "doc.pdf")).thenReturn(true);
 
         assertThatThrownBy(() -> fileShareAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null)))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("已存在");
+                .hasMessageContaining("同名");
     }
 
     @Test
@@ -553,8 +550,6 @@ class FileManagerServiceTest {
         source.setCurrentObjectId(OBJECT_ID);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
-                .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> {
                     FileNode saved = invocation.getArgument(0);
@@ -948,8 +943,6 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(newObjectId))
                 .thenReturn(Optional.of(newObject));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
-                .thenReturn(Optional.empty());
         when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, newObjectId))
                 .thenReturn(Optional.of(new FileUploadSession()));
         when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
@@ -984,8 +977,6 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(newObjectId))
                 .thenReturn(Optional.of(newObject));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
-                .thenReturn(Optional.empty());
         when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, newObjectId))
                 .thenReturn(Optional.of(new FileUploadSession()));
         when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
@@ -1013,8 +1004,6 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(newObjectId))
                 .thenReturn(Optional.of(newObject));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
-                .thenReturn(Optional.empty());
         when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1086,8 +1075,8 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(objectId))
                 .thenReturn(Optional.of(object));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, objectId))
-                .thenReturn(Optional.of(other));
+        when(fileNodeRepository.existsActiveByOwnerUserIdAndObjectId(OWNER_ID, objectId, FILE_ID))
+                .thenReturn(true);
 
         assertThatThrownBy(() ->
                 fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
@@ -1109,8 +1098,6 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(objectId))
                 .thenReturn(Optional.of(object));
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, objectId))
-                .thenReturn(Optional.empty());
         when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, objectId))
                 .thenReturn(Optional.empty());
 
@@ -1435,8 +1422,6 @@ class FileManagerServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
 
         // 步骤4：用正确密码接受 → 成功
-        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
-                .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> {
                     FileNode saved = invocation.getArgument(0);

@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -132,12 +133,33 @@ public class MusicPlaylistService {
 
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> playlistTracksPage(UUID ownerUserId, UUID playlistId, int page, int size) {
-        List<MusicTrackDto> all = playlistTracks(ownerUserId, playlistId);
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
-        int from = (int) Math.min((long) safePage * safeSize, all.size());
-        int to = (int) Math.min((long) from + safeSize, all.size());
-        return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        requirePlaylist(ownerUserId, playlistId);
+        Page<MusicPlaylistItem> itemPage = playlistItemRepository
+                .findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
+                        ownerUserId, playlistId, pageable);
+        List<UUID> trackIds = itemPage.getContent().stream()
+                .map(MusicPlaylistItem::getTrackId)
+                .toList();
+        if (trackIds.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, itemPage.getTotalElements());
+        }
+        Map<UUID, MusicTrack> tracksById =
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds).stream()
+                        .collect(Collectors.toMap(
+                                MusicTrack::getId,
+                                Function.identity()
+                        ));
+        List<MusicTrack> orderedTracks = trackIds.stream()
+                .map(tracksById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        List<MusicTrackDto> content =
+                musicLibraryService.toTrackSummaryDtos(ownerUserId, orderedTracks);
+        return new PageImpl<>(content, pageable, itemPage.getTotalElements());
     }
 
     public List<MusicTrackDto> playlistTracks(UUID ownerUserId, UUID playlistId) {

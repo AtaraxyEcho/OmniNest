@@ -127,6 +127,7 @@
     "notificationFilterAllLabel": "All",
   "notificationFilterUnreadLabel": "Unread",
 "notificationMarkAllRead": "Mark all read",
+  "notificationMarkAllReadFailed": "Failed to mark all as read. Try again.",
   "notificationDelete": "Delete notification",
   "notificationClearAll": "Clear notifications",
   "notificationClearConfirmTitle": "Clear all notifications?",

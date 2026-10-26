@@ -127,6 +127,15 @@ class MusicPortalActions {
         .playItems(recent, startIndex: startIndex);
   }
 
+  /// 按曲目 ID 播放：搜索结果可能不在最近列表里，先补齐详情再起播。
+  Future<void> playTrackById(String trackId) async {
+    final notifier = _ref.read(musicCenterControllerProvider.notifier);
+    final track = await notifier.ensureTrackDetail(trackId);
+    if (track != null) {
+      await notifier.playTrack(track);
+    }
+  }
+
   /// 在最近列表中定位曲目下标；不存在返回 -1。
   @visibleForTesting
   static int recentItemsIndexOf(

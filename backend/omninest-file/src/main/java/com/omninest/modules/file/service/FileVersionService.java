@@ -258,11 +258,9 @@ public class FileVersionService {
     }
 
     private void rejectObjectAliasedToOtherNode(UUID ownerUserId, UUID fileNodeId, UUID objectId) {
-        fileNodeRepository.findActiveByOwnerUserIdAndObjectId(ownerUserId, objectId)
-                .filter(existing -> !existing.getId().equals(fileNodeId))
-                .ifPresent(existing -> {
-                    throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件使用");
-                });
+        if (fileNodeRepository.existsActiveByOwnerUserIdAndObjectId(ownerUserId, objectId, fileNodeId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件使用");
+        }
         // 回收站节点同样占用配额，历史版本也持有对象引用；只查活跃节点的当前对象
         // 会让同一份字节挂到多个节点上，删除/清空时按节点重复释放配额。
         if (fileNodeRepository.existsByCurrentObjectIdAndIdNot(objectId, fileNodeId)) {

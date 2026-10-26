@@ -851,10 +851,20 @@ extension FileBrowserUploadActions on FileBrowserController {
     if (current == null) {
       return;
     }
-    final tasks = [
-      task,
-      ...current.localUploadTasks.where((item) => item.id != task.id),
-    ];
+    final existingIndex = current.localUploadTasks.indexWhere(
+      (item) => item.id == task.id,
+    );
+    final previous =
+        existingIndex < 0 ? null : current.localUploadTasks[existingIndex];
+    // 进度回调每 80ms 一次：已有任务必须原地替换，头插会让队列行随并发进度跳动。
+    // 新任务追加到队尾，保持用户选择文件的顺序。
+    final tasks =
+        existingIndex < 0
+            ? [...current.localUploadTasks, task]
+            : [
+              for (final item in current.localUploadTasks)
+                if (item.id == task.id) task else item,
+            ];
     // 只裁剪已完成/已失败的历史记录；活跃任务与待用户处理的冲突任务不能被挤出。
     final kept = <FileUploadClientTask>[];
     var terminalCount = 0;
@@ -868,7 +878,9 @@ extension FileBrowserUploadActions on FileBrowserController {
       kept.add(item);
     }
     _emitState(current.copyWith(localUploadTasks: kept));
-    _startUploadQueuePolling();
+    if (previous == null || previous.status != task.status) {
+      _startUploadQueuePolling();
+    }
   }
 
   void _removeLocalUploadTask(String taskId) {

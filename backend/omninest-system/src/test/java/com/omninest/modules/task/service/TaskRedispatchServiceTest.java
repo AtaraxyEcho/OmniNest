@@ -58,6 +58,31 @@ class TaskRedispatchServiceTest {
     }
 
     @Test
+    void rebuildsComicParsePayloadWithFileOwnerAndEmptyHash() {
+        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK_ID))
+                .thenReturn(Optional.empty());
+        String payloadJson = """
+                {
+                  "ownerUserId": "10000000-0000-0000-0000-000000000001",
+                  "fileOwnerId": "10000000-0000-0000-0000-000000000002",
+                  "itemId": "20000000-0000-0000-0000-000000000001",
+                  "sourceId": "60000000-0000-0000-0000-000000000001",
+                  "fileNodeId": "30000000-0000-0000-0000-000000000001",
+                  "fileFormat": "EPUB",
+                  "contentHash": ""
+                }
+                """;
+
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, null, "COMIC_PARSE", QueueNames.COMIC_PARSE_ROUTING_KEY, payloadJson);
+
+        assertThat(payload)
+                .containsEntry("ownerUserId", "10000000-0000-0000-0000-000000000002")
+                .containsEntry("contentHash", "")
+                .containsEntry("isRetry", true);
+    }
+
+    @Test
     void rebuildsMediaScrapeEventPayloadFromStoredFields() {
         String payloadJson = """
                 {

@@ -6,12 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
-import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/application/shared_folder_browse_controller.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
@@ -134,10 +134,10 @@ class _SharedFolderBrowserState extends ConsumerState<SharedFolderBrowser> {
       return const AppLoading();
     }
     if (state.hasError) {
-      final message = l10n.messageForErrorCode(
-        '${state.error}',
-        fallback: '${state.error}',
-      );
+      final message = describeUserFacingError(
+        state.error!,
+        l10n: l10n,
+      ).message;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

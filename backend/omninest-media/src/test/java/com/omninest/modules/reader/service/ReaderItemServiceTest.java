@@ -455,12 +455,11 @@ class ReaderItemServiceTest {
                 newSourceItem(secondVolumeId),
                 newSourceItem(thirdVolumeId),
                 newSourceItem(foreignVolumeId)));
-        when(fileMetadataQueryService.findById(secondVolumeId)).thenReturn(Optional.of(
-                newFileDescriptor(secondVolumeId, SpaceType.PERSONAL, "v2.cbz", null)));
-        when(fileMetadataQueryService.findById(thirdVolumeId)).thenReturn(Optional.of(
-                newFileDescriptor(thirdVolumeId, SpaceType.PERSONAL, "v3.cbz", null)));
-        when(fileMetadataQueryService.findById(foreignVolumeId)).thenReturn(Optional.of(
-                newOwnedFileDescriptor(foreignVolumeId, "v4.cbz", OTHER_USER_ID)));
+        when(fileMetadataQueryService.findAllByIds(List.of(secondVolumeId, thirdVolumeId, foreignVolumeId)))
+                .thenReturn(List.of(
+                        newFileDescriptor(secondVolumeId, SpaceType.PERSONAL, "v2.cbz", null),
+                        newFileDescriptor(thirdVolumeId, SpaceType.PERSONAL, "v3.cbz", null),
+                        newOwnedFileDescriptor(foreignVolumeId, "v4.cbz", OTHER_USER_ID)));
 
         itemService.deleteItem(OWNER_ID, ITEM_ID, true);
 

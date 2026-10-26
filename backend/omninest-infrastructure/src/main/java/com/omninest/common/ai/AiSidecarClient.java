@@ -144,10 +144,10 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     private String probePipelineVersion(String endpoint, int timeoutSeconds) {
         try {
+            // /ready 是无需鉴权的探针端点，不再携带静态令牌，避免凭据无谓出现在探测链路。
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint + "/ready"))
                     .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 30)))
-                    .headers(tokenHeaders())
                     .GET()
                     .build();
             String responseBody = sendRequest(request);
@@ -276,14 +276,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         } catch (Exception exception) {
             throw new IllegalStateException("图像分析侧车调用失败", exception);
         }
-    }
-
-    private String[] tokenHeaders() {
-        String secret = properties.getSecret();
-        if (secret == null || secret.isBlank()) {
-            return new String[0];
-        }
-        return new String[]{SIDECAR_TOKEN_HEADER, secret};
     }
 
     /**

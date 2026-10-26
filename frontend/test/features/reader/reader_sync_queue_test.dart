@@ -20,9 +20,9 @@ void main() {
 
   setUp(() {
     db = LocalDatabase(NativeDatabase.memory());
-    storage = ReaderLocalStorage(db);
+    storage = ReaderLocalStorage(db, userId: 'user-1');
     api = MockReaderApi();
-    ReaderSyncQueue.init(db);
+    ReaderSyncQueue.init(db, userId: 'user-1');
   });
 
   tearDown(() async {
@@ -288,6 +288,7 @@ void main() {
         .into(db.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
             type: ReaderSyncQueue.opProgress,
             payload:
                 '{"itemId":"item-1","charOffset":100,"progressPercent":0.1,"readingMode":"scroll"}',
@@ -300,6 +301,7 @@ void main() {
         .into(db.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
             type: ReaderSyncQueue.opNoteUpdate,
             payload: '{"noteId":"note-1","content":"草稿"}',
             status: const Value('failed'),
@@ -322,6 +324,7 @@ void main() {
           .into(db.syncOperations)
           .insert(
             SyncOperationsCompanion.insert(
+              userId: const Value('user-1'),
               type: ReaderSyncQueue.opNoteUpdate,
               payload:
                   '{"noteId":"note-$index","title":null,"content":"草稿 $index"}',
@@ -364,6 +367,7 @@ void main() {
         .into(db.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
             type: 'file.favorite',
             payload: '{"fileId":"file-1"}',
             createdAt: DateTime(2026, 6, 30),
@@ -477,6 +481,7 @@ void main() {
         .into(db.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
             type: ReaderSyncQueue.opProgress,
             payload: '{"itemId":',
             createdAt: DateTime(2026, 6, 30),

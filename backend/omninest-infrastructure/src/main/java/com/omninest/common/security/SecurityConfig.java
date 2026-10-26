@@ -69,6 +69,14 @@ public class SecurityConfig {
                         "/api/v1/s/*/preview",
                         "/api/v1/s/*/children",
                         "/share/**",
+                        // 登录、注册、刷新与初始化本身不需要 Bearer；客户端残留的过期
+                        // Authorization 头不能在这些端点上先被资源服务器打成 401。
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/login/**",
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/setup/**",
+                        "/api/v1/version",
                         "/api/v1/external-connectors/*/oauth/callback",
                         // 播放会话流由查询串中的一次性播放令牌鉴权；浏览器残留的过期 Bearer
                         // 不应在 JWT 解码阶段把公开媒体请求打成 401。

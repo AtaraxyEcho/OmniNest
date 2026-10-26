@@ -103,8 +103,6 @@ class _FakeFileRepository
       totalParts: 2,
       mimeType: 'application/octet-stream',
       status: 'CREATED',
-      bucket: 'files',
-      objectKey: 'users/1/large.bin',
       uploadUrl: 'http://minio/part-1',
       parts: [
         FileUploadPart(
@@ -580,8 +578,6 @@ class _BatchFileRepository extends _FakeFileRepository {
       totalParts: 1,
       mimeType: mimeType ?? 'application/octet-stream',
       status: 'CREATED',
-      bucket: 'files',
-      objectKey: 'users/1/$fileName',
       uploadUrl: 'http://upload/$fileName',
       parts: const [],
       expiresAt: null,
