@@ -93,10 +93,14 @@ public interface PhotoItemTrashQueries {
     long countByOwnerUserIdAndDeletedAtIsNotNull(UUID ownerUserId);
 
     /**
-     * 查询用户回收站中进入时间早于截止时间的照片，供清空与过期清理。
+     * 分页查询用户回收站中进入时间早于截止时间的照片，供清空与过期清理。
+     *
+     * <p>必须带上限读取：清空回收站曾一次性拉取全部照片并塞进单个删除任务，
+     * 大回收站会同时撑爆任务载荷与单事务行数。</p>
      *
      * @param ownerUserId 用户标识
      * @param cutoff 截止时间
+     * @param pageable 批次上限
      * @return 回收站照片
      */
     @Query("""
@@ -108,9 +112,10 @@ public interface PhotoItemTrashQueries {
               AND file.deleted = false
             ORDER BY photo.deletedAt ASC
             """)
-    List<PhotoItem> findTrashByOwnerUserIdAndDeletedAtBefore(
+    List<PhotoItem> findTrashBatch(
             @Param("ownerUserId") UUID ownerUserId,
-            @Param("cutoff") Instant cutoff
+            @Param("cutoff") Instant cutoff,
+            Pageable pageable
     );
 
 

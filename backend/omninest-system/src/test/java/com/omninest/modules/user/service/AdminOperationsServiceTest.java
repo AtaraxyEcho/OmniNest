@@ -178,6 +178,36 @@ class AdminOperationsServiceTest {
     }
 
     @Test
+    void retryTaskRejectsConcurrentlyStartedTask() {
+        givenFreshAdminActor();
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        UUID fileNodeId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        UUID fileObjectId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        String payload = """
+                {
+                  "fileNodeId": "%s",
+                  "fileObjectId": "%s",
+                  "ownerUserId": "%s",
+                  "bucket": "user-files",
+                  "objectKey": "objects/a.mp3",
+                  "fileName": "a.mp3",
+                  "mimeType": "audio/mpeg",
+                  "sizeBytes": 1024,
+                  "occurredAt": "2026-06-01T10:00:00Z"
+                }
+                """.formatted(fileNodeId, fileObjectId, actorUserId);
+        when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
+                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", payload)));
+        // 状态守卫未命中（已被恢复器或其他管理员拉起）时 SQL 不返回行。
+        when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0)))
+                .thenThrow(new NoResultException());
+
+        assertThatThrownBy(() -> service.retryTask(actorUserId, taskId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("任务状态已变化");
+    }
+
+    @Test
     void retryTaskOnlyAllowsFailedCancelledOrDlqTasks() {
         givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");

@@ -673,7 +673,7 @@ void showFileMoreSectionsSheet(
                       child: Text(
                         entry.key.labelOf(l10n),
                         style: TextStyle(
-                          fontSize: 9, // ignore: font_size_whitelist
+                          fontSize: AppTypography.labelSmall,
                           height: 1.45,
                           letterSpacing: 1.5,
                           fontWeight: FontWeight.w700,

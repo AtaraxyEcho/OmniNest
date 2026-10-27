@@ -812,11 +812,17 @@ class MovieApi {
     return data['favorite'] == true;
   }
 
-  /// 收藏 / 取消收藏剧集（用户主动写）：无能力时抛 FORBIDDEN。
-  Future<void> toggleSeriesFavorite(String seriesId) async {
+  /// 幂等设定剧集收藏（用户主动写）：无能力时抛 FORBIDDEN。
+  ///
+  /// 目标状态显式传入，弱网重传不会把"收藏"翻成"取消收藏"。
+  Future<void> setSeriesFavorite(
+    String seriesId, {
+    required bool favorite,
+  }) async {
     apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/video/series/$seriesId/favorite',
+      queryParameters: {'favorite': favorite},
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏剧集失败');
   }

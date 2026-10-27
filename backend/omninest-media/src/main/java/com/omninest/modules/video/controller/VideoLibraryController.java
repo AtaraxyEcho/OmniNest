@@ -304,12 +304,18 @@ public class VideoLibraryController {
         return ApiResponse.success(movieLibraryService.itemAssets(currentUserContext.requireCurrentUserId(), videoItemId));
     }
 
-    @Operation(summary = "收藏/取消收藏剧集", description = "切换指定剧集的收藏状态")
+    @Operation(summary = "收藏/取消收藏剧集", description = "传 favorite 时按目标状态幂等设定，不传则翻转指定剧集的收藏状态")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/video/series/{seriesId}/favorite")
-    ApiResponse<Map<String, Boolean>> toggleSeriesFavorite(@PathVariable UUID seriesId) {
-        boolean favorite = movieEngagementService.toggleSeriesFavorite(currentUserContext.requireCurrentUserId(), seriesId);
-        return ApiResponse.success(Map.of("favorite", favorite));
+    ApiResponse<Map<String, Boolean>> toggleSeriesFavorite(
+            @PathVariable UUID seriesId,
+            @RequestParam(required = false) Boolean favorite
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        boolean result = favorite == null
+                ? movieEngagementService.toggleSeriesFavorite(ownerUserId, seriesId)
+                : movieEngagementService.setSeriesFavorite(ownerUserId, seriesId, favorite);
+        return ApiResponse.success(Map.of("favorite", result));
     }
 
     @Operation(summary = "获取剧集收藏状态", description = "查询指定剧集的收藏状态")

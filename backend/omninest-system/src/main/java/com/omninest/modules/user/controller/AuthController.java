@@ -191,7 +191,7 @@ public class AuthController {
     @Operation(summary = "刷新令牌", description = "使用刷新令牌获取新的访问令牌，支持 Web 端 HttpOnly Cookie 方式")
     @PostMapping("/api/v1/auth/refresh")
     ApiResponse<AuthTokenResponse> refresh(
-            @RequestBody(required = false) RefreshRequest request,
+            @Valid @RequestBody(required = false) RefreshRequest request,
             @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
             HttpServletRequest httpRequest,
             HttpServletResponse response
@@ -208,7 +208,7 @@ public class AuthController {
     @Operation(summary = "退出登录", description = "吊销当前刷新会话并清除刷新 Cookie；凭证无效时幂等成功")
     @PostMapping("/api/v1/auth/logout")
     ApiResponse<Void> logout(
-            @RequestBody(required = false) RefreshRequest request,
+            @Valid @RequestBody(required = false) RefreshRequest request,
             @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
             HttpServletRequest httpRequest,
             HttpServletResponse response

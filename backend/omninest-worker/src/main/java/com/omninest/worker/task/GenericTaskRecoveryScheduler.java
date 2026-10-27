@@ -27,11 +27,13 @@ import org.springframework.stereotype.Component;
  * （PHOTO_SCAN、PHOTO_THUMBNAILS、PHOTO_BATCH、PHOTO_MOTION、
  * PHOTO_MOTION_RESCAN、EXTERNAL_IMPORT、MEDIA_SCRAPE、VIDEO_TRANSCODE、
  * WEB_OPTIMIZE、AUDIO_EXTRACT、FILE_INDEX、THUMBNAIL、
- * TEXT_EXTRACTION、LOCAL_VIDEO_LIBRARY_DISCOVERY、LOCAL_VIDEO_LIBRARY_APPLY），
+ * TEXT_EXTRACTION、SEARCH_INDEX_REBUILD、NOTIFICATION_EMAIL、
+ * LOCAL_VIDEO_LIBRARY_DISCOVERY、LOCAL_VIDEO_LIBRARY_APPLY），
  * Worker 崩溃导致 RUNNING 任务心跳超时后，按重试次数裁决：可重试则经
  * Outbox 按退避时间重新入队，达到上限则进入死信；二是停滞任务清扫，对
  * 长时间停留在 QUEUED/RETRY_WAIT 且无存活投递记录的任务重新投递，兜住
- * "记录已建而消息丢失"的断链场景。</p>
+ * "记录已建而消息丢失"的断链场景。MEDIA_SCAN 不在心跳恢复之列：其消费者
+ * 不领取 RUNNING（执行期间停留在 QUEUED），由停滞清扫统一兜底。</p>
  *
  * <p>已有专用恢复调度器的任务类型（PHOTO_AI、PHOTO_GEO_*、MUSIC_*、COMIC_PARSE、
  * READER_PARSE、FILE_PURGE、MEDIA_AUTO_IMPORT）不参与心跳恢复，避免双重恢复；
@@ -60,6 +62,8 @@ public class GenericTaskRecoveryScheduler {
             "FILE_INDEX",
             "THUMBNAIL",
             "TEXT_EXTRACTION",
+            "SEARCH_INDEX_REBUILD",
+            "NOTIFICATION_EMAIL",
             "LOCAL_VIDEO_LIBRARY_DISCOVERY",
             "LOCAL_VIDEO_LIBRARY_APPLY"
     );

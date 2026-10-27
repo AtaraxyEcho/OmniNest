@@ -555,7 +555,23 @@ class _RecyclePagedRepository extends _FakeFileRepository {
 
 class _BatchFileRepository extends _FakeFileRepository {
   final List<String> directUploadNames = [];
+  final List<FileUploadSession> createdSessions = [];
   int _uploadCallCount = 0;
+
+  /// 非空时挂起 uploadPolicy，用于在批次开始与目标定型之间切换目录。
+  Completer<void>? policyGate;
+  final Completer<void> policyReached = Completer<void>();
+
+  @override
+  Future<FileUploadPolicy> uploadPolicy() async {
+    if (!policyReached.isCompleted) {
+      policyReached.complete();
+    }
+    if (policyGate != null) {
+      await policyGate!.future;
+    }
+    return super.uploadPolicy();
+  }
 
   @override
   Future<FileUploadSession> createUploadSession({
@@ -568,7 +584,7 @@ class _BatchFileRepository extends _FakeFileRepository {
     String? spaceType,
     String? asVersionOfFileId,
   }) async {
-    return FileUploadSession(
+    final session = FileUploadSession(
       id: 'session-$fileName',
       uploadId: 'upload-$fileName',
       parentId: parentId,
@@ -582,6 +598,8 @@ class _BatchFileRepository extends _FakeFileRepository {
       parts: const [],
       expiresAt: null,
     );
+    createdSessions.add(session);
+    return session;
   }
 
   @override

@@ -626,4 +626,57 @@ void main() {
       expect(state.section, FileManagerSection.allFiles);
     },
   );
+
+  test('批量上传途中切换目录，排队文件仍写入发起时的目录', () async {
+    final repository = _BatchFileRepository();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.openFolder(_folderNode('folder-1', '工作文档'));
+    repository.policyGate = Completer<void>();
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(Uint8List.fromList([1]), path: 'a.bin', name: 'a.bin'),
+      XFile.fromData(Uint8List.fromList([2]), path: 'b.bin', name: 'b.bin'),
+    ]);
+    // 批次已开始、目标尚未定型时切换目录：排队文件不能跟着落进新目录。
+    await repository.policyReached.future;
+    await controller.openFolder(_folderNode('folder-2', '其他目录'));
+    repository.policyGate!.complete();
+    await uploadFuture;
+
+    expect(repository.createdSessions.map((session) => session.parentId), [
+      'folder-1',
+      'folder-1',
+    ]);
+  });
+
+  test('上传历史只保留最近 20 条终态任务', () async {
+    final repository = _BatchFileRepository();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.uploadFiles([
+      for (var index = 0; index < 25; index++)
+        XFile.fromData(
+          Uint8List.fromList([index]),
+          path: 'f$index.bin',
+          name: 'f$index.bin',
+        ),
+    ]);
+
+    final tasks =
+        container.read(fileBrowserControllerProvider).value!.localUploadTasks;
+    final terminal = tasks.where((task) => task.isTerminal).toList();
+    expect(terminal, hasLength(20));
+    // 队尾的新任务是用户最关心的：裁剪必须丢最旧的，而不是刚完成的。
+    expect(terminal.map((task) => task.fileName), contains('f24.bin'));
+  });
 }

@@ -316,18 +316,23 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
               message: l10n.coreClose,
               child: IconButton(
                 onPressed: _close,
-                constraints: BoxConstraints.tightFor(
+                padding: EdgeInsets.zero,
+                // 关闭属于逃生控件，命中区必须补到 48；视觉圆仍按原型尺寸，
+                // 绘制在图标侧而不是按钮背景上。
+                icon: Container(
                   width: metrics.closeButtonSize,
                   height: metrics.closeButtonSize,
-                ),
-                padding: EdgeInsets.zero,
-                iconSize: metrics.closeButtonSize * 0.45,
-                icon: Icon(
-                  Icons.close_rounded,
-                  color: Colors.white.withValues(alpha: 0.85),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: metrics.closeButtonSize * 0.45,
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
                 ),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

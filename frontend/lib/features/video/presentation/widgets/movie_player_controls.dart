@@ -33,6 +33,8 @@ class MoviePlayerIconButton extends StatelessWidget {
     final targetSize = size ?? (isMobilePlatform ? 48.0 : 44.0);
     final button = IconButton(
       onPressed: onPressed,
+      // 选中态（如已选音轨/字幕）必须进入无障碍语义，仅高亮背景读屏用户无法感知。
+      isSelected: selected,
       icon: Icon(icon, size: iconSize),
       constraints: BoxConstraints.tightFor(
         width: targetSize,

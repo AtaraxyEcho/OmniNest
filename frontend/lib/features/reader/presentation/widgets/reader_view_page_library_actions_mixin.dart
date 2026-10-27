@@ -92,7 +92,7 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
     try {
       final result = await ref
           .read(readerCenterControllerProvider.notifier)
-          .toggleBookshelf(itemId);
+          .setBookshelf(itemId, onBookshelf: !isInBookshelf);
       if (mounted) {
         // 以服务端返回为准，本地取反会在状态过期时与服务端脱节。
         setState(() => isInBookshelf = result.addedToBookshelf);

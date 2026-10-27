@@ -237,6 +237,12 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
   Widget _buildButton(BuildContext context, {required Color iconColor}) {
     final message = widget.tooltip;
     final icon = Icon(_volumeIcon, size: widget.iconSize, color: iconColor);
+    // 读屏需要当前音量而不只是按钮名；value 合并进按钮节点的朗读内容。
+    final button = _buildStyledButton(message, icon);
+    return Semantics(value: '${_volume.round()}%', child: button);
+  }
+
+  Widget _buildStyledButton(String message, Widget icon) {
     switch (widget.style) {
       case MusicVolumeButtonStyle.glass:
         return Tooltip(

@@ -610,6 +610,8 @@ class _HostedViewerActionButton extends StatelessWidget {
         message: tooltip,
         child: IconButton(
           onPressed: onTap,
+          // 激活态（已收藏/面板展开）必须进入无障碍语义，仅换颜色读屏用户无法感知。
+          isSelected: active,
           icon: Icon(
             icon,
             size: 20,

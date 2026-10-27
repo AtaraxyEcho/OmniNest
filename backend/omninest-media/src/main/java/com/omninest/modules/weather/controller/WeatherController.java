@@ -67,14 +67,16 @@ public class WeatherController {
     public ApiResponse<WeatherDto> getRealtimeWeather(
             @RequestParam(required = false) String location,
             HttpServletRequest httpRequest) {
-        // 按 IP 限流：每分钟 30 次（天气查询会触发多个外部 API 调用）
-        String ip = resolveClientIp(httpRequest);
-        if (!rateLimitService.tryAcquire("weather:" + ip, 30, Duration.ofMinutes(1))) {
+        // 用户级额度兜住"轮换出口 IP 绕开限流"，IP 级只做更高的总量兜底：
+        // 家庭/办公 NAT 共用出口时，同一个 IP 桶不再让成员互相挤占。
+        UUID userId = currentUserContext.requireCurrentUserId();
+        if (!rateLimitService.tryAcquire("weather:user:" + userId, 30, Duration.ofMinutes(1))
+                || !rateLimitService.tryAcquire(
+                        "weather:" + resolveClientIp(httpRequest), 120, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "天气查询过于频繁，请稍后再试");
         }
 
         // 优先级：Redis GPS（设备上报） > 前端 GPS 坐标 > 用户偏好城市 > 配置中心默认值
-        UUID userId = currentUserContext.requireCurrentUserId();
         String lang = getPreferenceLanguage(userId);
         // 1. 最高优先级：设备上报的 GPS 坐标（最精确、最实时）
         String resolvedLocation = userLocationService.getLocation(userId);
@@ -162,11 +164,13 @@ public class WeatherController {
     public ApiResponse<Void> reportLocation(
             @Valid @RequestBody UserLocationDto dto,
             HttpServletRequest httpRequest) {
-        String ip = resolveClientIp(httpRequest);
-        if (!rateLimitService.tryAcquire("weather:loc:" + ip, 10, Duration.ofMinutes(1))) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        // 与实时天气同一口径：用户级额度防绕过，IP 级只做更高的总量兜底。
+        if (!rateLimitService.tryAcquire("weather:loc:user:" + userId, 10, Duration.ofMinutes(1))
+                || !rateLimitService.tryAcquire(
+                        "weather:loc:" + resolveClientIp(httpRequest), 40, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "位置上报过于频繁");
         }
-        UUID userId = currentUserContext.requireCurrentUserId();
         userLocationService.saveLocation(userId, dto.latitude(), dto.longitude(), dto.source());
         return ApiResponse.success(null);
     }

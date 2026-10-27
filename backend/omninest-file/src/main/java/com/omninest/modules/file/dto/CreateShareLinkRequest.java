@@ -15,7 +15,9 @@ import java.util.UUID;
 public record CreateShareLinkRequest(
         @Schema(description = "资源 ID", example = "550e8400-e29b-41d4-a716-446655440000") @NotNull UUID resourceId,
         @Schema(description = "资源类型", example = "FILE", allowableValues = {"FILE", "FOLDER"}) String resourceType,
-        @Schema(description = "自定义访问密码") String password,
+        @Schema(description = "自定义访问密码")
+        @Size(max = 128, message = "分享密码长度不能超过 128 个字符")
+        String password,
         @Schema(description = "是否自动生成密码", example = "false") boolean generatePassword,
         @Schema(
                 description = "过期时间；接受 ISO-8601 即时区标记或 yyyy-MM-dd HH:mm:ss（按 UTC），由 parsedExpiresAt() 统一转 Instant",

@@ -69,6 +69,8 @@ public class PhotoLibraryService {
     private static final int SEARCH_INDEX_LIMIT = 500;
     /** 时间线/分组预览页上限：卡片预览不宜一次拉过多。 */
     private static final int PREVIEW_PAGE_MAX = 100;
+    /** 单个永久删除任务承载的照片上限：任务载荷与单事务行数都必须有界。 */
+    private static final int TRASH_PURGE_BATCH_SIZE = 200;
     private static final Map<String, String> SORT_FIELDS = Map.of(
             "createdAt", "createdAt",
             "dateTaken", "dateTaken",
@@ -408,22 +410,40 @@ public class PhotoLibraryService {
      */
     @Transactional(rollbackFor = Exception.class)
     public UUID purgeTrash(UUID ownerUserId) {
-        List<PhotoItem> items = photoItemRepository.findTrashByOwnerUserIdAndDeletedAtBefore(
-                ownerUserId,
-                Instant.now()
-        );
-        if (items.isEmpty()) {
+        List<UUID> taskIds = purgeTrashInBatches(ownerUserId, Instant.now());
+        if (taskIds.isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "回收站为空");
         }
-        UUID taskId = fileDeletionService.deletePermanentlyBatch(
-                ownerUserId,
-                items.stream().map(PhotoItem::getFileNodeId).toList(),
-                false,
-                items.stream().map(item -> new FilePurgeOrigin("PHOTOS", item.getId())).toList()
-        );
-        log.info("回收站清空任务已创建: taskId={}, photoCount={}, userId={}",
-                taskId, items.size(), ownerUserId);
-        return taskId;
+        log.info("回收站清空任务已创建: taskId={}, taskCount={}, userId={}",
+                taskIds.getFirst(), taskIds.size(), ownerUserId);
+        return taskIds.getFirst();
+    }
+
+    /**
+     * 按固定批次把截止时间前的回收站照片拆成多个永久删除任务。
+     *
+     * <p>每一批独立成任务：删除任务载荷里的根节点列表有 64KB 上限，单事务里
+     * 逐行加锁与软删也会随照片数线性变长。批次提交后照片从回收站查询中消失，
+     * 循环条件因此自然收敛。</p>
+     */
+    private List<UUID> purgeTrashInBatches(UUID ownerUserId, Instant cutoff) {
+        List<UUID> taskIds = new ArrayList<>();
+        while (true) {
+            List<PhotoItem> items = photoItemRepository.findTrashBatch(
+                    ownerUserId,
+                    cutoff,
+                    PageRequest.of(0, TRASH_PURGE_BATCH_SIZE)
+            );
+            if (items.isEmpty()) {
+                return taskIds;
+            }
+            taskIds.add(fileDeletionService.deletePermanentlyBatch(
+                    ownerUserId,
+                    items.stream().map(PhotoItem::getFileNodeId).toList(),
+                    false,
+                    items.stream().map(item -> new FilePurgeOrigin("PHOTOS", item.getId())).toList()
+            ));
+        }
     }
 
     /**
@@ -468,17 +488,11 @@ public class PhotoLibraryService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void purgeExpiredTrashForOwner(UUID ownerUserId, Instant cutoff) {
-        List<PhotoItem> items = photoItemRepository.findTrashByOwnerUserIdAndDeletedAtBefore(ownerUserId, cutoff);
-        if (items.isEmpty()) {
+        List<UUID> taskIds = purgeTrashInBatches(ownerUserId, cutoff);
+        if (taskIds.isEmpty()) {
             return;
         }
-        fileDeletionService.deletePermanentlyBatch(
-                ownerUserId,
-                items.stream().map(PhotoItem::getFileNodeId).toList(),
-                false,
-                items.stream().map(item -> new FilePurgeOrigin("PHOTOS", item.getId())).toList()
-        );
-        log.info("回收站过期照片清理任务已创建: photoCount={}, userId={}", items.size(), ownerUserId);
+        log.info("回收站过期照片清理任务已创建: taskCount={}, userId={}", taskIds.size(), ownerUserId);
     }
 
     /**

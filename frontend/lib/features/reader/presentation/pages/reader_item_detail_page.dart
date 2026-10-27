@@ -233,9 +233,17 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
   Future<void> _toggleBookshelf() async {
     setState(() => _bookshelfBusy = true);
     try {
+      final currentAdded =
+          ref
+              .read(readerItemDetailProvider(widget.itemId))
+              .asData
+              ?.value
+              .item
+              .addedToBookshelf ??
+          false;
       await ref
           .read(readerCenterControllerProvider.notifier)
-          .toggleBookshelf(widget.itemId);
+          .setBookshelf(widget.itemId, onBookshelf: !currentAdded);
       if (mounted) {
         ref.invalidate(readerItemDetailProvider(widget.itemId));
         ref.invalidate(readerCenterControllerProvider);

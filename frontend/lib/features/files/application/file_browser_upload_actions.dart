@@ -46,18 +46,41 @@ class _UploadRuntime {
   }
 }
 
+/// 上传目标目录与空间的快照。
+///
+/// 批量上传与冲突重试可能持续数分钟，期间用户会切换目录或空间；
+/// 目标必须在发起时固化，否则排队中的文件会静默传进用户后来浏览的目录。
+class UploadTarget {
+  const UploadTarget({required this.parentId, required this.spaceType});
+
+  /// 目标父目录，null 表示当前空间的根目录。
+  final String? parentId;
+
+  /// 后端空间参数：共享空间为 `SHARED`，个人空间为 null。
+  final String? spaceType;
+
+  static UploadTarget of(FileBrowserState? state) {
+    return UploadTarget(
+      parentId: state?.parentId,
+      spaceType: state?.spaceType == 'SHARED' ? 'SHARED' : null,
+    );
+  }
+}
+
 class _PreparedUpload {
   const _PreparedUpload({
     required this.taskId,
     required this.file,
     required this.fileName,
     required this.sizeBytes,
+    required this.target,
   });
 
   final String taskId;
   final XFile file;
   final String fileName;
   final int sizeBytes;
+  final UploadTarget target;
 }
 
 extension FileBrowserUploadActions on FileBrowserController {
@@ -68,19 +91,19 @@ extension FileBrowserUploadActions on FileBrowserController {
     String? sha256,
     int? partSizeBytes,
     String? asVersionOfFileId,
+    UploadTarget? target,
   }) async {
     return _runAction(FileOperation.createUploadSession, () async {
       final current = _currentState;
-      // 根据当前空间决定上传目标
-      final isShared = current?.spaceType == 'SHARED';
+      final resolved = target ?? UploadTarget.of(current);
       final session = await _repository.createUploadSession(
-        parentId: current?.parentId,
+        parentId: resolved.parentId,
         fileName: fileName,
         sizeBytes: sizeBytes,
         mimeType: mimeType,
         sha256: sha256,
         partSizeBytes: partSizeBytes,
-        spaceType: isShared ? 'SHARED' : null,
+        spaceType: resolved.spaceType,
         asVersionOfFileId: asVersionOfFileId,
       );
       final live = _liveOr(current);
@@ -294,6 +317,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         fileName: pending.fileName,
         sizeBytes: pending.sizeBytes,
         mimeType: pending.mimeType,
+        target: pending.target,
       );
       if (result == _UploadFileResult.completed) {
         await _refreshAfterLocalUploadSettled();
@@ -328,6 +352,8 @@ extension FileBrowserUploadActions on FileBrowserController {
       );
     }
     clearActionError();
+    // 整批共用一个目标快照：上传进行中切换目录/空间不能改动排队文件的落点。
+    final target = UploadTarget.of(_currentState);
     var completed = 0;
     var conflicts = 0;
     var failed = 0;
@@ -348,6 +374,7 @@ extension FileBrowserUploadActions on FileBrowserController {
             file: file,
             fileName: fileName,
             sizeBytes: sizeBytes,
+            target: target,
           ),
         );
         _upsertLocalUploadTask(
@@ -376,6 +403,7 @@ extension FileBrowserUploadActions on FileBrowserController {
               taskId: item.taskId,
               fileName: item.fileName,
               sizeBytes: item.sizeBytes,
+              target: item.target,
             );
             switch (result) {
               case _UploadFileResult.completed:
@@ -455,6 +483,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     int? sizeBytes,
     String? mimeType,
     String? asVersionOfFileId,
+    UploadTarget? target,
   }) async {
     sizeBytes ??= await file.length();
     fileName ??= _uploadFileName(file);
@@ -486,6 +515,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         mimeType: mimeType ?? file.mimeType ?? 'application/octet-stream',
         partSizeBytes: partSizeBytes,
         asVersionOfFileId: asVersionOfFileId,
+        target: target,
       );
       _upsertLocalUploadTask(
         task.copyWith(
@@ -548,6 +578,7 @@ extension FileBrowserUploadActions on FileBrowserController {
           fileName: fileName,
           sizeBytes: sizeBytes,
           mimeType: file.mimeType ?? 'application/octet-stream',
+          target: target ?? UploadTarget.of(_currentState),
         );
         return _UploadFileResult.conflict;
       }
@@ -866,14 +897,15 @@ extension FileBrowserUploadActions on FileBrowserController {
                 if (item.id == task.id) task else item,
             ];
     // 只裁剪已完成/已失败的历史记录；活跃任务与待用户处理的冲突任务不能被挤出。
+    // 保留最近 20 条终态记录：新任务追加在队尾，从队首正向计数会把刚完成的任务
+    // 立刻丢弃，因此先算出需要跳过的最旧条数。
+    final totalTerminal = tasks.where((item) => item.isTerminal).length;
+    var toDrop = math.max(0, totalTerminal - 20);
     final kept = <FileUploadClientTask>[];
-    var terminalCount = 0;
     for (final item in tasks) {
-      if (item.isTerminal) {
-        if (terminalCount >= 20) {
-          continue;
-        }
-        terminalCount++;
+      if (item.isTerminal && toDrop > 0) {
+        toDrop--;
+        continue;
       }
       kept.add(item);
     }

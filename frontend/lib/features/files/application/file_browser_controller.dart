@@ -101,6 +101,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       String fileName,
       int sizeBytes,
       String mimeType,
+      UploadTarget target,
     })
   >
   _pendingConflicts = {};

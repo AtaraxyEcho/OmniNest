@@ -795,7 +795,7 @@ public class PhotoLibraryController {
     @PostMapping("/api/v1/public/photos/share/{token}/authorize")
     ApiResponse<ShareAccessSessionDto> authorizeSharedAlbum(
             @PathVariable String token,
-            @RequestBody(required = false) ShareAuthorizationRequest body,
+            @Valid @RequestBody(required = false) ShareAuthorizationRequest body,
             HttpServletRequest request
     ) {
         return ApiResponse.success(albumService.issueSharedAlbumSession(
@@ -848,7 +848,7 @@ public class PhotoLibraryController {
     @PostMapping("/api/v1/public/photos/item/{token}/authorize")
     ApiResponse<ShareAccessSessionDto> authorizeSharedPhoto(
             @PathVariable String token,
-            @RequestBody(required = false) ShareAuthorizationRequest body,
+            @Valid @RequestBody(required = false) ShareAuthorizationRequest body,
             HttpServletRequest request
     ) {
         return ApiResponse.success(albumService.issueSharedPhotoSession(

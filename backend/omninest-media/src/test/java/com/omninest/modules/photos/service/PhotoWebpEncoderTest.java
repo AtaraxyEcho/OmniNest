@@ -18,4 +18,10 @@ class PhotoWebpEncoderTest {
         assertTrue(ImageIO.getImageWritersByFormatName("webp").hasNext(),
                 "缺少 WebP ImageIO 编码器，缩略图将回退为 JPEG");
     }
+
+    @Test
+    void webpImageReaderShouldBeRegistered() {
+        assertTrue(ImageIO.getImageReadersByFormatName("webp").hasNext(),
+                "缺少 WebP ImageIO 解码器，上传的 WebP 照片无法生成缩略图");
+    }
 }

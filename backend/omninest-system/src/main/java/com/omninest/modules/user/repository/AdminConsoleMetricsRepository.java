@@ -29,8 +29,14 @@ public class AdminConsoleMetricsRepository {
      * 因此写成 CTE 后在外层补齐 owner 两列。</p>
      *
      * <p>本语句服务管理员重试：重新投递等同用户侧重试，必须把重试阶梯复位
-     * （{@code retry_count} 归零、清空堆栈摘要与下次重试时刻）。若只递增计数，
-     * 已耗尽重试额度的任务再次遇到瞬时错误会直接进死信。</p>
+     * （{@code retry_count} 归零、清空堆栈摘要、下次重试时刻与上一次的完成时间、
+     * 心跳时间）。若只递增计数，已耗尽重试额度的任务再次遇到瞬时错误会直接进死信；
+     * 残留的 {@code completed_at} 会让未完成任务显示完成时间，残留心跳会让
+     * 心跳恢复调度误判为新近运行。</p>
+     *
+     * <p>状态守卫限定在重试入口允许的终态集合内：并发下任务已被恢复器或另一位
+     * 管理员拉起时守卫不命中，抛出 NoResultException 由调用方转换为稳定业务错误，
+     * 避免覆盖正在执行的运行态。</p>
      */
     public AdminOperationsDto.TaskRecordItem updateTaskStatusReturning(UUID taskId, String status, int progress) {
         var query = entityManager.createNativeQuery("""
@@ -42,9 +48,11 @@ public class AdminConsoleMetricsRepository {
                         stack_summary = null,
                         next_retry_at = null,
                         retry_count = 0,
+                        completed_at = null,
+                        heartbeat_at = null,
                         updated_at = now(),
                         version = version + 1
-                    where id = :taskId
+                    where id = :taskId and status in ('FAILED', 'CANCELLED', 'DLQ')
                     returning *
                 )
                 select t.id, t.task_type, t.status, t.progress, t.routing_key,

@@ -39,13 +39,36 @@ public class ReaderBookshelfService {
      */
     @Transactional(rollbackFor = Exception.class)
     public boolean toggleBookshelf(UUID ownerUserId, UUID readerItemId) {
-        boolean exists = bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId);
-        if (exists) {
-            bookshelfRepository.deleteByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId);
-            recordBookshelfEvent(ownerUserId, readerItemId, false);
-            log.info("从书架移除: userId={}, itemId={}", ownerUserId, readerItemId);
+        if (bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId)) {
+            removeFromBookshelf(ownerUserId, readerItemId);
             return false;
         }
+        addToBookshelf(ownerUserId, readerItemId);
+        return true;
+    }
+
+    /**
+     * 幂等设定书架状态：请求重放或多端并发点击不会把结果翻回相反值。
+     *
+     * @param ownerUserId  所有者用户 ID
+     * @param readerItemId 阅读条目 ID
+     * @param onBookshelf  true 表示加入书架，false 表示移除
+     * @return 设定后的书架状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean setBookshelf(UUID ownerUserId, UUID readerItemId, boolean onBookshelf) {
+        if (bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId) == onBookshelf) {
+            return onBookshelf;
+        }
+        if (onBookshelf) {
+            addToBookshelf(ownerUserId, readerItemId);
+        } else {
+            removeFromBookshelf(ownerUserId, readerItemId);
+        }
+        return onBookshelf;
+    }
+
+    private void addToBookshelf(UUID ownerUserId, UUID readerItemId) {
         // 书架行按 (owner, item) 落库，不校验条目可读性就会给不存在或无权阅读的条目写出孤儿行。
         readerItemService.requireItem(ownerUserId, readerItemId);
         ReaderBookshelf entry = new ReaderBookshelf();
@@ -60,7 +83,12 @@ public class ReaderBookshelfService {
         }
         recordBookshelfEvent(ownerUserId, readerItemId, true);
         log.info("添加到书架: userId={}, itemId={}", ownerUserId, readerItemId);
-        return true;
+    }
+
+    private void removeFromBookshelf(UUID ownerUserId, UUID readerItemId) {
+        bookshelfRepository.deleteByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId);
+        recordBookshelfEvent(ownerUserId, readerItemId, false);
+        log.info("从书架移除: userId={}, itemId={}", ownerUserId, readerItemId);
     }
 
     /**

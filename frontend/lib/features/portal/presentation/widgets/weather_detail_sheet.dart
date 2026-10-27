@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -504,11 +505,9 @@ class _HourlyWeather extends StatelessWidget {
                             index == 0
                                 ? l10n.weatherHourNow
                                 : hours[index].displayTime,
-                            // ignore: font_size_whitelist
                             style: TextStyle(
                               color: context.env.microLabelInk,
-                              // ignore: font_size_whitelist
-                              fontSize: 8,
+                              fontSize: AppTypography.labelSmall,
                             ),
                           ),
                           const SizedBox(height: 10),

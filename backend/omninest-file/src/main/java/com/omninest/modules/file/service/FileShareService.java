@@ -309,6 +309,7 @@ public class FileShareService {
 
         String generatedPassword = null;
         if (request.password() != null && !request.password().isBlank()) {
+            SharePasswordPolicy.requireEncodable(request.password());
             share.setPasswordHash(passwordEncoder.encode(request.password()));
         } else if (request.generatePassword()) {
             generatedPassword = generateRandomPassword(10);
@@ -402,6 +403,7 @@ public class FileShareService {
             share.setMaxAccessCount(maxAccessCount > 0 ? maxAccessCount : null);
         }
         if (request.password() != null) {
+            SharePasswordPolicy.requireEncodable(request.password());
             share.setPasswordHash(
                     request.password().isBlank() ? null : passwordEncoder.encode(request.password()));
         }

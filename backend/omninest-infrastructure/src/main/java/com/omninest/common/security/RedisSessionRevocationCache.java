@@ -2,11 +2,15 @@ package com.omninest.common.security;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -35,15 +39,31 @@ public class RedisSessionRevocationCache implements SessionRevocationCache {
         if (sessionIds == null || sessionIds.isEmpty()) {
             return;
         }
+        List<UUID> validSessionIds = sessionIds.stream().filter(Objects::nonNull).toList();
+        if (validSessionIds.isEmpty()) {
+            return;
+        }
         try {
             // 每个 sessionId 独立键：不同吊销来源的 TTL 互不覆盖，历史 sid 也能逐个过期。
-            for (UUID sessionId : sessionIds) {
-                redis.opsForValue().set(revokedKey(userId, sessionId), "1", ttl);
-                // 未撤销判定必须同时作废，否则旧的 ok 标记会在自身 TTL 内压住这次撤销
-                redis.delete(notRevokedKey(userId, sessionId));
-            }
+            // 退出全部设备或管理员禁用用户时可能一次吊销数十个会话，逐条串行会产生
+            // 2N 次网络往返；管道化后整批只等一次 RTT。
+            redis.executePipelined(new SessionCallback<>() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public <K, V> Object execute(RedisOperations<K, V> operations) {
+                    RedisOperations<String, String> stringOperations = (RedisOperations<String, String>) operations;
+                    for (UUID sessionId : validSessionIds) {
+                        stringOperations.opsForValue().set(revokedKey(userId, sessionId), "1", ttl);
+                    }
+                    // 未撤销判定必须同时作废，否则旧的 ok 标记会在自身 TTL 内压住这次撤销
+                    stringOperations.delete(validSessionIds.stream()
+                            .map(sessionId -> notRevokedKey(userId, sessionId))
+                            .toList());
+                    return null;
+                }
+            });
         } catch (RuntimeException exception) {
-            log.warn("Redis 会话撤销缓存写入失败: userId={}, count={}", userId, sessionIds.size(), exception);
+            log.warn("Redis 会话撤销缓存写入失败: userId={}, count={}", userId, validSessionIds.size(), exception);
         }
     }
 

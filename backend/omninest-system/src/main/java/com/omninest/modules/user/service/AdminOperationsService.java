@@ -199,11 +199,17 @@ public class AdminOperationsService {
         // 任务记录载荷只是事件子集的类型（媒体导入、扫描、粉碎、安全扫描）按原样重放。
         taskRedispatchService.redispatch(record);
         // 使用 EntityManager RETURNING 获取更新后的完整记录
-        AdminOperationsDto.TaskRecordItem retried = metricsRepository.updateTaskStatusReturning(
-                taskId,
-                TaskStatus.QUEUED.getValue(),
-                0
-        );
+        AdminOperationsDto.TaskRecordItem retried;
+        try {
+            retried = metricsRepository.updateTaskStatusReturning(
+                    taskId,
+                    TaskStatus.QUEUED.getValue(),
+                    0
+            );
+        } catch (NoResultException exception) {
+            // 并发的恢复器或另一位管理员已把任务拉起：整笔回滚，含上面的重投。
+            throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "任务状态已变化，请刷新后重试");
+        }
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
         return maskCrossOwnerSummary(retried, actorUserId);
     }

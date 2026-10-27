@@ -193,6 +193,46 @@ class ExternalImportExecutionServiceTest {
     }
 
     @Test
+    void execute_reclaimsTaskLeftInProgressByCrashedWorker() {
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<TransactionStatus> callback =
+                    (Consumer<TransactionStatus>) invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+
+        // 崩溃恢复/重试只重置 sys_tasks，业务表停在执行中状态；重入必须继续执行。
+        StorageImportTask task = new StorageImportTask();
+        task.setId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setExternalAccountId(ACCOUNT_ID);
+        task.setSourcePath("movies/a.mkv");
+        task.setFileName("a.mkv");
+        task.setStatus(ImportTaskStatus.TRANSFERRING.getValue());
+        when(importTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        when(importTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        StorageExternalAccount account = new StorageExternalAccount();
+        account.setId(ACCOUNT_ID);
+        account.setOwnerUserId(OWNER_ID);
+        account.setProvider("LOCAL");
+        account.setEncryptedCredentials("{\"path\":\"/mnt/local\"}");
+        account.setStatus("ACTIVE");
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
+
+        service.execute(new ExternalImportRequestedEvent(TASK_ID));
+
+        verify(taskRecordService).claimForExecution(TASK_ID, "SCANNING");
+        assertThat(task.getStatus()).isEqualTo(ImportTaskStatus.FAILED.getValue());
+        assertThat(task.getErrorSummary()).contains("本地目录导入已停用");
+    }
+
+    @Test
     void execute_usesFileCopyForRcloneFileSource() throws Exception {
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);

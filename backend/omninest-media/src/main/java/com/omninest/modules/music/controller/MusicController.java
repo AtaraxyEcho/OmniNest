@@ -340,7 +340,7 @@ public class MusicController {
 
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/music/tracks/{trackId}/play-history")
-    ApiResponse<Void> playHistory(@PathVariable UUID trackId, @RequestBody(required = false) MusicPlayHistoryRequest request) {
+    ApiResponse<Void> playHistory(@PathVariable UUID trackId, @Valid @RequestBody(required = false) MusicPlayHistoryRequest request) {
         musicLibraryService.recordPlayHistory(currentUserContext.requireCurrentUserId(), trackId, request);
         return ApiResponse.success();
     }
@@ -590,7 +590,7 @@ public class MusicController {
 
     @PostMapping("/api/v1/admin/music/scrape")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
-    ApiResponse<MusicScanJobDto> scrapeLibrary(@RequestBody(required = false) MusicScrapeRequest request) {
+    ApiResponse<MusicScanJobDto> scrapeLibrary(@Valid @RequestBody(required = false) MusicScrapeRequest request) {
         boolean force = request != null && request.force();
         return ApiResponse.success(musicScrapeService.scrapeLibrary(currentUserContext.requireCurrentUserId(), force));
     }

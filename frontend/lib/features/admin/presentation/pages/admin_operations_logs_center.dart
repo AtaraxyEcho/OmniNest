@@ -22,6 +22,11 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
   /// 最近一次成功加载的审计/登录页数据：刷新期间沿用旧数据避免闪烁。
   AdminPage<AdminAuditLog>? _lastAuditPage;
   AdminPage<AdminLoginAuditItem>? _lastLoginPage;
+
+  /// 隐藏 Tab 沿用的查询键：搜索词或每页条数变化只作用于当前 Tab，
+  /// 隐藏 Tab 不再跟着发起整页请求，徽章计数保留在下次激活前的快照。
+  AdminLogPageQuery? _lastActiveAuditQuery;
+  AdminLoginAuditPageQuery? _lastActiveLoginQuery;
   AdminListSort _auditSort = const AdminListSort(
     columnKey: 'createdAt',
     ascending: false,
@@ -82,8 +87,20 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
       sort: _loginSort.columnKey,
       dir: _loginSort.ascending ? 'asc' : 'desc',
     );
-    final auditAsync = ref.watch(adminLogPageProvider(auditQuery));
-    final loginAsync = ref.watch(adminLoginAuditPageProvider(loginQuery));
+    final auditActive = _tabController.index == 0;
+    // 隐藏 Tab 沿用最近一次激活时的查询键：搜索词、每页条数与排序的变化
+    // 只作用于当前 Tab，隐藏 Tab 不跟着发起整页请求，徽章计数保留旧快照。
+    if (auditActive) {
+      _lastActiveAuditQuery = auditQuery;
+    } else {
+      _lastActiveLoginQuery = loginQuery;
+    }
+    final auditKey =
+        auditActive ? auditQuery : (_lastActiveAuditQuery ?? auditQuery);
+    final loginKey =
+        auditActive ? (_lastActiveLoginQuery ?? loginQuery) : loginQuery;
+    final auditAsync = ref.watch(adminLogPageProvider(auditKey));
+    final loginAsync = ref.watch(adminLoginAuditPageProvider(loginKey));
     if (auditAsync.hasValue) {
       _lastAuditPage = auditAsync.value;
     }
@@ -92,13 +109,16 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
     }
     final auditPage = auditAsync.value ?? _lastAuditPage;
     final loginPage = loginAsync.value ?? _lastLoginPage;
-    final currentOptions =
+    // 动作选项必须是完整动作集：只从当前页聚合会让未出现在首屏或筛选后的
+    // 动作永远无法被选中，选中一项后其余选项也会一起消失。
+    final actionOptions =
         <String>{
-            'ALL',
+            ..._adminAuditActions,
             ...?auditPage?.items.map((item) => item.action),
             if (_auditAction != 'ALL') _auditAction,
           }.toList()
           ..sort();
+    final currentOptions = <String>['ALL', ...actionOptions];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -847,6 +867,33 @@ class _AdminRecordFilterBar extends StatelessWidget {
     );
   }
 }
+
+/// 操作审计的已知动作全集，与后端审计写入点一一对应。
+///
+/// 下拉选项以此为底，再与当前页数据取并集：筛选下拉不能依赖分页结果，
+/// 否则首屏只出现一种动作时其余动作不可选。
+const List<String> _adminAuditActions = <String>[
+  'ADMIN_CONFIG_UPDATE',
+  'ADMIN_EXTERNAL_STORAGE_CREATE',
+  'ADMIN_EXTERNAL_STORAGE_STATUS_UPDATE',
+  'ADMIN_QUOTA_UPDATE',
+  'ADMIN_ROLE_CREATE',
+  'ADMIN_ROLE_DELETE',
+  'ADMIN_ROLE_PERMISSIONS_UPDATE',
+  'ADMIN_TASK_CANCEL',
+  'ADMIN_TASK_DLQ_DISCARD',
+  'ADMIN_TASK_RETRY',
+  'ADMIN_USER_2FA_RESET',
+  'ADMIN_USER_CREATE',
+  'ADMIN_USER_DELETE',
+  'ADMIN_USER_ROLES_UPDATE',
+  'ADMIN_USER_ROLE_UPDATE',
+  'ADMIN_USER_STATUS_UPDATE',
+  'ADMIN_SESSION_REVOKE',
+  'ADMIN_SESSION_CLEANUP',
+  'ADMIN_AUDIT_LOG_CLEANUP',
+  'ADMIN_LOGIN_AUDIT_CLEANUP',
+];
 
 /// 审计操作类型的本地化短标签；未收录的枚举回退原始值，
 /// 由 [AdminCellText] 的 tooltip 保留完整名称。

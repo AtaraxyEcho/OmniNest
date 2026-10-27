@@ -112,4 +112,25 @@ class ReaderBookshelfServiceTest {
         verify(bookshelfRepository).deleteByOwnerUserIdAndReaderItemId(OWNER_ID, ITEM_ID);
         verify(readerItemService, never()).requireItem(OWNER_ID, ITEM_ID);
     }
+
+    @Test
+    void setBookshelfIsIdempotentWhenTargetStateAlreadyHolds() {
+        when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, ITEM_ID)).thenReturn(true);
+
+        // 重放的"加入书架"请求不能把已存在的书架行删掉。
+        assertThat(bookshelfService.setBookshelf(OWNER_ID, ITEM_ID, true)).isTrue();
+
+        verify(bookshelfRepository, never()).deleteByOwnerUserIdAndReaderItemId(OWNER_ID, ITEM_ID);
+        verify(bookshelfRepository, never()).saveAndFlush(any(ReaderBookshelf.class));
+    }
+
+    @Test
+    void setBookshelfRemovesOnlyWhenCurrentlyPresent() {
+        when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, ITEM_ID)).thenReturn(false);
+
+        assertThat(bookshelfService.setBookshelf(OWNER_ID, ITEM_ID, false)).isFalse();
+
+        verify(bookshelfRepository, never()).deleteByOwnerUserIdAndReaderItemId(OWNER_ID, ITEM_ID);
+        verify(readerItemService, never()).requireItem(OWNER_ID, ITEM_ID);
+    }
 }

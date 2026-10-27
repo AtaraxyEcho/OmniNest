@@ -260,10 +260,13 @@ extension MovieCenterCommands on MovieCenterController {
     }
   }
 
-  /// 切换剧集收藏状态。
-  Future<void> toggleSeriesFavorite(String seriesId) async {
+  /// 幂等设定剧集收藏状态。
+  Future<void> setSeriesFavorite(
+    String seriesId, {
+    required bool favorite,
+  }) async {
     try {
-      await _api.toggleSeriesFavorite(seriesId);
+      await _api.setSeriesFavorite(seriesId, favorite: favorite);
       await refresh();
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);

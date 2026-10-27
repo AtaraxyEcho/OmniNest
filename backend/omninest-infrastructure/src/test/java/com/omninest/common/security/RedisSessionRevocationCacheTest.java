@@ -8,6 +8,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -33,10 +35,21 @@ class RedisSessionRevocationCacheTest {
     }
 
     @Test
-    void markRevokedWritesIndependentKeyPerSession() {
+    @SuppressWarnings("unchecked")
+    void markRevokedWritesIndependentKeyPerSessionThroughOnePipeline() {
         UUID userId = UUID.randomUUID();
         UUID firstSessionId = UUID.randomUUID();
         UUID secondSessionId = UUID.randomUUID();
+        RedisOperations<String, String> pipelinedOperations = Mockito.mock(RedisOperations.class);
+        ValueOperations<String, String> pipelinedValues = Mockito.mock(ValueOperations.class);
+        Mockito.when(pipelinedOperations.opsForValue()).thenReturn(pipelinedValues);
+        // 管道内的命令在回调中登记，整批只有一次网络往返。
+        Mockito.when(redis.executePipelined(Mockito.any(SessionCallback.class)))
+                .thenAnswer(invocation -> {
+                    SessionCallback<?> callback = invocation.getArgument(0);
+                    callback.execute(pipelinedOperations);
+                    return List.of();
+                });
 
         cache.markRevoked(
                 userId,
@@ -44,18 +57,23 @@ class RedisSessionRevocationCacheTest {
                 Duration.ofDays(30)
         );
 
-        Mockito.verify(valueOperations).set(
+        Mockito.verify(pipelinedValues).set(
                 "session:blacklist:" + userId + ":" + firstSessionId,
                 "1",
                 Duration.ofDays(30)
         );
-        Mockito.verify(valueOperations).set(
+        Mockito.verify(pipelinedValues).set(
                 "session:blacklist:" + userId + ":" + secondSessionId,
                 "1",
                 Duration.ofDays(30)
         );
-        Mockito.verify(redis).delete("session:blacklist-ok:" + userId + ":" + firstSessionId);
-        Mockito.verify(redis).delete("session:blacklist-ok:" + userId + ":" + secondSessionId);
+        Mockito.verify(pipelinedOperations).delete(List.of(
+                "session:blacklist-ok:" + userId + ":" + firstSessionId,
+                "session:blacklist-ok:" + userId + ":" + secondSessionId
+        ));
+        // 逐条 set/delete 的旧路径不能再出现，否则批量吊销又退回 2N 次往返。
+        Mockito.verify(redis, Mockito.never()).opsForValue();
+        Mockito.verify(redis, Mockito.never()).delete(Mockito.anyString());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.omninest.modules.file.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
 /**
@@ -15,7 +16,9 @@ import java.time.Instant;
  * @author OmniNest
  */
 public record UpdateShareLinkRequest(
-        @Schema(description = "自定义访问密码；不传表示保持原密码") String password,
+        @Schema(description = "自定义访问密码；不传表示保持原密码")
+        @Size(max = 128, message = "分享密码长度不能超过 128 个字符")
+        String password,
         @Schema(
                 description = "过期时间；接受 ISO-8601 即时区标记或 yyyy-MM-dd HH:mm:ss（按 UTC）",
                 example = "2026-09-26T00:00:00Z"

@@ -222,7 +222,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<FileNodeDto> copyFile(
             @PathVariable UUID fileId,
-            @RequestBody(required = false) CopyFileRequest body
+            @Valid @RequestBody(required = false) CopyFileRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileManagerService.copyNode(
@@ -567,7 +567,7 @@ public class FileController {
     @PostMapping("/api/v1/s/{token}/authorize")
     ApiResponse<ShareAccessSessionDto> authorizeShare(
             @PathVariable String token,
-            @RequestBody(required = false) ShareAuthorizationRequest body,
+            @Valid @RequestBody(required = false) ShareAuthorizationRequest body,
             HttpServletRequest request
     ) {
         String password = body == null ? null : body.password();
@@ -619,7 +619,7 @@ public class FileController {
     ApiResponse<Void> acceptShare(
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
-            @RequestBody(required = false) AcceptShareRequest body,
+            @Valid @RequestBody(required = false) AcceptShareRequest body,
             HttpServletRequest request
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();

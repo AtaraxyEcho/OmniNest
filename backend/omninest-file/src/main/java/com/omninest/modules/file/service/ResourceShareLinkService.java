@@ -193,6 +193,7 @@ public class ResourceShareLinkService {
         share.setIncludeLocation(includeLocation);
         share.setOriginalQuality(originalQuality);
         if (password != null && !password.isBlank()) {
+            SharePasswordPolicy.requireEncodable(password);
             share.setPasswordHash(passwordEncoder.encode(password));
         }
         return toDto(shareLinkRepository.save(share), rawToken);
@@ -297,6 +298,7 @@ public class ResourceShareLinkService {
         share.setIncludeLocation(includeLocation);
         share.setOriginalQuality(originalQuality);
         if (password != null) {
+            SharePasswordPolicy.requireEncodable(password);
             share.setPasswordHash(password.isBlank() ? null : passwordEncoder.encode(password));
         }
         ShareLink saved = shareLinkRepository.save(share);

@@ -49,8 +49,8 @@ public class DeadLetterConsumer {
             extractTaskId(message, body).ifPresent(taskId -> {
                 boolean updated = taskRecordService.markDeadLetter(
                         taskId,
-                        describeDeadLetter(body, routingKey),
-                        extractStackSummary(body)
+                        DeadLetterDescriptions.describe(message, body, routingKey),
+                        DeadLetterDescriptions.stackSummary(body)
                 );
                 if (updated) {
                     log.info("任务状态已更新为 DLQ: taskId={}", taskId);
@@ -63,48 +63,6 @@ public class DeadLetterConsumer {
             log.error("死信处理失败", e);
             channel.basicNack(deliveryTag, false, false);
         }
-    }
-
-    /**
-     * 从死信消息体提取堆栈摘要字段，缺失或非 JSON 时返回 null。
-     */
-    private String extractStackSummary(String body) {
-        try {
-            JsonNode json = JsonSupport.readTree(body);
-            return json == null ? null : json.path("stackSummary").asString(null);
-        } catch (RuntimeException exception) {
-            log.debug("死信消息体不是 JSON，不提取堆栈摘要");
-            return null;
-        }
-    }
-
-    /**
-     * 组装死信错误摘要。
-     *
-     * <p>Outbox 死信消息体携带投递失败上下文（错误码、失败类型、失败实例）
-     * 与脱敏后的原始载荷，一并写入任务错误摘要；普通死信仅保留原始路由键。
-     * 创建载荷本身已在任务记录中，无需重复存储。</p>
-     */
-    private String describeDeadLetter(String body, String routingKey) {
-        StringBuilder summary = new StringBuilder("消息进入死信队列，原始路由键: ").append(routingKey);
-        JsonNode json = null;
-        try {
-            json = JsonSupport.readTree(body);
-        } catch (RuntimeException exception) {
-            log.debug("死信消息体不是 JSON，仅记录路由键");
-        }
-        if (json != null && json.path("errorCode").asString(null) != null) {
-            summary.append("; 投递失败: ").append(json.path("failureType").asString(null))
-                    .append('/').append(json.path("errorCode").asString(null));
-            if (json.path("instanceId").asString(null) != null) {
-                summary.append(" @").append(json.path("instanceId").asString(null));
-            }
-            String taskId = json.path("taskId").asString(null);
-            if (taskId != null && !taskId.isBlank() && taskId.length() <= 64) {
-                summary.append("; taskId: ").append(taskId);
-            }
-        }
-        return summary.toString();
     }
 
     /**

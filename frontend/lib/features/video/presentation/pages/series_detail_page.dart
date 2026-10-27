@@ -190,7 +190,7 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
         apply: (_) async {
           await ref
               .read(movieCenterControllerProvider.notifier)
-              .toggleSeriesFavorite(series.id);
+              .setSeriesFavorite(series.id, favorite: !current);
         },
       );
       if (!mounted) {

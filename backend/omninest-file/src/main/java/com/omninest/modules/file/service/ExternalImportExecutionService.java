@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -165,8 +166,10 @@ public class ExternalImportExecutionService {
 
             FileNode targetParent = resolveParent(t, destinationParentId);
             SpaceType spaceType = resolveSpaceType(t);
-            String availableName = resolveAvailableName(
+            String availableName = ExternalImportNames.resolveAvailable(
+                    fileNodeRepository,
                     t,
+                    spaceType,
                     targetParent == null ? null : targetParent.getId(),
                     fileName
             );
@@ -552,16 +555,36 @@ public class ExternalImportExecutionService {
         }
     }
 
+    /**
+     * 可重入的业务状态。
+     *
+     * <p>心跳超时恢复与用户/管理员重试只会重置 sys_tasks，不会改业务表状态；
+     * 崩溃时业务表可能停留在任意执行中状态，失败重试时停留在 FAILED。
+     * 若只接受 QUEUED，重投消息会因状态不符被静默确认，任务永远无法真正重跑。
+     * 并发安全由 {@code claimForExecution} 的行锁与状态守卫保证。</p>
+     */
+    private static final Set<String> CLAIMABLE_IMPORT_STATUSES = Set.of(
+            ImportTaskStatus.QUEUED.getValue(),
+            ImportTaskStatus.SCANNING.getValue(),
+            ImportTaskStatus.TRANSFERRING.getValue(),
+            ImportTaskStatus.IMPORTING.getValue(),
+            ImportTaskStatus.RUNNING.getValue(),
+            ImportTaskStatus.FAILED.getValue()
+    );
+
     private StorageImportTask markRunning(UUID taskId) {
         return transactionTemplate.execute(status ->
                 importTaskRepository.findById(taskId)
-                        .filter(t -> ImportTaskStatus.QUEUED.getValue().equals(t.getStatus()))
+                        .filter(t -> CLAIMABLE_IMPORT_STATUSES.contains(t.getStatus()))
                         .map(t -> {
                             if (!taskRecordService.claimForExecution(systemTaskId(t), "SCANNING")) {
                                 return null;
                             }
                             t.setStatus(ImportTaskStatus.SCANNING.getValue());
                             t.setErrorSummary(null);
+                            t.setCompletedFileId(null);
+                            t.setSpeedBytes(0L);
+                            t.setCurrentFileName(null);
                             return importTaskRepository.save(t);
                         })
                         .orElse(null)
@@ -780,8 +803,10 @@ public class ExternalImportExecutionService {
             StorageImportTask currentTask = requireTask(task.getId());
             FileNode targetParent = resolveParent(currentTask, currentTask.getTargetParentId());
             SpaceType spaceType = resolveSpaceType(currentTask);
-            String availableName = resolveAvailableName(
+            String availableName = ExternalImportNames.resolveAvailable(
+                    fileNodeRepository,
                     currentTask,
+                    spaceType,
                     targetParent == null ? null : targetParent.getId(),
                     currentTask.getFileName()
             );
@@ -834,7 +859,8 @@ public class ExternalImportExecutionService {
             StorageImportTask currentTask = requireTask(task.getId());
             FileNode parent = resolveParent(currentTask, parentId);
             SpaceType spaceType = resolveSpaceType(currentTask);
-            String availableName = resolveAvailableName(currentTask, parentId, folderName);
+            String availableName = ExternalImportNames.resolveAvailable(
+                    fileNodeRepository, currentTask, spaceType, parentId, folderName);
             FileNode folder = new FileNode();
             folder.setOwnerUserId(currentTask.getOwnerUserId());
             folder.setParentId(parentId);
@@ -1052,62 +1078,6 @@ public class ExternalImportExecutionService {
         }
         return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, task.getOwnerUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
-    }
-
-    private static final int MAX_NAME_COLLISION_ITERATIONS = 1000;
-    private static final int MAX_FILE_NAME_LENGTH = 255;
-
-    private String resolveAvailableName(StorageImportTask task, UUID parentId, String requestedName) {
-        String name = withNameSuffix(requestedName, "");
-        int index = 1;
-        while (nameExists(task, parentId, name)) {
-            String suffix = index > MAX_NAME_COLLISION_ITERATIONS
-                    ? " (" + UUID.randomUUID().toString().substring(0, 8) + ")"
-                    : " (" + index + ")";
-            name = withNameSuffix(requestedName, suffix);
-            if (index > MAX_NAME_COLLISION_ITERATIONS) {
-                break;
-            }
-            index++;
-        }
-        return name;
-    }
-
-    /**
-     * 在扩展名前插入冲突后缀，并把总分片名截到 file_nodes.name 的 255 字符列宽。
-     */
-    private String withNameSuffix(String requestedName, String suffix) {
-        int dotIndex = requestedName.lastIndexOf('.');
-        String stem = dotIndex <= 0 ? requestedName : requestedName.substring(0, dotIndex);
-        String extension = dotIndex <= 0 ? "" : requestedName.substring(dotIndex);
-        int stemLimit = Math.max(1, MAX_FILE_NAME_LENGTH - suffix.length() - extension.length());
-        if (stem.length() > stemLimit) {
-            stem = stem.substring(0, stemLimit);
-        }
-        return stem + suffix + extension;
-    }
-
-    private boolean nameExists(StorageImportTask task, UUID parentId, String name) {
-        if (resolveSpaceType(task) == SpaceType.SHARED) {
-            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
-                    SpaceType.SHARED,
-                    parentId,
-                    name
-            );
-        }
-        if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
-                    task.getOwnerUserId(),
-                    SpaceType.PERSONAL,
-                    name
-            );
-        }
-        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
-                task.getOwnerUserId(),
-                SpaceType.PERSONAL,
-                parentId,
-                name
-        );
     }
 
     private SpaceType resolveSpaceType(StorageImportTask task) {

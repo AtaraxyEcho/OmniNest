@@ -355,13 +355,20 @@ public class ReaderLibraryController {
     // ==================== Bookshelf ====================
 
     /**
-     * 切换书架状态：已存在则移除，不存在则添加。
+     * 设置书架状态：传入 bookshelf 时按目标状态幂等设定，缺省时保留翻转语义。
      */
-    @Operation(summary = "切换书架状态", description = "将指定阅读条目添加到书架或从书架移除")
+    @Operation(summary = "设置书架状态", description = "将指定阅读条目加入书架或移除；传 bookshelf 为幂等设定，不传则翻转")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/bookshelf")
-    ApiResponse<Boolean> toggleBookshelf(@PathVariable UUID itemId) {
-        return ApiResponse.success(readerBookshelfService.toggleBookshelf(currentUserContext.requireCurrentUserId(), itemId));
+    ApiResponse<Boolean> toggleBookshelf(
+            @PathVariable UUID itemId,
+            @RequestParam(required = false) Boolean bookshelf
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        if (bookshelf == null) {
+            return ApiResponse.success(readerBookshelfService.toggleBookshelf(ownerUserId, itemId));
+        }
+        return ApiResponse.success(readerBookshelfService.setBookshelf(ownerUserId, itemId, bookshelf));
     }
 
     // ==================== Sessions ====================

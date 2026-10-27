@@ -32,7 +32,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnWorkerRuntime
 public class ThumbnailConsumer {
 
-    private static final Set<String> IMAGE_MIME_PREFIXES = Set.of("image/jpeg", "image/png", "image/gif", "image/bmp");
+    private static final Set<String> IMAGE_MIME_PREFIXES = Set.of(
+            "image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp");
     private static final String TASK_TYPE = "THUMBNAIL";
 
     private final PhotoSourceFileService photoSourceFileService;

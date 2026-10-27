@@ -1,5 +1,6 @@
 package com.omninest.worker.task;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -68,6 +69,18 @@ class GenericTaskRecoverySchedulerTest {
         record.setPayload("{\"taskId\":\"" + TASK + "\"}");
         record.setCreatedAt(Instant.now().minusSeconds(3600));
         return record;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void heartbeatRecoveryCoversIndexRebuildAndNotificationEmail() {
+        // 两者都会领取 RUNNING 且没有专用恢复调度器；遗漏会让崩溃后的任务永久卡在 RUNNING。
+        List<String> taskTypes = (List<String>) ReflectionTestUtils.getField(
+                GenericTaskRecoveryScheduler.class, "RECOVERED_TASK_TYPES");
+        assertThat(taskTypes)
+                .contains("SEARCH_INDEX_REBUILD", "NOTIFICATION_EMAIL")
+                // MEDIA_SCAN 执行期间停留在 QUEUED，由停滞清扫兜底，不参与心跳恢复。
+                .doesNotContain("MEDIA_SCAN");
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.omninest.common.security.ClientIpResolver;
 import com.omninest.modules.user.dto.InitialSetupRequest;
 import com.omninest.modules.user.dto.InitialSetupResultDto;
 import com.omninest.modules.user.dto.InitialSetupStatusDto;
+import com.omninest.modules.user.dto.TwoFactorSecretRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.service.InitialSetupService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,7 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,7 +60,7 @@ public class InitialSetupController {
     @PostMapping("/api/v1/setup/2fa/secret")
     ApiResponse<TwoFactorSetupResponse> newTwoFactorSecret(
             @RequestHeader(name = SETUP_TOKEN_HEADER, required = false) String setupToken,
-            @RequestBody(required = false) Map<String, String> body,
+            @Valid @RequestBody(required = false) TwoFactorSecretRequest body,
             HttpServletRequest servletRequest
     ) {
         // 与创建超管同门槛：安装令牌、限流、再生成秘钥，避免匿名扫描器消耗配额。
@@ -74,7 +74,7 @@ public class InitialSetupController {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "秘钥生成请求过于频繁，请稍后再试");
         }
         return ApiResponse.success(
-                initialSetupService.newTwoFactorSecret(body == null ? null : body.get("username"))
+                initialSetupService.newTwoFactorSecret(body == null ? null : body.username())
         );
     }
 

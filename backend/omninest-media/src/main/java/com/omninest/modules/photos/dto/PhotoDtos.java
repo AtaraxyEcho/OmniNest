@@ -382,7 +382,7 @@ public final class PhotoDtos {
     ) {}
 
     public record CreateAlbumShareRequest(
-            String password,
+            @Size(max = 128, message = "分享密码长度不能超过 128 个字符") String password,
             Instant expiresAt,
             Integer maxAccessCount,
             Boolean includeLocation,
@@ -402,7 +402,7 @@ public final class PhotoDtos {
      * @param originalQuality 访客可见是否签发原图，必填
      */
     public record UpdatePhotoShareRequest(
-            String password,
+            @Size(max = 128, message = "分享密码长度不能超过 128 个字符") String password,
             Instant expiresAt,
             Integer maxAccessCount,
             Boolean includeLocation,

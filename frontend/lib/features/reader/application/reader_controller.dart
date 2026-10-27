@@ -531,12 +531,16 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     }
   }
 
-  /// 切换书架状态
+  /// 设定书架状态
   ///
-  /// 调用 API 切换后全量刷新，以服务端 `addedToBookshelf` 为准同步书架列表。
-  Future<BookshelfToggleResult> toggleBookshelf(String itemId) async {
+  /// 目标状态由调用方按当前事实取反后显式传入，避免请求重放把收藏翻回去；
+  /// 写入后全量刷新，以服务端 `addedToBookshelf` 为准同步书架列表。
+  Future<BookshelfToggleResult> setBookshelf(
+    String itemId, {
+    required bool onBookshelf,
+  }) async {
     try {
-      await _api.toggleBookshelf(itemId);
+      await _api.setBookshelf(itemId, onBookshelf: onBookshelf);
       await refresh();
       ref.read(readerBookshelfRevisionProvider.notifier).bump();
       final item =

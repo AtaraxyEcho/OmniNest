@@ -466,7 +466,10 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     try {
       await ref
           .read(readerCenterControllerProvider.notifier)
-          .toggleBookshelf(widget.item.id);
+          .setBookshelf(
+            widget.item.id,
+            onBookshelf: !widget.item.addedToBookshelf,
+          );
       if (mounted) {
         ref.invalidate(readerCenterControllerProvider);
         final l10n = AppLocalizations.of(context);

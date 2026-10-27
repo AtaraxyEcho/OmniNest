@@ -4,6 +4,9 @@ import com.omninest.modules.task.service.TaskRecordService;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -44,7 +47,7 @@ class DeadLetterConsumerTest {
         Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(true);
         String body = "{\"taskId\":\"" + taskId + "\",\"errorCode\":\"BROKER_UNAVAILABLE\","
-                + "\"failureType\":\"AmqpConnectException\",\"instanceId\":\"api-1\","
+                + "\"failureType\":\"AmqpConnectException\",\"publisherInstanceId\":\"api-1\","
                 + "\"payload\":{\"taskId\":\"" + taskId + "\"}}";
 
         consumer.handle(message(taskId.toString(), body, "media.scrape"), channel);
@@ -147,7 +150,37 @@ class DeadLetterConsumerTest {
         Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 
+    @Test
+    void handleRecordsBrokerDeathOriginFromXDeathHeader() throws IOException {
+        UUID taskId = UUID.randomUUID();
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
+                .thenReturn(true);
+        MessageProperties properties = properties(taskId.toString(), "index.sync");
+        properties.setHeader("x-death", List.of(new HashMap<>(Map.of(
+                "queue", "omni.task.file-index-sync",
+                "reason", "rejected",
+                "count", 2L
+        ))));
+
+        consumer.handle(new Message("{}".getBytes(StandardCharsets.UTF_8), properties), channel);
+
+        ArgumentCaptor<String> summaryCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(taskId),
+                summaryCaptor.capture(),
+                Mockito.isNull()
+        );
+        Assertions.assertThat(summaryCaptor.getValue())
+                .contains("来源队列: omni.task.file-index-sync")
+                .contains("原因: rejected")
+                .contains("次数: 2");
+    }
+
     private Message message(String taskIdHeader, String body, String routingKey) {
+        return new Message(body.getBytes(StandardCharsets.UTF_8), properties(taskIdHeader, routingKey));
+    }
+
+    private MessageProperties properties(String taskIdHeader, String routingKey) {
         MessageProperties properties = new MessageProperties();
         if (taskIdHeader != null) {
             properties.setHeader("taskId", taskIdHeader);
@@ -155,6 +188,6 @@ class DeadLetterConsumerTest {
         properties.setReceivedExchange("omni.task");
         properties.setReceivedRoutingKey(routingKey);
         properties.setDeliveryTag(1L);
-        return new Message(body.getBytes(StandardCharsets.UTF_8), properties);
+        return properties;
     }
 }

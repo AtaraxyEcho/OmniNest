@@ -348,15 +348,44 @@ public class MovieEngagementService {
             seriesFavoriteRepository.delete(existing.get());
             newFavorite = false;
         } else {
-            MediaSeriesFavorite fav = new MediaSeriesFavorite();
-            fav.setOwnerUserId(ownerUserId);
-            fav.setSeriesId(seriesId);
-            seriesFavoriteRepository.save(fav);
+            addSeriesFavorite(ownerUserId, seriesId);
             newFavorite = true;
         }
         recordEvent(ownerUserId, "VIDEO_SERIES", seriesId, SyncAction.UPDATED, Map.of("favorite", newFavorite));
         invalidateDashboardCache(ownerUserId);
         return newFavorite;
+    }
+
+    /**
+     * 幂等设定剧集收藏：请求重放或多端并发点击不会把结果翻回相反值。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param seriesId 剧集 ID
+     * @param favorite true 表示收藏，false 表示取消收藏
+     * @return 设定后的收藏状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean setSeriesFavorite(UUID ownerUserId, UUID seriesId, boolean favorite) {
+        mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        var existing = seriesFavoriteRepository.findByOwnerUserIdAndSeriesId(ownerUserId, seriesId);
+        if (favorite == existing.isPresent()) {
+            return favorite;
+        }
+        if (existing.isPresent()) {
+            seriesFavoriteRepository.delete(existing.get());
+        } else {
+            addSeriesFavorite(ownerUserId, seriesId);
+        }
+        recordEvent(ownerUserId, "VIDEO_SERIES", seriesId, SyncAction.UPDATED, Map.of("favorite", favorite));
+        invalidateDashboardCache(ownerUserId);
+        return favorite;
+    }
+
+    private void addSeriesFavorite(UUID ownerUserId, UUID seriesId) {
+        MediaSeriesFavorite fav = new MediaSeriesFavorite();
+        fav.setOwnerUserId(ownerUserId);
+        fav.setSeriesId(seriesId);
+        seriesFavoriteRepository.save(fav);
     }
 
     @Transactional(readOnly = true)

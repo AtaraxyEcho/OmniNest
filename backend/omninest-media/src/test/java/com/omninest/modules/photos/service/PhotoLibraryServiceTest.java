@@ -49,6 +49,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -226,6 +227,32 @@ class PhotoLibraryServiceTest {
         verify(fileDeletionService, Mockito.never()).deletePermanentlyBatch(
                 any(), any(), anyBoolean(), any()
         );
+    }
+
+    @Test
+    void purgeTrashSplitsTrashIntoBoundedTasks() {
+        PhotoItem first = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
+        PhotoItem second = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "第二张照片");
+        when(photoItemRepository.findTrashBatch(eq(OWNER_ID), any(), any(Pageable.class)))
+                .thenReturn(List.of(first))
+                .thenReturn(List.of(second))
+                .thenReturn(List.of());
+        UUID firstTaskId = UUID.fromString("90000000-0000-0000-0000-000000000001");
+        UUID secondTaskId = UUID.fromString("90000000-0000-0000-0000-000000000002");
+        when(fileDeletionService.deletePermanentlyBatch(eq(OWNER_ID), any(), eq(false), any()))
+                .thenReturn(firstTaskId)
+                .thenReturn(secondTaskId);
+
+        UUID taskId = service.purgeTrash(OWNER_ID);
+
+        // 返回首个任务供客户端跟踪；后续批次各自成任务，避免单任务载荷与单事务越界。
+        assertThat(taskId).isEqualTo(firstTaskId);
+        verify(fileDeletionService, Mockito.times(2))
+                .deletePermanentlyBatch(eq(OWNER_ID), any(), eq(false), any());
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(photoItemRepository, Mockito.atLeastOnce())
+                .findTrashBatch(eq(OWNER_ID), any(), pageCaptor.capture());
+        assertThat(pageCaptor.getValue().getPageSize()).isEqualTo(200);
     }
 
     @Test

@@ -424,7 +424,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     try {
       final result = await ref
           .read(readerCenterControllerProvider.notifier)
-          .toggleBookshelf(item.id);
+          .setBookshelf(item.id, onBookshelf: !item.addedToBookshelf);
       if (mounted) {
         showReaderSnackBar(
           context,
