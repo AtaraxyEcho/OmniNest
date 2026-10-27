@@ -51,6 +51,22 @@ public class MediaLibraryAccessService {
     }
 
     /**
+     * 判断用户当前是否具备媒体库管理权限（不抛异常，供 DTO 标记可写状态）。
+     *
+     * @param operatorUserId 操作用户 ID
+     * @return 具备时返回 true
+     */
+    @Transactional(readOnly = true)
+    public boolean canManageLibraries(UUID operatorUserId) {
+        if (operatorUserId == null) {
+            return false;
+        }
+        UserAuthorizationProfile profile = userDirectoryQueryService.requireAuthorizationProfile(operatorUserId);
+        return UserStatus.ACTIVE.getValue().equals(profile.status())
+                && profile.permissions().contains(Permissions.MEDIA_LIBRARY_MANAGE);
+    }
+
+    /**
      * 校验系统配置管理权限，用于挂载直达创建存储位置的分支；
      * 该分支能力超出媒体库管理权限，需以数据库授权档案单独把关。
      */

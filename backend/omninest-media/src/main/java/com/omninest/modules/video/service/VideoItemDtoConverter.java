@@ -49,12 +49,22 @@ public class VideoItemDtoConverter {
      * 批量转换，内部批量加载 movie/episode/series，消除 N+1。
      */
     public List<MovieVideoItemDto> toVideoDtos(UUID requesterUserId, List<MediaVideoItem> items) {
+        return toVideoDtos(requesterUserId, items, false);
+    }
+
+    /**
+     * 批量转换，并标记调用者能否修改这些条目的元数据。
+     *
+     * @param canManageLibraries 调用者是否具备媒体库管理权限
+     */
+    public List<MovieVideoItemDto> toVideoDtos(
+            UUID requesterUserId, List<MediaVideoItem> items, boolean canManageLibraries) {
         if (items.isEmpty()) {
             return List.of();
         }
         BatchIndex index = buildBatchIndex(items);
         return items.stream()
-                .map(item -> toVideoDto(requesterUserId, item, index))
+                .map(item -> toVideoDto(requesterUserId, item, index, canManageLibraries))
                 .toList();
     }
 
@@ -75,6 +85,16 @@ public class VideoItemDtoConverter {
      * 单条转换，只加载必要的关联实体（最多 3 次查询，而非 findAllById）。
      */
     public MovieVideoItemDto toVideoDto(UUID requesterUserId, MediaVideoItem item) {
+        return toVideoDto(requesterUserId, item, false);
+    }
+
+    /**
+     * 单条转换并标记是否可写。
+     *
+     * @param canManageLibraries 调用者是否具备媒体库管理权限
+     */
+    public MovieVideoItemDto toVideoDto(
+            UUID requesterUserId, MediaVideoItem item, boolean canManageLibraries) {
         UUID catalogOwnerUserId = item.getOwnerUserId();
         Map<UUID, MediaMovie> movieMap = new LinkedHashMap<>();
         if (item.getMovieId() != null) {
@@ -132,7 +152,7 @@ public class VideoItemDtoConverter {
                 moviePosterAssetMap, movieBackdropAssetMap,
                 seriesPosterAssetMap, seriesBackdropAssetMap,
                 loadAvailability(List.of(item.getFileNodeId())));
-        return toVideoDto(requesterUserId, item, index);
+        return toVideoDto(requesterUserId, item, index, false);
     }
 
     private record BatchIndex(
@@ -252,7 +272,8 @@ public class VideoItemDtoConverter {
                 .ifPresent(fileNodeId -> target.put(resourceId, fileNodeId));
     }
 
-    private MovieVideoItemDto toVideoDto(UUID requesterUserId, MediaVideoItem item, BatchIndex index) {
+    private MovieVideoItemDto toVideoDto(
+            UUID requesterUserId, MediaVideoItem item, BatchIndex index, boolean canManageLibraries) {
         UUID catalogOwnerUserId = item.getOwnerUserId();
         boolean isEpisode = MediaType.EPISODE.getValue().equals(item.getMediaType());
 
@@ -388,7 +409,9 @@ public class VideoItemDtoConverter {
                 item.getEpisodeId(),
                 item.getVersionLabel(),
                 item.isDefaultVersion(),
-                index.availabilityByFileNodeId().getOrDefault(item.getFileNodeId(), "AVAILABLE")
+                index.availabilityByFileNodeId().getOrDefault(item.getFileNodeId(), "AVAILABLE"),
+                item.getOwnerUserId().equals(requesterUserId)
+                        || (canManageLibraries && item.getLibrarySourceId() != null)
         );
     }
 

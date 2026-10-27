@@ -484,15 +484,31 @@ public class MovieLibraryService {
         if (series.getOwnerUserId().equals(operatorUserId)) {
             return series;
         }
+        // 可读但不可写返回 403；连读权限都没有时仍按不存在处理，避免资源枚举。
+        requireReadableSeriesOrNotFound(operatorUserId, series);
         if (series.getLibrarySourceId() != null) {
             try {
                 mediaLibraryAccessService.requireManage(operatorUserId, series.getLibrarySourceId());
                 return series;
             } catch (BusinessException exception) {
-                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该媒体资源元数据");
             }
         }
-        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+        throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该媒体资源元数据");
+    }
+
+    private void requireReadableSeriesOrNotFound(UUID viewerUserId, MediaTvSeries series) {
+        var scope = mediaLibraryAccessService.visibilityScope(viewerUserId);
+        boolean readable = tvSeriesRepository.findActiveReadableById(
+                series.getId(),
+                viewerUserId,
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                scope.librarySourceIds()
+        ).isPresent();
+        if (!readable) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -558,7 +574,8 @@ public class MovieLibraryService {
     @Transactional(readOnly = true)
     public MovieVideoItemDto detail(UUID ownerUserId, UUID videoItemId) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
-        return videoItemDtoConverter.toVideoDto(ownerUserId, item);
+        return videoItemDtoConverter.toVideoDto(
+                ownerUserId, item, mediaLibraryAccessService.canManageLibraries(ownerUserId));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -646,15 +663,19 @@ public class MovieLibraryService {
         if (item.getOwnerUserId().equals(operatorUserId)) {
             return item;
         }
+        // 可读但不可写返回 403；读不到的条目仍按不存在处理，避免资源枚举。
+        if (mediaContentAccessService.findReadableVideo(operatorUserId, videoItemId).isEmpty()) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+        }
         if (item.getLibrarySourceId() != null) {
             try {
                 mediaLibraryAccessService.requireManage(operatorUserId, item.getLibrarySourceId());
                 return item;
             } catch (BusinessException exception) {
-                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该媒体资源元数据");
             }
         }
-        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+        throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该媒体资源元数据");
     }
 
     /**
@@ -945,7 +966,11 @@ public class MovieLibraryService {
         List<MovieSeasonDto> seasonDtos = seasons.stream()
                 .map(season -> toSeasonDto(catalogOwnerUserId, season))
                 .toList();
-        return new MovieSeriesDetailDto(seriesDto, seasonDtos, seriesDto.castMembers(), seriesDto.crewMembers());
+        boolean writable = series.getOwnerUserId().equals(ownerUserId)
+                || (series.getLibrarySourceId() != null
+                    && mediaLibraryAccessService.canManageLibraries(ownerUserId));
+        return new MovieSeriesDetailDto(
+                seriesDto, seasonDtos, seriesDto.castMembers(), seriesDto.crewMembers(), writable);
     }
 
     @Transactional(readOnly = true)

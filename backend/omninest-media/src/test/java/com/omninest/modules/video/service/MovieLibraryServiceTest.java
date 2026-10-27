@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -480,6 +481,12 @@ class MovieLibraryServiceTest {
         foreignSeries.setOwnerUserId(UUID.randomUUID());
         foreignSeries.setTitle("别人的剧集");
         when(tvSeriesRepository.findById(SERIES_ID)).thenReturn(Optional.of(foreignSeries));
+        // 可读但无管理权：返回 403，而不是把已可见资源报成不存在。
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
+        when(tvSeriesRepository.findActiveReadableById(
+                eq(SERIES_ID), eq(OWNER_ID),
+                Mockito.anyBoolean(), eq(SpaceType.SHARED), any()))
+                .thenReturn(Optional.of(foreignSeries));
 
         assertThatThrownBy(
                 () -> movieLibraryService.updateSeriesMetadata(

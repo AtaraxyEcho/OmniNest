@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
@@ -283,15 +282,8 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
   Widget build(BuildContext context) {
     final item = widget.item;
     _ensureControllers(item);
-    final canEdit =
-        ref
-            .watch(authSessionProvider)
-            .asData
-            ?.value
-            .user
-            ?.permissions
-            .contains('media:write') ??
-        false;
+    // 服务端已按“所有者或媒体库管理员”判定可写；members 的 media:write 不代表能改公共库。
+    final canEdit = item.writable;
     final favoriteAsync = ref.watch(videoFavoriteStatusProvider(item.id));
     final actionState = ref.watch(movieDetailActionProvider);
     final favorited =

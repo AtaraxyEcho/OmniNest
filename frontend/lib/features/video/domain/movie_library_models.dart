@@ -75,6 +75,7 @@ class MovieVideoItem {
     this.versionLabel,
     this.isDefaultVersion = false,
     this.availabilityStatus = 'AVAILABLE',
+    this.writable = true,
   });
 
   final String id;
@@ -115,6 +116,9 @@ class MovieVideoItem {
   final String? versionLabel;
   final bool isDefaultVersion;
   final String availabilityStatus;
+
+  /// 服务端判定的元数据可写性：所有者或具备媒体库管理权限的管理员。
+  final bool writable;
 
   bool get available => availabilityStatus == 'AVAILABLE';
 
@@ -186,6 +190,7 @@ class MovieVideoItem {
       versionLabel: json['versionLabel']?.toString(),
       isDefaultVersion: json['isDefaultVersion'] == true,
       availabilityStatus: json['availabilityStatus']?.toString() ?? 'AVAILABLE',
+      writable: json['writable'] != false,
     );
   }
 
@@ -617,12 +622,16 @@ class MovieSeriesDetail {
     required this.seasons,
     required this.cast,
     required this.crew,
+    this.writable = true,
   });
 
   final MovieSeries series;
   final List<MovieSeason> seasons;
   final List<MovieCastMember> cast;
   final List<MovieCrewMember> crew;
+
+  /// 服务端判定的元数据可写性。
+  final bool writable;
 
   factory MovieSeriesDetail.fromJson(Map<String, dynamic> json) {
     return MovieSeriesDetail(
@@ -633,6 +642,7 @@ class MovieSeriesDetail {
           MovieJson.asList(json['cast']).map(MovieCastMember.fromJson).toList(),
       crew:
           MovieJson.asList(json['crew']).map(MovieCrewMember.fromJson).toList(),
+      writable: json['writable'] != false,
     );
   }
 }

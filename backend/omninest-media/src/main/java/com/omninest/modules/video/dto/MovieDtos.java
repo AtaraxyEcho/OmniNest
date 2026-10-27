@@ -94,7 +94,8 @@ public final class MovieDtos {
             UUID episodeId,
             String versionLabel,
             boolean isDefaultVersion,
-            String availabilityStatus
+            String availabilityStatus,
+            boolean writable
     ) {
     }
 
@@ -183,7 +184,8 @@ public final class MovieDtos {
             MovieSeriesDto series,
             List<MovieSeasonDto> seasons,
             List<CastMemberDto> cast,
-            List<CrewMemberDto> crew
+            List<CrewMemberDto> crew,
+            boolean writable
     ) {
     }
 

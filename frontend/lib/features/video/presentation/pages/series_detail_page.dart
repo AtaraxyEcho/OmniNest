@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
@@ -274,8 +273,8 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
   @override
   Widget build(BuildContext context) {
     _ensureControllers(series);
-    final user = ref.watch(authSessionProvider).value?.user;
-    final canEdit = user?.permissions.contains('media:write') ?? false;
+    // 服务端已按“所有者或媒体库管理员”判定可写。
+    final canEdit = widget.detail.writable;
     final actionState = ref.watch(movieDetailActionProvider);
     final favoriteAsync = ref.watch(seriesFavoriteProvider(series.id));
     final favorited =
