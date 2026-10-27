@@ -10802,6 +10802,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoSeriesLoadMore => '加载更多剧集';
 
   @override
+  String videoSeriesLoadedCount(Object loaded, Object total) {
+    return '已加载 $loaded / 共 $total 部剧集';
+  }
+
+  @override
   String get readerGoToLibrary => '去书库';
 
   @override

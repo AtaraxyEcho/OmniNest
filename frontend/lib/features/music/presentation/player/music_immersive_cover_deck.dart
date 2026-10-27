@@ -118,6 +118,7 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
             final perspective =
                 musicDeckPerspective(widget.layout) * widget.scale;
             final stageSize = widget.stageSize;
+            final stepScale = _sideStepScale(stageSize);
             final stage = Stack(
               fit: StackFit.expand,
               clipBehavior: Clip.none,
@@ -126,9 +127,9 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
                       ? [_buildPlaceholderCard()]
                       : [
                         for (final slot in _paintOrder)
-                          _buildStaticDeckCard(slot),
+                          _buildStaticDeckCard(slot, stepScale),
                         _buildActiveDeckCard(),
-                        ..._buildCardHitStrips(stageSize),
+                        ..._buildCardHitStrips(stageSize, stepScale),
                       ],
             );
             if (perspective <= 0) {
@@ -153,11 +154,11 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
   /// 几乎点不到，因此补一段透明命中区。命中条与对应的档位卡共享悬停键：
   /// 命中条悬停时直接点亮该卡（样例的悬停拉出反馈），点击仍由命中条选中。
   /// 命中条不与在读卡重叠。
-  List<Widget> _buildCardHitStrips(Size stageSize) {
+  List<Widget> _buildCardHitStrips(Size stageSize, double stepScale) {
     switch (widget.layout) {
       case PortalMusicLayout.left:
       case PortalMusicLayout.right:
-        return _buildSideLayoutHitStrips(stageSize);
+        return _buildSideLayoutHitStrips(stageSize, stepScale);
       case PortalMusicLayout.center:
         // 居中布局：透视变换下的命中测试有偏差，侧卡的露出带同样用命中条
         // 兜底（悬停拉出 + 点击切换），否则只能靠拖拽换卡。
@@ -250,7 +251,7 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
   static const _sideHitSlotOrder = <int>[1, 2, 3, 4];
 
   /// 两侧布局（居左/居右）的命中条：每档只占上一档右缘到本档右缘的露出带。
-  List<Widget> _buildSideLayoutHitStrips(Size stageSize) {
+  List<Widget> _buildSideLayoutHitStrips(Size stageSize, double stepScale) {
     final scale = widget.scale;
     final inset = musicDeckStageInset(widget.layout) * scale;
     final activeSize = resolveMusicDeckCard(widget.layout, 0).size * scale;
@@ -262,7 +263,11 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
       if (index == null) {
         continue;
       }
-      final spec = resolveMusicDeckCard(widget.layout, slot);
+      final spec = resolveMusicDeckCard(
+        widget.layout,
+        slot,
+        stepScale: stepScale,
+      );
       final outerEdge = inset + spec.offset.dx * scale + spec.size * scale;
       final width = outerEdge - innerEdge;
       if (width <= 0) {
@@ -328,7 +333,29 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
     );
   }
 
-  Widget _buildStaticDeckCard(int slot) {
+  /// 两侧布局的步进收敛系数：舞台越窄越收敛，保证最外档仍落在容器内。
+  ///
+  /// 基准步进来自样例（等距 34、阶梯 38）；预留 8px 右缘，避免贴边不可点。
+  double _sideStepScale(Size stageSize) {
+    if (widget.layout == PortalMusicLayout.center) {
+      return 1;
+    }
+    final scale = widget.scale;
+    final inset = musicDeckStageInset(widget.layout) * scale;
+    final activeSize = resolveMusicDeckCard(widget.layout, 0).size * scale;
+    final baseStep =
+        (widget.layout == PortalMusicLayout.left
+            ? kMusicIsometricShift.dx
+            : kMusicSteppedShift.dx) *
+        scale;
+    final available = stageSize.width - inset - activeSize - 8 * scale;
+    if (baseStep <= 0 || available >= baseStep * 4) {
+      return 1;
+    }
+    return (available / (baseStep * 4)).clamp(0.4, 1.0);
+  }
+
+  Widget _buildStaticDeckCard(int slot, double stepScale) {
     final index = _resolveSlotIndex(slot);
     if (index == null) {
       return const SizedBox.shrink();
@@ -341,6 +368,7 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
       layout: widget.layout,
       active: false,
       slot: slot,
+      stepScale: stepScale,
       ordinal: index + 1,
       total: widget.tracks.length,
       nowPlayingLabel: widget.nowPlayingLabel,

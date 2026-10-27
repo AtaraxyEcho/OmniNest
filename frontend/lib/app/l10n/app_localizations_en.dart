@@ -11147,6 +11147,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSeriesLoadMore => 'Load more';
 
   @override
+  String videoSeriesLoadedCount(Object loaded, Object total) {
+    return '$loaded of $total series loaded';
+  }
+
+  @override
   String get readerGoToLibrary => 'Go to library';
 
   @override

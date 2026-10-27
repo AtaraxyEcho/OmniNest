@@ -92,6 +92,25 @@ class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
                 ),
               ),
             ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: Text(
+                  l10n.videoSeriesLoadedCount(
+                    effective.length,
+                    paging.total > 0 ? paging.total : effective.length,
+                  ),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                    fontSize: AppTypography.bodySmall,
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (!_favoritesOnly && paging.hasMore)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),

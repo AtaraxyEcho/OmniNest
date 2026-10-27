@@ -10,6 +10,7 @@ class _DigitalCoverDeckCard extends StatelessWidget {
     required this.layout,
     required this.active,
     required this.slot,
+    this.stepScale = 1,
     required this.ordinal,
     required this.total,
     this.nowPlayingLabel,
@@ -34,6 +35,9 @@ class _DigitalCoverDeckCard extends StatelessWidget {
 
   /// 档位：两侧布局 0..4，居中布局 -2..+2。
   final int slot;
+
+  /// 两侧布局每档水平步进的收敛系数（窄舞台让最外档不越界）。
+  final double stepScale;
 
   /// 该卡在卡组队列中的序号（1 起）与队列总长：卡面角标据此显示「NN / NN」。
   final int ordinal;
@@ -62,6 +66,7 @@ class _DigitalCoverDeckCard extends StatelessWidget {
     final spec = resolveMusicDeckCard(
       layout,
       slot,
+      stepScale: stepScale,
     ).zoomed(expanded ? _DigitalImmersiveCoverDeckState._expandedZoom : 1);
     final size = spec.size * scale;
     // 悬停态：样例逐档写死了 `data-hover-transform`，故直接取登记值。

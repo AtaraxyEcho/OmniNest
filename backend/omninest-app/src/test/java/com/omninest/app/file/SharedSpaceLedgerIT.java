@@ -261,11 +261,17 @@ class SharedSpaceLedgerIT {
         // 共享照片是再次关联的唯一依据：回收站照片不能贡献边权重。
         assertThat(edges).hasSize(1);
         assertThat(edges.getFirst().getWeight()).isEqualTo(1L);
-        // 未写入 date_taken 的照片不进时间维度；位置维度按“未知位置”聚合，
-        // 权重必须等于活动照片数，否则回收站照片会继续给图谱加权。
-        assertThat(photoItemRepository.findAlbumTimeRelationEdges(owner, "UTC", 50)).isEmpty();
-        assertThat(photoItemRepository.findTimeLocationRelationEdges(owner, "UTC", 50)).isEmpty();
-        assertThat(photoItemRepository.findTimeRelationNodes(owner, "UTC", 50)).isEmpty();
+        // 未写入 date_taken 的照片按创建时间进入时间维度（与时间线统计同口径）；
+        // 回收站照片不贡献权重：两只专辑各得一条月边，时间-位置与时间节点各一条。
+        assertThat(photoItemRepository.findAlbumTimeRelationEdges(owner, "UTC", 50))
+                .hasSize(2)
+                .allSatisfy(edge -> assertThat(edge.getWeight()).isEqualTo(1L));
+        assertThat(photoItemRepository.findTimeLocationRelationEdges(owner, "UTC", 50))
+                .hasSize(1)
+                .allSatisfy(edge -> assertThat(edge.getWeight()).isEqualTo(1L));
+        assertThat(photoItemRepository.findTimeRelationNodes(owner, "UTC", 50))
+                .hasSize(1)
+                .allSatisfy(node -> assertThat(node.getWeight()).isEqualTo(1L));
         assertThat(photoItemRepository.findAlbumLocationRelationEdges(owner, 50)).hasSize(2)
                 .allSatisfy(edge -> assertThat(edge.getWeight()).isEqualTo(1L));
         assertThat(photoItemRepository.findAlbumRelationNodes(owner, 50)).hasSize(2);

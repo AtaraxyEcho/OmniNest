@@ -35,13 +35,14 @@ void main() {
   const maxChaptersPerBook = 24;
   const maxRenderSamples = 60;
 
-  final books = _findBooks(corpusPath);
-
-  if (books.isEmpty) {
-    test('CC0 语料缺失', () {
-      expect(true, isTrue);
-    }, skip: '未找到 $corpusPath 下的 .epub；这是本机素材目录，缺失时这一组不参与回归');
-    return;
+  // 本机没有真书语料时退回到内置的最小 EPUB 夹具：CI 与公开仓库同样跑核心
+  // 排版不变量，只有"真书多样性"这一层需要本地素材补位。
+  final corpusBooks = _findBooks(corpusPath);
+  final usingEmbeddedFixture = corpusBooks.isEmpty;
+  final books =
+      usingEmbeddedFixture ? <File>[_writeEmbeddedFixture()] : corpusBooks;
+  if (usingEmbeddedFixture) {
+    debugPrint('CC0 语料缺失，使用内置排版夹具: ${books.single.path}');
   }
 
   final readerDefault = ReaderViewSettings(
@@ -51,7 +52,7 @@ void main() {
   );
   final followBook = readerDefault.copyWith(followBookTypesetting: true);
 
-  group('CC0 真书语料', () {
+  group(usingEmbeddedFixture ? '内置排版夹具' : 'CC0 真书语料', () {
     for (final book in books) {
       test('${_shortName(book.path)}：样式表解析与逐章装页不变量', () async {
         final inspected = _inspectEpub(book);
@@ -170,6 +171,100 @@ void main() {
       );
     });
   });
+}
+
+/// 生成内置的最小 EPUB 排版夹具。
+///
+/// 覆盖真书才有的四类特征：`@charset`/`@namespace` 开头、四值 `margin`
+/// 简写、`p.first-child` 这类带连字符的 class、从祖先继承的对齐；两章各上百
+/// 段落，足以触发分页与偏移域不变量。
+File _writeEmbeddedFixture() {
+  final directory = Directory.systemTemp.createTempSync(
+    'omninest-epub-fixture-',
+  );
+  final archive = Archive();
+  void addText(String path, String value) {
+    final bytes = utf8.encode(value);
+    archive.addFile(ArchiveFile(path, bytes.length, bytes));
+  }
+
+  addText('mimetype', 'application/epub+zip');
+  addText(
+    'META-INF/container.xml',
+    '<?xml version="1.0"?>'
+        '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>'
+        '</container>',
+  );
+  addText(
+    'OEBPS/content.opf',
+    '<?xml version="1.0"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:title>内置排版夹具</dc:title></metadata>'
+        '<manifest>'
+        '<item id="style" href="styles/layout.css" media-type="text/css"/>'
+        '<item id="ch1" href="chapter1.xhtml" '
+        'media-type="application/xhtml+xml"/>'
+        '<item id="ch2" href="chapter2.xhtml" '
+        'media-type="application/xhtml+xml"/>'
+        '</manifest>'
+        '<spine><itemref idref="ch1"/><itemref idref="ch2"/></spine>'
+        '</package>',
+  );
+  addText('OEBPS/styles/layout.css', _embeddedCss);
+  addText('OEBPS/chapter1.xhtml', _embeddedChapter('第一章 起风', 1));
+  addText('OEBPS/chapter2.xhtml', _embeddedChapter('第二章 落雨', 2));
+  final bytes = ZipEncoder().encode(archive);
+  return File('${directory.path}/embedded-typesetting.epub')
+    ..writeAsBytesSync(bytes);
+}
+
+const String _embeddedCss =
+    '@charset "utf-8";\n'
+    '@namespace epub "http://www.idpf.org/2007/ops";\n'
+    'body { margin: 8px 10px 12px 14px; text-align: justify; }\n'
+    'p { margin: 0 0 0.8em 0; text-indent: 2em; }\n'
+    'p.first-child { text-indent: 0; }\n'
+    'blockquote { margin: 0.8em 2em 0.8em 2em; }\n'
+    'h1 { margin: 1.2em 0 1em 0; text-align: center; font-weight: bold; }\n';
+
+String _embeddedChapter(String title, int ordinal) {
+  final buffer =
+      StringBuffer()
+        ..write('<?xml version="1.0" encoding="utf-8"?>')
+        ..write('<!DOCTYPE html>')
+        ..write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN">')
+        ..write('<head><title>')
+        ..write(title)
+        ..write('</title>')
+        ..write(
+          '<link rel="stylesheet" type="text/css" '
+          'href="styles/layout.css"/></head><body>',
+        )
+        ..write('<h1>')
+        ..write(title)
+        ..write('</h1>');
+  for (var index = 0; index < 120; index++) {
+    final className = index == 0 ? ' class="first-child"' : '';
+    if (index % 17 == 0) {
+      buffer.write(
+        '<blockquote><p$className>'
+        '引文第 $index 段：这句话故意写得更长一些，用来覆盖缩进与左右外边距同时生效时的折行，'
+        '并检验分页引擎在嵌套块上的高度测量与实际渲染是否一致。</p></blockquote>',
+      );
+    } else {
+      buffer.write('<p$className>');
+      buffer.write(
+        '第 $ordinal 章第 $index 段。风从山口下来，带着松脂和湿土的气味，'
+        '屋里的灯芯跳了一下，纸上留下一个不圆的光斑。她把书翻到下一页，'
+        '听见远处的水声由远及近，像是有人在夜里反复练习同一段旋律。',
+      );
+      buffer.write('</p>');
+    }
+  }
+  buffer.write('</body></html>');
+  return buffer.toString();
 }
 
 List<File> _findBooks(String corpusPath) {

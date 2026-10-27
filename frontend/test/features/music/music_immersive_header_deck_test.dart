@@ -102,7 +102,11 @@ void main() {
     expect(combined, _flatLacks('onLongPressStart'));
     expect(combined, _flatContains('child: RepaintBoundary('));
     // 拖拽反馈是挂在卡面最内层的纯平移：档位变换与拖拽位移互不污染。
-    expect(combined, _flatContains('resolveMusicDeckCard(layout, slot)'));
+    // 每张卡仍各自解析档位参数；stepScale 只把舞台宽度传进同一解析函数。
+    expect(
+      combined,
+      _flatContains('resolveMusicDeckCard(layout, slot, stepScale: stepScale)'),
+    );
     expect(combined, _flatContains('dragOffset.dx * 0.62'));
     expect(combined, _flatContains('dragOffset.dy * 0.28'));
     expect(combined, _flatLacks('dx + dragOffset.dx'));

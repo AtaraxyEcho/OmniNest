@@ -12,6 +12,7 @@ class AnchoredPopover {
   final double gap;
 
   OverlayEntry? _entry;
+  _PopoverMetricsObserver? _metricsObserver;
 
   bool get isOpen => _entry != null;
 
@@ -39,11 +40,7 @@ class AnchoredPopover {
         .clamp(8.0, double.infinity);
     final double top = anchorTopLeft.dy + box.size.height + gap;
 
-    void close() {
-      _entry?.remove();
-      _entry = null;
-      onChanged?.call();
-    }
+    void close() => _close(onChanged);
 
     final OverlayEntry entry = OverlayEntry(
       builder:
@@ -75,17 +72,41 @@ class AnchoredPopover {
           ),
     );
     _entry = entry;
+    // 窗口缩放/旋转后浮层会停在旧坐标与旧高度上，直接收起最稳妥；
+    // 重新打开时按当前锚点重新定位。
+    _metricsObserver = _PopoverMetricsObserver(close);
+    WidgetsBinding.instance.addObserver(_metricsObserver!);
     overlay.insert(entry);
     onChanged?.call();
   }
 
   /// 关闭当前浮层，未打开时为空操作。
-  void close({VoidCallback? onChanged}) {
-    if (_entry == null) {
+  void close({VoidCallback? onChanged}) => _close(onChanged);
+
+  void _close(VoidCallback? onChanged) {
+    final entry = _entry;
+    if (entry == null) {
       return;
     }
-    _entry!.remove();
     _entry = null;
+    final observer = _metricsObserver;
+    _metricsObserver = null;
+    if (observer != null) {
+      WidgetsBinding.instance.removeObserver(observer);
+    }
+    entry.remove();
     onChanged?.call();
+  }
+}
+
+/// 监听窗口尺寸变化：锚点浮层在尺寸变化后自动收起。
+class _PopoverMetricsObserver with WidgetsBindingObserver {
+  _PopoverMetricsObserver(this.onMetricsChanged);
+
+  final VoidCallback onMetricsChanged;
+
+  @override
+  void didChangeMetrics() {
+    onMetricsChanged();
   }
 }

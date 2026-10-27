@@ -684,22 +684,29 @@ class MusicDeckCardSpec {
 }
 
 /// 解析某布局指定档位的卡面参数：两侧档位 0..4（0 为在读卡），
-MusicDeckCardSpec resolveMusicDeckCard(PortalMusicLayout layout, int slot) {
+///
+/// [stepScale] 只缩放两侧布局的每档水平步进：舞台被压窄时按可用宽度收敛，
+/// 让最外档仍落在容器内可点击；默认 1 保持样例原始几何。
+MusicDeckCardSpec resolveMusicDeckCard(
+  PortalMusicLayout layout,
+  int slot, {
+  double stepScale = 1,
+}) {
   switch (layout) {
     case PortalMusicLayout.left:
-      return _isometricDeckCard(slot.abs().clamp(0, 4));
+      return _isometricDeckCard(slot.abs().clamp(0, 4), stepScale);
     case PortalMusicLayout.right:
-      return _steppedDeckCard(slot.abs().clamp(0, 4));
+      return _steppedDeckCard(slot.abs().clamp(0, 4), stepScale);
     case PortalMusicLayout.center:
       return _radialDeckCard(slot.clamp(-2, 2));
   }
 }
 
-MusicDeckCardSpec _isometricDeckCard(int slot) {
+MusicDeckCardSpec _isometricDeckCard(int slot, double stepScale) {
   return MusicDeckCardSpec(
     size: kMusicIsometricCardSize,
     offset: Offset(
-      kMusicIsometricShift.dx * slot,
+      kMusicIsometricShift.dx * slot * stepScale,
       kMusicIsometricShift.dy * slot,
     ),
     depth: kMusicIsometricDepthStep * slot,
@@ -736,10 +743,13 @@ MusicDeckCardSpec _isometricDeckCard(int slot) {
   );
 }
 
-MusicDeckCardSpec _steppedDeckCard(int slot) {
+MusicDeckCardSpec _steppedDeckCard(int slot, double stepScale) {
   return MusicDeckCardSpec(
     size: kMusicSteppedCardSizes[slot],
-    offset: Offset(kMusicSteppedShift.dx * slot, kMusicSteppedShift.dy * slot),
+    offset: Offset(
+      kMusicSteppedShift.dx * slot * stepScale,
+      kMusicSteppedShift.dy * slot,
+    ),
     depth: 0,
     rotateX: 0,
     rotateY: 0,

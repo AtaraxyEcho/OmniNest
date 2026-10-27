@@ -20272,6 +20272,12 @@ abstract class AppLocalizations {
   /// **'Load more'**
   String get videoSeriesLoadMore;
 
+  /// No description provided for @videoSeriesLoadedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{loaded} of {total} series loaded'**
+  String videoSeriesLoadedCount(Object loaded, Object total);
+
   /// No description provided for @readerGoToLibrary.
   ///
   /// In en, this message translates to:

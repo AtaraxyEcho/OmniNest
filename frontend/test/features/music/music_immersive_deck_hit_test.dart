@@ -21,13 +21,13 @@ MusicTrack _track(int ordinal) {
 Future<void> _pumpDeck(
   WidgetTester tester,
   PortalMusicLayout layout,
-  ValueChanged<int> onSelected,
-) async {
+  ValueChanged<int> onSelected, {
+  Size stageSize = const Size(440, 385),
+}) async {
   const count = 6;
   final tracks = [for (var i = 1; i <= count; i++) _track(i)];
   // 卡组盒尺寸必须等于 stageSize：实机里卡组是 Positioned.fromRect(deckRect)，
   // 容器之外的命中带不会被命中测试接受。
-  const stageSize = Size(440, 385);
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -57,26 +57,31 @@ Future<void> _pumpDeck(
 }
 
 void main() {
-  // 两侧卡组的扇形越出卡组盒：等距档右缘 8 + 34*4 + 320 = 464、步进档
+  // 两侧卡组的扇形原本越出卡组盒：等距档右缘 8 + 34*4 + 320 = 464、步进档
   // 12 + 38*4 + 310 = 474，而容器基准只有 440/420（实机再受列宽压到 ~418）。
-  // 第 4 档在容器内没有任何像素，命中测试被父级尺寸挡住 → 可见但点不到。
-  // 修法需要改可见几何，待选型。
+  // 第 4 档在容器内没有可命中像素 → 可见但点不到。现在按舞台宽度收敛步进，
+  // 440 与实机极限 418 两档都必须四档全中。
   for (final layout in [PortalMusicLayout.left, PortalMusicLayout.right]) {
-    testWidgets('${layout.name} 布局每一档命中条都应选中对应曲目'
-        '（阻塞：最外档扇形溢出卡组盒，容器内无可命中区域，待几何选型）', (tester) async {
-      final selected = <int>[];
-      await _pumpDeck(tester, layout, selected.add);
-
-      for (var slot = 1; slot <= 4; slot++) {
-        await tester.tap(
-          find.byKey(ValueKey('deck-hit-strip-$slot')),
-          warnIfMissed: false,
+    for (final stageWidth in [440.0, 418.0]) {
+      testWidgets('${layout.name} 布局 ${stageWidth.toInt()}px 每一档命中条都应选中对应曲目', (
+        tester,
+      ) async {
+        final selected = <int>[];
+        await _pumpDeck(
+          tester,
+          layout,
+          selected.add,
+          stageSize: Size(stageWidth, 385),
         );
-        await tester.pumpAndSettle();
-      }
 
-      expect(selected, [1, 2, 3, 4]);
-    }, skip: true);
+        for (var slot = 1; slot <= 4; slot++) {
+          await tester.tap(find.byKey(ValueKey('deck-hit-strip-$slot')));
+          await tester.pumpAndSettle();
+        }
+
+        expect(selected, [1, 2, 3, 4]);
+      });
+    }
   }
 
   testWidgets('居中布局四张后排卡都有命中条且悬停抽出', (tester) async {

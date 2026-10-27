@@ -4994,6 +4994,7 @@
   "videoSearchScopeLoadedOnly": "Filtering only {count} loaded titles",
   "videoSearchNoHitsLoadMore": "Not found in loaded results. Load more or clear filters",
   "videoSeriesLoadMore": "Load more",
+  "videoSeriesLoadedCount": "{loaded} of {total} series loaded",
   "@videoSearchScopeLoadedOnly": {
     "placeholders": {
       "count": {

@@ -35,6 +35,9 @@ class LocalBookCache {
   /// 每个缓存目录的残留明文扫描结果；值为 `true` 表示仍有文件删不掉。
   /// 只有干净完成的扫描才会长期记忆，否则下次进入该目录会重扫。
   static final Map<String, Future<bool>> _sessionCleanupByDirectory = {};
+
+  /// 同一本书的下载单飞：阅读页与预加载同时请求时只下载/解密一次。
+  final Map<String, Future<File?>> _inFlightDownloads = {};
   static final Random _secureRandom = Random.secure();
 
   /// 本地平台缓存大小上限（500MB）
@@ -170,6 +173,27 @@ class LocalBookCache {
   }
 
   Future<File?> _ensureNativeCacheFile(
+    String itemId, {
+    Future<void> Function(String destinationPath)? nativeDownloader,
+  }) {
+    final pending = _inFlightDownloads[itemId];
+    if (pending != null) {
+      return pending;
+    }
+    late final Future<File?> tracked;
+    tracked = _loadNativeCacheFile(
+      itemId,
+      nativeDownloader: nativeDownloader,
+    ).whenComplete(() {
+      if (identical(_inFlightDownloads[itemId], tracked)) {
+        _inFlightDownloads.remove(itemId);
+      }
+    });
+    _inFlightDownloads[itemId] = tracked;
+    return tracked;
+  }
+
+  Future<File?> _loadNativeCacheFile(
     String itemId, {
     Future<void> Function(String destinationPath)? nativeDownloader,
   }) async {
