@@ -43,6 +43,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * 无法证明守卫命中/不命中、{@code completed_at} 置空和终态白名单的真实行为，
  * 因此在真库上执行。</p>
  *
+ * <p>本机没有 Docker 时整类按仓库既有 IT 的 {@code disabledWithoutDocker} 口径跳过，
+ * 构建仍然全绿：那种情况下这条 SQL 未被验证，只有
+ * {@code AdminOperationsServiceTest} 的异常翻译用例仍覆盖服务侧行为。</p>
+ *
  * @author OmniNest
  */
 @SpringBootTest(

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +23,7 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.ImportSourceKind;
 import com.omninest.modules.file.domain.ImportTaskStatus;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
@@ -333,15 +335,104 @@ class ExternalImportExecutionServiceTest {
     }
 
     @Test
-    void importKeepsGuessedMimeTypeWhenMagicSniffingHasNoConclusion() throws Exception {
-        Method resolve = ExternalImportExecutionService.class.getDeclaredMethod(
-                "resolveDetectedMimeType", String.class, String.class, String.class);
-        resolve.setAccessible(true);
-
-        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", null)).isEqualTo("video/x-matroska");
-        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", "video/x-matroska"))
+    void importKeepsGuessedMimeTypeWhenMagicSniffingHasNoConclusion() {
+        assertThat(ExternalImportFiles.resolveDetectedMimeType("a.mkv", "video/x-matroska", null))
                 .isEqualTo("video/x-matroska");
-        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", "video/mp4")).isEqualTo("video/mp4");
+        assertThat(ExternalImportFiles.resolveDetectedMimeType("a.mkv", "video/x-matroska", "video/x-matroska"))
+                .isEqualTo("video/x-matroska");
+        assertThat(ExternalImportFiles.resolveDetectedMimeType("a.mkv", "video/x-matroska", "video/mp4"))
+                .isEqualTo("video/mp4");
+    }
+
+    @Test
+    void freshImportStillCreatesCopyWhenSameContentAlreadyExists() throws Exception {
+        stubSameContentExistingNode();
+
+        Path staged = Files.createTempFile("omni-import-fresh-", ".mkv");
+        try {
+            Files.write(staged, "01234567".getBytes());
+            invokeImportSingleFile(staged);
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+
+        // 首次导入是显式意图：目标里已有同内容文件也必须按改名规则新建副本。
+        ArgumentCaptor<FileNode> nodeCaptor = ArgumentCaptor.forClass(FileNode.class);
+        verify(fileNodeRepository).save(nodeCaptor.capture());
+        assertThat(nodeCaptor.getValue().getName()).isEqualTo("episode-01 (1).mkv");
+    }
+
+    @Test
+    void resumedImportSkipsSameContentExistingNode() throws Exception {
+        stubSameContentExistingNode();
+        markResumedRun();
+
+        Path staged = Files.createTempFile("omni-import-resume-", ".mkv");
+        try {
+            Files.write(staged, "01234567".getBytes());
+            Method importSingleFile = importSingleFileMethod();
+            FileNode result = (FileNode) importSingleFile.invoke(service, importTask(), null,
+                    "episode-01.mkv", staged, 8L, 0L);
+            assertThat(result.getId()).isEqualTo(UUID.fromString("40000000-0000-0000-0000-000000000001"));
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+
+        // 重入只跳过已入库的那一份，不得再写节点或对象。
+        verify(fileNodeRepository, never()).save(any(FileNode.class));
+        verify(fileObjectRepository, never()).save(any(FileObject.class));
+    }
+
+    private Method importSingleFileMethod() throws NoSuchMethodException {
+        Method importSingleFile = ExternalImportExecutionService.class.getDeclaredMethod(
+                "importSingleFile",
+                StorageImportTask.class, UUID.class, String.class, Path.class, long.class, long.class);
+        importSingleFile.setAccessible(true);
+        return importSingleFile;
+    }
+
+    private void invokeImportSingleFile(Path staged) throws Exception {
+        importSingleFileMethod().invoke(service, importTask(), null, "episode-01.mkv", staged, 8L, 0L);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void markResumedRun() throws Exception {
+        Field resumedField = ExternalImportExecutionService.class.getDeclaredField("resumedRuns");
+        resumedField.setAccessible(true);
+        ((Map<UUID, Boolean>) resumedField.get(service)).put(TASK_ID, Boolean.TRUE);
+    }
+
+    private void stubSameContentExistingNode() {
+        stubTransactionPassthrough();
+        when(objectStorageBuckets.userFiles()).thenReturn("files");
+        when(objectStorageBuckets.quarantine()).thenReturn("file-quarantine");
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全",
+                        "924592b9b103f14f833faafb67f480691f01988aa457c0061769f58cd47311bc", 8L, "video/mp4"));
+
+        FileNode existing = new FileNode();
+        existing.setId(UUID.fromString("40000000-0000-0000-0000-000000000001"));
+        existing.setOwnerUserId(OWNER_ID);
+        existing.setName("episode-01.mkv");
+        existing.setCurrentObjectId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+        when(fileNodeRepository.findFirstByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "episode-01.mkv"))
+                .thenReturn(Optional.of(existing));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "episode-01.mkv"))
+                .thenReturn(true);
+        FileObject existingObject = new FileObject();
+        existingObject.setId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+        existingObject.setSha256("924592b9b103f14f833faafb67f480691f01988aa457c0061769f58cd47311bc");
+        when(fileObjectRepository.findById(UUID.fromString("40000000-0000-0000-0000-000000000002")))
+                .thenReturn(Optional.of(existingObject));
+        when(importTaskRepository.findById(TASK_ID)).thenAnswer(invocation -> Optional.of(importTask()));
+        when(fileObjectRepository.save(any(FileObject.class))).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.fromString("40000000-0000-0000-0000-000000000003"));
+            return object;
+        });
+        when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private StorageImportTask importTask() {

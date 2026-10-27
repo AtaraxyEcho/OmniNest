@@ -128,6 +128,16 @@ class ReaderPaginationEngine {
   /// 分割线块的块高，与渲染共用同一组常量（供对照测试引用）。
   static const double dividerHeight = _ReaderPaginationMetrics.dividerHeight;
 
+  /// 表格逐行高度：装页、滚动高度表与渲染分块预留共用这一份。
+  ///
+  /// 渲染侧首帧只构建一批行，未构建的行按这里的行高预留空位，整表占据的高度才
+  /// 与 `measureBlockHeight(TableBlock)` 恒等；两处各写一份就会在补行的那一帧跳动。
+  static List<double> tableRowHeights(
+    List<TableRowData> rows,
+    ReaderViewSettings settings,
+    double textScale,
+  ) => _ReaderPaginationMetrics.tableRowHeights(rows, settings, textScale);
+
   /// 计算单个 block 实际占据的高度（像素）：文字行 + 块自身的 padding/段间距。
   ///
   /// 这是块高的唯一来源，滚动高度表、翻页装页与渲染条目三处都必须取这一份；

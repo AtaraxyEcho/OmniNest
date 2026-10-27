@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -12,11 +13,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 外部导入重试的同名同内容判定。
+ * 外部导入重试的同名同内容判定与目录复用。
  *
  * <p>心跳超时恢复与手动重试会从远程重新拉取整份内容，没有这层判定就会把已入库的
- * 文件按 {@code name (1)} 再存一份。先按名称命中才计算本地摘要，常态导入不会因此
- * 多读一遍文件；摘要不同仍走改名分支，避免误吞内容不同的同名文件。</p>
+ * 文件按 {@code name (1)} 再存一份。调用方只在“重入执行”时启用这些判定：首次导入
+ * 是用户的显式意图，即便目标里已有同内容文件也必须新建副本。</p>
  *
  * @author OmniNest
  */
@@ -81,12 +82,55 @@ final class ExternalImportResumeDetector {
     ) {
         UUID rootId = task.getImportRootNodeId();
         if (rootId == null) {
-            return Optional.empty();
+            return legacyRoot(nodeRepository, task, spaceType);
         }
         Optional<FileNode> root = spaceType == SpaceType.SHARED
                 ? nodeRepository.findByIdAndSpaceTypeAndDeletedFalse(rootId, SpaceType.SHARED)
                 : nodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(rootId, task.getOwnerUserId());
         return root.filter(node -> NodeType.FOLDER.getValue().equals(node.getNodeType()))
+                .map(FileNode::getId);
+    }
+
+    /**
+     * 兜底定位旧任务的导入根目录：新增列之前的任务没有记录根目录 ID，
+     * 按“同所有者/空间/父级/名称 + RCLONE 来源的文件夹”找回，避免重试再建一份。
+     *
+     * @param nodeRepository 文件节点仓储
+     * @param task 导入任务
+     * @param spaceType 目标空间
+     * @return 可复用的根目录 ID
+     */
+    static Optional<UUID> legacyRoot(
+            FileNodeRepository nodeRepository,
+            StorageImportTask task,
+            SpaceType spaceType
+    ) {
+        return ExternalImportNames.findByName(
+                        nodeRepository, task, spaceType, task.getTargetParentId(), task.getFileName())
+                .filter(node -> NodeType.FOLDER.getValue().equals(node.getNodeType()))
+                .filter(node -> SourceType.RCLONE.getValue().equals(node.getSourceType()))
+                .map(FileNode::getId);
+    }
+
+    /**
+     * 重入时复用同名子目录：目录重试若逐层改名，已导入的文件会落进新建的空壳分支。
+     *
+     * @param nodeRepository 文件节点仓储
+     * @param task 导入任务
+     * @param spaceType 目标空间
+     * @param parentId 父目录 ID
+     * @param folderName 子目录名
+     * @return 可复用的子目录 ID
+     */
+    static Optional<UUID> reusableFolder(
+            FileNodeRepository nodeRepository,
+            StorageImportTask task,
+            SpaceType spaceType,
+            UUID parentId,
+            String folderName
+    ) {
+        return ExternalImportNames.findByName(nodeRepository, task, spaceType, parentId, folderName)
+                .filter(node -> NodeType.FOLDER.getValue().equals(node.getNodeType()))
                 .map(FileNode::getId);
     }
 }

@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,6 +103,15 @@ public class ExternalImportExecutionService {
 
     /** 大于此阈值的文件使用 multipart 并行上传。 */
     private static final long MULTIPART_THRESHOLD_BYTES = 64L * 1024 * 1024;
+
+    /**
+     * 本次执行是否为重入（崩溃恢复或重试）。
+     *
+     * <p>同名同内容跳过与目录复用只允许发生在重入里：首次导入是用户的显式意图，
+     * 即便目标里已有同内容文件也必须按改名规则新建副本。标记在 {@code markRunning}
+     * 领取成功时写入，随 {@code execute} 的 finally 一起清理，与进度节流的键同生命周期。</p>
+     */
+    private final Map<UUID, Boolean> resumedRuns = new ConcurrentHashMap<>();
     /** 每个分片大小：32MB。 */
     private static final long PART_SIZE_BYTES = 32L * 1024 * 1024;
     /** 并行上传分片数。 */
@@ -136,6 +146,7 @@ public class ExternalImportExecutionService {
             executeRcloneImport(task, account);
         } finally {
             progressThrottle.remove(event.taskId());
+            resumedRuns.remove(event.taskId());
         }
     }
 
@@ -151,15 +162,17 @@ public class ExternalImportExecutionService {
             return null;
         }
 
-        FileNode alreadyImported = ExternalImportResumeDetector.findAlreadyImported(
-                fileNodeRepository,
-                fileObjectRepository,
-                task,
-                resolveSpaceType(task),
-                destinationParentId,
-                fileName,
-                file
-        ).orElse(null);
+        FileNode alreadyImported = isResumedRun(task.getId())
+                ? ExternalImportResumeDetector.findAlreadyImported(
+                        fileNodeRepository,
+                        fileObjectRepository,
+                        task,
+                        resolveSpaceType(task),
+                        destinationParentId,
+                        fileName,
+                        file
+                ).orElse(null)
+                : null;
         if (alreadyImported != null) {
             log.info("导入重试命中同名同内容文件，跳过重复导入: taskId={}, fileNodeId={}, fileName={}",
                     task.getId(), alreadyImported.getId(), fileName);
@@ -168,8 +181,8 @@ public class ExternalImportExecutionService {
 
         String quarantineBucket = objectStorageBuckets.quarantine();
         String targetBucket = objectStorageBuckets.userFiles();
-        String mimeType = detectMimeType(file);
-        long size = fileSize(file);
+        String mimeType = ExternalImportFiles.detectMimeType(file);
+        long size = ExternalImportFiles.fileSize(file);
         externalStorageService.ensureSingleFileAllowed(size);
 
         // 事务内：准备 objectKey 和 availableName
@@ -263,7 +276,7 @@ public class ExternalImportExecutionService {
             throw exception;
         }
         ingressLifecycleService.markClean(ingressId, inspection.sha256());
-        String effectiveMimeType = resolveDetectedMimeType(
+        String effectiveMimeType = ExternalImportFiles.resolveDetectedMimeType(
                 prepResult.availableName, mimeType, inspection.detectedMimeType());
         try {
             objectStorageClient.copyObject(quarantineKey, targetKey, effectiveMimeType);
@@ -272,7 +285,7 @@ public class ExternalImportExecutionService {
                     ingressId,
                     false,
                     ErrorCode.FILE_UPLOAD_FAILED.name(),
-                    summarize(exception)
+                    ExternalImportFiles.summarize(exception)
             );
             removeObjectQuietly(quarantineKey);
             removeObjectQuietly(targetKey);
@@ -332,7 +345,7 @@ public class ExternalImportExecutionService {
                     ingressId,
                     false,
                     ErrorCode.FILE_UPLOAD_FAILED.name(),
-                    summarize(exception)
+                    ExternalImportFiles.summarize(exception)
             );
             removeObjectQuietly(targetKey);
             throw exception;
@@ -564,9 +577,9 @@ public class ExternalImportExecutionService {
 
         } catch (Exception e) {
             log.warn("外部存储导入失败: taskId={}, message={}", task.getId(), e.getMessage());
-            markFailed(task.getId(), summarize(e), ThrowableDescriber.describe(e));
+            markFailed(task.getId(), ExternalImportFiles.summarize(e), ThrowableDescriber.describe(e));
         } finally {
-            cleanupTempDir(tempDir);
+            ExternalImportFiles.cleanupTempDir(fileTreeScanner, tempDir);
         }
     }
 
@@ -595,6 +608,10 @@ public class ExternalImportExecutionService {
                             if (!taskRecordService.claimForExecution(systemTaskId(t), "SCANNING")) {
                                 return null;
                             }
+                            resumedRuns.put(
+                                    taskId,
+                                    !ImportTaskStatus.QUEUED.getValue().equals(t.getStatus())
+                            );
                             t.setStatus(ImportTaskStatus.SCANNING.getValue());
                             t.setErrorSummary(null);
                             t.setCompletedFileId(null);
@@ -604,6 +621,10 @@ public class ExternalImportExecutionService {
                         })
                         .orElse(null)
         );
+    }
+
+    private boolean isResumedRun(UUID taskId) {
+        return Boolean.TRUE.equals(resumedRuns.get(taskId));
     }
 
     private void markTransferring(UUID taskId) {
@@ -672,7 +693,7 @@ public class ExternalImportExecutionService {
                 }
             }
 
-            sleep(POLL_INTERVAL_SECONDS);
+            ExternalImportFiles.sleep(POLL_INTERVAL_SECONDS);
         }
     }
 
@@ -719,7 +740,7 @@ public class ExternalImportExecutionService {
         }
 
         StorageImportTask task = requireTask(taskId);
-        long totalSize = files.stream().mapToLong(this::fileSize).sum();
+        long totalSize = files.stream().mapToLong(ExternalImportFiles::fileSize).sum();
         prepareImportPhase(taskId, totalSize, files.size());
         if (isCancelled(taskId)) {
             markCancelled(taskId);
@@ -755,7 +776,7 @@ public class ExternalImportExecutionService {
                 markCancelled(taskId);
                 return;
             }
-            transferred += fileSize(file);
+            transferred += ExternalImportFiles.fileSize(file);
             completedFiles++;
             // 进度落库按 1 秒窗口节流：大目录导入时逐文件写库会显著放大事务数，
             // 而 UI 只需要近似实时；最后一件无条件写入，保证终态可见。
@@ -817,12 +838,19 @@ public class ExternalImportExecutionService {
         return transactionTemplate.execute(status -> {
             StorageImportTask currentTask = requireTask(task.getId());
             SpaceType spaceType = resolveSpaceType(currentTask);
-            var reusableRoot = ExternalImportResumeDetector.reusableRoot(
-                    fileNodeRepository, currentTask, spaceType);
-            if (reusableRoot.isPresent()) {
-                log.info("导入重试沿用已创建的根目录: taskId={}, folderId={}",
-                        currentTask.getId(), reusableRoot.get());
-                return reusableRoot.get();
+            if (isResumedRun(task.getId())) {
+                Optional<UUID> reusableRoot = ExternalImportResumeDetector.reusableRoot(
+                        fileNodeRepository, currentTask, spaceType);
+                if (reusableRoot.isPresent()) {
+                    if (currentTask.getImportRootNodeId() == null) {
+                        // 旧任务没有记录根目录：找回后补写，后续重入直接走 ID。
+                        currentTask.setImportRootNodeId(reusableRoot.get());
+                        importTaskRepository.save(currentTask);
+                    }
+                    log.info("导入重试沿用已创建的根目录: taskId={}, folderId={}",
+                            currentTask.getId(), reusableRoot.get());
+                    return reusableRoot.get();
+                }
             }
             FileNode targetParent = resolveParent(currentTask, currentTask.getTargetParentId());
             String availableName = ExternalImportNames.resolveAvailable(
@@ -884,6 +912,13 @@ public class ExternalImportExecutionService {
             StorageImportTask currentTask = requireTask(task.getId());
             FileNode parent = resolveParent(currentTask, parentId);
             SpaceType spaceType = resolveSpaceType(currentTask);
+            if (isResumedRun(task.getId())) {
+                Optional<UUID> reusable = ExternalImportResumeDetector.reusableFolder(
+                        fileNodeRepository, currentTask, spaceType, parentId, folderName);
+                if (reusable.isPresent()) {
+                    return reusable.get();
+                }
+            }
             String availableName = ExternalImportNames.resolveAvailable(
                     fileNodeRepository, currentTask, spaceType, parentId, folderName);
             FileNode folder = new FileNode();
@@ -1118,69 +1153,5 @@ public class ExternalImportExecutionService {
             return "/" + childName;
         }
         return parent.getNormalizedPath() + "/" + childName;
-    }
-
-    /**
-     * 只用于隔离上传阶段的 Content-Type 种子：外部来源没有客户端申报，先按扩展名与系统探测给一个候选值，
-     * 真实类型以扫描阶段 {@link FileIngressSafetyService} 的魔数结果为准。
-     */
-    private String detectMimeType(Path file) {
-        try {
-            String mimeType = Files.probeContentType(file);
-            if (mimeType != null && !mimeType.isBlank()) {
-                return mimeType;
-            }
-        } catch (IOException e) {
-            log.debug("系统探测 MIME 失败，降级到扩展名推断: file={}", file.getFileName(), e);
-        }
-        return FileUploadSessionService.guessMimeTypeByFileName(
-                file.getFileName().toString());
-    }
-
-    /**
-     * 以魔数结果修正入库 MIME，规则与 {@code FileIngressPromotionService} 的晋升一致：
-     * 探测无结论（null）时保留推断值，否则一律采用探测值。外部来源的文件名与字节经常不一致
-     * （改名、无扩展名、伪装扩展名），错误的 MIME 会让下载与内联播放拿到错的 Content-Type。
-     */
-    private String resolveDetectedMimeType(String fileName, String guessedMimeType, String detectedMimeType) {
-        if (detectedMimeType == null || detectedMimeType.equals(guessedMimeType)) {
-            return guessedMimeType;
-        }
-        log.info("外部导入 MIME 按魔数修正: fileName={}, guessed={}, detected={}",
-                fileName, guessedMimeType, detectedMimeType);
-        return detectedMimeType;
-    }
-
-    private long fileSize(Path file) {
-        try {
-            return Files.size(file);
-        } catch (IOException e) {
-            throw new IllegalStateException("读取文件大小失败", e);
-        }
-    }
-
-    private void cleanupTempDir(Path tempDir) {
-        try {
-            fileTreeScanner.deleteTree(tempDir);
-        } catch (IOException exception) {
-            log.debug("导入临时目录清理失败，不影响主流程: dir={}", tempDir, exception);
-        }
-    }
-
-    private String summarize(Exception exception) {
-        String message = exception.getMessage();
-        if (message == null || message.isBlank()) {
-            return exception.getClass().getSimpleName();
-        }
-        return message.length() > 500 ? message.substring(0, 500) : message;
-    }
-
-    private void sleep(int seconds) {
-        try {
-            Thread.sleep(Duration.ofSeconds(seconds).toMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("导入轮询被中断", e);
-        }
     }
 }

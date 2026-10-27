@@ -122,6 +122,50 @@ class ExternalImportResumeDetectorTest {
                 nodeRepository, task, SpaceType.PERSONAL)).isEmpty();
     }
 
+    @Test
+    void legacyRootFallbackCoversTasksWithoutRecordedRoot() {
+        StorageImportTask task = task();
+        task.setFileName("movies");
+        UUID rootId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        // 新增列之前的旧任务没有记录根目录：按同名 RCLONE 文件夹找回。
+        FileNode legacy = new FileNode();
+        legacy.setId(rootId);
+        legacy.setNodeType(NodeType.FOLDER.getValue());
+        legacy.setSourceType("RCLONE");
+        when(nodeRepository.findFirstByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "movies"))
+                .thenReturn(Optional.of(legacy));
+
+        assertThat(ExternalImportResumeDetector.reusableRoot(
+                nodeRepository, task, SpaceType.PERSONAL)).contains(rootId);
+
+        // 同名但来源不是导入（用户自建文件夹）时不得误用。
+        legacy.setSourceType("LOCAL");
+        assertThat(ExternalImportResumeDetector.reusableRoot(
+                nodeRepository, task, SpaceType.PERSONAL)).isEmpty();
+    }
+
+    @Test
+    void reusesSubFolderWithSameNameOnResume() {
+        UUID parentId = UUID.fromString("70000000-0000-0000-0000-000000000001");
+        UUID folderId = UUID.fromString("80000000-0000-0000-0000-000000000001");
+        FileNode folder = new FileNode();
+        folder.setId(folderId);
+        folder.setNodeType(NodeType.FOLDER.getValue());
+        when(nodeRepository.findFirstByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, parentId, "season-01"))
+                .thenReturn(Optional.of(folder));
+
+        assertThat(ExternalImportResumeDetector.reusableFolder(
+                nodeRepository, task(), SpaceType.PERSONAL, parentId, "season-01"))
+                .contains(folderId);
+
+        folder.setNodeType(NodeType.FILE.getValue());
+        assertThat(ExternalImportResumeDetector.reusableFolder(
+                nodeRepository, task(), SpaceType.PERSONAL, parentId, "season-01"))
+                .isEmpty();
+    }
+
     private Path write(Path dir, String name, String content) throws IOException {
         return Files.writeString(dir.resolve(name), content, StandardCharsets.UTF_8);
     }

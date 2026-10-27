@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_stylesheet.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_table_block_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -573,72 +574,10 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
   }
 
   Widget _table(TableBlock block) {
-    if (block.rows.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: ReaderContentBlockItem.tableVerticalPadding,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final row in block.rows)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: widget.settings.onSurfaceVariantColor.withValues(
-                        alpha: 0.15,
-                      ),
-                      width: ReaderContentBlockItem.tableRowBorderWidth,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final cell in row.cells)
-                      Container(
-                        constraints: const BoxConstraints(minWidth: 60),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical:
-                              ReaderContentBlockItem.tableCellVerticalPadding,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              row.isHeader
-                                  ? widget.settings.onSurfaceVariantColor
-                                      .withValues(alpha: 0.08)
-                                  : null,
-                        ),
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              for (final span in cell)
-                                _listOrTableSpan(
-                                  span,
-                                  weight:
-                                      row.isHeader
-                                          ? FontWeight.w700
-                                          : span.isBold
-                                          ? FontWeight.w700
-                                          : FontWeight.w400,
-                                ),
-                            ],
-                          ),
-                          strutStyle: widget.settings.bodyStrutStyle(),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
+    return ReaderTableBlockView(
+      rows: block.rows,
+      settings: widget.settings,
+      spanBuilder: _listOrTableSpan,
     );
   }
 }
