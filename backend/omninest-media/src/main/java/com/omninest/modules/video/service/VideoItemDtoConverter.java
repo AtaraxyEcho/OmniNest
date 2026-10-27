@@ -44,20 +44,17 @@ public class VideoItemDtoConverter {
     private final FileContentAvailabilityQueryService fileContentAvailabilityQueryService;
     private final ContentAssetRepository contentAssetRepository;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
+    private final MediaLibraryAccessService mediaLibraryAccessService;
 
     /**
      * 批量转换，内部批量加载 movie/episode/series，消除 N+1。
      */
     public List<MovieVideoItemDto> toVideoDtos(UUID requesterUserId, List<MediaVideoItem> items) {
-        return toVideoDtos(requesterUserId, items, false);
+        boolean canManageLibraries = mediaLibraryAccessService.canManageLibraries(requesterUserId);
+        return toVideoDtos(requesterUserId, items, canManageLibraries);
     }
 
-    /**
-     * 批量转换，并标记调用者能否修改这些条目的元数据。
-     *
-     * @param canManageLibraries 调用者是否具备媒体库管理权限
-     */
-    public List<MovieVideoItemDto> toVideoDtos(
+    private List<MovieVideoItemDto> toVideoDtos(
             UUID requesterUserId, List<MediaVideoItem> items, boolean canManageLibraries) {
         if (items.isEmpty()) {
             return List.of();
@@ -85,15 +82,11 @@ public class VideoItemDtoConverter {
      * 单条转换，只加载必要的关联实体（最多 3 次查询，而非 findAllById）。
      */
     public MovieVideoItemDto toVideoDto(UUID requesterUserId, MediaVideoItem item) {
-        return toVideoDto(requesterUserId, item, false);
+        return toVideoDto(
+                requesterUserId, item, mediaLibraryAccessService.canManageLibraries(requesterUserId));
     }
 
-    /**
-     * 单条转换并标记是否可写。
-     *
-     * @param canManageLibraries 调用者是否具备媒体库管理权限
-     */
-    public MovieVideoItemDto toVideoDto(
+    private MovieVideoItemDto toVideoDto(
             UUID requesterUserId, MediaVideoItem item, boolean canManageLibraries) {
         UUID catalogOwnerUserId = item.getOwnerUserId();
         Map<UUID, MediaMovie> movieMap = new LinkedHashMap<>();

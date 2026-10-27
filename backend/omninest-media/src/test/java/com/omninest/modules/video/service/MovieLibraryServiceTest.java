@@ -116,7 +116,8 @@ class MovieLibraryServiceTest {
                     new VideoCatalogMappers(fileQueryService),
                     fileContentAvailabilityQueryService,
                     contentAssetRepository,
-                    mediaPlaybackTokenService
+                    mediaPlaybackTokenService,
+                    mediaLibraryAccessService
             );
     private final MovieLibraryService movieLibraryService =
             new MovieLibraryService(

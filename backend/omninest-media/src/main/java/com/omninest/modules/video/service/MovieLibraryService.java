@@ -574,8 +574,7 @@ public class MovieLibraryService {
     @Transactional(readOnly = true)
     public MovieVideoItemDto detail(UUID ownerUserId, UUID videoItemId) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
-        return videoItemDtoConverter.toVideoDto(
-                ownerUserId, item, mediaLibraryAccessService.canManageLibraries(ownerUserId));
+        return videoItemDtoConverter.toVideoDto(ownerUserId, item);
     }
 
     @Transactional(rollbackFor = Exception.class)

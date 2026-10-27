@@ -160,22 +160,15 @@ public class MovieScrapeExecutionService {
         // 必须落在两次短事务之间：Worker 的数据库连接池很小，外部网络整段占住会拖垮其他消费者。
         ScrapeAssetRefs refs = fetchAssetRefs(plan, candidate);
 
-        try {
-            transactionTemplate.executeWithoutResult(status -> {
-                applyAssetRefs(plan, refs);
-                // 文件级信息仍写入 video_item
-                fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
-                videoItemRepository.save(item);
-                applicationEventPublisher.publishEvent(new VideoProbeEvent(item));
-                taskRecordService.markCompleted(event.taskId(), resultMap("元数据刮削完成", candidate));
-                recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.UPDATED);
-            });
-        } catch (RuntimeException exception) {
-            // 回填事务失败时本次新建的头像文件已无人引用，先清掉再抛出；
-            // 失败清理只记日志，不能掩盖原始异常。
-            discardProfileAssets(plan, refs);
-            throw exception;
-        }
+        transactionTemplate.executeWithoutResult(status -> {
+            applyAssetRefs(plan, refs);
+            // 文件级信息仍写入 video_item
+            fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
+            videoItemRepository.save(item);
+            applicationEventPublisher.publishEvent(new VideoProbeEvent(item));
+            taskRecordService.markCompleted(event.taskId(), resultMap("元数据刮削完成", candidate));
+            recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.UPDATED);
+        });
 
         log.info("刮削完成: taskId={}, itemId={}, mediaType={}, provider={}",
                 event.taskId(), item.getId(), item.getMediaType(), candidate.provider());
@@ -288,20 +281,6 @@ public class MovieScrapeExecutionService {
         changed |= applyProfileFileIds(movie.getCrewMembers(), refs.profileFileIds());
         if (changed) {
             movieRepository.save(movie);
-        }
-    }
-
-    private void discardProfileAssets(ScrapeAssetPlan plan, ScrapeAssetRefs refs) {
-        if (plan == null || refs.profileFileIds().isEmpty()) {
-            return;
-        }
-        for (UUID fileId : refs.profileFileIds().values()) {
-            try {
-                derivedAssetStorageService.deleteOwned(plan.ownerUserId(), fileId);
-            } catch (RuntimeException exception) {
-                log.warn("刮削回填失败后清理头像资产失败: fileId={}, errorType={}",
-                        fileId, exception.getClass().getSimpleName());
-            }
         }
     }
 
