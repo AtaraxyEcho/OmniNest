@@ -1076,6 +1076,30 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     boolean existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(SpaceType spaceType, String name);
 
     /**
+     * 共享空间同名节点查找（外部导入重试的内容比对）
+     */
+    Optional<FileNode> findFirstBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+            SpaceType spaceType, UUID parentId, String name);
+
+    /**
+     * 共享空间根目录同名节点查找
+     */
+    Optional<FileNode> findFirstBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+            SpaceType spaceType, String name);
+
+    /**
+     * 个人空间同名节点查找（外部导入重试的内容比对）
+     */
+    Optional<FileNode> findFirstByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+            UUID ownerUserId, SpaceType spaceType, UUID parentId, String name);
+
+    /**
+     * 个人空间根目录同名节点查找
+     */
+    Optional<FileNode> findFirstByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+            UUID ownerUserId, SpaceType spaceType, String name);
+
+    /**
      * 按空间类型查询回收站文件（个人空间用 ownerUserId，共享空间用 deletedBy）
      */
     List<FileNode> findByOwnerUserIdAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(

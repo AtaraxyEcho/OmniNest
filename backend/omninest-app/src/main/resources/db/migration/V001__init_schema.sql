@@ -2408,7 +2408,8 @@ CREATE TABLE "omni"."storage_import_tasks" (
   "source_kind" varchar(16) NOT NULL DEFAULT 'FILE'::character varying,
   "total_files" int4 NOT NULL DEFAULT 0,
   "completed_files" int4 NOT NULL DEFAULT 0,
-  "current_file_name" varchar(1024)
+  "current_file_name" varchar(1024),
+  "import_root_node_id" uuid
 )
 ;
 COMMENT ON COLUMN "omni"."storage_import_tasks"."task_id" IS '系统任务ID，关联sys_tasks';
@@ -2416,6 +2417,7 @@ COMMENT ON COLUMN "omni"."storage_import_tasks"."source_kind" IS '导入源类�
 COMMENT ON COLUMN "omni"."storage_import_tasks"."total_files" IS '任务包含的文件总数';
 COMMENT ON COLUMN "omni"."storage_import_tasks"."completed_files" IS '已完成入库的文件数';
 COMMENT ON COLUMN "omni"."storage_import_tasks"."current_file_name" IS '当前扫描、传输或入库的文件相对路径';
+COMMENT ON COLUMN "omni"."storage_import_tasks"."import_root_node_id" IS '目录导入首次创建的根文件夹ID，重试沿用避免重复建目录';
 
 CREATE TABLE "omni"."storage_remote_metadata_cache" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),

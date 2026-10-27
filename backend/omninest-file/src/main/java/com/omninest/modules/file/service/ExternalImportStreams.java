@@ -1,8 +1,14 @@
 package com.omninest.modules.file.service;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.function.LongConsumer;
 
 /**
@@ -21,6 +27,31 @@ final class ExternalImportStreams {
 
     static InputStream bounded(RandomAccessFile file, long limit, LongConsumer onProgress) {
         return new BoundedRandomAccessInputStream(file, limit, onProgress);
+    }
+
+    /**
+     * 计算本地文件的 SHA-256 十六进制摘要。
+     *
+     * <p>仅用于导入重试的同名同内容比对：调用方先确认目标目录存在同名节点才会调用，
+     * 常态导入不会因此多读一遍文件。</p>
+     *
+     * @param path 待计算文件
+     * @return 小写十六进制摘要
+     */
+    static String sha256Hex(Path path) {
+        try (InputStream input = new BufferedInputStream(Files.newInputStream(path), 64 * 1024)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException e) {
+            throw new IllegalStateException("读取文件摘要失败: " + path.getFileName(), e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", e);
+        }
     }
 
     /**

@@ -1,3 +1,4 @@
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/admin/data/admin_api_response.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
@@ -200,6 +201,14 @@ class AdminOperationsApi {
       },
     );
     return AdminPage.fromJson(parseData(response.data), AdminAuditLog.fromJson);
+  }
+
+  /// 审计日志出现过的操作类型；筛选下拉以它为准，避免前端手抄清单漂移。
+  Future<List<String>> auditActions() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/logs/actions',
+    );
+    return parseAuditActions(response.data);
   }
 
   Future<AdminStorageManagementView> storage() async {
@@ -554,6 +563,17 @@ class AdminOperationsApi {
     Map<String, dynamic>? body,
   ) {
     return AdminExternalStorageView.fromJson(parseData(body));
+  }
+
+  List<String> parseAuditActions(Map<String, dynamic>? body) {
+    final data = parseEnvelope(body)['data'];
+    if (data is! List) {
+      throw const AppException(
+        code: 'INVALID_RESPONSE',
+        message: 'Admin 响应格式不正确',
+      );
+    }
+    return data.whereType<String>().toList(growable: false);
   }
 
   Map<String, dynamic> parseData(Map<String, dynamic>? body) {

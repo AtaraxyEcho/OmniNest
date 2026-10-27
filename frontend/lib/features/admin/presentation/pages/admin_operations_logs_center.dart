@@ -65,12 +65,21 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
   }
 
   void _handleTabChanged() {
-    if (!_tabController.indexIsChanging && mounted) setState(() {});
+    if (!_tabController.indexIsChanging && mounted) {
+      setState(() {
+        // 离开的 Tab 留下它当时的查询键：隐藏期间搜索词、每页条数与排序的变化
+        // 不再触发它的整页请求，徽章计数保留这次快照。
+        if (_tabController.index == 0) {
+          _lastActiveLoginQuery = _buildLoginQuery();
+        } else {
+          _lastActiveAuditQuery = _buildAuditQuery();
+        }
+      });
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final auditQuery = (
+  AdminLogPageQuery _buildAuditQuery() {
+    return (
       page: _auditPage,
       size: _pageSize,
       action: _auditAction,
@@ -78,7 +87,10 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
       sort: _auditSort.columnKey,
       dir: _auditSort.ascending ? 'asc' : 'desc',
     );
-    final loginQuery = (
+  }
+
+  AdminLoginAuditPageQuery _buildLoginQuery() {
+    return (
       page: _loginPage,
       size: _pageSize,
       result: _loginResult,
@@ -87,14 +99,13 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
       sort: _loginSort.columnKey,
       dir: _loginSort.ascending ? 'asc' : 'desc',
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auditQuery = _buildAuditQuery();
+    final loginQuery = _buildLoginQuery();
     final auditActive = _tabController.index == 0;
-    // 隐藏 Tab 沿用最近一次激活时的查询键：搜索词、每页条数与排序的变化
-    // 只作用于当前 Tab，隐藏 Tab 不跟着发起整页请求，徽章计数保留旧快照。
-    if (auditActive) {
-      _lastActiveAuditQuery = auditQuery;
-    } else {
-      _lastActiveLoginQuery = loginQuery;
-    }
     final auditKey =
         auditActive ? auditQuery : (_lastActiveAuditQuery ?? auditQuery);
     final loginKey =
@@ -109,11 +120,13 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
     }
     final auditPage = auditAsync.value ?? _lastAuditPage;
     final loginPage = loginAsync.value ?? _lastLoginPage;
-    // 动作选项必须是完整动作集：只从当前页聚合会让未出现在首屏或筛选后的
-    // 动作永远无法被选中，选中一项后其余选项也会一起消失。
+    // 动作选项必须覆盖库内全部动作：只从当前页聚合会让未出现在首屏或筛选后的
+    // 动作永远无法被选中；集合由后端按实际写入值返回，不做前端手抄。
+    final knownActions =
+        ref.watch(adminAuditActionsProvider).value ?? const <String>[];
     final actionOptions =
         <String>{
-            ..._adminAuditActions,
+            ...knownActions,
             ...?auditPage?.items.map((item) => item.action),
             if (_auditAction != 'ALL') _auditAction,
           }.toList()
@@ -867,33 +880,6 @@ class _AdminRecordFilterBar extends StatelessWidget {
     );
   }
 }
-
-/// 操作审计的已知动作全集，与后端审计写入点一一对应。
-///
-/// 下拉选项以此为底，再与当前页数据取并集：筛选下拉不能依赖分页结果，
-/// 否则首屏只出现一种动作时其余动作不可选。
-const List<String> _adminAuditActions = <String>[
-  'ADMIN_CONFIG_UPDATE',
-  'ADMIN_EXTERNAL_STORAGE_CREATE',
-  'ADMIN_EXTERNAL_STORAGE_STATUS_UPDATE',
-  'ADMIN_QUOTA_UPDATE',
-  'ADMIN_ROLE_CREATE',
-  'ADMIN_ROLE_DELETE',
-  'ADMIN_ROLE_PERMISSIONS_UPDATE',
-  'ADMIN_TASK_CANCEL',
-  'ADMIN_TASK_DLQ_DISCARD',
-  'ADMIN_TASK_RETRY',
-  'ADMIN_USER_2FA_RESET',
-  'ADMIN_USER_CREATE',
-  'ADMIN_USER_DELETE',
-  'ADMIN_USER_ROLES_UPDATE',
-  'ADMIN_USER_ROLE_UPDATE',
-  'ADMIN_USER_STATUS_UPDATE',
-  'ADMIN_SESSION_REVOKE',
-  'ADMIN_SESSION_CLEANUP',
-  'ADMIN_AUDIT_LOG_CLEANUP',
-  'ADMIN_LOGIN_AUDIT_CLEANUP',
-];
 
 /// 审计操作类型的本地化短标签；未收录的枚举回退原始值，
 /// 由 [AdminCellText] 的 tooltip 保留完整名称。

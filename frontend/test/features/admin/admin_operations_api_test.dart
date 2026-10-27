@@ -170,4 +170,25 @@ void main() {
       throwsA(isA<AppException>()),
     );
   });
+
+  test('parses audit action list for the log filter', () {
+    final actions = api.parseAuditActions({
+      'code': 200,
+      'message': 'success',
+      'data': ['ADMIN_CONFIG_UPDATE', 'ADMIN_TASK_RETRY'],
+    });
+
+    expect(actions, ['ADMIN_CONFIG_UPDATE', 'ADMIN_TASK_RETRY']);
+  });
+
+  test('rejects non-list audit action payloads', () {
+    expect(
+      () => api.parseAuditActions({
+        'code': 200,
+        'message': 'success',
+        'data': {'action': 'ADMIN_CONFIG_UPDATE'},
+      }),
+      throwsA(isA<AppException>()),
+    );
+  });
 }

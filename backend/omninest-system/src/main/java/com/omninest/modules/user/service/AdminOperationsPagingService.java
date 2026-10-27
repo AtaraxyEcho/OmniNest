@@ -101,6 +101,16 @@ public class AdminOperationsPagingService {
     }
 
     /**
+     * 查询审计日志出现过的操作类型，供管理端筛选下拉使用。
+     *
+     * @return 去重升序的操作类型
+     */
+    @Transactional(readOnly = true)
+    public List<String> auditActions() {
+        return auditLogRepository.findDistinctActions();
+    }
+
+    /**
      * 分页查询操作审计日志。
      *
      * @param page 页码，从零开始

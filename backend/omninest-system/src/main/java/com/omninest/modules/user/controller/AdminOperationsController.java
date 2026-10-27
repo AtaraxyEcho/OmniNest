@@ -185,6 +185,13 @@ public class AdminOperationsController {
         return ApiResponse.success(adminOperationsPagingService.logPage(page, size, action, query, sort, dir));
     }
 
+    @Operation(summary = "查询操作审计动作类型", description = "返回审计日志中实际出现过的全部操作类型，供筛选下拉使用")
+    @GetMapping("/api/v1/admin/logs/actions")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")
+    ApiResponse<List<String>> auditActions() {
+        return ApiResponse.success(adminOperationsPagingService.auditActions());
+    }
+
     @Operation(summary = "获取系统监控数据")
     @GetMapping("/api/v1/admin/monitoring")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")

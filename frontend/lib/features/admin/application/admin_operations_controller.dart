@@ -175,6 +175,13 @@ final adminLogPageProvider = FutureProvider.autoDispose
           );
     });
 
+/// 审计筛选动作全集：取自库内实际写入值，不在前端维护副本。
+final adminAuditActionsProvider = FutureProvider<List<String>>((ref) {
+  ref.watch(sessionEpochProvider);
+
+  return ref.watch(adminOperationsApiProvider).auditActions();
+});
+
 final adminStorageProvider = FutureProvider<AdminStorageManagementView>((ref) {
   ref.watch(sessionEpochProvider);
 

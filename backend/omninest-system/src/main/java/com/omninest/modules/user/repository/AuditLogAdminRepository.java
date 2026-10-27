@@ -40,6 +40,17 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
     List<AuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     /**
+     * 查询审计日志中出现过的全部操作类型，供管理端筛选下拉使用。
+     *
+     * <p>筛选选项不能由当前分页数据反推：未出现在首屏的动作会永远无法选中。
+     * 动作集合直接取自库内实际写入值，避免前端手工维护清单与后端写入点漂移。</p>
+     *
+     * @return 去重并升序排列的操作类型
+     */
+    @Query("select distinct audit.action from AuditLog audit order by audit.action")
+    List<String> findDistinctActions();
+
+    /**
      * 按管理端筛选条件分页查询操作审计日志。
      *
      * @param action 操作类型，空字符串表示不限

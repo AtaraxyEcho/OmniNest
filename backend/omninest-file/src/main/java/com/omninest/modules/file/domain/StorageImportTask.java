@@ -89,6 +89,10 @@ public class StorageImportTask {
     @Column(name = "completed_file_id")
     private UUID completedFileId;
 
+    /** 目录导入首次创建的根文件夹；重试沿用它，避免同名目录重复建份。 */
+    @Column(name = "import_root_node_id")
+    private UUID importRootNodeId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

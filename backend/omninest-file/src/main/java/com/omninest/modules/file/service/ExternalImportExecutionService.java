@@ -151,6 +151,21 @@ public class ExternalImportExecutionService {
             return null;
         }
 
+        FileNode alreadyImported = ExternalImportResumeDetector.findAlreadyImported(
+                fileNodeRepository,
+                fileObjectRepository,
+                task,
+                resolveSpaceType(task),
+                destinationParentId,
+                fileName,
+                file
+        ).orElse(null);
+        if (alreadyImported != null) {
+            log.info("导入重试命中同名同内容文件，跳过重复导入: taskId={}, fileNodeId={}, fileName={}",
+                    task.getId(), alreadyImported.getId(), fileName);
+            return alreadyImported;
+        }
+
         String quarantineBucket = objectStorageBuckets.quarantine();
         String targetBucket = objectStorageBuckets.userFiles();
         String mimeType = detectMimeType(file);
@@ -801,8 +816,15 @@ public class ExternalImportExecutionService {
     private UUID createImportRoot(StorageImportTask task) {
         return transactionTemplate.execute(status -> {
             StorageImportTask currentTask = requireTask(task.getId());
-            FileNode targetParent = resolveParent(currentTask, currentTask.getTargetParentId());
             SpaceType spaceType = resolveSpaceType(currentTask);
+            var reusableRoot = ExternalImportResumeDetector.reusableRoot(
+                    fileNodeRepository, currentTask, spaceType);
+            if (reusableRoot.isPresent()) {
+                log.info("导入重试沿用已创建的根目录: taskId={}, folderId={}",
+                        currentTask.getId(), reusableRoot.get());
+                return reusableRoot.get();
+            }
+            FileNode targetParent = resolveParent(currentTask, currentTask.getTargetParentId());
             String availableName = ExternalImportNames.resolveAvailable(
                     fileNodeRepository,
                     currentTask,
@@ -822,7 +844,10 @@ public class ExternalImportExecutionService {
             if (spaceType == SpaceType.SHARED) {
                 folder.setUploadedBy(currentTask.getOwnerUserId());
             }
-            return fileNodeRepository.save(folder).getId();
+            UUID folderId = fileNodeRepository.save(folder).getId();
+            currentTask.setImportRootNodeId(folderId);
+            importTaskRepository.save(currentTask);
+            return folderId;
         });
     }
 

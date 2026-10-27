@@ -91,6 +91,15 @@ class AdminOperationsPagingServiceTest {
     }
 
     @Test
+    void auditActionsComeFromRepositoryDistinctValues() {
+        when(auditRepository.findDistinctActions())
+                .thenReturn(List.of("ADMIN_CONFIG_UPDATE", "ADMIN_TASK_RETRY"));
+
+        assertThat(service.auditActions())
+                .containsExactly("ADMIN_CONFIG_UPDATE", "ADMIN_TASK_RETRY");
+    }
+
+    @Test
     void logPageReturnsLastLegalPageWhenRequestedPageIsEmpty() {
         AuditLog audit = new AuditLog();
         audit.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));

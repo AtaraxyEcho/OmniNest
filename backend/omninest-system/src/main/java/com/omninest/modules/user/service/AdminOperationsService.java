@@ -29,6 +29,7 @@ import com.omninest.modules.user.repository.AuthLoginAuditRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.TaskRecordAdminRepository;
 import jakarta.persistence.NoResultException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import java.lang.management.ManagementFactory;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -206,8 +207,10 @@ public class AdminOperationsService {
                     TaskStatus.QUEUED.getValue(),
                     0
             );
-        } catch (NoResultException exception) {
+        } catch (NoResultException | EmptyResultDataAccessException exception) {
             // 并发的恢复器或另一位管理员已把任务拉起：整笔回滚，含上面的重投。
+            // 仓储经 PersistenceExceptionTranslation 会把 NoResultException 转成
+            // EmptyResultDataAccessException，两种类型都要覆盖。
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "任务状态已变化，请刷新后重试");
         }
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
@@ -302,7 +305,7 @@ public class AdminOperationsService {
     ) {
         try {
             return metricsRepository.updateTaskTerminalReturning(taskId, targetStatus, expectedStatus, reason);
-        } catch (NoResultException exception) {
+        } catch (NoResultException | EmptyResultDataAccessException exception) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "任务状态已变化，请刷新后重试");
         }
     }

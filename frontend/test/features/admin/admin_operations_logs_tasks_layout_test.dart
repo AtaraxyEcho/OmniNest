@@ -166,6 +166,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          adminAuditActionsProvider.overrideWith(
+            (ref) async => const <String>[
+              'ADMIN_CONFIG_UPDATE',
+              'ADMIN_TASK_RETRY',
+            ],
+          ),
           adminLogPageProvider((
             page: 0,
             size: 10,
@@ -225,6 +231,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          adminAuditActionsProvider.overrideWith(
+            (ref) async => const <String>[
+              'ADMIN_CONFIG_UPDATE',
+              'ADMIN_TASK_RETRY',
+            ],
+          ),
           adminLogPageProvider((
             page: 0,
             size: 10,

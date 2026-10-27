@@ -42,7 +42,7 @@ import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.AuthLoginAuditRepository;
 import com.omninest.modules.user.port.ExternalStorageAccountSummary;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
-import jakarta.persistence.NoResultException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Collections;
@@ -200,7 +200,7 @@ class AdminOperationsServiceTest {
                 taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", payload)));
         // 状态守卫未命中（已被恢复器或其他管理员拉起）时 SQL 不返回行。
         when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0)))
-                .thenThrow(new NoResultException());
+                .thenThrow(new EmptyResultDataAccessException(1));
 
         assertThatThrownBy(() -> service.retryTask(actorUserId, taskId))
                 .isInstanceOf(BusinessException.class)
@@ -506,7 +506,7 @@ class AdminOperationsServiceTest {
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "QUEUED")).when(taskRecordRepository).findByIdRaw(taskId);
         when(metricsRepository.updateTaskTerminalReturning(taskId, "CANCELLED", "QUEUED", "cancelled by admin"))
-                .thenThrow(new NoResultException());
+                .thenThrow(new EmptyResultDataAccessException(1));
 
         assertThatThrownBy(() -> service.cancelTask(actorUserId, taskId))
                 .isInstanceOf(BusinessException.class)

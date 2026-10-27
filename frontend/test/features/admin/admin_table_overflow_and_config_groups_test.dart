@@ -78,6 +78,9 @@ Future<void> _pumpLogsPage(
       totalPages: 1,
     ),
   );
+  when(
+    () => api.auditActions(),
+  ).thenAnswer((_) async => <String>['ADMIN_CONFIG_UPDATE']);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [adminOperationsApiProvider.overrideWithValue(api)],

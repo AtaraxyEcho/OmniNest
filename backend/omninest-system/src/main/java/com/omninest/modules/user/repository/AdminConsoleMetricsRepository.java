@@ -7,6 +7,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -35,8 +36,8 @@ public class AdminConsoleMetricsRepository {
      * 心跳恢复调度误判为新近运行。</p>
      *
      * <p>状态守卫限定在重试入口允许的终态集合内：并发下任务已被恢复器或另一位
-     * 管理员拉起时守卫不命中，抛出 NoResultException 由调用方转换为稳定业务错误，
-     * 避免覆盖正在执行的运行态。</p>
+     * 管理员拉起时守卫不命中，抛出 {@link EmptyResultDataAccessException} 由调用方
+     * 转换为稳定业务错误，避免覆盖正在执行的运行态。</p>
      */
     public AdminOperationsDto.TaskRecordItem updateTaskStatusReturning(UUID taskId, String status, int progress) {
         var query = entityManager.createNativeQuery("""
@@ -72,7 +73,8 @@ public class AdminConsoleMetricsRepository {
      * 以预期状态为守卫把任务更新为终态并返回完整记录（PostgreSQL RETURNING 子句）。
      *
      * <p>用于管理员取消排队任务与丢弃死信任务：并发状态变化导致守卫不命中时
-     * 不更新任何行并抛出 NoResultException，由调用方转换为稳定业务错误。
+     * 不更新任何行并抛出 {@link EmptyResultDataAccessException}（仓储的异常翻译会把
+     * {@code NoResultException} 转成该类型），由调用方转换为稳定业务错误。
      * reason 非空时覆盖错误摘要（取消原因），为空时保留原死信错误摘要。</p>
      *
      * @param taskId 任务 ID

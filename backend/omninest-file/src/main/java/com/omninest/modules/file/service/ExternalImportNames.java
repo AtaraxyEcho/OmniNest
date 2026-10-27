@@ -1,8 +1,10 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -65,6 +67,39 @@ final class ExternalImportNames {
             stem = stem.substring(0, stemLimit);
         }
         return stem + suffix + extension;
+    }
+
+    /**
+     * 在目标目录下查找同名活跃节点，供重试续跑比对内容。
+     *
+     * @param repository 文件节点仓储
+     * @param task 导入任务，仅用于取所有者
+     * @param spaceType 目标空间
+     * @param parentId 目标父目录，null 表示空间根目录
+     * @param name 文件名
+     * @return 同名节点，不存在时为空
+     */
+    static Optional<FileNode> findByName(
+            FileNodeRepository repository,
+            StorageImportTask task,
+            SpaceType spaceType,
+            UUID parentId,
+            String name
+    ) {
+        if (spaceType == SpaceType.SHARED) {
+            if (parentId == null) {
+                return repository.findFirstBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                        SpaceType.SHARED, name);
+            }
+            return repository.findFirstBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    SpaceType.SHARED, parentId, name);
+        }
+        if (parentId == null) {
+            return repository.findFirstByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    task.getOwnerUserId(), SpaceType.PERSONAL, name);
+        }
+        return repository.findFirstByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                task.getOwnerUserId(), SpaceType.PERSONAL, parentId, name);
     }
 
     private static boolean exists(
