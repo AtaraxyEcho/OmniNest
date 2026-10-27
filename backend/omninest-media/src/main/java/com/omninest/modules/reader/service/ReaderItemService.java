@@ -375,12 +375,8 @@ public class ReaderItemService {
         if (coverFileId == null) {
             return null;
         }
-        long referencingOthers = itemRepository.findByCoverFileIdIn(List.of(coverFileId)).stream()
-                .filter(candidate -> !candidate.getId().equals(item.getId()))
-                .count();
-        if (referencingOthers > 0) {
-            log.info("派生封面仍被其他阅读条目引用，跳过清理: coverFileId={}, others={}",
-                    coverFileId, referencingOthers);
+        if (itemRepository.existsByCoverFileIdAndIdNot(coverFileId, item.getId())) {
+            log.info("派生封面仍被其他阅读条目引用，跳过清理: coverFileId={}", coverFileId);
             return null;
         }
         return coverFileId;

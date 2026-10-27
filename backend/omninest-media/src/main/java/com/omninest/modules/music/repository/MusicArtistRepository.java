@@ -1,5 +1,6 @@
 package com.omninest.modules.music.repository;
 
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.MusicArtist;
 import java.util.Collection;
 import java.util.List;
@@ -29,6 +30,41 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
     Page<MusicArtist> findActiveByOwnerUserId(
             @Param("ownerUserId") UUID ownerUserId,
             Pageable pageable);
+
+    /**
+     * 查询当前用户可见的活动歌手：本人名下，或含本人可见共享空间曲目。
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    Page<MusicArtist> findVisibleActiveArtists(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
+     * 搜索当前用户可见的活动歌手。
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+              and lower(artist.name) like lower(concat('%', :keyword, '%')) escape '\\'
+            order by artist.name asc
+            limit 10
+            """)
+    List<MusicArtist> searchVisibleActiveArtists(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("keyword") String keyword);
 
     Optional<MusicArtist> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 

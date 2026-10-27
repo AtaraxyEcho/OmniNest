@@ -108,7 +108,8 @@ class MusicAdminServiceTest {
             transactionManager,
             derivedAssetStorageService,
             coverRetentionService,
-            txtContentDecoder
+            txtContentDecoder,
+            mock(com.omninest.modules.user.service.UserDirectoryQueryService.class)
     );
 
     MusicAdminServiceTest() {
@@ -417,7 +418,7 @@ class MusicAdminServiceTest {
     }
 
     private void stubUpdateTrackCollaborators(MusicTrack track) {
-        when(musicLibraryService.requireTrack(OWNER_ID, track.getId())).thenReturn(track);
+        when(trackRepository.findById(track.getId())).thenReturn(java.util.Optional.of(track));
         when(trackRepository.save(any(MusicTrack.class))).thenAnswer(invocation -> invocation.getArgument(0));
         MusicArtist artist = new MusicArtist();
         artist.setId(UUID.fromString("60000000-0000-0000-0000-000000000002"));

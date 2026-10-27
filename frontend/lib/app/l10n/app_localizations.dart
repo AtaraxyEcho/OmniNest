@@ -1856,6 +1856,12 @@ abstract class AppLocalizations {
   /// **'Consolidate family media, reading, files, and automation tasks into one stable personal space.'**
   String get loginSubtitle;
 
+  /// No description provided for @loginRedirectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll be redirected to your requested page after signing in'**
+  String get loginRedirectHint;
+
   /// No description provided for @loginFeatureMedia.
   ///
   /// In en, this message translates to:
@@ -8628,6 +8634,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a new sensitive value; the current value is never displayed'**
   String get adminSensitiveValuePlaceholder;
+
+  /// No description provided for @adminShowValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Show value'**
+  String get adminShowValue;
+
+  /// No description provided for @adminHideValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide value'**
+  String get adminHideValue;
 
   /// No description provided for @adminChangeReason.
   ///
@@ -16121,6 +16139,12 @@ abstract class AppLocalizations {
   /// **'Full resolution'**
   String get photosShareOptionOriginalFull;
 
+  /// No description provided for @photosShareLocationHidesOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'To avoid EXIF location leaks, turning off location shares preview images only.'**
+  String get photosShareLocationHidesOriginal;
+
   /// No description provided for @photosShareManage.
   ///
   /// In en, this message translates to:
@@ -22611,6 +22635,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Local weather'**
   String get weatherSheetLocalFallback;
+
+  /// No description provided for @weatherStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather is disabled. Ask an administrator to enable it in the config center.'**
+  String get weatherStatusDisabled;
+
+  /// No description provided for @weatherStatusLocationMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Location not found. Update your preferred city in settings.'**
+  String get weatherStatusLocationMissing;
+
+  /// No description provided for @weatherStatusUpstreamFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather request failed. Please try again later.'**
+  String get weatherStatusUpstreamFailed;
+
+  /// No description provided for @weatherStatusRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get weatherStatusRetry;
 
   /// No description provided for @weatherSheetFeelsLike.
   ///

@@ -148,6 +148,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       obscurePassword: _obscurePassword,
       submitting: loginState.submitting,
       errorMessage: _errorText(loginState.error, AppLocalizations.of(context)),
+      hasRedirect: _redirectLocation() != null,
       onTogglePassword: _togglePassword,
       onSubmit: _submit,
     );
@@ -271,6 +272,7 @@ class _LoginFormCard extends StatelessWidget {
     required this.obscurePassword,
     required this.submitting,
     required this.errorMessage,
+    required this.hasRedirect,
     required this.onTogglePassword,
     required this.onSubmit,
   });
@@ -281,6 +283,7 @@ class _LoginFormCard extends StatelessWidget {
   final bool obscurePassword;
   final bool submitting;
   final String? errorMessage;
+  final bool hasRedirect;
   final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
 
@@ -358,6 +361,28 @@ class _LoginFormCard extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          if (hasRedirect) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.subdirectory_arrow_right_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    l10n.loginRedirectHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 28),
           // 与安装向导同策略：两个字段编入同一自动填充组，系统与浏览器
           // 按“用户名 + 口令”成对填充，不单独提示口令。

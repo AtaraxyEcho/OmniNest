@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,6 +46,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class GeonamesImportService {
+    private static final int CITY_NAME_UPDATE_BATCH_SIZE = 1_000;
+
+    private static final String UPDATE_CITY_NAME_ZH_SQL = """
+            UPDATE omni.geo_cities
+            SET name_zh = ?
+            WHERE dataset_id = ? AND geoname_id = ?
+              AND (name_zh IS NULL OR name_zh <> ?)
+            """;
 
     /** 阶段：校验数据文件。 */
     public static final String PHASE_VALIDATING = "VALIDATING";
@@ -82,6 +91,7 @@ public class GeonamesImportService {
     private final TaskRecordService taskRecordService;
     private final TransactionTemplate transactionTemplate;
     private final GeoCityIndex geoCityIndex;
+    private final JdbcTemplate jdbcTemplate;
     private final DomainEventPublisher eventPublisher;
 
     /**
@@ -258,10 +268,21 @@ public class GeonamesImportService {
         }
 
         transactionTemplate.executeWithoutResult(status -> {
+            // 逐条 UPDATE 在 4-6 万个城市上会产生同样次数的数据库往返；
+            // 按批提交既保留事务边界又能在秒级完成。
+            List<Object[]> cityNameBatches = new ArrayList<>();
             for (Long geonameId : selector.collectedIds()) {
-                if (cityIds.contains(geonameId)) {
-                    geoCityRepository.updateCityNameZh(datasetId, geonameId, selector.best(geonameId));
+                if (!cityIds.contains(geonameId)) {
+                    continue;
                 }
+                String nameZh = selector.best(geonameId);
+                if (nameZh != null) {
+                    cityNameBatches.add(new Object[]{nameZh, datasetId, geonameId, nameZh});
+                }
+            }
+            for (int start = 0; start < cityNameBatches.size(); start += CITY_NAME_UPDATE_BATCH_SIZE) {
+                int end = Math.min(start + CITY_NAME_UPDATE_BATCH_SIZE, cityNameBatches.size());
+                jdbcTemplate.batchUpdate(UPDATE_CITY_NAME_ZH_SQL, cityNameBatches.subList(start, end));
             }
             admin1ByCode.forEach((code, entry) -> {
                 String zh = selector.best(entry.geonameId());

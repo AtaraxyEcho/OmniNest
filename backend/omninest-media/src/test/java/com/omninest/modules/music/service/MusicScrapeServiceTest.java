@@ -96,6 +96,7 @@ class MusicScrapeServiceTest {
             musicLibraryService,
             notificationService,
             catalogService,
+            mock(MusicCoverRetentionService.class),
             derivedAssetStorageService,
             List.of(metadataProvider),
             taskRecordService,

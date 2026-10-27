@@ -915,6 +915,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loginSubtitle => '把家庭媒体、阅读、文件与自动化任务收拢到一个稳定的个人空间。';
 
   @override
+  String get loginRedirectHint => '登录后将自动返回您刚才访问的页面';
+
+  @override
   String get loginFeatureMedia => '媒体中心';
 
   @override
@@ -4528,6 +4531,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminSensitiveValuePlaceholder => '请输入新的敏感配置值，原值不会回显';
+
+  @override
+  String get adminShowValue => '显示明文';
+
+  @override
+  String get adminHideValue => '隐藏明文';
 
   @override
   String get adminChangeReason => '变更原因';
@@ -8567,6 +8576,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareOptionOriginalFull => '原始分辨率';
 
   @override
+  String get photosShareLocationHidesOriginal =>
+      '为防止原图内嵌的 EXIF 泄露拍摄位置，关闭位置信息时仅提供脱敏预览图。';
+
+  @override
   String get photosShareManage => '管理已有链接';
 
   @override
@@ -12052,6 +12065,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get weatherSheetLocalFallback => '本地天气';
+
+  @override
+  String get weatherStatusDisabled => '天气服务未启用，请联系管理员在配置中心开启';
+
+  @override
+  String get weatherStatusLocationMissing => '未找到对应城市位置，请在偏好设置中修改';
+
+  @override
+  String get weatherStatusUpstreamFailed => '天气数据请求失败，请稍后重试';
+
+  @override
+  String get weatherStatusRetry => '立即重试';
 
   @override
   String weatherSheetFeelsLike(int temp) {

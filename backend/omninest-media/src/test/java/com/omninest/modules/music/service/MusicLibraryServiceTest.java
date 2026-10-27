@@ -154,11 +154,11 @@ class MusicLibraryServiceTest {
         MusicAlbum album = new MusicAlbum();
         album.setId(albumId);
         album.setOwnerUserId(OWNER_ID);
-        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
+        when(albumRepository.findById(albumId)).thenReturn(Optional.of(album));
         // 分页必须由仓储承载：全量物化整张专辑再内存切页会在大专辑上放大查询与实体开销。
-        when(trackRepository.findAlbumTracksPage(eq(OWNER_ID), eq(albumId), any(Pageable.class)))
+        when(trackRepository.findVisibleAlbumTracksPage(eq(OWNER_ID), any(), eq(albumId), any(Pageable.class)))
                 .thenAnswer(invocation -> {
-                    Pageable requested = invocation.getArgument(2);
+                    Pageable requested = invocation.getArgument(3);
                     List<MusicTrack> all = List.of(track(), track(), track());
                     int from = (int) Math.min(requested.getOffset(), all.size());
                     int to = (int) Math.min((long) from + requested.getPageSize(), all.size());
@@ -174,7 +174,7 @@ class MusicLibraryServiceTest {
         org.assertj.core.api.Assertions.assertThat(second.getContent()).hasSize(1);
         org.assertj.core.api.Assertions.assertThat(second.getTotalElements()).isEqualTo(3);
         org.assertj.core.api.Assertions.assertThat(second.getPageable().getOffset()).isEqualTo(2);
-        verify(trackRepository, never()).findAlbumTracks(OWNER_ID, albumId);
+        verify(trackRepository, never()).findVisibleAlbumTracks(eq(OWNER_ID), any(), eq(albumId));
     }
 
     @Test
@@ -183,8 +183,8 @@ class MusicLibraryServiceTest {
         MusicAlbum album = new MusicAlbum();
         album.setId(albumId);
         album.setOwnerUserId(OWNER_ID);
-        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
-        when(trackRepository.findAlbumTracks(OWNER_ID, albumId)).thenReturn(List.of(track()));
+        when(albumRepository.findById(albumId)).thenReturn(Optional.of(album));
+        when(trackRepository.findVisibleAlbumTracks(OWNER_ID, SpaceType.SHARED, albumId)).thenReturn(List.of(track()));
 
         var tracks = libraryService.albumTracks(OWNER_ID, albumId);
 
@@ -195,7 +195,7 @@ class MusicLibraryServiceTest {
     @Test
     void albumTracksRejectsAlbumOfOtherOwner() {
         UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
-        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.empty());
+        when(albumRepository.findById(albumId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> libraryService.albumTracks(OWNER_ID, albumId))
                 .isInstanceOf(BusinessException.class)
@@ -209,8 +209,8 @@ class MusicLibraryServiceTest {
         MusicArtist artist = new MusicArtist();
         artist.setId(artistId);
         artist.setOwnerUserId(OWNER_ID);
-        when(artistRepository.findByIdAndOwnerUserId(artistId, OWNER_ID)).thenReturn(Optional.of(artist));
-        when(trackRepository.findArtistTracks(OWNER_ID, artistId)).thenReturn(List.of(track()));
+        when(artistRepository.findById(artistId)).thenReturn(Optional.of(artist));
+        when(trackRepository.findVisibleArtistTracks(OWNER_ID, SpaceType.SHARED, artistId)).thenReturn(List.of(track()));
 
         var tracks = libraryService.artistTracks(OWNER_ID, artistId);
 
@@ -440,14 +440,14 @@ class MusicLibraryServiceTest {
         track.setArtistName("Omni Band");
         track.setAlbumTitle("City Lights");
         PageRequest pageRequest = PageRequest.of(0, 20);
-        when(trackRepository.searchByOwnerUserId(OWNER_ID, "Omni", pageRequest))
+        when(trackRepository.searchVisibleToUser(OWNER_ID, SpaceType.SHARED, "Omni", pageRequest))
                 .thenReturn(List.of(track));
 
         var result = libraryService.search(OWNER_ID, "  Omni  ");
 
         assertThat(result.tracks()).hasSize(1);
         assertThat(result.tracks().getFirst().artistName()).isEqualTo("Omni Band");
-        verify(trackRepository).searchByOwnerUserId(OWNER_ID, "Omni", pageRequest);
+        verify(trackRepository).searchVisibleToUser(OWNER_ID, SpaceType.SHARED, "Omni", pageRequest);
     }
 
     @Test
@@ -456,13 +456,14 @@ class MusicLibraryServiceTest {
         // 否则用户敲的 % 会把条件放宽成近似全库匹配。
         libraryService.search(OWNER_ID, " 100% _x ");
 
-        verify(trackRepository).searchByOwnerUserId(
+        verify(trackRepository).searchVisibleToUser(
                 eq(OWNER_ID),
+                any(),
                 eq("100\\% \\_x"),
                 ArgumentMatchers.any(Pageable.class)
         );
-        verify(albumRepository).searchActiveByOwnerUserId(OWNER_ID, "100\\% \\_x");
-        verify(artistRepository).searchActiveByOwnerUserId(OWNER_ID, "100\\% \\_x");
+        verify(albumRepository).searchVisibleActiveAlbums(eq(OWNER_ID), any(), eq("100\\% \\_x"));
+        verify(artistRepository).searchVisibleActiveArtists(eq(OWNER_ID), any(), eq("100\\% \\_x"));
     }
 
     @Test
@@ -548,14 +549,14 @@ class MusicLibraryServiceTest {
 
     @Test
     void albumSortWhitelistUsesTitleAndFallsBackForUnknownNameField() {
-        when(albumRepository.findActiveByOwnerUserId(eq(OWNER_ID), any(Pageable.class)))
+        when(albumRepository.findVisibleActiveAlbums(eq(OWNER_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.<MusicAlbum>of(), PageRequest.of(0, 20), 0));
 
         libraryService.albums(OWNER_ID, 0, 20, "title,asc");
         libraryService.albums(OWNER_ID, 0, 20, "name");
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(albumRepository, times(2)).findActiveByOwnerUserId(eq(OWNER_ID), captor.capture());
+        verify(albumRepository, times(2)).findVisibleActiveAlbums(eq(OWNER_ID), any(), captor.capture());
         List<Pageable> pageables = captor.getAllValues();
         assertThat(pageables.get(0).getSort().getOrderFor("title")).isNotNull();
         // MusicAlbum 没有 name 属性，旧白名单会把它直接交给 JPA 并抛 PropertyReferenceException

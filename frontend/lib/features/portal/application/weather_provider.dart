@@ -132,6 +132,7 @@ class WeatherData {
     this.hourly = const [],
     this.daily = const [],
     this.locationName = '',
+    this.status = WeatherData.statusOk,
   });
 
   final int temp;
@@ -162,6 +163,17 @@ class WeatherData {
 
   /// 可读地区名（城市），GPS 直连时可能为空。
   final String locationName;
+
+  /// 后端降级原因：OK / DISABLED / LOCATION_NOT_FOUND / UPSTREAM_ERROR。
+  final String status;
+
+  static const statusOk = 'OK';
+  static const statusDisabled = 'DISABLED';
+  static const statusLocationNotFound = 'LOCATION_NOT_FOUND';
+  static const statusUpstreamError = 'UPSTREAM_ERROR';
+
+  /// 是否处于降级态（没有可展示的天气数据）。
+  bool get isDegraded => status != statusOk;
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
     final hourlyRaw = json['hourly'] as List<dynamic>? ?? const [];
@@ -199,6 +211,7 @@ class WeatherData {
           if (item is Map<String, dynamic>) WeatherDaily.fromJson(item),
       ],
       locationName: json['locationName'] as String? ?? '',
+      status: json['status'] as String? ?? WeatherData.statusOk,
     );
   }
 

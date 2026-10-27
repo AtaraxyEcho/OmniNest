@@ -103,8 +103,11 @@ class GeoCityBatchRepositoryIT {
                 row(1816663L, "Hangzhou", "China", "Zhejiang", "30.2936500", "120.1614300", 11900000L, "PPTA"))));
         assertThat(inserted).isEqualTo(2);
 
-        transaction.executeWithoutResult(status ->
-                assertThat(geoCityRepository.updateCityNameZh(datasetId, 1809858L, "广州市")).isEqualTo(1));
+        // 中文名回填在生产代码中是 JdbcTemplate 批量更新，这里用同一语句模拟。
+        transaction.executeWithoutResult(status -> assertThat(jdbcTemplate.update(
+                "UPDATE omni.geo_cities SET name_zh = ? WHERE dataset_id = ? AND geoname_id = ?"
+                        + " AND (name_zh IS NULL OR name_zh <> ?)",
+                "广州市", datasetId, 1809858L, "广州市")).isEqualTo(1));
         int updated = transaction.execute(status -> geoCityRepository.upsertCities(datasetId, List.of(
                 row(1809858L, "Guangzhou City", "China", "Guangdong", "23.1000000", "113.2000000", 16000000L, "PPLA"))));
         assertThat(updated).isEqualTo(1);

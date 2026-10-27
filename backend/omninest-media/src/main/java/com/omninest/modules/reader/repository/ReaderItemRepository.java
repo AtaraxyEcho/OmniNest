@@ -48,6 +48,15 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
     List<ReaderItem> findByCoverFileIdIn(Collection<UUID> coverFileIds);
 
     /**
+     * 判断除指定条目外是否还有条目引用同一封面，用于安全回收派生封面。
+     *
+     * @param coverFileId 封面文件节点 ID
+     * @param id 需要排除的条目 ID
+     * @return 仍被其他条目引用时返回 true
+     */
+    boolean existsByCoverFileIdAndIdNot(UUID coverFileId, UUID id);
+
+    /**
      * 按内容哈希查找已有条目（用于内容级去重）。
      */
     List<ReaderItem> findByContentHash(String contentHash);

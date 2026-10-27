@@ -959,6 +959,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Consolidate family media, reading, files, and automation tasks into one stable personal space.';
 
   @override
+  String get loginRedirectHint =>
+      'You\'ll be redirected to your requested page after signing in';
+
+  @override
   String get loginFeatureMedia => 'Media Center';
 
   @override
@@ -4690,6 +4694,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminSensitiveValuePlaceholder =>
       'Enter a new sensitive value; the current value is never displayed';
+
+  @override
+  String get adminShowValue => 'Show value';
+
+  @override
+  String get adminHideValue => 'Hide value';
 
   @override
   String get adminChangeReason => 'Change Reason';
@@ -8826,6 +8836,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareOptionOriginalFull => 'Full resolution';
 
   @override
+  String get photosShareLocationHidesOriginal =>
+      'To avoid EXIF location leaks, turning off location shares preview images only.';
+
+  @override
   String get photosShareManage => 'Manage existing links';
 
   @override
@@ -12462,6 +12476,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get weatherSheetLocalFallback => 'Local weather';
+
+  @override
+  String get weatherStatusDisabled =>
+      'Weather is disabled. Ask an administrator to enable it in the config center.';
+
+  @override
+  String get weatherStatusLocationMissing =>
+      'Location not found. Update your preferred city in settings.';
+
+  @override
+  String get weatherStatusUpstreamFailed =>
+      'Weather request failed. Please try again later.';
+
+  @override
+  String get weatherStatusRetry => 'Retry';
 
   @override
   String weatherSheetFeelsLike(int temp) {

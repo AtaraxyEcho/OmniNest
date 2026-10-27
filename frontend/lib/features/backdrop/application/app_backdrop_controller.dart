@@ -26,6 +26,14 @@ final appBackdropLocalVideoCacheProvider = Provider<AppBackdropLocalVideoCache>(
   (ref) {
     final cache = AppBackdropLocalVideoCache();
     ref.onDispose(cache.dispose);
+    // 退出登录/切换账号后同一设备的原账号壁纸视频必须清掉，否则下一个账号能看到残留文件。
+    ref.listen(authSessionProvider, (previous, next) {
+      final wasAuthenticated = previous?.value?.isAuthenticated ?? false;
+      final isAuthenticated = next.value?.isAuthenticated ?? false;
+      if (wasAuthenticated && !isAuthenticated) {
+        unawaited(cache.evictAll());
+      }
+    });
     return cache;
   },
 );

@@ -410,16 +410,34 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
           enabled: !_busy,
           onChanged: (v) {
             if (v == _includeLocation) return;
-            _update(() => _includeLocation = v);
+            _update(() {
+              _includeLocation = v;
+              // 原图与实况视频内嵌 EXIF 坐标：关闭位置时不得再下发原图。
+              if (!v) {
+                _originalQuality = false;
+              }
+            });
             unawaited(_applySettings());
           },
         ),
+        if (!_includeLocation)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 2),
+            child: Text(
+              l10n.photosShareLocationHidesOriginal,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: AppTypography.labelSmall,
+                height: 1.3,
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         _ShareToggleRow(
           label: l10n.photosShareOptionOriginal,
           sublabel: l10n.photosShareOptionOriginalFull,
           value: _originalQuality,
-          enabled: !_busy,
+          enabled: !_busy && _includeLocation,
           onChanged: (v) {
             if (v == _originalQuality) return;
             _update(() => _originalQuality = v);

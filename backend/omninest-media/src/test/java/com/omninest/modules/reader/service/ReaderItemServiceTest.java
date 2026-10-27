@@ -192,7 +192,7 @@ class ReaderItemServiceTest {
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
         when(sourceRepository.findByReaderItemId(ITEM_ID)).thenReturn(List.of());
         when(pageAssetRepository.findByReaderItemIdIn(List.of(ITEM_ID))).thenReturn(List.of());
-        when(itemRepository.findByCoverFileIdIn(List.of(COVER_FILE_NODE_ID))).thenReturn(List.of(item));
+        when(itemRepository.existsByCoverFileIdAndIdNot(COVER_FILE_NODE_ID, ITEM_ID)).thenReturn(false);
 
         itemService.deleteItem(OWNER_ID, ITEM_ID);
 
@@ -214,8 +214,7 @@ class ReaderItemServiceTest {
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
         when(sourceRepository.findByReaderItemId(ITEM_ID)).thenReturn(List.of());
         when(pageAssetRepository.findByReaderItemIdIn(List.of(ITEM_ID))).thenReturn(List.of());
-        when(itemRepository.findByCoverFileIdIn(List.of(COVER_FILE_NODE_ID)))
-                .thenReturn(List.of(item, sibling));
+        when(itemRepository.existsByCoverFileIdAndIdNot(COVER_FILE_NODE_ID, ITEM_ID)).thenReturn(true);
 
         itemService.deleteItem(OWNER_ID, ITEM_ID);
 
@@ -232,7 +231,7 @@ class ReaderItemServiceTest {
         when(derivedAssetStorageService.store(
                 any(), any(), any(), any(), any(), any(), any(java.io.InputStream.class)
         )).thenReturn(newCoverId);
-        when(itemRepository.findByCoverFileIdIn(List.of(previousCoverId))).thenReturn(List.of(item));
+        when(itemRepository.existsByCoverFileIdAndIdNot(previousCoverId, ITEM_ID)).thenReturn(false);
 
         itemService.uploadCover(OWNER_ID, ITEM_ID, pngUpload("封面.png"));
 

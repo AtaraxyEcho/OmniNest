@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -352,20 +353,23 @@ class MovieMobileCinemaHero extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (posterUrl != null)
-              Image.network(
-                posterUrl!,
+              // 签名 URL 的查询串每次刷新都会变：缓存键取不含查询串的路径，
+              // 否则同一张题图每次进页都重新下载。
+              CachedNetworkImage(
+                imageUrl: posterUrl!,
+                cacheKey: _posterCacheKey(posterUrl!),
                 fit: BoxFit.cover,
-                cacheWidth: quantizedDecodeWidth(
+                memCacheWidth: quantizedDecodeWidth(
                   logicalWidth: MediaQuery.sizeOf(context).width,
                   devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
                   max: 2560,
                 ),
-                cacheHeight: quantizedDecodeWidth(
+                memCacheHeight: quantizedDecodeWidth(
                   logicalWidth: 348,
                   devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
                   max: 2048,
                 ),
-                errorBuilder: (_, _, _) => ColoredBox(color: context.env.stage),
+                errorWidget: (_, _, _) => ColoredBox(color: context.env.stage),
               )
             else
               ColoredBox(color: context.env.stage),
@@ -562,4 +566,10 @@ class _HeroButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 题图缓存键：去掉签名查询串，只保留路径。
+String _posterCacheKey(String url) {
+  final uri = Uri.tryParse(url);
+  return uri == null ? url : uri.replace(query: '').toString();
 }

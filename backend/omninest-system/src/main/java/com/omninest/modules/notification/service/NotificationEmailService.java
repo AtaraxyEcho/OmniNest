@@ -11,8 +11,11 @@ import com.omninest.modules.notification.repository.NotificationRepository;
 import com.omninest.modules.notification.repository.NotificationTypeRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.common.user.SystemInstanceInfo;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +57,7 @@ public class NotificationEmailService {
     private final UserAccountQuery userAccountQuery;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final SystemInstanceInfo systemInstanceInfo;
 
     /**
      * 判断该用户此刻是否需要邮件投递：通道可用且偏好显式开启。
@@ -65,8 +69,52 @@ public class NotificationEmailService {
         if (!runtimeConfig.configured()) {
             return false;
         }
-        Object value = userPreferenceQuery.findValues(userId, PREFERENCE_SCOPE).get(EMAIL_PREFERENCE_KEY);
-        return value instanceof Boolean enabled && enabled;
+        Map<String, Object> preferences = userPreferenceQuery.findValues(userId, PREFERENCE_SCOPE);
+        if (!(preferences.get(EMAIL_PREFERENCE_KEY) instanceof Boolean enabled) || !enabled) {
+            return false;
+        }
+        // 免打扰时段是同一偏好作用域下的独立配置：站内通知照常入库，邮件静默跳过。
+        return !isQuietHours(preferences, systemInstanceInfo.timeZone());
+    }
+
+    private boolean isQuietHours(Map<String, Object> preferences, ZoneId zoneId) {
+        if (!(preferences.get("quietHours") instanceof Map<?, ?> quietHours)) {
+            return false;
+        }
+        if (!(quietHours.get("enabled") instanceof Boolean enabled) || !enabled) {
+            return false;
+        }
+        LocalTime start = parseClock(quietHours.get("start"));
+        LocalTime end = parseClock(quietHours.get("end"));
+        if (start == null || end == null || start.equals(end)) {
+            return false;
+        }
+        LocalTime now = LocalTime.now(zoneId);
+        if (start.isBefore(end)) {
+            return !now.isBefore(start) && now.isBefore(end);
+        }
+        // 跨零点窗口（22:00–08:00）。
+        return !now.isBefore(start) || now.isBefore(end);
+    }
+
+    private LocalTime parseClock(Object value) {
+        if (!(value instanceof String text) || text.isBlank()) {
+            return null;
+        }
+        String[] parts = text.trim().split(":");
+        if (parts.length != 2) {
+            return null;
+        }
+        try {
+            int hour = Integer.parseInt(parts[0].trim());
+            int minute = Integer.parseInt(parts[1].trim());
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return null;
+            }
+            return LocalTime.of(hour, minute);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     /**

@@ -219,6 +219,7 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
         json.put("hourly", serializeHourly(weather.hourly()));
         json.put("daily", serializeDaily(weather.daily()));
         json.put("locationName", weather.locationName() != null ? weather.locationName() : "");
+        json.put("status", weather.status() != null ? weather.status() : WeatherDto.STATUS_OK);
         return JsonSupport.toJson(json);
     }
 
@@ -285,7 +286,8 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 json.path("textNight").asString("--"),
                 parseHourly(json.path("hourly")),
                 parseDaily(json.path("daily")),
-                json.path("locationName").asString("")
+                json.path("locationName").asString(""),
+                json.path("status").asString(WeatherDto.STATUS_OK)
         );
     }
 

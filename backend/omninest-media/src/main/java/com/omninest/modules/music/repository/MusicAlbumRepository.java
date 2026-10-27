@@ -1,5 +1,6 @@
 package com.omninest.modules.music.repository;
 
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.MusicAlbum;
 import java.util.Collection;
 import java.util.List;
@@ -47,6 +48,58 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
             """)
     List<MusicAlbum> findActiveByOwnerUserIdAndArtistId(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistId") UUID artistId);
+
+    /**
+     * 查询当前用户可见的活动专辑：本人名下，或含本人可见共享空间曲目。
+     */
+    @Query("""
+            select distinct album from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (album.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    Page<MusicAlbum> findVisibleActiveAlbums(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
+     * 搜索当前用户可见的活动专辑。
+     */
+    @Query("""
+            select distinct album from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (album.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+              and lower(album.title) like lower(concat('%', :keyword, '%')) escape '\\'
+            order by album.updatedAt desc
+            limit 10
+            """)
+    List<MusicAlbum> searchVisibleActiveAlbums(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("keyword") String keyword);
+
+    /**
+     * 查询指定歌手下用户可见的活动专辑。
+     */
+    @Query("""
+            select distinct album from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false and track.artistId = :artistId
+              and (album.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            order by album.updatedAt desc
+            """)
+    List<MusicAlbum> findVisibleActiveAlbumsByArtist(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
             @Param("artistId") UUID artistId);
 
     Optional<MusicAlbum> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);

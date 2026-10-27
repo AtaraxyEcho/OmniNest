@@ -52,6 +52,8 @@ class NotificationEmailServiceTest {
     private final UserAccountQuery userAccountQuery = mock(UserAccountQuery.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
+    private final com.omninest.common.user.SystemInstanceInfo systemInstanceInfo =
+            mock(com.omninest.common.user.SystemInstanceInfo.class);
 
     /** 渲染器按真实实现装配，因此实例名/语言/时区必须给出确定值。 */
     private final SystemInstanceInfo instanceConfig = stubInstanceConfig();
@@ -65,8 +67,13 @@ class NotificationEmailServiceTest {
             userPreferenceQuery,
             userAccountQuery,
             taskRecordService,
-            taskDispatchService
+            taskDispatchService,
+            systemInstanceInfo
     );
+
+    {
+        when(systemInstanceInfo.timeZone()).thenReturn(ZoneId.of("UTC"));
+    }
 
     private static SystemInstanceInfo stubInstanceConfig() {
         SystemInstanceInfo config = mock(SystemInstanceInfo.class);
@@ -88,6 +95,35 @@ class NotificationEmailServiceTest {
 
         when(userPreferenceQuery.findValues(USER_ID, "notification"))
                 .thenReturn(Map.of("emailNotification", Boolean.TRUE));
+        assertThat(service.shouldDeliver(USER_ID)).isTrue();
+    }
+
+    @Test
+    void shouldDeliverSkipsEmailInsideQuietHours() {
+        when(runtimeConfig.configured()).thenReturn(true);
+        when(systemInstanceInfo.timeZone()).thenReturn(ZoneId.of("UTC"));
+        // UTC 当前时刻 + 2 小时作为窗口中点，保证跨零点与同日两种形态都命中。
+        java.time.LocalTime now = java.time.LocalTime.now(ZoneId.of("UTC")).withSecond(0).withNano(0);
+        java.time.format.DateTimeFormatter clock = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        String start = now.minusHours(1).format(clock);
+        String end = now.plusHours(1).format(clock);
+        when(userPreferenceQuery.findValues(USER_ID, "notification")).thenReturn(Map.of(
+                "emailNotification", Boolean.TRUE,
+                "quietHours", Map.of("enabled", Boolean.TRUE, "start", start, "end", end)
+        ));
+
+        assertThat(service.shouldDeliver(USER_ID)).isFalse();
+    }
+
+    @Test
+    void shouldDeliverIgnoresInvalidQuietHoursWindow() {
+        when(runtimeConfig.configured()).thenReturn(true);
+        when(systemInstanceInfo.timeZone()).thenReturn(ZoneId.of("UTC"));
+        when(userPreferenceQuery.findValues(USER_ID, "notification")).thenReturn(Map.of(
+                "emailNotification", Boolean.TRUE,
+                "quietHours", Map.of("enabled", Boolean.TRUE, "start", "22:00", "end", "22:00")
+        ));
+
         assertThat(service.shouldDeliver(USER_ID)).isTrue();
     }
 

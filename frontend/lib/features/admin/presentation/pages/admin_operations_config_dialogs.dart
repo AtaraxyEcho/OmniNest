@@ -39,6 +39,9 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
   bool get _isBoolConfig => widget.entry.valueType == 'BOOLEAN';
   bool get _isSensitiveConfig => _isSensitiveConfigEntry(widget.entry);
 
+  /// 敏感值默认掩码显示，允许管理员核对粘贴的私钥/Token。
+  bool _obscureSensitive = true;
+
   String get _initialDisplayValue {
     if (_isSensitiveConfig) return '';
     if (_isBoolConfig) return widget.entry.value;
@@ -175,6 +178,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
           else
             TextField(
               controller: _valueController,
+              obscureText: _isSensitiveConfig && _obscureSensitive,
               decoration: InputDecoration(
                 labelText: l10n.adminConfigValue,
                 hintText:
@@ -182,6 +186,25 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
                         ? l10n.adminSensitiveValuePlaceholder
                         : null,
                 suffixText: _isGbConfig ? 'GB' : (_isMbConfig ? 'MB' : null),
+                suffixIcon:
+                    _isSensitiveConfig
+                        ? IconButton(
+                          tooltip:
+                              _obscureSensitive
+                                  ? l10n.adminShowValue
+                                  : l10n.adminHideValue,
+                          onPressed:
+                              () => setState(
+                                () => _obscureSensitive = !_obscureSensitive,
+                              ),
+                          icon: Icon(
+                            _obscureSensitive
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 18,
+                          ),
+                        )
+                        : null,
               ),
               keyboardType:
                   _isGbConfig || _isMbConfig

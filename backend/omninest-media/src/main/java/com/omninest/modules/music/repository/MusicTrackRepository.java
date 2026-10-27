@@ -111,6 +111,160 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             Pageable pageable
     );
 
+    /**
+     * 按关键词搜索用户可见曲目（个人 + 共享空间），口径与 {@link #findTracksVisibleToUser} 一致。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param keyword 已转义的关键词
+     * @param pageable 分页限制
+     * @return 匹配曲目
+     */
+    @Query("""
+            select distinct t from MusicTrack t
+            join FileNode file on t.fileNodeId = file.id
+            where file.deleted = false
+              and (
+                t.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+              and (
+                lower(coalesce(t.title, '')) like lower(concat('%', :keyword, '%')) escape '\\'
+                or lower(coalesce(t.artistName, '')) like lower(concat('%', :keyword, '%')) escape '\\'
+                or lower(coalesce(t.albumTitle, '')) like lower(concat('%', :keyword, '%')) escape '\\'
+              )
+            order by t.updatedAt desc
+            """)
+    List<MusicTrack> searchVisibleToUser(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * 专辑内当前用户可见的曲目（个人 + 共享空间）。
+     */
+    @Query("""
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.albumId = :albumId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            order by track.discNumber asc, track.trackNumber asc, track.title asc
+            """)
+    List<MusicTrack> findVisibleAlbumTracks(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("albumId") UUID albumId
+    );
+
+    @Query(value = """
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.albumId = :albumId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            order by track.discNumber asc, track.trackNumber asc, track.title asc
+            """,
+            countQuery = """
+            select count(track) from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.albumId = :albumId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            """)
+    Page<MusicTrack> findVisibleAlbumTracksPage(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("albumId") UUID albumId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.artistId = :artistId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            order by track.albumTitle asc, track.discNumber asc, track.trackNumber asc, track.title asc
+            """)
+    List<MusicTrack> findVisibleArtistTracks(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("artistId") UUID artistId
+    );
+
+    @Query(value = """
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.artistId = :artistId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            order by track.albumTitle asc, track.discNumber asc, track.trackNumber asc, track.title asc
+            """,
+            countQuery = """
+            select count(track) from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.artistId = :artistId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            """)
+    Page<MusicTrack> findVisibleArtistTracksPage(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("artistId") UUID artistId,
+            Pageable pageable
+    );
+
+    /**
+     * 判断专辑内是否存在当前用户可见的曲目，用于共享空间专辑详情放行。
+     */
+    @Query("""
+            select count(track) > 0 from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.albumId = :albumId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            """)
+    boolean existsVisibleAlbumTrack(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("albumId") UUID albumId
+    );
+
+    /**
+     * 判断歌手名下是否存在当前用户可见的曲目，用于共享空间歌手详情放行。
+     */
+    @Query("""
+            select count(track) > 0 from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.artistId = :artistId and file.deleted = false
+              and (
+                track.ownerUserId = :userId
+                or (:sharedType is not null and file.spaceType = :sharedType)
+              )
+            """)
+    boolean existsVisibleArtistTrack(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("artistId") UUID artistId
+    );
+
     @Query("""
             select count(track) from MusicTrack track
             join FileNode file on track.fileNodeId = file.id

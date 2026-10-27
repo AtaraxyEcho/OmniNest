@@ -203,9 +203,9 @@ class _TagPhotos extends ConsumerWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      AppLocalizations.of(
-                        context,
-                      ).photosTagsPhotoCount(paging.items.length),
+                      AppLocalizations.of(context).photosTagsPhotoCount(
+                        paging.total > 0 ? paging.total : paging.items.length,
+                      ),
                       style: TextStyle(
                         color: colors.muted,
                         fontSize: AppTypography.bodySmall,

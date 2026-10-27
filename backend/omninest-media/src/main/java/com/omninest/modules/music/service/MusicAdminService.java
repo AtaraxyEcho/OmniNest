@@ -3,6 +3,7 @@ import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.security.Permissions;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
@@ -11,6 +12,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
@@ -33,7 +35,10 @@ import com.omninest.modules.music.repository.MusicAlbumRepository;
 import com.omninest.modules.music.repository.MusicArtistRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
+import com.omninest.modules.user.domain.UserStatus;
+import com.omninest.modules.user.dto.UserDirectoryDtos.UserAuthorizationProfile;
 import com.omninest.modules.reader.service.TxtContentDecoder;
+import com.omninest.modules.user.service.UserDirectoryQueryService;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -114,6 +119,7 @@ public class MusicAdminService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final MusicCoverRetentionService coverRetentionService;
     private final TxtContentDecoder txtContentDecoder;
+    private final UserDirectoryQueryService userDirectoryQueryService;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -321,7 +327,9 @@ public class MusicAdminService {
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto updateTrack(UUID ownerUserId, UUID trackId, UpdateMusicTrackRequest request) {
         log.info("更新音乐曲目: trackId={}", trackId);
-        MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireWritableTrack(ownerUserId, trackId);
+        // 歌手/专辑与统计必须落在曲目真实归属人名下，否则会在管理员个人曲库凭空建出重复目录。
+        UUID catalogOwnerId = track.getOwnerUserId();
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
         UUID previousCoverFileId = track.getCoverFileId();
@@ -329,8 +337,8 @@ public class MusicAdminService {
         // 同步 music_artists / music_albums 实体，重关联 FK
         String artistName = request.artistName() != null ? request.artistName().trim() : track.getArtistName();
         String albumTitle = request.albumTitle() != null ? request.albumTitle().trim() : track.getAlbumTitle();
-        var artist = catalogService.resolveArtist(ownerUserId, artistName, null, null);
-        var album = catalogService.resolveAlbum(ownerUserId, albumTitle, artistName, null, null, null, null);
+        var artist = catalogService.resolveArtist(catalogOwnerId, artistName, null, null);
+        var album = catalogService.resolveAlbum(catalogOwnerId, albumTitle, artistName, null, null, null, null);
 
         if (request.title() != null) {
             String title = request.title().trim();
@@ -357,10 +365,10 @@ public class MusicAdminService {
         trackRepository.save(track);
         // 封面未变时不能回收：未携带 coverFileId 只表示“不修改”，不是替换。
         if (previousCoverFileId != null && !previousCoverFileId.equals(track.getCoverFileId())) {
-            coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
+            coverRetentionService.releaseUnreferenced(catalogOwnerId, previousCoverFileId);
         }
-        catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
-        recordTrackUpdated(ownerUserId, track);
+        catalogService.refreshStatistics(catalogOwnerId, previousArtistId, previousAlbumId, track);
+        recordTrackUpdated(catalogOwnerId, track);
         return musicLibraryService.toTrackDto(track, false);
     }
 
@@ -381,14 +389,43 @@ public class MusicAdminService {
         }
     }
 
+    /**
+     * 曲目元数据可写判据：所有者本人，或共享空间曲目且操作者具备媒体库/系统配置管理权限。
+     *
+     * <p>与影视模块的 requireWritableVideo 同口径；其余情况统一按 FORBIDDEN 返回，
+     * 避免把“可读但不可写”误报成资源不存在。</p>
+     */
+    private MusicTrack requireWritableTrack(UUID operatorUserId, UUID trackId) {
+        MusicTrack track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
+        if (track.getOwnerUserId().equals(operatorUserId)) {
+            return track;
+        }
+        FileDescriptor file = fileMetadataQueryService.findActiveById(track.getFileNodeId()).orElse(null);
+        boolean sharedSpace = file != null && SpaceType.SHARED == file.spaceType();
+        if (sharedSpace && canManageSharedCatalog(operatorUserId)) {
+            return track;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该音乐资源");
+    }
+
+    private boolean canManageSharedCatalog(UUID operatorUserId) {
+        UserAuthorizationProfile profile = userDirectoryQueryService.requireAuthorizationProfile(operatorUserId);
+        if (!UserStatus.ACTIVE.getValue().equals(profile.status())) {
+            return false;
+        }
+        return profile.permissions().contains(Permissions.MEDIA_LIBRARY_MANAGE)
+                || profile.permissions().contains(Permissions.SYSTEM_CONFIG_MANAGE);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto applyLyrics(UUID ownerUserId, UUID trackId, String lyrics, String lyricsTranslation) {
         log.info("应用歌词: trackId={}", trackId);
-        MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireWritableTrack(ownerUserId, trackId);
         track.setLyricsRaw(lyrics);
         track.setLyricsTranslation(lyricsTranslation);
         trackRepository.save(track);
-        recordTrackUpdated(ownerUserId, track);
+        recordTrackUpdated(track.getOwnerUserId(), track);
         log.info(
                 "歌词已应用: trackId={}, length={}, hasTranslation={}",
                 trackId,

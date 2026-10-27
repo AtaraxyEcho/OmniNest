@@ -14,6 +14,8 @@ import com.omninest.modules.video.domain.MediaTvEpisode;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
+import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
 import com.omninest.modules.video.event.MediaScrapeRequestedEvent;
 import com.omninest.modules.video.event.VideoProbeEvent;
@@ -180,26 +182,63 @@ public class MovieScrapeExecutionService {
      * 下载并入库主海报/背景图；返回全空表示本次不需要同步或同步未产出可用对象。
      */
     private ScrapeAssetRefs fetchAssetRefs(ScrapeAssetPlan plan, ScrapeCandidateDto candidate) {
-        if (plan == null || !plan.requireAssets()) {
+        if (plan == null) {
             return ScrapeAssetRefs.empty();
+        }
+        // 演职员头像与海报/背景图同样是一次 HTTP + 对象存储写入，必须留在事务外。
+        Map<String, UUID> profileFileIds = fetchProfileImages(plan, candidate);
+        if (!plan.requireAssets()) {
+            return new ScrapeAssetRefs(null, null, profileFileIds);
         }
         if (plan.series()) {
             ContentAssetService.SeriesAssetResult assets =
                     contentAssetService.syncPrimarySeriesAssets(plan.ownerUserId(), plan.resourceId(), candidate);
-            return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId());
+            return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId(), profileFileIds);
         }
         ContentAssetService.MovieAssetResult assets =
                 contentAssetService.syncPrimaryMovieAssets(plan.resourceId(), plan.ownerUserId(), candidate);
-        return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId());
+        return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId(), profileFileIds);
     }
+
+    /**
+     * 下载演职员头像：同一张 profilePath 在一次刮削内只下载一次。
+     */
+    private Map<String, UUID> fetchProfileImages(ScrapeAssetPlan plan, ScrapeCandidateDto candidate) {
+        Map<String, String> pathsByName = new LinkedHashMap<>();
+        if (candidate.castMembers() != null) {
+            for (CastMemberDto member : candidate.castMembers()) {
+                if (member.profilePath() != null && !member.profilePath().isBlank()) {
+                    pathsByName.putIfAbsent(member.profilePath(), member.name());
+                }
+            }
+        }
+        if (candidate.crewMembers() != null) {
+            for (CrewMemberDto member : candidate.crewMembers()) {
+                if (member.profilePath() != null && !member.profilePath().isBlank()) {
+                    pathsByName.putIfAbsent(member.profilePath(), member.name());
+                }
+            }
+        }
+        if (pathsByName.isEmpty()) {
+            return Map.of();
+        }
+        String resourceType = plan.series() ? ResourceType.TV_SERIES.getValue() : ResourceType.MOVIE.getValue();
+        Map<String, UUID> fileIdsByPath = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : pathsByName.entrySet()) {
+            UUID fileId = storeProfileImage(
+                    plan.ownerUserId(), plan.resourceId(), resourceType, entry.getKey(), entry.getValue());
+            if (fileId != null) {
+                fileIdsByPath.put(entry.getKey(), fileId);
+            }
+        }
+        return fileIdsByPath;
+    }
+
 
     /**
      * 把已入库的资产引用回填到电影或系列行上。
      */
     private void applyAssetRefs(ScrapeAssetPlan plan, ScrapeAssetRefs refs) {
-        if (refs.posterFileId() == null && refs.backdropFileId() == null) {
-            return;
-        }
         if (plan.series()) {
             MediaTvSeries series = tvSeriesRepository
                     .findByIdAndOwnerUserId(plan.resourceId(), plan.ownerUserId())
@@ -207,13 +246,20 @@ public class MovieScrapeExecutionService {
             if (series == null) {
                 return;
             }
+            boolean changed = false;
             if (refs.posterFileId() != null) {
                 series.setPosterFileId(refs.posterFileId());
+                changed = true;
             }
             if (refs.backdropFileId() != null) {
                 series.setBackdropFileId(refs.backdropFileId());
+                changed = true;
             }
-            tvSeriesRepository.save(series);
+            changed |= applyProfileFileIds(series.getCastMembers(), refs.profileFileIds());
+            changed |= applyProfileFileIds(series.getCrewMembers(), refs.profileFileIds());
+            if (changed) {
+                tvSeriesRepository.save(series);
+            }
             return;
         }
         MediaMovie movie = movieRepository
@@ -222,13 +268,39 @@ public class MovieScrapeExecutionService {
         if (movie == null) {
             return;
         }
+        boolean changed = false;
         if (refs.posterFileId() != null) {
             movie.setPosterFileId(refs.posterFileId());
+            changed = true;
         }
         if (refs.backdropFileId() != null) {
             movie.setBackdropFileId(refs.backdropFileId());
+            changed = true;
         }
-        movieRepository.save(movie);
+        changed |= applyProfileFileIds(movie.getCastMembers(), refs.profileFileIds());
+        changed |= applyProfileFileIds(movie.getCrewMembers(), refs.profileFileIds());
+        if (changed) {
+            movieRepository.save(movie);
+        }
+    }
+
+    private boolean applyProfileFileIds(List<Map<String, Object>> members, Map<String, UUID> profileFileIds) {
+        if (members == null || members.isEmpty() || profileFileIds.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        for (Map<String, Object> member : members) {
+            Object path = member.get("profilePath");
+            if (path == null) {
+                continue;
+            }
+            UUID fileId = profileFileIds.get(path.toString());
+            if (fileId != null && !fileId.toString().equals(member.get("profileFileId"))) {
+                member.put("profileFileId", fileId.toString());
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /**
@@ -245,10 +317,14 @@ public class MovieScrapeExecutionService {
     /**
      * 外部图片本地化后的资产引用。
      */
-    private record ScrapeAssetRefs(UUID posterFileId, UUID backdropFileId) {
+    private record ScrapeAssetRefs(
+            UUID posterFileId,
+            UUID backdropFileId,
+            Map<String, UUID> profileFileIds
+    ) {
 
         static ScrapeAssetRefs empty() {
-            return new ScrapeAssetRefs(null, null);
+            return new ScrapeAssetRefs(null, null, Map.of());
         }
     }
 
@@ -550,13 +626,6 @@ public class MovieScrapeExecutionService {
                 m.put("character", member.character());
                 if (member.profilePath() != null) {
                     m.put("profilePath", member.profilePath());
-                    UUID profileFileId = storeProfileImage(
-                            movie.getOwnerUserId(),
-                            movie.getId(),
-                            ResourceType.MOVIE.getValue(),
-                            member.profilePath(),
-                            member.name());
-                    if (profileFileId != null) m.put("profileFileId", profileFileId.toString());
                 }
                 if (member.order() != null) m.put("order", member.order());
                 castMaps.add(m);
@@ -572,13 +641,6 @@ public class MovieScrapeExecutionService {
                 m.put("department", member.department());
                 if (member.profilePath() != null) {
                     m.put("profilePath", member.profilePath());
-                    UUID profileFileId = storeProfileImage(
-                            movie.getOwnerUserId(),
-                            movie.getId(),
-                            ResourceType.MOVIE.getValue(),
-                            member.profilePath(),
-                            member.name());
-                    if (profileFileId != null) m.put("profileFileId", profileFileId.toString());
                 }
                 crewMaps.add(m);
             }
@@ -676,13 +738,6 @@ public class MovieScrapeExecutionService {
                 m.put("character", member.character());
                 if (member.profilePath() != null) {
                     m.put("profilePath", member.profilePath());
-                    UUID profileFileId = storeProfileImage(
-                            series.getOwnerUserId(),
-                            series.getId(),
-                            ResourceType.TV_SERIES.getValue(),
-                            member.profilePath(),
-                            member.name());
-                    if (profileFileId != null) m.put("profileFileId", profileFileId.toString());
                 }
                 if (member.order() != null) m.put("order", member.order());
                 castMaps.add(m);
@@ -699,13 +754,6 @@ public class MovieScrapeExecutionService {
                 m.put("department", member.department());
                 if (member.profilePath() != null) {
                     m.put("profilePath", member.profilePath());
-                    UUID profileFileId = storeProfileImage(
-                            series.getOwnerUserId(),
-                            series.getId(),
-                            ResourceType.TV_SERIES.getValue(),
-                            member.profilePath(),
-                            member.name());
-                    if (profileFileId != null) m.put("profileFileId", profileFileId.toString());
                 }
                 crewMaps.add(m);
             }

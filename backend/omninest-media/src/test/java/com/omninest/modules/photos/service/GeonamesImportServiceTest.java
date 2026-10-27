@@ -74,6 +74,7 @@ class GeonamesImportServiceTest {
     private TaskRecordService taskRecordService;
     private GeoCityIndex geoCityIndex;
     private DomainEventPublisher eventPublisher;
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private GeoDataset dataset;
     private GeonamesImportService service;
 
@@ -84,6 +85,7 @@ class GeonamesImportServiceTest {
         taskRecordService = Mockito.mock(TaskRecordService.class);
         geoCityIndex = Mockito.mock(GeoCityIndex.class);
         eventPublisher = Mockito.mock(DomainEventPublisher.class);
+        jdbcTemplate = Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
 
         dataset = new GeoDataset();
         dataset.setId(UUID.randomUUID());
@@ -120,6 +122,7 @@ class GeonamesImportServiceTest {
                 taskRecordService,
                 new TransactionTemplate(transactionManager),
                 geoCityIndex,
+                jdbcTemplate,
                 eventPublisher);
 
         write("cities5000.txt", CITIES_FILE);
@@ -164,11 +167,19 @@ class GeonamesImportServiceTest {
                 .orElseThrow()
                 .name());
 
-        verify(cityRepository).updateCityNameZh(dataset.getId(), 1809858L, "广州市");
+        ArgumentCaptor<java.util.List<Object[]>> cityNameBatches = ArgumentCaptor.captor();
+        verify(jdbcTemplate).batchUpdate(Mockito.anyString(), cityNameBatches.capture());
+        java.util.List<Object[]> batchArgs = cityNameBatches.getValue();
+        assertEquals(1, batchArgs.size());
+        assertEquals("广州市", batchArgs.get(0)[0]);
+        assertEquals(dataset.getId(), batchArgs.get(0)[1]);
+        assertEquals(1809858L, batchArgs.get(0)[2]);
         verify(cityRepository).updateProvinceNameZh(dataset.getId(), "Guangdong", "广东省");
         verify(cityRepository).updateCountryNameZh(dataset.getId(), "CN", "中国");
-        // 范围外的候选不回填。
-        verify(cityRepository, never()).updateCityNameZh(eq(dataset.getId()), eq(9999999L), anyString());
+        // 范围外的候选不进批次。
+        assertEquals(0L, batchArgs.stream()
+                .filter(args -> Long.valueOf(9999999L).equals(args[2]))
+                .count());
 
         assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
         ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.captor();
@@ -202,7 +213,7 @@ class GeonamesImportServiceTest {
         service.executeImportTask(UUID.randomUUID());
 
         assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
-        verify(cityRepository, never()).updateCityNameZh(any(), anyLong(), anyString());
+        verify(jdbcTemplate, never()).batchUpdate(anyString(), anyList());
         verify(cityRepository, never()).updateProvinceNameZh(any(), anyString(), anyString());
         verify(cityRepository, never()).updateCountryNameZh(any(), anyString(), anyString());
     }
@@ -215,7 +226,7 @@ class GeonamesImportServiceTest {
         service.executeImportTask(UUID.randomUUID());
 
         verify(cityRepository, never()).upsertCities(any(), anyList());
-        verify(cityRepository).updateCityNameZh(dataset.getId(), 1809858L, "广州市");
+        verify(jdbcTemplate).batchUpdate(anyString(), anyList());
         assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
     }
 

@@ -145,7 +145,7 @@ public class WeatherService {
         final String apiLang = normalizeLang(lang);
 
         if (!"true".equalsIgnoreCase(config.get("weather.enabled"))) {
-            return WeatherDto.empty();
+            return WeatherDto.disabled();
         }
 
         String baseUrl = config.get("weather.qweather.url");
@@ -163,7 +163,7 @@ public class WeatherService {
                 resolved = resolveLocation(fallbackLocation, config, apiLang);
             }
             if (resolved == null) {
-                return WeatherDto.empty();
+                return WeatherDto.locationNotFound();
             }
         }
 
@@ -301,7 +301,7 @@ public class WeatherService {
     private WeatherDto withLocationName(WeatherDto weather, String locationName) {
         String target = locationName != null ? locationName : "";
         if (weather == null) {
-            return WeatherDto.empty();
+            return WeatherDto.upstreamError();
         }
         if (target.isBlank() || target.equals(weather.locationName())) {
             return weather;
@@ -315,7 +315,8 @@ public class WeatherService {
                 weather.tempMax(), weather.tempMin(), weather.precip(), weather.windScale(),
                 weather.textDay(), weather.textNight(),
                 weather.hourly(), weather.daily(),
-                target
+                target,
+                weather.status()
         );
     }
 
@@ -609,7 +610,8 @@ public class WeatherService {
             today != null ? getStringSafe(today, "textNight", "--") : "--",
             hourlyForecasts,
             dailyForecasts,
-            locationName != null ? locationName : ""
+            locationName != null ? locationName : "",
+            WeatherDto.STATUS_OK
         );
     }
 

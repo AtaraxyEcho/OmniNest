@@ -26,21 +26,27 @@ class TagPhotosState {
     required this.items,
     this.hasMore = false,
     this.isLoadingMore = false,
+    this.total = 0,
   });
 
   final List<PhotoItem> items;
   final bool hasMore;
   final bool isLoadingMore;
 
+  /// 标签关联的照片总数（服务端 totalElements），不是已加载条数。
+  final int total;
+
   TagPhotosState copyWith({
     List<PhotoItem>? items,
     bool? hasMore,
     bool? isLoadingMore,
+    int? total,
   }) {
     return TagPhotosState(
       items: items ?? this.items,
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      total: total ?? this.total,
     );
   }
 }
@@ -56,7 +62,11 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
   Future<TagPhotosState> build() async {
     _page = 0;
     final first = await ref.watch(photoRepositoryProvider).listByTagPage(tag);
-    return TagPhotosState(items: first.items, hasMore: first.hasMore);
+    return TagPhotosState(
+      items: first.items,
+      hasMore: first.hasMore,
+      total: first.totalElements,
+    );
   }
 
   Future<void> loadMore() async {
@@ -75,7 +85,13 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
         ...current.items,
         ...next.items.where((item) => !seen.contains(item.id)),
       ];
-      state = AsyncData(TagPhotosState(items: merged, hasMore: next.hasMore));
+      state = AsyncData(
+        TagPhotosState(
+          items: merged,
+          hasMore: next.hasMore,
+          total: next.totalElements,
+        ),
+      );
     } on Object {
       // 失败只复位加载中标志：整份回滚 await 前抓的快照会覆盖请求窗口内的写入，
       // 尾部重试行由视图承载。

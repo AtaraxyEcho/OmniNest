@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
+import 'package:omninest/features/portal/presentation/widgets/weather_degraded_notice.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_layout.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
 
@@ -135,6 +136,20 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.weather.isDegraded) {
+      // 未启用/位置解析失败/上游故障：给出可操作提示，而不是满屏 "--"。
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: WeatherDegradedNotice(status: widget.weather.status),
+        ),
+      );
+    }
     final viewport = MediaQuery.sizeOf(context);
     final metrics = WeatherDetailLayoutMetrics.resolve(viewport);
     final spec = WeatherSceneSpec.from(widget.weather);

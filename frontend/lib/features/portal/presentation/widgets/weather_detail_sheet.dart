@@ -14,6 +14,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_controller.d
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
+import 'package:omninest/features/portal/presentation/widgets/weather_degraded_notice.dart';
 
 /// 样例 `.weather-scene` 的固定带高。
 const double _weatherSceneBandHeight = 250;
@@ -183,6 +184,19 @@ class _WeatherDetailSheet extends StatelessWidget {
     // 样例 --safe-bottom 是 max(12px, env(safe-area-inset-bottom))，
     // 抽屉底至少留 12。
     final safeBottom = max(12.0, MediaQuery.paddingOf(context).bottom);
+    if (weather.isDegraded) {
+      // 降级态只给原因与重试入口，避免整屏 "--" 占位符。
+      return Container(
+        width: isWide ? 600 : double.infinity,
+        padding: EdgeInsets.only(bottom: safeBottom),
+        decoration: BoxDecoration(
+          color: context.env.sheetSolid,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          border: Border(top: BorderSide(color: context.env.line13)),
+        ),
+        child: WeatherDegradedNotice(status: weather.status),
+      );
+    }
     return Container(
       width: isWide ? 600 : double.infinity,
       constraints: BoxConstraints(maxHeight: maxHeight),

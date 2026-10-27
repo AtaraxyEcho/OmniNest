@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -90,7 +91,9 @@ class _MusicPlatformLoggedInCardState
           radius: 22,
           backgroundColor: widget.accentColor.withValues(alpha: 0.15),
           backgroundImage:
-              user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+              user.avatarUrl.isNotEmpty
+                  ? CachedNetworkImageProvider(user.avatarUrl)
+                  : null,
           child:
               user.avatarUrl.isEmpty
                   ? Icon(

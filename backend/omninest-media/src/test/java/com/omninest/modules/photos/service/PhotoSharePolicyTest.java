@@ -49,7 +49,7 @@ class PhotoSharePolicyTest {
                 false,
                 null,
                 List.of(),
-                null,
+                Map.of("city", "Beijing", "gps_latitude", 1.5, "Address", "北京市"),
                 null,
                 "READY",
                 "https://example/motion.mp4",
@@ -66,12 +66,25 @@ class PhotoSharePolicyTest {
     }
 
     @Test
-    void applySharePolicy_stripsGpsWhenLocationDisabled() {
+    void applySharePolicy_stripsGpsAndOriginalLinksWhenLocationDisabled() {
         PhotoItemDto result = PhotoAlbumService.applySharePolicy(dto(), false, true);
         assertThat(result.gpsLatitude()).isNull();
         assertThat(result.gpsLongitude()).isNull();
         assertThat(result.gpsLocation()).isNull();
-        assertThat(result.sourceUrl()).isEqualTo("https://example/source");
+        // 原图与实况视频内嵌 EXIF 坐标，关闭位置时连同封面原图一起撤下。
+        assertThat(result.sourceUrl()).isNull();
+        assertThat(result.motionVideoUrl()).isNull();
+        // 独立派生封面不含原图元数据，关闭位置时仍然可用。
+        assertThat(result.coverUrl()).isEqualTo("https://example/cover");
+    }
+
+    @Test
+    void applySharePolicy_stripsLocationKeysFromProviderMetadataWhenLocationDisabled() {
+        PhotoItemDto result = PhotoAlbumService.applySharePolicy(dto(), false, false);
+
+        assertThat(result.providerMetadata())
+                .containsEntry("city", "Beijing")
+                .doesNotContainKeys("gps_latitude", "Address");
     }
 
     @Test
@@ -84,10 +97,18 @@ class PhotoSharePolicyTest {
     }
 
     @Test
-    void applySharePolicy_hidesCoverWhenItPointsToOriginal() {
+    void applySharePolicy_keepsOriginalCoverWhenLocationVisible() {
+        // 包含位置时封面原图不构成位置泄露；置空会让没有派生缩略图的照片破图。
         PhotoItemDto result = PhotoAlbumService.applySharePolicy(dto(FILE_NODE_ID), true, false);
 
-        assertThat(result.coverUrl()).isNull();
+        assertThat(result.coverUrl()).isEqualTo("https://example/cover");
         assertThat(result.sourceUrl()).isNull();
+    }
+
+    @Test
+    void applySharePolicy_hidesOriginalCoverWhenLocationHidden() {
+        PhotoItemDto result = PhotoAlbumService.applySharePolicy(dto(FILE_NODE_ID), false, false);
+
+        assertThat(result.coverUrl()).isNull();
     }
 }

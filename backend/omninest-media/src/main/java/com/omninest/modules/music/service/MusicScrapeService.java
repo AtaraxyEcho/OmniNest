@@ -60,6 +60,7 @@ public class MusicScrapeService {
     private final MusicLibraryService musicLibraryService;
     private final NotificationPublisher notificationService;
     private final MusicCatalogService catalogService;
+    private final MusicCoverRetentionService coverRetentionService;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final List<MusicMetadataProvider> metadataProviders;
     private final TaskRecordService taskRecordService;
@@ -144,8 +145,8 @@ public class MusicScrapeService {
         track.setMetadataStatus(MetadataStatus.MATCHED.getValue());
         trackRepository.save(track);
 
-        // 下载封面到 MinIO 并设置 coverFileId
-        downloadCover(ownerUserId, track, request.coverUrl());
+        // 手动应用候选的意图就是纠错：允许替换旧封面并按引用回收旧资产。
+        downloadCover(ownerUserId, track, request.coverUrl(), true, null);
 
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
         return musicLibraryService.toTrackDto(track, isFavorite(ownerUserId, trackId));
@@ -230,6 +231,8 @@ public class MusicScrapeService {
             // N+1 优化：artist/album 缓存加批量统计刷新。
             Map<String, MusicArtist> artistCache = new LinkedHashMap<>();
             Map<String, MusicAlbum> albumCache = new LinkedHashMap<>();
+            // 同专辑多曲目共用同一封面地址：缓存已入库的派生节点，避免重复下载与重复建对象。
+            Map<String, UUID> coverCache = new LinkedHashMap<>();
             Set<UUID> affectedArtistIds = new HashSet<>();
             Set<UUID> affectedAlbumIds = new HashSet<>();
 
@@ -263,9 +266,9 @@ public class MusicScrapeService {
                         }
                         log.info("[刮削] 命中: trackId={}, score={}", track.getId(), best.score());
                         applyCandidateBatchCached(ownerUserId, track, best,
-                                favoriteTrackIds.contains(track.getId()),
+                                favoriteTrackIds.contains(track.getId()), force,
                                 artistCache, albumCache,
-                                affectedArtistIds, affectedAlbumIds);
+                                affectedArtistIds, affectedAlbumIds, coverCache);
                         matched++;
                     } catch (RuntimeException ex) {
                         log.warn("刮削失败: trackId={}, errorType={}",
@@ -452,8 +455,8 @@ public class MusicScrapeService {
                 track.getId(), candidate.score(), candidate.coverUrl() != null && !candidate.coverUrl().isBlank(),
                 externalIds.get("musicbrainzRecordingId") != null);
 
-        // 下载封面到 MinIO 并设置 coverFileId
-        downloadCover(ownerUserId, track, candidate.coverUrl());
+        // 未缓存的批量路径没有 force 上下文：保持“已有封面不覆盖”的旧语义。
+        downloadCover(ownerUserId, track, candidate.coverUrl(), false, null);
 
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
     }
@@ -464,9 +467,11 @@ public class MusicScrapeService {
      */
     private void applyCandidateBatchCached(
             UUID ownerUserId, MusicTrack track, MusicScrapeCandidateDto candidate, boolean favorite,
+            boolean force,
             Map<String, MusicArtist> artistCache,
             Map<String, MusicAlbum> albumCache,
-            Set<UUID> affectedArtistIds, Set<UUID> affectedAlbumIds
+            Set<UUID> affectedArtistIds, Set<UUID> affectedAlbumIds,
+            Map<String, UUID> coverCache
     ) {
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
@@ -513,8 +518,8 @@ public class MusicScrapeService {
                 track.getId(), candidate.score(), candidate.coverUrl() != null && !candidate.coverUrl().isBlank(),
                 externalIds.get("musicbrainzRecordingId") != null);
 
-        // 下载封面到 MinIO 并设置 coverFileId
-        downloadCover(ownerUserId, track, candidate.coverUrl());
+        // 自动扫描默认保留原封面；显式强制重刮时才覆盖，并复用同专辑已下载的封面。
+        downloadCover(ownerUserId, track, candidate.coverUrl(), force, coverCache);
 
         // 收集受影响的 artist/album ID（不逐个刷新，最后批量刷新）
         if (previousArtistId != null) affectedArtistIds.add(previousArtistId);
@@ -552,19 +557,32 @@ public class MusicScrapeService {
      * 下载封面图片到 MinIO 并设置 track.coverFileId。
      * 跳过条件：coverUrl 为空、track 已有 coverFileId、或下载失败。
      */
-    private void downloadCover(UUID ownerUserId, MusicTrack track, String coverUrl) {
+    private void downloadCover(
+            UUID ownerUserId,
+            MusicTrack track,
+            String coverUrl,
+            boolean overwriteExisting,
+            Map<String, UUID> coverCache
+    ) {
         if (coverUrl == null || coverUrl.isBlank()) {
             return;
         }
-        if (track.getCoverFileId() != null) {
+        if (!overwriteExisting && track.getCoverFileId() != null) {
             log.debug("封面已存在，跳过下载: trackId={}, coverFileId={}", track.getId(), track.getCoverFileId());
             return;
         }
+        String cacheKey = coverUrl.trim();
+        UUID cached = coverCache == null ? null : coverCache.get(cacheKey);
+        if (cached != null) {
+            applyCoverFileId(track, cached);
+            return;
+        }
+        UUID previousCoverFileId = track.getCoverFileId();
         try {
             String fileName = "cover-" + track.getId() + ".jpg";
             UUID coverFileId = derivedAssetStorageService.storeRemote(new DerivedAssetRequest(
                     ownerUserId,
-                    coverUrl,
+                    cacheKey,
                     ResourceType.MUSIC_TRACK.getValue(),
                     track.getId(),
                     AssetType.POSTER.getValue(),
@@ -572,12 +590,34 @@ public class MusicScrapeService {
                     "image/jpeg",
                     SpaceType.PERSONAL
             ));
-            track.setCoverFileId(coverFileId);
-            trackRepository.save(track);
+            applyCoverFileId(track, coverFileId);
+            if (coverCache != null) {
+                coverCache.put(cacheKey, coverFileId);
+            }
+            if (previousCoverFileId != null && !previousCoverFileId.equals(coverFileId)) {
+                releaseCoverQuietly(track.getOwnerUserId(), previousCoverFileId);
+            }
             log.info("[封面下载] trackId={}, coverFileId={}", track.getId(), coverFileId);
         } catch (RuntimeException ex) {
             log.warn("[封面下载失败] trackId={}, errorType={}",
                     track.getId(), ex.getClass().getSimpleName());
+        }
+    }
+
+    private void applyCoverFileId(MusicTrack track, UUID coverFileId) {
+        if (coverFileId.equals(track.getCoverFileId())) {
+            return;
+        }
+        track.setCoverFileId(coverFileId);
+        trackRepository.save(track);
+    }
+
+    private void releaseCoverQuietly(UUID ownerUserId, UUID coverFileId) {
+        try {
+            coverRetentionService.releaseUnreferenced(ownerUserId, coverFileId);
+        } catch (RuntimeException ex) {
+            log.warn("旧封面回收失败: coverFileId={}, errorType={}",
+                    coverFileId, ex.getClass().getSimpleName());
         }
     }
 }

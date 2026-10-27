@@ -210,7 +210,8 @@ class RedisWeatherCacheStoreTest {
                                 "2026-07-22", 27, 18, "101", "多云", "150", "晴"
                         )
                 ),
-                "贵阳"
+                "贵阳",
+                WeatherDto.STATUS_OK
         );
     }
 }

@@ -146,8 +146,9 @@ public class MusicLibraryService {
     @Transactional(readOnly = true)
     public Page<MusicAlbumDto> albums(UUID ownerUserId, int page, int size, String sort) {
         return albumRepository
-                .findActiveByOwnerUserId(
+                .findVisibleActiveAlbums(
                         ownerUserId,
+                        sharedVisibility(ownerUserId),
                         PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
                                 resolveSort(sort, ALBUM_SORT_FIELDS, Sort.by(Sort.Direction.DESC, "updatedAt"))))
                 .map(this::toAlbumDto);
@@ -162,9 +163,9 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public List<MusicTrackDto> albumTracks(UUID ownerUserId, UUID albumId) {
-        MusicAlbum album = albumRepository.findByIdAndOwnerUserId(albumId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findAlbumTracks(ownerUserId, album.getId()));
+        MusicAlbum album = requireVisibleAlbum(ownerUserId, albumId);
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleAlbumTracks(
+                ownerUserId, sharedVisibility(ownerUserId), album.getId()));
     }
 
     /**
@@ -172,10 +173,9 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> albumTracksPage(UUID ownerUserId, UUID albumId, int page, int size) {
-        MusicAlbum album = albumRepository.findByIdAndOwnerUserId(albumId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
-        Page<MusicTrack> trackPage = trackRepository.findAlbumTracksPage(
-                ownerUserId, album.getId(), trackPageRequest(page, size));
+        MusicAlbum album = requireVisibleAlbum(ownerUserId, albumId);
+        Page<MusicTrack> trackPage = trackRepository.findVisibleAlbumTracksPage(
+                ownerUserId, sharedVisibility(ownerUserId), album.getId(), trackPageRequest(page, size));
         return new PageImpl<>(
                 toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
                 trackPage.getPageable(),
@@ -192,9 +192,9 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public List<MusicTrackDto> artistTracks(UUID ownerUserId, UUID artistId) {
-        MusicArtist artist = artistRepository.findByIdAndOwnerUserId(artistId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findArtistTracks(ownerUserId, artist.getId()));
+        MusicArtist artist = requireVisibleArtist(ownerUserId, artistId);
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleArtistTracks(
+                ownerUserId, sharedVisibility(ownerUserId), artist.getId()));
     }
 
     /**
@@ -202,10 +202,9 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> artistTracksPage(UUID ownerUserId, UUID artistId, int page, int size) {
-        MusicArtist artist = artistRepository.findByIdAndOwnerUserId(artistId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
-        Page<MusicTrack> trackPage = trackRepository.findArtistTracksPage(
-                ownerUserId, artist.getId(), trackPageRequest(page, size));
+        MusicArtist artist = requireVisibleArtist(ownerUserId, artistId);
+        Page<MusicTrack> trackPage = trackRepository.findVisibleArtistTracksPage(
+                ownerUserId, sharedVisibility(ownerUserId), artist.getId(), trackPageRequest(page, size));
         return new PageImpl<>(
                 toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
                 trackPage.getPageable(),
@@ -221,11 +220,44 @@ public class MusicLibraryService {
     @Transactional(readOnly = true)
     public Page<MusicArtistDto> artists(UUID ownerUserId, int page, int size, String sort) {
         return artistRepository
-                .findActiveByOwnerUserId(
+                .findVisibleActiveArtists(
                         ownerUserId,
+                        sharedVisibility(ownerUserId),
                         PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
                                 resolveSort(sort, ARTIST_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "name"))))
                 .map(this::toArtistDto);
+    }
+
+    /**
+     * 专辑详情放行判据：本人名下，或共享空间内存在可见曲目；其余按不存在处理防枚举。
+     */
+    private MusicAlbum requireVisibleAlbum(UUID userId, UUID albumId) {
+        MusicAlbum album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
+        if (album.getOwnerUserId().equals(userId)) {
+            return album;
+        }
+        SpaceType sharedType = sharedVisibility(userId);
+        if (sharedType != null && trackRepository.existsVisibleAlbumTrack(userId, sharedType, albumId)) {
+            return album;
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在");
+    }
+
+    /**
+     * 歌手详情放行判据：本人名下，或共享空间内存在可见曲目；其余按不存在处理防枚举。
+     */
+    private MusicArtist requireVisibleArtist(UUID userId, UUID artistId) {
+        MusicArtist artist = artistRepository.findById(artistId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
+        if (artist.getOwnerUserId().equals(userId)) {
+            return artist;
+        }
+        SpaceType sharedType = sharedVisibility(userId);
+        if (sharedType != null && trackRepository.existsVisibleArtistTrack(userId, sharedType, artistId)) {
+            return artist;
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在");
     }
 
     /**
@@ -255,7 +287,8 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public List<MusicAlbumDto> artistAlbums(UUID ownerUserId, UUID artistId) {
-        return albumRepository.findActiveByOwnerUserIdAndArtistId(ownerUserId, artistId).stream()
+        return albumRepository.findVisibleActiveAlbumsByArtist(
+                        ownerUserId, sharedVisibility(ownerUserId), artistId).stream()
                 .map(this::toAlbumDto)
                 .toList();
     }
@@ -353,22 +386,25 @@ public class MusicLibraryService {
         // 并且三条查询都要声明 escape 符。
         String normalized = LikePatterns.escapeSpecials(trimmed);
         return new MusicSearchResultDto(
-                toTrackSummaryDtos(ownerUserId, trackRepository.searchByOwnerUserId(
+                toTrackSummaryDtos(ownerUserId, trackRepository.searchVisibleToUser(
                         ownerUserId,
+                        sharedVisibility(ownerUserId),
                         normalized,
                         PageRequest.of(0, 20)
                 )),
                 albumRepository
-                        .searchActiveByOwnerUserId(
+                        .searchVisibleActiveAlbums(
                                 ownerUserId,
+                                sharedVisibility(ownerUserId),
                                 normalized
                         )
                         .stream()
                         .map(this::toAlbumDto)
                         .toList(),
                 artistRepository
-                        .searchActiveByOwnerUserId(
+                        .searchVisibleActiveArtists(
                                 ownerUserId,
+                                sharedVisibility(ownerUserId),
                                 normalized
                         )
                         .stream()

@@ -29,10 +29,11 @@ class LocalFallbackRateLimiterTest {
     void restartsCountAfterWindowElapsed() throws InterruptedException {
         String key = "local-expiry-" + UUID.randomUUID();
 
-        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(60))).isTrue();
-        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(60))).isFalse();
-        Thread.sleep(120);
-        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(60))).isTrue();
+        // 窗口取 300ms：60ms 在并行构建的 JVM 停顿下会让“窗口内第二次”偶发过期。
+        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(300))).isTrue();
+        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(300))).isFalse();
+        Thread.sleep(700);
+        assertThat(LocalFallbackRateLimiter.tryAcquire(key, 1, Duration.ofMillis(300))).isTrue();
     }
 
     @Test

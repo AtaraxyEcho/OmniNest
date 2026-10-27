@@ -226,11 +226,17 @@ class MovieScrapeExecutionServiceTest {
         );
         when(provider.search(new FileNameGuess("示例剧集", 2019, null, null))).thenReturn(List.of(candidate));
         when(tvSeriesRepository.findByTmdbIdAndOwnerUserId(1399, OWNER_ID)).thenReturn(Optional.empty());
+        java.util.concurrent.atomic.AtomicReference<MediaTvSeries> savedSeries =
+                new java.util.concurrent.atomic.AtomicReference<>();
         when(tvSeriesRepository.save(any(MediaTvSeries.class))).thenAnswer(invocation -> {
             MediaTvSeries series = invocation.getArgument(0);
             series.setId(SERIES_ID);
+            savedSeries.set(series);
             return series;
         });
+        // 头像在事务外下载、第二段事务按主键回读剧集行后回填。
+        when(tvSeriesRepository.findByIdAndOwnerUserId(SERIES_ID, OWNER_ID))
+                .thenAnswer(invocation -> java.util.Optional.ofNullable(savedSeries.get()));
         when(contentAssetService.syncPrimarySeriesAssets(any(), any(), eq(candidate)))
                 .thenReturn(new ContentAssetService.SeriesAssetResult(null, null));
         when(tvSeasonRepository.save(any(MediaTvSeason.class))).thenAnswer(invocation -> invocation.getArgument(0));

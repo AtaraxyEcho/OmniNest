@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -396,7 +397,11 @@ public class PhotoAlbumService {
     }
 
     /**
-     * 按分享策略裁剪公开照片 DTO：关闭位置时剥离 GPS；关闭原图时不签发 sourceUrl。
+     * 按分享策略裁剪公开照片 DTO。
+     *
+     * <p>关闭“包含位置”时不签发任何原始文件直链（sourceUrl / motionVideoUrl / 以原图为封面），
+     * 并剥离 providerMetadata 中的位置键：原图与实况视频内嵌的 EXIF/XMP 会直接给出拍摄坐标，
+     * 流式重编码剥离元数据会破坏 ICC 色彩与 HDR 增益图，因此采用策略互斥而不是改写字节。</p>
      */
     static PhotoItemDto applySharePolicy(
             PhotoItemDto dto,
@@ -406,10 +411,11 @@ public class PhotoAlbumService {
         if (includeLocation && originalQuality) {
             return dto;
         }
-        // coverFileId 缺失或等于源文件时，coverUrl 实际就是原图：隐私限制下不能下发。
+        // coverFileId 缺失或等于源文件时，coverUrl 实际就是原图：仅在隐藏位置时必须撤下。
+        // 包含位置但要求预览质量时保留封面，避免没有派生缩略图的照片直接破图。
         boolean coverIsOriginal = dto.coverFileId() == null
                 || dto.coverFileId().equals(dto.fileNodeId());
-        String coverUrl = coverIsOriginal ? null : dto.coverUrl();
+        String coverUrl = (!includeLocation && coverIsOriginal) ? null : dto.coverUrl();
         return new PhotoItemDto(
                 dto.id(),
                 dto.fileNodeId(),
@@ -435,18 +441,43 @@ public class PhotoAlbumService {
                 dto.format(),
                 dto.fileSize(),
                 coverUrl,
-                originalQuality ? dto.sourceUrl() : null,
+                includeLocation && originalQuality ? dto.sourceUrl() : null,
                 dto.metadataStatus(),
                 dto.favorite(),
                 dto.createdAt(),
                 dto.tags(),
-                dto.providerMetadata(),
+                includeLocation ? dto.providerMetadata() : stripLocationMetadata(dto.providerMetadata()),
                 dto.contentAnalysis(),
                 dto.motionState(),
-                originalQuality ? dto.motionVideoUrl() : null,
+                includeLocation && originalQuality ? dto.motionVideoUrl() : null,
                 dto.edited(),
                 dto.coverFileId()
         );
+    }
+
+    private static final Set<String> LOCATION_METADATA_KEYS = Set.of(
+            "gps", "gpslatitude", "gpslongitude", "location", "address",
+            "latitude", "longitude", "lat", "lon", "rawexifgps"
+    );
+
+    /**
+     * 剥离 providerMetadata 中的位置键（键名大小写与下划线不敏感）。
+     */
+    private static Map<String, Object> stripLocationMetadata(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return metadata;
+        }
+        Map<String, Object> filtered = new HashMap<>();
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            String normalized = entry.getKey() == null
+                    ? ""
+                    : entry.getKey().replace("_", "").replace("-", "").toLowerCase(Locale.ROOT);
+            if (normalized.contains("gps") || LOCATION_METADATA_KEYS.contains(normalized)) {
+                continue;
+            }
+            filtered.put(entry.getKey(), entry.getValue());
+        }
+        return filtered;
     }
 
     /**

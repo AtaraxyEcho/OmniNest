@@ -61,24 +61,6 @@ public interface GeoCityRepository extends JpaRepository<GeoCity, UUID>, GeoCity
     List<Long> findGeonameIdsByDatasetId(@Param("datasetId") UUID datasetId);
 
     /**
-     * 回填城市中文名。
-     *
-     * @return 更新行数
-     */
-    @Modifying
-    @Query(value = """
-            UPDATE omni.geo_cities
-            SET name_zh = :nameZh
-            WHERE dataset_id = :datasetId AND geoname_id = :geonameId
-              AND (name_zh IS NULL OR name_zh <> :nameZh)
-            """, nativeQuery = true)
-    int updateCityNameZh(
-            @Param("datasetId") UUID datasetId,
-            @Param("geonameId") long geonameId,
-            @Param("nameZh") String nameZh
-    );
-
-    /**
      * 按一级行政区英文名批量回填中文名。
      *
      * @return 更新行数

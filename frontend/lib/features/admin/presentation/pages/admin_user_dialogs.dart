@@ -272,16 +272,30 @@ class _EditUserRolesDialog extends ConsumerStatefulWidget {
 }
 
 class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
-  late final Set<String> _roles =
-      widget.user.roles
-          .where((role) => AdminRoles.manageableRoles.contains(role))
-          .toSet();
+  /// 完整保留用户现有角色（含自定义角色）：旧实现先按内置清单过滤，
+  /// 保存时会把 FAMILY_MEMBER/AUDITOR 之一静默清空。
+  late final Set<String> _roles = {...widget.user.roles};
   bool _submitting = false;
   String? _errorMessage;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final rolesAsync = ref.watch(adminRolesProvider);
+    final roleLabels = <String, String>{};
+    for (final role in rolesAsync.asData?.value.roles ?? const []) {
+      roleLabels[role.code] = role.name;
+    }
+    // 角色清单加载中/失败时退回“内置角色 + 用户已有角色”，保证任何情况下都能保存。
+    final selectableRoles =
+        <String>{
+            for (final role in AdminRoles.allRoles)
+              if (role != AdminRoles.superAdmin) role,
+            ...roleLabels.keys.where((role) => role != AdminRoles.superAdmin),
+            ...widget.user.roles.where((role) => role != AdminRoles.superAdmin),
+            ..._roles.where((role) => role != AdminRoles.superAdmin),
+          }.toList()
+          ..sort();
     return WorkstationDialogFrame(
       title: l10n.adminEditRoles(widget.user.title),
       width: 460,
@@ -295,10 +309,12 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final role in AdminRoles.manageableRoles)
+              for (final role in selectableRoles)
                 FilterChip(
                   selected: _roles.contains(role),
-                  label: Text(adminRoleDisplayName(l10n, role)),
+                  label: Text(
+                    roleLabels[role] ?? adminRoleDisplayName(l10n, role),
+                  ),
                   onSelected: (selected) {
                     setState(() {
                       if (selected) {
