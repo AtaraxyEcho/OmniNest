@@ -45,10 +45,12 @@ void main() {
     },
   );
 
-  test('Web 首帧取色脚本与 Dart 侧的键名和极性值不漂移', () {
+  test('启动阶段底色三处同源，首帧脚本不改写页面底色', () {
     final indexSource = File('web/index.html').readAsStringSync();
     final themeBootSource =
         File('web/js/omninest-theme-boot.js').readAsStringSync();
+    final shellCss = File('web/css/omninest-shell.css').readAsStringSync();
+    final manifestSource = File('web/manifest.json').readAsStringSync();
     String hex(Color color) =>
         '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
@@ -62,14 +64,33 @@ void main() {
       reason: 'index.html 不得保留内联脚本体',
     );
 
-    // 浅色档必须等于托管面的 scaffold 底色，否则首帧与第一帧之间会跳色。
+    // Flutter 启动画面、Web 引擎首帧、PWA 启动屏必须同色：三处都是纯色，
+    // 任何一处不同都会在冷启动时跳一次。
+    final bootColor = hex(MobileEnvPalette.dark.stage);
+    expect(
+      shellCss,
+      contains('var(--omninest-boot-bg, $bootColor)'),
+      reason: '引擎首帧底色要和 MobileEnvPalette.dark.stage 同值',
+    );
+    expect(
+      manifestSource,
+      contains('"background_color": "$bootColor"'),
+      reason: 'PWA 启动屏底色要和启动画面同值',
+    );
+    expect(themeBootSource, contains("DARK = '$bootColor'"));
+
+    // 首帧脚本只定系统栏取色。改写页面底色会让浅色偏好用户经历
+    // 「浅底 → 深色品牌页 → 浅色界面」两次跳色。
+    expect(
+      themeBootSource,
+      isNot(contains("setProperty('--omninest-boot-bg'")),
+      reason: '启动画面固定深色，首帧底色不得随主题极性改写',
+    );
     expect(
       themeBootSource,
       contains("LIGHT = '${hex(MobileEnvPalette.light.stageSolid)}'"),
-      reason: '首帧浅色底要和 MobileEnvPalette.light.stageSolid 同值',
+      reason: '浅色偏好下的系统栏取色仍要等于 MobileEnvPalette.light.stageSolid',
     );
-    // 深色档沿用既有兜底值：本次只补浅色，不动冷启动深色基线。
-    expect(themeBootSource, contains("DARK = '#0b1110'"));
     expect(indexSource, contains('<meta name="theme-color" content="#0b1110"'));
 
     // 脚本读的是 SharedPreferences 的 Web 落盘键，前缀 flutter. 由该实现固定。
@@ -79,10 +100,5 @@ void main() {
     // 改写目标按 id 定位，id 漂移会让首帧脚本与运行期绑定各写各的。
     expect(indexSource, contains('id="omninest-theme-color"'));
     expect(themeBootSource, contains("getElementById('omninest-theme-color')"));
-
-    // 底色由 CSS 变量接管，缺省仍是设计基准的 #09100f（无脚本时保持深色）。
-    final shellCss = File('web/css/omninest-shell.css').readAsStringSync();
-    expect(shellCss, contains('var(--omninest-boot-bg, #09100f)'));
-    expect(themeBootSource, contains("'--omninest-boot-bg'"));
   });
 }

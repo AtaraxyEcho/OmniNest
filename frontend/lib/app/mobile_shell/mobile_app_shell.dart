@@ -17,7 +17,6 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
-import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -197,12 +196,11 @@ class _MobileTopBar extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Row(
                 children: [
-                  // 透明底标记的可视内容只占画布宽约 70%，取与搜索钮同档的
-                  // 48 才能在顶栏读成品牌位；圆角对透明图不产生裁切，仅按
-                  // 其余展示位约 29% 的比例保持数值一致。
-                  const BrandLogo(size: 48, radius: 14),
+                  // 移动端顶栏不设品牌位：品牌标记是 512px 插画，缩到 48 后细节
+                  // 糊成色带，且与右侧账户头像构成「两个人像」的语义撞车。桌面
+                  // 顶栏保留标记（那里有更大字号档与更长的横向空间），移动端
+                  // 退为纯 chrome，让首页的居中大时钟成为唯一视觉中心。
                   if (!isHome) ...[
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

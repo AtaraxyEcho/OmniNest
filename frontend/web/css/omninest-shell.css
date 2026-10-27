@@ -1,9 +1,12 @@
-/* 引擎首帧前的底色：与移动端启动屏/舞台底色一致，避免冷启动闪白。
-   取设计基准 .boot-screen 的 #09100f（应用内舞台为 #0b1110）。
-   浅色极性由 index.html 的首帧脚本改写 --omninest-boot-bg，缺省仍保持深色。 */
+/* 引擎首帧前的底色：与 Flutter 启动画面（MobileEnvPalette.dark.stage）以及
+   PWA manifest 的 background_color 三处同值 #0b1110，避免冷启动在纯色之间
+   跳一次。
+   首帧脚本不再按主题极性改写这个值：Flutter 首帧是固定深色的品牌页，浅色
+   偏好下若先把底铺成浅色，就会变成「浅底 → 深色品牌页 → 浅色界面」两次
+   跳色。变量保留给外部覆盖，缺省即最终值。 */
 html, body {
   margin: 0;
   padding: 0;
-  background-color: var(--omninest-boot-bg, #09100f);
+  background-color: var(--omninest-boot-bg, #0b1110);
   height: 100%;
 }

@@ -12,7 +12,6 @@ import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
-import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -253,10 +252,11 @@ void main() {
     }
   });
 
-  testWidgets('顶栏无背景：仅品牌/标题 + 搜索 + 头像，无铃铛与壁纸按钮', (tester) async {
+  testWidgets('顶栏无背景：首页只有搜索 + 头像，不设品牌位', (tester) async {
     await pumpShell(tester, initialLocation: '/portal');
-    // 首页顶栏只保留品牌标记，不出现品牌字标与多余动作。
-    expect(find.byType(BrandLogo), findsOneWidget);
+    // 图形标记是 512px 人物插画，压进 48px 顶栏后没有可读性，还会与右侧
+    // 账户头像构成两个人像。品牌归启动、登录与关于，常驻外壳不再承载。
+    expect(find.byType(BrandLogo), findsNothing);
     expect(find.text('OmniNest'), findsNothing);
     expect(find.byIcon(Icons.wallpaper_rounded), findsNothing);
     expect(find.byIcon(Icons.notifications_none), findsNothing);
@@ -270,21 +270,6 @@ void main() {
       ),
     );
     expect(searchIcon.color, MobileEnvPalette.dark.ink);
-    // 品牌标记不得低于搜索钮那一档：透明底标记的可视内容只占画布宽约 70%，
-    // 尺寸回落后会在顶栏里读成一个孤立小点。
-    final brandSize = tester.getSize(find.byType(BrandLogo));
-    final searchTargetSize = tester.getSize(
-      find.ancestor(
-        of: find.descendant(
-          of: find.byType(Tooltip),
-          matching: find.byWidgetPredicate(
-            (widget) => widget is OmniIcon && widget.icon == OmniIcons.search,
-          ),
-        ),
-        matching: find.byType(MobilePressable),
-      ),
-    );
-    expect(brandSize.width, greaterThanOrEqualTo(searchTargetSize.width));
     // 顶栏内容行之上没有带颜色背景的装饰盒（透明呈现在环境上）。
     // 基准内容带 64，无障碍字号下由 scaleHeight 自撑，因此只断言下限。
     final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));

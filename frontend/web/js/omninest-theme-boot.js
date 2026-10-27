@@ -1,6 +1,10 @@
 // 引擎首帧之前定色。运行期的 BrowserThemeColorBinding 要等第一帧之后才生效，
-// 浅色偏好用户在此之前看到的是深色系统栏与深色底。这里只能复现启动读取的
-// 规则：设备级偏好优先，缺省跟随系统极性；登录后的远端偏好仍由 Dart 侧覆盖。
+// 浅色偏好用户在此之前看到的是深色系统栏。这里只能复现启动读取的规则：
+// 设备级偏好优先，缺省跟随系统极性；登录后的远端偏好仍由 Dart 侧覆盖。
+//
+// 只定系统栏取色，不定页面底色：Flutter 首帧是固定深色的品牌页，底色由
+// omninest-shell.css 的 #0b1110 铺定并与启动画面同值。若在浅色偏好下先把
+// 页面底色铺浅，就会出现「浅底 → 深色品牌页 → 浅色界面」两次跳色。
 //
 // 该文件必须是外部脚本：后端 CSP 为 script-src 'self' 'wasm-unsafe-eval'，
 // 内联脚本会被浏览器拒绝执行。
@@ -31,7 +35,4 @@
   document
     .getElementById('omninest-theme-color')
     .setAttribute('content', color);
-  if (isLight) {
-    document.documentElement.style.setProperty('--omninest-boot-bg', color);
-  }
 })();
