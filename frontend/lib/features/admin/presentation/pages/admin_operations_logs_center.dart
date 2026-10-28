@@ -217,7 +217,12 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
               _AuditLogTab(
                 page: auditPage,
                 busy: auditAsync.isLoading,
-                failed: auditAsync.hasError && auditPage == null,
+                errorMessage:
+                    auditAsync.hasError && auditPage == null
+                        ? describeUserFacingError(
+                          auditAsync.error!,
+                        ).displayMessage
+                        : null,
                 onPageChanged: (page) => setState(() => _auditPage = page),
                 pageSize: _pageSize,
                 onRowsPerPageChanged: _changePageSize,
@@ -236,7 +241,12 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
               _LoginAuditLogTab(
                 page: loginPage,
                 busy: loginAsync.isLoading,
-                failed: loginAsync.hasError && loginPage == null,
+                errorMessage:
+                    loginAsync.hasError && loginPage == null
+                        ? describeUserFacingError(
+                          loginAsync.error!,
+                        ).displayMessage
+                        : null,
                 onPageChanged: (page) => setState(() => _loginPage = page),
                 pageSize: _pageSize,
                 onRowsPerPageChanged: _changePageSize,
@@ -409,11 +419,11 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
         l10n.adminCleanupCompleted('$count'),
         severity: OmniFeedbackSeverity.success,
       );
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.adminLoadFailed(''),
+        describeUserFacingError(error, l10n: l10n).displayMessage,
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -454,7 +464,7 @@ class _AuditLogTab extends StatelessWidget {
   const _AuditLogTab({
     required this.page,
     required this.busy,
-    required this.failed,
+    required this.errorMessage,
     required this.onPageChanged,
     required this.sort,
     required this.onSort,
@@ -465,7 +475,7 @@ class _AuditLogTab extends StatelessWidget {
 
   final AdminPage<AdminAuditLog>? page;
   final bool busy;
-  final bool failed;
+  final String? errorMessage;
   final ValueChanged<int> onPageChanged;
   final AdminListSort sort;
   final void Function(String columnKey, bool ascending) onSort;
@@ -478,12 +488,14 @@ class _AuditLogTab extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final result = page;
     if (result == null) {
-      return failed
-          ? Center(child: Text(l10n.adminLoadFailed('')))
-          : const Padding(
-            padding: EdgeInsets.all(16),
-            child: AdminListSkeleton(),
-          );
+      final message = errorMessage;
+      if (message != null) {
+        return Center(child: Text(l10n.adminLoadFailed(message)));
+      }
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: AdminListSkeleton(),
+      );
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 16),
@@ -614,7 +626,7 @@ class _LoginAuditLogTab extends StatelessWidget {
   const _LoginAuditLogTab({
     required this.page,
     required this.busy,
-    required this.failed,
+    required this.errorMessage,
     required this.onPageChanged,
     required this.sort,
     required this.onSort,
@@ -624,7 +636,7 @@ class _LoginAuditLogTab extends StatelessWidget {
 
   final AdminPage<AdminLoginAuditItem>? page;
   final bool busy;
-  final bool failed;
+  final String? errorMessage;
   final ValueChanged<int> onPageChanged;
   final AdminListSort sort;
   final void Function(String columnKey, bool ascending) onSort;
@@ -636,12 +648,14 @@ class _LoginAuditLogTab extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final result = page;
     if (result == null) {
-      return failed
-          ? Center(child: Text(l10n.adminLoadFailed('')))
-          : const Padding(
-            padding: EdgeInsets.all(16),
-            child: AdminListSkeleton(),
-          );
+      final message = errorMessage;
+      if (message != null) {
+        return Center(child: Text(l10n.adminLoadFailed(message)));
+      }
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: AdminListSkeleton(),
+      );
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 16),

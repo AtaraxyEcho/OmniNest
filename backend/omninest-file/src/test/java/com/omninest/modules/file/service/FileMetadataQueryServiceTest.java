@@ -26,9 +26,11 @@ class FileMetadataQueryServiceTest {
     private static final UUID OBJECT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
+    private final com.omninest.modules.file.repository.FileNodeScanQueryRepository scanQueryRepository =
+            mock(com.omninest.modules.file.repository.FileNodeScanQueryRepository.class);
     private final FileObjectRepository fileObjectRepository = mock(FileObjectRepository.class);
     private final FileMetadataQueryService service = new FileMetadataQueryService(
-            fileNodeRepository, fileObjectRepository);
+            fileNodeRepository, scanQueryRepository, fileObjectRepository);
 
     /**
      * 验证文件实体被映射为不可变描述符。

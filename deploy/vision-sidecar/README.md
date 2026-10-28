@@ -17,10 +17,10 @@
 | 接口 | 说明 |
 | --- | --- |
 | `POST /analyze-content?hint=AUTO\|TEXT_GRAPHIC\|NATURAL_PHOTO&skipOcr=false` | 返回 `schemaVersion`、`pipelineVersion`、`ocrPipelineVersion`、`observations`、`semanticTags` 与 `ocrText` |
-| `GET /health` | 返回进程状态、当前视觉档位与流水线版本 |
-| `GET /ready` | 返回同样的状态；侧车进程可服务即返回 HTTP 200 |
+| `GET /health` | 返回进程存活状态，供容器 HEALTHCHECK 使用 |
+| `GET /ready` | 返回不透明流水线版本指纹与 OCR 版本；进程可服务即返回 HTTP 200 |
 
-上传图片会校验字节数、宽高、像素总数和实际编码。OCR 为常驻能力；轻量视觉模型文件缺失时 OCR 仍可用，`/ready` 会返回 `visionModelState=missing`，且流水线版本带 `-missing` 后缀。补齐模型并重启后版本变为 `-ready`，后端会据此重新分析。
+上传图片会校验字节数、宽高、像素总数和实际编码。OCR 为常驻能力；轻量视觉模型文件缺失时 OCR 仍可用，`/ready` 仍返回 200，只是流水线版本指纹随模型文件状态变化（指纹不含档位与缺失状态明文）。补齐模型并重启后指纹随之变化，后端会据此重新分析。
 
 ## 模型资产
 

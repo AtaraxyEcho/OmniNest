@@ -67,9 +67,9 @@ public class PhotoAiConsumer {
                 retryService.handlePhotoAiFailure(event, e);
                 channel.basicAck(deliveryTag, false);
             } catch (RuntimeException retryException) {
-                log.error("照片 AI 任务失败状态写入失败，将重新投递原消息: taskId={}",
+                log.error("照片 AI 任务失败状态写入失败，转入死信队列: taskId={}",
                         event.taskId(), retryException);
-                channel.basicNack(deliveryTag, false, true);
+                channel.basicNack(deliveryTag, false, false);
             }
         }
     }

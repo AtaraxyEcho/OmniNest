@@ -625,12 +625,21 @@ public class FileQueryService {
         Map<UUID, FileNode> nodesById = fileNodeRepository
                 .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
+        // 同一批次里父目录与其后代同时出现时，父目录的移动已经带着后代整体换路径。
+        Set<UUID> carriedByAncestor = nodesById.values().stream()
+                .filter(candidate -> nodesById.values().stream()
+                        .anyMatch(other -> candidate.isPathInside(other)))
+                .map(FileNode::getId).collect(Collectors.toSet());
         List<UUID> affectedFileIds = new ArrayList<>();
         int movedCount = 0;
         for (UUID fileId : fileIds) {
             FileNode node = nodesById.get(fileId);
             if (node == null) {
                 results.add(BatchItemResult.skipped(fileId, "文件不存在或已删除"));
+                continue;
+            }
+            if (carriedByAncestor.contains(fileId)) {
+                results.add(BatchItemResult.failed(fileId, ErrorCode.PARAM_ERROR.name(), "父级目录已在本次批量移动中"));
                 continue;
             }
             try {

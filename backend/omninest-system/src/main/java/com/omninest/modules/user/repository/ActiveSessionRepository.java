@@ -157,7 +157,18 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
             @Param("reason") String reason);
 
     /**
-     * 通过会话 ID 查询（含已撤销）。
+     * 通过会话 ID 查询（不加锁，含已撤销）。
+     *
+     * <p>只做存在性与状态判断的调用方必须走本方法：持锁事务里再开独立事务更新同一行
+     * 会形成跨连接自死锁。加锁查询仅供刷新令牌轮换使用。</p>
+     */
+    @Query("select session from AuthActiveSession session "
+            + "where session.id = :sessionId and session.userId = :userId")
+    Optional<AuthActiveSession> findSessionSnapshot(
+            @Param("sessionId") UUID sessionId, @Param("userId") UUID userId);
+
+    /**
+     * 通过会话 ID 查询（含已撤销），并加排他行锁以串行化刷新令牌轮换。
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AuthActiveSession> findByIdAndUserId(UUID sessionId, UUID userId);

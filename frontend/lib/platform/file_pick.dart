@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -94,13 +96,62 @@ final class PickedFile {
     return XFile(localPath).readAsBytes();
   }
 
-  /// 转成可上传的 [XFile]：本地路径优先，Web 或无路径时按字节构造。
+  /// 转成可上传的 [XFile]：本地路径优先，Web 直接复用浏览器文件句柄。
+  ///
+  /// Web 端不能先 [readBytes] 再构造：那会按文件大小复制一份 `Uint8List`，
+  /// 大文件（EPUB/漫画包）直接撑爆标签页；`PlatformFile.xFile` 底层持有
+  /// Blob 句柄，`openRead` 按块读取。调用方显式要求的 MIME 用包装对象覆盖，
+  /// 不为此回退到整份读取。
   Future<XFile> toXFile({String? mimeType}) async {
     final localPath = path;
     if (!kIsWeb && localPath != null && localPath.isNotEmpty) {
       return XFile(localPath, name: name, mimeType: mimeType);
     }
-    final bytes = await readBytes();
-    return XFile.fromData(bytes, name: name, mimeType: mimeType);
+    final source = _source.xFile;
+    if (mimeType == null || mimeType == source.mimeType) {
+      return source;
+    }
+    return _MimeTypedXFile(source, mimeType, name);
   }
+}
+
+/// 只覆盖 MIME 类型与展示名、其余读写全部委托给底层 [XFile] 的包装。
+///
+/// 用于 Web 上既保留浏览器 Blob 的流式读取，又把调用方声明的 MIME
+/// 带给上传链路，避免为了改 MIME 把整份文件读进内存。
+final class _MimeTypedXFile implements XFile {
+  _MimeTypedXFile(this._delegate, this._mimeType, this._name);
+
+  final XFile _delegate;
+  final String _mimeType;
+  final String _name;
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  String get name => _name;
+
+  @override
+  String get mimeType => _mimeType;
+
+  @override
+  Future<int> length() => _delegate.length();
+
+  @override
+  Future<Uint8List> readAsBytes() => _delegate.readAsBytes();
+
+  @override
+  Stream<Uint8List> openRead([int? start, int? end]) =>
+      _delegate.openRead(start, end);
+
+  @override
+  Future<String> readAsString({Encoding encoding = utf8}) =>
+      _delegate.readAsString(encoding: encoding);
+
+  @override
+  Future<void> saveTo(String path) => _delegate.saveTo(path);
+
+  @override
+  Future<DateTime> lastModified() => _delegate.lastModified();
 }

@@ -480,7 +480,11 @@ class _ConfigHistoryDialog extends ConsumerWidget {
         error:
             (error, _) => Padding(
               padding: const EdgeInsets.all(32),
-              child: Text(l10n.adminLoadFailed('$error')),
+              child: Text(
+                l10n.adminLoadFailed(
+                  describeUserFacingError(error, l10n: l10n).displayMessage,
+                ),
+              ),
             ),
         data: (items) {
           if (items.isEmpty) {

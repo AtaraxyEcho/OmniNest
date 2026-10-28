@@ -110,6 +110,32 @@ class ReaderImportCandidate {
   final String sizeDisplay;
 }
 
+/// 可导入候选列表：服务端超出上限时会截断，客户端需显式提示。
+class ReaderImportCandidates {
+  const ReaderImportCandidates({required this.items, required this.truncated});
+
+  /// 从导入候选接口数据创建。
+  factory ReaderImportCandidates.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    final items =
+        rawItems is List
+            ? rawItems
+                .whereType<Map<String, dynamic>>()
+                .map(ReaderImportCandidate.fromJson)
+                .toList(growable: false)
+            : const <ReaderImportCandidate>[];
+    return ReaderImportCandidates(
+      items: items,
+      truncated: json['truncated'] == true,
+    );
+  }
+
+  final List<ReaderImportCandidate> items;
+
+  /// 是否还有更多候选未返回（服务端按上限截断）。
+  final bool truncated;
+}
+
 /// 封面候选图片（文件管理中已托管的图片节点，供"从文件选择封面"列出）
 class ReaderCoverCandidate {
   const ReaderCoverCandidate({

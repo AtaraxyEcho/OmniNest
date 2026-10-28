@@ -70,6 +70,9 @@ public class MediaPublicContentController {
     ) throws IOException {
         MediaContentAccessService.TokenVideoAccess access =
                 mediaContentAccessService.requireTokenVideoAccess(token, videoItemId);
+        // 转码开关与容器格式都可能快速失败：先校验再固定 media 响应头，
+        // 否则 503/400 会以 video/mp4 的损坏流发给播放器。
+        videoStreamService.requireStreamable(access.item().getOwnerUserId(), access.item().getId());
         response.setContentType("video/mp4");
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader("Transfer-Encoding", "chunked");

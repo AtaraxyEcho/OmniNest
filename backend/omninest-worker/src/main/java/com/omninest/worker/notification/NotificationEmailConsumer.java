@@ -55,9 +55,9 @@ public class NotificationEmailConsumer {
             retryService.handleFailure(event, exception);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException stateException) {
-            log.error("邮件投递失败状态写入异常，将重新投递原消息: taskId={}, errorType={}",
+            log.error("邮件投递失败状态写入异常，转入死信队列: taskId={}, errorType={}",
                     event.taskId(), stateException.getClass().getSimpleName(), stateException);
-            channel.basicNack(deliveryTag, false, true);
+            channel.basicNack(deliveryTag, false, false);
         }
     }
 }

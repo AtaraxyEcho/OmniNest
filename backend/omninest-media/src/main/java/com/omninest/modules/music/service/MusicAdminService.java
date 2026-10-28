@@ -5,6 +5,7 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.media.domain.MetadataStatus;
+import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
@@ -91,6 +92,10 @@ public class MusicAdminService {
             TaskStatus.RUNNING.getValue(),
             TaskStatus.RETRY_WAIT.getValue()
     );
+    /** 音乐扫描只取音频分类；歌词文件由独立查询补齐。 */
+    private static final List<String> MUSIC_SCAN_CATEGORIES = List.of(FileTypeCategories.AUDIO);
+    /** 扫描分页大小：每批处理完即释放。 */
+    private static final int SCAN_PAGE_SIZE = 500;
 
     /** 派生封面存储的资源类型与资产类型，与手动上传共用同一前缀。 */
     private static final String COVER_RESOURCE_TYPE = "MUSIC_COVER";
@@ -191,77 +196,28 @@ public class MusicAdminService {
 
         int imported = 0;
         try {
-            List<FileDescriptor> ownedNodes = fileMetadataQueryService.listOwnedActive(ownerUserId);
-            List<FileDescriptor> allSharedNodes = fileMetadataQueryService.listSharedVisibleToUser(ownerUserId);
-            Set<UUID> viewableSharedFileIds = filePermissionService.resolveViewableFileIds(
-                    allSharedNodes.stream().map(FileDescriptor::id).toList(), ownerUserId);
-            List<FileDescriptor> sharedNodes = allSharedNodes.stream()
-                    .filter(node -> viewableSharedFileIds.contains(node.id()))
-                    .toList();
-
-            List<FileDescriptor> nodes = new ArrayList<>(ownedNodes);
-            nodes.addAll(sharedNodes);
-
-            Map<String, FileDescriptor> lyricFilesByBasePath = nodes.stream()
-                    .filter(this::isLrcFile)
-                    .collect(Collectors.toMap(
-                            node -> basePathKey(node.normalizedPath()),
-                            Function.identity(),
-                            (left, right) -> left
-                    ));
-
-            // N+1 优化: artist/album 缓存 + 批量统计刷新
-            Map<String, MusicArtist> artistCache = new LinkedHashMap<>();
-            Map<String, MusicAlbum> albumCache = new LinkedHashMap<>();
-            // 统计必须按实际归属人刷新：共享文件首次建索引时曲目落在文件所有者名下，
-            // 记到扫描者账上会让所有者的歌手/专辑曲目数失真。
-            Map<UUID, Set<UUID>> affectedArtistsByOwner = new LinkedHashMap<>();
-            Map<UUID, Set<UUID>> affectedAlbumsByOwner = new LinkedHashMap<>();
-            int visited = 0;
-            List<FileDescriptor> audioNodes = nodes.stream().filter(this::isAudioFile).toList();
+            Map<String, FileDescriptor> lyricFilesByBasePath = loadLyricFiles(ownerUserId);
+            // 进度分母用候选总量；共享文件里无权限的部分会让进度略低于 100%，完成时统一收敛。
+            long totalCandidates = fileMetadataQueryService.countOwnedActiveFilesByCategories(
+                            ownerUserId, MUSIC_SCAN_CATEGORIES)
+                    + fileMetadataQueryService.countSharedFilesByCategories(
+                            ownerUserId, MUSIC_SCAN_CATEGORIES);
             Semaphore ioPermits = new Semaphore(Math.max(1, scanPrefetchConcurrency));
+            ScanSession session;
             try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-                for (int start = 0; start < audioNodes.size(); start += Math.max(1, scanPrefetchBatchSize)) {
-                    List<FileDescriptor> chunk = audioNodes.subList(
-                            start,
-                            Math.min(start + Math.max(1, scanPrefetchBatchSize), audioNodes.size())
-                    );
-                    List<Future<PrefetchedAudio>> futures = chunk.stream()
-                            .map(file -> ioExecutor.submit(() -> prefetchAudio(file, lyricFilesByBasePath, ioPermits)))
-                            .toList();
-                    // 单线程顺序入库：artist/album 缓存与同名唯一键都不能并发写。
-                    for (Future<PrefetchedAudio> future : futures) {
-                        visited++;
-                        try {
-                            PrefetchedAudio prefetched = future.get();
-                            transactionTemplate.executeWithoutResult(status ->
-                                    importPrefetchedAudioCached(ownerUserId, prefetched,
-                                            artistCache, albumCache,
-                                            affectedArtistsByOwner, affectedAlbumsByOwner)
-                            );
-                            imported++;
-                        } catch (InterruptedException exception) {
-                            Thread.currentThread().interrupt();
-                            throw new IllegalStateException("音乐扫描等待预取结果时被中断", exception);
-                        } catch (ExecutionException | RuntimeException perFileError) {
-                            log.warn("音乐扫描单文件失败，跳过继续: jobId={}, errorType={}",
-                                    jobId, perFileError.getClass().getSimpleName());
-                        }
-                        if (!audioNodes.isEmpty()
-                                && (visited == audioNodes.size() || visited % 20 == 0)) {
-                            int progress = 10 + (int) Math.floor((visited * 80.0) / audioNodes.size());
-                            taskRecordService.updateExecution(jobId, "SCANNING", progress);
-                        }
-                    }
-                }
+                session = new ScanSession(
+                        jobId, ownerUserId, lyricFilesByBasePath, ioPermits, ioExecutor, totalCandidates);
+                scanOwnedAudioPages(session);
+                scanSharedAudioPages(session);
             }
+            imported = session.imported;
 
             // 批量刷新统计：逐个归属人刷新，包含被扫入共享文件的文件所有者。
-            for (Map.Entry<UUID, Set<UUID>> entry : affectedArtistsByOwner.entrySet()) {
+            for (Map.Entry<UUID, Set<UUID>> entry : session.affectedArtistsByOwner.entrySet()) {
                 catalogService.refreshStatisticsBatch(
                         entry.getKey(),
                         entry.getValue(),
-                        affectedAlbumsByOwner.getOrDefault(entry.getKey(), Set.of())
+                        session.affectedAlbumsByOwner.getOrDefault(entry.getKey(), Set.of())
                 );
             }
             job.setStatus(TaskStatus.COMPLETED.getValue());
@@ -269,7 +225,7 @@ public class MusicAdminService {
             job.setMessage("音乐库扫描完成，已处理 " + imported + " 个音频文件");
             taskRecordService.markCompleted(jobId, Map.of("imported", imported));
             // 扫描入库改变音乐仪表盘统计与最近列表，需失效缓存；共享曲目同时影响所有者。
-            Set<UUID> affectedOwners = new LinkedHashSet<>(affectedArtistsByOwner.keySet());
+            Set<UUID> affectedOwners = new LinkedHashSet<>(session.affectedArtistsByOwner.keySet());
             affectedOwners.add(ownerUserId);
             for (UUID affectedOwner : affectedOwners) {
                 readThroughCache.invalidate("omninest:dashboard:music:" + affectedOwner);
@@ -309,6 +265,161 @@ public class MusicAdminService {
             throw new IllegalStateException("音乐扫描失败", e);
         }
         scanJobRepository.save(job);
+    }
+
+    /**
+     * 一次扫描的游标、缓存与累计状态。
+     *
+     * <p>内部类而非方法参数：artist/album 缓存、失效归属与统计必须跨批保持，
+     * 而每批文件本身处理完即可释放。</p>
+     */
+    private final class ScanSession {
+        private final UUID jobId;
+        private final UUID ownerUserId;
+        private final Map<String, FileDescriptor> lyricFilesByBasePath;
+        private final Semaphore ioPermits;
+        private final ExecutorService ioExecutor;
+        private final long totalCandidates;
+        private final Map<String, MusicArtist> artistCache = new LinkedHashMap<>();
+        private final Map<String, MusicAlbum> albumCache = new LinkedHashMap<>();
+        private final Map<UUID, Set<UUID>> affectedArtistsByOwner = new LinkedHashMap<>();
+        private final Map<UUID, Set<UUID>> affectedAlbumsByOwner = new LinkedHashMap<>();
+        private int visited;
+        private int imported;
+        private long scannedCandidates;
+
+        private ScanSession(
+                UUID jobId,
+                UUID ownerUserId,
+                Map<String, FileDescriptor> lyricFilesByBasePath,
+                Semaphore ioPermits,
+                ExecutorService ioExecutor,
+                long totalCandidates
+        ) {
+            this.jobId = jobId;
+            this.ownerUserId = ownerUserId;
+            this.lyricFilesByBasePath = lyricFilesByBasePath;
+            this.ioPermits = ioPermits;
+            this.ioExecutor = ioExecutor;
+            this.totalCandidates = totalCandidates;
+        }
+
+        private void processPage(List<FileDescriptor> page) {
+            scannedCandidates += page.size();
+            List<FileDescriptor> audioFiles = page.stream()
+                    .filter(MusicAdminService.this::isAudioFile)
+                    .toList();
+            // 预取按固定小批推进：一页 500 条若一次性预取，内嵌封面与标签会同时驻留内存。
+            int chunkSize = Math.max(1, scanPrefetchBatchSize);
+            for (int start = 0; start < audioFiles.size(); start += chunkSize) {
+                processChunk(audioFiles.subList(start, Math.min(start + chunkSize, audioFiles.size())));
+            }
+            reportProgress();
+        }
+
+        private void processChunk(List<FileDescriptor> chunk) {
+            if (chunk.isEmpty()) {
+                return;
+            }
+            List<Future<PrefetchedAudio>> futures = chunk.stream()
+                    .map(file -> ioExecutor.submit(() -> prefetchAudio(file, lyricFilesByBasePath, ioPermits)))
+                    .toList();
+            // 单线程顺序入库：artist/album 缓存与同名唯一键都不能并发写。
+            for (Future<PrefetchedAudio> future : futures) {
+                visited++;
+                try {
+                    PrefetchedAudio prefetched = future.get();
+                    transactionTemplate.executeWithoutResult(status ->
+                            importPrefetchedAudioCached(ownerUserId, prefetched,
+                                    artistCache, albumCache,
+                                    affectedArtistsByOwner, affectedAlbumsByOwner)
+                    );
+                    imported++;
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("音乐扫描等待预取结果时被中断", exception);
+                } catch (ExecutionException | RuntimeException perFileError) {
+                    log.warn("音乐扫描单文件失败，跳过继续: jobId={}, errorType={}",
+                            jobId, perFileError.getClass().getSimpleName());
+                }
+                if (visited % 20 == 0) {
+                    reportProgress();
+                }
+            }
+        }
+
+        private void reportProgress() {
+            if (totalCandidates <= 0) {
+                return;
+            }
+            long processed = Math.min(scannedCandidates, totalCandidates);
+            int progress = 10 + (int) Math.floor(processed * 80.0 / totalCandidates);
+            taskRecordService.updateExecution(jobId, "SCANNING", Math.min(90, progress));
+        }
+    }
+
+    /**
+     * 歌词文件单独查询：数量级远小于音频，可一次载入并按目录基名匹配。
+     */
+    private Map<String, FileDescriptor> loadLyricFiles(UUID ownerUserId) {
+        Map<String, FileDescriptor> lyrics = new LinkedHashMap<>();
+        mergeLyricFiles(lyrics, fileMetadataQueryService.listOwnedLyricFiles(ownerUserId), false, ownerUserId);
+        mergeLyricFiles(lyrics, fileMetadataQueryService.listSharedLyricFiles(ownerUserId), true, ownerUserId);
+        return lyrics;
+    }
+
+    private void mergeLyricFiles(
+            Map<String, FileDescriptor> target,
+            List<FileDescriptor> candidates,
+            boolean shared,
+            UUID ownerUserId
+    ) {
+        for (FileDescriptor node : shared ? filterViewable(candidates, ownerUserId) : candidates) {
+            if (isLrcFile(node)) {
+                target.putIfAbsent(basePathKey(node.normalizedPath()), node);
+            }
+        }
+    }
+
+    private List<FileDescriptor> filterViewable(List<FileDescriptor> nodes, UUID ownerUserId) {
+        if (nodes.isEmpty()) {
+            return nodes;
+        }
+        Set<UUID> viewable = filePermissionService.resolveViewableFileIds(
+                nodes.stream().map(FileDescriptor::id).toList(), ownerUserId);
+        return nodes.stream().filter(node -> viewable.contains(node.id())).toList();
+    }
+
+    private void scanOwnedAudioPages(ScanSession session) {
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<FileDescriptor> page = fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                    session.ownerUserId, MUSIC_SCAN_CATEGORIES, afterId, SCAN_PAGE_SIZE);
+            if (page.isEmpty()) {
+                return;
+            }
+            session.processPage(page);
+            afterId = page.getLast().id();
+            if (page.size() < SCAN_PAGE_SIZE) {
+                return;
+            }
+        }
+    }
+
+    private void scanSharedAudioPages(ScanSession session) {
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<FileDescriptor> page = fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                    session.ownerUserId, MUSIC_SCAN_CATEGORIES, afterId, SCAN_PAGE_SIZE);
+            if (page.isEmpty()) {
+                return;
+            }
+            session.processPage(filterViewable(page, session.ownerUserId));
+            afterId = page.getLast().id();
+            if (page.size() < SCAN_PAGE_SIZE) {
+                return;
+            }
+        }
     }
 
     @Transactional(readOnly = true)

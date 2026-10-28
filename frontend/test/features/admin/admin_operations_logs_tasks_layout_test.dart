@@ -157,6 +157,73 @@ void main() {
     expect(find.text('批量重试'), findsOneWidget);
   });
 
+  testWidgets('任务页刷新后勾选仍跟随业务 ID 而不是行下标', (tester) async {
+    // 选择状态按业务 ID 保存：刷新导致行位置平移时，勾选必须跟着原任务走。
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final query = (
+      page: 0,
+      size: 10,
+      status: 'ALL',
+      taskType: 'ALL',
+      query: '',
+      sort: 'updatedAt',
+      dir: 'desc',
+    );
+    var items = <AdminTaskRecord>[
+      _taskRecord('task-a', 'FAILED'),
+      _taskRecord('task-b', 'FAILED'),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminTaskPageProvider(query).overrideWith(
+            (ref) async => AdminPage<AdminTaskRecord>(
+              items: items,
+              page: 0,
+              size: 10,
+              totalElements: items.length,
+              totalPages: 1,
+            ),
+          ),
+          adminDlqProvider.overrideWith((ref) async => const <AdminDlqTask>[]),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: Scaffold(body: const AdminTasksPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AdminTasksPage)),
+    );
+
+    await tester.tap(find.byType(Checkbox).at(1));
+    await tester.pumpAndSettle();
+    expect(find.text('已选 1 项'), findsOneWidget);
+
+    // 刷新后首行换人，task-a 从第一行移到第二行。
+    items = <AdminTaskRecord>[
+      _taskRecord('task-c', 'FAILED'),
+      _taskRecord('task-a', 'FAILED'),
+    ];
+    container.invalidate(adminTaskPageProvider(query));
+    await tester.pumpAndSettle();
+
+    final checkboxes =
+        tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
+    expect(checkboxes[1].value, isFalse, reason: '新首行不应被误勾选');
+    expect(checkboxes[2].value, isTrue, reason: '勾选应跟随 task-a');
+    expect(find.text('已选 1 项'), findsOneWidget);
+  });
+
   testWidgets('日志页在短桌面窗口中使用滚动布局', (tester) async {
     tester.view.physicalSize = const Size(1280, 360);
     tester.view.devicePixelRatio = 1;
@@ -733,4 +800,19 @@ void main() {
     expect(find.text('丢弃'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
+}
+
+/// 任务表格用例的固定行数据。
+AdminTaskRecord _taskRecord(String id, String status) {
+  return AdminTaskRecord(
+    id: id,
+    taskType: 'PHOTO_SCAN',
+    status: status,
+    progress: 0,
+    routingKey: 'omni.photo.scan',
+    errorSummary: null,
+    retryCount: 0,
+    createdAt: '2026-08-17T12:00:00Z',
+    updatedAt: '2026-08-17T12:00:00Z',
+  );
 }

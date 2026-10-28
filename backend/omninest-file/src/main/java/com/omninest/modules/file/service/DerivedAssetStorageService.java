@@ -329,7 +329,6 @@ public class DerivedAssetStorageService {
     /**
      * 将输入流保存为衍生资产文件（默认存入个人空间）。
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
                      String assetType, String fileName, String mimeType, InputStream data) {
         return store(ownerUserId, resourceType, resourceId, assetType, fileName, mimeType, data, SpaceType.PERSONAL);
@@ -347,7 +346,6 @@ public class DerivedAssetStorageService {
      * @param sourceFile 本地源文件
      * @return FileNode ID
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
                       String assetType, String fileName, String mimeType, Path sourceFile) {
         return store(
@@ -384,23 +382,8 @@ public class DerivedAssetStorageService {
                 copyBounded(data, out, MAX_FETCHED_DERIVED_ASSET_BYTES);
             }
             Path stagedFile = tempFile;
-            return storeInNewTransactionWithRetry(() -> {
-                try {
-                    return storeFile(
-                            ownerUserId,
-                            resourceType,
-                            resourceId,
-                            assetType,
-                            fileName,
-                            fileName,
-                            mimeType,
-                            stagedFile,
-                            spaceType
-                    );
-                } catch (IOException ex) {
-                    throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
-                }
-            });
+            return storeFile(ownerUserId, resourceType, resourceId, assetType,
+                    fileName, fileName, mimeType, stagedFile, spaceType);
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
         } finally {
@@ -430,23 +413,21 @@ public class DerivedAssetStorageService {
     public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
                       String assetType, String fileName, String mimeType,
                       Path sourceFile, SpaceType spaceType) {
-        return storeInNewTransactionWithRetry(() -> {
-            try {
-                return storeFile(
-                        ownerUserId,
-                        resourceType,
-                        resourceId,
-                        assetType,
-                        fileName,
-                        fileName,
-                        mimeType,
-                        sourceFile,
-                        spaceType
-                );
-            } catch (IOException ex) {
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
-            }
-        });
+        try {
+            return storeFile(
+                    ownerUserId,
+                    resourceType,
+                    resourceId,
+                    assetType,
+                    fileName,
+                    fileName,
+                    mimeType,
+                    sourceFile,
+                    spaceType
+            );
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
+        }
     }
 
     /**
@@ -465,23 +446,21 @@ public class DerivedAssetStorageService {
     public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
                       String assetType, String fileName, String storageFileName,
                       String mimeType, Path sourceFile) {
-        return storeInNewTransactionWithRetry(() -> {
-            try {
-                return storeFile(
-                        ownerUserId,
-                        resourceType,
-                        resourceId,
-                        assetType,
-                        fileName,
-                        storageFileName,
-                        mimeType,
-                        sourceFile,
-                        SpaceType.PERSONAL
-                );
-            } catch (IOException ex) {
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
-            }
-        });
+        try {
+            return storeFile(
+                    ownerUserId,
+                    resourceType,
+                    resourceId,
+                    assetType,
+                    fileName,
+                    storageFileName,
+                    mimeType,
+                    sourceFile,
+                    SpaceType.PERSONAL
+            );
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
+        }
     }
 
     private UUID storeFile(
@@ -520,14 +499,28 @@ public class DerivedAssetStorageService {
         );
         String normalizedPath = normalizedPath(resourceType, resourceId, assetType, fileName);
         requireTargetWritable(ownerUserId, normalizedPath);
+        // 对象上传与全文件摘要都在数据库事务之外完成：完整内容产物可达数十 GB，
+        // 放在事务里会在整个网络传输与磁盘摘要期间独占连接与行锁。
+        String objectSha256 = sha256(normalizedSource);
         try {
             objectStorageClient.putObject(stagingKey, normalizedSource, mimeType);
-            requireTargetWritable(ownerUserId, normalizedPath);
-            objectStorageClient.copyObject(stagingKey, finalKey);
+            return storeInNewTransactionWithRetry(() -> {
+                requireTargetWritable(ownerUserId, normalizedPath);
+                objectStorageClient.copyObject(stagingKey, finalKey);
+                return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
+                        bucketName, objectKey, normalizedPath, sizeBytes, objectSha256);
+            });
         } finally {
             removeStagingObject(stagingKey);
         }
+    }
 
+    /**
+     * 在独立事务内写入对象元数据与派生节点，只做轻量数据库操作。
+     */
+    private UUID persistFileMetadata(UUID ownerUserId, String fileName, String mimeType,
+            SpaceType spaceType, String bucketName, String objectKey,
+            String normalizedPath, long sizeBytes, String sha256) {
         FileObject object = fileObjectRepository
                 .findByBucketNameAndObjectKey(bucketName, objectKey)
                 .orElseGet(FileObject::new);
@@ -535,7 +528,7 @@ public class DerivedAssetStorageService {
         object.setObjectKey(objectKey);
         object.setMimeType(mimeType);
         object.setSizeBytes(sizeBytes);
-        object.setSha256(sha256(normalizedSource));
+        object.setSha256(sha256);
         FileObject savedObject = fileObjectRepository.save(object);
 
         FileNode node = fileNodeRepository
@@ -580,24 +573,23 @@ public class DerivedAssetStorageService {
             tempFile = downloaded.path();
             String mimeType = firstNonBlank(downloaded.mimeType(), request.mimeType(), "application/octet-stream");
             Path downloadedFile = tempFile;
-            // 必须使用 REQUIRES_NEW：唯一键冲突会把外层事务标记 rollback-only，重试不能复用。
-            return storeInNewTransactionWithRetry(() -> {
-                try {
-                    return storeFile(
-                            request.ownerUserId(),
-                            request.resourceType(),
-                            request.resourceId(),
-                            request.assetType(),
-                            request.fileName(),
-                            request.fileName(),
-                            mimeType,
-                            downloadedFile,
-                            request.spaceType() != null ? request.spaceType() : SpaceType.PERSONAL
-                    );
-                } catch (IOException exception) {
-                    throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件保存失败");
-                }
-            });
+            try {
+                // 元数据落在 storeFile 内部的独立新事务：唯一键冲突会把外层事务标记 rollback-only，
+                // 重试不能复用调用方事务。
+                return storeFile(
+                        request.ownerUserId(),
+                        request.resourceType(),
+                        request.resourceId(),
+                        request.assetType(),
+                        request.fileName(),
+                        request.fileName(),
+                        mimeType,
+                        downloadedFile,
+                        request.spaceType() != null ? request.spaceType() : SpaceType.PERSONAL
+                );
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件保存失败");
+            }
         } finally {
             if (tempFile != null) {
                 try {

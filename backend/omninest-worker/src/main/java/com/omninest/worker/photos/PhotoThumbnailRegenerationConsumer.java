@@ -42,8 +42,8 @@ public class PhotoThumbnailRegenerationConsumer {
                         e instanceof Exception exception ? exception : new IllegalStateException(e));
                 channel.basicAck(deliveryTag, false);
             } catch (RuntimeException stateException) {
-                log.error("缩略图重生成失败状态写入失败，将重新投递原消息: taskId={}", event.taskId());
-                channel.basicNack(deliveryTag, false, true);
+                log.error("缩略图重生成失败状态写入失败，转入死信队列: taskId={}", event.taskId());
+                channel.basicNack(deliveryTag, false, false);
             }
         }
     }

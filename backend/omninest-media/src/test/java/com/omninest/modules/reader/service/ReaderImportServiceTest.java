@@ -30,6 +30,7 @@ import com.omninest.modules.reader.domain.ReaderSourceStatus;
 import com.omninest.modules.reader.event.ComicParseTaskEvent;
 import com.omninest.modules.reader.repository.ReaderBookshelfRepository;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
+import com.omninest.modules.reader.dto.ReaderDtos;
 import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -39,7 +40,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -673,9 +677,44 @@ class ReaderImportServiceTest {
         return item;
     }
 
+    @Test
+    void importCandidatesTruncatesAtConfiguredLimit() {
+        // 候选上限：多取一条判断是否还有更多，超出后截断并显式告知客户端。
+        ReflectionTestUtils.setField(importService, "importCandidateLimit", 2);
+        UUID first = UUID.fromString("30000000-0000-0000-0000-000000000011");
+        UUID second = UUID.fromString("30000000-0000-0000-0000-000000000012");
+        UUID third = UUID.fromString("30000000-0000-0000-0000-000000000013");
+        List<FileDescriptor> files = List.of(
+                personalFileNode(first, "a.epub"),
+                personalFileNode(second, "b.epub"),
+                personalFileNode(third, "c.epub"));
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesLimited(
+                eq(OWNER_ID), anyList(), eq(3))).thenReturn(files);
+        when(fileMetadataQueryService.listActiveFilesBySpaceAndCategoriesLimited(
+                eq(SpaceType.SHARED), anyList(), eq(3))).thenReturn(List.of());
+        when(fileDetector.isReaderFile(anyString())).thenReturn(true);
+        when(fileDetector.detectType(anyString())).thenReturn("EPUB");
+        when(itemRepository.findVisibleContentHashes(any(), any())).thenReturn(List.of());
+        when(sourceRepository.findVisibleSourceContentHashes(any(), any())).thenReturn(List.of());
+        when(itemRepository.findVisibleMainFileNodeIds(any(), anyList(), any())).thenReturn(List.of());
+        when(sourceRepository.findImportedFileNodeIds(any(), anyList(), any())).thenReturn(List.of());
+        when(fileMetadataQueryService.findContentSha256ByFileNodeIds(anyList())).thenReturn(Map.of());
+
+        var response = importService.importCandidates(OWNER_ID);
+
+        assertThat(response.truncated()).isTrue();
+        assertThat(response.items()).extracting(ReaderDtos.ImportCandidateDto::fileName)
+                .containsExactly("a.epub", "b.epub");
+    }
+
     /** 创建个人空间文件节点。 */
     private FileDescriptor personalFileNode(String name) {
         return fileDescriptor(FILE_NODE_ID, OWNER_ID, SpaceType.PERSONAL, name, FILE_OBJECT_ID);
+    }
+
+    /** 创建指定节点 id 的个人空间文件节点。 */
+    private FileDescriptor personalFileNode(UUID id, String name) {
+        return fileDescriptor(id, OWNER_ID, SpaceType.PERSONAL, name, FILE_OBJECT_ID);
     }
 
     /** 创建共享空间文件节点。 */

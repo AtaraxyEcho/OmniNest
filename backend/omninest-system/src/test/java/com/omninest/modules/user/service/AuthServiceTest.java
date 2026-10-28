@@ -774,11 +774,14 @@ class AuthServiceTest {
             assertThatThrownBy(() -> service.refresh("refresh-token"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("刷新凭证已失效");
-            verify(sessionRevocationService).revokeSessionAndDeactivate(
+            // 撤销状态写在当前事务持有的会话行上，不再开独立事务更新同一行（会自死锁）。
+            assertThat(session.isRevoked()).isTrue();
+            assertThat(session.getRevokeReason()).contains("刷新令牌重放");
+            verify(sessionRevocationService).revokeSession(
                     eq(user.getId()),
                     eq(session.getId()),
-                    eq("刷新令牌重放，会话已撤销"),
                     any(Duration.class));
+            verify(sessionRevocationService, never()).revokeSessionAndDeactivate(any(), any(), any(), any());
         }
 
         @Test
@@ -1049,7 +1052,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             AuthActiveSession session = activeSession(user.getId());
             UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
-            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+            when(activeSessionRepository.findSessionSnapshot(sessionId, user.getId()))
                     .thenReturn(Optional.of(session));
 
             service.logout("refresh-token", null, null);
@@ -1064,7 +1067,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             AuthActiveSession session = activeSession(user.getId());
             UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
-            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+            when(activeSessionRepository.findSessionSnapshot(sessionId, user.getId()))
                     .thenReturn(Optional.of(session));
 
             service.logout(null, user.getId(), sessionId);
@@ -1078,7 +1081,7 @@ class AuthServiceTest {
         void logoutIsIdempotentWhenSessionMissing() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
-            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+            when(activeSessionRepository.findSessionSnapshot(sessionId, user.getId()))
                     .thenReturn(Optional.empty());
 
             service.logout("refresh-token", null, null);

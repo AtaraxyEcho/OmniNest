@@ -3,6 +3,7 @@ import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -157,8 +159,12 @@ class MusicAdminServiceTest {
 
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio, document));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio, document));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
@@ -173,8 +179,12 @@ class MusicAdminServiceTest {
         FileDescriptor audio = fileNode(AUDIO_FILE_ID, "Night Drive.flac", "audio/flac", 12_000_000L);
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
@@ -189,8 +199,12 @@ class MusicAdminServiceTest {
                 AUDIO_FILE_ID, "fallback.mp3", "audio/mpeg", 12_000_000L, objectId);
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         byte[] audioBytes = id3Tag(
                 textFrame("TIT2", "Night Drive"),
@@ -239,8 +253,12 @@ class MusicAdminServiceTest {
                 UUID.fromString("30000000-0000-0000-0000-000000000001"));
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         byte[] audioBytes = id3Tag(
                 textFrame("TIT2", "Night Drive"),
@@ -273,8 +291,13 @@ class MusicAdminServiceTest {
                 lyricFileId, "Night Drive.lrc", "text/plain", 128L, lyricObjectId);
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio, lyric));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listOwnedLyricFiles(OWNER_ID)).thenReturn(List.of(lyric));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         when(fileQueryService.openOwnedFileContent(OWNER_ID, AUDIO_FILE_ID))
                 .thenReturn(content("Night Drive.mp3", "audio/mpeg", new byte[] {0, 1, 2}));
@@ -465,8 +488,12 @@ class MusicAdminServiceTest {
 
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(scannerId)).thenReturn(List.of());
-        when(fileMetadataQueryService.listSharedVisibleToUser(scannerId)).thenReturn(List.of(shared));
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(scannerId), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(scannerId), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(shared));
         when(filePermissionService.resolveViewableFileIds(List.of(AUDIO_FILE_ID), scannerId))
                 .thenReturn(Set.of(AUDIO_FILE_ID));
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.of(existing));
@@ -494,8 +521,12 @@ class MusicAdminServiceTest {
 
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
-        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.of(existing));
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
@@ -519,8 +550,12 @@ class MusicAdminServiceTest {
 
         stubScanJob();
         stubMusicPersistence();
-        when(fileMetadataQueryService.listOwnedActive(scannerId)).thenReturn(List.of());
-        when(fileMetadataQueryService.listSharedVisibleToUser(scannerId)).thenReturn(List.of(shared));
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(scannerId), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of());
+        when(fileMetadataQueryService.listSharedFilesByCategoriesAfterId(
+                eq(scannerId), eq(List.of(FileTypeCategories.AUDIO)), any(UUID.class), anyInt()))
+                .thenReturn(List.of(shared));
         when(filePermissionService.resolveViewableFileIds(List.of(AUDIO_FILE_ID), scannerId))
                 .thenReturn(Set.of(AUDIO_FILE_ID));
         when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());

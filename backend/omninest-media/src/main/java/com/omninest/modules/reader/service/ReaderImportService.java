@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
@@ -68,6 +69,12 @@ public class ReaderImportService {
     private static final String FILE_TYPE_ZIP = "ZIP";
     private static final String FILE_TYPE_PDF = "PDF";
     private static final Set<String> SUPPORTED_CONTENT_KINDS = Set.of(CONTENT_KIND_TEXT, CONTENT_KIND_COMIC);
+    /** 可导入候选的数据库分类过滤：覆盖 epub/txt/cbz/zip/pdf，精确判定仍由文件检测器完成。 */
+    private static final List<String> READER_CANDIDATE_CATEGORIES = List.of(
+            FileTypeCategories.NOVEL,
+            FileTypeCategories.COMIC,
+            FileTypeCategories.DOCUMENT,
+            FileTypeCategories.ARCHIVE);
 
     private final ReaderItemRepository itemRepository;
     private final ReaderBookshelfRepository bookshelfRepository;
@@ -92,6 +99,10 @@ public class ReaderImportService {
      */
     @Value("${omninest.reader.content-kind.text-chars-threshold:100}")
     private int textCharsThreshold;
+
+    /** 可导入候选上限：超出时按创建时间倒序截断，避免超大文档库整表进内存。 */
+    @Value("${omninest.reader.import-candidate-limit:2000}")
+    private int importCandidateLimit = 2000;
 
     /**
      * 导入阅读文件。普通文本条目只创建元数据，漫画条目创建待解析来源并投递异步解析任务。
@@ -455,13 +466,18 @@ public class ReaderImportService {
      * @return 可导入文件列表
      */
     @Transactional(readOnly = true)
-    public List<ReaderDtos.ImportCandidateDto> importCandidates(UUID ownerUserId) {
-        // 目录行由 SQL 过滤掉，候选集只剩文件节点。
-        List<FileDescriptor> personalFiles = fileMetadataQueryService.listOwnedActiveFiles(ownerUserId);
+    public ReaderDtos.ImportCandidatesResponse importCandidates(UUID ownerUserId) {
+        // 目录行、派生资产与无关分类都在 SQL 层排除；候选有上限，避免超大文档库整表加载。
+        int limit = Math.max(1, importCandidateLimit);
+        int fetchLimit = limit + 1;
+        List<FileDescriptor> personalFiles =
+                fileMetadataQueryService.listOwnedActiveFilesByCategoriesLimited(
+                        ownerUserId, READER_CANDIDATE_CATEGORIES, fetchLimit);
         SpaceType sharedType = sharedVisibility(ownerUserId);
         List<FileDescriptor> sharedFiles = sharedType == null
                 ? List.of()
-                : fileMetadataQueryService.listActiveFilesBySpace(sharedType);
+                : fileMetadataQueryService.listActiveFilesBySpaceAndCategoriesLimited(
+                        sharedType, READER_CANDIDATE_CATEGORIES, fetchLimit);
 
         List<FileDescriptor> allFiles = new ArrayList<>(personalFiles);
         Set<UUID> seenFileNodeIds = new HashSet<>();
@@ -501,7 +517,12 @@ public class ReaderImportService {
                     file.spaceType().getValue(),
                     file.createdAt()));
         }
-        return candidates;
+        // 多取一条用来判断是否还有更多；超出上限时截断并显式告知客户端。
+        boolean truncated = candidates.size() > limit;
+        if (truncated) {
+            candidates = new ArrayList<>(candidates.subList(0, limit));
+        }
+        return new ReaderDtos.ImportCandidatesResponse(candidates, truncated);
     }
 
     /**

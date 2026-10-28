@@ -750,18 +750,34 @@ class _BackdropTile extends StatelessWidget {
                 ),
                 if (onRemove != null)
                   Positioned(
-                    right: 4,
-                    top: 4,
-                    child: IconButton(
-                      tooltip: l10n.portalLocalBackdropRemove,
-                      onPressed: () => _confirmRemove(context, l10n),
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      color: palette.text,
-                      style: IconButton.styleFrom(
-                        backgroundColor: palette.surfaceContainer,
-                        minimumSize: const Size(28, 28),
-                        fixedSize: const Size(28, 28),
-                        padding: EdgeInsets.zero,
+                    right: 0,
+                    top: 0,
+                    child: Tooltip(
+                      message: l10n.portalLocalBackdropRemove,
+                      child: InkResponse(
+                        onTap: () => _confirmRemove(context, l10n),
+                        radius: 18,
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          // 视觉圆底保持 28dp，命中热区扩到 36dp；
+                          // 28dp 的点击区在触控屏上过小且会误触卡片本体的选中态。
+                          child: Center(
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: palette.surfaceContainer,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: palette.text,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),

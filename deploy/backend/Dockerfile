@@ -28,4 +28,7 @@ EXPOSE 8080
 USER omninest
 
 # JAVA_OPTS 可由 Compose 按角色覆盖，堆上限随容器内存而不是宿主机。
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Duser.timezone=Asia/Shanghai -jar /app/app.jar"]
+# sun.net.inetaddr.ttl 必须作为 JVM 启动参数：InetAddressCachePolicy 在首次解析
+# 主机名时就锁定策略，业务代码里再改 Security 属性不保证生效，SSRF 校验后的
+# 二次解析窗口随之失去缓存收敛。
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Dsun.net.inetaddr.ttl=60 -Duser.timezone=Asia/Shanghai -jar /app/app.jar"]

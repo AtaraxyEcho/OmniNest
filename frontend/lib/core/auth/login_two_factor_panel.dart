@@ -233,6 +233,9 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
             challengeToken: widget.challenge.challengeToken,
             password: password,
           );
+      if (!mounted) {
+        return;
+      }
       setState(() => _enrollStep = _EnrollStep.scan);
     });
   }
@@ -322,6 +325,9 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
             challengeToken: widget.challenge.challengeToken,
             code: code,
           );
+      if (!mounted) {
+        return;
+      }
       setState(() => _enrollStep = _EnrollStep.codes);
     });
   }
@@ -419,7 +425,7 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
     });
     try {
       await action();
-      if (onDone != null) {
+      if (onDone != null && mounted) {
         onDone();
       }
     } catch (error) {

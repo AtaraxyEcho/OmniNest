@@ -362,19 +362,19 @@ public class CurrentUserService implements UserProfileCacheEvictor {
 
     /**
      * 撤销指定会话（主动登出其他设备）。
-     * 先写入即时撤销状态，再持久化会话状态。
+     *
+     * <p>只做无锁状态判断，撤销本身走独立事务：在持锁事务里开独立事务更新同一行
+     * 会形成跨连接自死锁。</p>
      *
      * @param userId 当前用户 ID
      * @param sessionId 会话 ID
      */
-    @Transactional(rollbackFor = Exception.class)
     public void revokeSession(UUID userId, UUID sessionId) {
-        AuthActiveSession session = activeSessionRepository.findByIdAndUserId(sessionId, userId)
+        AuthActiveSession session = activeSessionRepository.findSessionSnapshot(sessionId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在"));
         if (session.isRevoked()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "会话已被撤销");
         }
-        // 先更新即时撤销状态并同步落库会话状态（独立事务），任一后续失败都不会回滚吊销。
         sessionRevocationService.revokeSessionAndDeactivate(
                 userId, sessionId, "用户主动撤销", Duration.ofDays(30));
     }

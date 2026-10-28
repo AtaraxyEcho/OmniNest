@@ -761,9 +761,17 @@ extension FileBrowserUploadActions on FileBrowserController {
         uploadId: runtime.session.uploadId,
         partNumber: part.partNumber,
       );
+      // 请求在途期间任务可能已被暂停或删除：此时还没有登记取消令牌，
+      // 不在这里拦截会继续上传整个分片（最大 64 MB）。
+      if (runtime.removed || runtime.pauseRequested) {
+        return;
+      }
     }
     if (uploadUrl.isEmpty) {
-      throw const AppException(code: '8002', message: '上传地址不可用');
+      throw const AppException(
+        code: AppErrorCodes.uploadUrlMissing,
+        message: '上传地址不可用',
+      );
     }
     final start = (part.partNumber - 1) * runtime.session.partSizeBytes;
     final end = math.min(start + part.sizeBytes, runtime.session.sizeBytes);
@@ -799,7 +807,9 @@ extension FileBrowserUploadActions on FileBrowserController {
       // 先移除当前分片的在途字节，避免把已完成字节与同一分片重复相加。
       runtime.inFlightBytes.remove(part.partNumber);
       final afterPartTask = _findLocalUploadTask(taskId);
-      if (runtime.removed || afterPartTask == null) {
+      // 暂停标记必须在确认分片后重查：确认请求在途时用户可能已经点了暂停，
+      // 不拦住会把刚置为 PAUSED 的任务覆写回 UPLOADING。
+      if (runtime.removed || runtime.pauseRequested || afterPartTask == null) {
         return;
       }
       _upsertLocalUploadTask(

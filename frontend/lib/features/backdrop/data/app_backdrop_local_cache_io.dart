@@ -43,10 +43,11 @@ class AppBackdropLocalVideoCache {
   Future<String?> ensureCached({
     required String assetId,
     required String remoteUrl,
-  }) {
+  }) async {
     final ready = _readyById[assetId];
-    if (ready != null && File(ready).existsSync()) {
-      return Future<String?>.value(ready);
+    // 允许缓存文件被系统清理：命中登记但落盘已消失时重新下载。
+    if (ready != null && await File(ready).exists()) {
+      return ready;
     }
     final pending = _inFlight[assetId];
     if (pending != null) {

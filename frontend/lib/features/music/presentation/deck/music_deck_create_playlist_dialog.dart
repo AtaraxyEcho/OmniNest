@@ -1,13 +1,13 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 /// 歌单编辑器提交的数据。
 class MusicDeckPlaylistDraft {
@@ -78,7 +78,9 @@ class _MusicDeckCreatePlaylistDialogState
   static const int _maxCoverBytes = 8 * 1024 * 1024;
 
   Future<void> _pickCover() async {
-    final result = await FilePicker.pickFiles(type: FileType.image);
+    // 走平台唯一出口：桌面端 file_picker 只给路径不给字节，
+    // 直接 readAsBytes 会拿到空内容，必须由 FilePick 统一兜底。
+    final result = await FilePick.pickImages();
     if (!mounted || result.isEmpty) {
       return;
     }
@@ -95,11 +97,16 @@ class _MusicDeckCreatePlaylistDialogState
       );
       return;
     }
-    final bytes = await file.readAsBytes();
+    final bytes = await file.readBytes();
     if (!mounted) {
       return;
     }
     if (bytes.isEmpty) {
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicCoverReadFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
       return;
     }
     Uint8List? preview;

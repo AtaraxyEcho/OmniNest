@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 动态照片存量回扫任务服务：创建回扫任务、分批检测并就地提取运动视频。
@@ -52,6 +53,7 @@ public class PhotoMotionRescanService {
      * @param ownerUserId 照片所有者
      * @return 任务 ID
      */
+    @Transactional(rollbackFor = Exception.class)
     public UUID enqueueRescan(UUID ownerUserId) {
         Optional<TaskRecord> active = taskRecordService.findActiveResourceTask(
                 ownerUserId,

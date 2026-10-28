@@ -56,7 +56,7 @@ void main() {
     expect(upload.mimeType, 'application/epub+zip');
   });
 
-  test('无本地路径时 toXFile 回落到内存字节', () async {
+  test('无本地路径时 toXFile 复用平台句柄并保留调用方 MIME', () async {
     final bytes = Uint8List.fromList([9, 9]);
     guard = installFilePick(
       files: [FakePickedPlatformFile(name: 'cover.jpg', bytes: bytes)],
@@ -65,7 +65,10 @@ void main() {
     final picked = await FilePick.pickImages();
     final upload = await picked.single.toXFile(mimeType: 'image/jpeg');
 
+    // 不再 readBytes 后重新构造：读内容仍与原文件一致，MIME 由包装层覆盖。
     expect(await upload.readAsBytes(), bytes);
+    expect(upload.mimeType, 'image/jpeg');
+    expect(upload.name, 'cover.jpg');
   });
 
   test('平台选择失败时异常交给调用方处理', () async {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -175,16 +177,21 @@ class TwoFactorServiceTest {
         credential.setEnabled(true);
         credential.setLastUsedStep(null);
         when(totpCredentialRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(Optional.of(credential));
-        when(totpCredentialRepository.save(any(AuthTotpCredential.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        // 原子条件更新：只有更大的时间步能写入，同一步骤重复提交返回 0 行。
+        AtomicLong persistedStep = new AtomicLong(Long.MIN_VALUE);
+        when(totpCredentialRepository.consumeStep(eq(userId), anyLong(), any(Instant.class)))
+                .thenAnswer(invocation -> {
+                    long step = invocation.getArgument(1);
+                    return persistedStep.getAndUpdate(previous -> Math.max(previous, step)) < step ? 1 : 0;
+                });
 
         String code = TotpUtil.currentCode(secret, Instant.now());
         assertThatCode(() -> service.verifyCode(userId, code)).doesNotThrowAnyException();
+        assertThat(persistedStep.get()).isNotEqualTo(Long.MIN_VALUE);
 
         assertThatThrownBy(() -> service.verifyCode(userId, code))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("两步验证码错误");
-        assertThat(credential.getLastUsedStep()).isNotNull();
+                .hasMessageContaining("两步验证码已使用");
     }
 
     @Test
@@ -321,6 +328,8 @@ class TwoFactorServiceTest {
         credential.setEnabled(true);
         credential.setLastUsedStep(null);
         when(totpCredentialRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(Optional.of(credential));
+        when(totpCredentialRepository.consumeStep(eq(userId), anyLong(), any(Instant.class)))
+                .thenReturn(1);
 
         service.disable(userId, "secret123", TotpUtil.currentCode(secret, Instant.now()));
 

@@ -26,7 +26,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     columnKey: 'updatedAt',
     ascending: false,
   );
-  final Set<int> _selectedTasks = <int>{};
+  final Set<String> _selectedTaskIds = <String>{};
 
   @override
   void initState() {
@@ -76,14 +76,23 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     );
     final page = taskAsync.value ?? _lastTaskPage;
     if (page == null) {
-      return taskAsync.hasError
-          ? Center(
-            child: Text(AppLocalizations.of(context).adminLoadFailed('')),
-          )
-          : const Padding(
-            padding: EdgeInsets.all(16),
-            child: AdminListSkeleton(),
-          );
+      if (taskAsync.hasError) {
+        final l10n = AppLocalizations.of(context);
+        return Center(
+          child: Text(
+            l10n.adminLoadFailed(
+              describeUserFacingError(
+                taskAsync.error!,
+                l10n: l10n,
+              ).displayMessage,
+            ),
+          ),
+        );
+      }
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: AdminListSkeleton(),
+      );
     }
     return _buildPage(context, page, dlqAsync, busy: taskAsync.isLoading);
   }
@@ -93,33 +102,36 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     setState(() {
       _pageSize = size;
       _page = 0;
-      _selectedTasks.clear();
+      _selectedTaskIds.clear();
     });
   }
 
   /// 批量重试选中的任务：工位确认弹窗后逐条执行，失败项跳过。
   Future<void> _batchRetry(AdminPage<AdminTaskRecord> page) async {
     final l10n = AppLocalizations.of(context);
+    // 先按可重试状态收敛，再弹确认：确认框数量必须等于真正会提交的条数，
+    // 全是不可重试项时不能向后端发送空数组。
+    final ids = <String>[
+      for (final item in page.items)
+        if (item.canRetry && _selectedTaskIds.contains(item.id)) item.id,
+    ];
+    if (ids.isEmpty) {
+      setState(_selectedTaskIds.clear);
+      return;
+    }
     final confirmed = await showWorkstationConfirmDialog(
       context,
       title: l10n.adminBatchConfirmTitle,
-      message: l10n.adminBatchConfirmMessage('${_selectedTasks.length}'),
+      message: l10n.adminBatchConfirmMessage('${ids.length}'),
       confirmLabel: l10n.coreConfirm,
     );
     if (!confirmed || !mounted) return;
-    final ids = <String>[
-      for (final index in _selectedTasks)
-        if (index >= 0 &&
-            index < page.items.length &&
-            page.items[index].canRetry)
-          page.items[index].id,
-    ];
     try {
       final result = await ref
           .read(adminOperationsActionsProvider)
           .batchRetryTasks(ids);
       if (!mounted) return;
-      setState(() => _selectedTasks.clear());
+      setState(() => _selectedTaskIds.clear());
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
@@ -142,14 +154,11 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   Future<void> _batchCancel(AdminPage<AdminTaskRecord> page) async {
     final l10n = AppLocalizations.of(context);
     final targets = <String>[
-      for (final index in _selectedTasks)
-        if (index >= 0 &&
-            index < page.items.length &&
-            page.items[index].canCancel)
-          page.items[index].id,
+      for (final item in page.items)
+        if (item.canCancel && _selectedTaskIds.contains(item.id)) item.id,
     ];
     if (targets.isEmpty) {
-      setState(() => _selectedTasks.clear());
+      setState(() => _selectedTaskIds.clear());
       return;
     }
     final confirmed = await showWorkstationConfirmDialog(
@@ -165,7 +174,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
           .read(adminOperationsActionsProvider)
           .batchCancelTasks(targets);
       if (!mounted) return;
-      setState(() => _selectedTasks.clear());
+      setState(() => _selectedTaskIds.clear());
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
@@ -257,7 +266,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
                   (value) => setState(() {
                     _status = value;
                     _page = 0;
-                    _selectedTasks.clear();
+                    _selectedTaskIds.clear();
                   }),
             ),
             _TaskFilter(
@@ -269,7 +278,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
                   (value) => setState(() {
                     _taskType = value;
                     _page = 0;
-                    _selectedTasks.clear();
+                    _selectedTaskIds.clear();
                   }),
             ),
           ],
@@ -346,7 +355,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
             onPageChanged:
                 (value) => setState(() {
                   _page = value;
-                  _selectedTasks.clear();
+                  _selectedTaskIds.clear();
                 }),
             onRetry: _retryTask,
             onCancel: _cancelTask,
@@ -359,23 +368,29 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
               setState(() {
                 _taskSort = AdminListSort(columnKey: key, ascending: ascending);
                 _page = 0;
-                _selectedTasks.clear();
+                _selectedTaskIds.clear();
               });
             },
-            selectedIndexes: _selectedTasks,
-            onRowCheck:
-                (index, value) => setState(() {
-                  value
-                      ? _selectedTasks.add(index)
-                      : _selectedTasks.remove(index);
-                }),
+            selectedIndexes: <int>{
+              for (var i = 0; i < page.items.length; i++)
+                if (_selectedTaskIds.contains(page.items[i].id)) i,
+            },
+            onRowCheck: (index, value) {
+              if (index < 0 || index >= page.items.length) {
+                return;
+              }
+              final id = page.items[index].id;
+              setState(() {
+                value ? _selectedTaskIds.add(id) : _selectedTaskIds.remove(id);
+              });
+            },
             onCheckAll: (value) {
               setState(() {
-                _selectedTasks.clear();
+                _selectedTaskIds.clear();
                 if (value) {
-                  for (var i = 0; i < page.items.length; i++) {
-                    if (page.items[i].canRetry || page.items[i].canCancel) {
-                      _selectedTasks.add(i);
+                  for (final item in page.items) {
+                    if (item.canRetry || item.canCancel) {
+                      _selectedTaskIds.add(item.id);
                     }
                   }
                 }
@@ -383,7 +398,7 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
             },
             onBatchRetry: () => _batchRetry(page),
             onBatchCancel: () => _batchCancel(page),
-            onClearSelection: () => setState(() => _selectedTasks.clear()),
+            onClearSelection: () => setState(() => _selectedTaskIds.clear()),
           ),
           _DlqTab(
             query: _query,
@@ -424,11 +439,14 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   Future<void> _retryTaskAsync(String taskId) async {
     try {
       await ref.read(adminOperationsActionsProvider).retryTask(taskId);
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).adminLoadFailed(''),
+        describeUserFacingError(
+          error,
+          l10n: AppLocalizations.of(context),
+        ).displayMessage,
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -461,11 +479,14 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   Future<void> _retryDlq(String taskId) async {
     try {
       await ref.read(adminOperationsActionsProvider).retryDlq(taskId);
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).adminLoadFailed(''),
+        describeUserFacingError(
+          error,
+          l10n: AppLocalizations.of(context),
+        ).displayMessage,
         severity: OmniFeedbackSeverity.error,
       );
     }

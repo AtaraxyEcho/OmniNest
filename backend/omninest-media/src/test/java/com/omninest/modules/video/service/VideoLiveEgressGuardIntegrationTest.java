@@ -71,8 +71,7 @@ class VideoLiveEgressGuardIntegrationTest {
                 new VideoFfmpegRuntime(new VideoProcessExecutor())
         );
         VideoStreamService.StreamCommand command = service.buildStreamCommand(
-                service.buildTranscodeArgs("mov", playlistUrl, 0L),
-                List.of(playlistUrl)
+                service.buildTranscodeArgs("mov", playlistUrl, 0L)
         );
 
         int exitCode = run(command.command());

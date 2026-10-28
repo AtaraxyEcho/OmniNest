@@ -12143,6 +12143,12 @@ abstract class AppLocalizations {
   /// **'Pending Import'**
   String get readerPendingImport;
 
+  /// No description provided for @readerImportCandidatesTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Some importable files are hidden because the list is too long'**
+  String get readerImportCandidatesTruncated;
+
   /// No description provided for @readerPendingImportCount.
   ///
   /// In en, this message translates to:
@@ -20517,6 +20523,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unknown error'**
   String get errorUnknown;
+
+  /// No description provided for @errorPreferenceVersionConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences were updated elsewhere. Refresh and try again'**
+  String get errorPreferenceVersionConflict;
 
   /// No description provided for @errorDownloadTicketInvalid.
   ///

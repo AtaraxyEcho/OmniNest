@@ -157,7 +157,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     columnKey: 'lastActiveAt',
     ascending: false,
   );
-  final Set<int> _selectedSessions = <int>{};
+  final Set<String> _selectedSessionIds = <String>{};
   int _retentionDays = 30;
   Timer? _searchTimer;
 
@@ -200,14 +200,23 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     }
     final page = sessionsAsync.value ?? _lastSessionsPage;
     if (page == null) {
-      return sessionsAsync.hasError
-          ? Center(
-            child: Text(AppLocalizations.of(context).adminLoadFailed('')),
-          )
-          : const Padding(
-            padding: EdgeInsets.all(16),
-            child: AdminListSkeleton(),
-          );
+      if (sessionsAsync.hasError) {
+        final l10n = AppLocalizations.of(context);
+        return Center(
+          child: Text(
+            l10n.adminLoadFailed(
+              describeUserFacingError(
+                sessionsAsync.error!,
+                l10n: l10n,
+              ).displayMessage,
+            ),
+          ),
+        );
+      }
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: AdminListSkeleton(),
+      );
     }
     return _buildPage(context, page, busy: sessionsAsync.isLoading);
   }
@@ -225,6 +234,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     final expiredCount =
         page.items.where((session) => session.isExpired).length;
     final platforms = _countClientPlatforms(page.items);
+    final visibleSelection = _visibleSelection(page);
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -276,7 +286,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
                       setState(() {
                         _status = value;
                         _page = 0;
-                        _selectedSessions.clear();
+                        _selectedSessionIds.clear();
                       });
                     }
                   },
@@ -304,7 +314,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
                       setState(() {
                         _platform = value;
                         _page = 0;
-                        _selectedSessions.clear();
+                        _selectedSessionIds.clear();
                       });
                     }
                   },
@@ -408,13 +418,13 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
           title: l10n.adminSessionList,
           subtitle: l10n.adminSessionListSubtitle,
           children: [
-            if (_selectedSessions.isNotEmpty) ...[
+            if (visibleSelection.isNotEmpty) ...[
               _AdminBatchBar(
-                count: _selectedSessions.length,
+                count: visibleSelection.length,
                 actionLabel: l10n.adminBatchRevokeSessions,
                 actionIcon: Icons.logout_rounded,
                 onAction: () => _batchRevoke(page),
-                onClear: () => setState(() => _selectedSessions.clear()),
+                onClear: () => setState(() => _selectedSessionIds.clear()),
               ),
               const SizedBox(height: 8),
             ],
@@ -481,35 +491,45 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
                     ascending: ascending,
                   );
                   _page = 0;
-                  _selectedSessions.clear();
+                  _selectedSessionIds.clear();
                 });
               },
               showCheckboxes: true,
-              isChecked: (index) => _selectedSessions.contains(index),
+              isChecked:
+                  (index) =>
+                      index >= 0 &&
+                      index < page.items.length &&
+                      _selectedSessionIds.contains(page.items[index].id),
               isCheckDisabled: (index) => !page.items[index].isActive,
-              onRowCheck:
-                  (index, value) => setState(() {
-                    value
-                        ? _selectedSessions.add(index)
-                        : _selectedSessions.remove(index);
-                  }),
+              onRowCheck: (index, value) {
+                if (index < 0 || index >= page.items.length) {
+                  return;
+                }
+                final id = page.items[index].id;
+                setState(() {
+                  value
+                      ? _selectedSessionIds.add(id)
+                      : _selectedSessionIds.remove(id);
+                });
+              },
               onCheckAll: (value) {
                 setState(() {
-                  _selectedSessions.clear();
+                  _selectedSessionIds.clear();
                   if (value) {
-                    for (var i = 0; i < page.items.length; i++) {
-                      if (page.items[i].isActive) _selectedSessions.add(i);
+                    for (final item in page.items) {
+                      if (item.isActive) _selectedSessionIds.add(item.id);
                     }
                   }
                 });
               },
               allChecked:
                   page.items.any((item) => item.isActive) &&
-                  _selectedSessions.length ==
-                      page.items.where((item) => item.isActive).length,
+                  _selectedSessionIds.containsAll(
+                    page.items.where((item) => item.isActive).map((e) => e.id),
+                  ),
               someChecked:
-                  _selectedSessions.isNotEmpty &&
-                  _selectedSessions.length <
+                  visibleSelection.isNotEmpty &&
+                  visibleSelection.length <
                       page.items.where((item) => item.isActive).length,
               rowCount: page.items.length,
               emptyState: AdminListEmptyState(
@@ -609,7 +629,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
               onPageChanged:
                   (next) => setState(() {
                     _page = next;
-                    _selectedSessions.clear();
+                    _selectedSessionIds.clear();
                   }),
               onRowsPerPageChanged: _changePageSize,
             ),
@@ -658,34 +678,42 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     setState(() {
       _pageSize = size;
       _page = 0;
-      _selectedSessions.clear();
+      _selectedSessionIds.clear();
     });
+  }
+
+  /// 当前页仍可见的勾选：数据刷新移除的行自动退出勾选。
+  Set<String> _visibleSelection(AdminPage<AdminSessionItem> page) {
+    final visibleIds = page.items.map((item) => item.id).toSet();
+    return _selectedSessionIds.where(visibleIds.contains).toSet();
   }
 
   /// 批量强制下线选中的会话：破坏性确认后逐条执行，失败项跳过。
   Future<void> _batchRevoke(AdminPage<AdminSessionItem> page) async {
     final l10n = AppLocalizations.of(context);
+    // 先按可撤销状态收敛，再弹确认：确认框数量与真正提交的条数一致。
+    final ids = <String>[
+      for (final item in page.items)
+        if (item.isActive && _selectedSessionIds.contains(item.id)) item.id,
+    ];
+    if (ids.isEmpty) {
+      setState(_selectedSessionIds.clear);
+      return;
+    }
     final confirmed = await showWorkstationConfirmDialog(
       context,
       title: l10n.adminBatchConfirmTitle,
-      message: l10n.adminBatchConfirmMessage('${_selectedSessions.length}'),
+      message: l10n.adminBatchConfirmMessage('${ids.length}'),
       confirmLabel: l10n.adminBatchRevokeSessions,
       destructive: true,
     );
     if (!confirmed || !mounted) return;
-    final ids = <String>[
-      for (final index in _selectedSessions)
-        if (index >= 0 &&
-            index < page.items.length &&
-            page.items[index].isActive)
-          page.items[index].id,
-    ];
     try {
       final result = await ref
           .read(adminOperationsActionsProvider)
           .batchRevokeSessions(ids);
       if (!mounted) return;
-      setState(() => _selectedSessions.clear());
+      setState(() => _selectedSessionIds.clear());
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
@@ -719,11 +747,11 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     if (!confirmed || !mounted) return;
     try {
       await ref.read(adminOperationsActionsProvider).revokeSession(session.id);
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.adminLoadFailed(''),
+        describeUserFacingError(error, l10n: l10n).displayMessage,
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -754,11 +782,11 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
         l10n.adminCleanupCompleted('$count'),
         severity: OmniFeedbackSeverity.success,
       );
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.adminLoadFailed(''),
+        describeUserFacingError(error, l10n: l10n).displayMessage,
         severity: OmniFeedbackSeverity.error,
       );
     }

@@ -113,6 +113,7 @@ class SecurityConfigTest {
                 .expiresAt(expiresAt)
                 .claim("sid", "20000000-0000-0000-0000-000000000001")
                 .claim("token_type", "access")
+                .claim("token_use", "access")
                 .build();
         return config.jwtEncoder(properties)
                 .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))

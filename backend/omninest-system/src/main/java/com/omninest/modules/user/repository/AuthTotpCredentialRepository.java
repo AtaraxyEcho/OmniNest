@@ -1,12 +1,15 @@
 package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuthTotpCredential;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -32,4 +35,26 @@ public interface AuthTotpCredentialRepository extends JpaRepository<AuthTotpCred
     @Transactional(rollbackFor = Exception.class)
     @Modifying
     void deleteByUserId(UUID userId);
+
+    /**
+     * 原子消费一个 TOTP 时间步。
+     *
+     * <p>并发提交同一时间窗口的验证码时，只有第一个请求能把 {@code lastUsedStep}
+     * 推进到该步；其余请求返回 0，按验证码已使用拒绝。依赖乐观锁兜底只会把
+     * 冲突翻译成未映射的 5xx。</p>
+     *
+     * @param userId 用户标识
+     * @param step 已匹配的时间步
+     * @param now 更新时间
+     * @return 更新行数，0 表示该步已被其他请求消费
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Modifying
+    @Query("update AuthTotpCredential c set c.lastUsedStep = :step, c.updatedAt = :now, "
+            + "c.version = c.version + 1 where c.userId = :userId and c.enabled = true "
+            + "and (c.lastUsedStep is null or c.lastUsedStep < :step)")
+    int consumeStep(
+            @Param("userId") UUID userId,
+            @Param("step") long step,
+            @Param("now") Instant now);
 }

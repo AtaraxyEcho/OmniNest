@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 
 /// widget/单元用例用的 file_picker 平台替身。
 ///
@@ -86,6 +87,10 @@ final class FakePickedPlatformFile extends PlatformFile {
 
   @override
   Uri get uri => path != null ? Uri.file(path!) : Uri.parse('memory://$name');
+
+  /// 内存态句柄：Web 端真实实现同样持有 Blob/内存字节，不落盘。
+  @override
+  XFile get xFile => XFile.fromData(bytes, name: name);
 
   @override
   Future<Uint8List> readAsBytes() async => bytes;

@@ -2893,6 +2893,7 @@
   "readerImportEssay": "Essay",
   "readerImportComic": "Comic",
   "readerPendingImport": "Pending Import",
+  "readerImportCandidatesTruncated": "Some importable files are hidden because the list is too long",
   "readerPendingImportCount": "{count} files",
   "@readerPendingImportCount": {
     "placeholders": {
@@ -5069,6 +5070,7 @@
   "errorNetworkTimeout": "Request timed out. Check your network and try again",
   "errorNetworkError": "Network error. Please try again later",
   "errorUnknown": "Unknown error",
+  "errorPreferenceVersionConflict": "Preferences were updated elsewhere. Refresh and try again",
   "errorDownloadTicketInvalid": "The download link is invalid. Please retry",
   "errorDownloadRangeInvalid": "The server cannot resume this download. Please retry",
   "errorDownloadTicketChanged": "The file has changed. Please download it again",

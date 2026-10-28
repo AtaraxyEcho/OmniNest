@@ -2675,6 +2675,10 @@ CREATE INDEX "idx_content_assets_resource" ON "omni"."content_assets" USING btre
   "asset_type" "pg_catalog"."text_ops" ASC NULLS LAST,
   "sort_order" "pg_catalog"."int4_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_content_assets_owner_file_node" ON "omni"."content_assets" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE file_node_id IS NOT NULL;
 
 ALTER TABLE "omni"."content_assets" ADD CONSTRAINT "ck_content_assets_metadata_json_size" CHECK (octet_length(metadata::text) <= 262144);
 ALTER TABLE "omni"."content_assets" ADD CONSTRAINT "chk_content_assets_asset_type" CHECK (asset_type::text = ANY (ARRAY['POSTER'::character varying::text, 'BACKDROP'::character varying::text, 'THUMBNAIL'::character varying::text, 'LOGO'::character varying::text, 'BANNER'::character varying::text, 'COVER'::character varying::text, 'ARTIST_PHOTO'::character varying::text, 'SCREENSHOT'::character varying::text, 'NFO'::character varying::text, 'LYRICS'::character varying::text, 'SUBTITLE'::character varying::text, 'OTHER'::character varying::text]));
@@ -3129,6 +3133,10 @@ CREATE INDEX "idx_media_video_items_series_episode" ON "omni"."media_video_items
   "season_number" "pg_catalog"."int4_ops" ASC NULLS LAST,
   "episode_number" "pg_catalog"."int4_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_media_video_items_owner_source" ON "omni"."media_video_items" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "source_video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE source_video_item_id IS NOT NULL;
 
 ALTER TABLE "omni"."media_video_items" ADD CONSTRAINT "uniq_media_video_items_file" UNIQUE ("file_node_id");
 
@@ -3402,6 +3410,12 @@ CREATE INDEX "idx_photo_items_owner_location_city" ON "omni"."photo_items" USING
 CREATE INDEX "idx_photo_items_cover_file" ON "omni"."photo_items" USING btree (
   "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE cover_file_id IS NOT NULL;
+CREATE INDEX "idx_photo_items_active_file" ON "omni"."photo_items" USING btree (
+  "active_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE active_file_id IS NOT NULL;
+CREATE INDEX "idx_photo_items_motion_video_file" ON "omni"."photo_items" USING btree (
+  "motion_video_file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE motion_video_file_node_id IS NOT NULL;
 
 ALTER TABLE "omni"."photo_items" ADD CONSTRAINT "uk_photo_items_file_node" UNIQUE ("file_node_id");
 

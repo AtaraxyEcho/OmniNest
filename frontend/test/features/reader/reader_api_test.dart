@@ -87,14 +87,17 @@ void main() {
         body: {
           'code': 200,
           'message': 'success',
-          'data': [
-            {
-              'fileNodeId': 'file-1',
-              'fileName': 'book.epub',
-              'itemType': 'EPUB',
-              'sizeDisplay': '2 MB',
-            },
-          ],
+          'data': {
+            'items': [
+              {
+                'fileNodeId': 'file-1',
+                'fileName': 'book.epub',
+                'itemType': 'EPUB',
+                'sizeDisplay': '2 MB',
+              },
+            ],
+            'truncated': true,
+          },
         },
       );
       final api = ReaderApi(_apiClient(adapter));
@@ -103,11 +106,12 @@ void main() {
 
       expect(adapter.lastMethod, 'GET');
       expect(adapter.lastPath, '/reader/import/candidates');
-      expect(result, hasLength(1));
-      expect(result.single.fileNodeId, 'file-1');
-      expect(result.single.fileName, 'book.epub');
-      expect(result.single.itemType, 'EPUB');
-      expect(result.single.sizeDisplay, '2 MB');
+      expect(result.items, hasLength(1));
+      expect(result.truncated, isTrue);
+      expect(result.items.single.fileNodeId, 'file-1');
+      expect(result.items.single.fileName, 'book.epub');
+      expect(result.items.single.itemType, 'EPUB');
+      expect(result.items.single.sizeDisplay, '2 MB');
     });
 
     test('detail sends GET to /reader/items/:id', () async {

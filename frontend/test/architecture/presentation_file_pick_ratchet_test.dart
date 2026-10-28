@@ -10,11 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// 已知未覆盖：`package:file_selector/` 的 `openFile()`/`openFiles()` 直调与拖放面板
 /// 仍在 5 个 presentation 文件里，纳入判据前要先给 FilePick 补对应出口。
 void main() {
-  const allowedViolations = <String>{
-    // 并行会话正在改这个文件，收口后必须从清单移除。
-    'FILE_PICKER_IMPORT '
-        'lib/features/music/presentation/deck/music_deck_create_playlist_dialog.dart',
-  };
+  const allowedViolations = <String>{};
 
   test('presentation 层不直接依赖 file_picker、image_picker、dart:io 或裸 XFile 构造', () {
     final found = <String>{};

@@ -151,6 +151,25 @@ class ComicParseTaskServiceTest {
     }
 
     @Test
+    void processMarksTaskFailedWhenParseLeavesSourceFailed() {
+        // CBZ/ZIP 无图片时解析层只把来源置为 FAILED 并正常返回：
+        // 任务必须跟随来源失败，不能把 sys_tasks 置为 COMPLETED。
+        ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PARSING);
+        ReaderItemSource failedSource = sourceWithStatus(ReaderSourceStatus.FAILED);
+        failedSource.setErrorCode("NO_IMAGE_ENTRY");
+        failedSource.setErrorMessage("未找到可阅读图片");
+        Mockito.when(sourceRepository.findById(SOURCE_ID))
+                .thenReturn(Optional.of(source))
+                .thenReturn(Optional.of(failedSource));
+
+        taskService.process(event());
+
+        Mockito.verify(taskRecordService).markFailed(TASK_ID, "未找到可阅读图片", null);
+        Mockito.verify(taskRecordService, Mockito.never())
+                .markCompleted(Mockito.eq(TASK_ID), Mockito.anyMap());
+    }
+
+    @Test
     void processPropagatesInfrastructureFailure() {
         ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PARSING);
         Mockito.when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));

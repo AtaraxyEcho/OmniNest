@@ -88,6 +88,112 @@ void main() {
     expect(repository.completedSessions, ['upload-123']);
   });
 
+  test('分片 URL 在途时暂停：不再发起该分片上传且任务保持 PAUSED', () async {
+    // 取分片 URL 的请求在途时还没有登记取消令牌，暂停必须由状态守卫拦住，
+    // 否则响应回来后会继续上传整个分片（最大 64 MB）。
+    final repository =
+        _FakeFileRepository()
+          ..omitPartUrls = true
+          ..partUrlCompleter = Completer<String>()
+          ..partUrlRequested = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'large.bin',
+        name: 'large.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+    await repository.partUrlRequested!.future;
+    final task =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    controller.pauseLocalUploadTask(task.id);
+    repository.partUrlCompleter!.complete('https://storage.test/late');
+    await uploadFuture;
+
+    expect(repository.uploadedPartUrls, isEmpty, reason: '暂停后不得再上传分片');
+    final pausedTask =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(pausedTask.status, 'PAUSED');
+    expect(repository.completedSessions, isEmpty);
+  });
+
+  test('确认分片在途时暂停：任务保持 PAUSED，不被覆写回 UPLOADING', () async {
+    final repository =
+        _FakeFileRepository()
+          ..completePartCompleter = Completer<void>()
+          ..completePartRequested = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+    // 记录状态序列：暂停后若被分片确认回调覆写回 UPLOADING，
+    // 收尾的 _markUploadPaused 会把终态改回 PAUSED，只看最终状态会漏掉这次闪变。
+    final statuses = <String>[];
+    container.listen(fileBrowserControllerProvider, (previous, next) {
+      final tasks = next.value?.localUploadTasks;
+      if (tasks != null && tasks.isNotEmpty) {
+        statuses.add(tasks.single.status);
+      }
+    }, fireImmediately: true);
+
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'large.bin',
+        name: 'large.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+    await repository.firstUploadStarted.future;
+    await repository.secondUploadStarted.future;
+    repository.firstUploadResult.complete('etag-1');
+    repository.secondUploadResult.complete('etag-2');
+    await repository.completePartRequested!.future;
+    final task =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    controller.pauseLocalUploadTask(task.id);
+    repository.completePartCompleter!.complete();
+    await uploadFuture;
+
+    final pausedTask =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(pausedTask.status, 'PAUSED');
+    expect(repository.completedSessions, isEmpty);
+    final pauseIndex = statuses.indexOf('PAUSED');
+    expect(pauseIndex, isNonNegative);
+    expect(
+      statuses.skip(pauseIndex + 1),
+      isNot(contains('UPLOADING')),
+      reason: '暂停后不得再出现 UPLOADING 覆写',
+    );
+  });
+
   test(
     'resuming a paused upload refreshes the file list on completion',
     () async {

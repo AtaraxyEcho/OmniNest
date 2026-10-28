@@ -43,7 +43,7 @@ docker compose up -d vision-sidecar
 
 Compose 将命名卷 `omninest-ai-models` 挂载到 `/app/models`。将 `mobileclip2_s0_vision_fp32.onnx` 与 `policy_text_embeds.npz` 放入该卷即可启用轻量视觉标签；RapidOCR 模型随安装包内置。删除卷不会丢失 OCR 能力，但会移除视觉档模型资产。
 
-模型文件缺失时，侧车仍可提供 OCR，但 `/ready` 的 `visionModelState` 返回 `missing`，流水线版本包含 `-missing` 后缀；补齐模型并重启容器后版本变为 `-ready`，照片库重分析会按新版本重新执行，不会把缺模型结果误判为已完成。
+模型文件缺失时侧车仍可提供 OCR；`/ready` 始终返回 HTTP 200，流水线版本改为不透明指纹（视觉档位或模型文件状态任一变化都会改变该指纹），不再返回档位与缺失状态明文。补齐模型并重启容器后版本指纹随之变化，照片库重分析会按新版本重新执行，不会把缺模型结果误判为已完成。
 
 侧车就绪只是必要条件之一：`photo.ai.enabled` 在配置中心基线里内置为 `false`，管理员必须显式置为 `true`，图像分析才会对照片下发任务；关闭时任务直接取消，不会写分析记录。
 

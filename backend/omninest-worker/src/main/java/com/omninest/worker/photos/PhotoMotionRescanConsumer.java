@@ -47,10 +47,12 @@ public class PhotoMotionRescanConsumer {
                 // 服务内的 RuntimeException 已走重试/死信分支；这里兜住 Error 等未被捕获的情况，
                 // 避免把消息 ACK 掉却让任务永远停在 RUNNING。
                 photoMotionRescanService.failFromConsumer(event.taskId(), e);
+                channel.basicAck(deliveryTag, false);
             } catch (RuntimeException markFailure) {
-                log.error("动态照片回扫任务失败状态回写失败: taskId={}", event.taskId(), markFailure);
+                // 死信状态本身写不进去时不能再确认消息：转入死信队列等待心跳超时恢复兜底。
+                log.error("动态照片回扫任务失败状态回写失败，转入死信队列: taskId={}", event.taskId(), markFailure);
+                channel.basicNack(deliveryTag, false, false);
             }
-            channel.basicAck(deliveryTag, false);
         }
     }
 }

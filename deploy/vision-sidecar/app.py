@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
 from rapidocr_onnxruntime import RapidOCR
@@ -129,8 +130,14 @@ def _vision_model_state(profile: str) -> str:
 
 
 def current_vision_pipeline_version() -> str:
-    """模型目录可能在容器启动后才挂载，版本串必须在每次响应时重新计算。"""
-    return f"vision-v7-{VISION_PROFILE}-{_vision_model_state(VISION_PROFILE)}"
+    """模型目录可能在容器启动后才挂载，版本串必须在每次响应时重新计算。
+
+    对外版本号使用不透明指纹：模型档位与文件是否齐全属于内部诊断信息，
+    但其中任一变化都必须改变版本串，才能触发依赖版本比对的重新分析。
+    """
+    descriptor = f"{VISION_PROFILE}:{_vision_model_state(VISION_PROFILE)}"
+    digest = hashlib.sha256(descriptor.encode("utf-8")).hexdigest()[:12]
+    return f"vision-v7-{digest}"
 
 
 def current_content_pipeline_version() -> str:
@@ -701,6 +708,27 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="OmniNest Image Analysis Sidecar", version="6.0.0", lifespan=lifespan)
 
 
+# 多部分表单在进入路由函数前就会被 Starlette 解析：并发槽必须包住整个请求，
+# 否则排队请求会在槽外各自把请求体落盘，槽位只限制推理而限制不到上传。
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+
+
+@app.middleware("http")
+async def guard_analysis_uploads(request: Request, call_next):
+    if request.url.path != "/analyze-content":
+        return await call_next(request)
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            declared = int(declared_length)
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+        if declared > MAX_IMAGE_BYTES + MULTIPART_OVERHEAD_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "Image exceeds size limit"})
+    async with inference_slots:
+        return await call_next(request)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -708,7 +736,9 @@ async def health():
 
 @app.get("/ready")
 async def ready():
-    # 只暴露健康与版本信息；模型档位、文件状态留在内部诊断接口/日志。
+    # 匿名探针只拿健康与不透明版本号，模型档位与文件状态不外泄。
+    # 始终返回 200：容器 HEALTHCHECK、Worker 能力探测与后端流水线版本缓存都按 2xx 判定，
+    # 缺模型时 OCR 仍可用；模型文件变化只会改变版本指纹，由版本比对触发重分析。
     return {
         "status": "ok",
         "pipelineVersion": current_content_pipeline_version(),
@@ -726,8 +756,7 @@ async def analyze_content(
     hint: str = Query(default="AUTO", description="AUTO | TEXT_GRAPHIC | NATURAL_PHOTO"),
     skip_ocr: bool = Query(default=False, alias="skipOcr", description="OCR 版本未变时跳过重复识别"),
 ):
-    # 请求体读取也必须在推理并发槽内：否则排队请求会各自把最多 64MB 原图
-    # 读进内存，绕过槽位限制形成内存峰值。
-    async with inference_slots:
-        contents = await _read_image_bytes(image)
-        return await to_thread(_analyze_content_sync, contents, hint.upper(), skip_ocr)
+    # 并发槽由 guard_analysis_uploads 中间件持有：请求体解析发生在槽位内，
+    # 排队请求不会在槽外先把最多 64MB 原图读进内存或落盘。
+    contents = await _read_image_bytes(image)
+    return await to_thread(_analyze_content_sync, contents, hint.upper(), skip_ocr)

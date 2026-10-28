@@ -126,6 +126,23 @@ public class FileNode {
         category = FileTypeCategories.resolve(name, mimeType, nodeType);
     }
 
+    /**
+     * 判断本节点是否位于另一节点的子树内（同空间、按规范化路径前缀比较）。
+     *
+     * @param ancestor 候选上级节点
+     * @return 本节点是其后代时返回 true
+     */
+    public boolean isPathInside(FileNode ancestor) {
+        if (this == ancestor || normalizedPath == null || ancestor.normalizedPath == null
+                || spaceType != ancestor.spaceType) {
+            return false;
+        }
+        String prefix = ancestor.normalizedPath.endsWith("/")
+                ? ancestor.normalizedPath
+                : ancestor.normalizedPath + "/";
+        return normalizedPath.startsWith(prefix);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

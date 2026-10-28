@@ -26,6 +26,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class LogoutBearerTokenFilter extends OncePerRequestFilter {
 
     static final String LOGOUT_PATH = "/api/v1/auth/logout";
+    private static final String TOKEN_USE_CLAIM = "token_use";
+    private static final String ACCESS_TOKEN_USE = "access";
 
     private final JwtDecoder jwtDecoder;
     private final Converter<Jwt, ? extends AbstractAuthenticationToken> converter;
@@ -59,6 +61,11 @@ final class LogoutBearerTokenFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             try {
                 Jwt jwt = jwtDecoder.decode(header.substring("Bearer ".length()));
+                if (!ACCESS_TOKEN_USE.equals(jwt.getClaimAsString(TOKEN_USE_CLAIM))) {
+                    // 只接受访问令牌：刷新令牌或挑战令牌不得注入 SecurityContext。
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 AbstractAuthenticationToken authentication = converter.convert(jwt);
                 if (authentication != null) {
                     authentication.setDetails(

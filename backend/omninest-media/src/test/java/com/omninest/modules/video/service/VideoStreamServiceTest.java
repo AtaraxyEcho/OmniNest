@@ -207,12 +207,27 @@ class VideoStreamServiceTest {
         when(ffmpegRuntime.isDisabled()).thenReturn(false);
 
         List<String> command = service.buildStreamCommand(
-                List.of("-i", "http://minio/movie.mp4"),
-                List.of("http://minio/movie.mp4")
+                service.buildTranscodeArgs("mp4", "http://minio/movie.mp4", 0L)
         ).command();
 
         assertThat(command).containsSubsequence(
                 "ffmpeg", "-y", "-protocol_whitelist", "http,https,tcp,tls",
-                "-i", "http://minio/movie.mp4");
+                "-f", "mp4", "-i", "http://minio/movie.mp4");
+    }
+
+    @Test
+    void cachedAudioArgsKeepWhitelistPerInputInsteadOfMerging() {
+        // 本地视频 + 远程音轨：两个输入必须各带自己的白名单，
+        // 合并后本地视频会获得出网协议、远程音轨会获得读盘能力。
+        List<String> args = service.buildCachedAudioArgs(
+                "matroska", "/mnt/local-movie/movie.mkv", "http://minio/audio.aac", 0L);
+
+        assertThat(args).containsSubsequence(
+                "-protocol_whitelist", "file,crypto,data",
+                "-f", "matroska", "-i", "/mnt/local-movie/movie.mkv");
+        assertThat(args).containsSubsequence(
+                "-protocol_whitelist", "http,https,tcp,tls",
+                "-f", "aac", "-i", "http://minio/audio.aac");
+        assertThat(args).doesNotContain("file,crypto,data,http,https,tcp,tls");
     }
 }

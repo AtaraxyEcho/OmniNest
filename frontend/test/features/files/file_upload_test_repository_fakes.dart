@@ -28,6 +28,22 @@ class _FakeFileRepository
   final sharedParentRequests = <String?>[];
   final personalFilesByPage = <int, List<FileNode>>{};
   final personalPageRequests = <int>[];
+
+  /// 为 true 时不预签名分片，强制走按需取分片 URL 的路径。
+  bool omitPartUrls = false;
+
+  /// 卡住按需取分片 URL 的在途响应。
+  Completer<String>? partUrlCompleter;
+
+  /// 首个按需取分片 URL 的请求已发出。
+  Completer<void>? partUrlRequested;
+
+  /// 卡住分片确认的在途响应。
+  Completer<void>? completePartCompleter;
+
+  /// 首个分片确认请求已发出。
+  Completer<void>? completePartRequested;
+
   final firstUploadStarted = Completer<void>();
   final secondUploadStarted = Completer<void>();
   final firstUploadResult = Completer<String>();
@@ -93,7 +109,7 @@ class _FakeFileRepository
     String? spaceType,
     String? asVersionOfFileId,
   }) async {
-    return const FileUploadSession(
+    return FileUploadSession(
       id: 'session-id',
       uploadId: 'upload-123',
       parentId: null,
@@ -103,19 +119,19 @@ class _FakeFileRepository
       totalParts: 2,
       mimeType: 'application/octet-stream',
       status: 'CREATED',
-      uploadUrl: 'http://minio/part-1',
+      uploadUrl: omitPartUrls ? null : 'http://minio/part-1',
       parts: [
         FileUploadPart(
           partNumber: 1,
           sizeBytes: 3,
           status: 'PENDING',
-          uploadUrl: 'http://minio/part-1',
+          uploadUrl: omitPartUrls ? null : 'http://minio/part-1',
         ),
         FileUploadPart(
           partNumber: 2,
           sizeBytes: 3,
           status: 'PENDING',
-          uploadUrl: 'http://minio/part-2',
+          uploadUrl: omitPartUrls ? null : 'http://minio/part-2',
         ),
       ],
       expiresAt: null,
@@ -126,7 +142,17 @@ class _FakeFileRepository
   Future<String> getUploadPartUrl({
     required String uploadId,
     required int partNumber,
-  }) async => 'https://storage.test/$uploadId/part-$partNumber';
+  }) async {
+    final requested = partUrlRequested;
+    if (requested != null && !requested.isCompleted) {
+      requested.complete();
+    }
+    final gate = partUrlCompleter;
+    if (gate != null) {
+      return gate.future;
+    }
+    return 'https://storage.test/$uploadId/part-$partNumber';
+  }
 
   @override
   Future<String> putUploadUrl({
@@ -202,6 +228,14 @@ class _FakeFileRepository
     required int partNumber,
     required String eTag,
   }) async {
+    final requested = completePartRequested;
+    if (requested != null && !requested.isCompleted) {
+      requested.complete();
+    }
+    final gate = completePartCompleter;
+    if (gate != null) {
+      await gate.future;
+    }
     completedPartNumbers.add(partNumber);
   }
 

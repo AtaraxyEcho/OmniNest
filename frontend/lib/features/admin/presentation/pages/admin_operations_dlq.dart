@@ -55,24 +55,27 @@ class _DlqTab extends ConsumerStatefulWidget {
 }
 
 class _DlqTabState extends ConsumerState<_DlqTab> {
-  /// 勾选索引基于过滤后列表：查询词或数据刷新变化时失效，须清空。
-  final Set<int> _selected = <int>{};
+  /// 勾选按业务 ID 保存：列表刷新或单行操作导致下标平移时，勾选仍跟着原来的任务。
+  final Set<String> _selectedIds = <String>{};
 
   @override
   void didUpdateWidget(_DlqTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query && _selected.isNotEmpty) {
-      setState(_selected.clear);
+    if (oldWidget.query != widget.query && _selectedIds.isNotEmpty) {
+      setState(_selectedIds.clear);
     }
+  }
+
+  /// 当前过滤结果中仍可见的勾选：数据刷新移除的行自动退出勾选。
+  Set<String> _visibleSelection(List<AdminDlqTask> filtered) {
+    final visibleIds = filtered.map((item) => item.id).toSet();
+    return _selectedIds.where(visibleIds.contains).toSet();
   }
 
   /// 批量重试勾选的死信：确认后逐条执行，失败项跳过。
   Future<void> _batchRetry(List<AdminDlqTask> filtered) async {
     final l10n = AppLocalizations.of(context);
-    final ids = <String>[
-      for (final index in _selected)
-        if (index >= 0 && index < filtered.length) filtered[index].id,
-    ];
+    final ids = _visibleSelection(filtered).toList();
     if (ids.isEmpty) {
       return;
     }
@@ -88,7 +91,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
           .read(adminOperationsActionsProvider)
           .batchRetryDlq(ids);
       if (!mounted) return;
-      setState(_selected.clear);
+      setState(_selectedIds.clear);
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
@@ -111,10 +114,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
   /// 单行丢弃的短码口令在批量场景不可行，文案明确不可恢复。
   Future<void> _batchDiscard(List<AdminDlqTask> filtered) async {
     final l10n = AppLocalizations.of(context);
-    final ids = <String>[
-      for (final index in _selected)
-        if (index >= 0 && index < filtered.length) filtered[index].id,
-    ];
+    final ids = _visibleSelection(filtered).toList();
     if (ids.isEmpty) {
       return;
     }
@@ -131,7 +131,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
           .read(adminOperationsActionsProvider)
           .batchDiscardDlq(ids);
       if (!mounted) return;
-      setState(_selected.clear);
+      setState(_selectedIds.clear);
       showOmniFeedback(
         context,
         l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
@@ -159,7 +159,14 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
             padding: EdgeInsets.all(16),
             child: AdminListSkeleton(),
           ),
-      error: (_, _) => Center(child: Text(l10n.adminLoadFailed(''))),
+      error:
+          (error, _) => Center(
+            child: Text(
+              l10n.adminLoadFailed(
+                describeUserFacingError(error, l10n: l10n).displayMessage,
+              ),
+            ),
+          ),
       data: (items) {
         final filtered =
             widget.query.isEmpty
@@ -173,46 +180,56 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                           ) ??
                           false);
                 }).toList();
+        final visibleSelection = _visibleSelection(filtered);
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 16),
           child: AdminTableSection(
             title: l10n.adminDlq,
             subtitle: l10n.adminDlqSubtitle,
             children: [
-              if (_selected.isNotEmpty) ...[
+              if (visibleSelection.isNotEmpty) ...[
                 _AdminBatchBar(
-                  count: _selected.length,
+                  count: visibleSelection.length,
                   actionLabel: l10n.adminBatchRetryTasks,
                   actionIcon: Icons.replay_rounded,
                   onAction: () => _batchRetry(filtered),
                   secondaryActionLabel: l10n.adminTaskDiscard,
                   secondaryActionIcon: Icons.delete_outline_rounded,
                   onSecondaryAction: () => _batchDiscard(filtered),
-                  onClear: () => setState(_selected.clear),
+                  onClear: () => setState(_selectedIds.clear),
                 ),
                 const SizedBox(height: 8),
               ],
               AdminDataTable(
                 showCheckboxes: true,
-                isChecked: (index) => _selected.contains(index),
-                onRowCheck:
-                    (index, value) => setState(() {
-                      value ? _selected.add(index) : _selected.remove(index);
-                    }),
+                isChecked:
+                    (index) =>
+                        index >= 0 &&
+                        index < filtered.length &&
+                        _selectedIds.contains(filtered[index].id),
+                onRowCheck: (index, value) {
+                  if (index < 0 || index >= filtered.length) {
+                    return;
+                  }
+                  final id = filtered[index].id;
+                  setState(() {
+                    value ? _selectedIds.add(id) : _selectedIds.remove(id);
+                  });
+                },
                 onCheckAll: (value) {
                   setState(() {
-                    _selected.clear();
+                    _selectedIds.clear();
                     if (value) {
-                      for (var i = 0; i < filtered.length; i++) {
-                        _selected.add(i);
-                      }
+                      _selectedIds.addAll(filtered.map((item) => item.id));
                     }
                   });
                 },
                 allChecked:
-                    filtered.isNotEmpty && _selected.length == filtered.length,
+                    filtered.isNotEmpty &&
+                    _selectedIds.containsAll(filtered.map((item) => item.id)),
                 someChecked:
-                    _selected.isNotEmpty && _selected.length < filtered.length,
+                    visibleSelection.isNotEmpty &&
+                    visibleSelection.length < filtered.length,
                 showIndex: true,
                 minTableWidth: 980,
                 // 两个 48px 图标按钮需 2×48 加余量，默认 168 偏宽。

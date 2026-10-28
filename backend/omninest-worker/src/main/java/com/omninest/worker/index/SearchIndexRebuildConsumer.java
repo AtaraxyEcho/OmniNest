@@ -72,9 +72,9 @@ public class SearchIndexRebuildConsumer {
                         event.taskId(), QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY, event, executionException);
                 channel.basicAck(deliveryTag, false);
             } catch (RuntimeException stateException) {
-                log.error("索引重建失败状态写入失败，将重新投递原消息: taskId={}, errorType={}",
+                log.error("索引重建失败状态写入失败，转入死信队列: taskId={}, errorType={}",
                         event.taskId(), stateException.getClass().getSimpleName(), stateException);
-                channel.basicNack(deliveryTag, false, true);
+                channel.basicNack(deliveryTag, false, false);
             }
         }
     }

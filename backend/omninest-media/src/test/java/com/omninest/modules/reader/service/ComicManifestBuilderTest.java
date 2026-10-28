@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -281,8 +282,8 @@ class ComicManifestBuilderTest {
         List<ReaderPage> secondPages = pages(itemId, secondSourceId, 3);
 
         when(sourceRepository.findByReaderItemId(itemId)).thenReturn(List.of(firstSource, secondSource));
-        when(pageRepository.findBySourceId(firstSourceId)).thenReturn(firstPages);
-        when(pageRepository.findBySourceId(secondSourceId)).thenReturn(secondPages);
+        when(pageRepository.findByReaderItemIdOrderByPageIndex(itemId))
+                .thenReturn(Stream.concat(firstPages.stream(), secondPages.stream()).toList());
         when(pageRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(catalogRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
@@ -318,8 +319,8 @@ class ComicManifestBuilderTest {
         List<ReaderPage> secondPages = flatPages(itemId, secondSourceId, 3);
 
         when(sourceRepository.findByReaderItemId(itemId)).thenReturn(List.of(firstSource, secondSource));
-        when(pageRepository.findBySourceId(firstSourceId)).thenReturn(firstPages);
-        when(pageRepository.findBySourceId(secondSourceId)).thenReturn(secondPages);
+        when(pageRepository.findByReaderItemIdOrderByPageIndex(itemId))
+                .thenReturn(Stream.concat(firstPages.stream(), secondPages.stream()).toList());
         when(pageRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(catalogRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
@@ -356,7 +357,7 @@ class ComicManifestBuilderTest {
                 pageAt(itemId, sourceId, 2, "ch02/001.jpg")));
 
         when(sourceRepository.findByReaderItemId(itemId)).thenReturn(List.of(archive));
-        when(pageRepository.findBySourceId(sourceId)).thenReturn(pages);
+        when(pageRepository.findByReaderItemIdOrderByPageIndex(itemId)).thenReturn(pages);
         when(pageRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(catalogRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findById(itemId)).thenReturn(Optional.empty());

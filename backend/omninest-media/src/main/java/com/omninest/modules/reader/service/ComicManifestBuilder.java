@@ -132,16 +132,23 @@ public class ComicManifestBuilder {
         sources.sort(SOURCE_ORDER);
 
         // 2. 按来源顺序 + sourcePageIndex 重排全局 pageIndex
+        // 一次查询取回全部页面再分组：每个分卷单独查询会随卷数线性放大。
+        Map<UUID, List<ReaderPage>> pagesBySource = new HashMap<>();
+        for (ReaderPage page : pageRepository.findByReaderItemIdOrderByPageIndex(itemId)) {
+            pagesBySource.computeIfAbsent(page.getSourceId(), key -> new ArrayList<>()).add(page);
+        }
         List<ReaderPage> allPages = new ArrayList<>();
         for (ReaderItemSource src : sources) {
-            List<ReaderPage> sourcePages = pageRepository.findBySourceId(src.getId());
+            List<ReaderPage> sourcePages = pagesBySource.get(src.getId());
+            if (sourcePages == null || sourcePages.isEmpty()) {
+                continue;
+            }
             sourcePages.sort(Comparator.comparingInt(ReaderPage::getSourcePageIndex));
             allPages.addAll(sourcePages);
         }
         for (int i = 0; i < allPages.size(); i++) {
             allPages.get(i).setPageIndex(i);
         }
-        pageRepository.saveAll(allPages);
 
         // 3. 构建 source-aware 目录
         catalogRepository.deleteByReaderItemId(itemId);

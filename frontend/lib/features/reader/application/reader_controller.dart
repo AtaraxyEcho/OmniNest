@@ -620,8 +620,8 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     }
   }
 
-  /// 获取导入候选文件列表
-  Future<List<ReaderImportCandidate>> importCandidates() async {
+  /// 获取导入候选文件列表；truncated 表示服务端按上限截断。
+  Future<ReaderImportCandidates> importCandidates() async {
     try {
       return await _api.importCandidates();
     } on Exception catch (e) {

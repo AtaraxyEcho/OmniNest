@@ -98,8 +98,16 @@ public class ThumbnailConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("缩略图生成失败: fileNodeId={}", event.fileNodeId(), e);
-            taskTracker.handleFailure(TASK_TYPE, QueueNames.THUMBNAIL_ROUTING_KEY, tracked.taskId(), event, e);
-            channel.basicAck(deliveryTag, false);
+            try {
+                taskTracker.handleFailure(TASK_TYPE, QueueNames.THUMBNAIL_ROUTING_KEY, tracked.taskId(), event, e);
+                channel.basicAck(deliveryTag, false);
+            } catch (RuntimeException stateException) {
+                // 失败状态本身写不进去时不能再确认消息：转入死信队列，
+                // 让任务由心跳超时恢复兜底，而不是留下永远未确认的消息。
+                log.error("缩略图失败状态写入失败，转入死信队列: taskId={}, errorType={}",
+                        tracked.taskId(), stateException.getClass().getSimpleName(), stateException);
+                channel.basicNack(deliveryTag, false, false);
+            }
         }
     }
 

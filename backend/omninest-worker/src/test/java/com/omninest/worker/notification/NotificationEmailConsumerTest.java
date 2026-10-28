@@ -58,7 +58,7 @@ class NotificationEmailConsumerTest {
     }
 
     @Test
-    void retryStateWriteFailureRequeuesInsteadOfLosingMessage() throws IOException {
+    void retryStateWriteFailureRoutesToDeadLetterQueue() throws IOException {
         NotificationEmailRequestedEvent event = event();
         doThrow(new RuntimeException("db down")).when(deliveryService).deliver(event);
         doThrow(new IllegalStateException("retry row locked"))
@@ -67,7 +67,7 @@ class NotificationEmailConsumerTest {
         consumer.handle(event, message(), channel);
 
         verify(channel, never()).basicAck(anyLong(), eq(false));
-        verify(channel).basicNack(1L, false, true);
+        verify(channel).basicNack(1L, false, false);
     }
 
     private void verifyNoRetry() {

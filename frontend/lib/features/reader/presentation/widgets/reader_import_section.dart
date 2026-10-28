@@ -32,6 +32,9 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
 
   List<ReaderImportCandidate> _candidates = [];
 
+  /// 服务端按上限截断候选时的提示标记。
+  bool _truncated = false;
+
   /// 候选加载失败标记：与「无候选」的空态区分，提供重试入口。
   bool _loadFailed = false;
 
@@ -56,7 +59,8 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
               .importCandidates();
       if (mounted) {
         setState(() {
-          _candidates = candidates;
+          _candidates = candidates.items;
+          _truncated = candidates.truncated;
           _loadFailed = false;
         });
       }
@@ -101,6 +105,17 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
             ),
           ],
         ),
+        if (_truncated) ...[
+          const SizedBox(height: 8),
+          Text(
+            AppLocalizations.of(context).readerImportCandidatesTruncated,
+            style: TextStyle(
+              color: context.readerColors.onSurfaceVariant,
+              fontSize: AppTypography.labelSmall,
+              height: 1.3,
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         if (candidates.isEmpty)
           Column(

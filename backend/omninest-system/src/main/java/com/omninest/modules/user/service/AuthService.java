@@ -45,6 +45,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Slf4j
 @Service
@@ -169,7 +171,7 @@ public class AuthService {
             // 验证码错误不核销 jti：单次输错不应作废整个登录挑战，防爆破由上面的按用户预算承担
             throw exception;
         }
-        consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
+        consumeChallengeTokenAfterCommit(challengeToken, TOKEN_USE_TWO_FACTOR);
         log.info("用户两步验证登录成功: userId={}, platform={}, ip={}", userId, clientPlatform, ipAddress);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
     }
@@ -228,11 +230,12 @@ public class AuthService {
             String ipAddress,
             String userAgent
     ) {
-        UUID userId = consumeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
+        UUID userId = verifyChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
         AuthUser profile = loadActiveUserWithRoles(userId);
         if (!twoFactorService.isEnabled(userId)) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置");
         }
+        consumeChallengeTokenAfterCommit(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
         log.info("管理员两步验证注册完成: userId={}, platform={}", userId, clientPlatform);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
     }
@@ -297,6 +300,33 @@ public class AuthService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证已使用，请重新发起");
         }
         return parseUserId(jwt.getSubject());
+    }
+
+    /**
+     * 在事务提交后核销一次性挑战令牌。
+     *
+     * <p>登录落库或事务提交失败时令牌必须仍然可用，用户不必重新输入密码；
+     * 提交成功后再核销，期间的重放由 TOTP 单步消费兜底。</p>
+     *
+     * @param rawToken 挑战令牌
+     * @param expectedUse 期望的 token_use
+     */
+    private void consumeChallengeTokenAfterCommit(String rawToken, String expectedUse) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        consumeChallengeToken(rawToken, expectedUse);
+                    } catch (RuntimeException exception) {
+                        // 会话已经签发，核销失败不能把成功登录变成 500。
+                        log.warn("两步验证挑战令牌核销失败: {}", exception.getMessage());
+                    }
+                }
+            });
+            return;
+        }
+        consumeChallengeToken(rawToken, expectedUse);
     }
 
     private Jwt decodeChallengeToken(String rawToken, String expectedUse) {
@@ -437,7 +467,7 @@ public class AuthService {
         return sessionId;
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = RefreshTokenReplayException.class)
     public AuthTokenResponse refresh(String refreshToken) {
         String token = normalizeToken(refreshToken);
         Jwt jwt;
@@ -489,14 +519,16 @@ public class AuthService {
                 );
                 return issueToken(toDto(profile), sessionId, session.getExpiresAt(), currentJti);
             }
-            sessionRevocationService.revokeSessionAndDeactivate(
-                    userId,
-                    sessionId,
-                    "刷新令牌重放，会话已撤销",
-                    authenticationTokenPolicy.refreshTokenTtl()
-            );
+            // 当前事务已持有该会话的排他行锁，撤销状态必须写在本事务里：
+            // 在 REQUIRES_NEW 中更新同一行会阻塞自身连接，形成同线程自死锁。
+            session.setRevokedAt(now);
+            session.setRevokeReason("刷新令牌重放，会话已撤销");
+            activeSessionRepository.save(session);
+            // 撤销记录在独立事务中插入另一张表，不与会话行锁冲突。
+            sessionRevocationService.revokeSession(
+                    userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
             log.warn("检测到刷新令牌重放，撤销会话: userId={}, sessionId={}", userId, sessionId);
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证已失效，请重新登录");
+            throw new RefreshTokenReplayException("刷新凭证已失效，请重新登录");
         }
         String rotatedJti = UUID.randomUUID().toString();
         session.setPreviousRefreshJti(currentJti);
@@ -562,7 +594,6 @@ public class AuthService {
      * @param authenticatedUserId 当前 Bearer 令牌的用户标识，可为空
      * @param authenticatedSessionId 当前 Bearer 令牌的 sid，可为空
      */
-    @Transactional(rollbackFor = Exception.class)
     public void logout(String refreshToken, UUID authenticatedUserId, UUID authenticatedSessionId) {
         UUID userId = null;
         UUID sessionId = null;
@@ -587,9 +618,11 @@ public class AuthService {
         if (userId == null || sessionId == null) {
             return;
         }
-        if (activeSessionRepository.findByIdAndUserId(sessionId, userId).isEmpty()) {
+        if (activeSessionRepository.findSessionSnapshot(sessionId, userId).isEmpty()) {
             return;
         }
+        // 撤销本身走独立事务；本方法只做无锁存在性判断，不能持有会话行锁，
+        // 否则独立事务里的同会话更新会阻塞到自身事务结束。
         sessionRevocationService.revokeSessionAndDeactivate(
                 userId, sessionId, "用户退出登录", authenticationTokenPolicy.refreshTokenTtl());
         if (authenticatedUserId != null

@@ -328,6 +328,18 @@ public final class ReaderDtos {
     ) {
     }
 
+    /**
+     * 可导入候选列表：超过服务端上限时按创建时间倒序截断。
+     *
+     * @param items 候选文件
+     * @param truncated 是否还有更多候选未返回
+     */
+    public record ImportCandidatesResponse(
+            List<ImportCandidateDto> items,
+            boolean truncated
+    ) {
+    }
+
     /** 从文件节点设置封面请求。 */
     public record SetCoverFromFileRequest(
             @NotNull UUID fileNodeId

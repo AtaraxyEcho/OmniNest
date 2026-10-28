@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/preferences/preference_local_store.dart';
 import 'package:omninest/core/preferences/preference_snapshot.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
@@ -285,7 +286,10 @@ class PreferenceSyncService {
       }
     }
     // 三次冲突后仍失败:抛给上层,保留 pending 供下次同步重放。
-    throw const AppException(code: '7001', message: '用户偏好已在其他位置更新，请刷新后重试');
+    throw const AppException(
+      code: AppErrorCodes.preferenceVersionConflict,
+      message: '用户偏好已在其他位置更新，请刷新后重试',
+    );
   }
 
   Future<T> _serial<T>(

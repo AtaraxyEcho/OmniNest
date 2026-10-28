@@ -49,6 +49,8 @@ public class TextExtractionConsumer {
             channel.basicAck(deliveryTag, false);
             return;
         }
+        FileSearchIndexService.ChunkIndexSession indexSession = null;
+        boolean indexCommitted = false;
         try {
             if (fileLifecycleGuard.findOwnedProcessable(event.ownerUserId(), event.fileNodeId()).isEmpty()) {
                 log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
@@ -67,7 +69,7 @@ public class TextExtractionConsumer {
                 channel.basicAck(deliveryTag, false);
                 return;
             }
-            FileSearchIndexService.ChunkIndexSession indexSession = fileSearchIndexService.openChunkIndex(
+            indexSession = fileSearchIndexService.openChunkIndex(
                     event.fileNodeId(),
                     event.ownerUserId(),
                     event.fileName(),
@@ -88,6 +90,7 @@ public class TextExtractionConsumer {
                 return;
             }
             int chunkCount = indexSession.complete();
+            indexCommitted = true;
             if (chunkCount > 0) {
                 log.info("文本提取完成: fileNodeId={}, 文本长度={}, chunkCount={}, truncated={}",
                         event.fileNodeId(), extraction.textLength(), chunkCount, extraction.truncated());
@@ -106,8 +109,26 @@ public class TextExtractionConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("文本提取失败: fileNodeId={}", event.fileNodeId(), e);
-            taskTracker.handleFailure(TASK_TYPE, QueueNames.TEXT_EXTRACTION_ROUTING_KEY, tracked.taskId(), event, e);
-            channel.basicAck(deliveryTag, false);
+            if (indexSession != null && !indexCommitted) {
+                // 分块是边解析边写入的：中途失败会留下半截文档，
+                // 任务重试前必须按文件清掉，否则搜索命中残缺正文。
+                try {
+                    fileSearchIndexService.deleteFiles(
+                            List.of(event.fileNodeId()), event.ownerUserId());
+                } catch (RuntimeException cleanupException) {
+                    log.warn("文本提取失败后清理半截索引失败: fileNodeId={}, errorType={}",
+                            event.fileNodeId(), cleanupException.getClass().getSimpleName(), cleanupException);
+                }
+            }
+            try {
+                taskTracker.handleFailure(
+                        TASK_TYPE, QueueNames.TEXT_EXTRACTION_ROUTING_KEY, tracked.taskId(), event, e);
+                channel.basicAck(deliveryTag, false);
+            } catch (RuntimeException stateException) {
+                log.error("文本提取失败状态写入失败，转入死信队列: taskId={}, errorType={}",
+                        tracked.taskId(), stateException.getClass().getSimpleName(), stateException);
+                channel.basicNack(deliveryTag, false, false);
+            }
         }
     }
 }

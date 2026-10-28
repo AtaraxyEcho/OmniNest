@@ -658,10 +658,10 @@ public class ReaderLibraryController {
         return ApiResponse.success(null);
     }
 
-    @Operation(summary = "列出可导入的文件", description = "列出个人空间和共享空间中可导入的 EPUB/TXT/CBZ/ZIP 文件")
+    @Operation(summary = "列出可导入的文件", description = "列出个人空间和共享空间中可导入的 EPUB/TXT/CBZ/ZIP 文件，超出上限时截断")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/reader/import/candidates")
-    ApiResponse<List<ReaderDtos.ImportCandidateDto>> importCandidates() {
+    ApiResponse<ReaderDtos.ImportCandidatesResponse> importCandidates() {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(readerImportService.importCandidates(ownerUserId));
     }

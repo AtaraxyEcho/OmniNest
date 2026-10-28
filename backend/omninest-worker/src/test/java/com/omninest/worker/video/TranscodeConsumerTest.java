@@ -106,7 +106,7 @@ class TranscodeConsumerTest {
     }
 
     @Test
-    void handleRequeuesOriginalMessageWhenFailureStateCannotBePersisted() throws IOException {
+    void handleRoutesToDeadLetterQueueWhenFailureStateCannotBePersisted() throws IOException {
         TranscodeRequestedEvent event = event(false, false);
         Mockito.doThrow(new IllegalStateException("transcoder unavailable"))
                 .when(executionService).execute(TASK_ID, VIDEO_ID, OWNER_ID);
@@ -119,7 +119,7 @@ class TranscodeConsumerTest {
 
         consumer.handle(event, message(), channel);
 
-        Mockito.verify(channel).basicNack(1L, false, true);
+        Mockito.verify(channel).basicNack(1L, false, false);
         Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 

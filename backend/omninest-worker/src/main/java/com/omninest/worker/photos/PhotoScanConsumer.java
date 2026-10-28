@@ -50,9 +50,9 @@ public class PhotoScanConsumer {
                     event.jobId(), QueueNames.PHOTO_SCAN_ROUTING_KEY, event, exception);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException stateException) {
-            log.error("照片扫描失败状态写入失败，将重新投递原消息: jobId={}, errorType={}",
+            log.error("照片扫描失败状态写入失败，转入死信队列: jobId={}, errorType={}",
                     event.jobId(), stateException.getClass().getSimpleName(), stateException);
-            channel.basicNack(deliveryTag, false, true);
+            channel.basicNack(deliveryTag, false, false);
         }
     }
 }

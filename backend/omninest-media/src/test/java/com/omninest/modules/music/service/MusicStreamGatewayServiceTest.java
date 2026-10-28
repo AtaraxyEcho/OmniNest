@@ -44,12 +44,15 @@ class MusicStreamGatewayServiceTest {
             mock(com.omninest.modules.music.repository.MusicTrackRepository.class);
     private final com.omninest.modules.file.service.FilePlaybackContentService filePlaybackContentService =
             mock(com.omninest.modules.file.service.FilePlaybackContentService.class);
+    private final com.omninest.modules.file.service.FileMetadataQueryService fileMetadataQueryService =
+            mock(com.omninest.modules.file.service.FileMetadataQueryService.class);
 
     private final MusicStreamGatewayService service = new MusicStreamGatewayService(
             sessionService,
             sourceUrlPolicy,
             trackRepository,
-            filePlaybackContentService
+            filePlaybackContentService,
+            fileMetadataQueryService
     );
 
     @Test
@@ -163,7 +166,7 @@ class MusicStreamGatewayServiceTest {
     }
 
     @Test
-    void localSessionHeadClosesProbeStreamWithoutBody() throws Exception {
+    void localSessionHeadClosesContentStreamWithoutBody() throws Exception {
         stubLocalTrack();
         final boolean[] contentClosed = {false};
         when(filePlaybackContentService.openFileContent(OWNER_ID, FILE_NODE_ID))
@@ -195,6 +198,25 @@ class MusicStreamGatewayServiceTest {
         track.setFormat("flac");
         track.setDurationSeconds(180);
         when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
+        // 文件大小来自元数据：本地流不再为探测大小额外打开一次对象存储。
+        when(fileMetadataQueryService.findAllByIds(java.util.List.of(FILE_NODE_ID)))
+                .thenReturn(java.util.List.of(new com.omninest.modules.file.dto.FileDescriptor(
+                        FILE_NODE_ID,
+                        OWNER_ID,
+                        null,
+                        "FILE",
+                        "track.flac",
+                        "/track.flac",
+                        "audio/flac",
+                        10L,
+                        null,
+                        "UPLOAD",
+                        false,
+                        false,
+                        com.omninest.modules.file.domain.SpaceType.PERSONAL,
+                        OWNER_ID,
+                        null,
+                        null)));
         MusicPlaybackSession session = new MusicPlaybackSession(
                 SESSION_ID,
                 OWNER_ID,

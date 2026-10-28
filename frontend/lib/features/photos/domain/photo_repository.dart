@@ -147,9 +147,7 @@ abstract interface class PhotoRepository {
     String location, {
     int page = 0,
     int size = 50,
-  }) {
-    throw UnimplementedError('listByLocationPage');
-  }
+  });
 
   /// 添加标签
   Future<void> addTag(String photoId, String tag);
@@ -200,9 +198,7 @@ abstract interface class PhotoRepository {
   Future<void> revertToVersion(String photoId, String versionId);
 
   /// 清除编辑产物，恢复未经编辑的原始照片。
-  Future<void> revertToOriginal(String photoId) {
-    throw UnimplementedError('revertToOriginal');
-  }
+  Future<void> revertToOriginal(String photoId);
 
   /// 创建相册分享链接
   Future<PhotoShareLink> createAlbumShare(

@@ -200,10 +200,21 @@ class AnalysisPipelineTest(unittest.TestCase):
         self.assertEqual("SUBJECT", result.observations[0].namespace)
         self.assertEqual("cat", result.observations[0].code)
 
-    def test_pipeline_version_contains_profile_model_state_and_ocr_version(self):
-        self.assertIn(app.VISION_PROFILE, app.current_content_pipeline_version())
-        self.assertIn(app._vision_model_state(app.VISION_PROFILE), app.current_content_pipeline_version())
-        self.assertIn(app.OCR_PIPELINE_VERSION, app.current_content_pipeline_version())
+    def test_pipeline_version_is_opaque_but_tracks_profile_and_model_state(self):
+        with patch.object(app, "VISION_PROFILE", "lightweight"):
+            with patch.object(app, "_vision_model_state", return_value="ready"):
+                ready_version = app.current_content_pipeline_version()
+            with patch.object(app, "_vision_model_state", return_value="missing"):
+                missing_version = app.current_content_pipeline_version()
+        with patch.object(app, "VISION_PROFILE", "ram_plus_int8"):
+            with patch.object(app, "_vision_model_state", return_value="ready"):
+                other_profile_version = app.current_content_pipeline_version()
+
+        self.assertIn(app.OCR_PIPELINE_VERSION, ready_version)
+        self.assertNotIn("lightweight", ready_version)
+        self.assertNotIn("ready", ready_version)
+        self.assertNotEqual(ready_version, missing_version)
+        self.assertNotEqual(ready_version, other_profile_version)
 
     def test_vision_model_state_requires_all_profile_files(self):
         with patch.object(app.os.path, "isfile", return_value=True):
@@ -266,12 +277,29 @@ class AnalysisPipelineTest(unittest.TestCase):
                 self.assertEqual("ram_plus_int8", app._resolve_safe_vision_profile())
 
     def test_ready_reports_pipeline_version_without_internal_model_state(self):
-        response = asyncio.run(app.ready())
+        with patch.object(app, "_vision_model_state", return_value="ready"):
+            response = asyncio.run(app.ready())
+            expected_version = app.current_content_pipeline_version()
         self.assertEqual("ok", response["status"])
-        self.assertEqual(app.current_content_pipeline_version(), response["pipelineVersion"])
+        self.assertEqual(expected_version, response["pipelineVersion"])
         self.assertEqual(app.OCR_PIPELINE_VERSION, response["ocrVersion"])
         self.assertNotIn("visionProfile", response)
         self.assertNotIn("visionModelState", response)
+
+    def test_ready_stays_healthy_but_changes_version_when_models_are_missing(self):
+        # /ready 必须始终 200：容器 HEALTHCHECK、Worker 能力探测与后端版本缓存都按 2xx 判定。
+        with patch.object(app, "_vision_model_state", return_value="ready"):
+            response = asyncio.run(app.ready())
+            ready_version = app.current_content_pipeline_version()
+        self.assertEqual("ok", response["status"])
+        self.assertEqual(ready_version, response["pipelineVersion"])
+
+        with patch.object(app, "_vision_model_state", return_value="missing"):
+            degraded = asyncio.run(app.ready())
+            missing_version = app.current_content_pipeline_version()
+        self.assertEqual("ok", degraded["status"])
+        self.assertNotEqual(ready_version, missing_version)
+        self.assertNotIn("missing", missing_version)
 
 
 class SidecarTokenTest(unittest.TestCase):

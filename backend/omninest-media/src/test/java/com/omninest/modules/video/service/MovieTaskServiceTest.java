@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.error.BusinessException;
 
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
@@ -78,7 +79,7 @@ class MovieTaskServiceTest {
         );
         assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
         assertThat(eventCaptor.getValue().incremental()).isTrue();
-        verify(scrapeService, never()).registerPendingVideo(any(), any());
+        verify(scrapeService, never()).registerPendingVideosBatch(any(), any(), any());
     }
 
     @Test
@@ -87,18 +88,36 @@ class MovieTaskServiceTest {
                 FILE_ID, OWNER_ID, null, "FILE", "movie.mkv", "/movie.mkv",
                 "video/x-matroska", 4096, null, "LOCAL", false, false,
                 SpaceType.PERSONAL, OWNER_ID, null, null);
-        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(video));
+        when(taskRecordService.claimForExecution(any(), eq("SCANNING"))).thenReturn(true);
+        when(fileMetadataQueryService.listOwnedActiveFilesByCategoriesAfterId(
+                eq(OWNER_ID), eq(List.of(FileTypeCategories.VIDEO)),
+                any(UUID.class), anyInt())).thenReturn(List.of(video));
         when(fileNameParser.isVideoFile(video.name(), video.mimeType())).thenReturn(true);
         when(videoItemRepository.findByOwnerUserIdAndFileNodeIdIn(eq(OWNER_ID), any()))
                 .thenReturn(List.of());
+        when(scrapeService.registerPendingVideosBatch(eq(OWNER_ID), any(), any())).thenReturn(1);
         UUID taskId = UUID.randomUUID();
         MediaLibraryScanRequestedEvent event =
                 new MediaLibraryScanRequestedEvent(taskId, OWNER_ID, null, true);
 
         service.executeScan(event);
 
-        verify(scrapeService).registerPendingVideo(OWNER_ID, FILE_ID);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FileDescriptor>> filesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(scrapeService).registerPendingVideosBatch(eq(OWNER_ID), filesCaptor.capture(), any());
+        assertThat(filesCaptor.getValue()).extracting(FileDescriptor::id).containsExactly(FILE_ID);
         verify(taskRecordService).markCompleted(eq(taskId), any());
+    }
+
+    @Test
+    void executeScanSkipsWhenTaskCannotBeClaimed() {
+        UUID taskId = UUID.randomUUID();
+        when(taskRecordService.claimForExecution(taskId, "SCANNING")).thenReturn(false);
+
+        service.executeScan(new MediaLibraryScanRequestedEvent(taskId, OWNER_ID, null, true));
+
+        verify(scrapeService, never()).registerPendingVideosBatch(any(), any(), any());
+        verify(taskRecordService, never()).markCompleted(any(), any());
     }
 
     @Test

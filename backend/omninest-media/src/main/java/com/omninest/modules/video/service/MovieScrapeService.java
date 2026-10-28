@@ -26,8 +26,10 @@ import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -82,6 +84,45 @@ public class MovieScrapeService {
         // 新登记条目改变影视库统计，需失效 dashboard 缓存。
         readThroughCache.invalidate("omninest:dashboard:video:" + catalogOwnerId);
         return created;
+    }
+
+    /**
+     * 批量登记待刮削视频：复用扫描阶段已加载的文件描述与既有条目，避免逐文件重复查询。
+     *
+     * <p>不包裹单一事务：登记中途遇到无权限文件时，已登记条目与逐文件登记路径一样保留。
+     * Dashboard 缓存按目录所有者去重失效，不随文件数重复失效。</p>
+     *
+     * @param ownerUserId 扫描发起者
+     * @param files 待登记文件，调用方已按扫描规则过滤
+     * @param existingByFileNodeId 已存在的业务行，键为文件节点 ID
+     * @return 新登记条目数
+     */
+    public int registerPendingVideosBatch(
+            UUID ownerUserId,
+            List<FileDescriptor> files,
+            Map<UUID, MediaVideoItem> existingByFileNodeId
+    ) {
+        if (files.isEmpty()) {
+            return 0;
+        }
+        Set<UUID> touchedCatalogOwners = new LinkedHashSet<>();
+        int registered = 0;
+        for (FileDescriptor file : files) {
+            MediaVideoItem existing = existingByFileNodeId.get(file.id());
+            if (existing != null) {
+                requireScrapeWritable(ownerUserId, existing);
+                continue;
+            }
+            requireFileWritableForScrape(ownerUserId, file);
+            UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+            videoItemRepository.save(pendingVideo(catalogOwnerId, file, fileNameParser.parse(file.name())));
+            touchedCatalogOwners.add(catalogOwnerId);
+            registered++;
+        }
+        for (UUID catalogOwnerId : touchedCatalogOwners) {
+            readThroughCache.invalidate("omninest:dashboard:video:" + catalogOwnerId);
+        }
+        return registered;
     }
 
     /**

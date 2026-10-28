@@ -6441,6 +6441,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerPendingImport => '待导入文件';
 
   @override
+  String get readerImportCandidatesTruncated => '可导入文件过多，仅显示部分结果';
+
+  @override
   String readerPendingImportCount(Object count) {
     return '$count 个';
   }
@@ -10933,6 +10936,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorUnknown => '未知错误';
+
+  @override
+  String get errorPreferenceVersionConflict => '偏好已在其他位置更新，请刷新后重试';
 
   @override
   String get errorDownloadTicketInvalid => '下载链接无效，请重试';

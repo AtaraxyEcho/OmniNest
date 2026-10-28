@@ -8,6 +8,7 @@ import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileObjectDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import java.util.Collection;
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileMetadataQueryService {
 
     private final FileNodeRepository fileNodeRepository;
+    private final FileNodeScanQueryRepository fileNodeScanQueryRepository;
     private final FileObjectRepository fileObjectRepository;
 
     /**
@@ -174,6 +176,140 @@ public class FileMetadataQueryService {
         // 入参是字面量路径前缀（跨模块调用方不预先转义），转义只发生在这里一次。
         return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                 ownerUserId, spaceType, LikePatterns.escapeSpecials(prefix))
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 按 ID 游标分批查询用户自有、指定业务分类的未删除文件。
+     *
+     * <p>分类与派生资产排除都下推数据库：图库十万级照片不会因为与音乐/影视/阅读
+     * 同属一个用户就被整体加载进 JVM，调用方每批处理完即可释放。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param categories 业务分类集合，不可为空
+     * @param afterId 上一批最后一个节点 ID，首批传全零 UUID
+     * @param limit 单批上限
+     * @return 本批文件描述符
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listOwnedActiveFilesByCategoriesAfterId(
+            UUID ownerUserId, Collection<String> categories, UUID afterId, int limit) {
+        return fileNodeScanQueryRepository.findOwnedActiveFilesByCategoriesAfterId(
+                        ownerUserId, categories, afterId, PageRequest.of(0, limit))
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 统计用户自有、指定业务分类的未删除文件数量。
+     */
+    @Transactional(readOnly = true)
+    public long countOwnedActiveFilesByCategories(UUID ownerUserId, Collection<String> categories) {
+        return fileNodeScanQueryRepository.countOwnedActiveFilesByCategories(ownerUserId, categories);
+    }
+
+    /**
+     * 按 ID 游标分批查询共享给当前用户的指定业务分类文件。
+     *
+     * @param userId 当前用户 ID
+     * @param categories 业务分类集合，不可为空
+     * @param afterId 上一批最后一个节点 ID，首批传全零 UUID
+     * @param limit 单批上限
+     * @return 本批文件描述符
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listSharedFilesByCategoriesAfterId(
+            UUID userId, Collection<String> categories, UUID afterId, int limit) {
+        return fileNodeScanQueryRepository.findSharedFilesByCategoriesAfterId(
+                        userId, categories, afterId, PageRequest.of(0, limit))
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 统计共享给当前用户、指定业务分类的未删除文件数量。
+     */
+    @Transactional(readOnly = true)
+    public long countSharedFilesByCategories(UUID userId, Collection<String> categories) {
+        return fileNodeScanQueryRepository.countSharedFilesByCategories(userId, categories);
+    }
+
+    /**
+     * 按路径前缀、业务分类与 ID 游标分批查询用户自有未删除文件。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
+     * @param prefix 路径前缀
+     * @param categories 业务分类集合，不可为空
+     * @param afterId 上一批最后一个节点 ID，首批传全零 UUID
+     * @param limit 单批上限
+     * @return 本批文件描述符
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listOwnedActiveByPathPrefixAndCategoriesAfterId(
+            UUID ownerUserId, SpaceType spaceType, String prefix,
+            Collection<String> categories, UUID afterId, int limit) {
+        return fileNodeScanQueryRepository.findOwnedActiveFilesByPathPrefixAndCategoriesAfterId(
+                        ownerUserId, spaceType, LikePatterns.escapeSpecials(prefix),
+                        categories, afterId, PageRequest.of(0, limit))
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 统计用户指定空间与路径前缀下、指定业务分类的未删除文件数量。
+     */
+    @Transactional(readOnly = true)
+    public long countOwnedActiveByPathPrefixAndCategories(
+            UUID ownerUserId, SpaceType spaceType, String prefix, Collection<String> categories) {
+        return fileNodeScanQueryRepository.countOwnedActiveFilesByPathPrefixAndCategories(
+                ownerUserId, spaceType, LikePatterns.escapeSpecials(prefix), categories);
+    }
+
+    /**
+     * 查询用户自有的 {@code .lrc} 歌词文件。
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listOwnedLyricFiles(UUID ownerUserId) {
+        return fileNodeScanQueryRepository.findOwnedLyricFiles(ownerUserId)
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 查询共享给当前用户的 {@code .lrc} 歌词文件。
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listSharedLyricFiles(UUID userId) {
+        return fileNodeScanQueryRepository.findSharedLyricFiles(userId)
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 按创建时间倒序取用户自有的指定业务分类文件，供有上限的候选列表使用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param categories 业务分类集合，不可为空
+     * @param limit 上限
+     * @return 文件描述符，最多 limit 条
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listOwnedActiveFilesByCategoriesLimited(
+            UUID ownerUserId, Collection<String> categories, int limit) {
+        return fileNodeScanQueryRepository.findOwnedActiveFilesByCategoriesLimited(
+                        ownerUserId, categories, PageRequest.of(0, limit))
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
+     * 按创建时间倒序取指定空间内的指定业务分类文件，供有上限的候选列表使用。
+     *
+     * @param spaceType 空间类型
+     * @param categories 业务分类集合，不可为空
+     * @param limit 上限
+     * @return 文件描述符，最多 limit 条
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listActiveFilesBySpaceAndCategoriesLimited(
+            SpaceType spaceType, Collection<String> categories, int limit) {
+        return fileNodeScanQueryRepository.findSpaceFilesByCategoriesLimited(
+                        spaceType, categories, PageRequest.of(0, limit))
                 .stream().map(this::toDescriptor).toList();
     }
 

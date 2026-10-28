@@ -18,4 +18,7 @@ abstract final class AppErrorCodes {
   static const sharePasswordRequired = 'SHARE_PASSWORD_REQUIRED';
   static const forbidden = 'FORBIDDEN';
   static const other = 'OTHER';
+
+  /// 偏好快照版本冲突：提交时的基线版本已被其他设备改写。
+  static const preferenceVersionConflict = 'PREFERENCE_VERSION_CONFLICT';
 }

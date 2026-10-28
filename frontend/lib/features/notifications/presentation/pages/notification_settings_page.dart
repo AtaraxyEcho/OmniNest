@@ -52,8 +52,12 @@ class _NotificationSettingsPageState
                           child: CircularProgressIndicator.adaptive(),
                         ),
                     error:
-                        (e, _) =>
-                            Center(child: Text(l10n.filesLoadFailed('$e'))),
+                        (_, _) => Center(
+                          child: Text(
+                            l10n.notificationLoadFailed,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                     data: (prefs) => _buildBody(context, typesAsync, prefs),
                   ),
                 ),

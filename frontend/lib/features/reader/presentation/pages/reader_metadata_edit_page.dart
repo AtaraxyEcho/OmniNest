@@ -192,7 +192,12 @@ class _ReaderMetadataEditPageState
     } on Exception catch (e) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
-        showReaderSnackBar(context, l10n.readerSaveFailed('$e'));
+        showReaderSnackBar(
+          context,
+          l10n.readerSaveFailed(
+            describeUserFacingError(e, l10n: l10n).displayMessage,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -619,7 +624,12 @@ class _ReaderMetadataEditPageState
     } on Exception catch (e) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
-        showReaderSnackBar(context, l10n.readerUploadFailed('$e'));
+        showReaderSnackBar(
+          context,
+          l10n.readerUploadFailed(
+            describeUserFacingError(e, l10n: l10n).displayMessage,
+          ),
+        );
       }
     }
   }

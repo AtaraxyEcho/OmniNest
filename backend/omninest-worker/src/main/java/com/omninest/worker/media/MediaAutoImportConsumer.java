@@ -68,9 +68,9 @@ public class MediaAutoImportConsumer {
             retryService.handleFailure(event, exception);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException stateException) {
-            log.error("媒体自动导入失败状态写入失败，将重新投递原消息: taskId={}, errorType={}",
+            log.error("媒体自动导入失败状态写入失败，转入死信队列: taskId={}, errorType={}",
                     event.taskId(), stateException.getClass().getSimpleName(), stateException);
-            channel.basicNack(deliveryTag, false, true);
+            channel.basicNack(deliveryTag, false, false);
         }
     }
 }

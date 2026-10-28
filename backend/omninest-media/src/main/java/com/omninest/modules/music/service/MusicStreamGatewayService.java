@@ -4,6 +4,8 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePlaybackContentService;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicTrackRepository;
@@ -14,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public class MusicStreamGatewayService {
     private final MusicOnlineSourceUrlPolicy sourceUrlPolicy;
     private final MusicTrackRepository trackRepository;
     private final FilePlaybackContentService filePlaybackContentService;
+    private final FileMetadataQueryService fileMetadataQueryService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -145,16 +149,14 @@ public class MusicStreamGatewayService {
         }
         UUID requesterUserId = session.ownerUserId();
         UUID fileNodeId = track.getFileNodeId();
-        long totalBytes;
-        try (FileContentStream probe = filePlaybackContentService.openFileContent(requesterUserId, fileNodeId)) {
-            totalBytes = probe.sizeBytes();
-        } catch (BusinessException exception) {
-            return localFailure(exception);
-        } catch (IOException exception) {
-            log.warn("本地曲目探测失败: sessionId={}, errorType={}",
-                    session.sessionId(), exception.getClass().getSimpleName());
-            return ResponseEntity.internalServerError().build();
+        // 大小取自元数据：为探测大小先打开一次对象存储流、再为输出打开第二次，
+        // 每次播放都会多一次 GetObject 往返与连接占用。
+        Optional<FileDescriptor> descriptor = fileMetadataQueryService
+                .findAllByIds(List.of(fileNodeId)).stream().findFirst();
+        if (descriptor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
+        long totalBytes = descriptor.get().sizeBytes();
         String contentType = guessContentType("", session.format());
         if (range == null || range.isBlank()) {
             FileContentStream content;

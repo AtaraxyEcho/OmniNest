@@ -217,8 +217,11 @@ public class TwoFactorService {
         if (secret != null) {
             long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
             if (step != TotpUtil.NO_MATCH) {
-                credential.setLastUsedStep(step);
-                totpCredentialRepository.save(credential);
+                // 条件更新保证同一步骤只能被一个请求消费；并发同码在数据库层收敛，
+                // 不依赖 @Version 的乐观锁异常（其映射结果是 5xx 而不是验证码错误）。
+                if (totpCredentialRepository.consumeStep(userId, step, Instant.now()) == 0) {
+                    throw new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码已使用");
+                }
                 return;
             }
         }

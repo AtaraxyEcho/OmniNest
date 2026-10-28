@@ -73,6 +73,18 @@ public class ComicParseTaskService {
                 throw new ReaderImportCancelledException();
             }
             fileLifecycleGuard.requireOwnedWritable(event.ownerUserId(), event.fileNodeId());
+            // CBZ/ZIP 无图片时解析层只把来源置为 FAILED 并正常返回；
+            // 任务必须跟随来源状态失败，否则 sys_tasks 报成功而作品停在"未找到可阅读图片"。
+            ReaderItemSource refreshed = sourceRepository.findById(event.sourceId()).orElse(null);
+            if (refreshed != null && refreshed.getStatus() == ReaderSourceStatus.FAILED) {
+                String message = refreshed.getErrorMessage() == null || refreshed.getErrorMessage().isBlank()
+                        ? "漫画解析失败"
+                        : refreshed.getErrorMessage();
+                log.warn("漫画解析未产出可阅读页面: itemId={}, sourceId={}, error={}",
+                        event.itemId(), event.sourceId(), message);
+                markTaskFailed(event, message, null);
+                return;
+            }
             log.info("漫画解析完成: itemId={}, sourceId={}", event.itemId(), event.sourceId());
             markCompleted(event, "漫画解析完成");
         } catch (ReaderImportCancelledException exception) {

@@ -706,14 +706,12 @@ class ReaderApi {
     return ReaderItem.fromJson(parseData(response.data));
   }
 
-  /// 获取导入候选文件列表（个人空间 + 共享空间）
-  Future<List<ReaderImportCandidate>> importCandidates() async {
+  /// 获取导入候选文件列表（个人空间 + 共享空间），超出服务端上限时截断。
+  Future<ReaderImportCandidates> importCandidates() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/reader/import/candidates',
     );
-    return parseList(
-      response.data,
-    ).map(ReaderImportCandidate.fromJson).toList(growable: false);
+    return ReaderImportCandidates.fromJson(parseData(response.data));
   }
 
   /// 从文件节点设置封面

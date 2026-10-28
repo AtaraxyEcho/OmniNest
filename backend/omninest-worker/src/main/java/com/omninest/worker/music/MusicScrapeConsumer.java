@@ -47,9 +47,9 @@ public class MusicScrapeConsumer {
                 retryService.handleScrapeFailure(event, e);
                 channel.basicAck(deliveryTag, false);
             } catch (RuntimeException retryException) {
-                log.error("音乐刮削失败状态写入失败，将重新投递原消息: taskId={}",
+                log.error("音乐刮削失败状态写入失败，转入死信队列: taskId={}",
                         event.jobId(), retryException);
-                channel.basicNack(deliveryTag, false, true);
+                channel.basicNack(deliveryTag, false, false);
             }
         }
     }

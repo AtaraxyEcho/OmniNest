@@ -67,7 +67,7 @@ class PhotoAiConsumerTest {
     }
 
     @Test
-    void handleRequeuesOriginalMessageWhenRetryStateWriteFails() throws IOException {
+    void handleRoutesToDeadLetterQueueWhenRetryStateWriteFails() throws IOException {
         PhotoAiEvent event = event();
         Mockito.doThrow(new IllegalStateException("sidecar unavailable"))
                 .when(taskService).execute(event);
@@ -76,7 +76,7 @@ class PhotoAiConsumerTest {
 
         consumer.handle(event, message(), channel);
 
-        Mockito.verify(channel).basicNack(1L, false, true);
+        Mockito.verify(channel).basicNack(1L, false, false);
         Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 

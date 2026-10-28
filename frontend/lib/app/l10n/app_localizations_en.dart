@@ -6646,6 +6646,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerPendingImport => 'Pending Import';
 
   @override
+  String get readerImportCandidatesTruncated =>
+      'Some importable files are hidden because the list is too long';
+
+  @override
   String readerPendingImportCount(Object count) {
     return '$count files';
   }
@@ -11284,6 +11288,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorUnknown => 'Unknown error';
+
+  @override
+  String get errorPreferenceVersionConflict =>
+      'Preferences were updated elsewhere. Refresh and try again';
 
   @override
   String get errorDownloadTicketInvalid =>
