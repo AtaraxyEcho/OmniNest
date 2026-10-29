@@ -147,7 +147,7 @@ class ContentAssetServiceTest {
                 any(),
                 any()
         )).thenReturn(List.of(asset));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, posterFileId))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, posterFileId))
                 .thenReturn(new FileDownloadUrlDto(
                         posterFileId,
                         "poster.jpg",

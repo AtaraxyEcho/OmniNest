@@ -161,7 +161,7 @@ public class SubtitleManagementService {
     private SubtitleTrackDto toDto(UUID ownerUserId, MediaSubtitleTrack track) {
         String url = null;
         if (track.getFileNodeId() != null) {
-            url = fileQueryService.createDownloadUrl(ownerUserId, track.getFileNodeId()).downloadUrl();
+            url = fileQueryService.createDownloadUrlAs(ownerUserId, track.getFileNodeId()).downloadUrl();
         }
         boolean embedded = track.getFileNodeId() == null;
         return new SubtitleTrackDto(

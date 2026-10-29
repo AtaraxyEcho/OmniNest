@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 class FileDownloadServiceTest {
 
     private static final UUID USER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal REQUESTER = RequestPrincipal.credential(() -> USER_ID);
     private static final UUID FILE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final FileDownloadUrlDto URL = new FileDownloadUrlDto(
             FILE_ID, "movie.mkv", "https://example.com/signed", Instant.EPOCH);
@@ -55,7 +57,7 @@ class FileDownloadServiceTest {
         when(sharedSpaceService.canDownload(USER_ID)).thenReturn(true);
         when(fileContentAccessService.createDownloadUrl(shared)).thenReturn(URL);
 
-        FileDownloadUrlDto result = service.createDownloadUrl(USER_ID, FILE_ID);
+        FileDownloadUrlDto result = service.createDownloadUrl(REQUESTER, FILE_ID);
 
         assertThat(result.downloadUrl()).isEqualTo("https://example.com/signed");
     }
@@ -70,10 +72,10 @@ class FileDownloadServiceTest {
         when(sharedSpaceService.canDownload(USER_ID)).thenReturn(false);
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, shared)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.createDownloadUrl(USER_ID, FILE_ID))
+        assertThatThrownBy(() -> service.createDownloadUrl(REQUESTER, FILE_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
+                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED);
         verify(fileContentAccessService, never()).createDownloadUrl(any());
     }
 
@@ -85,7 +87,7 @@ class FileDownloadServiceTest {
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.findByIdAndDeletedFalse(FILE_ID)).thenReturn(Optional.of(personal));
 
-        assertThatThrownBy(() -> service.createDownloadUrl(USER_ID, FILE_ID))
+        assertThatThrownBy(() -> service.createDownloadUrl(REQUESTER, FILE_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
                 .isEqualTo(ErrorCode.FILE_NOT_FOUND);
@@ -109,7 +111,7 @@ class FileDownloadServiceTest {
                 .thenReturn(Map.of(ownedId, URL, sharedId, URL));
 
         Map<UUID, FileDownloadUrlDto> result = service.createDownloadUrls(
-                USER_ID, List.of(ownedId, sharedId, privateOtherId));
+                REQUESTER, List.of(ownedId, sharedId, privateOtherId));
 
         assertThat(result).containsOnlyKeys(ownedId, sharedId);
     }
@@ -130,7 +132,7 @@ class FileDownloadServiceTest {
                 .thenReturn(Map.of(ownedId, URL, recipientFileId, URL));
 
         Map<UUID, FileDownloadUrlDto> result = service.createDownloadUrls(
-                USER_ID, List.of(ownedId, recipientFileId));
+                REQUESTER, List.of(ownedId, recipientFileId));
 
         assertThat(result).containsOnlyKeys(ownedId, recipientFileId);
     }
@@ -143,7 +145,7 @@ class FileDownloadServiceTest {
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, personal)).thenReturn(true);
         when(fileContentAccessService.createDownloadUrl(personal)).thenReturn(URL);
 
-        FileDownloadUrlDto result = service.createDownloadUrlForShared(USER_ID, FILE_ID);
+        FileDownloadUrlDto result = service.createDownloadUrlForShared(REQUESTER, FILE_ID);
 
         assertThat(result.downloadUrl()).isEqualTo("https://example.com/signed");
     }
@@ -155,10 +157,10 @@ class FileDownloadServiceTest {
         when(fileNodeRepository.findByIdAndDeletedFalse(FILE_ID)).thenReturn(Optional.of(personal));
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, personal)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.createDownloadUrlForShared(USER_ID, FILE_ID))
+        assertThatThrownBy(() -> service.createDownloadUrlForShared(REQUESTER, FILE_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
+                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED);
         verify(fileContentAccessService, never()).createDownloadUrl(any());
     }
 
@@ -172,7 +174,7 @@ class FileDownloadServiceTest {
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, personal)).thenReturn(true);
         when(fileContentAccessService.createDownloadUrl(personal)).thenReturn(URL);
 
-        FileDownloadUrlDto result = service.createDownloadUrl(USER_ID, FILE_ID);
+        FileDownloadUrlDto result = service.createDownloadUrl(REQUESTER, FILE_ID);
 
         assertThat(result.downloadUrl()).isEqualTo("https://example.com/signed");
     }

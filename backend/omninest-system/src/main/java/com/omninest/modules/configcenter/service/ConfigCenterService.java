@@ -381,13 +381,15 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                 @Override
                 public void afterCommit() {
                     runtimeConfigCache.evict(key);
-                    publishRefresh(key);
+                    // afterCommit 派发时事务同步仍然活跃，此处若再注册新的同步，其 afterCommit
+                    // 回调不会进入本轮快照，广播会被静默丢弃；提交已发生，直接发布。
+                    publishRefreshEvent(key);
                 }
             });
             return;
         }
         runtimeConfigCache.evict(key);
-        publishRefresh(key);
+        publishRefreshEvent(key);
     }
 
     private void evictAfterCommit(String key) {
@@ -401,19 +403,6 @@ public class ConfigCenterService implements RuntimeConfigCommand {
             return;
         }
         runtimeConfigCache.evict(key);
-    }
-
-    private void publishRefresh(String key) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            publishRefreshEvent(key);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                publishRefreshEvent(key);
-            }
-        });
     }
 
     private void publishRefreshEvent(String key) {

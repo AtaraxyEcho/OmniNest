@@ -13,6 +13,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageCompletedPart;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.upload.FileUploadSettings;
+import com.omninest.modules.file.config.FileUploadLimitsProperties;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FileUploadPart;
@@ -65,17 +66,6 @@ import org.springframework.util.MimeType;
 @RequiredArgsConstructor
 public class FileUploadSessionService {
 
-    /** 单用户未完成上传会话的并发上限。 */
-    private static final int MAX_ACTIVE_UPLOAD_SESSIONS = 20;
-
-    private static final long DIRECT_UPLOAD_MAX_BYTES = 64L * 1024 * 1024;
-    private static final int MAX_CONCURRENT_PARTS = 4;
-    private static final int MIN_PART_SIZE_BYTES = 10 * 1024 * 1024;
-    private static final int DEFAULT_PART_SIZE_BYTES = 10 * 1024 * 1024;
-    private static final int MAX_PART_SIZE_BYTES = 100 * 1024 * 1024;
-    private static final int MAX_TOTAL_PARTS = 1000;
-    private static final int TARGET_PARTS = 64;
-
     /** 创建会话时只预签名前若干分片，其余由客户端按需拉取，避免事务内生成 1000 个 URL。 */
     private static final int INITIAL_PRESIGNED_PARTS = 10;
     private static final Duration SCAN_WINDOW = Duration.ofHours(24);
@@ -90,6 +80,7 @@ public class FileUploadSessionService {
     private final FilePostProcessingTaskService postProcessingTaskService;
     private final ObjectStorageBuckets objectStorageBuckets;
     private final FileUploadSettings uploadSettings;
+    private final FileUploadLimitsProperties uploadLimits;
     private final FileIngressLifecycleService ingressLifecycleService;
     private final FileIngressScanTaskService ingressScanTaskService;
     private final ConfigValueProvider configValueProvider;
@@ -102,11 +93,12 @@ public class FileUploadSessionService {
 
     public FileUploadPolicyDto uploadPolicy() {
         return new FileUploadPolicyDto(
-                DIRECT_UPLOAD_MAX_BYTES,
-                DEFAULT_PART_SIZE_BYTES,
-                MAX_PART_SIZE_BYTES,
-                MAX_TOTAL_PARTS,
-                MAX_CONCURRENT_PARTS,
+                uploadLimits.getDirectUploadMaxBytes(),
+                uploadLimits.getDefaultPartSizeBytes(),
+                uploadLimits.getMaxPartSizeBytes(),
+                uploadLimits.getMaxTotalParts(),
+                uploadLimits.getMaxConcurrentParts(),
+                uploadLimits.maxFileSizeBytes(),
                 uploadSettings.presignedUrlTtl().getSeconds(),
                 uploadSettings.maxPresignedPartsPerSecond(),
                 bandwidthLimitEnabled()
@@ -162,7 +154,7 @@ public class FileUploadSessionService {
         SpaceType targetSpaceType = spaceType;
         // 签名限流依赖 Redis，先于任何数据库事务与对象存储调用执行。
         checkBandwidthLimit(ownerUserId);
-        if (request.partSizeBytes() == null && request.sizeBytes() <= DIRECT_UPLOAD_MAX_BYTES) {
+        if (request.partSizeBytes() == null && request.sizeBytes() <= uploadLimits.getDirectUploadMaxBytes()) {
             return transactionTemplate.execute(status -> createDirectSession(
                     ownerUserId,
                     request,
@@ -305,6 +297,9 @@ public class FileUploadSessionService {
         Instant now = Instant.now();
         if (session.getExpiresAt().minus(Duration.ofHours(1)).isBefore(now)) {
             session.setExpiresAt(now.plus(uploadSettings.sessionTtl()));
+            // 配额预留必须跟着会话一起延期：预留先到期会被回收成 EXPIRED 并释放额度，
+            // 之后的结算遇 EXPIRED 直接空转，这笔上传量要等对账兜底才回到用量。
+            storageQuotaService.extendReservation("UPLOAD", session.getId(), session.getExpiresAt());
         }
         fileUploadSessionRepository.save(session);
         return toPartsDto(session, parts, false);
@@ -323,9 +318,12 @@ public class FileUploadSessionService {
             CompleteFileUploadRequest request
     ) {
         MultipartCompletion completion;
+        // 直传的存在性探测放在事务外：对象键在会话创建后不再变化，而一次 HEAD 的往返
+        // 若留在持锁事务里，会把悲观锁与数据库连接一起占住。
+        boolean directObjectReady = directObjectReady(ownerUserId, uploadId);
         try {
             completion = transactionTemplate.execute(
-                    status -> prepareCompletion(ownerUserId, uploadId, request));
+                    status -> prepareCompletion(ownerUserId, uploadId, request, directObjectReady));
         } catch (UploadSessionExpiredException exception) {
             markSessionExpired(ownerUserId, uploadId);
             throw exception;
@@ -362,7 +360,8 @@ public class FileUploadSessionService {
     private MultipartCompletion prepareCompletion(
             UUID ownerUserId,
             String uploadId,
-            CompleteFileUploadRequest request
+            CompleteFileUploadRequest request,
+            boolean directObjectReady
     ) {
         FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
         if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
@@ -377,7 +376,7 @@ public class FileUploadSessionService {
         }
         if (isDirectUpload(session)) {
             return new MultipartCompletion(
-                    completeDirectSession(ownerUserId, session, request), null, null, List.of());
+                    completeDirectSession(ownerUserId, session, request, directObjectReady), null, null, List.of());
         }
         applyCompletedPartRequest(session, request == null ? null : request.parts());
 
@@ -627,7 +626,8 @@ public class FileUploadSessionService {
     private FileUploadCompleteResultDto completeDirectSession(
             UUID ownerUserId,
             FileUploadSession session,
-            CompleteFileUploadRequest request
+            CompleteFileUploadRequest request,
+            boolean objectReady
     ) {
         String sha256 = normalizeSha256(request == null ? null : request.sha256());
         if (sha256 != null && session.getSha256() != null && !session.getSha256().equalsIgnoreCase(sha256)) {
@@ -644,12 +644,25 @@ public class FileUploadSessionService {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
-        ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
-        if (!objectStorageClient.objectExists(key)) {
+        if (!objectReady) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件内容尚未上传完成");
         }
 
         return dispatchSecurityScan(ownerUserId, session, asVersionOfFileId);
+    }
+
+    /**
+     * 直传内容是否已在对象存储就绪；非直传会话返回 true，交给分片路径自行校验。
+     */
+    private boolean directObjectReady(UUID ownerUserId, String uploadId) {
+        return fileUploadSessionRepository.findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
+                .filter(this::isDirectUpload)
+                .map(session -> new ObjectStorageKey(
+                        session.getTargetBucket(),
+                        session.getTargetObjectKey()
+                ))
+                .map(objectStorageClient::objectExists)
+                .orElse(true);
     }
 
     /**
@@ -706,9 +719,9 @@ public class FileUploadSessionService {
                 ),
                 Instant.now()
         );
-        if (active >= MAX_ACTIVE_UPLOAD_SESSIONS) {
+        if (active >= uploadLimits.getMaxActiveUploadSessions()) {
             throw new BusinessException(ErrorCode.RATE_LIMITED,
-                    "活跃上传会话过多（上限 " + MAX_ACTIVE_UPLOAD_SESSIONS + "），请先完成或等待过期会话释放");
+                    "活跃上传会话过多（上限 " + uploadLimits.getMaxActiveUploadSessions() + "），请先完成或等待过期会话释放");
         }
     }
 
@@ -852,31 +865,31 @@ public class FileUploadSessionService {
 
     private int resolvePartSizeBytes(long totalSizeBytes, Integer requestedPartSizeBytes) {
         if (requestedPartSizeBytes != null) {
-            if (requestedPartSizeBytes < MIN_PART_SIZE_BYTES || requestedPartSizeBytes > MAX_PART_SIZE_BYTES) {
+            if (requestedPartSizeBytes < uploadLimits.getMinPartSizeBytes() || requestedPartSizeBytes > uploadLimits.getMaxPartSizeBytes()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "分片大小必须在 10MB 到 100MB 之间");
             }
             return requestedPartSizeBytes;
         }
-        if (totalSizeBytes <= DEFAULT_PART_SIZE_BYTES) {
+        if (totalSizeBytes <= uploadLimits.getDefaultPartSizeBytes()) {
             return Math.toIntExact(totalSizeBytes);
         }
         // 动态分片：目标约 64 个分片，减少大文件的分片数量
         // 2GB 文件：32MB × 64 片（而非 10MB × 200 片）
         int partSizeBytes = Math.max(
-                MIN_PART_SIZE_BYTES,
-                Math.toIntExact((totalSizeBytes + TARGET_PARTS - 1) / TARGET_PARTS)
+                uploadLimits.getMinPartSizeBytes(),
+                Math.toIntExact((totalSizeBytes + uploadLimits.getTargetParts() - 1) / uploadLimits.getTargetParts())
         );
         // 确保不超过 S3 的 1000 分片限制
-        while (resolveTotalPartsValue(totalSizeBytes, partSizeBytes) > MAX_TOTAL_PARTS
-                && partSizeBytes < MAX_PART_SIZE_BYTES) {
-            partSizeBytes = Math.min(partSizeBytes * 2, MAX_PART_SIZE_BYTES);
+        while (resolveTotalPartsValue(totalSizeBytes, partSizeBytes) > uploadLimits.getMaxTotalParts()
+                && partSizeBytes < uploadLimits.getMaxPartSizeBytes()) {
+            partSizeBytes = Math.min(partSizeBytes * 2, uploadLimits.getMaxPartSizeBytes());
         }
         return partSizeBytes;
     }
 
     private int resolveTotalParts(long totalSizeBytes, int partSizeBytes) {
         long totalParts = resolveTotalPartsValue(totalSizeBytes, partSizeBytes);
-        if (totalParts > MAX_TOTAL_PARTS) {
+        if (totalParts > uploadLimits.getMaxTotalParts()) {
             throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "文件分片数量超过限制");
         }
         return Math.toIntExact(totalParts);

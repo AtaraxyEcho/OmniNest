@@ -194,7 +194,9 @@ public class ComicEpubParser {
             EpubManifestItem manifestItem = parseResult.manifest().get(spineItem.idref());
             if (manifestItem == null) continue;
 
-            String xhtmlPath = manifestItem.href();
+            // 带 #fragment 的 href 在压缩包条目里查不到，直接读会整页静默丢失；
+            // 目录键与图片路径解析都用剥片段后的名字，这里必须同口径。
+            String xhtmlPath = stripFragment(manifestItem.href());
 
             // 读取 XHTML
             String xhtml = archive.readSmallText(xhtmlPath);

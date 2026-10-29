@@ -168,14 +168,43 @@ public interface PhotoItemRelationQueries {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("limit") int limit);
 
+    /**
+     * 缺失封面的照片 ID（按 ID 游标分批）。
+     *
+     * <p>重生成要遍历全部缺失项，但一次只取一页：整用户照片一次性进内存
+     * 会在超大相册上直接把堆占满。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param afterId 上一批最后一个照片 ID，首批传全零 UUID
+     * @param pageable 分页参数
+     * @return 缺失封面的照片 ID，按 ID 升序
+     */
     @Query("""
             SELECT p.id
               FROM PhotoItem p
              WHERE p.ownerUserId = :ownerUserId
                AND p.coverFileId IS NULL
-             ORDER BY p.createdAt DESC
+               AND p.id > :afterId
+             ORDER BY p.id ASC
             """)
-    List<UUID> findIdsMissingCover(@Param("ownerUserId") UUID ownerUserId);
+    List<UUID> findIdsMissingCoverAfter(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("afterId") UUID afterId,
+            Pageable pageable);
+
+    /**
+     * 统计缺失封面的照片数量，供任务按百分比上报进度。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 数量
+     */
+    @Query("""
+            SELECT count(p.id)
+              FROM PhotoItem p
+             WHERE p.ownerUserId = :ownerUserId
+               AND p.coverFileId IS NULL
+            """)
+    long countMissingCover(@Param("ownerUserId") UUID ownerUserId);
 
     /**
      * 批量读取照片当前活动的全分辨率文件节点，只返回已产生编辑产物的照片。

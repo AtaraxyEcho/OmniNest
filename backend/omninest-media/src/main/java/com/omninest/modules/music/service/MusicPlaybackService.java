@@ -2,6 +2,7 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FilePlaybackContentService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
@@ -40,18 +41,19 @@ public class MusicPlaybackService {
     /**
      * 生成本地曲库播放计划。
      *
-     * @param ownerUserId 用户 ID
+     * @param requester 当前请求主体
      * @param trackId 曲目 ID
      * @return 播放计划
      */
     @Transactional(readOnly = true)
-    public MusicPlaybackPlanDto playbackPlan(UUID ownerUserId, UUID trackId) {
+    public MusicPlaybackPlanDto playbackPlan(RequestPrincipal requester, UUID trackId) {
+        UUID ownerUserId = requester.userId();
         log.info("生成播放计划: trackId={}, userId={}", trackId, ownerUserId);
         MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         // 本地曲库由播放网关在服务端按 Range 直接读 File 内容：任何面向浏览器的下载地址
         // （本地只读的相对路径、MinIO 的 publicEndpoint）在容器内都不可回环请求。
         // 这里只做下载权限预检，会话本身不保存外部地址。
-        filePlaybackContentService.requireDownloadable(ownerUserId, track.getFileNodeId());
+        filePlaybackContentService.requireDownloadable(requester, track.getFileNodeId());
         return playbackSessionService.createLocalPlan(
                 ownerUserId,
                 track.getId(),

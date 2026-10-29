@@ -72,6 +72,7 @@ public class MeController {
         return ApiResponse.success(webShareBaseUrlService.resolveShareBaseUrl());
     }
 
+    @Operation(summary = "修改密码", description = "校验原密码后更新当前用户的登录密码")
     @PutMapping("/api/v1/me/password")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
@@ -80,6 +81,7 @@ public class MeController {
         return ApiResponse.success(null);
     }
 
+    @Operation(summary = "上传头像", description = "更新当前用户头像并返回可访问地址")
     @PutMapping("/api/v1/me/avatar")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
@@ -107,6 +109,7 @@ public class MeController {
      * 撤销指定会话（主动登出其他设备）。
      * Redis 先写保证即时生效，DB 后写保证持久化。
      */
+    @Operation(summary = "撤销会话", description = "主动登出当前用户的指定设备会话")
     @DeleteMapping("/api/v1/me/sessions/{sessionId}")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<Void> revokeSession(@PathVariable UUID sessionId) {

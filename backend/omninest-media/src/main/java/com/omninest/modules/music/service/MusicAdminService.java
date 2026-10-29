@@ -469,7 +469,7 @@ public class MusicAdminService {
                 track.setLyricsTranslation(null);
             }
         }
-        applyCoverUpdate(track, request.coverFileId(), Boolean.TRUE.equals(request.clearCover()));
+        applyCoverUpdate(ownerUserId, track, request.coverFileId(), Boolean.TRUE.equals(request.clearCover()));
         track.setArtistId(artist.getId());
         track.setAlbumId(album.getId());
         track.setMetadataStatus(MetadataStatus.MANUAL.getValue());
@@ -486,8 +486,16 @@ public class MusicAdminService {
     /**
      * 应用封面部分更新：clearCover 优先清空（含内联/外部回退地址），
      * 否则仅在携带新 coverFileId 时替换。
+     *
+     * <p>传入的封面必须是操作者本人可读的活动图片节点，与歌单封面同一判据；
+     * 不加这道校验就能把他人的文件节点挂到自己曲目的封面上。</p>
      */
-    private void applyCoverUpdate(MusicTrack track, UUID coverFileId, boolean clearCover) {
+    private void applyCoverUpdate(
+            UUID operatorUserId,
+            MusicTrack track,
+            UUID coverFileId,
+            boolean clearCover
+    ) {
         if (clearCover) {
             track.setCoverFileId(null);
             track.getProviderMetadata().remove("coverDataUrl");
@@ -495,6 +503,7 @@ public class MusicAdminService {
             return;
         }
         if (coverFileId != null) {
+            fileQueryService.validateOwnedImage(operatorUserId, coverFileId);
             track.setCoverFileId(coverFileId);
             track.getProviderMetadata().remove("coverDataUrl");
         }

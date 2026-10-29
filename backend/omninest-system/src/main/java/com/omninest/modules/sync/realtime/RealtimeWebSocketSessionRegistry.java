@@ -168,14 +168,18 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
     }
 
     private void close(String sessionId, WebSocketSession session) {
-        unregister(sessionId, session);
+        // 先关连接、把摘除留给容器的 afterConnectionClosed：它会 unregister 后继续委托
+        // 下层处理器，STOMP 才能销毁会话并发布断连事件。提前 unregister 会让那次委托
+        // 被布尔门挡住，用户注册表里留下幽灵会话与心跳任务。
         if (!session.isOpen()) {
+            unregister(sessionId, session);
             return;
         }
         try {
             session.close(CloseStatus.POLICY_VIOLATION);
         } catch (IOException ex) {
             log.debug("关闭无效 WebSocket 会话失败: sessionId={}", sessionId, ex);
+            unregister(sessionId, session);
         }
     }
 

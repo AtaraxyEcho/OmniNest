@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
@@ -38,7 +39,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +54,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class FileQueryService {
-    private static final int LIFECYCLE_BATCH_SIZE = 500;
     private final FileNodeRepository fileNodeRepository;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ApplicationEventPublisher eventPublisher;
@@ -70,6 +69,7 @@ public class FileQueryService {
     private final FileListQueryService listQueryService;
     private final FileDownloadContentService downloadContentService;
     private final FileRestoreSupport restoreSupport;
+    private final FileSubtreeSoftDeleter subtreeSoftDeleter;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
@@ -118,18 +118,30 @@ public class FileQueryService {
     }
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
-        return downloadContentService.createDownloadUrl(ownerUserId, fileId);
+    public FileDownloadUrlDto createDownloadUrl(RequestPrincipal requester, UUID fileId) {
+        return downloadContentService.createDownloadUrl(requester, fileId);
     }
 
     @Transactional(readOnly = true)
-    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
-        return downloadContentService.createDownloadUrls(ownerUserId, fileIds);
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(
+            RequestPrincipal requester, Collection<UUID> fileIds) {
+        return downloadContentService.createDownloadUrls(requester, fileIds);
     }
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createReadableDownloadUrl(UUID userId, UUID fileId) {
-        return downloadContentService.createReadableDownloadUrl(userId, fileId);
+    public FileDownloadUrlDto createDownloadUrlAs(UUID actorUserId, UUID fileId) {
+        return downloadContentService.createDownloadUrlAs(actorUserId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrlsAs(
+            UUID actorUserId, Collection<UUID> fileIds) {
+        return downloadContentService.createDownloadUrlsAs(actorUserId, fileIds);
+    }
+
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createReadableDownloadUrl(RequestPrincipal requester, UUID fileId) {
+        return downloadContentService.createReadableDownloadUrl(requester, fileId);
     }
 
     @Transactional(readOnly = true)
@@ -157,8 +169,8 @@ public class FileQueryService {
     }
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
-        return downloadContentService.createDownloadUrlForShared(userId, fileId);
+    public FileDownloadUrlDto createDownloadUrlForShared(RequestPrincipal requester, UUID fileId) {
+        return downloadContentService.createDownloadUrlForShared(requester, fileId);
     }
 
     public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {
@@ -276,26 +288,7 @@ public class FileQueryService {
         fileNodeRepository.save(node);
         fileIndexSyncService.scheduleAfterCommit(actorUserId, List.of(node.getId()));
         eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(actorUserId, List.of(node.getId()), deletedAt));
-
-        while (true) {
-            List<UUID> descendantIds = fileNodeRepository.findActiveIdsByPathPrefix(
-                            actorUserId,
-                            node.getSpaceType(),
-                            lookup.subtreePrefix(node),
-                            PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
-                    )
-                    .getContent();
-            if (descendantIds.isEmpty()) {
-                break;
-            }
-            fileNodeRepository.softDeleteIds(actorUserId, descendantIds, deletedAt);
-            fileIndexSyncService.scheduleAfterCommit(actorUserId, descendantIds);
-            eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(
-                    actorUserId,
-                    List.copyOf(descendantIds),
-                    deletedAt
-            ));
-        }
+        subtreeSoftDeleter.softDeleteDescendants(actorUserId, node, deletedAt, null);
         recordFileEvent(actorUserId, node.getId(), SyncAction.DELETED);
     }
 
@@ -434,6 +427,7 @@ public class FileQueryService {
         List<BatchItemResult> results = new ArrayList<>();
         Instant deletedAt = Instant.now();
         List<UUID> allDeletedIds = new ArrayList<>();
+        List<UUID> rootIds = new ArrayList<>();
         List<FileNode> allToSave = new ArrayList<>();
         for (UUID fileId : fileIds) {
             FileNode node = nodesById.get(fileId);
@@ -446,18 +440,15 @@ public class FileQueryService {
             markDeleted(node, ownerUserId, deletedAt);
             allToSave.add(node);
             allDeletedIds.add(node.getId());
-            List<FileNode> descendants = fileNodeRepository
-                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                            ownerUserId, node.getSpaceType(), lookup.subtreePrefix(node));
-            descendants.forEach(d -> markDeleted(d, ownerUserId, deletedAt));
-            allToSave.addAll(descendants);
-            descendants.stream().map(FileNode::getId).forEach(allDeletedIds::add);
+            rootIds.add(node.getId());
+            subtreeSoftDeleter.softDeleteDescendants(ownerUserId, node, deletedAt, allDeletedIds);
             results.add(BatchItemResult.success(fileId));
         }
         if (!allToSave.isEmpty()) {
             fileNodeRepository.saveAll(allToSave);
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, allDeletedIds);
-            eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, allDeletedIds, deletedAt));
+            // 后代已由 softDeleteDescendants 逐批投递过，这里只补根节点。
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, rootIds);
+            eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, rootIds, deletedAt));
             recordLibraryInvalidation(ownerUserId, SyncAction.DELETED, allDeletedIds.size());
         }
         return results;

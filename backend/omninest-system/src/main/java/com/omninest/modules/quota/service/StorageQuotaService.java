@@ -22,8 +22,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 集中存储配额管理服务。
@@ -210,7 +208,7 @@ public class StorageQuotaService {
                         ? (int) (owner.usedBytes() * 100 / owner.quotaBytes()) : 0;
                 String title = status == QuotaStatus.CRITICAL ? "存储空间即将满额" : "存储空间预警";
                 String message = "存储空间已使用 " + percent + "%，请及时清理";
-                notificationService.create(userId, "QUOTA_WARNING", title, message,
+                notificationService.notifyOrLog(userId, "QUOTA_WARNING", title, message,
                         Map.of("usedBytes", owner.usedBytes(), "quotaBytes", owner.quotaBytes()));
             }
         } catch (Exception e) {
@@ -237,16 +235,7 @@ public class StorageQuotaService {
      * 配额变更提交后再清用户资料缓存，避免并发读在提交前把旧用量重新写回缓存。
      */
     private void evictProfileCacheAfterCommit(UUID userId) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            userProfileCacheEvictor.evictProfileCache(userId);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                userProfileCacheEvictor.evictProfileCache(userId);
-            }
-        });
+        userProfileCacheEvictor.evictProfileCacheAfterCommit(userId);
     }
 
     /**
@@ -267,6 +256,9 @@ public class StorageQuotaService {
         if (user.superAdmin()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员配额不能通过管理端修改");
         }
+        // 配额是自我提权最近的一条路：自改、改同级管理员与设无限制都要更高层级把关。
+        adminActorVerifier.requireQuotaMutationAuthority(
+                operatorId, userId, newQuotaBytes <= 0);
         // 0 表示无限制，允许在已有用量时改回无限额；只有正数配额需要拦住低于已用量的设置。
         if (newQuotaBytes > 0 && newQuotaBytes < user.usedBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
@@ -275,7 +267,7 @@ public class StorageQuotaService {
         long oldQuota = user.quotaBytes();
         userStorageCommand.updateQuota(userId, newQuotaBytes);
         // 资料缓存含配额字段，管理端改完必须驱逐，否则用户五分钟内读到的仍是旧配额
-        userProfileCacheEvictor.evictProfileCache(userId);
+        evictProfileCacheAfterCommit(userId);
         auditRecorder.recordWithPayload(
                 operatorId,
                 "ADMIN_QUOTA_UPDATE",
@@ -317,6 +309,9 @@ public class StorageQuotaService {
         adminActorVerifier.requireFreshAdminActor(operatorId);
         int updated = 0;
         for (UUID userId : userIds) {
+            // 批量入口不得成为绕过单条权限判定的旁路：越权目标要抛错，而不是被静默跳过。
+            adminActorVerifier.requireQuotaMutationAuthority(
+                    operatorId, userId, newQuotaBytes <= 0);
             UserAccountSummary user = userAccountQuery.findById(userId).orElse(null);
             if (user == null || user.superAdmin()) {
                 continue;
@@ -327,7 +322,7 @@ public class StorageQuotaService {
             }
             long oldQuota = user.quotaBytes();
             userStorageCommand.updateQuota(userId, newQuotaBytes);
-            userProfileCacheEvictor.evictProfileCache(userId);
+            evictProfileCacheAfterCommit(userId);
             auditRecorder.recordWithPayload(
                     operatorId,
                     "ADMIN_QUOTA_UPDATE",

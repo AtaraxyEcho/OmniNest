@@ -61,9 +61,17 @@ public class MovieEngagementService {
     private final FileQueryService fileQueryService;
     private final ReadThroughCache readThroughCache;
 
+    /** 首页摘要类列表的上限；完整列表走对应的分页方法。 */
+    private static final int SUMMARY_LIST_LIMIT = 200;
+
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> favorites(UUID ownerUserId) {
-        return toFavoriteDtos(ownerUserId, favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId));
+        // 首页摘要用途：收藏可能上万条，无界查询会把实体与封面签名一起装进内存；
+        // 完整列表走 favoritesPage。
+        return toFavoriteDtos(ownerUserId, favoriteRepository
+                .findPageByOwnerUserIdOrderByCreatedAtDesc(
+                        ownerUserId, PageRequest.of(0, SUMMARY_LIST_LIMIT))
+                .getContent());
     }
 
     /**
@@ -139,7 +147,11 @@ public class MovieEngagementService {
 
     @Transactional(readOnly = true)
     public List<MovieWatchHistoryDto> history(UUID ownerUserId) {
-        return toHistoryDtos(ownerUserId, historyRepository.findByOwnerUserIdOrderByPlayedAtDesc(ownerUserId));
+        // 同收藏：摘要只需最近一批，完整历史走 historyPage。
+        return toHistoryDtos(ownerUserId, historyRepository
+                .findPageByOwnerUserIdOrderByPlayedAtDesc(
+                        ownerUserId, PageRequest.of(0, SUMMARY_LIST_LIMIT))
+                .getContent());
     }
 
     /**

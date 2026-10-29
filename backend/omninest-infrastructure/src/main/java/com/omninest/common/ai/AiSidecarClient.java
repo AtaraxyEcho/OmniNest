@@ -6,6 +6,7 @@ import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.SafeUrlValidator;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,6 +54,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     private final AiSidecarProperties properties;
     private final TempStagingPort tempStagingPort;
+    private final SafeUrlValidator safeUrlValidator;
     private final HttpClient httpClient;
     private final Object pipelineVersionLock = new Object();
     private volatile PipelineVersionCache pipelineVersionCache;
@@ -62,10 +64,16 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      *
      * @param properties 图像分析侧车配置
      * @param tempStagingPort 受控临时目录端口，multipart 缓冲不得落在系统临时目录
+     * @param safeUrlValidator 出站地址解析校验器
      */
-    public AiSidecarClient(AiSidecarProperties properties, TempStagingPort tempStagingPort) {
+    public AiSidecarClient(
+            AiSidecarProperties properties,
+            TempStagingPort tempStagingPort,
+            SafeUrlValidator safeUrlValidator
+    ) {
         this.properties = properties;
         this.tempStagingPort = tempStagingPort;
+        this.safeUrlValidator = safeUrlValidator;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -86,8 +94,13 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     @Override
     public String fetchRemotePipelineVersion(String endpoint, int timeoutSeconds) {
-        String normalizedEndpoint = normalizeEndpoint(endpoint);
-        if (normalizedEndpoint.isEmpty()) {
+        String normalizedEndpoint;
+        try {
+            normalizedEndpoint = requireEndpoint(endpoint);
+        } catch (RuntimeException exception) {
+            // 版本号只用于界面展示，地址缺失或不可用时应返回空而不是让调用方失败。
+            log.warn("图像分析侧车地址校验未通过，跳过版本探测: errorType={}",
+                    exception.getClass().getSimpleName());
             return null;
         }
         long now = System.currentTimeMillis();
@@ -317,6 +330,15 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         if (normalizedEndpoint.isEmpty()) {
             throw new IllegalArgumentException("图像分析侧车地址不能为空");
         }
+        // 地址来自配置中心，按自建端点档位复核：放行环回与内网（sidecar 常与本服务同机同网），
+        // 但拒绝链路本地（含云元数据段）、多播与保留段。
+        URI parsed;
+        try {
+            parsed = URI.create(normalizedEndpoint);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("图像分析侧车地址格式无效");
+        }
+        safeUrlValidator.requireSelfHostedSafeHost(parsed);
         return normalizedEndpoint;
     }
 

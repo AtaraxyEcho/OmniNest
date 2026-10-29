@@ -7,6 +7,7 @@ import com.omninest.common.util.LikePatterns;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.MediaContentPurpose;
@@ -882,14 +883,14 @@ public class ReaderItemService {
     /**
      * 创建阅读源文件临时下载票据。
      *
-     * @param ownerUserId 当前用户标识
+     * @param requester 当前请求主体
      * @param itemId 阅读条目标识
      * @return 临时下载票据
      */
-    public ReaderFileTicketDto createFileTicket(UUID ownerUserId, UUID itemId) {
-        DownloadDescriptor descriptor = prepareDownload(ownerUserId, itemId);
+    public ReaderFileTicketDto createFileTicket(RequestPrincipal requester, UUID itemId) {
+        DownloadDescriptor descriptor = prepareDownload(requester, itemId);
         FileDownloadUrlDto download = fileQueryService.createReadableDownloadUrl(
-                ownerUserId,
+                requester,
                 descriptor.fileNodeId()
         );
         return new ReaderFileTicketDto(
@@ -905,20 +906,21 @@ public class ReaderItemService {
     /**
      * 校验阅读条目访问权限并准备流式下载描述。
      *
-     * @param ownerUserId 当前用户标识
+     * @param requester 当前请求主体
      * @param itemId 阅读条目标识
      * @return 流式下载描述
      */
-    public DownloadDescriptor prepareDownload(UUID ownerUserId, UUID itemId) {
-        ReaderItem item = requireItem(ownerUserId, itemId);
+    public DownloadDescriptor prepareDownload(RequestPrincipal requester, UUID itemId) {
+        UUID requesterUserId = requester.userId();
+        ReaderItem item = requireItem(requesterUserId, itemId);
         if (item.getFileNodeId() == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "条目未关联文件");
         }
-        FileDescriptor fileNode = fileLifecycleGuard.requireDownloadable(ownerUserId, item.getFileNodeId());
+        FileDescriptor fileNode = fileLifecycleGuard.requireDownloadable(requester, item.getFileNodeId());
         // 使用条目标题和文件扩展名构建下载文件名
         String downloadFileName = buildDownloadFileName(item.getTitle(), fileNode.name());
         return new DownloadDescriptor(
-                ownerUserId,
+                requesterUserId,
                 fileNode.id(),
                 downloadFileName,
                 fileNode.sizeBytes(),

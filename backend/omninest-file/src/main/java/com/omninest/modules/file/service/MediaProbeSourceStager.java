@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -51,10 +52,8 @@ public class MediaProbeSourceStager {
     private static final int COPY_BUFFER_BYTES = 64 * 1024;
     /** 首尾窗口都失败时的整文件兜底上限；超过该大小不再整份落盘，避免填满临时卷。 */
     private static final long MAX_FULL_STAGE_BYTES = 4L * 1024 * 1024 * 1024;
-    private static final Path PROCESSING_ROOT = Path.of(
-            System.getProperty("java.io.tmpdir"), "omninest-probe");
-
     private final FileContentAccessService fileContentAccessService;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 用默认窗口为节点准备本地探测输入。
@@ -76,8 +75,7 @@ public class MediaProbeSourceStager {
     public Optional<StagedSource> stage(FileNode node, long maxTailBytes) {
         Path tempFile = null;
         try {
-            Files.createDirectories(PROCESSING_ROOT);
-            tempFile = Files.createTempFile(PROCESSING_ROOT, "probe-", ".bin");
+            tempFile = tempStagingPort.createTempFile("probe", "probe-", ".bin");
             long totalBytes;
             long headBytes;
             try (FileContentStream head = fileContentAccessService.open(node);
@@ -136,8 +134,7 @@ public class MediaProbeSourceStager {
                         node.getId(), totalBytes);
                 return Optional.empty();
             }
-            Files.createDirectories(PROCESSING_ROOT);
-            tempFile = Files.createTempFile(PROCESSING_ROOT, "probe-full-", ".bin");
+            tempFile = tempStagingPort.createTempFile("probe", "probe-full-", ".bin");
             Files.copy(content.inputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
             return Optional.of(new StagedSource(tempFile, true, totalBytes, totalBytes));
         } catch (IOException | RuntimeException exception) {

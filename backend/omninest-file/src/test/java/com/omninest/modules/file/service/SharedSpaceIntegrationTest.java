@@ -14,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.modules.file.domain.NodeType;
@@ -26,10 +25,9 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.domain.SharedSpacePermission.Action;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
-import com.omninest.modules.file.repository.FileNodePermissionRepository;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
-import com.omninest.modules.file.repository.ShareLinkRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -82,14 +80,14 @@ class SharedSpaceIntegrationTest {
     private final SharedSpaceQuotaService sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final UserAccountQuery userAccountQuery = mock(UserAccountQuery.class);
-    private final ShareLinkRepository shareLinkRepository = mock(ShareLinkRepository.class);
-    private final FileNodePermissionRepository fileNodePermissionRepository = mock(FileNodePermissionRepository.class);
+    private final SharedSpaceCascadeCleanup cascadeCleanup = mock(SharedSpaceCascadeCleanup.class);
+    private final FileNodeScanQueryRepository fileNodeScanQueryRepository =
+            mock(FileNodeScanQueryRepository.class);
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
     private final ApplicationEventPublisher eventPublisher =
             mock(ApplicationEventPublisher.class);
     private final FileIndexSyncService fileIndexSyncService = mock(FileIndexSyncService.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
-    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
 
     private SharedSpaceService service;
 
@@ -102,9 +100,9 @@ class SharedSpaceIntegrationTest {
 
         service = new SharedSpaceService(
                 fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
-                storageQuotaService, userAccountQuery, shareLinkRepository,
-                fileNodePermissionRepository, configValueProvider, eventPublisher,
-                fileIndexSyncService, syncEventRecorder, readThroughCache,
+                storageQuotaService, userAccountQuery, cascadeCleanup,
+                fileNodeScanQueryRepository, configValueProvider, eventPublisher,
+                fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class)
         );

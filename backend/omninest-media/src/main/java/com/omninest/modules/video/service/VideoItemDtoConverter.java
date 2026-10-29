@@ -145,7 +145,11 @@ public class VideoItemDtoConverter {
                 moviePosterAssetMap, movieBackdropAssetMap,
                 seriesPosterAssetMap, seriesBackdropAssetMap,
                 loadAvailability(List.of(item.getFileNodeId())));
-        return toVideoDto(requesterUserId, item, index, false);
+        return toVideoDto(
+                requesterUserId,
+                item,
+                index,
+                mediaLibraryAccessService.canManageLibraries(requesterUserId));
     }
 
     private record BatchIndex(

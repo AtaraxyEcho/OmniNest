@@ -1,6 +1,7 @@
 package com.omninest.worker.photos;
 
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
+import com.omninest.worker.support.TransientRetry;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.event.PhotoIndexEvent;
@@ -39,7 +40,12 @@ public class PhotoIndexConsumer {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {
             log.info("收到照片索引任务: photoId={}, ownerUserId={}", event.photoId(), event.ownerUserId());
-            if (!taskService.index(event.ownerUserId(), event.photoId())) {
+            // 索引队列没有任务行可补跑：先做几次短退避重试，失败才进死信。
+            boolean indexed = TransientRetry.call(
+                    "照片索引",
+                    () -> taskService.index(event.ownerUserId(), event.photoId())
+            );
+            if (!indexed) {
                 log.warn("照片不存在，跳过索引: photoId={}", event.photoId());
                 channel.basicAck(deliveryTag, false);
                 return;

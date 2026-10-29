@@ -369,13 +369,6 @@ class MusicApi {
     return MusicTrack.fromJson(data);
   }
 
-  Future<MusicPlaybackPosition> lastPosition() async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/last-position',
-    );
-    return MusicPlaybackPosition.fromJson(parseData(response.data));
-  }
-
   Future<MusicPlaybackQueueSnapshot> playbackQueue() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/playback-queue',
@@ -398,21 +391,6 @@ class MusicApi {
       data: snapshot.toJson(),
     );
     return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
-  }
-
-  /// 保存播放位置（自动写回）：无能力时静默 no-op。
-  Future<void> savePosition({
-    required String trackId,
-    required int positionSeconds,
-  }) async {
-    if (!apiClient.hasPermission(activityWritePermission)) {
-      return;
-    }
-    final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/music/position',
-      data: {'trackId': trackId, 'positionSeconds': positionSeconds},
-    );
-    parseEnvelope(response.data);
   }
 
   /// 获取指定可播放对象的跨设备进度。

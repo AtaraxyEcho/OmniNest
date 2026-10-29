@@ -17,6 +17,9 @@ abstract final class AppErrorCodes {
   static const oldPasswordInvalid = 'OLD_PASSWORD_INVALID';
   static const sharePasswordRequired = 'SHARE_PASSWORD_REQUIRED';
   static const forbidden = 'FORBIDDEN';
+
+  /// 共享空间成员具备浏览位但缺下载位：播放原件与下载同样被拒。
+  static const downloadPermissionRequired = 'DOWNLOAD_PERMISSION_REQUIRED';
   static const other = 'OTHER';
 
   /// 偏好快照版本冲突：提交时的基线版本已被其他设备改写。

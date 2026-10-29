@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
@@ -618,7 +619,7 @@ public class PhotoAdminService {
         String normalizedPath = "/.metadata/PHOTO_ITEM/" + photoId + "/RAW_PREVIEW/" + photoId + "_raw_preview.jpg";
         return fileMetadataQueryService.findActivePath(ownerUserId, normalizedPath)
                 .map(node -> {
-                    FileDownloadUrlDto url = fileQueryService.createDownloadUrl(ownerUserId, node.id());
+                    FileDownloadUrlDto url = fileQueryService.createDownloadUrlAs(ownerUserId, node.id());
                     return url.downloadUrl();
                 })
                 .orElse(null);
@@ -670,48 +671,30 @@ public class PhotoAdminService {
         if (!taskRecordService.claimForExecution(taskId, "PROCESSING")) {
             return;
         }
-        List<UUID> photoIds = photoItemRepository.findIdsMissingCover(ownerUserId);
-        int total = photoIds.size();
+        // 按 ID 游标分批：失败的照片仍留在"缺失"集合里，只靠重查会反复取到同一批。
+        int total = (int) Math.min(Integer.MAX_VALUE, photoItemRepository.countMissingCover(ownerUserId));
+        int processed = 0;
         int regenerated = 0;
         int lastReported = -1;
         try {
-            // 批量读取照片与源文件描述，避免逐张 findById 造成 N+1。
-            Map<UUID, PhotoItem> photosById = photoItemRepository.findAllById(photoIds).stream()
-                    .filter(item -> ownerUserId.equals(item.getOwnerUserId()))
-                    .collect(Collectors.toMap(PhotoItem::getId, item -> item));
-            List<UUID> fileNodeIds = photosById.values().stream()
-                    .map(PhotoItem::getFileNodeId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            Map<UUID, FileDescriptor> filesById = fileMetadataQueryService.findAllByIds(fileNodeIds).stream()
-                    .collect(Collectors.toMap(FileDescriptor::id, file -> file));
-            for (int index = 0; index < total; index++) {
-                PhotoItem photo = photosById.get(photoIds.get(index));
-                if (photo == null || photo.getCoverFileId() != null) {
-                    lastReported = reportThrottled(taskId, index + 1, total, lastReported);
-                    continue;
+            UUID afterId = new UUID(0L, 0L);
+            while (true) {
+                List<UUID> batch = photoItemRepository.findIdsMissingCoverAfter(
+                        ownerUserId, afterId, PageRequest.of(0, SCAN_PAGE_SIZE));
+                if (batch.isEmpty()) {
+                    break;
                 }
-                FileDescriptor file = filesById.get(photo.getFileNodeId());
-                if (file == null) {
-                    lastReported = reportThrottled(taskId, index + 1, total, lastReported);
-                    continue;
+                regenerated += regenerateCoverBatch(ownerUserId, batch);
+                processed += batch.size();
+                int percent = PhotoAdminSupport.progressPercent(processed, Math.max(total, processed));
+                if (percent != lastReported && (processed % 25 == 0 || processed >= total)) {
+                    taskRecordService.updateProgress(taskId, percent);
+                    lastReported = percent;
                 }
-                try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
-                        ownerUserId,
-                        file.id()
-                )) {
-                    UUID coverFileId = createCover(ownerUserId, photo, file, source);
-                    if (coverFileId != null) {
-                        photo.setCoverFileId(coverFileId);
-                        photoItemRepository.save(photo);
-                        regenerated++;
-                    }
-                } catch (Exception exception) {
-                    // 单张损坏图片的解码/IO 异常不能中断整批任务；记录后继续下一张。
-                    log.warn("缩略图重生成失败: fileNodeId={}, errorType={}, message={}",
-                            file.id(), exception.getClass().getSimpleName(), exception.getMessage());
+                if (batch.size() < SCAN_PAGE_SIZE) {
+                    break;
                 }
-                lastReported = reportThrottled(taskId, index + 1, total, lastReported);
+                afterId = batch.get(batch.size() - 1);
             }
             taskRecordService.updateProgress(taskId, 100);
             taskRecordService.markCompleted(taskId, Map.of("regenerated", regenerated));
@@ -729,29 +712,47 @@ public class PhotoAdminService {
         }
     }
 
-    /**
-     * 进度按每 25 张或最后一张写库，避免逐张更新 task_record。
-     */
-    private int reportThrottled(UUID taskId, int finished, int total, int lastReported) {
-        int percent = PhotoAdminSupport.progressPercent(finished, total);
-        if (percent == lastReported || (finished % 25 != 0 && finished < total)) {
-            return lastReported;
+    /** 处理一批缺失封面的照片，返回成功生成的数量；批量预读避免 N+1，单张失败只记录。 */
+    private int regenerateCoverBatch(UUID ownerUserId, List<UUID> photoIds) {
+        Map<UUID, PhotoItem> photosById = photoItemRepository.findAllById(photoIds).stream()
+                .filter(item -> ownerUserId.equals(item.getOwnerUserId()))
+                .collect(Collectors.toMap(PhotoItem::getId, item -> item));
+        List<UUID> fileNodeIds = photosById.values().stream()
+                .map(PhotoItem::getFileNodeId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, FileDescriptor> filesById = fileMetadataQueryService.findAllByIds(fileNodeIds).stream()
+                .collect(Collectors.toMap(FileDescriptor::id, file -> file));
+        int regenerated = 0;
+        for (UUID photoId : photoIds) {
+            PhotoItem photo = photosById.get(photoId);
+            if (photo == null || photo.getCoverFileId() != null) {
+                continue;
+            }
+            FileDescriptor file = filesById.get(photo.getFileNodeId());
+            if (file == null) {
+                continue;
+            }
+            try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
+                    ownerUserId,
+                    file.id()
+            )) {
+                UUID coverFileId = createCover(ownerUserId, photo, file, source);
+                if (coverFileId != null) {
+                    photo.setCoverFileId(coverFileId);
+                    photoItemRepository.save(photo);
+                    regenerated++;
+                }
+            } catch (Exception exception) {
+                // 单张损坏图片的解码/IO 异常不能中断整批任务；记录后继续下一张。
+                log.warn("缩略图重生成失败: fileNodeId={}, errorType={}, message={}",
+                        file.id(), exception.getClass().getSimpleName(), exception.getMessage());
+            }
         }
-        taskRecordService.updateProgress(taskId, percent);
-        return percent;
+        return regenerated;
     }
 
-    /**
-     * 为重生成流程创建封面：可解码图片生成缩略图，RAW 生成预览图。
-     *
-     * <p>仅供缩略图重生成任务使用；常规导入的封面由缩略图任务异步生成。</p>
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param photo 照片实体
-     * @param file 源文件描述
-     * @param source 暂存源文件句柄
-     * @return 封面派生文件节点 ID，无法生成时返回 null
-     */
+    /** 为重生成流程创建封面：可解码图片生成缩略图，RAW 生成预览图；无法生成时返回 null。 */
     private UUID createCover(
             UUID ownerUserId,
             PhotoItem photo,

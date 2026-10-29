@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -383,7 +384,7 @@ class ReaderImportServiceTest {
         stubReadFileBytes();
         when(fileDetector.detectType("银河轨道 第001话.cbz")).thenReturn("CBZ");
         when(fileDetector.detectContentKind("CBZ")).thenReturn("COMIC");
-        when(itemRepository.findPersonalComicCandidates(OWNER_ID, SpaceType.PERSONAL, "COMIC"))
+        when(itemRepository.findPersonalComicCandidates(eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("COMIC"), any()))
                 .thenReturn(List.of(existingItem));
         when(itemRepository.findByIdForUpdate(EXISTING_ITEM_ID)).thenReturn(Optional.of(existingItem));
         when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, EXISTING_ITEM_ID)).thenReturn(false);
@@ -415,7 +416,7 @@ class ReaderImportServiceTest {
         stubReadFileBytes();
         when(fileDetector.detectType("芙莉莲 第02卷.cbz")).thenReturn("CBZ");
         when(fileDetector.detectContentKind("CBZ")).thenReturn("COMIC");
-        when(itemRepository.findSharedComicCandidates(SpaceType.SHARED, "COMIC"))
+        when(itemRepository.findSharedComicCandidates(eq(SpaceType.SHARED), eq("COMIC"), any()))
                 .thenReturn(List.of(sharedWork));
         when(itemRepository.findByIdForUpdate(EXISTING_ITEM_ID)).thenReturn(Optional.of(sharedWork));
         when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, EXISTING_ITEM_ID)).thenReturn(false);
@@ -456,7 +457,7 @@ class ReaderImportServiceTest {
         stubReadFileBytes();
         when(fileDetector.detectType("芙莉莲 第02卷.cbz")).thenReturn("CBZ");
         when(fileDetector.detectContentKind("CBZ")).thenReturn("COMIC");
-        when(itemRepository.findPersonalComicCandidates(OWNER_ID, SpaceType.PERSONAL, "COMIC"))
+        when(itemRepository.findPersonalComicCandidates(eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("COMIC"), any()))
                 .thenReturn(List.of());
         when(itemRepository.save(any(ReaderItem.class))).thenReturn(savedItem);
         when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, SAVED_ITEM_ID)).thenReturn(false);
@@ -468,7 +469,7 @@ class ReaderImportServiceTest {
         ReaderItem result = importService.importFile(OWNER_ID, FILE_NODE_ID);
 
         assertThat(result.getId()).isEqualTo(SAVED_ITEM_ID);
-        verify(itemRepository, never()).findSharedComicCandidates(any(), any());
+        verify(itemRepository, never()).findSharedComicCandidates(any(), any(), any());
     }
 
     @Test
@@ -490,7 +491,7 @@ class ReaderImportServiceTest {
         ReaderItem result = importService.importFile(OWNER_ID, FILE_NODE_ID);
 
         assertThat(result.getId()).isEqualTo(SAVED_ITEM_ID);
-        verify(itemRepository, never()).findPersonalComicCandidates(any(), any(), any());
+        verify(itemRepository, never()).findPersonalComicCandidates(any(), any(), any(), any());
         verify(sourceRepository).save(any(ReaderItemSource.class));
         verify(taskDispatchService).enqueue(any(), any(), any(), any());
     }
@@ -630,6 +631,25 @@ class ReaderImportServiceTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    void pdfMetadataIsExtractedOutsideTheImportTransaction() {
+        // 提取要整本落盘并渲染首页，放进写事务会让数百 MB 传输全程占住连接。
+        // 这里让事务模板不执行回调：只有事务外的提取才会真的发生。
+        // doReturn 而不是 when(...)：when 形式会先真的调用一次该方法，
+        // 撞上 @BeforeEach 里"必定回调业务体"的桩并拿到 null 回调。
+        doReturn(null).when(transactionTemplate).execute(any());
+        when(fileMetadataQueryService.findById(FILE_NODE_ID))
+                .thenReturn(Optional.of(personalFileNode("报告.pdf")));
+        stubReadFileBytes();
+        when(fileDetector.detectType("报告.pdf")).thenReturn("PDF");
+        when(pdfMetadataService.extract(any(FileDescriptor.class)))
+                .thenReturn(new ReaderPdfMetadataService.PdfMetadata(12, new byte[] {1, 2, 3}));
+
+        importService.importFile(OWNER_ID, FILE_NODE_ID);
+
+        verify(pdfMetadataService).extract(any(FileDescriptor.class));
     }
 
     @Test

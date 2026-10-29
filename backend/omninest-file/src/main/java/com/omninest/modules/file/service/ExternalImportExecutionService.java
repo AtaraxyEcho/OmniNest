@@ -966,7 +966,14 @@ public class ExternalImportExecutionService {
                 return;
             }
             if (SpaceType.SHARED == resolveSpaceType(task)) {
-                sharedSpaceQuotaService.increaseUsage(totalSize, fileCount);
+                // 完成是唯一记账点，且按该任务"已入库的累计量"入账：
+                // 失败重试后 totalSize 只是本次运行量，和失败路径的累计量纲混用会重复计入。
+                long importedBytes = ingressItemRepository.sumImportedBytesByTaskId(task.getId());
+                if (importedBytes > 0) {
+                    sharedSpaceQuotaService.increaseUsage(
+                            importedBytes,
+                            ingressItemRepository.countImportedFilesByTaskId(task.getId()));
+                }
             } else {
                 storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), totalSize);
             }
@@ -986,17 +993,15 @@ public class ExternalImportExecutionService {
     }
 
     /**
-     * 导入任务终态结算：共享任务按实际已导入字节（transferredBytes）计入共享用量
-     * ——目录导入逐文件独立提交，部分成功后失败/取消时这些字节已真实占用共享空间，
-     * 不能因任务未完成而漏记；个人任务沿用预留结算（失败路径即释放差额）。
+     * 终态结算：个人任务沿用预留结算（失败路径即释放差额）；共享任务在失败路径不入账。
+     *
+     * <p>共享账本把唯一记账点放在完成态的累计入库量上：失败路径也记一次的话，
+     * 管理端重试后同一批字节会被计入两次（FAILED 是可再次领取的状态）。
+     * 失败/取消时已入库的字节会短暂少计，由每十分钟的共享用量对账补齐。</p>
      */
     private void settleImportQuota(StorageImportTask task) {
-        // 进度列含临时下载与失败文件字节，不能作为入库量；按实际生成 FileNode 的入库记录结算。
         long importedBytes = ingressItemRepository.sumImportedBytesByTaskId(task.getId());
         if (SpaceType.SHARED == resolveSpaceType(task)) {
-            if (importedBytes > 0) {
-                sharedSpaceQuotaService.increaseUsage(importedBytes, task.getCompletedFiles());
-            }
             return;
         }
         storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), importedBytes);

@@ -175,7 +175,7 @@ public class BackdropAssetService {
         // 原图与缩略图一次批量签名，避免每张壁纸 4 次单行查询。
         Map<UUID, FileDownloadUrlDto> urls = fileIds.isEmpty()
                 ? Map.of()
-                : fileQueryService.createDownloadUrls(ownerUserId, fileIds);
+                : fileQueryService.createDownloadUrlsAs(ownerUserId, fileIds);
         return assets.stream()
                 .map(asset -> toDto(asset, urls))
                 .toList();
@@ -855,7 +855,7 @@ public class BackdropAssetService {
             return null;
         }
         try {
-            return fileQueryService.createDownloadUrl(ownerUserId, fileId);
+            return fileQueryService.createDownloadUrlAs(ownerUserId, fileId);
         } catch (RuntimeException ex) {
             log.warn("背景素材签名 URL 生成失败: userId={}, fileId={}", ownerUserId, fileId, ex);
             return null;

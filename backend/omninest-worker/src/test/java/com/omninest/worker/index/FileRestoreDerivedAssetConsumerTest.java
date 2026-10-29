@@ -39,6 +39,23 @@ class FileRestoreDerivedAssetConsumerTest {
     }
 
     @Test
+    @DisplayName("瞬时失败重试成功后确认，不把恢复消息丢进死信")
+    void handleRetriesTransientFailureThenAcknowledges() throws IOException {
+        FileRestoredEvent event = event();
+        Mockito.doThrow(new IllegalStateException("object storage busy"))
+                .doNothing()
+                .when(derivedAssetService)
+                .validateAndRepair(event);
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(derivedAssetService, Mockito.times(2)).validateAndRepair(event);
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(),
+                Mockito.anyBoolean());
+    }
+
+    @Test
     @DisplayName("文件再次进入回收站或永久删除时跳过修复并确认")
     void handleAcknowledgesWhenFileEnteredPurgeAgain() throws IOException {
         FileRestoredEvent event = event();

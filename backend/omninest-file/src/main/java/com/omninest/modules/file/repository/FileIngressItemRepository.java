@@ -64,6 +64,20 @@ public interface FileIngressItemRepository extends JpaRepository<FileIngressItem
             """)
     long sumImportedBytesByTaskId(@Param("sourceTaskId") UUID sourceTaskId);
 
+    /**
+     * 统计该导入任务已真正入库的文件数，与 {@link #sumImportedBytesByTaskId} 同口径。
+     *
+     * @param sourceTaskId 导入任务标识
+     * @return 已入库文件数
+     */
+    @Query("""
+            select count(item.id)
+            from FileIngressItem item
+            where item.sourceTaskId = :sourceTaskId
+              and item.resultFileNodeId is not null
+            """)
+    long countImportedFilesByTaskId(@Param("sourceTaskId") UUID sourceTaskId);
+
     @Query("""
             select item.targetObjectKey
             from FileIngressItem item

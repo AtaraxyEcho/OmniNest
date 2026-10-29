@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -79,14 +80,42 @@ public class NotificationTypeController {
                 request.sortOrder(),
                 request.enabled()
         );
+        // 请求体各字段都是"传了才改"的可选语义，Map.of 不接受 null：
+        // 省略 enabled 时原来连变更本身都会被 NPE 打成一个已经生效却返回 500 的请求。
         adminAuditRecorder.recordWithMetadata(
                 actorUserId,
                 "ADMIN_NOTIFICATION_TYPE_UPDATE",
                 "notification_types",
                 id,
-                Map.of("enabled", request.enabled())
+                changedFields(request)
         );
         return ApiResponse.success(result);
+    }
+
+    /**
+     * 收集本次实际提交的字段，供审计载荷记录改了什么。
+     */
+    private static Map<String, Object> changedFields(UpdateTypeRequest request) {
+        Map<String, Object> changed = new LinkedHashMap<>();
+        if (request.label() != null) {
+            changed.put("label", request.label());
+        }
+        if (request.description() != null) {
+            changed.put("description", request.description());
+        }
+        if (request.icon() != null) {
+            changed.put("icon", request.icon());
+        }
+        if (request.color() != null) {
+            changed.put("color", request.color());
+        }
+        if (request.sortOrder() != null) {
+            changed.put("sortOrder", request.sortOrder());
+        }
+        if (request.enabled() != null) {
+            changed.put("enabled", request.enabled());
+        }
+        return changed;
     }
 
     /**

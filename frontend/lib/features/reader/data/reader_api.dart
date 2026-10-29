@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -270,15 +271,39 @@ class ReaderApi {
       );
     }
     final expectedDigest = ticket.sha256?.trim().toLowerCase();
-    if (expectedDigest != null &&
-        expectedDigest.isNotEmpty &&
-        sha256.convert(bytes).toString().toLowerCase() != expectedDigest) {
-      throw const AppException(
-        code: 'READER_FILE_DIGEST_MISMATCH',
-        message: '阅读文件完整性校验失败',
-      );
+    if (expectedDigest != null && expectedDigest.isNotEmpty) {
+      // 这里是 Web 专用路径：单 isolate 上整包一次 sha256 会把主线程占住数秒，
+      // 分块并在块间让出事件循环，帧调度才有机会执行。
+      final actual = await _sha256HexChunked(bytes);
+      if (actual != expectedDigest) {
+        throw const AppException(
+          code: 'READER_FILE_DIGEST_MISMATCH',
+          message: '阅读文件完整性校验失败',
+        );
+      }
     }
     return bytes;
+  }
+
+  static const _digestChunkBytes = 1 << 20;
+
+  /// 分块计算 SHA-256；每块之间让出一次事件循环。
+  Future<String> _sha256HexChunked(Uint8List data) async {
+    late Digest completed;
+    final output = ChunkedConversionSink<Digest>.withCallback(
+      (digests) => completed = digests.single,
+    );
+    final input = sha256.startChunkedConversion(output);
+    for (var offset = 0; offset < data.length; offset += _digestChunkBytes) {
+      final end = offset + _digestChunkBytes;
+      final stop = end > data.length ? data.length : end;
+      input.add(data.sublist(offset, stop));
+      if (stop < data.length) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+    input.close();
+    return completed.toString();
   }
 
   /// 原生平台路径：从签名地址直接写入临时文件。

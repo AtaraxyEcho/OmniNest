@@ -43,7 +43,7 @@ class MediaProbeSourceStagerTest {
     private final FileContentAccessService fileContentAccessService =
             mock(FileContentAccessService.class);
     private final MediaProbeSourceStager stager =
-            new MediaProbeSourceStager(fileContentAccessService);
+            new MediaProbeSourceStager(fileContentAccessService, new TestTempStagingPort());
 
     @Test
     @DisplayName("不超过头窗口的对象整份取回，不请求区间读")

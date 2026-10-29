@@ -2,6 +2,7 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -147,7 +148,8 @@ public class MusicStreamGatewayService {
         if (track == null || track.getFileNodeId() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        UUID requesterUserId = session.ownerUserId();
+        // 播放会话是请求者身份的凭证：会话由请求者发起，网关不再持有会话级用户上下文。
+        RequestPrincipal requester = RequestPrincipal.credential(session::ownerUserId);
         UUID fileNodeId = track.getFileNodeId();
         // 大小取自元数据：为探测大小先打开一次对象存储流、再为输出打开第二次，
         // 每次播放都会多一次 GetObject 往返与连接占用。
@@ -161,7 +163,7 @@ public class MusicStreamGatewayService {
         if (range == null || range.isBlank()) {
             FileContentStream content;
             try {
-                content = filePlaybackContentService.openFileContent(requesterUserId, fileNodeId);
+                content = filePlaybackContentService.openFileContent(requester, fileNodeId);
             } catch (BusinessException exception) {
                 return localFailure(exception);
             }
@@ -182,7 +184,7 @@ public class MusicStreamGatewayService {
                     .build();
         }
         Optional<FileContentRange> slice = filePlaybackContentService.openFileRange(
-                requesterUserId, fileNodeId, parsed.start(), parsed.length());
+                requester, fileNodeId, parsed.start(), parsed.length());
         if (slice.isEmpty()) {
             return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
                     .header(HttpHeaders.CONTENT_RANGE, "bytes */" + totalBytes)

@@ -180,7 +180,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(80);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(70);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -208,7 +208,6 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('share.enabled'),
                         ('share.max-bytes'),
                         ('upload.rate.enabled'),
-                        ('security.rate-limit'),
                         ('clamav.enabled'),
                         ('clamav.host'),
                         ('clamav.port'),
@@ -222,15 +221,6 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('media.tmdb.strategy'),
                         ('media.tmdb.limit'),
                         ('media.tmdb.adult'),
-                        ('reader.gbooks.enabled'),
-                        ('reader.gbooks.url'),
-                        ('reader.gbooks.lang'),
-                        ('reader.gbooks.limit'),
-                        ('reader.gbooks.timeout'),
-                        ('reader.gbooks.key'),
-                        ('reader.openlib.enabled'),
-                        ('reader.openlib.url'),
-                        ('reader.openlib.lang'),
                         ('music.musicbrainz.enabled'),
                         ('music.import.enabled'),
                         ('music.musicbrainz.url'),
@@ -278,12 +268,11 @@ class BuiltinCatalogFlywayMigrationTest {
                   AND config_key IN (
                     'media.tmdb.key',
                     'media.tmdb.token',
-                    'reader.gbooks.key',
                     'weather.qweather.key',
                     'notification.email.password'
                   )
                   AND config_value = ''
-                """)).isEqualTo(5);
+                """)).isEqualTo(4);
     }
 
     @Test

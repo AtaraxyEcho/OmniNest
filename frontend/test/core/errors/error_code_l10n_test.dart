@@ -3,6 +3,7 @@ import 'dart:ui' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 
 void main() {
   final l10n = lookupAppLocalizations(const Locale('en'));
@@ -31,5 +32,16 @@ void main() {
       l10n.messageForErrorCode('READER_BOOK_DOWNLOAD_FAILED', fallback: '失败'),
       l10n.errorBookDownloadFailed,
     );
+  });
+
+  test('共享空间缺下载位有自己的文案，不回落到通用无权限', () {
+    expect(
+      l10n.messageForErrorCode(
+        AppErrorCodes.downloadPermissionRequired,
+        fallback: '回退',
+      ),
+      l10n.errorDownloadPermissionRequired,
+    );
+    expect(l10n.errorDownloadPermissionRequired, isNot(l10n.errorForbidden));
   });
 }

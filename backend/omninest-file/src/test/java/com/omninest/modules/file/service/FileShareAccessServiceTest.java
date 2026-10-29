@@ -151,7 +151,7 @@ class FileShareAccessServiceTest {
                 .thenReturn(new PageImpl<>(List.of(
                         childDto(FILE_ID, "a.mkv", NodeType.FILE),
                         childDto(SUB_FOLDER_ID, "nested", NodeType.FOLDER))));
-        Mockito.when(fileQueryService.createDownloadUrls(eq(OWNER), any()))
+        Mockito.when(fileQueryService.createDownloadUrlsAs(eq(OWNER), any()))
                 .thenReturn(Map.of(FILE_ID,
                         new FileDownloadUrlDto(FILE_ID, "a.mkv", "https://signed/a.mkv", Instant.now())));
 
@@ -231,7 +231,7 @@ class FileShareAccessServiceTest {
                 .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
         Mockito.when(fileQueryService.listFilesPage(OWNER, ROOT_ID, null, 0, 50))
                 .thenReturn(new PageImpl<>(List.of(childDto(FILE_ID, "a.mkv", NodeType.FILE))));
-        Mockito.when(fileQueryService.createDownloadUrls(eq(OWNER), any()))
+        Mockito.when(fileQueryService.createDownloadUrlsAs(eq(OWNER), any()))
                 .thenReturn(Map.of(FILE_ID,
                         new FileDownloadUrlDto(FILE_ID, "a.mkv", "https://signed/a.mkv", Instant.now())));
 

@@ -44,8 +44,6 @@ public record ConfigDefinition(
 ) {
     private static final Set<String> URL_KEYS = Set.of(
             "media.tmdb.url",
-            "reader.gbooks.url",
-            "reader.openlib.url",
             "music.musicbrainz.url",
             "music.musicbrainz.cover-url",
             "music.netease.url",
@@ -132,8 +130,6 @@ public record ConfigDefinition(
                 || "log-retention.scan-paths".equals(key)
                 || key.startsWith("media.tmdb.")
                 || key.startsWith("music.")
-                || key.startsWith("reader.gbooks.")
-                || key.startsWith("reader.openlib.")
                 || key.startsWith("photo.ai.")
                 || key.startsWith("weather.qweather.")
                 || key.startsWith("clamav.")

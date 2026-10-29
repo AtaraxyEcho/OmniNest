@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.SpaceType;
@@ -29,6 +30,7 @@ class FileLifecycleGuardTest {
 
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID MEMBER_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
+    private static final RequestPrincipal MEMBER = RequestPrincipal.credential(() -> MEMBER_ID);
     private static final UUID STRANGER_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
     private static final UUID NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
@@ -127,13 +129,13 @@ class FileLifecycleGuardTest {
     @Test
     void downloadableUsesDownloadPredicateInsteadOfBrowseOnly() {
         FileNode node = node(SpaceType.SHARED, false);
-        when(fileDownloadService.requireDownloadableNode(MEMBER_ID, NODE_ID))
+        when(fileDownloadService.requireDownloadableNode(MEMBER, NODE_ID))
                 .thenReturn(node);
 
-        FileDescriptor descriptor = guard.requireDownloadable(MEMBER_ID, NODE_ID);
+        FileDescriptor descriptor = guard.requireDownloadable(MEMBER, NODE_ID);
 
         assertThat(descriptor.id()).isEqualTo(NODE_ID);
-        verify(fileDownloadService).requireDownloadableNode(MEMBER_ID, NODE_ID);
+        verify(fileDownloadService).requireDownloadableNode(MEMBER, NODE_ID);
         verify(sharedSpaceService, never()).validateBrowsePermission(any());
     }
 }

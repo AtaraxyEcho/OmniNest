@@ -18,4 +18,14 @@ public interface UserProfileCacheEvictor {
      * @param userId 用户标识
      */
     void evictProfileCache(UUID userId);
+
+    /**
+     * 在事务提交后驱逐指定用户的资料缓存；无事务同步时立即驱逐。
+     *
+     * <p>写事务体内直接驱逐会留出窗口：并发读在提交前仍能看到旧行，并把旧角色、
+     * 旧状态或旧配额重新写回带 TTL 的缓存，驱逐等于白做。</p>
+     *
+     * @param userId 用户标识
+     */
+    void evictProfileCacheAfterCommit(UUID userId);
 }

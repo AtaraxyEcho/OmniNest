@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.sun.net.httpserver.HttpServer;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.music.domain.MusicTrack;
@@ -32,6 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 class MusicStreamGatewayServiceTest {
 
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal REQUESTER = RequestPrincipal.credential(() -> OWNER_ID);
     private static final String SESSION_ID = "session-1";
     private static final String TOKEN = "token-1";
     private static final UUID TRACK_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
@@ -114,10 +116,10 @@ class MusicStreamGatewayServiceTest {
     void localSessionServesPartialContentForRangeRequest() throws Exception {
         stubLocalTrack();
         byte[] slice = new byte[] {7, 8, 9};
-        when(filePlaybackContentService.openFileContent(OWNER_ID, FILE_NODE_ID))
+        when(filePlaybackContentService.openFileContent(REQUESTER, FILE_NODE_ID))
                 .thenAnswer(invocation -> new FileContentStream(
                         new ByteArrayInputStream(new byte[10]), "track.flac", 10L, "audio/flac"));
-        when(filePlaybackContentService.openFileRange(OWNER_ID, FILE_NODE_ID, 2L, 3L))
+        when(filePlaybackContentService.openFileRange(REQUESTER, FILE_NODE_ID, 2L, 3L))
                 .thenAnswer(invocation -> Optional.of(
                         new FileContentRange(new ByteArrayInputStream(slice), 10L)));
 
@@ -137,7 +139,7 @@ class MusicStreamGatewayServiceTest {
     void localSessionServesFullContentWithoutRange() throws Exception {
         stubLocalTrack();
         byte[] payload = new byte[] {1, 2, 3, 4};
-        when(filePlaybackContentService.openFileContent(OWNER_ID, FILE_NODE_ID))
+        when(filePlaybackContentService.openFileContent(REQUESTER, FILE_NODE_ID))
                 .thenAnswer(invocation -> new FileContentStream(
                         new ByteArrayInputStream(payload), "track.flac", payload.length, "audio/flac"));
 
@@ -154,7 +156,7 @@ class MusicStreamGatewayServiceTest {
     @Test
     void localSessionRejectsUnsatisfiableRange() {
         stubLocalTrack();
-        when(filePlaybackContentService.openFileContent(OWNER_ID, FILE_NODE_ID))
+        when(filePlaybackContentService.openFileContent(REQUESTER, FILE_NODE_ID))
                 .thenAnswer(invocation -> new FileContentStream(
                         new ByteArrayInputStream(new byte[10]), "track.flac", 10L, "audio/flac"));
 
@@ -169,7 +171,7 @@ class MusicStreamGatewayServiceTest {
     void localSessionHeadClosesContentStreamWithoutBody() throws Exception {
         stubLocalTrack();
         final boolean[] contentClosed = {false};
-        when(filePlaybackContentService.openFileContent(OWNER_ID, FILE_NODE_ID))
+        when(filePlaybackContentService.openFileContent(REQUESTER, FILE_NODE_ID))
                 .thenAnswer(invocation -> new FileContentStream(
                         new ByteArrayInputStream(new byte[10]) {
                             @Override

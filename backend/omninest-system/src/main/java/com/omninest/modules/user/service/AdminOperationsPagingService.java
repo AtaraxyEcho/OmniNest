@@ -41,7 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdminOperationsPagingService {
     private static final int DEFAULT_PAGE_SIZE = 25;
-       private static final int MAX_PAGE_INDEX = 1_000_000;
+    /**
+     * 页深上限：OFFSET 深度与页大小相乘就是数据库要跳过的行数，
+     * 百万级页深等于让一次请求扫过整表；管理端列表用筛选而不是翻到底。
+     */
+    private static final int MAX_PAGE_INDEX = 1_000;
     private static final int MAX_FILTER_LENGTH = 100;
     private static final int MAX_SEARCH_LENGTH = 200;
 

@@ -31,6 +31,7 @@ import com.omninest.modules.reader.service.model.ComicManifestDraft.ComicCatalog
 import com.omninest.modules.reader.service.model.ComicManifestDraft.ComicPageDraft;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.IOException;
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
@@ -49,6 +51,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -76,6 +79,7 @@ public class ReaderComicManifestService {
     private final TaskRecordService taskRecordService;
     private final MediaSyncEventService syncEventService;
     private final ReaderCoverExtractionService coverExtractionService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 为已导入的漫画条目生成清单。
@@ -284,9 +288,25 @@ public class ReaderComicManifestService {
      * @param sourceId 来源 ID
      * @param progressReporter 任务进度回调
      */
-    @Transactional(rollbackFor = Exception.class)
     public void parseExistingSource(UUID itemId, UUID sourceId, IntConsumer progressReporter) {
         progressReporter.accept(20);
+        // 整包下载与解包写盘不能占住数据库连接：先在短事务里标记解析中，
+        // 事务外把归档落盘一次，再回短事务写页面、清单与封面。
+        ReaderItemSource source = transactionTemplate.execute(status -> markParsing(itemId, sourceId));
+        if (source == null) {
+            return;
+        }
+        FileDescriptor fileNode = loadFileNode(source.getFileNodeId());
+        try (StagedArchive staged = epubArchiveStager.stage(fileNode)) {
+            transactionTemplate.executeWithoutResult(status ->
+                    parseStaged(itemId, sourceId, fileNode.sizeBytes(), staged, progressReporter));
+        }
+    }
+
+    /**
+     * 短事务：校验来源归属并标记解析中；已 READY 时只刷新条目状态并返回 null。
+     */
+    private ReaderItemSource markParsing(UUID itemId, UUID sourceId) {
         ReaderItemSource source = sourceRepository.findById(sourceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "来源不存在"));
         if (!source.getReaderItemId().equals(itemId)) {
@@ -294,19 +314,38 @@ public class ReaderComicManifestService {
         }
         if (source.getStatus() == ReaderSourceStatus.READY) {
             refreshItemImportStatus(itemId);
-            return;
+            return null;
         }
-
         source.setStatus(ReaderSourceStatus.PARSING);
         source.setErrorCode(null);
         source.setErrorMessage(null);
         sourceRepository.save(source);
         refreshItemImportStatus(itemId);
+        return source;
+    }
 
+    /**
+     * 短事务：用已落盘的归档写出页面、清单与封面。
+     *
+     * @param itemId 漫画作品 ID
+     * @param sourceId 来源 ID
+     * @param archiveSizeBytes 归档字节数
+     * @param stagedArchive 本地暂存归档路径
+     * @param progressReporter 任务进度回调
+     */
+    private void parseStaged(
+            UUID itemId,
+            UUID sourceId,
+            long archiveSizeBytes,
+            StagedArchive stagedArchive,
+            IntConsumer progressReporter
+    ) {
+        ReaderItemSource source = sourceRepository.findById(sourceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "来源不存在"));
         List<ReaderPageAsset> previousPageAssets = pageAssetService.findPageAssets(source.getId());
         progressReporter.accept(30);
         if ("EPUB".equals(source.getFileFormat())) {
-            EpubSourceParseResult parseResult = reparseEpubSource(source, progressReporter);
+            EpubSourceParseResult parseResult = reparseEpubSource(source, progressReporter, stagedArchive);
             if (source.getStatus() == ReaderSourceStatus.READY) {
                 rebuildComicManifest(itemId, parseResult.catalogDrafts());
                 progressReporter.accept(95);
@@ -316,7 +355,8 @@ public class ReaderComicManifestService {
                 return;
             }
         } else {
-            ReaderCoverDraft cover = reparseZipSource(source, progressReporter);
+            ReaderCoverDraft cover =
+                    reparseZipSource(source, progressReporter, stagedArchive, archiveSizeBytes);
             if (source.getStatus() == ReaderSourceStatus.READY) {
                 rebuildComicManifest(itemId);
                 progressReporter.accept(95);
@@ -701,6 +741,23 @@ public class ReaderComicManifestService {
      * 把合法分卷静默判成已删除。
      */
     private void enqueueParseTask(ReaderItem item, ReaderItemSource source, boolean retry) {
+        // 同一源文件已有在跑的解析任务就不再新建：claimForExecution 按 taskId 判重，
+        // 全新 taskId 拦不住并发，两个 Worker 会各解一遍同一归档并双倍全量下载。
+        if (source.getFileNodeId() != null
+                && taskRecordService.findActiveResourceTask(
+                        item.getOwnerUserId(),
+                        "COMIC_PARSE",
+                        "FILE_NODE",
+                        source.getFileNodeId(),
+                        Set.of(
+                                TaskStatus.QUEUED.getValue(),
+                                TaskStatus.RETRY_WAIT.getValue(),
+                                TaskStatus.RUNNING.getValue()
+                        )
+                )
+                .isPresent()) {
+            return;
+        }
         UUID taskId = UUID.randomUUID();
         UUID fileOwnerId = source.getFileNodeId() == null
                 ? item.getOwnerUserId()
@@ -742,11 +799,10 @@ public class ReaderComicManifestService {
      */
     private EpubSourceParseResult reparseEpubSource(
             ReaderItemSource source,
-            IntConsumer progressReporter
+            IntConsumer progressReporter,
+            StagedArchive stagedArchive
     ) {
-        FileDescriptor fileNode = loadFileNode(source.getFileNodeId());
-
-        try (StagedArchive stagedArchive = epubArchiveStager.stage(fileNode)) {
+        try {
             progressReporter.accept(50);
             ComicEpubParser parser = new ComicEpubParser();
             try (EpubArchive archive = new EpubArchive(stagedArchive.path(), archiveSafetyPolicy)) {
@@ -785,10 +841,14 @@ public class ReaderComicManifestService {
     /**
      * 重新解析 CBZ/ZIP 来源（保留 sourceId，绕开幂等检查）。
      */
-    private ReaderCoverDraft reparseZipSource(ReaderItemSource source, IntConsumer progressReporter) {
-        FileDescriptor fileNode = loadFileNode(source.getFileNodeId());
-
-        List<ImageEntry> imageEntries = archiveParser.parseEntries(fileNode);
+    private ReaderCoverDraft reparseZipSource(
+            ReaderItemSource source,
+            IntConsumer progressReporter,
+            StagedArchive stagedArchive,
+            long archiveSizeBytes
+    ) {
+        List<ImageEntry> imageEntries = archiveParser.parseEntries(
+                stagedArchive::openStream, archiveSizeBytes, "sourceId=" + source.getId());
         progressReporter.accept(70);
 
         if (imageEntries.isEmpty()) {
@@ -826,7 +886,7 @@ public class ReaderComicManifestService {
         source.setPageCount(newPages.size());
         source.setStatus(ReaderSourceStatus.READY);
         sourceRepository.save(source);
-        return archiveParser.extractCover(fileNode, imageEntries.getFirst());
+        return archiveParser.extractCover(stagedArchive::openStream, imageEntries.getFirst());
     }
 
     private void persistCoverAfterCommit(UUID itemId, ReaderCoverDraft cover) {

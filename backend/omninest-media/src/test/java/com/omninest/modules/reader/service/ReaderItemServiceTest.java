@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -82,6 +83,7 @@ import org.springframework.web.multipart.MultipartFile;
 class ReaderItemServiceTest {
 
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal REQUESTER = RequestPrincipal.credential(() -> OWNER_ID);
     private static final UUID OTHER_USER_ID = UUID.fromString("10000000-0000-0000-0000-000000000099");
     private static final UUID ITEM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID SHARED_ITEM_ID = UUID.fromString("20000000-0000-0000-0000-000000000003");
@@ -502,9 +504,9 @@ class ReaderItemServiceTest {
         );
 
         when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-        when(fileLifecycleGuard.requireDownloadable(OWNER_ID, FILE_NODE_ID)).thenReturn(fileNode);
+        when(fileLifecycleGuard.requireDownloadable(REQUESTER, FILE_NODE_ID)).thenReturn(fileNode);
         when(fileMetadataQueryService.findContentSha256(FILE_NODE_ID)).thenReturn(Optional.of("abc123"));
-        when(fileQueryService.createReadableDownloadUrl(OWNER_ID, FILE_NODE_ID))
+        when(fileQueryService.createReadableDownloadUrl(REQUESTER, FILE_NODE_ID))
                 .thenReturn(new FileDownloadUrlDto(
                         FILE_NODE_ID,
                         "original.epub",
@@ -512,14 +514,14 @@ class ReaderItemServiceTest {
                         Instant.parse("2026-06-12T00:15:00Z")
                 ));
 
-        var ticket = itemService.createFileTicket(OWNER_ID, ITEM_ID);
+        var ticket = itemService.createFileTicket(REQUESTER, ITEM_ID);
 
         assertThat(ticket.itemId()).isEqualTo(ITEM_ID);
         assertThat(ticket.fileName()).isEqualTo("Large Book.epub");
         assertThat(ticket.sizeBytes()).isEqualTo(2L * 1024 * 1024 * 1024);
         assertThat(ticket.sha256()).isEqualTo("abc123");
         assertThat(ticket.downloadUrl()).contains("signature=test");
-        verify(fileQueryService).createReadableDownloadUrl(OWNER_ID, FILE_NODE_ID);
+        verify(fileQueryService).createReadableDownloadUrl(REQUESTER, FILE_NODE_ID);
     }
 
     @Test

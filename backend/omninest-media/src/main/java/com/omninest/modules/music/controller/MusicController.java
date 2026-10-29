@@ -287,14 +287,14 @@ public class MusicController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/stream/{trackId}")
     ResponseEntity<Void> stream(@PathVariable UUID trackId) {
-        MusicPlaybackPlanDto plan = playbackService.playbackPlan(currentUserContext.requireCurrentUserId(), trackId);
+        MusicPlaybackPlanDto plan = playbackService.playbackPlan(currentUserContext.requirePrincipal(), trackId);
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(plan.url())).build();
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/tracks/{trackId}/playback-plan")
     ApiResponse<MusicPlaybackPlanDto> playbackPlan(@PathVariable UUID trackId) {
-        return ApiResponse.success(playbackService.playbackPlan(currentUserContext.requireCurrentUserId(), trackId));
+        return ApiResponse.success(playbackService.playbackPlan(currentUserContext.requirePrincipal(), trackId));
     }
 
     @GetMapping("/api/v1/music/playback/sessions/{sessionId}/stream")

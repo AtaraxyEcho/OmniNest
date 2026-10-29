@@ -11052,6 +11052,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorForbidden => '没有权限执行该操作';
 
   @override
+  String get errorDownloadPermissionRequired => '该文件需要共享空间的下载权限';
+
+  @override
   String get filesOpListVersions => '查看版本';
 
   @override
@@ -11538,6 +11541,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerAnnotationSaveFailed => '批注保存失败，请重试';
+
+  @override
+  String get readerAnnotationDeleteFailed => '批注删除失败，请重试';
 
   @override
   String get musicFavoriteToggleFailed => '收藏操作失败，请重试';

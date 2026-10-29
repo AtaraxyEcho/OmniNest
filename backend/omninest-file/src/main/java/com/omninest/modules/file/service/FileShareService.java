@@ -353,11 +353,10 @@ public class FileShareService {
         if (recipients.contains(ownerUserId)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不能分享给自己");
         }
+        // 一次批量取状态：逐个 findDetailsById 会把 100 个接收人放大成 100 次带角色图的多表查询。
+        Map<UUID, String> statuses = userAccountQuery.findStatuses(recipients);
         for (UUID recipientUserId : recipients) {
-            if (recipientUserId == null
-                    || userAccountQuery.findDetailsById(recipientUserId)
-                            .filter(details -> "ACTIVE".equals(details.status()))
-                            .isEmpty()) {
+            if (recipientUserId == null || !"ACTIVE".equals(statuses.get(recipientUserId))) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "分享接收人不存在或已停用");
             }
         }

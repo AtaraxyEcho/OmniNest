@@ -449,6 +449,24 @@ void main() {
       expect(adapter.fileRequestCount, 1);
     });
 
+    test('Web 文件下载跨块校验大文件摘要，分块哈希与整包一致', () async {
+      // 超过 1 MiB 才会走多块累加：漏接块或块序错乱都会让摘要不匹配而抛错。
+      final bytes = Uint8List.fromList(
+        List<int>.generate(2 * 1024 * 1024 + 5, (index) => index % 251),
+      );
+      final adapter = _ReaderFileDownloadAdapter(
+        sizeBytes: bytes.length,
+        sha256Value: sha256.convert(bytes).toString(),
+        bytes: bytes,
+      );
+      final api = ReaderApi(_apiClient(adapter));
+
+      final result = await api.downloadFileBytes('item-large');
+
+      expect(result, bytes);
+      expect(adapter.fileRequestCount, 1);
+    });
+
     test('Web 文件下载拒绝摘要不一致的正文', () async {
       final bytes = Uint8List.fromList(utf8.encode('tampered'));
       final adapter = _ReaderFileDownloadAdapter(

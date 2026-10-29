@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 class MusicPlaybackServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal REQUESTER = RequestPrincipal.credential(() -> OWNER_ID);
     private static final UUID TRACK_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID FILE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
@@ -76,7 +78,7 @@ class MusicPlaybackServiceTest {
                 null
         ));
 
-        var plan = playbackService.playbackPlan(OWNER_ID, TRACK_ID);
+        var plan = playbackService.playbackPlan(REQUESTER, TRACK_ID);
 
         assertThat(plan.trackId()).isEqualTo(TRACK_ID);
         assertThat(plan.url()).isEqualTo("/api/v1/music/playback/sessions/session-1/stream?token=token");
@@ -84,7 +86,7 @@ class MusicPlaybackServiceTest {
         assertThat(plan.durationSeconds()).isEqualTo(245);
         assertThat(plan.format()).isEqualTo("flac");
         // 播放网关直接读 File 内容，计划里不再携带面向浏览器的下载地址。
-        verify(filePlaybackContentService).requireDownloadable(OWNER_ID, FILE_ID);
+        verify(filePlaybackContentService).requireDownloadable(REQUESTER, FILE_ID);
     }
 
     @Test

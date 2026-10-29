@@ -15,6 +15,7 @@ import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.service.SharedSpaceQuotaService;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicTrackRepository;
@@ -99,6 +100,9 @@ class SharedSpaceLedgerIT {
 
     @Autowired
     private FileNodeRepository fileNodeRepository;
+
+    @Autowired
+    private FileNodeScanQueryRepository fileNodeScanQueryRepository;
 
     @Autowired
     private FileMetricsRepository fileMetricsRepository;
@@ -224,6 +228,29 @@ class SharedSpaceLedgerIT {
         assertThat(number(byOwner.getFirst()[1])).isEqualTo(1L);
         assertThat(otherOwnerFile).isNotNull();
         assertThat(folder).isNotNull();
+    }
+
+    @Test
+    @DisplayName("共享目录整体删除前的他人内容判定：按上传者归属、排除回收站、转义生效")
+    void foreignDescendantCountDrivesSharedFolderDeleteGuard() {
+        UUID operator = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        // 下划线是目录名字面量：不声明 ESCAPE 时通配会把兄弟目录的子项一起判成"他人内容"。
+        String folderPath = "/S_T/a";
+        insertSharedNode(operator, operator, folderPath, "FOLDER", 0L, false);
+        insertSharedNode(operator, operator, folderPath + "/mine.pdf", "FILE", 400L, false);
+        // uploaded_by 缺失时回落到 owner_user_id，与按上传者分组投递失效事件的口径一致。
+        insertSharedNode(operator, null, folderPath + "/mine-legacy.pdf", "FILE", 400L, false);
+        insertSharedNode(member, member, folderPath + "/theirs.pdf", "FILE", 900L, false);
+        insertSharedNode(member, null, folderPath + "/theirs-legacy.pdf", "FILE", 900L, false);
+        // 回收站里的他人文件不再受本次删除影响，不该把整目录判成混有他人内容。
+        insertSharedNode(member, member, folderPath + "/already-gone.pdf", "FILE", 900L, true);
+        insertSharedNode(member, member, folderPath + "X/other-folder.pdf", "FILE", 7_000L, false);
+
+        long foreignCount = fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(folderPath + "/"), operator);
+
+        assertThat(foreignCount).isEqualTo(2L);
     }
 
     @Test
@@ -457,7 +484,29 @@ class SharedSpaceLedgerIT {
             long sizeBytes,
             boolean deleted
     ) {
-        return insertSharedNode(ownerUserId, normalizedPath, nodeType, sizeBytes, null, null, deleted);
+        return insertSharedNode(ownerUserId, ownerUserId, normalizedPath, nodeType, sizeBytes, deleted);
+    }
+
+    private UUID insertSharedNode(
+            UUID ownerUserId,
+            UUID uploadedBy,
+            String normalizedPath,
+            String nodeType,
+            long sizeBytes,
+            boolean deleted
+    ) {
+        UUID nodeId = UUID.randomUUID();
+        Instant now = Instant.now();
+        jdbcTemplate.update("""
+                INSERT INTO omni.file_nodes
+                    (id, owner_user_id, uploaded_by, node_type, name, normalized_path, size_bytes,
+                     is_deleted, space_type, source_type, created_at, updated_at, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SHARED', 'LOCAL', ?, ?, 0)
+                """, nodeId, ownerUserId, uploadedBy, nodeType,
+                normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
+                normalizedPath, sizeBytes, deleted,
+                Timestamp.from(now), Timestamp.from(now));
+        return nodeId;
     }
 
     private UUID insertSharedNode(

@@ -66,7 +66,9 @@ public class DeadLetterConsumer {
     }
 
     /**
-     * 尝试从消息头或 JSON body 中提取 taskId。
+     * 从消息头或 JSON body 中提取 taskId。
+     *
+     * <p>头与体两条通道都保留：任务消息由发布侧写头，业务事件类死信只能从体里取。</p>
      */
     private Optional<UUID> extractTaskId(Message message, String body) {
         Object taskIdHeader = message.getMessageProperties().getHeaders().get("taskId");

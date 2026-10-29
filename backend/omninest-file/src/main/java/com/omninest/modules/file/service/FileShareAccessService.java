@@ -226,13 +226,15 @@ public class FileShareAccessService {
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(), link.getOwnerUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在或已被删除"));
-        // 文件夹没有单文件下载语义：createDownloadUrl 会直接拒绝非 FILE 节点，
+        // 文件夹没有单文件下载语义：签发入口会直接拒绝非 FILE 节点，
         // 让整条分享以 400 结束。此处回文件夹元数据并把下载入口留空。
         if (NodeType.FOLDER.getValue().equals(link.getResourceType())) {
             return new FileShareAccessDto(
                     node.getName(), node.getMimeType(), node.getSizeBytes(), null, link.getResourceType());
         }
-        FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrl(link.getOwnerUserId(), node.getId());
+        // 分享链接本身就是访问凭证：访客没有用户身份，节点范围由 link 的 resourceId 决定。
+        FileDownloadUrlDto downloadUrl =
+                fileQueryService.createDownloadUrlAs(link.getOwnerUserId(), node.getId());
         return new FileShareAccessDto(
                 node.getName(), node.getMimeType(), node.getSizeBytes(),
                 downloadUrl.downloadUrl(), link.getResourceType());
@@ -381,7 +383,7 @@ public class FileShareAccessService {
             return Map.of();
         }
         Map<UUID, String> urls = new LinkedHashMap<>();
-        fileQueryService.createDownloadUrls(ownerUserId, fileIds)
+        fileQueryService.createDownloadUrlsAs(ownerUserId, fileIds)
                 .forEach((nodeId, downloadUrl) -> urls.put(nodeId, downloadUrl.downloadUrl()));
         return urls;
     }

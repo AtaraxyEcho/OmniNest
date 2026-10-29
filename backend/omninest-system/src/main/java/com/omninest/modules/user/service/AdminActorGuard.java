@@ -82,6 +82,39 @@ public class AdminActorGuard {
     }
 
     /**
+     * 校验操作者有权修改目标用户的存储配额。
+     *
+     * <p>配额是自我提权最近的一条路：普通管理员把自己或同级管理员的配额改成无限制
+     * （{@code quota_bytes <= 0}）即等于摆脱容量约束。因此改自己的配额一律拒绝，
+     * 无限制与针对管理员账户的改动只允许超级管理员发起。</p>
+     *
+     * @param actorUserId 操作者用户标识
+     * @param targetUserId 目标用户标识
+     * @param unlimitedRequested 是否把配额设为无限制
+     */
+    public void requireQuotaMutationAuthority(
+            UUID actorUserId,
+            UUID targetUserId,
+            boolean unlimitedRequested
+    ) {
+        if (actorUserId == null || targetUserId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "配额操作缺少有效主体");
+        }
+        if (actorUserId.equals(targetUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "不能修改自己的存储配额");
+        }
+        AuthUser actor = requireFreshAdminActor(actorUserId);
+        if (isSuperAdmin(actor)) {
+            return;
+        }
+        if (unlimitedRequested) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可将存储配额设为无限制");
+        }
+        authUserRepository.findWithRolesById(targetUserId)
+                .ifPresent(target -> requireSuperAdminForAdminTarget(actor, target, "调整管理员的存储配额"));
+    }
+
+    /**
      * 校验待授予的权限编码是操作者自身权限集合的子集，阻止自助提权。
      *
      * <p>角色权限只影响绑定到该角色的用户，操作者将自己角色的权限放大等同于给自己授权，

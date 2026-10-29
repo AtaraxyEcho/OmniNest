@@ -339,6 +339,11 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       _refreshTimer?.cancel();
       final ok = await refreshSession();
       if (ok) return;
+      // 刷新是异步边界：容器可能已在 await 期间随页面销毁，
+      // 此后读 state 与重排定时器都不再安全。
+      if (!ref.mounted) {
+        return;
+      }
       // 明确失效时 refreshSession 内部已清会话并取消排程；
       // 瞬时故障保留会话，按原过期时间继续排程等待下个周期。
       final stillAuthenticated = state.value?.isAuthenticated ?? false;

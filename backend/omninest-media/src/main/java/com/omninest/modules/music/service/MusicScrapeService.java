@@ -54,6 +54,13 @@ public class MusicScrapeService {
     private static final int SCRAPE_BATCH_SIZE = 200;
     private static final String TASK_TYPE = "MUSIC_SCRAPE";
 
+    /** 仍在队列或执行中的状态：用于整库刮削的幂等去重。 */
+    private static final List<String> ACTIVE_TASK_STATUSES = List.of(
+            TaskStatus.QUEUED.getValue(),
+            TaskStatus.RUNNING.getValue(),
+            TaskStatus.RETRY_WAIT.getValue()
+    );
+
     private final MusicTrackRepository trackRepository;
     private final MusicFavoriteRepository favoriteRepository;
     private final MusicScanJobRepository scanJobRepository;
@@ -161,6 +168,15 @@ public class MusicScrapeService {
      */
     @Transactional(rollbackFor = Exception.class)
     public MusicScanJobDto scrapeLibrary(UUID ownerUserId, boolean force) {
+        // 整库刮削是重任务：已有排队或执行中的同类任务时直接复用，
+        // 否则连点会把多份 MusicBrainz 全库作业刷进队列。
+        MusicScanJob running = taskRecordService
+                .findActiveTaskForOwner(ownerUserId, TASK_TYPE, ACTIVE_TASK_STATUSES)
+                .flatMap(task -> scanJobRepository.findByIdAndOwnerUserId(task.getId(), ownerUserId))
+                .orElse(null);
+        if (running != null) {
+            return toDto(running);
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, ownerUserId, TASK_TYPE, QueueNames.MUSIC_SCRAPE_ROUTING_KEY, Map.of(
                 "jobId", taskId.toString(),

@@ -60,6 +60,21 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("缺下载权限返回 403，播放与下载共用这一档语义")
+    void handleDownloadPermissionRequired_returns403() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.DOWNLOAD_PERMISSION_REQUIRED,
+                "无下载权限"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED.getCode());
+    }
+
+    @Test
     @DisplayName("未映射的业务码返回 400，不借用 404 语义")
     void handleUnmappedBusinessCode_returns400() {
         BusinessException exception = new BusinessException(

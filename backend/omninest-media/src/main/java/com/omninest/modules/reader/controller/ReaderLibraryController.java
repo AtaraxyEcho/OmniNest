@@ -189,8 +189,8 @@ public class ReaderLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping(value = "/api/v1/reader/items/{itemId}/file", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     ResponseEntity<StreamingResponseBody> downloadFile(@PathVariable UUID itemId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        ReaderItemService.DownloadDescriptor descriptor = readerItemService.prepareDownload(ownerUserId, itemId);
+        ReaderItemService.DownloadDescriptor descriptor = readerItemService.prepareDownload(
+                currentUserContext.requirePrincipal(), itemId);
         // 使用 Spring 内置 ContentDisposition 处理 RFC 6266 编码
         ContentDisposition disposition = ContentDisposition
                 .attachment()
@@ -213,8 +213,8 @@ public class ReaderLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/reader/items/{itemId}/file-ticket")
     ApiResponse<ReaderFileTicketDto> createFileTicket(@PathVariable UUID itemId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(readerItemService.createFileTicket(ownerUserId, itemId));
+        return ApiResponse.success(
+                readerItemService.createFileTicket(currentUserContext.requirePrincipal(), itemId));
     }
 
     // ==================== Progress ====================

@@ -90,6 +90,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   // 拖动状态 — 解决进度条跳回起点
   bool _isSeeking = false;
   bool _progressSyncWarned = false;
+
   /// 正常退出已同步过最终进度；dispose 不再重复发同一次请求。
   bool _finalProgressSynced = false;
   // seek 后保留起始位置，防止 _openIfNeeded 重新从头打开
@@ -152,7 +153,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     _progressSyncService = ref.read(movieProgressSyncServiceProvider);
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
     // 显式设置音量，确保有声音
-    _player.setVolume(_volume);
+    unawaited(_player.setVolume(_volume));
     _startHideTimer();
     if (isMobilePlatform) {
       // 租约会同步修改 Provider 状态，延迟到首帧后获取。
@@ -706,16 +707,20 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       }
     } else if (sub.isEmbedded) {
       // Desktop/Android：内嵌字幕按 stream index 选择（libmpv 原生支持）
-      _player.setSubtitleTrack(
-        SubtitleTrack('${sub.streamIndex}', sub.label, sub.language),
+      unawaited(
+        _player.setSubtitleTrack(
+          SubtitleTrack('${sub.streamIndex}', sub.label, sub.language),
+        ),
       );
     } else if (sub.isExternal) {
       // Desktop/Android 外挂字幕
-      _player.setSubtitleTrack(
-        SubtitleTrack.uri(sub.url!, title: sub.label, language: sub.language),
+      unawaited(
+        _player.setSubtitleTrack(
+          SubtitleTrack.uri(sub.url!, title: sub.label, language: sub.language),
+        ),
       );
     } else {
-      _player.setSubtitleTrack(SubtitleTrack.auto());
+      unawaited(_player.setSubtitleTrack(SubtitleTrack.auto()));
     }
   }
 
@@ -727,12 +732,12 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       if (isWebPlatform) {
         _displaySubtitleCues(cues, generation);
       } else {
-        _player.setSubtitleTrack(track);
+        unawaited(_player.setSubtitleTrack(track));
       }
       return;
     }
     if (!isWebPlatform) {
-      _player.setSubtitleTrack(track);
+      unawaited(_player.setSubtitleTrack(track));
     }
   }
 
@@ -818,7 +823,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     _subtitlePositionSub?.cancel();
     _subtitlePositionSub = null;
     if (!isWebPlatform) {
-      _player.setSubtitleTrack(SubtitleTrack.no());
+      unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
     }
   }
 
@@ -882,7 +887,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         _isMuted = true;
       }
     });
-    _player.setVolume(_volume);
+    unawaited(_player.setVolume(_volume));
   }
 
   void _toggleFullscreen() {

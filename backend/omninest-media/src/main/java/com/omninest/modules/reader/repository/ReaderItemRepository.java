@@ -173,7 +173,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             """)
     List<ReaderItem> findSharedComicCandidates(
             @Param("sharedType") SpaceType sharedType,
-            @Param("contentKind") String contentKind);
+            @Param("contentKind") String contentKind,
+            Pageable pageable);
 
     /**
      * 查询当前用户个人空间的漫画条目作为分卷合并候选。
@@ -192,7 +193,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
     List<ReaderItem> findPersonalComicCandidates(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("personalType") SpaceType personalType,
-            @Param("contentKind") String contentKind);
+            @Param("contentKind") String contentKind,
+            Pageable pageable);
 
     /**
      * 查询用户可见条目（个人空间 + 共享空间）的全部非空内容哈希，用于候选列表去重。

@@ -36,6 +36,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
@@ -105,6 +106,15 @@ class DerivedAssetStorageServiceTest {
                 new SimpleTransactionStatus());
     }
 
+    /**
+     * 生产代码用注入模板的 TransactionManager 现建 REQUIRES_NEW 短事务；
+     * 单测必须给出真实的 TransactionManager，否则新建的模板没有事务管理器可用。
+     */
+    @BeforeEach
+    void wireTransactionManager() {
+        allowStoreTransaction();
+    }
+
     @Test
     void openLegacyObjectDelegatesToStorageClient() {
         DerivedAssetStorageService service = new DerivedAssetStorageService(
@@ -126,7 +136,7 @@ class DerivedAssetStorageServiceTest {
                 new ObjectStorageKey("derived-assets", "derived/owner/photo.jpg")
         )).thenReturn(expected);
 
-        InputStream actual = service.openLegacyObject(reference);
+        InputStream actual = new LegacyObjectAccess(objectStorageClient).open(reference);
 
         assertThat(actual).isSameAs(expected);
     }

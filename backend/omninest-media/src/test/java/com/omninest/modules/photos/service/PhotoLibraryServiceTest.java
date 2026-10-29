@@ -282,9 +282,9 @@ class PhotoLibraryServiceTest {
                 .thenReturn(false);
         when(photoTagRepository.findByOwnerUserIdAndPhotoId(OWNER_ID, PHOTO_ID_1))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
                 .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1-thumb.jpg", "http://minio/photo1-thumb"));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_NODE_ID_1))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, FILE_NODE_ID_1))
                 .thenReturn(downloadUrl(FILE_NODE_ID_1, "photo1.jpg", "http://minio/photo1-source"));
 
         PhotoItemDto result = service.photo(OWNER_ID, PHOTO_ID_1);
@@ -305,7 +305,7 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of());
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any())).thenAnswer(invocation -> {
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any())).thenAnswer(invocation -> {
             Collection<UUID> requested = invocation.getArgument(1);
             Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
             if (requested.contains(COVER_FILE_ID_1)) {
@@ -341,7 +341,7 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of());
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(eq(OWNER_ID), any()))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any())).thenReturn(Map.of());
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any())).thenReturn(Map.of());
 
         Page<PhotoListItemDto> result = service.listPhotosPage(
                 OWNER_ID, 0, 50, "createdAt,desc", " sunset ");
@@ -364,7 +364,7 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of(PHOTO_ID_1));
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any()))
                 .thenAnswer(invocation -> {
                     Collection<UUID> requested = invocation.getArgument(1);
                     Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
@@ -400,7 +400,7 @@ class PhotoLibraryServiceTest {
             assertThat(item.coverUrl()).isEqualTo("http://minio/photo1");
             assertThat(item.sourceUrl()).isEqualTo("http://minio/photo1-source");
         });
-        verify(fileQueryService, never()).createDownloadUrl(eq(OWNER_ID), any());
+        verify(fileQueryService, never()).createDownloadUrlAs(eq(OWNER_ID), any());
     }
 
     @Test
@@ -509,7 +509,7 @@ class PhotoLibraryServiceTest {
                 OWNER_ID,
                 List.of(PHOTO_ID_1, PHOTO_ID_2)
         )).thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
                 .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
 
         Page<PhotoTimelineMonthDto> result = service.timelinePage(OWNER_ID, 1, 500);
@@ -541,7 +541,7 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of());
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
                 .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
 
         Page<PhotoGroupDto> result = service.groupByPage(OWNER_ID, GroupBy.FORMAT, 1, 500);
@@ -690,7 +690,7 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of());
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any()))
                 .thenReturn(Map.of(
                         COVER_FILE_ID_1,
                         downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"),

@@ -8,6 +8,7 @@ import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.AdminFileShareLinkDto;
@@ -449,9 +450,9 @@ public class FileController {
     @GetMapping("/api/v1/files/{fileId}/download-url")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<FileDownloadUrlDto> createDownloadUrl(@PathVariable UUID fileId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.recordAccess(ownerUserId, fileId);
-        return ApiResponse.success(fileQueryService.createDownloadUrl(ownerUserId, fileId));
+        RequestPrincipal requester = currentUserContext.requirePrincipal();
+        fileManagerService.recordAccess(requester.userId(), fileId);
+        return ApiResponse.success(fileQueryService.createDownloadUrl(requester, fileId));
     }
 
     /**
@@ -465,9 +466,9 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<FileDownloadUrlDto>> createDownloadUrls(
             @Valid @RequestBody BatchDownloadUrlRequest request) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        RequestPrincipal requester = currentUserContext.requirePrincipal();
         return ApiResponse.success(
-                List.copyOf(fileQueryService.createDownloadUrls(ownerUserId, request.fileIds()).values()));
+                List.copyOf(fileQueryService.createDownloadUrls(requester, request.fileIds()).values()));
     }
 
     @Operation(summary = "列出共享给我的文件", description = "列出其他用户共享给当前用户的文件")
@@ -910,8 +911,8 @@ public class FileController {
     @GetMapping("/api/v1/files/{fileId}/download-url/shared")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<FileDownloadUrlDto> getSharedDownloadUrl(@PathVariable UUID fileId) {
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileQueryService.createDownloadUrlForShared(userId, fileId));
+        return ApiResponse.success(
+                fileQueryService.createDownloadUrlForShared(currentUserContext.requirePrincipal(), fileId));
     }
 
     private String resolveClientIp(HttpServletRequest request) {

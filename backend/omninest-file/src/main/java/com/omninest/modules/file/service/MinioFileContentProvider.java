@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.InlineContentPolicy;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.domain.FileNode;
@@ -17,9 +18,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -37,20 +36,6 @@ public class MinioFileContentProvider implements FileContentProvider {
      */
     private static final Duration DOWNLOAD_URL_TTL = Duration.ofHours(2);
     private static final String PROVIDER_TYPE = "MINIO";
-
-    /**
-     * 浏览器会直接执行的类型：经预签名 URL 内联返回即构成存储型 XSS 面，
-     * 下载地址必须强制为附件且覆盖为不可执行类型。
-     */
-    private static final Set<String> INLINE_EXECUTABLE_TYPES = Set.of(
-            "text/html",
-            "application/xhtml+xml",
-            "image/svg+xml",
-            "application/xml",
-            "text/xml",
-            "application/javascript",
-            "text/javascript"
-    );
 
     private final FileObjectRepository fileObjectRepository;
     private final ObjectStorageClient objectStorageClient;
@@ -94,15 +79,14 @@ public class MinioFileContentProvider implements FileContentProvider {
      */
     private URI createSafeDownloadUrl(String fileName, FileObject object) {
         ObjectStorageKey key = new ObjectStorageKey(object.getBucketName(), object.getObjectKey());
-        String mimeType = object.getMimeType() == null ? "" : object.getMimeType().toLowerCase(Locale.ROOT);
-        if (!INLINE_EXECUTABLE_TYPES.contains(mimeType)) {
+        if (!InlineContentPolicy.isExecutable(object.getMimeType())) {
             return objectStorageClient.createDownloadUrl(key, DOWNLOAD_URL_TTL);
         }
         String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
         return objectStorageClient.createDownloadUrl(
                 key,
                 DOWNLOAD_URL_TTL,
-                "application/octet-stream",
+                InlineContentPolicy.FALLBACK_MIME_TYPE,
                 "attachment; filename*=UTF-8''" + encodedName
         );
     }

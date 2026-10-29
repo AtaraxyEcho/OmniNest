@@ -1,6 +1,7 @@
 package com.omninest.worker.index;
 
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
+import com.omninest.worker.support.TransientRetry;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -46,7 +47,11 @@ public class FileRestoreDerivedAssetConsumer {
     public void handle(FileRestoredEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {
-            derivedAssetService.validateAndRepair(event);
+            // 恢复索引队列没有任务行可补跑：先做几次短退避重试，失败才进死信。
+            TransientRetry.call("恢复文件派生资产修复", () -> {
+                derivedAssetService.validateAndRepair(event);
+                return null;
+            });
             channel.basicAck(deliveryTag, false);
         } catch (BusinessException exception) {
             if (ErrorCode.FILE_NOT_FOUND.equals(exception.errorCode())

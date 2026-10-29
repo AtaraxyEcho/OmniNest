@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/connectivity_listener.dart';
@@ -178,7 +180,7 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   ReaderImageCache.init(imageRepository);
 
   // 启动时自动清理过期缓存（不阻塞启动）
-  _autoCleanExpiredCache(localStorage, imageRepository);
+  unawaited(_autoCleanExpiredCache(localStorage, imageRepository));
 
   return db;
 });

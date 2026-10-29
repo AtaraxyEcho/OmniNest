@@ -78,7 +78,7 @@ class SubtitleManagementServiceTest {
         );
         when(fileLifecycleGuard.requireOwnedWritable(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(subtitleFile("subtitle.srt", "application/x-subrip", 1024));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_NODE_ID))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(new FileDownloadUrlDto(
                         FILE_NODE_ID,
                         "subtitle.srt",

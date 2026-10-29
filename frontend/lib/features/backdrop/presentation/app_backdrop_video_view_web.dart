@@ -42,6 +42,8 @@ class AppBackdropVideoView extends StatefulWidget {
 
 class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   web.HTMLVideoElement? _element;
+  JSFunction? _errorListener;
+  JSFunction? _readyListener;
   String? _appliedSource;
   bool _failed = false;
   bool _sourceStaleNotified = false;
@@ -64,8 +66,10 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     el.playsInline = true;
     el.setAttribute('playsinline', '');
     el.preload = 'auto';
-    el.addEventListener('error', _handleError.toJS);
-    el.addEventListener('loadeddata', _handleReady.toJS);
+    _errorListener = _handleError.toJS;
+    _readyListener = _handleReady.toJS;
+    el.addEventListener('error', _errorListener!);
+    el.addEventListener('loadeddata', _readyListener!);
     _applySource();
   }
 
@@ -137,22 +141,33 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   }
 
   void _play(web.HTMLVideoElement el) {
-    el.play().toDart.then((_) {}, onError: (Object _) {
-      if (widget.muted || _autoplayPolicyMuted) {
-        return;
-      }
-      // 自动播放策略拒绝带声播放：退回静音继续放，而不是让壁纸停在原地。
-      _autoplayPolicyMuted = true;
-      el.muted = true;
-      el.play().toDart.then((_) {}, onError: (Object _) {});
-    });
+    el.play().toDart.then(
+      (_) {},
+      onError: (Object _) {
+        if (widget.muted || _autoplayPolicyMuted) {
+          return;
+        }
+        // 自动播放策略拒绝带声播放：退回静音继续放，而不是让壁纸停在原地。
+        _autoplayPolicyMuted = true;
+        el.muted = true;
+        el.play().toDart.then((_) {}, onError: (Object _) {});
+      },
+    );
   }
 
   void _handleReady(web.Event event) {
+    if (!mounted) {
+      return;
+    }
     _attempts = 0;
   }
 
   void _handleError(web.Event event) {
+    // dispose 里的 load() 自身还能回灌一次 error：不设这道闸就会
+    // 在已卸载的 State 上 setState，并用残留元素重开重试定时器。
+    if (!mounted) {
+      return;
+    }
     if (widget.codecUnsupported) {
       // 编码已知不可播：重签和重试都只会重复同一失败，直接收敛到静态海报。
       if (!_failed) {
@@ -208,11 +223,21 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     _retryTimer?.cancel();
     final el = _element;
     if (el != null) {
+      final errorListener = _errorListener;
+      final readyListener = _readyListener;
+      if (errorListener != null) {
+        el.removeEventListener('error', errorListener);
+      }
+      if (readyListener != null) {
+        el.removeEventListener('loadeddata', readyListener);
+      }
       el.pause();
       el.removeAttribute('src');
       el.load();
     }
     _element = null;
+    _errorListener = null;
+    _readyListener = null;
     super.dispose();
   }
 

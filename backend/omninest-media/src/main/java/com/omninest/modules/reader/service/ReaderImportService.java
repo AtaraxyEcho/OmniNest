@@ -45,6 +45,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -62,6 +63,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ReaderImportService {
 
     private static final String CONTENT_KIND_COMIC = "COMIC";
+
+    /**
+     * 分卷合并候选上限：标题匹配在内存里做，候选不设限会把整个空间的漫画一次性载入。
+     * 按 updatedAt 倒序取最近的一批，新分卷总是与最近活跃的同名作品合并。
+     */
+    private static final int COMIC_CANDIDATE_LIMIT = 500;
     private static final String CONTENT_KIND_TEXT = "TEXT";
     private static final String FILE_TYPE_EPUB = "EPUB";
     private static final String FILE_TYPE_TXT = "TXT";
@@ -127,14 +134,26 @@ public class ReaderImportService {
         // 整本 SHA-256 与版式探测都要从对象存储完整取流，EPUB/CBZ 还要整包落盘解压；
         // 这些只读 I/O 放进事务里就是让数百 MB 的传输全程占住一个数据库连接。
         // 因此先判定是否真要新建条目，只有新建时才在事务外算好，事务内只做校验、加锁与落库。
-        ContentProbe probe = null;
-        if (findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null
-                && findAttachedComicItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null) {
-            probe = prepareContentProbe(fileNode, fileType, contentKindOverride);
-        }
+        ReaderItem existingItem = findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType());
+        ReaderItem attachedComic = existingItem == null
+                ? findAttachedComicItem(ownerUserId, fileNodeId, fileNode.spaceType())
+                : null;
+        ContentProbe probe = existingItem == null && attachedComic == null
+                ? prepareContentProbe(fileNode, fileType, contentKindOverride)
+                : null;
+        // PDF 元数据同样要整本落盘并渲染首页，留在事务里等于让传输与渲染占住连接。
+        boolean pdfMetadataNeeded = FILE_TYPE_PDF.equals(fileType)
+                && (existingItem == null
+                        ? attachedComic == null
+                        : existingItem.getOwnerUserId().equals(ownerUserId));
+        ReaderPdfMetadataService.PdfMetadata pdfMetadata = pdfMetadataNeeded
+                ? pdfMetadataService.extract(fileNode)
+                : null;
         ContentProbe effectiveProbe = probe;
+        ReaderPdfMetadataService.PdfMetadata effectivePdfMetadata = pdfMetadata;
         return transactionTemplate.execute(status -> importInTransaction(
-                ownerUserId, fileNodeId, fileNode, fileType, forceImport, contentKindOverride, effectiveProbe));
+                ownerUserId, fileNodeId, fileNode, fileType, forceImport, contentKindOverride,
+                effectiveProbe, effectivePdfMetadata));
     }
 
     /**
@@ -254,7 +273,8 @@ public class ReaderImportService {
             String fileType,
             boolean forceImport,
             String contentKindOverride,
-            ContentProbe probe) {
+            ContentProbe probe,
+            ReaderPdfMetadataService.PdfMetadata pdfMetadata) {
         ReaderItem existing = findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType());
         if (existing != null) {
             // 条目归属固定为文件所有者；成员复用共享条目时只加入自己的书架，
@@ -266,8 +286,8 @@ public class ReaderImportService {
                         existing,
                         contentKindOverride);
                 if (FILE_TYPE_PDF.equals(fileType)) {
-                    // 内容替换后重新提取页数与封面，避免派生元数据陈旧。
-                    enrichPdfMetadata(existing, fileNode, true);
+                    // 内容替换后重写页数与封面，避免派生元数据陈旧；提取已在事务外完成。
+                    applyPdfMetadata(existing, fileNode, pdfMetadata, true);
                 }
             }
             ensureOnBookshelf(ownerUserId, existing.getId());
@@ -345,11 +365,11 @@ public class ReaderImportService {
                         false);
             }
         } else if (FILE_TYPE_PDF.equals(fileType)) {
-            // PDF 由客户端渲染，服务端提取页数与首页封面后即可阅读。
+            // PDF 由客户端渲染，服务端在事务外提取页数与首页封面后即可阅读。
             saved.setImportStatus("READY");
             saved.setParsedAt(Instant.now());
             saved = itemRepository.save(saved);
-            enrichPdfMetadata(saved, fileNode);
+            applyPdfMetadata(saved, fileNode, pdfMetadata, false);
         } else {
             textParseSubmissionService.submit(saved, false);
         }
@@ -759,9 +779,15 @@ public class ReaderImportService {
                 baseName);
 
         List<ReaderItem> existingComics = sharedSpace
-                ? itemRepository.findSharedComicCandidates(SpaceType.SHARED, CONTENT_KIND_COMIC)
+                ? itemRepository.findSharedComicCandidates(
+                        SpaceType.SHARED,
+                        CONTENT_KIND_COMIC,
+                        PageRequest.of(0, COMIC_CANDIDATE_LIMIT))
                 : itemRepository.findPersonalComicCandidates(
-                        ownerUserId, SpaceType.PERSONAL, CONTENT_KIND_COMIC);
+                        ownerUserId,
+                        SpaceType.PERSONAL,
+                        CONTENT_KIND_COMIC,
+                        PageRequest.of(0, COMIC_CANDIDATE_LIMIT));
         for (ReaderItem existing : existingComics) {
             String existingBase = normalizeComicTitle(existing.getTitle());
             if (!baseName.equalsIgnoreCase(existingBase)) {
@@ -820,12 +846,17 @@ public class ReaderImportService {
      * 以流式方式计算文件 SHA-256，避免将完整文件读入内存。
      */
 
-    private void enrichPdfMetadata(ReaderItem item, FileDescriptor fileNode) {
-        enrichPdfMetadata(item, fileNode, false);
-    }
-
-    private void enrichPdfMetadata(ReaderItem item, FileDescriptor fileNode, boolean overwriteCover) {
-        ReaderPdfMetadataService.PdfMetadata metadata = pdfMetadataService.extract(fileNode);
+    /**
+     * 把已提取的 PDF 元数据落库：页数写进来源行，首页封面走派生资产。
+     *
+     * <p>提取要整本落盘并渲染首页，必须在事务外完成；这里只做写库，
+     * 否则数百 MB 的传输会全程占住导入事务的数据库连接。</p>
+     */
+    private void applyPdfMetadata(
+            ReaderItem item,
+            FileDescriptor fileNode,
+            ReaderPdfMetadataService.PdfMetadata metadata,
+            boolean overwriteCover) {
         if (metadata == null) {
             return;
         }
@@ -854,19 +885,23 @@ public class ReaderImportService {
      * <p>PDF 由客户端渲染，没有文本章节清单，绝不能投给文本解析引擎：那条链只认 EPUB 与 TXT，
      * 结果是把一份可读的条目写成 FAILED。
      */
-    @Transactional(rollbackFor = Exception.class)
     public void reparsePdfItem(UUID ownerUserId, ReaderItem item) {
         if (item.getFileNodeId() == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "阅读条目未关联源文件");
         }
         FileDescriptor fileNode = loadReadableFileNode(ownerUserId, item.getFileNodeId());
-        item.setImportStatus("READY");
-        item.setParseErrorCode(null);
-        item.setParseErrorMessage(null);
-        item.setParsedAt(Instant.now());
-        itemRepository.save(item);
-        enrichPdfMetadata(item, fileNode, true);
-        syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
+        // 提取要整本落盘并渲染首页：先做完，再进写事务，避免传输与渲染占住连接。
+        ReaderPdfMetadataService.PdfMetadata metadata = pdfMetadataService.extract(fileNode);
+        transactionTemplate.execute(status -> {
+            item.setImportStatus("READY");
+            item.setParseErrorCode(null);
+            item.setParseErrorMessage(null);
+            item.setParsedAt(Instant.now());
+            itemRepository.save(item);
+            applyPdfMetadata(item, fileNode, metadata, true);
+            syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
+            return null;
+        });
     }
 
     /**

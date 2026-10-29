@@ -135,8 +135,6 @@ public final class ConfigDefinitionCatalog {
                 "config.storage.sharedSpaceLimit", "共享空间最大容量（字节，0 表示无限制）", 0, Long.MAX_VALUE));
         add(values, bool("upload.rate.enabled", true, "upload", ConfigSurface.GENERAL,
                 "config.upload.rate", "是否启用上传签发限速"));
-        add(values, number("security.rate-limit", "120", "security", ConfigSurface.GENERAL,
-                "config.security.rateLimit", "默认接口限流上限", 1, 1_000_000));
         add(values, bool("clamav.enabled", false, "security", ConfigSurface.GENERAL,
                 "config.security.clamav.enabled", "是否启用 ClamAV 文件安全扫描（公网生产需在配置中心改为 true）"));
         add(values, string("clamav.host", "localhost", "security", ConfigSurface.GENERAL,
@@ -178,25 +176,6 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.tmdb.maxResults", "TMDB 单次搜索结果上限", 1, 20));
         add(values, bool("media.tmdb.adult", false, "media", ConfigSurface.INTEGRATION,
                 "config.integration.tmdb.includeAdult", "TMDB 是否包含成人内容"));
-
-        add(values, bool("reader.gbooks.enabled", false, "reader", ConfigSurface.INTEGRATION,
-                "config.integration.googleBooks.enabled", "是否启用 Google Books"));
-        add(values, string("reader.gbooks.url", "https://www.googleapis.com/books/v1", "reader",
-                ConfigSurface.INTEGRATION, "config.integration.googleBooks.baseUrl", "Google Books API 地址", false, 512));
-        add(values, string("reader.gbooks.lang", "zh-CN", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.googleBooks.language", "Google Books 返回语言", false, 32));
-        add(values, number("reader.gbooks.limit", "5", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.googleBooks.maxResults", "Google Books 单次搜索结果上限", 1, 20));
-        add(values, number("reader.gbooks.timeout", "40", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.googleBooks.timeout", "Google Books 请求超时（秒）", 3, 120));
-        add(values, sensitive("reader.gbooks.key", "", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.googleBooks.apiKey", "Google Books API Key", 1024));
-        add(values, bool("reader.openlib.enabled", false, "reader", ConfigSurface.INTEGRATION,
-                "config.integration.openLibrary.enabled", "是否启用 Open Library"));
-        add(values, string("reader.openlib.url", "https://openlibrary.org", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.openLibrary.baseUrl", "Open Library API 地址", false, 512));
-        add(values, string("reader.openlib.lang", "zh", "reader", ConfigSurface.INTEGRATION,
-                "config.integration.openLibrary.language", "Open Library 返回语言", false, 32));
 
         add(values, bool("music.musicbrainz.enabled", true, "music", ConfigSurface.INTEGRATION,
                 "config.integration.musicbrainz.enabled", "是否启用 MusicBrainz"));

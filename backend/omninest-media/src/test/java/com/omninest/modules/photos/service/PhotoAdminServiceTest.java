@@ -23,6 +23,7 @@ import com.omninest.modules.file.service.FilePostProcessingTaskService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoScanJob;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoScanJobRepository;
@@ -31,7 +32,10 @@ import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.domain.TaskStatus;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,6 +43,7 @@ import java.util.function.IntSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -194,6 +199,75 @@ class PhotoAdminServiceTest {
                 eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.PHOTO_SCAN_ROUTING_KEY),
                 any());
+    }
+
+    @Test
+    void thumbnailRegenerationWalksPagesByCursorAndReportsTheRegeneratedCount() {
+        UUID taskId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        UUID coverFileId = UUID.randomUUID();
+        List<UUID> firstPage = new ArrayList<>();
+        for (int index = 0; index < 500; index++) {
+            firstPage.add(UUID.randomUUID());
+        }
+        UUID cursor = firstPage.get(firstPage.size() - 1);
+        PageRequest page = PageRequest.of(0, 500);
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(OWNER_ID);
+        photo.setFileNodeId(fileNodeId);
+        FileDescriptor file = new FileDescriptor(
+                fileNodeId, OWNER_ID, null, "FILE", "a.jpg", "/a.jpg", "image/jpeg", 10L,
+                null, null, false, false, SpaceType.PERSONAL, OWNER_ID, Instant.now(), Instant.now());
+        PhotoSourceFileService.StagedPhotoFile staged = mock(PhotoSourceFileService.StagedPhotoFile.class);
+        when(staged.fileName()).thenReturn("a.jpg");
+        when(staged.raw()).thenReturn(false);
+        when(taskRecordService.claimForExecution(taskId, "PROCESSING")).thenReturn(true);
+        when(photoItemRepository.countMissingCover(OWNER_ID)).thenReturn(501L);
+        when(photoItemRepository.findIdsMissingCoverAfter(OWNER_ID, new UUID(0L, 0L), page))
+                .thenReturn(firstPage);
+        when(photoItemRepository.findIdsMissingCoverAfter(OWNER_ID, cursor, page))
+                .thenReturn(List.of(photoId));
+        when(photoItemRepository.findAllById(any())).thenAnswer(invocation -> {
+            Collection<UUID> ids = invocation.getArgument(0);
+            return ids.contains(photoId) ? List.of(photo) : List.of();
+        });
+        when(fileMetadataQueryService.findAllByIds(any())).thenAnswer(invocation -> {
+            Collection<UUID> ids = invocation.getArgument(0);
+            return ids.contains(fileNodeId) ? List.of(file) : List.of();
+        });
+        when(sourceFileService.stageReadable(OWNER_ID, fileNodeId)).thenReturn(staged);
+        when(fileDetector.isDecodable("a.jpg")).thenReturn(true);
+        when(thumbnailService.generateAndStoreFile(eq(OWNER_ID), eq(fileNodeId), any(), eq("a.jpg")))
+                .thenReturn(coverFileId);
+        when(photoItemRepository.save(photo)).thenReturn(photo);
+
+        service.executeThumbnailRegeneration(taskId, OWNER_ID);
+
+        // 失败照片会留在"缺失"集合里，只能用 ID 游标推进；重查同一条件会反复取到同一批。
+        InOrder cursorOrder = inOrder(photoItemRepository);
+        cursorOrder.verify(photoItemRepository).findIdsMissingCoverAfter(OWNER_ID, new UUID(0L, 0L), page);
+        cursorOrder.verify(photoItemRepository).findIdsMissingCoverAfter(OWNER_ID, cursor, page);
+        assertThat(photo.getCoverFileId()).isEqualTo(coverFileId);
+        verify(photoItemRepository).save(photo);
+        verify(taskRecordService).markCompleted(taskId, Map.of("regenerated", 1));
+    }
+
+    @Test
+    void thumbnailRegenerationMarksTaskFailedAndRethrowsWhenTheScanFails() {
+        UUID taskId = UUID.randomUUID();
+        when(taskRecordService.claimForExecution(taskId, "PROCESSING")).thenReturn(true);
+        when(photoItemRepository.countMissingCover(OWNER_ID)).thenReturn(1L);
+        when(photoItemRepository.findIdsMissingCoverAfter(any(), any(), any()))
+                .thenThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> service.executeThumbnailRegeneration(taskId, OWNER_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("db down");
+
+        verify(taskRecordService).markFailed(eq(taskId), eq("db down"), any());
+        verify(taskRecordService, never()).markCompleted(eq(taskId), anyMap());
     }
 
     private FileDescriptor descriptor(String name) {

@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
@@ -37,24 +38,30 @@ public class FileDownloadService {
     /**
      * 为可下载节点创建短期下载地址。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      * @return 下载地址
      */
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrl(UUID userId, UUID fileId) {
-        return fileContentAccessService.createDownloadUrl(requireDownloadableNode(userId, fileId));
+    public FileDownloadUrlDto createDownloadUrl(RequestPrincipal requester, UUID fileId) {
+        return fileContentAccessService.createDownloadUrl(requireDownloadableNode(requester, fileId));
     }
 
     /**
-     * 批量为当前用户可下载的文件创建短期下载地址。
+     * 批量为当前请求者可下载的文件创建短期下载地址。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileIds 文件节点 ID 集合
      * @return 文件节点 ID 到下载地址的映射
      */
     @Transactional(readOnly = true)
-    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID userId, Collection<UUID> fileIds) {
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(
+            RequestPrincipal requester, Collection<UUID> fileIds) {
+        return selectDownloadableNodes(requester.userId(), fileIds);
+    }
+
+    private Map<UUID, FileDownloadUrlDto> selectDownloadableNodes(
+            UUID userId, Collection<UUID> fileIds) {
         if (fileIds == null || fileIds.isEmpty()) {
             return Map.of();
         }
@@ -83,22 +90,23 @@ public class FileDownloadService {
     /**
      * 生成共享文件的下载 URL：所有者直接放行，否则校验共享空间或定向分享接收关系。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      * @return 下载地址
      */
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
+    public FileDownloadUrlDto createDownloadUrlForShared(RequestPrincipal requester, UUID fileId) {
+        UUID userId = requester.userId();
         FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         if (node.getOwnerUserId().equals(userId)) {
-            return createDownloadUrl(userId, fileId);
+            return createDownloadUrl(requester, fileId);
         }
         if (node.getSpaceType() == SpaceType.SHARED) {
             // 空间权限足够时不再多查分享接收关系；定向分享是空间外成员的显式补充授权。
             if (!sharedSpaceService.canDownload(userId)
                     && !shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
+                throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限");
             }
             requireFileNode(node);
             return fileContentAccessService.createDownloadUrl(node);
@@ -106,24 +114,57 @@ public class FileDownloadService {
         // 定向分享只落 share_links + file_share_recipients；节点 shared 标志与
         // file_node_permissions 是早期模型，不能再作为当前分享的授权依据。
         if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
+            throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限");
         }
         requireFileNode(node);
         return fileContentAccessService.createDownloadUrl(node);
     }
 
     /**
-     * 校验当前用户具备下载权限并返回可下载节点。
+     * 以指定用户身份签发下载地址，应用该用户自身的下载能力。
+     *
+     * <p>只用于调用方已完成业务授权、且必须以业务对象所有者身份签发的场景：派生资产
+     * （海报、封面、字幕）随业务对象展示，以及分享链接会话。请求路径上的原始文件下载
+     * 必须使用 {@link #createDownloadUrl(RequestPrincipal, UUID)}；控制器禁止调用本方法。</p>
+     *
+     * @param actorUserId 签发身份
+     * @param fileId 文件节点 ID
+     * @return 下载地址
+     */
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createDownloadUrlAs(UUID actorUserId, UUID fileId) {
+        return fileContentAccessService.createDownloadUrl(requireDownloadableNode(actorUserId, fileId));
+    }
+
+    /**
+     * 批量以指定用户身份签发下载地址，按该用户的下载能力过滤不可下载节点。
+     *
+     * @param actorUserId 签发身份
+     * @param fileIds 文件节点 ID 集合
+     * @return 文件节点 ID 到下载地址的映射
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrlsAs(
+            UUID actorUserId, Collection<UUID> fileIds) {
+        return selectDownloadableNodes(actorUserId, fileIds);
+    }
+
+    /**
+     * 校验当前请求者具备下载权限并返回可下载节点。
      *
      * <p>与只读预览不同，这里要求共享空间成员具备 {@code CAN_DOWNLOAD}，
      * 个人空间文件必须存在定向分享接收关系。供需要直接流式输出原文件的
      * 业务模块复用，避免用浏览权限绕过下载权限位。</p>
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      * @return 可下载节点
      */
-    public FileNode requireDownloadableNode(UUID userId, UUID fileId) {
+    public FileNode requireDownloadableNode(RequestPrincipal requester, UUID fileId) {
+        return requireDownloadableNode(requester.userId(), fileId);
+    }
+
+    private FileNode requireDownloadableNode(UUID userId, UUID fileId) {
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, userId)
                 .orElseGet(() -> fileNodeRepository.findByIdAndDeletedFalse(fileId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在")));
@@ -131,7 +172,7 @@ public class FileDownloadService {
             if (node.getSpaceType() == SpaceType.SHARED) {
                 if (!sharedSpaceService.canDownload(userId)
                         && !shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
-                    throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
+                    throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限");
                 }
             } else if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
                 // 非所有者、非共享空间且没有定向分享关系时按不存在处理，避免存在性探测。

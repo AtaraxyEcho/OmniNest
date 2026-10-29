@@ -54,6 +54,15 @@ public class MovieTaskService {
     private static final List<String> VIDEO_SCAN_CATEGORIES = List.of(FileTypeCategories.VIDEO);
 
     /**
+     * 转码类任务的在跑状态：同一请求者对同一源文件只允许排一份。
+     */
+    private static final Set<String> ACTIVE_TRANSCODE_STATUSES = Set.of(
+            TaskStatus.QUEUED.getValue(),
+            TaskStatus.RETRY_WAIT.getValue(),
+            TaskStatus.RUNNING.getValue()
+    );
+
+    /**
      * 影视模块任务类型白名单：进度列表只展示本模块任务，避免串入文件/相册等其它任务。
      */
     static final Set<String> VIDEO_TASK_TYPES = Set.of(
@@ -112,6 +121,14 @@ public class MovieTaskService {
         MediaVideoItem videoItem = mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
         UUID catalogOwnerUserId = videoItem.getOwnerUserId();
         String taskType = audioOnly ? "AUDIO_EXTRACT" : VIDEO_TRANSCODE;
+        // 播放页会自动触发转码，那条路径没有入口限流：同一人反复回放同一部片
+        // 会成倍排队，先复用仍在跑的同类任务。
+        TaskRecord active = taskRecordService.findActiveResourceTask(
+                requesterUserId, taskType, "FILE_NODE", videoItem.getFileNodeId(), ACTIVE_TRANSCODE_STATUSES)
+                .orElse(null);
+        if (active != null) {
+            return new ScrapeTaskDto(active.getId(), active.getStatus(), "该影片的转码任务已在队列中");
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, requesterUserId, taskType, QueueNames.VIDEO_TRANSCODE_ROUTING_KEY,
                 "QUEUED", "FILE_NODE", videoItem.getFileNodeId(),

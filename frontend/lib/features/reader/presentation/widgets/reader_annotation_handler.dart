@@ -240,13 +240,21 @@ class ReaderAnnotationHandler {
   }
 
   /// 删除批注。
-  Future<void> delete(ReaderAnnotation annotation) async {
+  Future<void> delete(ReaderAnnotation annotation, BuildContext context) async {
     try {
       await dataManager.deleteAnnotation(annotation.id);
       await load();
     } on Exception catch (e) {
+      // 与新增/编辑同口径：删除失败必须可感知，否则批注原地留着，
+      // 用户以为已经删掉，下次进来还在。
       if (kDebugMode) {
         readerDebugLog('ReaderAnnotationHandler: annotation delete failed: $e');
+      }
+      if (context.mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).readerAnnotationDeleteFailed,
+        );
       }
     }
   }
@@ -296,7 +304,7 @@ class ReaderAnnotationHandler {
       chapters: chapters,
       settings: settings,
       onDelete: (annotation) async {
-        await delete(annotation);
+        await delete(annotation, context);
       },
       onEdit: (annotation) {
         edit(annotation, context);

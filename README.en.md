@@ -127,6 +127,10 @@ Screenshot folders:
 | Admin | Users, roles/permissions, config, tasks, logs, audit, runtime status |
 | Profile | Themes, preferences, account security |
 
+### Shared space permission bits
+
+Browsing and retrieving are separate permissions. `CAN_BROWSE` covers listing folders and derived previews such as posters and subtitles; obtaining the original file (download, copy, or playing a source that has no transcoded variant) requires `CAN_DOWNLOAD`. A member with the browse bit alone therefore cannot play a film uploaded by someone else until a transcoded variant exists, and the client reports that the download permission is required. Grant that member the download bit when they need to watch it. Music playback follows the same rule.
+
 ---
 
 ## Platform support

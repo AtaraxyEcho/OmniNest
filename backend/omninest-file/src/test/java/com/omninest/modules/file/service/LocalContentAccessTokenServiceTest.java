@@ -42,9 +42,14 @@ class LocalContentAccessTokenServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID fileId = UUID.randomUUID();
         String token = service.issue(ownerUserId, fileId).token();
-        String replaced = token.substring(0, token.length() - 2)
-                + (token.endsWith("A") ? "B" : "A")
-                + token.charAt(token.length() - 1);
+        // 旧写法按末尾字符挑替换值，若该位本就是 'A'/'B' 就改成原值：
+        // 令牌没变自然验签通过，这条用例约 1/64 概率假失败。
+        char[] tampered = token.toCharArray();
+        int signatureStart = token.indexOf('.');
+        int index = signatureStart > 0 ? signatureStart - 1 : tampered.length - 1;
+        tampered[index] = tampered[index] == 'A' ? 'B' : 'A';
+        String replaced = new String(tampered);
+        assertNotEquals(token, replaced);
 
         assertThrows(BusinessException.class, () -> service.requireGrant("unknown"));
         assertThrows(BusinessException.class, () -> service.requireGrant(replaced));

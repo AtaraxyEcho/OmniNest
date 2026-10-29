@@ -2,6 +2,7 @@ package com.omninest.modules.video.controller;
 
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.common.security.InlineContentPolicy;
 import com.omninest.modules.video.service.MediaContentAccessService;
 import com.omninest.modules.video.service.MoviePlaybackService;
 import com.omninest.modules.video.service.VideoStreamService;
@@ -47,13 +48,18 @@ public class MediaPublicContentController {
             @RequestParam String token
     ) {
         FileContentResource content = mediaContentAccessService.openPlaybackContent(token, videoItemId);
+        boolean executable = InlineContentPolicy.isExecutable(content.mimeType());
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(resolveMediaType(content.mimeType()));
+        headers.setContentType(resolveMediaType(executable
+                ? InlineContentPolicy.FALLBACK_MIME_TYPE
+                : content.mimeType()));
         headers.setContentLength(content.sizeBytes());
         headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
         // 原片体积大且带短期令牌，继续禁止中间缓存。
         headers.setCacheControl(CacheControl.noStore());
-        headers.setContentDisposition(ContentDisposition.inline()
+        headers.setContentDisposition((executable
+                ? ContentDisposition.attachment()
+                : ContentDisposition.inline())
                 .filename(content.fileName(), StandardCharsets.UTF_8)
                 .build());
         return ResponseEntity.ok().headers(headers).body(content.resource());
@@ -124,12 +130,17 @@ public class MediaPublicContentController {
     }
 
     private ResponseEntity<StreamingResponseBody> streamAsset(FileContentStream content) {
+        boolean executable = InlineContentPolicy.isExecutable(content.mimeType());
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(resolveMediaType(content.mimeType()));
+        headers.setContentType(resolveMediaType(executable
+                ? InlineContentPolicy.FALLBACK_MIME_TYPE
+                : content.mimeType()));
         headers.setContentLength(content.sizeBytes());
         // 海报/剧照按 fileNodeId 不可变；允许浏览器私有缓存一小时，避免每次进页面重下原图。
         headers.setCacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePrivate());
-        headers.setContentDisposition(ContentDisposition.inline()
+        headers.setContentDisposition((executable
+                ? ContentDisposition.attachment()
+                : ContentDisposition.inline())
                 .filename(content.fileName(), StandardCharsets.UTF_8)
                 .build());
         StreamingResponseBody body = outputStream -> {

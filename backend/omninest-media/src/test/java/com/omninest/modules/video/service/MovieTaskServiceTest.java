@@ -18,6 +18,8 @@ import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -26,6 +28,7 @@ import com.omninest.modules.video.event.MediaLibraryScanRequestedEvent;
 import com.omninest.modules.video.event.TranscodeRequestedEvent;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -141,6 +144,27 @@ class MovieTaskServiceTest {
         assertThat(eventCaptor.getValue().audioOnly()).isFalse();
         assertThat(eventCaptor.getValue().webOptimize()).isFalse();
         assertThat(result.status()).isEqualTo("QUEUED");
+    }
+
+    @Test
+    void createTranscodeTaskReusesActiveTaskForSameSourceFile() {
+        MediaVideoItem videoItem = videoItem();
+        UUID activeTaskId = UUID.randomUUID();
+        TaskRecord active = new TaskRecord();
+        active.setId(activeTaskId);
+        active.setStatus(TaskStatus.RUNNING.getValue());
+        when(mediaRuntimeConfigService.transcodeEnabled()).thenReturn(true);
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, ITEM_ID)).thenReturn(videoItem);
+        when(taskRecordService.findActiveResourceTask(
+                eq(OWNER_ID), eq("AUDIO_EXTRACT"), eq("FILE_NODE"), eq(FILE_ID), any()))
+                .thenReturn(Optional.of(active));
+
+        var result = service.createTranscodeTask(OWNER_ID, ITEM_ID, true);
+
+        // 播放页会自动触发音频转码，同一人反复回放同一部片不得成倍排队。
+        assertThat(result.taskId()).isEqualTo(activeTaskId);
+        assertThat(result.status()).isEqualTo("RUNNING");
+        verifyNoInteractions(taskDispatchService);
     }
 
     @Test

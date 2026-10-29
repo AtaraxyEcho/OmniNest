@@ -443,7 +443,7 @@ class PhotoBatchServiceTest {
         when(batchTaskRepository.findByIdAndOwnerUserId(TASK_ID, OWNER_ID)).thenReturn(Optional.of(task));
         when(fileMetadataQueryService.findById(ZIP_FILE_ID)).thenReturn(Optional.of(archiveNode));
         when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(archiveObject));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, ZIP_FILE_ID)).thenReturn(new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, ZIP_FILE_ID)).thenReturn(new FileDownloadUrlDto(
                 ZIP_FILE_ID,
                 "photos.zip",
                 "https://storage.example/photos.zip",

@@ -247,11 +247,11 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       },
       onRemoveHighlight: (a) {
         if (!mounted) return;
-        annotationHandler?.delete(a);
+        annotationHandler?.delete(a, context);
       },
       onRemoveAnnotation: (a) {
         if (!mounted) return;
-        annotationHandler?.delete(a);
+        annotationHandler?.delete(a, context);
       },
       onLinkTap: handleReaderLinkTap,
       onSelectionActive: onReaderSelectionActive,
@@ -430,11 +430,11 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           },
           onRemoveHighlight: (a) {
             if (!mounted) return;
-            annotationHandler?.delete(a);
+            annotationHandler?.delete(a, context);
           },
           onRemoveAnnotation: (a) {
             if (!mounted) return;
-            annotationHandler?.delete(a);
+            annotationHandler?.delete(a, context);
           },
           onLinkTap: handleReaderLinkTap,
           onSelectionActive: onReaderSelectionActive,

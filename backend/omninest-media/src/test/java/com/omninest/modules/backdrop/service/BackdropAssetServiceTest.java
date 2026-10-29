@@ -96,7 +96,7 @@ class BackdropAssetServiceTest {
             return invocation.getArgument(0);
         });
         when(backdropAssetRepository.countByOwnerUserIdAndStatusNot(any(), any())).thenReturn(0L);
-        when(fileQueryService.createDownloadUrl(any(), any())).thenAnswer(invocation -> new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrlAs(any(), any())).thenAnswer(invocation -> new FileDownloadUrlDto(
                 invocation.getArgument(1), "file", "https://signed/" + invocation.getArgument(1),
                 Instant.now().plusSeconds(900)));
 

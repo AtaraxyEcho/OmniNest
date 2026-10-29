@@ -413,7 +413,7 @@ public class VideoLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/items/{videoItemId}/playback")
     ApiResponse<PlaybackPlanDto> playbackPlan(@PathVariable UUID videoItemId) {
-        return ApiResponse.success(moviePlaybackService.playbackPlan(currentUserContext.requireCurrentUserId(), videoItemId));
+        return ApiResponse.success(moviePlaybackService.playbackPlan(currentUserContext.requirePrincipal(), videoItemId));
     }
 
     @Operation(summary = "更新播放进度", description = "更新指定视频的播放进度与观看历史；播放计划请按 GET 播放计划接口获取")
@@ -507,7 +507,7 @@ public class VideoLibraryController {
         return ApiResponse.success(movieNfoService.preview(currentUserContext.requireCurrentUserId(), videoItemId));
     }
 
-    @Operation(summary = "导出 NFO", description = "将指定视频的元数据导出为 NFO 文件")
+    @Operation(summary = "导出 NFO", description = "生成 NFO 内容并落盘为派生资产，同时返回内容供客户端直接保存")
     @PostMapping("/api/v1/video/items/{videoItemId}/nfo")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     ApiResponse<NfoExportDto> exportNfo(@PathVariable UUID videoItemId) {

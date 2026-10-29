@@ -41,7 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -94,6 +93,14 @@ public class DerivedAssetStorageService {
                 transactionTemplate.getTransactionManager());
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return executeWithConflictRetry(template, action);
+    }
+
+    /** 独立短事务：对象存储调用必须落在事务之外，否则远程 IO 期间一直占着数据库连接。 */
+    private TransactionTemplate newTransaction() {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
     }
 
     /** 执行存储动作，命中对象键唯一键冲突时以新事务重试一次，复用先到者写入的元数据。 */
@@ -187,65 +194,28 @@ public class DerivedAssetStorageService {
      *
      * <p>供业务清理流程在缺少所有者上下文时使用；节点必须是 DERIVED 来源。</p>
      *
+     * <p>对象删除落在事务之外且先于元数据：对象存储失败时元数据还在，清理流程可以重试；
+     * 若在事务内先删元数据，回滚会留下指向已删对象的行，成功则把远程 IO 的时长
+     * 全部计进数据库连接占用。</p>
+     *
      * @param fileNodeId 派生资产 FileNode ID
      * @return 是否删除了节点
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean deleteDerivedFileNode(UUID fileNodeId) {
         if (fileNodeId == null) {
             return false;
         }
-        FileNode node = fileNodeRepository.findById(fileNodeId)
-                .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
-                .orElse(null);
-        if (node == null) {
-            return false;
-        }
-        if (node.getCurrentObjectId() != null) {
-            fileObjectRepository.findById(node.getCurrentObjectId()).ifPresent(object -> {
-                deleteObject(new LegacyObjectReference(object.getBucketName(), object.getObjectKey()));
-                fileObjectRepository.delete(object);
-            });
-        }
-        fileNodeRepository.delete(node);
-        return true;
+        return deleteResolved(resolveDerivedDeleteTarget(fileNodeId));
+    }
+
+    /**
+     * 待删除的派生资产：节点标识与需要清理的物理对象。
+     */
+    private record DerivedDeleteTarget(UUID nodeId, UUID ownerUserId, ObjectStorageKey objectKey) {
     }
 
     public boolean deleteOwned(UUID ownerUserId, UUID fileNodeId) {
-        return deleteOwnedInCurrentTransaction(ownerUserId, fileNodeId);
-    }
-
-    /**
-     * 删除派生资源引用的物理对象。
-     *
-     * <p>调用方必须在删除自身元数据前调用此方法。对象存储异常会直接抛出，
-     * 由上层事务决定是否回滚，不能在元数据已经删除后再静默记录失败。</p>
-     *
-     * @param reference 物理对象引用
-     */
-    public void deleteObject(LegacyObjectReference reference) {
-        validateLegacyReference(reference);
-        objectStorageClient.removeObject(new ObjectStorageKey(
-                reference.bucketName(),
-                reference.objectKey()
-        ));
-    }
-
-    /**
-     * 打开迁移前遗留派生对象的只读流。
-     *
-     * <p>该入口仅用于尚未迁移为 FileNode 的派生资产。调用方拥有关闭返回流的责任，
-     * 业务模块不得直接依赖对象存储客户端。</p>
-     *
-     * @param reference 遗留对象引用
-     * @return 对象内容流
-     */
-    public InputStream openLegacyObject(LegacyObjectReference reference) {
-        validateLegacyReference(reference);
-        return objectStorageClient.getObject(new ObjectStorageKey(
-                reference.bucketName(),
-                reference.objectKey()
-        ));
+        return deleteResolved(resolveOwnedDeleteTarget(ownerUserId, fileNodeId));
     }
 
     /**
@@ -255,14 +225,13 @@ public class DerivedAssetStorageService {
      * @param fileNodeIds 文件节点 ID 集合
      * @return 成功匹配并删除的派生资源数量
      */
-    @Transactional(rollbackFor = Exception.class)
     public int deleteOwnedBatch(UUID ownerUserId, Collection<UUID> fileNodeIds) {
         if (fileNodeIds == null || fileNodeIds.isEmpty()) {
             return 0;
         }
         int deletedCount = 0;
         for (UUID fileNodeId : fileNodeIds) {
-            if (fileNodeId != null && deleteOwnedInCurrentTransaction(ownerUserId, fileNodeId)) {
+            if (fileNodeId != null && deleteOwned(ownerUserId, fileNodeId)) {
                 deletedCount++;
             }
         }
@@ -279,7 +248,6 @@ public class DerivedAssetStorageService {
      * @param fileName 派生资源文件名
      * @return 元数据和物理对象均存在时返回 true
      */
-    @Transactional(readOnly = true)
     public boolean isAvailable(
             UUID ownerUserId,
             String resourceType,
@@ -288,42 +256,80 @@ public class DerivedAssetStorageService {
             String fileName
     ) {
         String path = normalizedPath(resourceType, resourceId, assetType, fileName);
-        return fileNodeRepository.findActivePath(ownerUserId, path)
-                .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType()))
-                .map(FileNode::getCurrentObjectId)
-                .flatMap(fileObjectRepository::findById)
-                .map(object -> objectStorageClient.objectExists(new ObjectStorageKey(
-                        object.getBucketName(),
-                        object.getObjectKey()
-                )))
-                .orElse(false);
+        // 元数据读取放进只读短事务，对象存储探测留在事务外：
+        // 否则一次 HEAD 的往返时长会被算进数据库连接占用。
+        TransactionTemplate readOnly = newTransaction();
+        readOnly.setReadOnly(true);
+        ObjectStorageKey key = readOnly.execute(status ->
+                fileNodeRepository.findActivePath(ownerUserId, path)
+                        .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType()))
+                        .map(FileNode::getCurrentObjectId)
+                        .flatMap(fileObjectRepository::findById)
+                        .map(object -> new ObjectStorageKey(
+                                object.getBucketName(),
+                                object.getObjectKey()
+                        ))
+                        .orElse(null));
+        return key != null && objectStorageClient.objectExists(key);
     }
 
-    private boolean deleteOwnedInCurrentTransaction(UUID ownerUserId, UUID fileNodeId) {
-        FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
+    /**
+     * 短事务：解析当前用户可删的派生节点与对象键；不存在或不属于该用户时返回 null。
+     */
+    private DerivedDeleteTarget resolveOwnedDeleteTarget(UUID ownerUserId, UUID fileNodeId) {
+        return newTransaction().execute(status -> {
+            FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
+                    .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
+                    .orElse(null);
+            return node == null ? null : toDeleteTarget(node, ownerUserId);
+        });
+    }
+
+    /**
+     * 短事务：解析无所有者上下文的派生节点（调用方已完成授权）。
+     */
+    private DerivedDeleteTarget resolveDerivedDeleteTarget(UUID fileNodeId) {
+        return newTransaction().execute(status -> fileNodeRepository.findById(fileNodeId)
                 .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
-                .orElse(null);
-        if (node == null) {
+                .map(node -> toDeleteTarget(node, null))
+                .orElse(null));
+    }
+
+    private DerivedDeleteTarget toDeleteTarget(FileNode node, UUID ownerUserId) {
+        ObjectStorageKey key = node.getCurrentObjectId() == null
+                ? null
+                : fileObjectRepository.findById(node.getCurrentObjectId())
+                        .map(object -> new ObjectStorageKey(object.getBucketName(), object.getObjectKey()))
+                        .orElse(null);
+        return new DerivedDeleteTarget(node.getId(), ownerUserId, key);
+    }
+
+    /**
+     * 对象先删、元数据后删：对象存储失败时元数据还在，清理流程可以重试；
+     * 两段各自是短事务，远程 IO 不在连接占用范围内。
+     */
+    private boolean deleteResolved(DerivedDeleteTarget target) {
+        if (target == null) {
             return false;
         }
-        if (node.getCurrentObjectId() != null) {
-            fileObjectRepository.findById(node.getCurrentObjectId()).ifPresent(object -> {
-                deleteObject(new LegacyObjectReference(object.getBucketName(), object.getObjectKey()));
-                fileObjectRepository.delete(object);
-            });
+        if (target.objectKey() != null) {
+            objectStorageClient.removeObject(target.objectKey());
         }
-        fileNodeRepository.delete(node);
+        newTransaction().executeWithoutResult(status -> {
+            FileNode node = target.ownerUserId() == null
+                    ? fileNodeRepository.findById(target.nodeId()).orElse(null)
+                    : fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
+                            target.nodeId(), target.ownerUserId()).orElse(null);
+            if (node == null) {
+                return;
+            }
+            if (node.getCurrentObjectId() != null) {
+                fileObjectRepository.findById(node.getCurrentObjectId())
+                        .ifPresent(fileObjectRepository::delete);
+            }
+            fileNodeRepository.delete(node);
+        });
         return true;
-    }
-
-    private void validateLegacyReference(LegacyObjectReference reference) {
-        if (reference == null
-                || reference.bucketName() == null
-                || reference.bucketName().isBlank()
-                || reference.objectKey() == null
-                || reference.objectKey().isBlank()) {
-            throw new IllegalArgumentException("派生资源对象引用不能为空");
-        }
     }
 
     /**
@@ -641,24 +647,25 @@ public class DerivedAssetStorageService {
     }
 
     private DownloadedAsset persistResponse(HttpResponse<InputStream> response) throws IOException {
-        long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
-        if (contentLength > MAX_FETCHED_DERIVED_ASSET_BYTES) {
-            throw new IOException("派生资源响应大小超出限制");
-        }
-        Path tempFile = tempStagingPort.createTempFile("derived", "remote-", ".asset");
-        try {
-            try (InputStream body = response.body()) {
+        // 先拿到流再判长度：超限直接抛错会让实体流悬空，连接既无法复用也不会被回收。
+        try (InputStream body = response.body()) {
+            long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
+            if (contentLength > MAX_FETCHED_DERIVED_ASSET_BYTES) {
+                throw new IOException("派生资源响应大小超出限制");
+            }
+            Path tempFile = tempStagingPort.createTempFile("derived", "remote-", ".asset");
+            try {
                 try (OutputStream output = Files.newOutputStream(tempFile)) {
                     copyBounded(body, output, MAX_FETCHED_DERIVED_ASSET_BYTES);
                 }
+                String mimeType = response.headers().firstValue("Content-Type")
+                        .map(value -> value.split(";")[0].trim())
+                        .orElse(null);
+                return new DownloadedAsset(tempFile, mimeType);
+            } catch (IOException ex) {
+                Files.deleteIfExists(tempFile);
+                throw ex;
             }
-            String mimeType = response.headers().firstValue("Content-Type")
-                    .map(value -> value.split(";")[0].trim())
-                    .orElse(null);
-            return new DownloadedAsset(tempFile, mimeType);
-        } catch (IOException ex) {
-            Files.deleteIfExists(tempFile);
-            throw ex;
         }
     }
 

@@ -42,6 +42,21 @@ class PhotoIndexConsumerTest {
     }
 
     @Test
+    void handleRetriesTransientFailureBeforeAcknowledging() throws IOException {
+        PhotoIndexEvent event = event();
+        Mockito.when(taskService.index(event.ownerUserId(), event.photoId()))
+                .thenThrow(new IllegalStateException("index lock"))
+                .thenReturn(true);
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(taskService, Mockito.times(2)).index(event.ownerUserId(), event.photoId());
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(
+                Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
+    @Test
     void handleNacksWhenIndexingFails() throws IOException {
         PhotoIndexEvent event = event();
         Mockito.when(taskService.index(event.ownerUserId(), event.photoId()))

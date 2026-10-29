@@ -364,17 +364,28 @@ class _HostedTimelineBody extends ConsumerWidget {
       );
     }
     final languageCode = Localizations.localeOf(context).languageCode;
-    return ListView(
+    // 翻页会不断把新月份累加进同一份 timeline：整列 children 会把可视窗外的
+    // 每月网格与网络图全部建出来，随年限无界增长。按月惰性构建，行内仍是上限预览。
+    final monthRows = [
+      for (final year in timeline.years)
+        for (final month in year.months) (year: year.year, month: month),
+    ];
+    return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      children: [
-        for (final year in timeline.years)
-          for (final month in year.months) ...[
+      itemCount: monthRows.length,
+      itemBuilder: (context, index) {
+        final row = monthRows[index];
+        final year = row.year;
+        final month = row.month;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 6),
               child: Text(
                 DateFormat.yMMMM(
                   languageCode,
-                ).format(DateTime(year.year, month.month)).toUpperCase(),
+                ).format(DateTime(year, month.month)).toUpperCase(),
                 style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
                   height: 1.45,
@@ -395,7 +406,7 @@ class _HostedTimelineBody extends ConsumerWidget {
                           .set(
                             month.previewPhotos,
                             PhotoBrowseSource.timeline,
-                            sourceKey: '${year.year}-${month.month}',
+                            sourceKey: '$year-${month.month}',
                           );
                       context.push('/photos/${photo.id}');
                     },
@@ -415,15 +426,14 @@ class _HostedTimelineBody extends ConsumerWidget {
                     ).photosViewAllMonth(month.photoCount),
                     onTap:
                         () => unawaited(
-                          context.push(
-                            '/photos/period/${year.year}/${month.month}',
-                          ),
+                          context.push('/photos/period/$year/${month.month}'),
                         ),
                   ),
                 ),
               ),
           ],
-      ],
+        );
+      },
     );
   }
 }

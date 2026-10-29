@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.config.ConfigValueProvider;
-import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
@@ -26,10 +25,9 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
-import com.omninest.modules.file.repository.FileNodePermissionRepository;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
-import com.omninest.modules.file.repository.ShareLinkRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.quota.port.AdminActorVerifier;
@@ -67,14 +65,14 @@ class SharedSpaceServiceTest {
     private final SharedSpaceQuotaService sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final UserAccountQuery userAccountQuery = mock(UserAccountQuery.class);
-    private final ShareLinkRepository shareLinkRepository = mock(ShareLinkRepository.class);
-    private final FileNodePermissionRepository fileNodePermissionRepository = mock(FileNodePermissionRepository.class);
+    private final SharedSpaceCascadeCleanup cascadeCleanup = mock(SharedSpaceCascadeCleanup.class);
+    private final FileNodeScanQueryRepository fileNodeScanQueryRepository =
+            mock(FileNodeScanQueryRepository.class);
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
     private final ApplicationEventPublisher eventPublisher =
             mock(ApplicationEventPublisher.class);
     private final FileIndexSyncService fileIndexSyncService = mock(FileIndexSyncService.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
-    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
 
     private SharedSpaceService service;
 
@@ -85,9 +83,9 @@ class SharedSpaceServiceTest {
                 .thenReturn(Optional.of("true"));
         service = new SharedSpaceService(
                 fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
-                storageQuotaService, userAccountQuery, shareLinkRepository,
-                fileNodePermissionRepository, configValueProvider, eventPublisher,
-                fileIndexSyncService, syncEventRecorder, readThroughCache,
+                storageQuotaService, userAccountQuery, cascadeCleanup,
+                fileNodeScanQueryRepository, configValueProvider, eventPublisher,
+                fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class)
         );
@@ -164,8 +162,8 @@ class SharedSpaceServiceTest {
 
             service.moveToSharedSpace(FILE_ID, USER_A);
 
-            verify(shareLinkRepository).disableByResourceIdIn(eq(List.of(FILE_ID)), any());
-            verify(fileNodePermissionRepository).deleteByFileNodeIdIn(eq(List.of(FILE_ID)));
+            verify(cascadeCleanup).revokeShareLinks(List.of(FILE_ID));
+            verify(cascadeCleanup).revokeFilePermissions(List.of(FILE_ID));
         }
 
         @Test
@@ -351,8 +349,8 @@ class SharedSpaceServiceTest {
             assertThat(file.getUploadedBy()).isNull();
             assertThat(file.getParentId()).isNull();
             // 换空间后旧公开链接与细粒度授权必须立即失效。
-            verify(shareLinkRepository).disableByResourceIdIn(eq(List.of(FILE_ID)), any(Instant.class));
-            verify(fileNodePermissionRepository).deleteByFileNodeIdIn(List.of(FILE_ID));
+            verify(cascadeCleanup).revokeShareLinks(List.of(FILE_ID));
+            verify(cascadeCleanup).revokeFilePermissions(List.of(FILE_ID));
         }
 
         @Test
@@ -567,6 +565,49 @@ class SharedSpaceServiceTest {
             assertThat(folder.isDeleted()).isTrue();
             verify(fileNodeRepository).softDeleteSubtreeInSpace(
                     eq(SpaceType.SHARED), eq("/movies/"), any(Instant.class), eq(USER_A));
+        }
+
+        @Test
+        @DisplayName("上传者删自己建的文件夹，内含他人上传文件：拒绝且不级联")
+        void deleteSharedFile_folderWithForeignChild_throws() {
+            stubPermission(USER_A, true, false, false, true, false, false, false, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "movies");
+
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                    SpaceType.SHARED, "/movies/", USER_A))
+                    .thenReturn(1L);
+
+            assertThatThrownBy(() -> service.deleteSharedFile(FOLDER_ID, USER_A))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FORBIDDEN);
+
+            assertThat(folder.isDeleted()).isFalse();
+            verify(fileNodeRepository, never()).softDeleteSubtreeInSpace(
+                    any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("具备 CAN_DELETE_ANY 时可整体删除混有他人文件的文件夹")
+        void deleteSharedFile_folderWithForeignChild_adminAllowed() {
+            stubPermission(USER_B, true, false, false, true, true, false, false, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "movies");
+
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            // 目录内确有他人上传的文件，但操作者具备 CAN_DELETE_ANY：判定必须放过而非误拒。
+            when(fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                    SpaceType.SHARED, "/movies/", USER_B))
+                    .thenReturn(1L);
+            when(fileNodeRepository.findActiveIdsUnderPathInSpace(SpaceType.SHARED, "/movies/"))
+                    .thenReturn(List.of(CHILD_FILE_ID));
+
+            service.deleteSharedFile(FOLDER_ID, USER_B);
+
+            verify(fileNodeRepository).softDeleteSubtreeInSpace(
+                    eq(SpaceType.SHARED), eq("/movies/"), any(Instant.class), eq(USER_B));
         }
     }
 

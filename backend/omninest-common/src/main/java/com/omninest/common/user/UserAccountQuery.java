@@ -57,6 +57,14 @@ public interface UserAccountQuery {
     Map<UUID, String> findUsernames(Collection<UUID> userIds);
 
     /**
+     * 批量查询账户状态，供批量校验（如分享接收人是否可用）一次取回。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 以用户 ID 为键的状态映射；不存在的用户不出现在结果里
+     */
+    Map<UUID, String> findStatuses(Collection<UUID> userIds);
+
+    /**
      * 按用户标识游标查询一批账户标识。
      *
      * @param exclusiveCursor 排他游标，首次查询传 null

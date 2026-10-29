@@ -1,5 +1,6 @@
 package com.omninest.worker.task;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskDispatch;
@@ -9,6 +10,7 @@ import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -74,7 +76,14 @@ public class GenericTaskRecoveryScheduler {
     private static final String DISPATCH_STATUS_PENDING = "PENDING";
     private static final String DISPATCH_STATUS_PUBLISHING = "PUBLISHING";
 
+    /**
+     * 停滞任务清扫的互斥键与有效期：有效期覆盖一轮批量清扫的最坏耗时。
+     */
+    private static final String SWEEP_LOCK_KEY = "omninest:task:sweep-stuck";
+    private static final Duration SWEEP_LOCK_TTL = Duration.ofMinutes(5);
+
     private final TaskRecordService taskRecordService;
+    private final DistributedLock distributedLock;
     private final TaskDispatchRepository taskDispatchRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRedispatchService taskRedispatchService;
@@ -102,15 +111,27 @@ public class GenericTaskRecoveryScheduler {
 
     /**
      * 清扫投递断链的停滞任务并重新投递。
+     *
+     * <p>多实例同时清扫会对同一任务读后重投：重投不改 {@code retryCount}，
+     * 并发重投等于绕过 1/5/15 分钟 ×3 的重试上限，因此与孤儿扫描器一样先取互斥锁。</p>
      */
     @Scheduled(fixedDelayString = "${omninest.task.recovery-interval-millis:60000}")
     public void sweepStuckTasks() {
-        Instant cutoff = Instant.now().minus(
-                Math.max(60L, stuckDispatchSeconds),
-                ChronoUnit.SECONDS
-        );
-        for (TaskRecord record : taskRecordService.listStuckTasks(cutoff, cutoff, RECOVERY_BATCH_SIZE)) {
-            redispatchStuckTask(record, cutoff);
+        String lockToken = distributedLock.newToken();
+        if (!distributedLock.tryLock(SWEEP_LOCK_KEY, lockToken, SWEEP_LOCK_TTL)) {
+            log.debug("停滞任务清扫已被其他实例持有，本轮跳过");
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(
+                    Math.max(60L, stuckDispatchSeconds),
+                    ChronoUnit.SECONDS
+            );
+            for (TaskRecord record : taskRecordService.listStuckTasks(cutoff, cutoff, RECOVERY_BATCH_SIZE)) {
+                redispatchStuckTask(record, cutoff);
+            }
+        } finally {
+            distributedLock.unlock(SWEEP_LOCK_KEY, lockToken);
         }
     }
 

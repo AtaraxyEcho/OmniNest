@@ -106,6 +106,25 @@ public class UserAccountQueryService implements UserAccountQuery {
     }
 
     /**
+     * 批量查询账户状态。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 以用户 ID 为键的状态映射
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, String> findStatuses(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> statuses = new LinkedHashMap<>();
+        for (AuthUser user : authUserRepository.findAllById(userIds)) {
+            statuses.put(user.getId(), user.getStatus());
+        }
+        return Map.copyOf(statuses);
+    }
+
+    /**
      * 按用户标识游标查询一批账户标识。
      *
      * @param exclusiveCursor 排他游标，首次查询传 null

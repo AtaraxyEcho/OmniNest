@@ -166,7 +166,7 @@ public class PhotoBatchService {
         }
         FileObjectDescriptor fileObject = fileMetadataQueryService.findObjectById(fileNode.currentObjectId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "批量下载文件对象不存在"));
-        FileDownloadUrlDto url = fileQueryService.createDownloadUrl(ownerUserId, fileId);
+        FileDownloadUrlDto url = fileQueryService.createDownloadUrlAs(ownerUserId, fileId);
         return new PhotoBatchDownloadTicketDto(
                 url.downloadUrl(),
                 fileNode.name(),

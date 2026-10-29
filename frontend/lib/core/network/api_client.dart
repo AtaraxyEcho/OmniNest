@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
@@ -177,7 +179,10 @@ class ApiClient {
 
   void setAccessToken(String? token) {
     _manualAccessToken = token;
-    _sessionStore?.saveAccessToken(token);
+    final store = _sessionStore;
+    if (store != null) {
+      unawaited(store.saveAccessToken(token));
+    }
   }
 
   String? currentAccessToken() {

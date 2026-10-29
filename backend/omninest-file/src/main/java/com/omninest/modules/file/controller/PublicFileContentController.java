@@ -2,6 +2,7 @@ package com.omninest.modules.file.controller;
 
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.service.FileContentAccessService;
+import com.omninest.common.security.InlineContentPolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
@@ -29,13 +30,21 @@ public class PublicFileContentController {
     @GetMapping("/api/v1/public/file-content/{token}")
     ResponseEntity<Resource> content(@PathVariable String token) {
         FileContentResource content = fileContentAccessService.openPublicLocalResource(token);
+        // 本地节点的 MIME 按扩展名推导，HTML/SVG 同源内联就是存储型 XSS 面；
+        // 与 MinIO 预签名路径共用同一策略，避免只有一侧收敛。
+        boolean executable = InlineContentPolicy.isExecutable(content.mimeType());
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(resolveMediaType(content.mimeType()));
+        headers.setContentType(resolveMediaType(executable
+                ? InlineContentPolicy.FALLBACK_MIME_TYPE
+                : content.mimeType()));
         headers.setContentLength(content.sizeBytes());
         headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
         headers.setCacheControl("private, no-store");
         headers.setPragma("no-cache");
-        headers.setContentDisposition(ContentDisposition.inline()
+        ContentDisposition.Builder disposition = executable
+                ? ContentDisposition.attachment()
+                : ContentDisposition.inline();
+        headers.setContentDisposition(disposition
                 .filename(content.fileName(), StandardCharsets.UTF_8)
                 .build());
         return ResponseEntity.ok().headers(headers).body(content.resource());

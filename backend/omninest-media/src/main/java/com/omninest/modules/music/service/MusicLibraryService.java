@@ -858,7 +858,7 @@ public class MusicLibraryService {
             return null;
         }
         try {
-            return fileQueryService.createDownloadUrl(ownerUserId, fileId).downloadUrl();
+            return fileQueryService.createDownloadUrlAs(ownerUserId, fileId).downloadUrl();
         } catch (RuntimeException ex) {
             log.debug("音乐封面 URL 解析失败: fileId={}, message={}", fileId, ex.getMessage());
             return null;

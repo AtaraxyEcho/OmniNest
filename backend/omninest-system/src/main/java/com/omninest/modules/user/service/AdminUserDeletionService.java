@@ -108,7 +108,7 @@ public class AdminUserDeletionService {
         // 清空角色集合使 Hibernate 在删除用户行之前先移除全部绑定行。
         user.getRoles().clear();
         authUserRepository.delete(user);
-        userProfileCacheEvictor.evictProfileCache(userId);
+        userProfileCacheEvictor.evictProfileCacheAfterCommit(userId);
         removeAvatarAfterCommit(userId, avatarFileId);
         auditLogService.recordWithPayload(
                 actorUserId,

@@ -19,4 +19,17 @@ public interface AdminActorVerifier {
      * @param actorUserId 操作者用户标识
      */
     void requireFreshAdminActor(UUID actorUserId);
+
+    /**
+     * 校验操作者有权修改目标用户的存储配额。
+     *
+     * <p>配额是自我提权最近的一条路：普通管理员可以把自己或同级别管理员的配额改成
+     * 无限制（{@code quota_bytes <= 0}），等于绕过容量约束。因此改自己的配额一律拒绝，
+     * 目标为管理员或要求无限制时只允许超级管理员。</p>
+     *
+     * @param actorUserId 操作者用户标识
+     * @param targetUserId 目标用户标识
+     * @param unlimitedRequested 是否把配额设为无限制
+     */
+    void requireQuotaMutationAuthority(UUID actorUserId, UUID targetUserId, boolean unlimitedRequested);
 }

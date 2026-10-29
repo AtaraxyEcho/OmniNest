@@ -921,7 +921,7 @@ public class PhotoLibraryService {
             return null;
         }
         try {
-            return fileQueryService.createDownloadUrl(
+            return fileQueryService.createDownloadUrlAs(
                     photo.getOwnerUserId(),
                     photo.getMotionVideoFileNodeId()
             ).downloadUrl();
@@ -1046,7 +1046,7 @@ public class PhotoLibraryService {
             return null;
         }
         try {
-            FileDownloadUrlDto url = fileQueryService.createDownloadUrl(ownerUserId, coverFileId);
+            FileDownloadUrlDto url = fileQueryService.createDownloadUrlAs(ownerUserId, coverFileId);
             return url.downloadUrl();
         } catch (Exception ex) {
             log.warn("解析封面 URL 失败: photoId={}, coverFileId={}", photoId, coverFileId, ex);
@@ -1056,7 +1056,7 @@ public class PhotoLibraryService {
 
     private String resolveSourceUrl(UUID ownerUserId, UUID fileNodeId) {
         try {
-            return fileQueryService.createDownloadUrl(ownerUserId, fileNodeId).downloadUrl();
+            return fileQueryService.createDownloadUrlAs(ownerUserId, fileNodeId).downloadUrl();
         } catch (Exception ex) {
             log.warn("解析照片原图 URL 失败: fileNodeId={}", fileNodeId, ex);
             return null;

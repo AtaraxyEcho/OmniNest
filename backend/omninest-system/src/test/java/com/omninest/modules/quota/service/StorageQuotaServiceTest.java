@@ -214,6 +214,20 @@ class StorageQuotaServiceTest {
     }
 
     @Test
+    @DisplayName("updateQuota: 权限判定交给管理员边界，且把无限制意图如实传递")
+    void updateQuotaDelegatesAuthorityCheck() {
+        UserAccountSummary user = userWith(1000, 500);
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user));
+        UUID operatorId = UUID.randomUUID();
+
+        service.updateQuota(USER_ID, 0, operatorId);
+
+        // 0 表示无限制：这是普通管理员自我提权最近的一条路，必须由 AdminActorVerifier 把关。
+        verify(adminActorVerifier).requireQuotaMutationAuthority(operatorId, USER_ID, true);
+        verify(userStorageCommand).updateQuota(USER_ID, 0);
+    }
+
+    @Test
     @DisplayName("updateQuotaAndGetDetails: 返回更新后的公共账户详情")
     void updateQuotaAndGetDetailsReturnsUpdatedContract() {
         UUID operatorId = UUID.randomUUID();

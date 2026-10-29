@@ -9,7 +9,9 @@ import com.omninest.modules.reader.service.ReaderArchiveSafetyPolicy.ArchiveRead
 import com.omninest.modules.reader.service.ReaderArchiveSafetyPolicy.EntryReadGuard;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.io.ByteArrayOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -56,26 +58,74 @@ public class ReaderComicArchiveParser {
      * @return 按文件名自然排序的图片条目
      */
     public List<ImageEntry> parseEntries(FileDescriptor fileNode) {
+        return parseEntries(
+                contentSupplier(fileNode),
+                fileNode.sizeBytes(),
+                "fileNodeId=" + fileNode.id()
+        );
+    }
+
+    /**
+     * 归档字节流来源：GB18030 重扫需要重开一次，因此是工厂而不是一次性流。
+     */
+    @FunctionalInterface
+    interface ArchiveStreamSupplier {
+        InputStream open() throws IOException;
+    }
+
+    /**
+     * 打开对象存储内容流；包装出的流关闭时同时释放 {@link FileContentStream}。
+     */
+    private ArchiveStreamSupplier contentSupplier(FileDescriptor fileNode) {
+        return () -> {
+            FileContentStream content = fileQueryService.openOwnedFileContent(
+                    fileNode.ownerUserId(), fileNode.id());
+            return new FilterInputStream(content.inputStream()) {
+                @Override
+                public void close() throws IOException {
+                    try {
+                        super.close();
+                    } finally {
+                        content.close();
+                    }
+                }
+            };
+        };
+    }
+
+    /**
+     * 按调用方提供的字节流来源解析条目。
+     *
+     * <p>调用方已在事务外把归档落盘：这里不再回源对象存储，整包下载因此不会占住数据库连接。
+     * 同一份暂存归档也被封面的二次读取复用，避免为取一张封面再下载整包。</p>
+     *
+     * @param supplier 可重开的归档字节流来源
+     * @param sizeBytes 归档字节数，用于先做体积上限校验
+     * @param logRef 日志里标识归档来源的短文本
+     * @return 按文件名自然排序的图片条目
+     */
+    public List<ImageEntry> parseEntries(
+            ArchiveStreamSupplier supplier, long sizeBytes, String logRef) {
+        archiveSafetyPolicy.validateArchiveSize(sizeBytes);
         try {
-            return parseEntries(fileNode, StandardCharsets.UTF_8);
+            return parseEntries(supplier, StandardCharsets.UTF_8, logRef);
         } catch (ArchiveNameEncodingException exception) {
             // 非 UTF-8 条目名会以 MALFORMED 或 invalid LOC header 失败；按 Windows 常见 GBK 重扫一次。
-            log.info("漫画归档条目名不是 UTF-8，回退 GB18030 重扫: fileNodeId={}", fileNode.id());
+            log.info("漫画归档条目名不是 UTF-8，回退 GB18030 重扫: {}", logRef);
             try {
-                return parseEntries(fileNode, GB18030);
+                return parseEntries(supplier, GB18030, logRef);
             } catch (ArchiveNameEncodingException retryException) {
                 throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "压缩包条目名编码无法识别");
             }
         }
     }
 
-    private List<ImageEntry> parseEntries(FileDescriptor fileNode, Charset charset) {
-        archiveSafetyPolicy.validateArchiveSize(fileNode.sizeBytes());
+    private List<ImageEntry> parseEntries(
+            ArchiveStreamSupplier supplier, Charset charset, String logRef) {
         ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
         List<ImageEntry> imageEntries = new ArrayList<>();
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                fileNode.ownerUserId(), fileNode.id());
-             ZipInputStream input = new ZipInputStream(content.inputStream(), charset)) {
+        try (InputStream raw = supplier.open();
+             ZipInputStream input = new ZipInputStream(raw, charset)) {
             ZipEntry entry;
             int entryIndex = 0;
             while ((entry = input.getNextEntry()) != null) {
@@ -119,11 +169,11 @@ public class ReaderComicArchiveParser {
                 throw new ArchiveNameEncodingException(exception);
             }
             log.warn("漫画归档读取失败: fileNodeId={}, errorType={}",
-                    fileNode.id(), exception.getClass().getSimpleName());
+                    logRef, exception.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
         } catch (IOException exception) {
             log.warn("漫画归档读取失败: fileNodeId={}, errorType={}",
-                    fileNode.id(), exception.getClass().getSimpleName());
+                    logRef, exception.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
         }
         imageEntries.sort((left, right) -> naturalCompare(left.name(), right.name()));
@@ -138,22 +188,33 @@ public class ReaderComicArchiveParser {
      * @return 封面草稿；读取失败时返回 null
      */
     public ReaderCoverDraft extractCover(FileDescriptor fileNode, ImageEntry coverEntry) {
-        ReaderCoverDraft draft = extractCover(fileNode, coverEntry, StandardCharsets.UTF_8);
+        return extractCover(contentSupplier(fileNode), coverEntry);
+    }
+
+    /**
+     * 从已落盘的归档提取封面：与条目解析共用同一次暂存，不再为一张封面二次下载整包。
+     *
+     * @param supplier 可重开的归档字节流来源
+     * @param coverEntry 封面条目
+     * @return 封面草稿；读取失败时返回 null
+     */
+    public ReaderCoverDraft extractCover(
+            ArchiveStreamSupplier supplier, ImageEntry coverEntry) {
+        ReaderCoverDraft draft = extractCover(supplier, coverEntry, StandardCharsets.UTF_8);
         if (draft != null) {
             return draft;
         }
-        return extractCover(fileNode, coverEntry, GB18030);
+        return extractCover(supplier, coverEntry, GB18030);
     }
 
     private ReaderCoverDraft extractCover(
-            FileDescriptor fileNode,
+            ArchiveStreamSupplier supplier,
             ImageEntry coverEntry,
             Charset charset
     ) {
         ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                fileNode.ownerUserId(), fileNode.id());
-             ZipInputStream input = new ZipInputStream(content.inputStream(), charset)) {
+        try (InputStream raw = supplier.open();
+             ZipInputStream input = new ZipInputStream(raw, charset)) {
             ZipEntry entry;
             while ((entry = input.getNextEntry()) != null) {
                 boolean targetEntry = !entry.isDirectory() && coverEntry.name().equals(entry.getName());

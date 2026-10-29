@@ -38,6 +38,35 @@ void main() {
     );
   }
 
+  /// 提供一个可读 localizations 的 BuildContext：批注反馈要在挂载上下文上弹提示。
+  Future<BuildContext> hostedContext(WidgetTester tester) async {
+    BuildContext? captured;
+    await tester.pumpWidget(
+      ToastificationWrapper(
+        config: omniFeedbackToastConfig,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh'), Locale('en')],
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                captured = context;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    return captured!;
+  }
+
   ReaderAnnotation createAnnotation({
     String id = 'ann-1',
     String itemId = 'item-1',
@@ -105,7 +134,7 @@ void main() {
     });
 
     group('delete', () {
-      test('calls deleteAnnotation and reloads', () async {
+      testWidgets('calls deleteAnnotation and reloads', (tester) async {
         final annotation = createAnnotation(id: 'ann-5');
         when(
           () => mockDataManager.deleteAnnotation('ann-5'),
@@ -115,14 +144,15 @@ void main() {
         ).thenAnswer((_) async => []);
 
         final handler = createHandler();
-        await handler.delete(annotation);
+        final context = await hostedContext(tester);
+        await handler.delete(annotation, context);
 
         verify(() => mockDataManager.deleteAnnotation('ann-5')).called(1);
         verify(() => mockDataManager.loadAnnotations('item-1')).called(1);
         expect(notifyCount, 1);
       });
 
-      test('does not crash when reloading after delete fails', () async {
+      testWidgets('does not crash when reloading after delete fails', (tester) async {
         final annotation = createAnnotation();
         when(
           () => mockDataManager.deleteAnnotation(any()),
@@ -131,9 +161,30 @@ void main() {
           () => mockDataManager.loadAnnotations('item-1'),
         ).thenThrow(Exception('cache unavailable'));
         final handler = createHandler();
+        final context = await hostedContext(tester);
 
-        await handler.delete(annotation);
+        await handler.delete(annotation, context);
         expect(notifyCount, 0);
+      });
+
+      testWidgets('删除失败要弹出反馈，否则批注原地留着而用户以为已删', (tester) async {
+        final annotation = createAnnotation(id: 'ann-7');
+        when(
+          () => mockDataManager.deleteAnnotation('ann-7'),
+        ).thenThrow(Exception('db down'));
+        final handler = createHandler();
+        final context = await hostedContext(tester);
+
+        await handler.delete(annotation, context);
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+
+        expect(find.text('批注删除失败，请重试'), findsOneWidget);
+        // 删除失败不再重拉列表：不重拉才不会把未删除的批注"复活"成刷新过的样子。
+        verifyNever(() => mockDataManager.loadAnnotations('item-1'));
+        await tester.pump(const Duration(seconds: 10));
+        await tester.pumpAndSettle();
       });
     });
 

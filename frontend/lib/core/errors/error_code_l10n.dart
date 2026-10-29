@@ -51,6 +51,8 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorUnauthorized;
       case AppErrorCodes.forbidden:
         return errorForbidden;
+      case AppErrorCodes.downloadPermissionRequired:
+        return errorDownloadPermissionRequired;
       case AppErrorCodes.preferenceVersionConflict:
         return errorPreferenceVersionConflict;
       case 'VALIDATION_FAILED':

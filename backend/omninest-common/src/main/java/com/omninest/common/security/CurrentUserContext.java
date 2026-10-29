@@ -29,4 +29,16 @@ public interface CurrentUserContext {
      * @return 当前会话标识；凭证未携带会话信息时返回 null
      */
     UUID currentSessionId();
+
+    /**
+     * 获取当前请求的内容访问主体。
+     *
+     * <p>只有本接口能产出会话请求主体，内容访问 API 借此区分"请求者"与
+     * "资源记录的所有者"，避免把 {@code ownerUserId} 当作请求者传入。</p>
+     *
+     * @return 当前请求主体
+     */
+    default RequestPrincipal requirePrincipal() {
+        return RequestPrincipal.authenticated(requireCurrentUserId());
+    }
 }

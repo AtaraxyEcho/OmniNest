@@ -311,6 +311,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     _lastSyncAt = now;
     final total = _totalPages;
     final bookProgress = total > 0 ? _currentPage / total : 0.0;
+    // 退出路径先 unawaited 上报再 pop，本地落盘的 await 结束时本页可能已卸载，
+    // 服务必须在 await 之前取好（该 Provider 非 autoDispose，实例与容器同生命周期）。
+    final syncService = ref.read(readerProgressSyncServiceProvider);
     await ReaderLocalProgress.save(
       itemId: widget.itemId,
       chapterProgress: bookProgress,
@@ -325,17 +328,15 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
       // 总页数未知：上报会写成误导性百分比，只留本地页码。
       return;
     }
-    await ref
-        .read(readerProgressSyncServiceProvider)
-        .sync(
-          itemId: widget.itemId,
-          charOffset: _currentPage,
-          progressPercent: bookProgress,
-          readingMode: 'page',
-          chapterId: 'pdf',
-          pageIndex: _currentPage - 1,
-          clientUpdatedAt: now,
-        );
+    await syncService.sync(
+      itemId: widget.itemId,
+      charOffset: _currentPage,
+      progressPercent: bookProgress,
+      readingMode: 'page',
+      chapterId: 'pdf',
+      pageIndex: _currentPage - 1,
+      clientUpdatedAt: now,
+    );
   }
 
   /// 退出是强一致节点：节流窗口内的最后一次翻页必须刷出去。

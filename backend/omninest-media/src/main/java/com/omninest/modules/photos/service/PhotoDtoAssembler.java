@@ -213,7 +213,7 @@ public class PhotoDtoAssembler {
         }
         Map<UUID, String> result = new LinkedHashMap<>();
         fileQueryService
-                .createDownloadUrls(ownerUserId, fileIds)
+                .createDownloadUrlsAs(ownerUserId, fileIds)
                 .forEach((fileId, dto) -> result.put(fileId, dto.downloadUrl()));
         return result;
     }

@@ -316,8 +316,8 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(file));
         when(shareLinkRepository.save(any(ShareLink.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(userAccountQuery.findDetailsById(recipient))
-                .thenReturn(Optional.of(activeAccount(recipient)));
+        when(userAccountQuery.findStatuses(List.of(recipient)))
+                .thenReturn(Map.of(recipient, "ACTIVE"));
 
         CreateShareLinkRequest duplicated = new CreateShareLinkRequest(
                 FILE_ID, "FILE", null, false, null, null, List.of(recipient, recipient));
@@ -694,7 +694,8 @@ class FileManagerServiceTest {
 
         assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, sourceId, null))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED));
         verify(fileNodeRepository, Mockito.never()).save(any(FileNode.class));
     }
 

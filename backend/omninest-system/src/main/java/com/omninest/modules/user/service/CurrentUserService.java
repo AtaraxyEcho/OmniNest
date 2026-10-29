@@ -41,6 +41,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
@@ -109,6 +111,23 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             return;
         }
         readThroughCache.invalidate(PROFILE_CACHE_PREFIX + userId);
+    }
+
+    @Override
+    public void evictProfileCacheAfterCommit(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evictProfileCache(userId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictProfileCache(userId);
+            }
+        });
     }
 
     public UUID currentUserId() {

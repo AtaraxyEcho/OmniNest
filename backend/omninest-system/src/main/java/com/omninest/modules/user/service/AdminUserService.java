@@ -198,7 +198,7 @@ public class AdminUserService {
         user.setStatus(normalizedStatus);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户状态");
-        currentUserService.evictProfileCache(userId);
+        currentUserService.evictProfileCacheAfterCommit(userId);
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_STATUS_UPDATE", "auth_users", userId,
@@ -226,7 +226,7 @@ public class AdminUserService {
         adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "重置管理员两步验证");
         twoFactorService.resetByAdmin(user.getId());
         userSessionRevocationService.revokeAll(List.of(user.getId()), "管理员重置两步验证");
-        currentUserService.evictProfileCache(user.getId());
+        currentUserService.evictProfileCacheAfterCommit(user.getId());
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_2FA_RESET", "auth_users", user.getId(),
@@ -289,7 +289,7 @@ public class AdminUserService {
         resolvedRoles.forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
-        currentUserService.evictProfileCache(userId);
+        currentUserService.evictProfileCacheAfterCommit(userId);
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_ROLES_UPDATE", "auth_users", userId,

@@ -1,6 +1,7 @@
 package com.omninest.worker.index;
 
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
+import com.omninest.worker.support.TransientRetry;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.FileIndexSyncEvent;
@@ -44,7 +45,11 @@ public class FileIndexSyncConsumer {
     public void handle(FileIndexSyncEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {
-            int handled = fileIndexSyncService.sync(event.ownerUserId(), event.fileNodeIds());
+            // 索引队列没有任务行可补跑：先做几次短退避重试，失败才进死信。
+            int handled = TransientRetry.call(
+                    "文件索引同步",
+                    () -> fileIndexSyncService.sync(event.ownerUserId(), event.fileNodeIds())
+            );
             log.info("文件索引同步完成: ownerUserId={}, 请求节点数={}, 实际处理={}",
                     event.ownerUserId(), event.fileNodeIds().size(), handled);
             channel.basicAck(deliveryTag, false);

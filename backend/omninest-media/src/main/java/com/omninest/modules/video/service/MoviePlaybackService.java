@@ -2,6 +2,7 @@ package com.omninest.modules.video.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
@@ -62,27 +63,30 @@ public class MoviePlaybackService {
     private final MediaContentAccessService mediaContentAccessService;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
 
-    public PlaybackPlanDto playbackPlan(UUID ownerUserId, UUID videoItemId) {
+    public PlaybackPlanDto playbackPlan(RequestPrincipal requester, UUID videoItemId) {
+        UUID requesterUserId = requester.userId();
         // 查询在只读事务中执行
         TransactionTemplate readOnlyTx = new TransactionTemplate(transactionManager);
         readOnlyTx.setReadOnly(true);
         readOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
         PlaybackPlanDto plan = readOnlyTx.execute(status -> {
-            MediaVideoItem item = findVideo(ownerUserId, videoItemId);
+            MediaVideoItem item = findVideo(requesterUserId, videoItemId);
             MediaPlaybackProgress progress = progressService
-                    .find(ownerUserId, MediaPlaybackType.VIDEO, videoItemId.toString())
+                    .find(requesterUserId, MediaPlaybackType.VIDEO, videoItemId.toString())
                     .orElse(null);
-            return buildPlaybackPlan(ownerUserId, item, progress);
+            return buildPlaybackPlan(requester, item, progress);
         });
         // 自动触发在独立的写事务中执行，避免 readOnly 事务冲突
         TransactionTemplate writeTx = new TransactionTemplate(transactionManager);
         writeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         writeTx.executeWithoutResult(status ->
-                autoTriggerAudioTranscode(ownerUserId, plan));
+                autoTriggerAudioTranscode(requesterUserId, plan));
         return plan;
     }
 
-    private PlaybackPlanDto buildPlaybackPlan(UUID ownerUserId, MediaVideoItem item, MediaPlaybackProgress progress) {
+    private PlaybackPlanDto buildPlaybackPlan(
+            RequestPrincipal requester, MediaVideoItem item, MediaPlaybackProgress progress) {
+        UUID requesterUserId = requester.userId();
         String container = item.getContainerFormat();
         String videoCodec = item.getVideoCodec();
         String audioCodec = item.getAudioCodec();
@@ -90,11 +94,13 @@ public class MoviePlaybackService {
 
         UUID catalogOwnerId = item.getOwnerUserId();
         MediaPlaybackTokenService.IssuedMediaToken mediaToken = mediaPlaybackTokenService.issue(
-                ownerUserId,
+                requesterUserId,
                 item.getId()
         );
+        // 原片地址必须按请求者签发：FileDownloadService 的下载判定是"传入主体是否所有者"，
+        // 传 catalogOwnerId 会让共享空间成员绕过 CAN_DOWNLOAD 直接取得原件字节。
         FileDownloadUrlDto downloadUrl = item.getLibrarySourceId() == null
-                ? fileQueryService.createDownloadUrl(catalogOwnerId, item.getFileNodeId())
+                ? fileQueryService.createDownloadUrl(requester, item.getFileNodeId())
                 : new FileDownloadUrlDto(
                         item.getFileNodeId(),
                         null,
@@ -147,12 +153,12 @@ public class MoviePlaybackService {
      * 而客户端心跳根本不读取响应体。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    public void updateProgress(UUID ownerUserId, UUID videoItemId, PlaybackProgressRequest request) {
-        MediaVideoItem item = findVideo(ownerUserId, videoItemId);
+    public void updateProgress(UUID requesterUserId, UUID videoItemId, PlaybackProgressRequest request) {
+        MediaVideoItem item = findVideo(requesterUserId, videoItemId);
         long duration = request.durationSeconds() > 0 ? request.durationSeconds() : safeDuration(item);
         long position = Math.max(0, request.positionSeconds());
         MediaPlaybackProgress progress = progressService.save(
-                ownerUserId,
+                requesterUserId,
                 MediaPlaybackType.VIDEO,
                 videoItemId.toString(),
                 position,
@@ -161,14 +167,14 @@ public class MoviePlaybackService {
                 request.clientUpdatedAt(),
                 request.deviceId()
         );
-        historyRepository.save(upsertHistory(ownerUserId, videoItemId, progress));
+        historyRepository.save(upsertHistory(requesterUserId, videoItemId, progress));
     }
 
-    private MediaWatchHistory upsertHistory(UUID ownerUserId, UUID videoItemId, MediaPlaybackProgress progress) {
+    private MediaWatchHistory upsertHistory(UUID requesterUserId, UUID videoItemId, MediaPlaybackProgress progress) {
         MediaWatchHistory history = historyRepository
-                .findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(ownerUserId, videoItemId)
+                .findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(requesterUserId, videoItemId)
                 .orElseGet(MediaWatchHistory::new);
-        history.setOwnerUserId(ownerUserId);
+        history.setOwnerUserId(requesterUserId);
         history.setVideoItemId(videoItemId);
         history.setPositionSeconds(progress.getPositionSeconds());
         history.setDurationSeconds(progress.getDurationSeconds());
@@ -179,8 +185,8 @@ public class MoviePlaybackService {
         return history;
     }
 
-    private MediaVideoItem findVideo(UUID ownerUserId, UUID videoItemId) {
-        return mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+    private MediaVideoItem findVideo(UUID requesterUserId, UUID videoItemId) {
+        return mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
     }
 
     private PlaybackSubtitleDto toSubtitleDto(UUID videoItemId, String token, MediaSubtitleTrack track) {
@@ -231,13 +237,13 @@ public class MoviePlaybackService {
     /**
      * 校验字幕存在与影片可读性，不写响应；供控制器先校验再设置响应头。
      *
-     * @param ownerUserId 当前用户 ID
+     * @param requesterUserId 当前用户 ID
      * @param subtitleId 字幕轨道 ID
      */
-    public void requireSubtitleContentAccess(UUID ownerUserId, UUID subtitleId) {
+    public void requireSubtitleContentAccess(UUID requesterUserId, UUID subtitleId) {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
-        mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
+        mediaContentAccessService.requireReadableVideo(requesterUserId, track.getVideoItemId());
     }
 
     /**
@@ -248,11 +254,11 @@ public class MoviePlaybackService {
      * <p>不开事务的理由同 {@link #writeSubtitleContentByToken}：内嵌字幕在没提取过时要现场
      * 跑 ffmpeg，时长量级是分钟而不是毫秒，绝不能把它包在持库连接的事务里。
      */
-    public void writeSubtitleContent(UUID ownerUserId, UUID subtitleId, OutputStream out)
+    public void writeSubtitleContent(UUID requesterUserId, UUID subtitleId, OutputStream out)
             throws IOException {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
-        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
+        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(requesterUserId, track.getVideoItemId());
         // 先把要用的标量取出来：之后既不再读库，也不依赖仍处托管态的实体。
         UUID catalogOwnerId = item.getOwnerUserId();
         UUID videoFileNodeId = item.getFileNodeId();
@@ -359,7 +365,7 @@ public class MoviePlaybackService {
      * 仅转音频（~35MB），视频流播放时从原始文件 copy，不额外占用存储。
      * 在独立写事务中执行，与 playbackPlan 的只读事务隔离。
      */
-    private void autoTriggerAudioTranscode(UUID ownerUserId, PlaybackPlanDto plan) {
+    private void autoTriggerAudioTranscode(UUID requesterUserId, PlaybackPlanDto plan) {
         if (!mediaRuntimeConfigService.transcodeEnabled()) {
             return;
         }
@@ -367,7 +373,7 @@ public class MoviePlaybackService {
             return;
         }
         UUID videoItemId = plan.videoItemId();
-        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
         UUID catalogOwnerId = item.getOwnerUserId();
         boolean hasAudioCache = videoItemRepository
                 .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(catalogOwnerId, videoItemId, "AUDIO_ONLY")
@@ -376,7 +382,8 @@ public class MoviePlaybackService {
             return;
         }
         try {
-            movieTaskService.createTranscodeTask(catalogOwnerId, videoItemId, true);
+            // 任务必须记在请求者名下：传片库所有者会让观看者既看不到也取消不了自己触发的作业。
+            movieTaskService.createTranscodeTask(requesterUserId, videoItemId, true);
             log.info("自动触发音频转码: videoItemId={}", videoItemId);
         } catch (Exception e) {
             log.debug("自动触发音频转码失败（可能已存在任务）: videoItemId={}, message={}",

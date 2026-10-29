@@ -139,7 +139,7 @@ public class FileManagerService {
             // 复制他人上传的共享内容会生成自己名下的副本；没有下载权限时
             // 该路径等同于绕过 CAN_DOWNLOAD 获取原始内容。
             if (!userId.equals(source.getOwnerUserId()) && !sharedSpaceService.canDownload(userId)) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "无权限下载该共享文件");
+                throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无权限下载该共享文件");
             }
         }
 

@@ -135,7 +135,7 @@ class BackdropUploadResourceFilesTest {
                 .thenAnswer(invocation -> storedAssets.stream()
                         .filter(asset -> asset.getSha256().equals(invocation.getArgument(1)))
                         .findFirst());
-        when(fileQueryService.createDownloadUrl(any(), any())).thenAnswer(invocation ->
+        when(fileQueryService.createDownloadUrlAs(any(), any())).thenAnswer(invocation ->
                 new FileDownloadUrlDto(
                         invocation.getArgument(1), "file",
                         "https://signed/" + invocation.getArgument(1),

@@ -460,7 +460,8 @@ public class ContentAssetService {
     private String assetUrl(UUID ownerUserId, ContentAsset asset) {
         if (asset.getFileNodeId() != null) {
             try {
-                FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrl(ownerUserId, asset.getFileNodeId());
+                FileDownloadUrlDto downloadUrl =
+                        fileQueryService.createDownloadUrlAs(ownerUserId, asset.getFileNodeId());
                 return downloadUrl.downloadUrl();
             } catch (RuntimeException ex) {
                 log.debug("MinIO 资源 URL 解析失败，降级到外部 URL: assetId={}, fileNodeId={}, message={}",

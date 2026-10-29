@@ -31,7 +31,7 @@ public class VideoCatalogMappers {
      */
     public String resolveFileUrl(UUID ownerUserId, UUID fileId) {
         try {
-            return fileQueryService.createDownloadUrl(ownerUserId, fileId).downloadUrl();
+            return fileQueryService.createDownloadUrlAs(ownerUserId, fileId).downloadUrl();
         } catch (RuntimeException ex) {
             log.debug("MinIO 资源 URL 解析失败，降级到外部 URL: fileId={}, message={}", fileId, ex.getMessage());
             return null;
@@ -54,7 +54,7 @@ public class VideoCatalogMappers {
             return Map.of();
         }
         try {
-            return fileQueryService.createDownloadUrls(ownerUserId, fileIds).entrySet().stream()
+            return fileQueryService.createDownloadUrlsAs(ownerUserId, fileIds).entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().downloadUrl()));
         } catch (RuntimeException ex) {
             log.debug("批量解析演职员头像失败，降级到外部 URL: count={}, message={}",

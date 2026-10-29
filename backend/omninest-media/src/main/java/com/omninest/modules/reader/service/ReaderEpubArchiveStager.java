@@ -7,6 +7,7 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileQueryService;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import lombok.RequiredArgsConstructor;
@@ -87,6 +88,19 @@ public class ReaderEpubArchiveStager {
          */
         public Path path() {
             return path;
+        }
+
+        /**
+         * 以可关闭流的形式重开暂存归档；解析侧因此不必接触文件路径。
+         *
+         * @return 归档字节流，由调用方负责关闭
+         */
+        public InputStream openStream() {
+            try {
+                return Files.newInputStream(path);
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "暂存归档读取失败");
+            }
         }
 
         /**

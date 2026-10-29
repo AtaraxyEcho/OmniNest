@@ -22,7 +22,15 @@ class ImportFromDeviceButton extends ConsumerStatefulWidget {
 
 class _ImportFromDeviceButtonState
     extends ConsumerState<ImportFromDeviceButton> {
+  bool _busy = false;
+
   Future<void> _pickAndUpload() async {
+    // 文件选择器与空间面板都是异步边界，队列按调用新建作业且没有文件级去重：
+    // 在途期间再点一次会把同一批文件重复入队。
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
     try {
       final picked = await FilePick.pickFiles(
         allowedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
@@ -74,6 +82,10 @@ class _ImportFromDeviceButtonState
           describeUserFacingError(error).displayMessage,
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -95,7 +107,7 @@ class _ImportFromDeviceButtonState
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     return OutlinedButton.icon(
-      onPressed: _pickAndUpload,
+      onPressed: _busy ? null : _pickAndUpload,
       icon: Icon(
         Icons.upload_file_rounded,
         size: AppControlTokens.buttonIconSize,

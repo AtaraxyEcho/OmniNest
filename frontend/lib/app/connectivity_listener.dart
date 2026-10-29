@@ -124,7 +124,9 @@ class ConnectivityListener {
         try {
           await _dispatch(op);
           await _syncQueue.markCompleted(op.id);
-        } on Exception catch (e) {
+        } catch (e) {
+          // 损坏行的 jsonDecode 结果类型不匹配抛的是 Error（TypeError），
+          // 只捕 Exception 会让一条坏数据停掉整批重放而不是跳过它。
           if (kDebugMode) {
             devLog('同步操作失败: id=${op.id}, type=${op.type}, error=$e');
           }

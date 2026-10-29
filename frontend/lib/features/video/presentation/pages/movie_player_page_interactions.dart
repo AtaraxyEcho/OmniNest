@@ -364,6 +364,11 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
   }
 
   void _startHideTimer() {
+    // 面板关闭回调在 pop 之后才触发，此时本页可能已销毁：
+    // 再建定时器就落在 _hideTimer 字段上，dispose 已跑过，没人再取消它。
+    if (!mounted) {
+      return;
+    }
     _hideTimer?.cancel();
     _hideTimer = Timer(_MoviePlayerPageState._hideDelay, () {
       if (mounted && _player.state.playing && !_controlPanelOpen) {

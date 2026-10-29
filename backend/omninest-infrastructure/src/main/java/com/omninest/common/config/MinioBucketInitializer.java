@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,21 +31,24 @@ public class MinioBucketInitializer implements ApplicationRunner {
 
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final Environment environment;
 
     @Override
     public void run(ApplicationArguments args) {
         MinioProperties.Buckets buckets = minioProperties.getBuckets();
+        boolean production = environment != null
+                && environment.acceptsProfiles(Profiles.of("prod"));
         List<String> bucketNames = List.of(
                 buckets.getUserFiles(),
                 buckets.getDerivedAssets(),
                 buckets.getQuarantine()
         );
         for (String bucketName : bucketNames) {
-            ensureBucket(bucketName);
+            ensureBucket(bucketName, production);
         }
     }
 
-    private void ensureBucket(String bucketName) {
+    void ensureBucket(String bucketName, boolean production) {
         try {
             boolean exists = minioClient.bucketExists(
                     BucketExistsArgs.builder().bucket(bucketName).build()
@@ -61,6 +66,12 @@ public class MinioBucketInitializer implements ApplicationRunner {
                             .build()
             );
         } catch (Exception e) {
+            // 托管桶必须私有：MinIO 不可达或策略下发被拒时，生产 profile 不能带着
+            // "桶不存在/策略未验证"的状态起跑，否则健康探针看不出异常而对象可能对外可读。
+            if (production) {
+                throw new IllegalStateException(
+                        "生产环境无法确认 MinIO bucket 及其私有策略，拒绝以未验证状态启动: " + bucketName, e);
+            }
             log.error("检查或创建 MinIO bucket 失败: {}", bucketName, e);
         }
     }

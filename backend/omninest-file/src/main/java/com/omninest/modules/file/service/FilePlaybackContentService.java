@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
 import java.util.Optional;
@@ -24,39 +25,40 @@ public class FilePlaybackContentService {
     private final FileDownloadContentService downloadContentService;
 
     /**
-     * 校验当前用户具备下载权限，供媒体播放在开会话前预检。
+     * 校验当前请求者具备下载权限，供媒体播放在开会话前预检。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      */
     @Transactional(readOnly = true)
-    public void requireDownloadable(UUID userId, UUID fileId) {
-        downloadContentService.requireDownloadable(userId, fileId);
+    public void requireDownloadable(RequestPrincipal requester, UUID fileId) {
+        downloadContentService.requireDownloadable(requester, fileId);
     }
 
     /**
      * 按下载权限打开完整内容流。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      * @return 内容流
      */
     @Transactional(readOnly = true)
-    public FileContentStream openFileContent(UUID userId, UUID fileId) {
-        return downloadContentService.openDownloadableFileContent(userId, fileId);
+    public FileContentStream openFileContent(RequestPrincipal requester, UUID fileId) {
+        return downloadContentService.openDownloadableFileContent(requester, fileId);
     }
 
     /**
      * 按下载权限打开字节区间。
      *
-     * @param userId 当前用户
+     * @param requester 当前请求主体
      * @param fileId 文件节点 ID
      * @param offset 起始字节偏移
      * @param length 读取字节数
      * @return 区间句柄；提供者不支持区间读时为空
      */
     @Transactional(readOnly = true)
-    public Optional<FileContentRange> openFileRange(UUID userId, UUID fileId, long offset, long length) {
-        return downloadContentService.openDownloadableFileRange(userId, fileId, offset, length);
+    public Optional<FileContentRange> openFileRange(
+            RequestPrincipal requester, UUID fileId, long offset, long length) {
+        return downloadContentService.openDownloadableFileRange(requester, fileId, offset, length);
     }
 }

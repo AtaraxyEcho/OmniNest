@@ -24,4 +24,13 @@ public class UserAdminActorVerifier implements AdminActorVerifier, FreshAdminAct
     public void requireFreshAdminActor(UUID actorUserId) {
         adminActorGuard.requireFreshAdminActor(actorUserId);
     }
+
+    @Override
+    public void requireQuotaMutationAuthority(
+            UUID actorUserId,
+            UUID targetUserId,
+            boolean unlimitedRequested
+    ) {
+        adminActorGuard.requireQuotaMutationAuthority(actorUserId, targetUserId, unlimitedRequested);
+    }
 }

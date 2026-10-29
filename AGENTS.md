@@ -96,6 +96,7 @@ deploy/vision-sidecar/ 图像分析侧车服务、模型适配与容器定义
 - 授权使用 `auth_roles`、`auth_permissions`、`auth_user_roles`、`auth_role_permissions`。JWT 写入 roles 与 permissions claims，接口使用 Authority 和权限编码校验。
 - 超级管理员只在数据库不存在 `SUPER_ADMIN` 时通过初始化流程写入；此后认证与授权完全依赖数据库。
 - 文件访问必须校验所有权、空间权限、分享权限或管理员权限。托管 MinIO bucket 必须私有，下载使用短期签名 URL。
+- 内容访问 API 的请求者身份使用 `RequestPrincipal`，只能由 `CurrentUserContext.requirePrincipal()`（会话）或 `RequestPrincipal.credential(AccessGrant)`（已验证的播放会话、内容令牌、分享链接）产生；禁止把资源记录的 `ownerUserId` 或 `catalogOwnerId` 包装成请求主体。后台任务按所有者处理文件只使用 `requireOwnedWritable` 等所有者入口。派生资产（海报、封面、字幕）与分享链接会话只能走 `createDownloadUrlAs` / `createDownloadUrlsAs`，并在注释中说明调用方已完成的授权；该方法按传入身份的下载能力签发，控制器禁止调用。新增 `RequestPrincipal.credential` 调用点必须同时登记到 `ContentAccessPrincipalBoundaryTest` 的允许列表。
 - MIME 判断必须结合魔数。所有逻辑路径必须 normalize 并校验允许前缀。
 - 字幕下载、元数据刮削、URL 预览和外部资源抓取必须完成协议白名单、DNS 后 IP 校验、内网/loopback/link-local/metadata 拒绝，并在重定向后重新校验。
 - 登录、注册、分享访问和高成本任务使用 Redis + Lua 限流；Redis 不可用时按风险 fail-closed 或使用极小本地限额。

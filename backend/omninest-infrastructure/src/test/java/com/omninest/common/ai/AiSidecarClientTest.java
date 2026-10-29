@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
 import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.SsrfSafeUrlValidator;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -75,7 +77,7 @@ class AiSidecarClientTest {
                      "semanticTags":["橘猫"],"ocrText":"发票号码 12345"}
                     """);
         });
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         ContentAnalysis result = client.analyzeContent(
                 imageBytes,
@@ -116,7 +118,7 @@ class AiSidecarClientTest {
             requestBody.set(exchange.getRequestBody().readAllBytes());
             respond(exchange, "{\"schemaVersion\":2,\"observations\":[],\"semanticTags\":[]}");
         });
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         client.analyzeContent(imageBytes, "large.jpg", "AUTO", false, endpoint, 5);
 
@@ -126,7 +128,7 @@ class AiSidecarClientTest {
     @Test
     void shouldRejectRequestWhenSidecarSecretIsMissing() {
         properties.setSecret(" ");
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
@@ -139,7 +141,7 @@ class AiSidecarClientTest {
     @Test
     void shouldRejectImageBeforeSendingWhenBytesExceedLimit() {
         properties.setMaxImageBytes(4);
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -151,7 +153,7 @@ class AiSidecarClientTest {
     void shouldRejectOversizedSidecarResponse() {
         properties.setMaxResponseBytes(8);
         server.createContext("/analyze-content", exchange -> respond(exchange, "{\"schemaVersion\":2}"));
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         assertThrows(
                 IllegalStateException.class,
@@ -166,7 +168,7 @@ class AiSidecarClientTest {
                 422,
                 "{\"detail\":\"missing multipart boundary\"}"
         ));
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
@@ -184,7 +186,7 @@ class AiSidecarClientTest {
             requests.incrementAndGet();
             respond(exchange, "{\"status\":\"ok\",\"pipelineVersion\":\"vision-v6-ram_plus_int8+ppocr-v4-onnx-v1\"}");
         });
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         assertEquals(
                 "vision-v6-ram_plus_int8+ppocr-v4-onnx-v1",
@@ -200,7 +202,7 @@ class AiSidecarClientTest {
     @Test
     void shouldReturnNullWhenPipelineProbeFails() {
         server.createContext("/ready", exchange -> respond(exchange, 503, "{}"));
-        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
 
         assertNull(client.fetchRemotePipelineVersion(endpoint, 5));
     }
@@ -257,6 +259,24 @@ class AiSidecarClientTest {
                 }
             }
         };
+    }
+
+    @Test
+    void rejectsLinkLocalEndpointBeforeAnyRequest() {
+        AiSidecarProperties properties = new AiSidecarProperties();
+        properties.setSecret("test-secret");
+        AiSidecarClient client =
+                new AiSidecarClient(properties, stagingPort(), new SsrfSafeUrlValidator());
+
+        // 169.254/16 是云元数据段：配置被写歪时必须在出网前拒绝，而不是先发一次请求。
+        assertThrows(BusinessException.class, () -> client.analyzeContent(
+                new byte[] {1, 2, 3},
+                "a.jpg",
+                "AUTO",
+                false,
+                "http://169.254.169.254",
+                5
+        ));
     }
 
     private boolean containsSequence(byte[] source, byte[] expected) {

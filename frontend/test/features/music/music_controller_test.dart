@@ -1560,16 +1560,6 @@ class _FakeMusicApi implements MusicApi {
       throw UnimplementedError();
 
   @override
-  Future<MusicPlaybackPosition> lastPosition() async =>
-      const MusicPlaybackPosition(trackId: '', positionSeconds: 0);
-
-  @override
-  Future<void> savePosition({
-    required String trackId,
-    required int positionSeconds,
-  }) async {}
-
-  @override
   Future<MusicPlaybackProgress?> playbackProgress(String playableKey) async =>
       null;
 

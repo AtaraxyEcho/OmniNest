@@ -789,11 +789,19 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (sourceUrl == null || sourceUrl.isEmpty) return;
     try {
       if (kIsWeb) {
-        unawaited(
-          downloadPhotoBatchInBrowser(
-            url: sourceUrl,
-            fileName: photo.downloadFileName,
-          ),
+        // 与详情页同口径：等浏览器下载真的发起再反馈，
+        // unawaited 会让外层 catch 看不见拒绝，用户点了没动静。
+        await downloadPhotoBatchInBrowser(
+          url: sourceUrl,
+          fileName: photo.downloadFileName,
+        );
+        if (!mounted) {
+          return;
+        }
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosDownloadStarted,
+          severity: OmniFeedbackSeverity.success,
         );
         return;
       }

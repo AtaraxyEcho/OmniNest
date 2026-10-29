@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.sync.SyncAction;
@@ -52,6 +53,8 @@ import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.SliceImpl;
 
 /**
@@ -61,6 +64,7 @@ import org.springframework.data.domain.SliceImpl;
  */
 class FileQueryServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal OWNER = RequestPrincipal.credential(() -> OWNER_ID);
     private static final UUID OTHER_OWNER_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
     private final FileNodeRepository fileNodeRepository = Mockito.mock(FileNodeRepository.class);
@@ -114,7 +118,7 @@ class FileQueryServiceTest {
                 shareRecipientAccessService,
                 fileDownloadService,
                 probeService,
-                new MediaProbeSourceStager(access)
+                new MediaProbeSourceStager(access, new TestTempStagingPort())
         );
     }
 
@@ -134,7 +138,8 @@ class FileQueryServiceTest {
                 shareRecipientAccessService,
                 listQueryService,
                 downloadService,
-                new FileRestoreSupport(fileNodeRepository, lookup)
+                new FileRestoreSupport(fileNodeRepository, lookup),
+                new FileSubtreeSoftDeleter(fileNodeRepository, fileIndexSyncService, eventPublisher, lookup)
         );
     }
 
@@ -851,7 +856,7 @@ class FileQueryServiceTest {
         when(objectStorageClient.createDownloadUrl(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(URI.create("http://minio/download"));
 
-        var result = fileQueryService.createDownloadUrl(OWNER_ID, fileId);
+        var result = fileQueryService.createDownloadUrl(OWNER, fileId);
 
         assertThat(result.fileName()).isEqualTo("movie.mp4");
         assertThat(result.downloadUrl()).isEqualTo("http://minio/download");
@@ -919,7 +924,7 @@ class FileQueryServiceTest {
         when(sharedSpaceService.canBrowse(OWNER_ID)).thenReturn(true);
         when(sharedSpaceService.canDownload(OWNER_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> fileQueryService.createReadableDownloadUrl(OWNER_ID, fileId))
+        assertThatThrownBy(() -> fileQueryService.createReadableDownloadUrl(OWNER, fileId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("无权下载该文件");
     }
@@ -953,19 +958,23 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(folderId, fileId)))
                 .thenReturn(List.of(folder, standalone));
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
-                .thenReturn(List.of(child));
+        // 批量软删按"取一批 → 删一批 → 再取"循环：首个批次给一个后代，之后为空。
+        java.util.concurrent.atomic.AtomicBoolean firstBatch =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(fileNodeRepository.findActiveIdsByPathPrefix(any(), any(), any(), any()))
+                .thenAnswer(invocation -> firstBatch.getAndSet(false)
+                        ? new PageImpl<>(List.of(childId))
+                        : Page.empty());
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         var result = fileQueryService.batchDeleteNodes(OWNER_ID, List.of(folderId, fileId));
 
         assertThat(folder.isDeleted()).isTrue();
-        assertThat(child.isDeleted()).isTrue();
         assertThat(standalone.isDeleted()).isTrue();
+        // 后代改为批量软删：不再实体化整棵子树，断言落在 bulk 调用上。
+        verify(fileNodeRepository).softDeleteIds(eq(OWNER_ID), eq(List.of(childId)), any());
         assertThat(folder.getDeletedBy()).isEqualTo(OWNER_ID);
-        assertThat(child.getDeletedBy()).isEqualTo(OWNER_ID);
         assertThat(standalone.getDeletedBy()).isEqualTo(OWNER_ID);
         assertThat(result).hasSize(2);
         assertThat(result).extracting("status").containsOnly("SUCCESS");
@@ -980,6 +989,9 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(fileId)))
                 .thenReturn(List.of(file));
+        when(fileNodeRepository.findActiveIdsByPathPrefix(
+                eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("/data.csv/"), any()))
+                .thenReturn(Page.empty());
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 

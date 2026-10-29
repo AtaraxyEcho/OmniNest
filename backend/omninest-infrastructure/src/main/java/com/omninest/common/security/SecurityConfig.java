@@ -140,7 +140,18 @@ public class SecurityConfig {
                         // CSP 禁止内联脚本后，启动脚本与壳样式必须匿名可达
                         .requestMatchers("/js/**", "/css/**").permitAll()
                         .requestMatchers("/assets/**", "/icons/**", "/canvaskit/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // 认证端点逐个列出：前缀通配会让将来新增的认证端点默认匿名可达。
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/login/2fa",
+                                "/api/v1/auth/login/2fa/setup",
+                                "/api/v1/auth/login/2fa/enable",
+                                "/api/v1/auth/login/2fa/complete",
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/logout"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/setup/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/super-admin").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/2fa/secret").permitAll()

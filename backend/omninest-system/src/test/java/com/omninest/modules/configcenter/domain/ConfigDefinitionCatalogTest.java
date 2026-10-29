@@ -11,14 +11,15 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(80);
+        // 删除 security.rate-limit 与 reader.gbooks/openlib 后：总计 70（GENERAL 31 + INTEGRATION 39）。
+        assertThat(definitions).hasSize(70);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
-                .hasSize(32);
+                .hasSize(31);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
-                .hasSize(48);
+                .hasSize(39);
     }
 
     @Test
@@ -157,9 +158,6 @@ class ConfigDefinitionCatalogTest {
     void restrictedMediaDefinitionsAreMarkedForSuperAdminOnly() {
         assertThat(ConfigDefinitionCatalog.find("media.import.enabled").orElseThrow().superAdminOnly()).isTrue();
         assertThat(ConfigDefinitionCatalog.find("media.tmdb.key")
-                .orElseThrow()
-                .superAdminOnly()).isTrue();
-        assertThat(ConfigDefinitionCatalog.find("reader.gbooks.key")
                 .orElseThrow()
                 .superAdminOnly()).isTrue();
     }

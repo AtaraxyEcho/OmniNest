@@ -21,6 +21,7 @@ import com.omninest.common.ratelimit.TokenBucketRateLimiter;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.upload.FileUploadSettings;
+import com.omninest.modules.file.config.FileUploadLimitsProperties;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FileUploadPart;
@@ -129,6 +130,7 @@ class FileUploadSessionServiceTest {
                 postProcessingTaskService,
                 objectStorageBuckets,
                 uploadSettings,
+                new FileUploadLimitsProperties(),
                 ingressLifecycleService,
                 ingressScanTaskService,
                 configValueProvider,
@@ -571,6 +573,29 @@ class FileUploadSessionServiceTest {
         assertThat(part.getETag()).isEqualTo("etag-1");
         assertThat(part.getStatus()).isEqualTo("COMPLETED");
         assertThat(response.completedPartNumbers()).containsExactly(1);
+    }
+
+    @Test
+    void completePartAutoRenewalExtendsQuotaReservation() {
+        FileUploadSession session = session();
+        FileUploadPart part = part(1, "PENDING", null);
+        Instant originalExpiry = session.getExpiresAt();
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdAndPartNumber(SESSION_ID, 1)).thenReturn(Optional.of(part));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(uploadPartRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.completePart(OWNER_ID, "upload-123", 1, new CompleteFileUploadPartRequest(1, "\"etag-1\""));
+
+        // 会话剩余时间不足 1 小时即自动延期，配额预留必须同步推后：
+        // 预留先到期会被回收成 EXPIRED 并释放额度，之后的结算直接空转，这笔上传量要等对账才回到用量。
+        assertThat(session.getExpiresAt()).isAfter(originalExpiry);
+        verify(storageQuotaService).extendReservation(
+                eq("UPLOAD"), eq(SESSION_ID), eq(session.getExpiresAt()));
     }
 
     @Test

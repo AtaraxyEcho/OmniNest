@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
@@ -32,6 +33,7 @@ class GenericTaskRecoverySchedulerTest {
     private TaskDispatchRepository taskDispatchRepository;
     private TaskDispatchService taskDispatchService;
     private TaskRedispatchService taskRedispatchService;
+    private DistributedLock distributedLock;
     private GenericTaskRecoveryScheduler scheduler;
 
     private static final UUID TASK = UUID.randomUUID();
@@ -44,10 +46,25 @@ class GenericTaskRecoverySchedulerTest {
         taskDispatchRepository = Mockito.mock(TaskDispatchRepository.class);
         taskDispatchService = Mockito.mock(TaskDispatchService.class);
         taskRedispatchService = Mockito.mock(TaskRedispatchService.class);
+        distributedLock = Mockito.mock(DistributedLock.class);
+        // 单实例用例默认总能拿到清扫锁；并发语义由锁本身保证。
+        Mockito.when(distributedLock.tryLock(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(true);
         scheduler = new GenericTaskRecoveryScheduler(
-                taskRecordService, taskDispatchRepository, taskDispatchService, taskRedispatchService);
+                taskRecordService, distributedLock, taskDispatchRepository,
+                taskDispatchService, taskRedispatchService);
         ReflectionTestUtils.setField(scheduler, "staleHeartbeatSeconds", 600L);
         ReflectionTestUtils.setField(scheduler, "stuckDispatchSeconds", 1800L);
+    }
+
+    @Test
+    void sweepSkipsWhenAnotherInstanceHoldsTheLock() {
+        Mockito.when(distributedLock.tryLock(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(false);
+
+        scheduler.sweepStuckTasks();
+
+        // 两个实例同时清扫会重复重投同一任务，而重投不改 retryCount，等于绕开重试上限。
+        Mockito.verify(taskRecordService, Mockito.never())
+                .listStuckTasks(Mockito.any(), Mockito.any(), Mockito.anyInt());
     }
 
     private TaskDispatch dispatch() {

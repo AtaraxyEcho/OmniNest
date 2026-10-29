@@ -2,7 +2,6 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.audit.AdminAuditRecorder;
-import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.sync.SyncAction;
@@ -17,18 +16,15 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserAccountSummary;
 import com.omninest.modules.file.domain.FileNode;
-import com.omninest.modules.file.domain.FileNodePermission;
 import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.domain.SharedSpacePermission.Action;
-import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileMetricsRepository;
-import com.omninest.modules.file.repository.FileNodePermissionRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
-import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.nio.charset.StandardCharsets;
@@ -75,13 +71,12 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final StorageQuotaService storageQuotaService;
     private final UserAccountQuery userAccountQuery;
-    private final ShareLinkRepository shareLinkRepository;
-    private final FileNodePermissionRepository fileNodePermissionRepository;
+    private final SharedSpaceCascadeCleanup cascadeCleanup;
+    private final FileNodeScanQueryRepository fileNodeScanQueryRepository;
     private final ConfigValueProvider configValueProvider;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
-    private final ReadThroughCache readThroughCache;
     private final RuntimeConfigCommand runtimeConfigCommand;
     private final AdminActorVerifier adminActorVerifier;
     private final AdminAuditRecorder adminAuditRecorder;
@@ -264,8 +259,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 .filter(candidate -> !candidate.isDeleted())
                 .map(FileNode::getId)
                 .toList();
-        revokeShareLinksForNodes(subtreeIds);
-        revokeFilePermissionsForNodes(subtreeIds);
+        cascadeCleanup.revokeShareLinks(subtreeIds);
+        cascadeCleanup.revokeFilePermissions(subtreeIds);
         SubtreeStats stats = calculateSubtreeStats(node);
         // 检查共享空间配额
         sharedSpaceQuotaService.checkQuota(stats.totalBytes());
@@ -331,8 +326,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         subtreeIds.add(node.getId());
         // 与个人 → 共享方向对称：换空间后原有公开链接与细粒度授权必须立即失效，
         // 否则访客仍能凭旧 token 读取已迁入个人空间的内容。
-        revokeShareLinksForNodes(subtreeIds);
-        revokeFilePermissionsForNodes(subtreeIds);
+        cascadeCleanup.revokeShareLinks(subtreeIds);
+        cascadeCleanup.revokeFilePermissions(subtreeIds);
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
         // 个人空间文件不需要 uploaded_by
@@ -366,6 +361,17 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
 
         // 先收集所有后代 ID（软删除后查询会返回空）
         String descendantPrefix = node.getNormalizedPath() + "/";
+        // 与迁回个人空间同判据：目录内混有其他成员上传的文件时，非管理级操作者不能借
+        // 父目录上传者身份整体删除，否则等于绕过 CAN_DELETE_ANY 处置他人内容。
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())
+                && !canAccess(operatorId, Action.CAN_DELETE_ANY)
+                && fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                        SpaceType.SHARED,
+                        LikePatterns.escapeSpecials(descendantPrefix),
+                        operatorId
+                ) > 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无法整体删除");
+        }
         List<UUID> allIds = new ArrayList<>(fileNodeRepository.findActiveIdsUnderPathInSpace(
                 SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix)));
         allIds.add(node.getId());
@@ -417,11 +423,6 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
 
-    /**
-     * 校验共享空间操作权限。
-     * 角色信息通过用户查询端口一次性加载。
-     */
-    @Transactional(readOnly = true)
     /**
      * 校验共享空间是否可写入（导入/上传前置）。
      *
@@ -641,31 +642,6 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         }
         if (!changed.isEmpty()) {
             fileNodeRepository.saveAll(changed);
-        }
-    }
-
-    /**
-     * 撤销整棵子树的公开分享链接，并同步清掉读穿透缓存。
-     *
-     * <p>按资源集合一次查询、一次批量停用，避免对子树每个节点各跑一轮全表扫描。</p>
-     */
-    private void revokeShareLinksForNodes(List<UUID> fileNodeIds) {
-        if (fileNodeIds.isEmpty()) {
-            return;
-        }
-        List<ShareLink> active = shareLinkRepository.findByResourceIdInAndDisabledAtIsNull(fileNodeIds);
-        shareLinkRepository.disableByResourceIdIn(fileNodeIds, Instant.now());
-        for (ShareLink link : active) {
-            readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
-        }
-    }
-
-    /**
-     * 撤销整棵子树的细粒度权限（移入共享空间时）。
-     */
-    private void revokeFilePermissionsForNodes(List<UUID> fileNodeIds) {
-        if (!fileNodeIds.isEmpty()) {
-            fileNodePermissionRepository.deleteByFileNodeIdIn(fileNodeIds);
         }
     }
 

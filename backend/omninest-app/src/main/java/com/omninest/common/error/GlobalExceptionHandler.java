@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
         log.warn("业务异常: code={}, message={}", exception.errorCode().getCode(), exception.getMessage());
         HttpStatus status = switch (exception.errorCode()) {
             case UNAUTHORIZED, PASSWORD_INVALID, SHARE_PASSWORD_REQUIRED -> HttpStatus.UNAUTHORIZED;
-            case FORBIDDEN, REGISTRATION_DISABLED -> HttpStatus.FORBIDDEN;
+            case FORBIDDEN, REGISTRATION_DISABLED, DOWNLOAD_PERMISSION_REQUIRED -> HttpStatus.FORBIDDEN;
             case NOT_FOUND, TASK_NOT_FOUND, CONFIG_NOT_FOUND, FILE_NOT_FOUND,
                     MEDIA_NOT_FOUND, BOOK_NOT_FOUND, BACKDROP_NOT_FOUND,
                     CHAPTER_TEXT_UNAVAILABLE -> HttpStatus.NOT_FOUND;

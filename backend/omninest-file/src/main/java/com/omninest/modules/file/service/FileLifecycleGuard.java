@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FilePurgeState;
@@ -47,19 +48,20 @@ public class FileLifecycleGuard {
     }
 
     /**
-     * 校验当前用户可以下载活动文件。
+     * 校验当前请求者可以下载活动文件。
      *
      * <p>预览只需要浏览权限，原始文件下载还必须满足共享空间 {@code CAN_DOWNLOAD}
      * 或定向分享接收关系。直接流式输出原文件的接口必须走本方法，不能只调用
-     * {@link #requireReadable}。</p>
+     * {@link #requireReadable}。后台任务按所有者处理文件使用
+     * {@link #requireOwnedWritable}，不构造请求主体。</p>
      *
-     * @param userId 当前用户 ID
+     * @param requester 当前请求主体
      * @param fileNodeId 文件节点 ID
      * @return 文件描述符
      */
     @Transactional(readOnly = true)
-    public FileDescriptor requireDownloadable(UUID userId, UUID fileNodeId) {
-        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileNodeId);
+    public FileDescriptor requireDownloadable(RequestPrincipal requester, UUID fileNodeId) {
+        FileNode node = fileDownloadService.requireDownloadableNode(requester, fileNodeId);
         requireIdle(node);
         return toDescriptor(node);
     }

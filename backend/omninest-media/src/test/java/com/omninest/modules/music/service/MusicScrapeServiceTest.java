@@ -168,7 +168,7 @@ class MusicScrapeServiceTest {
         doNothing().when(catalogService).refreshStatistics(any(), any(), any(), any());
         UUID coverFileId = UUID.fromString("60000000-0000-0000-0000-000000000001");
         when(derivedAssetStorageService.storeRemote(any())).thenReturn(coverFileId);
-        when(fileQueryService.createDownloadUrl(OWNER_ID, coverFileId))
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, coverFileId))
                 .thenReturn(new FileDownloadUrlDto(
                         coverFileId,
                         "cover.jpg",

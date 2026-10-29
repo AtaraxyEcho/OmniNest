@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
@@ -47,6 +48,9 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
  */
 class MoviePlaybackServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID VIEWER_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal REQUESTER = RequestPrincipal.credential(() -> OWNER_ID);
+    private static final RequestPrincipal VIEWER = RequestPrincipal.credential(() -> VIEWER_ID);
     private static final UUID MOVIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID FILE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID SUBTITLE_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
@@ -141,19 +145,97 @@ class MoviePlaybackServiceTest {
                 .thenReturn(Optional.of(progress));
         when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrl(REQUESTER, FILE_ID)).thenReturn(new FileDownloadUrlDto(
                 FILE_ID,
                 "inception.mp4",
                 "http://localhost:9000/video.mp4",
                 Instant.parse("2026-05-21T11:00:00Z")
         ));
 
-        var plan = playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
+        var plan = playbackService.playbackPlan(REQUESTER, MOVIE_ID);
 
         assertThat(plan.mode()).isEqualTo("DIRECT_PLAY");
         assertThat(plan.url()).isEqualTo("http://localhost:9000/video.mp4");
         assertThat(plan.positionSeconds()).isEqualTo(600);
         assertThat(plan.container()).isEqualTo("mp4");
+    }
+
+    @Test
+    void playbackPlanSignsOriginalAsRequesterSoBrowseOnlyMemberIsRefused() {
+        MediaVideoItem movie = sharedMovieOwnedBySomeoneElse();
+        stubTransaction();
+        when(mediaContentAccessService.requireReadableVideo(VIEWER_ID, MOVIE_ID)).thenReturn(movie);
+        when(mediaPlaybackTokenService.issue(VIEWER_ID, MOVIE_ID)).thenReturn(
+                new MediaPlaybackTokenService.IssuedMediaToken("media-token", Instant.parse("2026-05-21T11:00:00Z")));
+        when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
+                .thenReturn(List.of());
+        // File 模块对无 CAN_DOWNLOAD 的共享成员按请求者拒绝；播放计划不得改用条目所有者绕开这一判定。
+        when(fileQueryService.createDownloadUrl(VIEWER, FILE_ID))
+                .thenThrow(new BusinessException(
+                        ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限"));
+
+        assertThatThrownBy(() -> playbackService.playbackPlan(VIEWER, MOVIE_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED);
+        verify(fileQueryService, never())
+                .createDownloadUrl(RequestPrincipal.credential(() -> OWNER_ID), FILE_ID);
+    }
+
+    @Test
+    void playbackPlanSignsOriginalAsRequesterForDownloadCapableMember() {
+        MediaVideoItem movie = sharedMovieOwnedBySomeoneElse();
+        stubTransaction();
+        when(mediaContentAccessService.requireReadableVideo(VIEWER_ID, MOVIE_ID)).thenReturn(movie);
+        when(mediaPlaybackTokenService.issue(VIEWER_ID, MOVIE_ID)).thenReturn(
+                new MediaPlaybackTokenService.IssuedMediaToken("media-token", Instant.parse("2026-05-21T11:00:00Z")));
+        when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrl(VIEWER, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+                FILE_ID, "inception.mp4", "http://localhost:9000/shared.mp4", Instant.parse("2026-05-21T11:00:00Z")));
+
+        var plan = playbackService.playbackPlan(VIEWER, MOVIE_ID);
+
+        assertThat(plan.url()).isEqualTo("http://localhost:9000/shared.mp4");
+        verify(fileQueryService).createDownloadUrl(VIEWER, FILE_ID);
+    }
+
+    private void stubTransaction() {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
+
+    @Test
+    void autoTriggeredTranscodeTaskIsOwnedByRequester() {
+        MediaVideoItem movie = sharedMovieOwnedBySomeoneElse();
+        movie.setContainerFormat("avi");
+        stubTransaction();
+        when(mediaRuntimeConfigService.transcodeEnabled()).thenReturn(true);
+        when(mediaContentAccessService.requireReadableVideo(VIEWER_ID, MOVIE_ID)).thenReturn(movie);
+        when(mediaPlaybackTokenService.issue(VIEWER_ID, MOVIE_ID)).thenReturn(
+                new MediaPlaybackTokenService.IssuedMediaToken("media-token", Instant.parse("2026-05-21T11:00:00Z")));
+        when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrl(VIEWER, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+                FILE_ID, "film.avi", "http://localhost:9000/film.avi", Instant.parse("2026-05-21T11:00:00Z")));
+        when(videoItemRepository.findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
+                OWNER_ID, MOVIE_ID, "AUDIO_ONLY")).thenReturn(Optional.empty());
+
+        playbackService.playbackPlan(VIEWER, MOVIE_ID);
+
+        // 任务记在请求者名下：记成片库所有者会让观看者既看不到也取消不了自己触发的作业。
+        verify(movieTaskService).createTranscodeTask(VIEWER_ID, MOVIE_ID, true);
+    }
+
+    private MediaVideoItem sharedMovieOwnedBySomeoneElse() {
+        MediaVideoItem movie = new MediaVideoItem();
+        movie.setId(MOVIE_ID);
+        movie.setOwnerUserId(OWNER_ID);
+        movie.setFileNodeId(FILE_ID);
+        movie.setContainerFormat("mp4");
+        movie.setVideoCodec("h264");
+        movie.setAudioCodec("aac");
+        movie.setMetadataStatus("MATCHED");
+        return movie;
     }
 
     @Test
@@ -178,14 +260,14 @@ class MoviePlaybackServiceTest {
                 .thenReturn(Optional.empty());
         when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrl(REQUESTER, FILE_ID)).thenReturn(new FileDownloadUrlDto(
                 FILE_ID,
                 "night.webm",
                 "http://localhost:9000/night.webm",
                 Instant.parse("2026-05-21T11:00:00Z")
         ));
 
-        var plan = playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
+        var plan = playbackService.playbackPlan(REQUESTER, MOVIE_ID);
 
         assertThat(plan.mode())
                 .as("matroska 容器中 av1+opus 属 WebM 家族，应直接播放")
@@ -217,7 +299,7 @@ class MoviePlaybackServiceTest {
                 .thenReturn(Optional.empty());
         when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrl(REQUESTER, FILE_ID)).thenReturn(new FileDownloadUrlDto(
                 FILE_ID,
                 "movie.mp4",
                 "http://localhost:9000/movie.mp4",
@@ -225,7 +307,7 @@ class MoviePlaybackServiceTest {
         ));
         when(mediaRuntimeConfigService.transcodeEnabled()).thenReturn(false);
 
-        playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
+        playbackService.playbackPlan(REQUESTER, MOVIE_ID);
 
         verify(movieTaskService, never()).createTranscodeTask(any(), any(), anyBoolean());
     }

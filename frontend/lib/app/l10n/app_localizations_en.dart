@@ -11419,6 +11419,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorForbidden => 'Not allowed to perform this action';
 
   @override
+  String get errorDownloadPermissionRequired =>
+      'Downloading this file requires the download permission in the shared space';
+
+  @override
   String get filesOpListVersions => 'View versions';
 
   @override
@@ -11934,6 +11938,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readerAnnotationSaveFailed =>
       'Failed to save the annotation, please retry';
+
+  @override
+  String get readerAnnotationDeleteFailed =>
+      'Failed to delete the annotation, please retry';
 
   @override
   String get musicFavoriteToggleFailed =>

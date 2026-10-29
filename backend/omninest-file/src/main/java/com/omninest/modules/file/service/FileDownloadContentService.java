@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
@@ -39,17 +40,30 @@ class FileDownloadContentService {
     private final MediaProbeSourceStager mediaProbeSourceStager;
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
-        return fileDownloadService.createDownloadUrl(ownerUserId, fileId);
+    public FileDownloadUrlDto createDownloadUrl(RequestPrincipal requester, UUID fileId) {
+        return fileDownloadService.createDownloadUrl(requester, fileId);
     }
 
     @Transactional(readOnly = true)
-    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
-        return fileDownloadService.createDownloadUrls(ownerUserId, fileIds);
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(
+            RequestPrincipal requester, Collection<UUID> fileIds) {
+        return fileDownloadService.createDownloadUrls(requester, fileIds);
     }
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createReadableDownloadUrl(UUID userId, UUID fileId) {
+    public FileDownloadUrlDto createDownloadUrlAs(UUID actorUserId, UUID fileId) {
+        return fileDownloadService.createDownloadUrlAs(actorUserId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrlsAs(
+            UUID actorUserId, Collection<UUID> fileIds) {
+        return fileDownloadService.createDownloadUrlsAs(actorUserId, fileIds);
+    }
+
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createReadableDownloadUrl(RequestPrincipal requester, UUID fileId) {
+        UUID userId = requester.userId();
         FileNode node = findReadableFileNode(userId, fileId);
         if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹不能直接下载");
@@ -59,7 +73,7 @@ class FileDownloadContentService {
         if (node.getSpaceType() == SpaceType.SHARED
                 && !node.getOwnerUserId().equals(userId)
                 && !sharedSpaceService.canDownload(userId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权下载该文件");
+            throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无权下载该文件");
         }
         return fileContentAccessService.createDownloadUrl(node);
     }
@@ -100,20 +114,20 @@ class FileDownloadContentService {
     }
 
     @Transactional(readOnly = true)
-    public void requireDownloadable(UUID userId, UUID fileId) {
-        fileDownloadService.requireDownloadableNode(userId, fileId);
+    public void requireDownloadable(RequestPrincipal requester, UUID fileId) {
+        fileDownloadService.requireDownloadableNode(requester, fileId);
     }
 
     @Transactional(readOnly = true)
-    public FileContentStream openDownloadableFileContent(UUID userId, UUID fileId) {
-        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileId);
+    public FileContentStream openDownloadableFileContent(RequestPrincipal requester, UUID fileId) {
+        FileNode node = fileDownloadService.requireDownloadableNode(requester, fileId);
         return fileContentAccessService.open(node);
     }
 
     @Transactional(readOnly = true)
     public Optional<FileContentRange> openDownloadableFileRange(
-            UUID userId, UUID fileId, long offset, long length) {
-        FileNode node = fileDownloadService.requireDownloadableNode(userId, fileId);
+            RequestPrincipal requester, UUID fileId, long offset, long length) {
+        FileNode node = fileDownloadService.requireDownloadableNode(requester, fileId);
         return fileContentAccessService.openRange(node, offset, length);
     }
 
@@ -129,8 +143,8 @@ class FileDownloadContentService {
     }
 
     @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
-        return fileDownloadService.createDownloadUrlForShared(userId, fileId);
+    public FileDownloadUrlDto createDownloadUrlForShared(RequestPrincipal requester, UUID fileId) {
+        return fileDownloadService.createDownloadUrlForShared(requester, fileId);
     }
 
     public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {

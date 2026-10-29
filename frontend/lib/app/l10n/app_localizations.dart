@@ -20740,6 +20740,12 @@ abstract class AppLocalizations {
   /// **'Not allowed to perform this action'**
   String get errorForbidden;
 
+  /// No description provided for @errorDownloadPermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading this file requires the download permission in the shared space'**
+  String get errorDownloadPermissionRequired;
+
   /// No description provided for @filesOpListVersions.
   ///
   /// In en, this message translates to:
@@ -21681,6 +21687,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to save the annotation, please retry'**
   String get readerAnnotationSaveFailed;
+
+  /// No description provided for @readerAnnotationDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to delete the annotation, please retry'**
+  String get readerAnnotationDeleteFailed;
 
   /// No description provided for @musicFavoriteToggleFailed.
   ///

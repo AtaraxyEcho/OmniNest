@@ -168,6 +168,29 @@ public interface FileNodeScanQueryRepository extends Repository<FileNode, UUID> 
             @Param("categories") Collection<String> categories);
 
     /**
+     * 统计指定空间与路径前缀下不属于该操作者的活动节点数。
+     *
+     * <p>归属口径与按上传者分组的失效投递一致：{@code uploaded_by} 缺失时回落到
+     * {@code owner_user_id}。共享空间目录的整体删除据此判定是否混入其他成员的内容。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的字面量路径前缀（含结尾分隔符）
+     * @param operatorId 操作者用户 ID
+     * @return 归属非该操作者的活动节点数
+     */
+    @Query("""
+            SELECT count(n) FROM FileNode n
+            WHERE n.spaceType = :spaceType
+              AND n.deleted = false
+              AND n.normalizedPath LIKE CONCAT(:prefix, '%') escape '\\'
+              AND coalesce(n.uploadedBy, n.ownerUserId) <> :operatorId
+            """)
+    long countActiveForeignDescendantsByPathPrefix(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
+            @Param("operatorId") UUID operatorId);
+
+    /**
      * 查询用户自有的 {@code .lrc} 歌词文件。
      *
      * <p>歌词无业务分类，单独查询；数量级远小于音频，可与分页音频流并行使用。</p>

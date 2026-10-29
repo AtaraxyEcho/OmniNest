@@ -34,6 +34,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 配置中心应用服务单元测试。
@@ -149,6 +151,32 @@ class ConfigCenterServiceTest {
 
         verify(configEntryRepository, never()).save(any(ConfigEntry.class));
         verify(runtimeConfigCache).evict("auth.two-factor.required-roles");
+    }
+
+    @Test
+    void updateDefersRefreshEventUntilTransactionCommit() {
+        ConfigEntry entry = entry("share.max-bytes", "120", "NUMBER", "storage", "HOT");
+        when(configEntryRepository.findByConfigKey("share.max-bytes")).thenReturn(Optional.of(entry));
+        when(configEntryRepository.save(any(ConfigEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.update("share.max-bytes", "180", "调整共享空间容量", UUID.randomUUID());
+
+            verify(publisher, never()).publishFanout(any(), any());
+            verify(runtimeConfigCache, never()).evict("share.max-bytes");
+
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertThat(synchronizations).hasSize(1);
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+
+            verify(publisher).publishFanout(
+                    ArgumentMatchers.eq(QueueNames.CONFIG_REFRESH_EXCHANGE), any());
+            verify(runtimeConfigCache).evict("share.max-bytes");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

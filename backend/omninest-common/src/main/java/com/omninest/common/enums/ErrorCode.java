@@ -45,6 +45,7 @@ public enum ErrorCode {
     FILE_LIFECYCLE_CONFLICT(4007, "文件正在执行生命周期操作"),
     FILE_OBJECT_MISSING(4008, "文件对象缺失"),
     FILE_SECURITY_REJECTED(4009, "文件安全扫描未通过"),
+    DOWNLOAD_PERMISSION_REQUIRED(4010, "需要下载权限"),
 
     // ==================== 媒体 5xxx ====================
     MEDIA_NOT_FOUND(5001, "媒体资源不存在"),

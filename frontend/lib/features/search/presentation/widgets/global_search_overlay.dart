@@ -9,6 +9,7 @@ import 'package:omninest/app/router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/command_palette_colors.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -113,8 +114,11 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   }
 
   Future<void> _loadRecentQueries() async {
+    // 存储键要跨异步边界使用，必须在 await 之前取好：getter 内的 ref.read
+    // 若排在 await 之后，面板已关闭时就会命中已卸载的 Widget。
+    final storageKey = _recentQueriesKey;
     final preferences = await SharedPreferences.getInstance();
-    final saved = preferences.getStringList(_recentQueriesKey) ?? const [];
+    final saved = preferences.getStringList(storageKey) ?? const [];
     if (!mounted) {
       return;
     }
@@ -148,6 +152,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     if (q.isEmpty) {
       return;
     }
+    // 命中跳转先记历史再 pop 本面板，写盘回调可能落在卸载之后：
+    // 存储键与待写列表都在 pop 前定格，回调只碰 SharedPreferences，不碰 ref/context。
+    final storageKey = _recentQueriesKey;
     _recentQueries
       ..remove(q)
       ..insert(0, q);
@@ -155,11 +162,20 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       _recentQueries.removeRange(8, _recentQueries.length);
     }
     unawaited(
-      SharedPreferences.getInstance().then(
-        (preferences) =>
-            preferences.setStringList(_recentQueriesKey, _recentQueries),
-      ),
+      _persistRecentQueries(storageKey, List<String>.from(_recentQueries)),
     );
+  }
+
+  Future<void> _persistRecentQueries(
+    String storageKey,
+    List<String> snapshot,
+  ) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setStringList(storageKey, snapshot);
+    } on Exception catch (error) {
+      devLog('搜索历史写入失败: ${error.runtimeType}');
+    }
   }
 
   /// 激活一条命中：历史词回填搜索框，其它目标先补齐上下文再跳转。
