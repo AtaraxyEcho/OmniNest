@@ -493,48 +493,55 @@ class _ConfigHistoryDialog extends ConsumerWidget {
               child: Text(l10n.adminNoConfigHistory),
             );
           }
-          return ListView.builder(
-            shrinkWrap: true,
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return ListTile(
-                title: Text(
-                  '${item.oldValue ?? l10n.adminNotSet}'
-                  ' → ${item.newValue ?? l10n.adminNotSet}',
-                  style: const TextStyle(fontSize: AppTypography.bodyMedium),
-                ),
-                subtitle: Text(
-                  '${item.changeReason ?? l10n.adminNoReason}'
-                  ' · ${item.createdAt}',
-                  style: TextStyle(
-                    fontSize: AppTypography.bodySmall,
-                    color: adminColors.onSurfaceVariant,
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return ListTile(
+                  title: Text(
+                    '${item.oldValue ?? l10n.adminNotSet}'
+                    ' → ${item.newValue ?? l10n.adminNotSet}',
+                    style: const TextStyle(fontSize: AppTypography.bodyMedium),
                   ),
-                ),
-                trailing: TextButton(
-                  onPressed: () async {
-                    try {
-                      await ref
-                          .read(adminOperationsActionsProvider)
-                          .rollbackConfig(item.id);
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
+                  subtitle: Text(
+                    '${item.changeReason ?? l10n.adminNoReason}'
+                    ' · ${item.createdAt}',
+                    style: TextStyle(
+                      fontSize: AppTypography.bodySmall,
+                      color: adminColors.onSurfaceVariant,
+                    ),
+                  ),
+                  trailing: TextButton(
+                    onPressed: () async {
+                      try {
+                        await ref
+                            .read(adminOperationsActionsProvider)
+                            .rollbackConfig(item.id);
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      } on Exception catch (e) {
+                        if (context.mounted) {
+                          showOmniFeedback(
+                            context,
+                            l10n.adminLoadFailed(
+                              describeUserFacingError(e, l10n: l10n).message,
+                            ),
+                            severity: OmniFeedbackSeverity.error,
+                          );
+                        }
                       }
-                    } on Exception catch (e) {
-                      if (context.mounted) {
-                        showOmniFeedback(
-                          context,
-                          l10n.adminLoadFailed('$e'),
-                          severity: OmniFeedbackSeverity.error,
-                        );
-                      }
-                    }
-                  },
-                  child: Text(l10n.adminRollback),
-                ),
-              );
-            },
+                    },
+                    child: Text(l10n.adminRollback),
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

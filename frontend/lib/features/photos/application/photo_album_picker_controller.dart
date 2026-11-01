@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -43,7 +44,11 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
   int _generation = 0;
 
   @override
-  PhotoAlbumPickerState build() => const PhotoAlbumPickerState();
+  PhotoAlbumPickerState build() {
+    // 候选照片与选中项属于上一账号的会话，换号必须自行清空。
+    ref.watch(sessionEpochProvider);
+    return const PhotoAlbumPickerState();
+  }
 
   /// 打开指定相册的选择器：复位选择并拉取候选首页。
   Future<void> open(String albumId) async {

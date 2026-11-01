@@ -61,7 +61,7 @@ public class FileFavoriteService {
                 .map(nodesById::get)
                 .filter(Objects::nonNull)
                 .toList();
-        List<FileNodeDto> items = fileNodeSupport.toNodeDtos(nodes);
+        List<FileNodeDto> items = fileNodeSupport.toNodeDtos(nodes, ownerUserId);
         return new PageImpl<>(items, pageable, favoriteNodeIds.getTotalElements());
     }
 
@@ -139,7 +139,7 @@ public class FileFavoriteService {
             favoriteRepository.saveAll(created);
             syncEventWriter.recordFileLibraryInvalidation(ownerUserId, created.size());
         }
-        return fileNodeSupport.toNodeDtos(nodes);
+        return fileNodeSupport.toNodeDtos(nodes, ownerUserId);
     }
 
     /**

@@ -1,9 +1,8 @@
 package com.omninest.modules.photos.service;
 
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import javax.imageio.ImageIO;
@@ -25,6 +24,7 @@ public class PhotoRawPreviewService {
 
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final PhotoInputGuard inputGuard;
+    private final TempStagingPort tempStagingPort;
 
     private static final String RESOURCE_TYPE = "PHOTO_ITEM";
     private static final String ASSET_TYPE = "RAW_PREVIEW";
@@ -47,7 +47,8 @@ public class PhotoRawPreviewService {
                 return null;
             }
             inputGuard.validateDimensions(image.getWidth(), image.getHeight());
-            previewFile = Files.createTempFile("omninest-photo-raw-preview-", ".jpg");
+            previewFile = tempStagingPort.createTempFile(
+                    "photo-raw-preview", "omninest-photo-raw-preview-", ".jpg");
             if (!ImageIO.write(image, "jpg", previewFile.toFile())) {
                 return null;
             }
@@ -70,13 +71,6 @@ public class PhotoRawPreviewService {
     }
 
     private void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException exception) {
-            log.debug("RAW 预览临时文件清理失败: errorType={}", exception.getClass().getSimpleName());
-        }
+        tempStagingPort.deleteQuietly(file);
     }
 }

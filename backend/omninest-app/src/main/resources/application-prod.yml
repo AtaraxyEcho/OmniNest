@@ -46,7 +46,8 @@ music:
 photo:
   ai:
     endpoint: ${OMNINEST_PHOTO_AI_ENDPOINT:http://localhost:8090}
-    secret: ${OMNINEST_AI_SIDECAR_SECRET:change-me-ai-sidecar-random-secret}
+    # 图像分析侧车是可选组件：留空表示不启用，显式配置后才校验密钥强度。
+    secret: ${OMNINEST_AI_SIDECAR_SECRET:}
     timeout-seconds: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:30}
     max-image-bytes: ${OMNINEST_PHOTO_AI_MAX_IMAGE_BYTES:67108864}
     max-response-bytes: ${OMNINEST_PHOTO_AI_MAX_RESPONSE_BYTES:1048576}

@@ -457,11 +457,11 @@ class AuditQueryContractIT {
                 VALUES (?, ?)
                 """, owner, deletedId);
 
-        List<FileNode> recent = accessRecordRepository.findRecentNodes(
+        var recent = accessRecordRepository.findRecentNodes(
                 owner, SpaceType.PERSONAL, PageRequest.of(0, 50));
 
         // 共享空间访问不得挤占个人最近窗口，回收站节点也不能出现在结果里。
-        assertThat(recent).extracting(FileNode::getId).containsExactly(personalId);
+        assertThat(recent.getContent()).extracting(FileNode::getId).containsExactly(personalId);
     }
 
     @Test

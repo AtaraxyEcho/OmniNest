@@ -11,6 +11,9 @@ const _retryableStatusCodes = {408, 500, 502, 503, 504};
 /// 幂等 HTTP 方法集合，这些方法默认允许基于 HTTP 状态码重试。
 const _idempotentMethods = {'GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'};
 
+/// 只读 HTTP 方法：读超时说明请求已经到达服务端，只有这类方法值得自动重发。
+const _readOnlyMethods = {'GET', 'HEAD', 'OPTIONS'};
+
 /// 请求级开关：置为 `true` 时跳过"服务端错误重试"，只保留网络层重试。
 ///
 /// 用于用户已确认的一次性动作（如断开平台连接）：这类请求服务端若返回 5xx，
@@ -66,6 +69,12 @@ class RetryInterceptor extends Interceptor {
 
     await Future<void>.delayed(delay);
 
+    // 退避期间页面可能已离开并取消请求：取消后不得再发一次。
+    if (err.requestOptions.cancelToken?.isCancelled ?? false) {
+      handler.next(err);
+      return;
+    }
+
     // 递增重试计数
     err.requestOptions.extra['retryCount'] = retryCount + 1;
 
@@ -107,6 +116,10 @@ class RetryInterceptor extends Interceptor {
       return;
     }
     await Future<void>.delayed(baseDelay * (1 << retryCount));
+    if (request.cancelToken?.isCancelled ?? false) {
+      handler.next(response);
+      return;
+    }
     request.extra['retryCount'] = retryCount + 1;
     try {
       final dio = _dio;
@@ -148,10 +161,21 @@ class RetryInterceptor extends Interceptor {
   }
 
   /// 判断是否为可重试的网络错误类型。
+  ///
+  /// 读超时（receiveTimeout）只对只读方法或显式携带幂等键的请求重试：
+  /// 30 秒读超时叠两次退避会让写操作阻塞 90 秒以上，而写请求在服务端可能
+  /// 仍在执行，重复发送的收益远低于等待放大带来的体感损失。
   bool _isRetryableErrorType(DioException err) {
-    return err.type == DioExceptionType.connectionTimeout ||
-        err.type == DioExceptionType.receiveTimeout ||
-        err.type == DioExceptionType.connectionError;
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.connectionError) {
+      return true;
+    }
+    if (err.type != DioExceptionType.receiveTimeout) {
+      return false;
+    }
+    final request = err.requestOptions;
+    return _readOnlyMethods.contains(request.method.toUpperCase()) ||
+        _hasIdempotencyKey(request);
   }
 
   /// 判断 HTTP 方法是否幂等。
@@ -168,6 +192,10 @@ class RetryInterceptor extends Interceptor {
     if (_isIdempotent(options.method)) {
       return true;
     }
+    return _hasIdempotencyKey(options);
+  }
+
+  bool _hasIdempotencyKey(RequestOptions options) {
     final idempotencyKey =
         options.headers.entries
             .where((entry) => entry.key.toLowerCase() == 'idempotency-key')

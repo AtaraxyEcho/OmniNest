@@ -1,6 +1,7 @@
 package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuthUser;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,22 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     @EntityGraph(attributePaths = {"roles", "roles.permissions"})
     @Query("select user from AuthUser user where user.id = :id")
     Optional<AuthUser> findWithRolesAndPermissionsById(@Param("id") UUID id);
+
+    /**
+     * 只更新最近登录时间。
+     *
+     * <p>登录流程不再把游离用户实体整行 merge 回库：整行写回会用读取时的快照覆盖
+     * 期间被管理员修改的状态、配额等列。</p>
+     *
+     * @param userId 用户标识
+     * @param lastLoginAt 登录时间
+     * @return 影响行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update AuthUser user set user.lastLoginAt = :lastLoginAt where user.id = :userId")
+    int updateLastLoginAt(
+            @Param("userId") UUID userId,
+            @Param("lastLoginAt") Instant lastLoginAt);
 
     @Query("""
             select user from AuthUser user

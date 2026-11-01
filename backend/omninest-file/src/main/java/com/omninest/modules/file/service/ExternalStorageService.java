@@ -128,13 +128,15 @@ public class ExternalStorageService {
             int safeSize = Math.max(size, 1);
             int from = (int) Math.min((long) safePage * safeSize, total);
             int to = (int) Math.min((long) from + safeSize, total);
+            // 无分页入口会传入 Integer.MAX_VALUE：32 位下 total + safeSize - 1 会溢出成负数。
+            int totalPages = total == 0 ? 0 : (int) (((long) total + safeSize - 1) / safeSize);
             return new ExternalFileListDto(
                     items.subList(from, to),
                     path,
                     safePage,
                     safeSize,
                     total,
-                    (total + safeSize - 1) / safeSize
+                    totalPages
             );
         } catch (IllegalStateException e) {
             String message = e.getMessage();

@@ -119,22 +119,18 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       _importTaskPollTimer?.cancel();
       _importTaskPollTimer = null;
     });
-    final filesPage = await _repository.listFilesPage();
-    final stats = await _repository.storageStats();
-    List<FileUploadQueueItem> uploadQueue = const [];
-    try {
-      uploadQueue = await _repository.listUploadQueue();
-    } on Exception {
-      // 上传队列获取失败不影响主初始化
-    }
-    List<FileNode> favoriteFiles = const [];
-    try {
-      // 预载收藏列表：任意分区的行内星标都需要已收藏状态。
-      favoriteFiles = await _repository.listFavoriteFiles();
-    } on Object {
-      // 收藏列表获取失败（含测试假体 UnimplementedError 属 Error 非
-      // Exception）不影响主初始化。
-    }
+    // 四个初始化请求互不依赖：串行 await 会把首屏等待累加成四倍请求 RTT。
+    final results = await Future.wait<Object?>([
+      _repository.listFilesPage(),
+      _repository.storageStats(),
+      // 上传队列与收藏列表失败不影响主初始化。
+      _optionalOr(_repository.listUploadQueue, const <FileUploadQueueItem>[]),
+      _optionalOr(_repository.listFavoriteFiles, const <FileNode>[]),
+    ]);
+    final filesPage = results[0]! as FileNodePage;
+    final stats = results[1]! as FileStorageStats;
+    final uploadQueue = results[2]! as List<FileUploadQueueItem>;
+    final favoriteFiles = results[3]! as List<FileNode>;
     return FileBrowserState(
       files: filesPage.items,
       recycleBin: const [],
@@ -146,6 +142,15 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       fileTotalElements: filesPage.totalElements,
       fileTotalPages: filesPage.totalPages,
     );
+  }
+
+  /// 可选初始化请求：失败（含测试假体的 UnimplementedError）时回落默认值。
+  Future<T> _optionalOr<T>(Future<T> Function() call, T fallback) async {
+    try {
+      return await call();
+    } on Object {
+      return fallback;
+    }
   }
 
   void clearActionError() {

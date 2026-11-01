@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -180,6 +181,17 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
      */
     @Override
     public <T> T getOrLoad(String key, Duration ttl, Supplier<T> loader, Class<T> type) {
+        return getOrLoadCachingWhen(key, ttl, loader, type, value -> true);
+    }
+
+    @Override
+    public <T> T getOrLoadCachingWhen(
+            String key,
+            Duration ttl,
+            Supplier<T> loader,
+            Class<T> type,
+            Predicate<T> cacheable
+    ) {
         try {
             String cached = get(key);
             if (cached != null) {
@@ -193,7 +205,7 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
             log.warn("读取缓存失败: key={}", key, ex);
         }
 
-        return loadOnce(key, ttl, loader, type);
+        return loadOnce(key, ttl, loader, type, cacheable);
     }
 
     /**
@@ -204,7 +216,13 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
      * 直接等待在途结果。在途异常按原运行时异常抛给等待方，保持调用方的错误映射不变；
      * 加载失败不写缓存。
      */
-    private <T> T loadOnce(String key, Duration ttl, Supplier<T> loader, Class<T> type) {
+    private <T> T loadOnce(
+            String key,
+            Duration ttl,
+            Supplier<T> loader,
+            Class<T> type,
+            Predicate<T> cacheable
+    ) {
         CompletableFuture<T> future = new CompletableFuture<>();
         CompletableFuture<?> inFlight = loading.putIfAbsent(key, future);
         if (inFlight != null) {
@@ -214,7 +232,7 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
         T value;
         try {
             value = loader.get();
-            if (value != null) {
+            if (value != null && cacheable.test(value)) {
                 try {
                     set(key, JsonSupport.toJson(value), ttl);
                 } catch (Exception ex) {

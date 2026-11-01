@@ -7,6 +7,7 @@ import com.omninest.common.util.LikePatterns;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.security.RequestPrincipal;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -121,6 +122,7 @@ public class ReaderItemService {
     private final MediaSyncEventService syncEventService;
     private final PhotoInputGuard photoInputGuard;
     private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
+    private final TempStagingPort tempStagingPort;
 
     /**
      * 列出阅读条目，支持按类型、内容类型和关键词过滤。
@@ -131,6 +133,7 @@ public class ReaderItemService {
      * @param query       标题关键词，可为 null
      * @return 条目 DTO 列表
      */
+    @Transactional(readOnly = true)
     public Page<ReaderItemDto> listItemsPage(
             UUID ownerUserId, String itemType, String contentKind, String query,
             boolean bookshelfOnly, int page, int size) {
@@ -640,7 +643,7 @@ public class ReaderItemService {
         UUID previousCoverFileId = unreferencedCoverFileId(item);
         Path staged = null;
         try {
-            staged = Files.createTempFile("omninest-reader-cover-", ".upload");
+            staged = tempStagingPort.createTempFile("reader-cover", "omninest-reader-cover-", ".upload");
             file.transferTo(staged);
             photoInputGuard.inspectForDecode(staged, file.getOriginalFilename());
             String extension = getExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
@@ -668,13 +671,7 @@ public class ReaderItemService {
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "封面文件读取失败");
         } finally {
-            if (staged != null) {
-                try {
-                    Files.deleteIfExists(staged);
-                } catch (IOException exception) {
-                    log.warn("Reader 封面临时文件清理失败: itemId={}", itemId, exception);
-                }
-            }
+            tempStagingPort.deleteQuietly(staged);
         }
     }
 

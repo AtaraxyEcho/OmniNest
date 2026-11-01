@@ -169,7 +169,6 @@ class _ComicImportConfirmPageState
             pages: _manifest.pages,
             sources: _manifest.sources,
             shrinkWrap: true,
-            onNodeTap: (_) {},
           ),
         ),
       ],

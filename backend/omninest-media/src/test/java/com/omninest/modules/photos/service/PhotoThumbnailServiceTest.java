@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -47,12 +48,20 @@ class PhotoThumbnailServiceTest {
         when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> Files.createTempFile(
                         invocation.getArgument(1), invocation.getArgument(2)));
+        doAnswer(invocation -> {
+            final Path path = invocation.getArgument(0);
+            if (path != null) {
+                Files.deleteIfExists(path);
+            }
+            return null;
+        }).when(tempStagingPort).deleteQuietly(any());
     }
     private final PhotoThumbnailService service = new PhotoThumbnailService(
             storageService,
             fileLifecycleGuard,
             sourceFileService,
-            inputGuard
+            inputGuard,
+            tempStagingPort
     );
 
     @Test

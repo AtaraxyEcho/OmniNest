@@ -181,6 +181,49 @@ void main() {
       expect(handler.resolveCount + handler.nextCount, 1);
     });
 
+    test(
+      'does not retry receive timeout for writes without idempotency key',
+      () async {
+        final handler = _TestErrorHandler();
+        final exception = buildException(
+          type: DioExceptionType.receiveTimeout,
+          method: 'PUT',
+        );
+
+        await interceptor.onError(exception, handler);
+
+        // 30 秒读超时重试两次会让写操作阻塞 90 秒以上。
+        expect(handler.nextCount, 1);
+        expect(handler.resolveCount, 0);
+        expect(exception.requestOptions.extra['retryCount'], isNull);
+      },
+    );
+
+    test(
+      'stops retrying when the request is cancelled during backoff',
+      () async {
+        final fastInterceptor = RetryInterceptor(
+          maxRetries: 2,
+          baseDelay: Duration.zero,
+        );
+        final handler = _TestErrorHandler();
+        final cancelToken = CancelToken();
+        final options = getOptions();
+        options.cancelToken = cancelToken;
+        final exception = DioException(
+          type: DioExceptionType.connectionTimeout,
+          requestOptions: options,
+        );
+        cancelToken.cancel();
+
+        await fastInterceptor.onError(exception, handler);
+
+        expect(handler.nextCount, 1);
+        expect(handler.resolveCount, 0);
+        expect(options.extra['retryCount'], isNull);
+      },
+    );
+
     test('does not retry POST on 429', () async {
       final handler = _TestErrorHandler();
       final exception = buildException(

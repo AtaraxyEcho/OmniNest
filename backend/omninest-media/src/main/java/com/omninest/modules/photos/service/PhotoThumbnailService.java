@@ -4,6 +4,7 @@ import com.omninest.modules.media.domain.AssetType;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +36,7 @@ public class PhotoThumbnailService {
     private final FileLifecycleGuard fileLifecycleGuard;
     private final PhotoSourceFileService sourceFileService;
     private final PhotoInputGuard inputGuard;
+    private final TempStagingPort tempStagingPort;
 
     // 1024 长边在高 DPI 屏幕的网格/列表场景达到视网膜级清晰度。
     private static final int MAX_THUMBNAIL_WIDTH = 1024;
@@ -164,19 +166,13 @@ public class PhotoThumbnailService {
     }
 
     private Path createOutputPath() throws IOException {
-        Path outputFile = Files.createTempFile("omninest-photo-thumbnail-", "." + OUTPUT_FORMAT);
+        Path outputFile = tempStagingPort.createTempFile(
+                "photo-thumbnail", "omninest-photo-thumbnail-", "." + OUTPUT_FORMAT);
         Files.deleteIfExists(outputFile);
         return outputFile;
     }
 
     private void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException exception) {
-            log.debug("缩略图临时文件清理失败: errorType={}", exception.getClass().getSimpleName());
-        }
+        tempStagingPort.deleteQuietly(file);
     }
 }

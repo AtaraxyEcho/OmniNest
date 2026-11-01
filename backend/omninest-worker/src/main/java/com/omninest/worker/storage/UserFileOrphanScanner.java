@@ -165,9 +165,11 @@ public class UserFileOrphanScanner {
                         bucket, candidate.getKey(), candidate.getValue());
             }
 
+            boolean deleteBudgetExhausted = false;
             if (properties.isDeleteEnabled()) {
                 for (Map.Entry<String, Long> candidate : candidates.entrySet()) {
                     if (deletionAttempts >= properties.getMaximumDeletesPerRun()) {
+                        deleteBudgetExhausted = true;
                         break;
                     }
                     deletionAttempts++;
@@ -181,6 +183,11 @@ public class UserFileOrphanScanner {
                                 exception.getClass().getSimpleName());
                     }
                 }
+            }
+
+            if (deleteBudgetExhausted) {
+                // 本页还有未删除的孤儿：保留当前页游标并结束本轮，下一轮从同一页续删。
+                break;
             }
 
             continuationToken = normalizeToken(page.nextContinuationToken());

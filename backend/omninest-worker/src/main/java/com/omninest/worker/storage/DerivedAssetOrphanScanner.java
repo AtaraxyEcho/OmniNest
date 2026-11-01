@@ -138,9 +138,11 @@ public class DerivedAssetOrphanScanner {
             candidateKeys.removeAll(referencedKeys);
             orphanObjects += candidateKeys.size();
 
+            boolean deleteBudgetExhausted = false;
             if (properties.isDeleteEnabled()) {
                 for (String objectKey : candidateKeys) {
                     if (deletionAttempts >= properties.getMaximumDeletesPerRun()) {
+                        deleteBudgetExhausted = true;
                         break;
                     }
                     deletionAttempts++;
@@ -153,6 +155,12 @@ public class DerivedAssetOrphanScanner {
                                 exception.getClass().getSimpleName());
                     }
                 }
+            }
+
+            if (deleteBudgetExhausted) {
+                // 本页还有未删除的孤儿：保留当前页游标并结束本轮，下一轮从同一页续删。
+                // 继续推进游标会让这些对象被跳过到整桶扫完一轮之后。
+                break;
             }
 
             continuationToken = normalizeToken(page.nextContinuationToken());

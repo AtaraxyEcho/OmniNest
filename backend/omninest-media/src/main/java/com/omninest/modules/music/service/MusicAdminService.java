@@ -9,6 +9,7 @@ import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -125,6 +126,7 @@ public class MusicAdminService {
     private final MusicCoverRetentionService coverRetentionService;
     private final TxtContentDecoder txtContentDecoder;
     private final UserDirectoryQueryService userDirectoryQueryService;
+    private final TempStagingPort tempStagingPort;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -816,7 +818,8 @@ public class MusicAdminService {
     ) {
         Path staged = null;
         try {
-            staged = Files.createTempFile("omninest-music-cover-", "." + cover.extension());
+            staged = tempStagingPort.createTempFile(
+                    "music-cover", "omninest-music-cover-", "." + cover.extension());
             Files.write(staged, cover.bytes());
             track.setCoverFileId(derivedAssetStorageService.store(
                     ownerUserId,
@@ -881,14 +884,7 @@ public class MusicAdminService {
     }
 
     private void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException ex) {
-            log.debug("音乐封面临时文件清理失败: errorType={}", ex.getClass().getSimpleName());
-        }
+        tempStagingPort.deleteQuietly(file);
     }
 
     /**

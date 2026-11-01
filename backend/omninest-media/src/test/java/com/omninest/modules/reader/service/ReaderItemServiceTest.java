@@ -28,7 +28,9 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.modules.photos.service.PhotoInputGuard;
 import com.omninest.modules.reader.domain.ReaderAnnotation;
 import com.omninest.modules.reader.domain.ReaderBookmark;
@@ -137,6 +139,9 @@ class ReaderItemServiceTest {
     private TaskRecordService taskRecordService;
     @Mock
     private PhotoInputGuard photoInputGuard;
+
+    @org.mockito.Spy
+    private TempStagingPort tempStagingPort = new TestTempStagingPort();
 
     @org.mockito.Spy
     private MediaProcessingLimitsProperties processingLimits = new MediaProcessingLimitsProperties();

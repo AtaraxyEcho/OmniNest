@@ -235,7 +235,7 @@ class ComicCatalogController extends ChangeNotifier {
 class ComicCatalogTree extends StatefulWidget {
   const ComicCatalogTree({
     required this.nodes,
-    required this.onNodeTap,
+    this.onNodeTap,
     this.currentNodeId,
     this.currentPageId,
     this.pages,
@@ -246,7 +246,9 @@ class ComicCatalogTree extends StatefulWidget {
   });
 
   final List<ComicCatalogNode> nodes;
-  final ValueChanged<ComicCatalogNode> onNodeTap;
+
+  /// 叶节点点击回调；只读预览（如导入确认页）传 null，目录展开仍可用。
+  final ValueChanged<ComicCatalogNode>? onNodeTap;
   final String? currentNodeId;
 
   /// 当前页面 ID（用于查找并高亮当前所在节点）。
@@ -369,7 +371,7 @@ Widget buildComicCatalogRow(
   BuildContext context, {
   required ComicCatalogFlatRow row,
   required ComicCatalogController controller,
-  required ValueChanged<ComicCatalogNode> onNodeTap,
+  ValueChanged<ComicCatalogNode>? onNodeTap,
 }) {
   final node = row.node;
   final hasKids = controller.hasChildren(node);
@@ -378,13 +380,10 @@ Widget buildComicCatalogRow(
   final colorScheme = Theme.of(context).colorScheme;
 
   return InkWell(
-    onTap: () {
-      if (hasKids) {
-        controller.toggle(node.id);
-      } else {
-        onNodeTap(node);
-      }
-    },
+    onTap:
+        hasKids
+            ? () => controller.toggle(node.id)
+            : (onNodeTap == null ? null : () => onNodeTap(node)),
     child: Padding(
       padding: EdgeInsets.only(
         left: 16.0 + row.depth * 24.0,

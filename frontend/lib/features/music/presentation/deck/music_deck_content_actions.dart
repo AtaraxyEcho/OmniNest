@@ -116,19 +116,26 @@ class _MusicBatchActionBar extends ConsumerWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(16),
               ),
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  for (final playlist in playlists)
-                    ListTile(
+              // 歌单数量无上限：弹窗高度封顶后再让列表滚动，短列表按内容贴合。
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = playlists[index];
+                    return ListTile(
                       title: Text(playlist.name),
                       onTap: () {
                         selected = playlist;
                         Navigator.of(sheetContext).pop();
                       },
-                    ),
-                ],
+                    );
+                  },
+                ),
               ),
             ),
           ),

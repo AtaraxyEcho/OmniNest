@@ -85,8 +85,12 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         }
         requireNotPublishedDefault("omninest.security.jwt-secret", "OMNINEST_SECURITY_JWT_SECRET");
         requireNotWeakSecret("omninest.security.jwt-secret", "OMNINEST_SECURITY_JWT_SECRET");
-        requireNotPublishedDefault("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
-        requireNotWeakSecret("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
+        // 图像分析侧车是可选组件：未配置密钥表示不启用，只有显式配置后才校验质量。
+        String aiSidecarSecret = environment.getProperty("photo.ai.secret");
+        if (aiSidecarSecret != null && !aiSidecarSecret.isBlank()) {
+            requireNotPublishedDefault("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
+            requireNotWeakSecret("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
+        }
         if (environment.getProperty("omninest.setup.enabled", Boolean.class, Boolean.FALSE)) {
             requireConfigured("omninest.setup.token", "OMNINEST_SETUP_TOKEN");
             requireNotPublishedDefault("omninest.setup.token", "OMNINEST_SETUP_TOKEN");

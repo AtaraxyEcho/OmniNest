@@ -7,6 +7,7 @@ import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import java.util.Comparator;
 import java.util.List;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 class FileListQueryService {
 
     private final FileNodeRepository fileNodeRepository;
+    private final FileFavoriteRepository favoriteRepository;
     private final FileNodeLookupSupport lookup;
     private final FileNodeDtoAssembler assembler;
 
@@ -51,8 +53,13 @@ class FileListQueryService {
                 .toList();
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(sorted);
         Map<UUID, UUID> coverMap = assembler.resolveAliveCovers(sorted);
+        Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, sorted);
         return sorted.stream()
-                .map(node -> assembler.toDto(node, uploaderNames, coverMap.get(node.getId())))
+                .map(node -> assembler.toDto(
+                        node,
+                        uploaderNames,
+                        coverMap.get(node.getId()),
+                        favoritedIds.contains(node.getId())))
                 .toList();
     }
 
@@ -82,7 +89,12 @@ class FileListQueryService {
         }
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(nodes.getContent());
         Map<UUID, UUID> covers = assembler.resolveAliveCovers(nodes.getContent());
-        return nodes.map(node -> assembler.toDto(node, uploaderNames, covers.get(node.getId())));
+        Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, nodes.getContent());
+        return nodes.map(node -> assembler.toDto(
+                node,
+                uploaderNames,
+                covers.get(node.getId()),
+                favoritedIds.contains(node.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -96,7 +108,23 @@ class FileListQueryService {
                 : fileNodeRepository.findPersonalRecyclePage(ownerUserId, spaceType, pageable);
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(nodes.getContent());
         Map<UUID, UUID> covers = assembler.resolveAliveCovers(nodes.getContent());
-        return nodes.map(node -> assembler.toDto(node, uploaderNames, covers.get(node.getId())));
+        Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, nodes.getContent());
+        return nodes.map(node -> assembler.toDto(
+                node,
+                uploaderNames,
+                covers.get(node.getId()),
+                favoritedIds.contains(node.getId())));
+    }
+
+    /**
+     * 收藏状态按当前页节点批量反查，避免前端用单页收藏列表推断星标。
+     */
+    private Set<UUID> resolveFavoritedIds(UUID ownerUserId, List<FileNode> nodes) {
+        if (nodes.isEmpty()) {
+            return Set.of();
+        }
+        List<UUID> nodeIds = nodes.stream().map(FileNode::getId).toList();
+        return Set.copyOf(favoriteRepository.findFavoritedNodeIds(ownerUserId, nodeIds));
     }
 
     private String resolveSubtreePrefix(UUID ownerUserId, UUID parentId) {

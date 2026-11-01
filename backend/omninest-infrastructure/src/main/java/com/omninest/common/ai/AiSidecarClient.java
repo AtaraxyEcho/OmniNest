@@ -47,7 +47,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final int BUFFER_SIZE = 8192;
     private static final int MAX_ERROR_SUMMARY_CHARS = 512;
     private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
-    private static final String SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token";
     private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
     private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
@@ -292,10 +291,12 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     }
 
     /**
-     * 生成推理请求的防重放头：静态令牌 + 秒级时间戳 + 方法/路径 HMAC。
+     * 生成推理请求的认证头：秒级时间戳 + 方法/路径 HMAC。
      *
-     * <p>签名不覆盖 multipart 请求体，避免为几十 MB 图片再做一遍哈希；时间戳窗口
-     * 把捕获的请求限制在 5 分钟内，路径绑定阻止把推理签名挪用到其他接口。</p>
+     * <p>只发签名，不发主密钥：后端与侧车之间默认是明文 HTTP，把共享密钥放进请求头
+     * 会让 HMAC「密钥不出进程」的意义消失。签名不覆盖 multipart 请求体，避免为几十 MB
+     * 图片再做一遍哈希；时间戳窗口把捕获的请求限制在 5 分钟内，路径绑定阻止把推理签名
+     * 挪用到其他接口。</p>
      */
     private String[] authHeaders(String method, String path) {
         String secret = requireSecret();
@@ -311,7 +312,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
             throw new IllegalStateException("图像分析侧车请求签名失败", exception);
         }
         return new String[]{
-                SIDECAR_TOKEN_HEADER, secret,
                 SIDECAR_TIMESTAMP_HEADER, Long.toString(timestamp),
                 SIDECAR_SIGNATURE_HEADER, signature
         };

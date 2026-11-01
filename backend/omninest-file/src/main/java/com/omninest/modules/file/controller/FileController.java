@@ -176,8 +176,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var files = fileManagerService.listRecentFiles(ownerUserId);
-        return ApiResponse.success(PageClamps.pagedResponse(files, page, size));
+        return ApiResponse.success(fileManagerService.listRecentFiles(ownerUserId, page, size));
     }
 
     @Operation(summary = "列出收藏文件", description = "列出当前用户收藏的文件")

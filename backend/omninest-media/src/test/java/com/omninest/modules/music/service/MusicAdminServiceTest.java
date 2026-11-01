@@ -24,6 +24,7 @@ import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
 import com.omninest.modules.music.domain.MusicScanJob;
@@ -111,7 +112,8 @@ class MusicAdminServiceTest {
             derivedAssetStorageService,
             coverRetentionService,
             txtContentDecoder,
-            mock(com.omninest.modules.user.service.UserDirectoryQueryService.class)
+            mock(com.omninest.modules.user.service.UserDirectoryQueryService.class),
+            new TestTempStagingPort()
     );
 
     MusicAdminServiceTest() {

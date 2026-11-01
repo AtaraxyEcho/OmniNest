@@ -34,7 +34,7 @@ class MediaProbeServiceTest {
             }
             """;
 
-    private final MediaProbeService service = new MediaProbeService();
+    private final MediaProbeService service = new MediaProbeService(new TestTempStagingPort());
 
     /** 假进程不会真的打开它，这里只需要一个本地路径形状。 */
     private static final Path PROBE_INPUT = Path.of(System.getProperty("java.io.tmpdir"), "probe-fixture.bin");
@@ -77,7 +77,7 @@ class MediaProbeServiceTest {
             command.set(args);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
-        });
+        }, new TestTempStagingPort());
 
         probing.runFfprobe(PROBE_INPUT);
 
@@ -97,7 +97,7 @@ class MediaProbeServiceTest {
             command.set(args);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
-        });
+        }, new TestTempStagingPort());
 
         probing.runFfprobe(PROBE_INPUT);
 
@@ -113,7 +113,7 @@ class MediaProbeServiceTest {
             outputFile.set(file);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
-        });
+        }, new TestTempStagingPort());
 
         String json = probing.runFfprobe(PROBE_INPUT);
 
@@ -128,7 +128,7 @@ class MediaProbeServiceTest {
         MediaProbeService probing = new MediaProbeService((args, file) -> {
             Files.write(file, output);
             return new FakeProcess(true, false, 0);
-        });
+        }, new TestTempStagingPort());
 
         String json = probing.runFfprobe(PROBE_INPUT);
 
@@ -138,7 +138,7 @@ class MediaProbeServiceTest {
     @Test
     void hungProcessIsKilledAndReportedAsTimeout() throws Exception {
         FakeProcess process = new FakeProcess(false, false, 0);
-        MediaProbeService probing = new MediaProbeService((args, file) -> process);
+        MediaProbeService probing = new MediaProbeService((args, file) -> process, new TestTempStagingPort());
 
         assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
                 .isInstanceOf(IOException.class)
@@ -150,7 +150,7 @@ class MediaProbeServiceTest {
     void probeFailureWithoutInterruptKeepsThreadInterruptFlagClear() {
         MediaProbeService probing = new MediaProbeService((args, file) -> {
             throw new IOException("ffprobe 未安装");
-        });
+        }, new TestTempStagingPort());
 
         assertThat(probing.probe("missing-binary", PROBE_INPUT).isEmpty()).isTrue();
         assertThat(Thread.interrupted()).isFalse();
@@ -162,7 +162,7 @@ class MediaProbeServiceTest {
         MediaProbeService probing = new MediaProbeService((args, file) -> {
             outputFile.set(file);
             throw new IOException("ffprobe 未安装");
-        });
+        }, new TestTempStagingPort());
 
         assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
                 .isInstanceOf(IOException.class);
@@ -172,7 +172,7 @@ class MediaProbeServiceTest {
     @Test
     void interruptWhileWaitingIsPropagatedToCallerFlag() {
         MediaProbeService probing = new MediaProbeService(
-                (args, file) -> new FakeProcess(true, true, 0));
+                (args, file) -> new FakeProcess(true, true, 0), new TestTempStagingPort());
 
         try {
             assertThat(probing.probe("interrupted", PROBE_INPUT).isEmpty()).isTrue();

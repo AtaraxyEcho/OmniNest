@@ -271,11 +271,12 @@ public class ReaderComicManifestService {
      * 解析已经存在的来源记录。
      *
      * <p>异步导入和异步重试都通过该方法执行，保证 sourceId 稳定，不重复创建来源。
+     * 本方法不得开启外层事务：归档下载与解包写盘的耗时阶段必须落在事务之外，
+     * 事务边界由三参重载内部的短事务控制。
      *
      * @param itemId   漫画作品 ID
      * @param sourceId 来源 ID
      */
-    @Transactional(rollbackFor = Exception.class)
     public void parseExistingSource(UUID itemId, UUID sourceId) {
         parseExistingSource(itemId, sourceId, ignored -> {
         });

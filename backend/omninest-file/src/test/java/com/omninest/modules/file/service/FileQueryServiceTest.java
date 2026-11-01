@@ -35,6 +35,7 @@ import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesDeletedEvent;
 import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import java.io.ByteArrayInputStream;
@@ -104,9 +105,12 @@ class FileQueryServiceTest {
             (owner, ids) -> Map.of()
     );
     private final FileListQueryService listQueryService = new FileListQueryService(
-            fileNodeRepository, lookup, assembler);
+            fileNodeRepository,
+            Mockito.mock(FileFavoriteRepository.class),
+            lookup,
+            assembler);
     private final FileQueryService fileQueryService = newQueryService(
-            newDownloadService(fileContentAccessService, new MediaProbeService()));
+            newDownloadService(fileContentAccessService, new MediaProbeService(new TestTempStagingPort())));
 
     private FileDownloadContentService newDownloadService(
             FileContentAccessService access, MediaProbeService probeService) {

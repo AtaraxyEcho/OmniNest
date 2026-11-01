@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -44,14 +46,17 @@ public class MediaProbeService {
             .expireAfterWrite(2, TimeUnit.HOURS)
             .build();
     private final ProcessStarter processStarter;
+    private final TempStagingPort tempStagingPort;
 
-    public MediaProbeService() {
-        this(MediaProbeService::startFfprobe);
+    @Autowired
+    public MediaProbeService(TempStagingPort tempStagingPort) {
+        this(MediaProbeService::startFfprobe, tempStagingPort);
     }
 
     /** 隔离系统进程 API 的测试边界，与 video 模块的外部进程执行器同一形态。 */
-    MediaProbeService(ProcessStarter processStarter) {
+    MediaProbeService(ProcessStarter processStarter, TempStagingPort tempStagingPort) {
         this.processStarter = processStarter;
+        this.tempStagingPort = tempStagingPort;
     }
 
     /**
@@ -97,7 +102,7 @@ public class MediaProbeService {
      * @throws InterruptedException 等待期间线程被中断
      */
     String runFfprobe(Path probeInput) throws IOException, InterruptedException {
-        Path outputFile = Files.createTempFile("omninest-ffprobe-", ".json");
+        Path outputFile = tempStagingPort.createTempFile("probe", "omninest-ffprobe-", ".json");
         Process process = null;
         try {
             process = processStarter.start(List.of(
@@ -120,11 +125,7 @@ public class MediaProbeService {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
             }
-            try {
-                Files.deleteIfExists(outputFile);
-            } catch (IOException e) {
-                log.debug("ffprobe 临时输出清理失败: {}", e.getMessage());
-            }
+            tempStagingPort.deleteQuietly(outputFile);
         }
     }
 

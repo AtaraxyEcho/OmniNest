@@ -64,9 +64,11 @@ class AiSidecarClientTest {
         AtomicReference<String> requestContentType = new AtomicReference<>();
         AtomicReference<String> requestQuery = new AtomicReference<>();
         AtomicReference<String> requestToken = new AtomicReference<>();
+        AtomicReference<String> requestSignature = new AtomicReference<>();
         server.createContext("/analyze-content", exchange -> {
             requestContentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
             requestToken.set(exchange.getRequestHeaders().getFirst("X-OmniNest-Sidecar-Token"));
+            requestSignature.set(exchange.getRequestHeaders().getFirst("X-OmniNest-Signature"));
             requestQuery.set(exchange.getRequestURI().getQuery());
             requestBody.set(exchange.getRequestBody().readAllBytes());
             respond(exchange, """
@@ -89,7 +91,8 @@ class AiSidecarClientTest {
         );
 
         assertTrue(requestContentType.get().replace(" ", "").startsWith("multipart/form-data;boundary="));
-        assertEquals("test-sidecar-secret", requestToken.get());
+        assertNull(requestToken.get(), "共享密钥不得出现在请求头里");
+        assertTrue(requestSignature.get() != null && !requestSignature.get().isBlank());
         assertTrue(requestQuery.get().contains("hint=TEXT_GRAPHIC"));
         assertTrue(requestQuery.get().contains("skipOcr=false"));
         String body = new String(requestBody.get(), StandardCharsets.ISO_8859_1);

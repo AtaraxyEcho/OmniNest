@@ -339,9 +339,7 @@ public class MediaLibraryReviewService {
             int size
     ) {
         List<SeasonSummary> seasons = candidateRepository.summarizeSeasons(ownerUserId, runId, groupId);
-        int from = Math.min(seasons.size(), page * size);
-        int to = Math.min(seasons.size(), from + size);
-        List<MediaScanTreeNodeDto> items = seasons.subList(from, to).stream().map(season -> {
+        List<MediaScanTreeNodeDto> items = PageClamps.slice(seasons, page, size).stream().map(season -> {
             int seasonNumber = season.getSeasonNumber() == null ? 1 : season.getSeasonNumber();
             String title = seasonNumber == 0 ? "特别篇" : "第 " + seasonNumber + " 季";
             return new MediaScanTreeNodeDto(

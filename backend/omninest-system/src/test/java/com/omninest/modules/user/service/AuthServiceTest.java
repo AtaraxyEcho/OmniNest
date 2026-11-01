@@ -55,6 +55,8 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class AuthServiceTest {
 
@@ -72,6 +74,7 @@ class AuthServiceTest {
     private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
+    private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
     private final Map<String, String> jtiByTokenUse = new HashMap<>();
     private final FixedJwtEncoder jwtEncoder = new FixedJwtEncoder(jtiByTokenUse);
     private final FixedJwtDecoder jwtDecoder = new FixedJwtDecoder(jtiByTokenUse);
@@ -84,6 +87,10 @@ class AuthServiceTest {
         when(authenticationTokenPolicy.refreshTokenTtl()).thenReturn(Duration.ofDays(30));
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(twoFactorService.isEnabled(any(UUID.class))).thenReturn(false);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
         service = new AuthService(
                 authUserRepository,
                 authRoleRepository,
@@ -102,7 +109,8 @@ class AuthServiceTest {
                 twoFactorService,
                 twoFactorPolicyService,
                 rateLimitService,
-                storageQuotaService
+                storageQuotaService,
+                transactionTemplate
         );
     }
     private static ObjectStorageBuckets createObjectStorageBuckets() {
@@ -241,7 +249,7 @@ class AuthServiceTest {
         void loginSuccess() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
 
             var token = service.login(
@@ -278,7 +286,7 @@ class AuthServiceTest {
         @DisplayName("平台头未识别时归入 native 档，其余超长头部按列宽截断")
         void loginClampsOversizedSessionHeaders() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
 
             service.login(
@@ -310,7 +318,7 @@ class AuthServiceTest {
         @DisplayName("平台标识大小写不敏感归一，Redis 键与入库值同源")
         void loginNormalizesKnownPlatformCase() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
 
             service.login(
@@ -331,7 +339,7 @@ class AuthServiceTest {
         @DisplayName("登录失败：密码错误，记录 FAILED 审计")
         void loginFailsWithWrongPassword() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
 
             assertThatThrownBy(() -> service.login(
                     new LoginRequest("admin", "wrong"), "web", null, null, "127.0.0.1", "test"))
@@ -345,7 +353,7 @@ class AuthServiceTest {
         @Test
         @DisplayName("登录失败：用户不存在，记录 FAILED 审计")
         void loginFailsWithNonExistentUser() {
-            when(authUserRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+            when(authUserRepository.findByUsernameWithPermissions("ghost")).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.login(
                     new LoginRequest("ghost", "pass"), "web", null, null, "127.0.0.1", "test"))
@@ -360,7 +368,7 @@ class AuthServiceTest {
         @Test
         @DisplayName("未知用户名仍返回统一 401，即使审计写入失败")
         void loginFailsWithUnauthorizedWhenAuditWriteFails() {
-            when(authUserRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+            when(authUserRepository.findByUsernameWithPermissions("ghost")).thenReturn(Optional.empty());
             doThrow(new IllegalStateException("audit database unavailable"))
                     .when(loginAuditService).record(any(), anyString(), anyString(), any(), any(),
                             any(), any(), anyString(), anyString());
@@ -377,7 +385,7 @@ class AuthServiceTest {
         void loginFailsWhenAccountDisabled() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.setStatus("DISABLED");
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
 
             assertThatThrownBy(() -> service.login(
                     new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test"))
@@ -395,7 +403,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.MEMBER, "file:read"));
             UUID oldSessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             AuthActiveSession oldSession = activeSession(user.getId());
             oldSession.setId(oldSessionId);
@@ -420,7 +428,7 @@ class AuthServiceTest {
         void loginDoesNotRevokeCrossPlatformSession() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.MEMBER, "file:read"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             // Android 没有旧会话
             when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
@@ -439,7 +447,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             AuthActiveSession knownSession = activeSession(user.getId());
             knownSession.setDeviceId("known-device");
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
                     user.getId(), "android"))
@@ -463,7 +471,7 @@ class AuthServiceTest {
         @DisplayName("已撤销的历史会话仍算已知设备，大小写不同的平台标识也能命中")
         void loginDoesNotNotifyKnownDeviceFromRevokedSession() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             // 历史会话已撤销，不会出现在未撤销列表中；只要设备曾经登录过就不该再告警
             when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
@@ -487,7 +495,7 @@ class AuthServiceTest {
         @DisplayName("缺少设备标识时不发送新设备通知")
         void loginDoesNotNotifyWithoutDeviceId() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
 
             service.login(
@@ -513,7 +521,7 @@ class AuthServiceTest {
         @DisplayName("已启用两步验证：密码通过后签发 verify 挑战而不是令牌")
         void loginReturnsVerifyChallengeWhenEnabled() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(twoFactorService.isEnabled(user.getId())).thenReturn(true);
 
             var token = service.login(
@@ -533,7 +541,7 @@ class AuthServiceTest {
         void loginReturnsEnrollChallengeForRequiredAdminWithoutCredential() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
 
             var token = service.login(
@@ -550,7 +558,7 @@ class AuthServiceTest {
         void loginKeepsEnrollChallengeWhenCredentialUnconfirmed() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
-            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.findByUsernameWithPermissions("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
 

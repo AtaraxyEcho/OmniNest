@@ -29,7 +29,6 @@ from rapidocr_onnxruntime import RapidOCR
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("omninest-vision-sidecar")
 
-SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token"
 SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp"
 SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature"
 SIDECAR_CLOCK_SKEW_SECONDS = 300
@@ -410,14 +409,11 @@ def _sidecar_signature(timestamp: int, method: str, path: str) -> str:
 
 def _require_sidecar_auth(
     request: Request,
-    token: Annotated[str | None, Header(alias=SIDECAR_TOKEN_HEADER)] = None,
     timestamp: Annotated[str | None, Header(alias=SIDECAR_TIMESTAMP_HEADER)] = None,
     signature: Annotated[str | None, Header(alias=SIDECAR_SIGNATURE_HEADER)] = None,
 ) -> None:
     if not SIDECAR_SECRET:
         raise HTTPException(status_code=503, detail="AI sidecar authentication is not configured")
-    if token is None or not hmac.compare_digest(token, SIDECAR_SECRET):
-        raise HTTPException(status_code=401, detail="Unauthorized")
     if timestamp is None or signature is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:

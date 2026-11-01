@@ -329,10 +329,11 @@ public class AdminOperationsService {
      *
      * @return 系统监控视图
      */
-    @Transactional(readOnly = true)
     public AdminOperationsDto.MonitoringView monitoring() {
         Instant now = Instant.now();
         SystemSnapshot snapshot = systemSnapshot();
+        // MinIO/ClamAV 探活是同步网络 IO，超时以秒计；同一请求内每个组件只探测一次。
+        Map<String, HealthSnapshot> health = probeHealth();
         Map<String, Long> taskCounts = taskRecordRepository.countGroupedByStatus();
         long runningTasks = taskCounts.getOrDefault(TaskStatus.RUNNING.getValue(), 0L);
         long queuedTasks = taskCounts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L);
@@ -361,11 +362,11 @@ public class AdminOperationsService {
                 queueDepth,
                 todayAdminActions
         );
-        List<AdminConsoleSummaryDto.HealthItem> health = List.of(
-                healthItem("数据库", componentStatus("db"), componentDetail("db")),
+        List<AdminConsoleSummaryDto.HealthItem> healthItems = List.of(
+                healthItem("数据库", health.get("db").status(), health.get("db").detail()),
                 healthItem("任务队列", queueStatus, queueDetail(runningTasks, failedTasks, dlqTasks)),
-                healthItem("对象存储", componentStatus("minio"), componentDetail("minio")),
-                healthItem("病毒防护", componentStatus("clamAv"), componentDetail("clamAv"))
+                healthItem("对象存储", health.get("minio").status(), health.get("minio").detail()),
+                healthItem("病毒防护", health.get("clamAv").status(), health.get("clamAv").detail())
         );
         List<AdminOperationsDto.MonitoringMetric> metrics = List.of(
                 new AdminOperationsDto.MonitoringMetric(
@@ -385,15 +386,15 @@ public class AdminOperationsService {
                 new AdminOperationsDto.MonitoringMetric("死信任务", String.valueOf(dlqTasks), "count",
                         dlqTasks > 0 ? "WARN" : "UP")
         );
-        String luceneStatus = componentStatus("luceneIndex");
+        String luceneStatus = health.get("luceneIndex").status();
         List<AdminOperationsDto.MonitoringComponent> components = List.of(
-                component("PostgreSQL", componentStatus("db"), Map.of(
+                component("PostgreSQL", health.get("db").status(), Map.of(
                         "连接池", "OmniNestHikariPool",
-                        "状态", componentDetail("db")
+                        "状态", health.get("db").detail()
                 )),
-                component("Redis", componentStatus("redis"), Map.of(
+                component("Redis", health.get("redis").status(), Map.of(
                         "用途", "限流与配置缓存",
-                        "状态", componentDetail("redis")
+                        "状态", health.get("redis").detail()
                 )),
                 component("RabbitMQ", queueStatus, Map.of(
                         "queued", queuedTasks,
@@ -401,16 +402,16 @@ public class AdminOperationsService {
                         "failed", failedTasks,
                         "dlq", dlqTasks
                 )),
-                component("MinIO", componentStatus("minio"), Map.of(
+                component("MinIO", health.get("minio").status(), Map.of(
                         "userFilesBucket", objectStorageBuckets.userFiles()
                 )),
                 component("Lucene Index", luceneStatus, Map.of(
                         "mode", "embedded",
                         "writable", "UP".equals(luceneStatus)
                 )),
-                component("ClamAV", componentStatus("clamAv"), Map.of(
+                component("ClamAV", health.get("clamAv").status(), Map.of(
                         "用途", "上传与外部导入入库前病毒扫描",
-                        "状态", componentDetail("clamAv")
+                        "状态", health.get("clamAv").detail()
                 )),
                 workerComponent()
         );
@@ -431,7 +432,7 @@ public class AdminOperationsService {
                 alerts,
                 auditRecent,
                 series,
-                health,
+                healthItems,
                 metrics
         );
     }
@@ -634,33 +635,36 @@ public class AdminOperationsService {
     }
 
     /**
-     * 通过 Actuator 获取组件健康状态。
+     * 一次探测监控页展示的全部组件，供状态与详情复用同一结果。
      */
-    private String componentStatus(String componentName) {
+    private Map<String, HealthSnapshot> probeHealth() {
+        Map<String, HealthSnapshot> results = new LinkedHashMap<>();
+        for (String componentName : List.of("db", "redis", "minio", "clamAv", "luceneIndex")) {
+            results.put(componentName, probeHealth(componentName));
+        }
+        return results;
+    }
+
+    private HealthSnapshot probeHealth(String componentName) {
         try {
             var health = healthEndpoint.healthForPath(componentName);
             if (health == null) {
-                return "DOWN";
+                return new HealthSnapshot("DOWN", "不可用");
             }
-            return Status.UP.equals(health.getStatus()) ? "UP" : "WARN";
+            String detail = health.getStatus() == null ? "不可用" : health.getStatus().getCode();
+            return new HealthSnapshot(Status.UP.equals(health.getStatus()) ? "UP" : "WARN", detail);
         } catch (Exception e) {
-            return "DOWN";
+            return new HealthSnapshot("DOWN", "不可用");
         }
     }
 
     /**
-     * 通过 Actuator 获取组件健康详情。
+     * 单个组件的健康快照。
+     *
+     * @param status 界面展示状态
+     * @param detail 健康详情
      */
-    private String componentDetail(String componentName) {
-        try {
-            var health = healthEndpoint.healthForPath(componentName);
-            if (health == null) {
-                return "不可用";
-            }
-            return health.getStatus().getCode();
-        } catch (Exception e) {
-            return "不可用";
-        }
+    private record HealthSnapshot(String status, String detail) {
     }
 
     private String uptime() {

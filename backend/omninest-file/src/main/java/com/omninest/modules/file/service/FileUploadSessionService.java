@@ -1140,7 +1140,8 @@ public class FileUploadSessionService {
                 node.getUploadedBy(),
                 null,
                 null,
-                mediaAutoImportTaskId
+                mediaAutoImportTaskId,
+                false
         );
     }
 }

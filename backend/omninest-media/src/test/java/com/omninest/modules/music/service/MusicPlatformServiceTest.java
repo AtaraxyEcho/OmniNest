@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,16 @@ class MusicPlatformServiceTest {
         when(configService.neteaseEnabled()).thenReturn(true);
         when(readThroughCache.getOrLoad(
                 ArgumentMatchers.anyString(),
+                ArgumentMatchers.any(),
+                ArgumentMatchers.any(),
+                ArgumentMatchers.any()
+        )).thenAnswer(invocation -> {
+            Supplier<?> loader = invocation.getArgument(2);
+            return loader.get();
+        });
+        when(readThroughCache.getOrLoadCachingWhen(
+                ArgumentMatchers.anyString(),
+                ArgumentMatchers.any(),
                 ArgumentMatchers.any(),
                 ArgumentMatchers.any(),
                 ArgumentMatchers.any()
@@ -144,7 +155,9 @@ class MusicPlatformServiceTest {
                 cache
         );
         when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
-        when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of());
+        when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of(
+                new OnlinePlaylistDto(
+                        "netease", "playlist-1", "Favorites", null, null, 20, "Music User", false, null, null)));
 
         cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
         cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
@@ -152,6 +165,24 @@ class MusicPlatformServiceTest {
 
         // 用户显式刷新必须真的回源，否则短 TTL 会让刷新按钮看起来没反应。
         cachedService.playlists(OWNER_ID, "netease", 0, 100, true);
+        verify(neteaseProvider, Mockito.times(2)).playlists(OWNER_ID);
+    }
+
+    @Test
+    void failedUpstreamResultsAreNotCached() {
+        InMemoryLibraryCache cache = new InMemoryLibraryCache();
+        MusicPlatformService cachedService = new MusicPlatformService(
+                List.of(neteaseProvider),
+                configService,
+                cache
+        );
+        when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
+        when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of());
+
+        // 上游未就绪时返回空列表：不得写入缓存，下一次请求必须继续回源。
+        cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
+        cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
+
         verify(neteaseProvider, Mockito.times(2)).playlists(OWNER_ID);
     }
 
@@ -251,7 +282,7 @@ class MusicPlatformServiceTest {
         );
         when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
         when(neteaseProvider.playlistTracks(ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.anyString()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(onlineTrack("track-1")));
 
         cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50, false);
         cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50, false);
@@ -318,14 +349,25 @@ class MusicPlatformServiceTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public <T> T getOrLoad(String key, Duration ttl, Supplier<T> loader, Class<T> type) {
+            return getOrLoadCachingWhen(key, ttl, loader, type, value -> true);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> T getOrLoadCachingWhen(
+                String key,
+                Duration ttl,
+                Supplier<T> loader,
+                Class<T> type,
+                Predicate<T> cacheable
+        ) {
             if (values.containsKey(key)) {
                 return (T) values.get(key);
             }
             T value = loader.get();
             loadedKeys.add(key);
-            if (value != null) {
+            if (value != null && cacheable.test(value)) {
                 values.put(key, value);
             }
             return value;

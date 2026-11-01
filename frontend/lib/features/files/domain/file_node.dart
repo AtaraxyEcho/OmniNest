@@ -30,6 +30,7 @@ class FileNode {
     this.uploaderName,
     this.coverFileId,
     this.mediaAutoImportTaskId,
+    this.favorited = false,
   });
 
   final String id;
@@ -50,6 +51,29 @@ class FileNode {
   /// 媒体封面文件节点 ID（音乐/影视/阅读库反查；无封面为空）。
   final String? coverFileId;
   final String? mediaAutoImportTaskId;
+
+  /// 当前用户是否已收藏该节点；由列表接口按页反查下发。
+  final bool favorited;
+
+  FileNode copyWith({bool? favorited}) {
+    return FileNode(
+      id: id,
+      parentId: parentId,
+      name: name,
+      isFolder: isFolder,
+      nodeType: nodeType,
+      normalizedPath: normalizedPath,
+      sizeBytes: sizeBytes,
+      updatedAt: updatedAt,
+      mimeType: mimeType,
+      spaceType: spaceType,
+      uploadedBy: uploadedBy,
+      uploaderName: uploaderName,
+      coverFileId: coverFileId,
+      mediaAutoImportTaskId: mediaAutoImportTaskId,
+      favorited: favorited ?? this.favorited,
+    );
+  }
 }
 
 class FileNodePage {

@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/files/data/file_providers.dart'
     show fileRepositoryProvider;
@@ -15,6 +16,8 @@ export 'package:omninest/features/files/domain/file_node.dart' show FileNode;
 
 /// 跨 Feature（全局搜索等）的文件预设：优先最近文件，为空时回退根目录。
 final fileRecentEntriesProvider = FutureProvider<List<FileNode>>((ref) async {
+  // 最近文件属于账号私有数据，换号必须重新取数。
+  ref.watch(sessionEpochProvider);
   final repo = ref.watch(fileRepositoryProvider);
   try {
     final recent = await repo.listRecentFiles();

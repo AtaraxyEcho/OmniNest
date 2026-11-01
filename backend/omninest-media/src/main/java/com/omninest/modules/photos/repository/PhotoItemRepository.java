@@ -1,6 +1,7 @@
 package com.omninest.modules.photos.repository;
 
 import com.omninest.modules.photos.domain.PhotoItem;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -48,6 +50,28 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
               AND photo.deletedAt IS NULL
             """)
     Optional<PhotoItem> findByOwnerUserIdAndId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("id") UUID id
+    );
+
+    /**
+     * 编辑版本落库前重新加载照片并加行锁。
+     *
+     * <p>编辑解码与对象存储写入都在事务外完成，跨事务传入的实体已游离；
+     * 必须在写事务内重新读取受管实例，否则 {@code save} 走 merge 后版本号不会回写。
+     * 行锁同时串行化同一照片的版本号分配。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param id 照片 ID
+     * @return 受管照片实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT photo FROM PhotoItem photo
+            WHERE photo.ownerUserId = :ownerUserId AND photo.id = :id
+              AND photo.deletedAt IS NULL
+            """)
+    Optional<PhotoItem> findForVersionUpdate(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("id") UUID id
     );

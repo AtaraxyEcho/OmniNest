@@ -293,6 +293,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       try {
         await _repository.addFavorite(file.id);
       } on Object {
+        _applyLocalFavoriteChange(file.id, added: false);
         await _refreshFavoritesData();
         rethrow;
       }
@@ -306,6 +307,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       try {
         await _repository.removeFavorite(file.id);
       } on Object {
+        _applyLocalFavoriteChange(file.id, added: true);
         await _refreshFavoritesData();
         rethrow;
       }
@@ -339,7 +341,14 @@ extension FileBrowserSelectionActions on FileBrowserController {
     } else {
       favorites.removeWhere((f) => f.id == fileId);
     }
-    _emitState(current.copyWith(favoriteFiles: favorites));
+    _emitState(
+      current.copyWith(
+        favoriteFiles: favorites,
+        files: _flagFavorite(current.files, fileId, added),
+        recentFiles: _flagFavorite(current.recentFiles, fileId, added),
+        recycleBin: _flagFavorite(current.recycleBin, fileId, added),
+      ),
+    );
   }
 
   Future<void> _refreshFavoritesData() async {
@@ -509,4 +518,16 @@ extension FileBrowserFolderDraftActions on FileBrowserController {
     _emitState(current.copyWith(draftFolderName: null));
     await createFolder(finalName);
   }
+}
+
+/// 把已加载节点里的收藏标记翻到目标值，供星标乐观更新与失败回滚共用。
+List<FileNode> _flagFavorite(
+  List<FileNode> nodes,
+  String fileId,
+  bool favorited,
+) {
+  return [
+    for (final node in nodes)
+      node.id == fileId ? node.copyWith(favorited: favorited) : node,
+  ];
 }

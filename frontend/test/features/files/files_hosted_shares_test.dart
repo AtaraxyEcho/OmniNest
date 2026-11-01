@@ -140,7 +140,8 @@ Future<void> _pumpToShares(
 void main() {
   testWidgets('分享列表渲染发丝线行与状态丸，不出现工位分页条', (tester) async {
     await _pumpToShares(tester, [
-      _share('s1', 'Golden hour', 'ACTIVE', expiresAt: DateTime(2026, 11, 1)),
+      // 到期日必须远离执行时刻：派生状态会把「ACTIVE 但已过期」的链接计为已过期。
+      _share('s1', 'Golden hour', 'ACTIVE', expiresAt: DateTime(2099, 1, 1)),
       _share('s2', 'Raw set', 'EXPIRED'),
     ]);
 

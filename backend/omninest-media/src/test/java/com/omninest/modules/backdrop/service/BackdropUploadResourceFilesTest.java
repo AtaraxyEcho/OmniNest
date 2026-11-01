@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
@@ -151,6 +152,7 @@ class BackdropUploadResourceFilesTest {
                 backdropScanTaskService,
                 rateLimitService,
                 videoThumbnailExtractor,
+                new TestTempStagingPort(),
                 afterCommitFiringTransactionManager()
         );
     }

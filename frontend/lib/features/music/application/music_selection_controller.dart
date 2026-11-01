@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -100,7 +101,7 @@ class MusicSelectionController extends Notifier<MusicSelectionState> {
             trackId: track.id,
             title: track.title,
             success: false,
-            errorMessage: error.toString(),
+            errorMessage: describeUserFacingError(error).message,
           ),
         );
       }

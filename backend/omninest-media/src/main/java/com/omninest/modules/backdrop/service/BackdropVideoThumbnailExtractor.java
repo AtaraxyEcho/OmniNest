@@ -1,5 +1,6 @@
 package com.omninest.modules.backdrop.service;
 
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.video.service.VideoProcessExecutor;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,6 +32,7 @@ public class BackdropVideoThumbnailExtractor {
     private static final int PROBE_CODEC_MAX_LENGTH = 32;
 
     private final VideoProcessExecutor processExecutor;
+    private final TempStagingPort tempStagingPort;
 
     private volatile Boolean localFfmpegAvailable;
 
@@ -76,13 +78,8 @@ public class BackdropVideoThumbnailExtractor {
         if (!isLocalFfmpegAvailable()) {
             return Optional.empty();
         }
-        Path output;
-        try {
-            output = Files.createTempFile("backdrop-playback-", ".mp4");
-        } catch (IOException ex) {
-            log.warn("壁纸播放衍生临时文件创建失败: {}", ex.getMessage());
-            return Optional.empty();
-        }
+        Path output =
+                tempStagingPort.createTempFile("backdrop", "backdrop-playback-", ".mp4");
         try {
             List<String> command = new ArrayList<>();
             command.add("ffmpeg");
@@ -107,7 +104,7 @@ public class BackdropVideoThumbnailExtractor {
             if (result.succeeded() && Files.isRegularFile(output) && Files.size(output) > 0) {
                 return Optional.of(output);
             }
-            Files.deleteIfExists(output);
+            tempStagingPort.deleteQuietly(output);
             return Optional.empty();
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -166,15 +163,11 @@ public class BackdropVideoThumbnailExtractor {
     }
 
     private void deleteQuietly(Path file) {
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException ex) {
-            log.debug("临时文件清理失败: {}", ex.getMessage());
-        }
+        tempStagingPort.deleteQuietly(file);
     }
 
     private Optional<Path> extractWithLocal(Path stagingFile, Duration timeout)            throws IOException, InterruptedException {
-        Path output = Files.createTempFile("backdrop-frame-", ".jpg");
+        Path output = tempStagingPort.createTempFile("backdrop", "backdrop-frame-", ".jpg");
         try {
             List<String> command = new ArrayList<>();
             command.add("ffmpeg");
@@ -194,10 +187,10 @@ public class BackdropVideoThumbnailExtractor {
             if (result.succeeded() && Files.isRegularFile(output) && Files.size(output) > 0) {
                 return Optional.of(output);
             }
-            Files.deleteIfExists(output);
+            tempStagingPort.deleteQuietly(output);
             return Optional.empty();
         } catch (IOException | InterruptedException ex) {
-            Files.deleteIfExists(output);
+            tempStagingPort.deleteQuietly(output);
             throw ex;
         }
     }

@@ -146,6 +146,36 @@ class DerivedAssetOrphanScannerTest {
     }
 
     @Test
+    void deleteBudgetExhaustionKeepsCursorOnCurrentPage() {
+        properties.setDeleteEnabled(true);
+        properties.setMaximumDeletesPerRun(1);
+        Instant old = Instant.now().minus(Duration.ofDays(2));
+        Mockito.when(redisUtil.get("omninest:maintenance:derived-orphan-scan:cursor"))
+                .thenReturn("page-1");
+        ObjectStoragePage page = new ObjectStoragePage(List.of(
+                object("derived/orphan-1.jpg", old),
+                object("derived/orphan-2.jpg", old)
+        ), "page-2");
+        Mockito.when(objectStorageClient.listObjects(BUCKET, "", "page-1", 500)).thenReturn(page);
+        Set<String> candidates = Set.of("derived/orphan-1.jpg", "derived/orphan-2.jpg");
+        Mockito.when(fileObjectReferenceQuery.findReferencedObjectKeys(BUCKET, candidates))
+                .thenReturn(Set.of());
+        Mockito.when(readerPageAssetReferenceQuery.findReferencedObjectKeys(BUCKET, candidates))
+                .thenReturn(Set.of());
+
+        DerivedAssetOrphanScanResult result = scanner.scanOnce();
+
+        // 本页还有未删除的孤儿：不得推进游标，也不能空扫后续页。
+        Assertions.assertThat(result.deletedObjects()).isEqualTo(1);
+        Assertions.assertThat(result.completed()).isFalse();
+        Assertions.assertThat(result.scannedPages()).isEqualTo(1);
+        Mockito.verify(redisUtil, Mockito.never())
+                .set(Mockito.anyString(), Mockito.anyString(), Mockito.any(Duration.class));
+        Mockito.verify(objectStorageClient, Mockito.never())
+                .listObjects(BUCKET, "", "page-2", 500);
+    }
+
+    @Test
     void boundedRunPersistsNextContinuationToken() {
         properties.setMaximumPagesPerRun(1);
         Mockito.when(redisUtil.get("omninest:maintenance:derived-orphan-scan:cursor"))

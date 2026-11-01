@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 浏览来源类型：锚定幻灯片等播放集合的业务数据源。
@@ -26,7 +27,11 @@ class PhotoBrowseScope {
 
 class PhotoBrowseScopeNotifier extends Notifier<PhotoBrowseScope> {
   @override
-  PhotoBrowseScope build() => const PhotoBrowseScope();
+  PhotoBrowseScope build() {
+    // 浏览序列含上一账号的照片与签名地址，换号必须自行清空。
+    ref.watch(sessionEpochProvider);
+    return const PhotoBrowseScope();
+  }
 
   void set(
     List<PhotoItem> photos,

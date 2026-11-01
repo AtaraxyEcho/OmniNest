@@ -116,9 +116,7 @@ public class StorageDirectoryService {
                     .filter(path -> !Files.isSymbolicLink(path))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .toList();
-            int from = Math.min(directories.size(), safePage * safeSize);
-            int to = Math.min(directories.size(), from + safeSize);
-            List<StorageDirectoryDto> items = directories.subList(from, to).stream()
+            List<StorageDirectoryDto> items = PageClamps.slice(directories, safePage, safeSize).stream()
                     .map(path -> toDto(locationRoot, path))
                     .toList();
             return PageResponse.of(items, safePage, safeSize, directories.size());

@@ -139,11 +139,14 @@ public class MusicPlatformService {
         String cacheKey = "omninest:music:playback-url:"
                 + ownerUserId + ":" + provider.platform().apiValue()
                 + ":" + songId + ":" + (quality == null ? "" : quality.trim().toLowerCase());
-        return readThroughCache.getOrLoad(
+        // 上游超时降级会返回无地址的结果对象：不缓存，否则一次抖动会让该曲目
+        // 在 5 分钟内始终「无播放地址」。
+        return readThroughCache.getOrLoadCachingWhen(
                 cacheKey,
                 PLAYBACK_URL_CACHE_TTL,
                 () -> provider.getPlaybackUrl(ownerUserId, songId, mediaMid, quality),
-                PlaybackUrlResult.class
+                PlaybackUrlResult.class,
+                result -> result != null && result.url() != null
         );
     }
 
@@ -166,11 +169,16 @@ public class MusicPlatformService {
         }
         String cacheKey = "omninest:music:lyrics:"
                 + ownerUserId + ":" + provider.platform().apiValue() + ":" + songId;
-        return readThroughCache.getOrLoad(
+        // 歌词请求失败时提供者返回四个字段全空的结果：不缓存，下一请求仍会回源。
+        return readThroughCache.getOrLoadCachingWhen(
                 cacheKey,
                 LYRICS_CACHE_TTL,
                 () -> provider.getLyrics(ownerUserId, songId),
-                MusicPlatformProvider.LyricsResult.class
+                MusicPlatformProvider.LyricsResult.class,
+                lyrics -> lyrics != null && (lyrics.plainLyrics() != null
+                        || lyrics.syncedLyrics() != null
+                        || lyrics.translatedLyrics() != null
+                        || lyrics.wordLyrics() != null)
         );
     }
 
@@ -197,11 +205,14 @@ public class MusicPlatformService {
         }
         String cacheKey = MusicPlatformLibraryCache.playlists(ownerUserId, provider.platform());
         invalidateIfForced(forceRefresh, cacheKey);
-        OnlinePlaylistList cached = readThroughCache.getOrLoad(
+        // 空列表不缓存：上游容器未就绪时提供者同样返回空列表，缓存会把一次启动窗口
+        // 放大成十分钟的「没有歌单」。
+        OnlinePlaylistList cached = readThroughCache.getOrLoadCachingWhen(
                 cacheKey,
                 ACCOUNT_LIST_CACHE_TTL,
                 () -> new OnlinePlaylistList(provider.playlists(ownerUserId)),
-                OnlinePlaylistList.class
+                OnlinePlaylistList.class,
+                value -> value != null && !value.items().isEmpty()
         );
         return slice(cached == null ? List.of() : cached.items(), page, size);
     }
@@ -424,11 +435,12 @@ public class MusicPlatformService {
             Duration ttl,
             Supplier<List<OnlineTrackDto>> loader
     ) {
-        OnlineTrackList cached = readThroughCache.getOrLoad(
+        OnlineTrackList cached = readThroughCache.getOrLoadCachingWhen(
                 cacheKey,
                 ttl,
                 () -> new OnlineTrackList(loader.get()),
-                OnlineTrackList.class
+                OnlineTrackList.class,
+                value -> value != null && !value.items().isEmpty()
         );
         return cached == null ? List.of() : cached.items();
     }

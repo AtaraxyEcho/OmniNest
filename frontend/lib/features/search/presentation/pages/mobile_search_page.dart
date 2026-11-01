@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/search/scoped_search_registry.dart';
 import 'package:omninest/core/search/scoped_search_source.dart';
@@ -36,7 +37,11 @@ class MobileSearchPage extends ConsumerStatefulWidget {
 /// 本次会话内的最近搜索（与桌面命令面板同策略，不做持久化）。
 class _RecentSearchQueriesNotifier extends Notifier<List<String>> {
   @override
-  List<String> build() => [];
+  List<String> build() {
+    // 最近搜索留在进程内、不持久化，但同样不得跨账号带过去。
+    ref.watch(sessionEpochProvider);
+    return [];
+  }
 
   void commit(String query) {
     final trimmed = query.trim();

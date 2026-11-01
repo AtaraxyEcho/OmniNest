@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import jakarta.annotation.PreDestroy;
@@ -73,7 +74,9 @@ public class WeatherService {
     private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
     /** 界面语言缺失或不在白名单时的状况文案语言。 */
     private static final String DEFAULT_LANG = "zh";
-    private static final Pattern COORD_PATTERN = Pattern.compile("^-?\\d{1,3}\\.\\d+,\\s*-?\\d{1,3}\\.\\d+$");
+    /** 坐标格式与控制器同源：{@code 经度,纬度}，整数度（如 116,40）同样合法。 */
+    private static final Pattern COORD_PATTERN =
+            Pattern.compile("^(-?\\d{1,3}(?:\\.\\d+)?),\\s*(-?\\d{1,3}(?:\\.\\d+)?)$");
     private static final List<String> CONFIG_KEYS = List.of(
             "weather.enabled",
             "weather.qweather.url",
@@ -802,7 +805,17 @@ public class WeatherService {
     }
 
     private boolean isLatLon(String location) {
-        return location != null && COORD_PATTERN.matcher(location.trim()).matches();
+        if (location == null) {
+            return false;
+        }
+        Matcher matcher = COORD_PATTERN.matcher(location.trim());
+        if (!matcher.matches()) {
+            return false;
+        }
+        // 与 WeatherController 一致按「经度,纬度」解析：|经度| 可到 180，|纬度| 不超过 90。
+        double longitude = Double.parseDouble(matcher.group(1));
+        double latitude = Double.parseDouble(matcher.group(2));
+        return Math.abs(longitude) <= 180 && Math.abs(latitude) <= 90;
     }
 
     private static final int MAX_DECOMPRESSED_SIZE = 1024 * 1024;

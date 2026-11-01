@@ -100,17 +100,19 @@ public class WeatherController {
     /**
      * 判断查询位置是否为经纬度坐标。
      *
-     * <p>GPS 坐标可能恰好是整数度（如 {@code 116,40}），不能要求必须带小数；
-     * 越界坐标按普通地名处理，避免把非法值透传给上游。</p>
+     * <p>入参格式与前端、和风天气一致为「经度,纬度」（如 {@code 116.41,39.92}）：
+     * 第一段是经度，允许到 ±180；第二段是纬度，允许到 ±90。GPS 坐标可能恰好是
+     * 整数度（如 {@code 116,40}），不能要求必须带小数；越界坐标按普通地名处理，
+     * 避免把非法值透传给上游。</p>
      */
     private boolean isLatLon(String location) {
         Matcher matcher = LAT_LON_PATTERN.matcher(location);
         if (!matcher.matches()) {
             return false;
         }
-        double latitude = Double.parseDouble(matcher.group(1));
-        double longitude = Double.parseDouble(matcher.group(2));
-        return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+        double longitude = Double.parseDouble(matcher.group(1));
+        double latitude = Double.parseDouble(matcher.group(2));
+        return Math.abs(longitude) <= 180 && Math.abs(latitude) <= 90;
     }
 
     private static final Pattern LAT_LON_PATTERN =

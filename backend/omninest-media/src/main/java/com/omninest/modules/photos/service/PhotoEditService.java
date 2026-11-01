@@ -2,6 +2,7 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -68,6 +69,7 @@ public class PhotoEditService {
     private final StorageQuotaService storageQuotaService;
     private final FileMetadataQueryService fileMetadataQueryService;
     private final PhotoThumbnailService photoThumbnailService;
+    private final TempStagingPort tempStagingPort;
     private final TransactionTemplate transactionTemplate;
     private final int maxHistoryVersions;
 
@@ -90,6 +92,7 @@ public class PhotoEditService {
             StorageQuotaService storageQuotaService,
             FileMetadataQueryService fileMetadataQueryService,
             PhotoThumbnailService photoThumbnailService,
+            TempStagingPort tempStagingPort,
             TransactionTemplate transactionTemplate,
             @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions,
             @Value("${photo.edit.max-concurrent:2}") int maxConcurrentEdits) {
@@ -103,6 +106,7 @@ public class PhotoEditService {
         this.storageQuotaService = storageQuotaService;
         this.fileMetadataQueryService = fileMetadataQueryService;
         this.photoThumbnailService = photoThumbnailService;
+        this.tempStagingPort = tempStagingPort;
         this.transactionTemplate = transactionTemplate;
         this.maxHistoryVersions = maxHistoryVersions;
         this.editSlots = new Semaphore(Math.max(1, maxConcurrentEdits), true);
@@ -205,7 +209,8 @@ public class PhotoEditService {
         try {
             // 外部编辑器回传的字节未经任何内容校验：落对象存储前先按与 applyEdit 相同的
             // 魔数与像素上限复核，否则客户端可以自称 image/jpeg 写入任意内容。
-            staged = Files.createTempFile("omninest-photo-edit-input-", ".jpg");
+            staged = tempStagingPort.createTempFile(
+                    "photo-edit", "omninest-photo-edit-input-", ".jpg");
             storedBytes = copyBounded(imageStream, staged, inputGuard.maxFileBytes(false));
             inputGuard.validateFileSize(storedBytes, false);
             PhotoInputGuard.ImageDimensions dimensions = inputGuard.inspectForDecode(staged, fileName);
@@ -264,24 +269,27 @@ public class PhotoEditService {
         List<EvictedVersion> evicted = new ArrayList<>();
         try {
             transactionTemplate.executeWithoutResult(status -> {
-                int versionNumber = nextVersionNumber(photo.getId());
+                PhotoItem managed = photoItemRepository
+                        .findForVersionUpdate(ownerUserId, photo.getId())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
+                int versionNumber = nextVersionNumber(managed.getId());
                 version.setVersionNumber(versionNumber);
                 chargeEditVersionQuota(ownerUserId, sizeBytes);
                 editVersionRepository.save(version);
                 // 封面优先使用派生缩略图；生成失败时保留旧缩略图，不能把全尺寸编辑图写进列表。
                 if (thumbnailFileId != null) {
-                    photo.setCoverFileId(thumbnailFileId);
+                    managed.setCoverFileId(thumbnailFileId);
                 }
-                photo.setActiveFileId(fileId);
-                photoItemRepository.save(photo);
-                evicted.addAll(enforceMaxVersions(ownerUserId, photo.getId()));
+                managed.setActiveFileId(fileId);
+                PhotoItem saved = photoItemRepository.saveAndFlush(managed);
+                evicted.addAll(enforceMaxVersions(ownerUserId, managed.getId()));
                 syncEventService.record(
                         ownerUserId,
                         SyncScope.PHOTOS,
                         "PHOTO_ITEM",
-                        photo.getId().toString(),
+                        managed.getId().toString(),
                         SyncAction.UPDATED,
-                        photo.getVersion(),
+                        saved.getVersion(),
                         Map.of("editVersion", versionNumber)
                 );
             });
@@ -400,7 +408,7 @@ public class PhotoEditService {
                 sourceFileId
         )) {
             inputGuard.inspectForDecode(source.path(), source.fileName());
-            editedFile = Files.createTempFile("omninest-photo-edit-", ".jpg");
+            editedFile = tempStagingPort.createTempFile("photo-edit", "omninest-photo-edit-", ".jpg");
             if (!applyTransform(source.path(), editedFile, request.editType(), request.editParams())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑操作失败");
             }
@@ -530,22 +538,31 @@ public class PhotoEditService {
     }
 
     private void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException exception) {
-            log.debug("照片编辑临时文件清理失败: errorType={}", exception.getClass().getSimpleName());
-        }
+        tempStagingPort.deleteQuietly(file);
     }
 
     private BufferedImage applyRotation(BufferedImage image, Map<String, Object> params) {
-        double angle = ((Number) params.getOrDefault("angle", 90)).doubleValue();
-        // 90/270 度旋转交换画布宽高，避免角落被原尺寸画布裁掉。
-        long turns = Math.round(Math.abs(angle) / 90.0);
-        if (turns % 2 == 1) {
-            boolean clockwise = angle > 0;
+        double angle = readNumberParam(params, "angle", 90.0);
+        long quarterTurns = Math.round(angle / 90.0);
+        // 270° 顺时针等价于 90° 逆时针：方向必须按归一化后的圈数判断，
+        // 只看角度正负会把 ±270° 转成相反方向。
+        if (Math.abs(angle - quarterTurns * 90.0) < 1e-6) {
+            int turns = (int) Math.floorMod(quarterTurns, 4L);
+            if (turns == 0) {
+                return image;
+            }
+            if (turns == 2) {
+                BufferedImage rotated = new BufferedImage(
+                        image.getWidth(), image.getHeight(), image.getType());
+                Graphics2D g = rotated.createGraphics();
+                g.translate(rotated.getWidth(), rotated.getHeight());
+                g.rotate(Math.PI);
+                g.drawImage(image, 0, 0, null);
+                g.dispose();
+                return rotated;
+            }
+            // 90/270 度旋转交换画布宽高，避免角落被原尺寸画布裁掉。
+            boolean clockwise = turns == 1;
             BufferedImage rotated = new BufferedImage(
                     image.getHeight(), image.getWidth(), image.getType());
             Graphics2D g = rotated.createGraphics();
@@ -567,12 +584,34 @@ public class PhotoEditService {
         return op.filter(image, null);
     }
 
+    private double readNumberParam(Map<String, Object> params, String key, double defaultValue) {
+        Object raw = params.get(key);
+        if (raw == null) {
+            return defaultValue;
+        }
+        if (raw instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (raw instanceof String text) {
+            try {
+                return Double.parseDouble(text.trim());
+            } catch (NumberFormatException exception) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "照片编辑参数格式错误: " + key);
+            }
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR, "照片编辑参数类型错误: " + key);
+    }
+
+    private int readIntParam(Map<String, Object> params, String key, int defaultValue) {
+        return (int) Math.round(readNumberParam(params, key, defaultValue));
+    }
+
     private BufferedImage applyCrop(BufferedImage image, Map<String, Object> params, int subsample) {
         int scale = Math.max(1, subsample);
-        int x = ((Number) params.getOrDefault("x", 0)).intValue() / scale;
-        int y = ((Number) params.getOrDefault("y", 0)).intValue() / scale;
-        int w = ((Number) params.getOrDefault("width", image.getWidth() * scale)).intValue() / scale;
-        int h = ((Number) params.getOrDefault("height", image.getHeight() * scale)).intValue() / scale;
+        int x = readIntParam(params, "x", 0) / scale;
+        int y = readIntParam(params, "y", 0) / scale;
+        int w = readIntParam(params, "width", image.getWidth() * scale) / scale;
+        int h = readIntParam(params, "height", image.getHeight() * scale) / scale;
         x = Math.max(0, Math.min(x, image.getWidth() - 1));
         y = Math.max(0, Math.min(y, image.getHeight() - 1));
         w = Math.max(1, Math.min(w, image.getWidth() - x));

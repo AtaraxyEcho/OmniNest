@@ -349,6 +349,8 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
+    // 继续收听是一个队列：点击任意一行都从该行起播，并把整个可见列表入队。
+    final recentItems = items.take(5).toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -359,7 +361,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
           onAction: () => context.push('/music'),
         ),
         const SizedBox(height: 4),
-        for (final (index, item) in items.take(5).indexed)
+        for (final (index, item) in recentItems.indexed)
           SampleSerifRow(
             number: '${index + 1}',
             title: item.track.title,
@@ -367,12 +369,12 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                 '${item.track.artistName} · ${_formatTrackDuration(Duration(seconds: item.track.durationSeconds ?? 0))}',
             onTap:
                 () => unawaited(
-                  ref.read(musicCenterControllerProvider.notifier).playItems([
-                    item,
-                  ], startIndex: index),
+                  ref
+                      .read(musicCenterControllerProvider.notifier)
+                      .playItems(recentItems, startIndex: index),
                 ),
             trailing: Icon(
-              Icons.more_horiz_rounded,
+              Icons.play_arrow_rounded,
               size: 19,
               color: context.env.inkFaint,
             ),

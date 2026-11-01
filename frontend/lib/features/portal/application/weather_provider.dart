@@ -384,6 +384,7 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
           hourly: weather.hourly,
           daily: weather.daily,
           locationName: preferredCity,
+          status: weather.status,
         );
       }
     }

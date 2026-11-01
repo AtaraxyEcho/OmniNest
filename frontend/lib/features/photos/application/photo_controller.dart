@@ -92,12 +92,14 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       _importRefreshInFlight = null;
       _realtimeRefreshInFlight = null;
     });
-    return _loadState();
+    // 会话重建时状态里仍是上一账号的数据（回收站、时间线、选中项、检索词）：
+    // 首屏必须从空状态起步，同会话刷新才允许沿用。
+    return _loadState(baseState: PhotoCenterState.empty());
   }
 
-  Future<PhotoCenterState> _loadState() async {
+  Future<PhotoCenterState> _loadState({PhotoCenterState? baseState}) async {
     final partialErrors = <String>[];
-    final previous = state.asData?.value;
+    final previous = baseState ?? state.asData?.value;
     final results = await Future.wait([
       _safe(_repo.dashboard, PhotoDashboard.empty(), partialErrors),
       _safe(_repo.listPhotos, PhotoPage.empty(), partialErrors),

@@ -4,6 +4,7 @@ import com.drew.imaging.ImageMetadataReader;
 import com.drew.metadata.Metadata;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
@@ -64,6 +65,7 @@ public class PhotoMotionVideoService {
     private final MediaSyncEventService syncEventService;
     private final PhotoExifExtractor exifExtractor;
     private final PlatformTransactionManager transactionManager;
+    private final TempStagingPort tempStagingPort;
     private TransactionTemplate transactionTemplate;
 
     @PostConstruct
@@ -108,7 +110,8 @@ public class PhotoMotionVideoService {
         }
         Path tempFile = null;
         try {
-            tempFile = Files.createTempFile("omninest-photo-motion-", ".mp4");
+            tempFile = tempStagingPort.createTempFile(
+                    "photo-motion", "omninest-photo-motion-", ".mp4");
             copyRange(sourceFile, videoStart, tempFile);
             UUID videoFileNodeId = derivedAssetStorageService.store(
                     ownerUserId,
@@ -142,13 +145,7 @@ public class PhotoMotionVideoService {
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "动态视频段写入失败");
         } finally {
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException ex) {
-                    log.warn("动态视频临时文件清理失败: {}", ex.getMessage());
-                }
-            }
+            tempStagingPort.deleteQuietly(tempFile);
         }
     }
 

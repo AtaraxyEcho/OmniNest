@@ -16,6 +16,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.io.IOException;
@@ -76,7 +77,8 @@ class PhotoMotionVideoServiceTest {
                 fileLifecycleGuard,
                 syncEventService,
                 new PhotoExifExtractor(),
-                transactionManager
+                transactionManager,
+                new TestTempStagingPort()
         );
         service.initTransactionTemplate();
         lenient().when(transactionManager.getTransaction(any()))

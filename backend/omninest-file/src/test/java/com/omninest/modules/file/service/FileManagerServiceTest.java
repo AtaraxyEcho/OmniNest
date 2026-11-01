@@ -73,6 +73,8 @@ import org.mockito.Mockito;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -148,7 +150,8 @@ class FileManagerServiceTest {
     private final SharedSpaceService fileNodeSupportSharedSpace =
             Mockito.mock(SharedSpaceService.class);
     private final FileNodeSupport fileNodeSupport =
-            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository, fileNodeSupportSharedSpace);
+            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository, fileNodeSupportSharedSpace,
+                    favoriteRepository);
     private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
     private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
             favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter, sharedSpaceService);
@@ -173,6 +176,13 @@ class FileManagerServiceTest {
             mock(ExternalStorageOAuthService.class),
             mock(ExternalStorageEndpointGuard.class),
             mock(PlatformTransactionManager.class));
+    private final TransactionTemplate transactionTemplate = Mockito.mock(TransactionTemplate.class, invocation -> {
+        if ("execute".equals(invocation.getMethod().getName())) {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        }
+        return null;
+    });
     private final FileManagerService fileManagerService = new FileManagerService(
             fileNodeRepository,
             accessRecordRepository,
@@ -183,7 +193,8 @@ class FileManagerServiceTest {
             sharedSpaceQuotaService,
             sharedSpaceService,
             syncEventRecorder,
-            mock(FileIndexSyncService.class)
+            mock(FileIndexSyncService.class),
+            transactionTemplate
     );
 
     @Test
@@ -193,11 +204,11 @@ class FileManagerServiceTest {
         // 空间过滤在 SQL 侧完成，仓储只返回个人空间存活节点
         when(accessRecordRepository.findRecentNodes(
                 eq(OWNER_ID), eq(SpaceType.PERSONAL), any(Pageable.class)))
-                .thenReturn(List.of(newer, older));
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(newer, older)));
 
-        var result = fileManagerService.listRecentFiles(OWNER_ID);
+        var result = fileManagerService.listRecentFiles(OWNER_ID, 0, 50);
 
-        assertThat(result).extracting("name").containsExactly("newer.txt", "older.txt");
+        assertThat(result.items()).extracting("name").containsExactly("newer.txt", "older.txt");
     }
 
     @Test

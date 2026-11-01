@@ -11,7 +11,9 @@ import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ public class FileNodeSupport {
     private final MediaCoverDirectory mediaCoverDirectory;
     private final FileNodeRepository fileNodeRepository;
     private final SharedSpaceService sharedSpaceService;
+    private final FileFavoriteRepository favoriteRepository;
 
     /**
      * 查找用户拥有的未删除节点。
@@ -137,7 +140,8 @@ public class FileNodeSupport {
         return toNodeDto(
                 node,
                 resolveUploaderNames(List.of(node)),
-                covers.get(node.getId())
+                covers.get(node.getId()),
+                false
         );
     }
 
@@ -148,11 +152,41 @@ public class FileNodeSupport {
      * @return 文件节点 DTO 列表
      */
     public List<FileNodeDto> toNodeDtos(List<FileNode> nodes) {
+        return toNodeDtos(nodes, null);
+    }
+
+    /**
+     * 将文件节点映射为对外 DTO，并按观察者补齐收藏状态。
+     *
+     * <p>收藏状态必须随列表下推：前端预载收藏列表受单页上限约束，累计收藏超过一页后
+     * 较早收藏的节点会在目录里丢失星标。</p>
+     *
+     * @param nodes 文件节点列表
+     * @param viewerUserId 当前查询用户；为 null 时不解析收藏状态
+     * @return 文件节点 DTO 列表
+     */
+    public List<FileNodeDto> toNodeDtos(List<FileNode> nodes, UUID viewerUserId) {
         Map<UUID, String> names = resolveUploaderNames(nodes);
         Map<UUID, UUID> covers = resolveAliveCovers(nodes);
+        Set<UUID> favoritedIds = resolveFavoritedIds(nodes, viewerUserId);
         return nodes.stream()
-                .map(node -> toNodeDto(node, names, covers.get(node.getId())))
+                .map(node -> toNodeDto(
+                        node,
+                        names,
+                        covers.get(node.getId()),
+                        favoritedIds.contains(node.getId())))
                 .toList();
+    }
+
+    private Set<UUID> resolveFavoritedIds(List<FileNode> nodes, UUID viewerUserId) {
+        if (viewerUserId == null || nodes.isEmpty()) {
+            return Set.of();
+        }
+        List<UUID> nodeIds = new ArrayList<>(nodes.size());
+        for (FileNode node : nodes) {
+            nodeIds.add(node.getId());
+        }
+        return new HashSet<>(favoriteRepository.findFavoritedNodeIds(viewerUserId, nodeIds));
     }
 
     /**
@@ -218,7 +252,12 @@ public class FileNodeSupport {
         return userNameDirectory.resolveDisplayNames(uploaderIds);
     }
 
-    private FileNodeDto toNodeDto(FileNode node, Map<UUID, String> uploaderNames, UUID coverFileId) {
+    private FileNodeDto toNodeDto(
+            FileNode node,
+            Map<UUID, String> uploaderNames,
+            UUID coverFileId,
+            boolean favorited
+    ) {
         UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         return new FileNodeDto(
                 node.getId(),
@@ -234,7 +273,9 @@ public class FileNodeSupport {
                 node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
                 node.getUploadedBy(),
                 uploaderNames.get(uploaderId),
-                coverFileId
+                coverFileId,
+                null,
+                favorited
         );
     }
 

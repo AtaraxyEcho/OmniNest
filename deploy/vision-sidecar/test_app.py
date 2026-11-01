@@ -311,20 +311,15 @@ class SidecarTokenTest(unittest.TestCase):
             url=SimpleNamespace(path="/analyze-content"),
         )
 
-    def test_sidecar_auth_requires_token_timestamp_and_signature(self):
+    def test_sidecar_auth_requires_timestamp_and_signature(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             with self.assertRaises(HTTPException) as missing:
-                app._require_sidecar_auth(self._request(), None)
-            with self.assertRaises(HTTPException) as invalid_token:
-                app._require_sidecar_auth(self._request(), "wrong-secret")
+                app._require_sidecar_auth(self._request())
             timestamp = int(time.time())
             with self.assertRaises(HTTPException) as missing_signature:
-                app._require_sidecar_auth(
-                    self._request(), "expected-secret", str(timestamp), None
-                )
+                app._require_sidecar_auth(self._request(), str(timestamp), None)
 
         self.assertEqual(401, missing.exception.status_code)
-        self.assertEqual(401, invalid_token.exception.status_code)
         self.assertEqual(401, missing_signature.exception.status_code)
 
     def test_sidecar_auth_accepts_valid_timestamp_and_signature(self):
@@ -332,7 +327,7 @@ class SidecarTokenTest(unittest.TestCase):
             timestamp = int(time.time())
             signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
             self.assertIsNone(app._require_sidecar_auth(
-                self._request(), "expected-secret", str(timestamp), signature
+                self._request(), str(timestamp), signature
             ))
 
     def test_sidecar_auth_rejects_stale_timestamp_and_tampered_path(self):
@@ -340,15 +335,11 @@ class SidecarTokenTest(unittest.TestCase):
             timestamp = int(time.time()) - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
             signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
             with self.assertRaises(HTTPException) as stale:
-                app._require_sidecar_auth(
-                    self._request(), "expected-secret", str(timestamp), signature
-                )
+                app._require_sidecar_auth(self._request(), str(timestamp), signature)
             fresh = int(time.time())
             wrong_signature = app._sidecar_signature(fresh, "POST", "/health")
             with self.assertRaises(HTTPException) as tampered:
-                app._require_sidecar_auth(
-                    self._request(), "expected-secret", str(fresh), wrong_signature
-                )
+                app._require_sidecar_auth(self._request(), str(fresh), wrong_signature)
 
         self.assertEqual(401, stale.exception.status_code)
         self.assertEqual(401, tampered.exception.status_code)
@@ -356,7 +347,7 @@ class SidecarTokenTest(unittest.TestCase):
     def test_missing_secret_is_reported_as_unavailable(self):
         with patch.object(app, "SIDECAR_SECRET", ""):
             with self.assertRaises(HTTPException) as context:
-                app._require_sidecar_auth(self._request(), "anything")
+                app._require_sidecar_auth(self._request())
         self.assertEqual(503, context.exception.status_code)
 
 

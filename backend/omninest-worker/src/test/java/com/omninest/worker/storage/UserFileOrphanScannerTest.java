@@ -161,6 +161,36 @@ class UserFileOrphanScannerTest {
     }
 
     @Test
+    @DisplayName("删除预算耗尽时保留当前页游标，不空扫后续页")
+    void deleteBudgetExhaustionKeepsCursorOnCurrentPage() {
+        properties.setDeleteEnabled(true);
+        properties.setMaximumDeletesPerRun(1);
+        Instant old = Instant.now().minus(Duration.ofDays(31));
+        String secondOrphan = "users/u1/files/n6/f.jpg";
+        Mockito.when(redisUtil.get(CURSOR)).thenReturn("page-1");
+        Mockito.when(objectStorageClient.listObjects(BUCKET, "", "page-1", 500)).thenReturn(
+                new ObjectStoragePage(List.of(
+                        object(ORPHAN_KEY, old, 700L),
+                        object(secondOrphan, old, 800L)
+                ), "page-2"));
+        Set<String> candidates = Set.of(ORPHAN_KEY, secondOrphan);
+        Mockito.when(fileObjectReferenceQuery.findReferencedObjectKeys(BUCKET, candidates))
+                .thenReturn(Set.of());
+        Mockito.when(fileIngressObjectReferenceQuery.findInFlightObjectKeys(BUCKET, candidates))
+                .thenReturn(Set.of());
+
+        UserFileOrphanScanResult result = scanner.scanOnce();
+
+        Assertions.assertThat(result.deletedObjects()).isEqualTo(1);
+        Assertions.assertThat(result.completed()).isFalse();
+        Assertions.assertThat(result.scannedPages()).isEqualTo(1);
+        Mockito.verify(redisUtil, Mockito.never())
+                .set(Mockito.anyString(), Mockito.anyString(), Mockito.any(Duration.class));
+        Mockito.verify(objectStorageClient, Mockito.never())
+                .listObjects(BUCKET, "", "page-2", 500);
+    }
+
+    @Test
     @DisplayName("空页不查询引用源，有界轮次保存续查标识")
     void boundedRunPersistsCursorWithoutQueryingReferences() {
         properties.setMaximumPagesPerRun(1);

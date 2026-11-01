@@ -28,6 +28,8 @@ import com.omninest.modules.photos.dto.PhotoDtos.EditRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoEditVersionDto;
 import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.common.processing.TempStagingPort;
+import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -52,6 +54,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -71,6 +74,7 @@ class PhotoEditServiceTest {
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final PhotoThumbnailService photoThumbnailService = mock(PhotoThumbnailService.class);
+    private final TempStagingPort tempStagingPort = new TestTempStagingPort();
     private final PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(txManager);
     private final PhotoEditService service = new PhotoEditService(
@@ -84,6 +88,7 @@ class PhotoEditServiceTest {
             storageQuotaService,
             fileMetadataQueryService,
             photoThumbnailService,
+            tempStagingPort,
             transactionTemplate,
             5,
             2
@@ -91,6 +96,15 @@ class PhotoEditServiceTest {
 
     {
         when(txManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
+
+    @BeforeEach
+    void stubManagedPhotoReload() {
+        // 版本落库在写事务内重新读取受管实体；测试沿用各用例已准备的 findById 桩。
+        when(photoItemRepository.findForVersionUpdate(any(), any()))
+                .thenAnswer(invocation -> photoItemRepository.findById(invocation.getArgument(1)));
+        when(photoItemRepository.saveAndFlush(any(PhotoItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -395,6 +409,7 @@ class PhotoEditServiceTest {
                 storageQuotaService,
                 fileMetadataQueryService,
                 photoThumbnailService,
+                tempStagingPort,
                 transactionTemplate,
                 5,
                 1
@@ -438,6 +453,7 @@ class PhotoEditServiceTest {
                 storageQuotaService,
                 fileMetadataQueryService,
                 photoThumbnailService,
+                tempStagingPort,
                 transactionTemplate,
                 5,
                 2
@@ -486,6 +502,81 @@ class PhotoEditServiceTest {
                 Instant.now(),
                 Instant.now()
         );
+    }
+
+    @Test
+    void rotationTreatsQuarterTurnsAsNormalizedDirection() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID sourceFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setFileNodeId(sourceFileId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId)).thenReturn(List.of());
+
+        Path source = Files.createTempFile("omninest-rotate-", ".png");
+        BufferedImage image = new BufferedImage(16, 8, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 16; x++) {
+                image.setRGB(x, y, x < 8 ? 0xFF0000 : 0x0000FF);
+            }
+        }
+        ImageIO.write(image, "png", source.toFile());
+        when(sourceFileService.stageOwned(ownerUserId, sourceFileId))
+                .thenReturn(new PhotoSourceFileService.StagedPhotoFile(
+                        source, "photo.png", Files.size(source), "image/png", false));
+        AtomicReference<BufferedImage> stored = new AtomicReference<>();
+        when(storageService.store(
+                eq(ownerUserId),
+                anyString(),
+                eq(photoId),
+                anyString(),
+                anyString(),
+                eq("image/jpeg"),
+                any(Path.class)
+        )).thenAnswer(invocation -> {
+            Path output = invocation.getArgument(6);
+            stored.set(ImageIO.read(output.toFile()));
+            return UUID.randomUUID();
+        });
+
+        // 字符串参数同样必须被接受；270° 顺时针等于 90° 逆时针。
+        service.applyEdit(ownerUserId, photoId, new EditRequest("ROTATE", Map.of("angle", "270")));
+
+        BufferedImage rotated = stored.get();
+        assertThat(rotated).isNotNull();
+        assertThat(rotated.getWidth()).isEqualTo(8);
+        assertThat(rotated.getHeight()).isEqualTo(16);
+        int top = rotated.getRGB(4, 4);
+        int bottom = rotated.getRGB(4, 12);
+        // 原图右半蓝色旋转到顶部，左半红色落到底部；反向旋转会得到相反结果。
+        assertThat((top & 0xFF)).isGreaterThan((top >> 16) & 0xFF);
+        assertThat(((bottom >> 16) & 0xFF)).isGreaterThan(bottom & 0xFF);
+    }
+
+    @Test
+    void rotationRejectsNonNumericAngleAsParameterError() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID sourceFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setFileNodeId(sourceFileId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        Path source = createImage();
+        when(sourceFileService.stageOwned(ownerUserId, sourceFileId))
+                .thenReturn(new PhotoSourceFileService.StagedPhotoFile(
+                        source, "photo.png", Files.size(source), "image/png", false));
+
+        assertThatThrownBy(() -> service.applyEdit(
+                ownerUserId,
+                photoId,
+                new EditRequest("ROTATE", Map.of("angle", true))
+        )).isInstanceOfSatisfying(BusinessException.class,
+                exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR));
     }
 
     private byte[] jpegBytes() throws Exception {

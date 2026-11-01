@@ -399,7 +399,9 @@ class _HostedTimelineBody extends ConsumerWidget {
               tiles: [
                 for (final photo in month.previewPhotos)
                   SamplePhotoTile(
-                    imageUrl: photo.coverUrl ?? photo.sourceUrl,
+                    // 多列网格只加载派生缩略图：原图回退会在移动端按全尺寸解码，
+                    // 缩略图未就绪时先显示占位，等任务完成后的列表刷新。
+                    imageUrl: photo.coverUrl,
                     onTap: () {
                       ref
                           .read(photoBrowseScopeProvider.notifier)

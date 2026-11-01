@@ -45,8 +45,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -86,8 +85,14 @@ public class AuthService {
     private final TwoFactorPolicyService twoFactorPolicyService;
     private final RateLimitService rateLimitService;
     private final StorageQuotaService storageQuotaService;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 注册账号并签发令牌。
+     *
+     * <p>BCrypt 哈希在事务外完成，事务只覆盖用户行、会话行与登录时间的写入：
+     * 持连接空等约 300ms 的密码计算会迅速占满连接池。</p>
+     */
     public AuthTokenResponse register(
             RegisterRequest request,
             String clientPlatform,
@@ -96,30 +101,48 @@ public class AuthService {
             String ipAddress,
             String userAgent
     ) {
-        AuthUser profile = registerInternal(request);
-        // 注册与登录必须共享同一套强制 2FA 策略：否则被纳入强制策略的角色
-        // 可以绕过登录入口，用注册接口直接拿到正式令牌。
-        if (twoFactorPolicyService.isRequired(profile)) {
-            log.info("注册命中强制两步验证，返回注册引导挑战: userId={}", profile.getId());
-            return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_ENROLL);
+        AuthUser prepared = prepareRegistration(request);
+        RegistrationOutcome outcome = transactionTemplate.execute(status -> {
+            prepared.getRoles().add(defaultUserRole());
+            AuthUser saved = authUserRepository.save(prepared);
+            // 注册与登录必须共享同一套强制 2FA 策略：否则被纳入强制策略的角色
+            // 可以绕过登录入口，用注册接口直接拿到正式令牌。
+            if (twoFactorPolicyService.isRequired(saved)) {
+                return new RegistrationOutcome(saved, null);
+            }
+            saved.setLastLoginAt(Instant.now());
+            authUserRepository.save(saved);
+            return new RegistrationOutcome(saved, registerSession(
+                    saved,
+                    UUID.randomUUID(),
+                    ClientPlatform.normalize(clientPlatform),
+                    deviceId,
+                    deviceName,
+                    ipAddress
+            ));
+        });
+        if (outcome == null || outcome.sessionId() == null) {
+            UUID userId = outcome == null ? prepared.getId() : outcome.profile().getId();
+            log.info("注册命中强制两步验证，返回注册引导挑战: userId={}", userId);
+            return buildChallengeResponse(userId, CHALLENGE_TYPE_ENROLL);
         }
-        UUID sessionId = createActiveSession(
-                profile,
-                clientPlatform,
-                deviceId,
-                deviceName,
-                ipAddress,
-                false
-        );
+        AuthUser profile = outcome.profile();
         auditLogin(profile, profile.getUsername(), clientPlatform, deviceId, deviceName,
                 ipAddress, userAgent, "SUCCESS", null);
-        profile.setLastLoginAt(Instant.now());
-        authUserRepository.save(profile);
         log.info("用户注册成功: userId={}, username={}", profile.getId(), profile.getUsername());
-        return issueToken(toDto(profile), sessionId);
+        // 注册事务内的角色集合来自刚写入的关联，事务结束后无法再懒加载权限；
+        // 重新按完整图层读取一次用于签发 JWT。
+        AuthUser issued = authUserRepository.findWithRolesAndPermissionsById(profile.getId())
+                .orElse(profile);
+        return issueToken(toDto(issued), outcome.sessionId());
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 账号密码登录。
+     *
+     * <p>密码校验与用户读取在事务外执行；会话与登录时间由 {@link #completeLogin}
+     * 内部的事务模板写入，审计与会话互斥各自使用独立事务，避免外层连接上再申请第二个连接。</p>
+     */
     public AuthTokenResponse login(LoginRequest request, String clientPlatform,
                                    String deviceId, String deviceName,
                                    String ipAddress, String userAgent) {
@@ -148,7 +171,6 @@ public class AuthService {
      * @param userAgent User-Agent
      * @return 访问与刷新令牌
      */
-    @Transactional(rollbackFor = Exception.class)
     public AuthTokenResponse completeTwoFactorLogin(
             String challengeToken,
             String code,
@@ -171,8 +193,9 @@ public class AuthService {
             // 验证码错误不核销 jti：单次输错不应作废整个登录挑战，防爆破由上面的按用户预算承担
             throw exception;
         }
-        consumeChallengeTokenAfterCommit(challengeToken, TOKEN_USE_TWO_FACTOR);
         log.info("用户两步验证登录成功: userId={}, platform={}, ip={}", userId, clientPlatform, ipAddress);
+        // 先核销再登录：已消费的挑战必须在建会话前拒绝，不能先签发令牌再吞掉核销失败。
+        consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
     }
 
@@ -221,7 +244,6 @@ public class AuthService {
      * @param userAgent User-Agent
      * @return 访问与刷新令牌
      */
-    @Transactional(rollbackFor = Exception.class)
     public AuthTokenResponse completeTwoFactorEnrollment(
             String finalizeToken,
             String clientPlatform,
@@ -235,8 +257,8 @@ public class AuthService {
         if (!twoFactorService.isEnabled(userId)) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置");
         }
-        consumeChallengeTokenAfterCommit(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
         log.info("管理员两步验证注册完成: userId={}, platform={}", userId, clientPlatform);
+        consumeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
     }
 
@@ -302,33 +324,6 @@ public class AuthService {
         return parseUserId(jwt.getSubject());
     }
 
-    /**
-     * 在事务提交后核销一次性挑战令牌。
-     *
-     * <p>登录落库或事务提交失败时令牌必须仍然可用，用户不必重新输入密码；
-     * 提交成功后再核销，期间的重放由 TOTP 单步消费兜底。</p>
-     *
-     * @param rawToken 挑战令牌
-     * @param expectedUse 期望的 token_use
-     */
-    private void consumeChallengeTokenAfterCommit(String rawToken, String expectedUse) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        consumeChallengeToken(rawToken, expectedUse);
-                    } catch (RuntimeException exception) {
-                        // 会话已经签发，核销失败不能把成功登录变成 500。
-                        log.warn("两步验证挑战令牌核销失败: {}", exception.getMessage());
-                    }
-                }
-            });
-            return;
-        }
-        consumeChallengeToken(rawToken, expectedUse);
-    }
-
     private Jwt decodeChallengeToken(String rawToken, String expectedUse) {
         String token = normalizeToken(rawToken);
         Jwt jwt;
@@ -358,7 +353,10 @@ public class AuthService {
         return profile;
     }
 
-    private AuthUser registerInternal(RegisterRequest request) {
+    /**
+     * 注册前置准备：查重、校验口令并完成 BCrypt 哈希，全部在事务外执行。
+     */
+    private AuthUser prepareRegistration(RegisterRequest request) {
         String username = normalizeUsername(request.username());
         if (authUserRepository.existsByUsername(username)) {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
@@ -373,15 +371,20 @@ public class AuthService {
         // 注册默认配额与管理员创建用户同源读取配置中心，避免实体字段默认值绕过
         // storage.quota.default（0 表示无限制）。
         profile.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
-        profile.getRoles().add(defaultUserRole());
-        return authUserRepository.save(profile);
+        return profile;
     }
 
+    /**
+     * 校验账号密码。
+     *
+     * <p>成功路径必须一次取到角色与权限图：登录不再包在外层事务里，返回后的
+     * {@code toDto} 不能再触发懒加载。失败路径只需要用户标识写审计，沿用同一次查询结果。</p>
+     */
     private AuthUser authenticatePassword(LoginRequest request, String clientPlatform,
                                           String deviceId, String deviceName,
                                           String ipAddress, String userAgent) {
         String username = normalizeUsername(request.username());
-        AuthUser profile = authUserRepository.findByUsername(username).orElse(null);
+        AuthUser profile = authUserRepository.findByUsernameWithPermissions(username).orElse(null);
         if (profile == null) {
             // 与真实用户的 BCrypt 成本对齐，避免通过响应时间枚举用户名。
             passwordEncoder.matches(request.password(), DUMMY_PASSWORD_HASH);
@@ -409,14 +412,21 @@ public class AuthService {
                                             String deviceId, String deviceName,
                                             String ipAddress, String userAgent) {
         boolean newDevice = isNewDevice(profile.getId(), clientPlatform, deviceId);
-        UUID sessionId = createActiveSession(
-                profile,
-                clientPlatform,
-                deviceId,
-                deviceName,
-                ipAddress,
-                true
-        );
+        // 平台标识参与互斥判定与 Redis 会话键拼接，必须在落库和登记前先归一化到固定档位，
+        // 否则改写大小写即可绕开同平台互斥，并把任意长字符串写进键空间。
+        String platform = ClientPlatform.normalize(clientPlatform);
+        UUID sessionId = UUID.randomUUID();
+        // 同平台互斥会按旧会话逐条写吊销记录，且吊销必须独立提交（登录失败也不得复活旧会话）。
+        // 放在事务外执行，才不会在持有连接时再申请第二个连接。
+        enforceSamePlatformMutex(profile.getId(), platform, sessionId);
+        Instant loginAt = Instant.now();
+        transactionTemplate.execute(status -> {
+            registerSession(profile, sessionId, platform, deviceId, deviceName, ipAddress);
+            // 定向更新而不是整实体 merge：避免把游离快照里的旧字段（如禁用状态）覆盖回数据库。
+            authUserRepository.updateLastLoginAt(profile.getId(), loginAt);
+            return sessionId;
+        });
+        profile.setLastLoginAt(loginAt);
 
         // 审计
         auditLogin(profile, profile.getUsername(), clientPlatform, deviceId, deviceName,
@@ -425,27 +435,20 @@ public class AuthService {
         if (newDevice) {
             notifyNewDevice(profile, clientPlatform, deviceName, ipAddress);
         }
-
-        profile.setLastLoginAt(Instant.now());
-        authUserRepository.save(profile);
         return issueToken(toDto(profile), sessionId);
     }
 
-    private UUID createActiveSession(
+    /**
+     * 登记新会话：写入 Redis 注册表并持久化会话行。调用方负责事务边界。
+     */
+    private UUID registerSession(
             AuthUser profile,
-            String clientPlatform,
+            UUID sessionId,
+            String platform,
             String deviceId,
             String deviceName,
-            String ipAddress,
-            boolean enforcePlatformMutex
+            String ipAddress
     ) {
-        UUID sessionId = UUID.randomUUID();
-        // 平台标识参与互斥判定与 Redis 会话键拼接，必须在落库和登记前先归一化到固定档位，
-        // 否则改写大小写即可绕开同平台互斥，并把任意长字符串写进键空间。
-        String platform = ClientPlatform.normalize(clientPlatform);
-        if (enforcePlatformMutex) {
-            enforceSamePlatformMutex(profile.getId(), platform, sessionId);
-        }
         activeSessionRegistry.register(
                 profile.getId(),
                 platform,
@@ -858,5 +861,14 @@ public class AuthService {
     private AuthUserDto toDto(AuthUser profile) {
         String avatarUrl = AuthUserMapper.resolveAvatarUrl(profile, objectStorageClient, objectStorageBuckets);
         return AuthUserMapper.toDto(profile, avatarUrl);
+    }
+
+    /**
+     * 注册写库结果：命中强制 2FA 时没有会话。
+     *
+     * @param profile 已写入的用户
+     * @param sessionId 新会话标识，未签发时为 null
+     */
+    private record RegistrationOutcome(AuthUser profile, UUID sessionId) {
     }
 }

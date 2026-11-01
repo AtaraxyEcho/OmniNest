@@ -39,6 +39,15 @@ class FileNodeDtoAssembler {
      * 未知用户不填充，由前端按缺省呈现。
      */
     FileNodeDto toDto(FileNode node, Map<UUID, String> uploaderNames, UUID coverFileId) {
+        return toDto(node, uploaderNames, coverFileId, false);
+    }
+
+    FileNodeDto toDto(
+            FileNode node,
+            Map<UUID, String> uploaderNames,
+            UUID coverFileId,
+            boolean favorited
+    ) {
         UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         return new FileNodeDto(
                 node.getId(),
@@ -54,7 +63,9 @@ class FileNodeDtoAssembler {
                 node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
                 node.getUploadedBy(),
                 uploaderNames.get(uploaderId),
-                coverFileId
+                coverFileId,
+                null,
+                favorited
         );
     }
 

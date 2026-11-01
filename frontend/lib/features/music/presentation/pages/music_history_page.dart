@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
@@ -50,8 +51,11 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
         child: history.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error:
-              (error, stackTrace) =>
-                  _hostedHistoryFailure(context, '$error', l10n),
+              (error, stackTrace) => _hostedHistoryFailure(
+                context,
+                describeUserFacingError(error, l10n: l10n).message,
+                l10n,
+              ),
           data: (state) {
             if (state.errorMessage != null) {
               return _hostedHistoryFailure(
@@ -95,7 +99,10 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
         backgroundColor: context.musicColors.surface,
         body: history.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => _HistoryFailure(message: '$error'),
+          error:
+              (error, stackTrace) => _HistoryFailure(
+                message: describeUserFacingError(error, l10n: l10n).message,
+              ),
           data: (state) {
             if (state.errorMessage != null) {
               return _HistoryFailure(

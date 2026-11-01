@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -40,7 +41,11 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
   int _generation = 0;
 
   @override
-  PhotoPeriodState build() => const PhotoPeriodState();
+  PhotoPeriodState build() {
+    // 期间浏览持有上一账号的照片与签名地址，换号必须自行清空。
+    ref.watch(sessionEpochProvider);
+    return const PhotoPeriodState();
+  }
 
   /// 打开指定年月：复位状态并拉取首页。
   Future<void> open(int year, int month) async {

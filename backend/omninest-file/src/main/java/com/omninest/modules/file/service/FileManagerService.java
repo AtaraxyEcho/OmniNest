@@ -1,5 +1,7 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.api.PageClamps;
+import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.storage.ObjectStorageClient;
@@ -39,9 +41,11 @@ import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文件核心操作服务。
@@ -70,6 +74,7 @@ public class FileManagerService {
     private final SharedSpaceService sharedSpaceService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
+    private final TransactionTemplate transactionTemplate;
 
     /** 单次打包总字节上限；默认 5GB，超限让客户端分批下载。 */
     private long maxBatchDownloadTotalBytes = 5L * 1024 * 1024 * 1024;
@@ -88,18 +93,26 @@ public class FileManagerService {
     }
 
     /**
-     * 查询用户最近访问的文件。
+     * 分页查询用户最近访问的文件。
      *
      * @param ownerUserId 用户 ID
-     * @return 最近访问文件列表
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 最近访问文件分页
      */
     @Transactional(readOnly = true)
-    public List<FileNodeDto> listRecentFiles(UUID ownerUserId) {
-        List<FileNode> nodes = accessRecordRepository.findRecentNodes(
+    public PageResponse<FileNodeDto> listRecentFiles(UUID ownerUserId, int page, int size) {
+        int safePage = PageClamps.safePage(page);
+        int safeSize = PageClamps.safeSize(size);
+        Page<FileNode> nodes = accessRecordRepository.findRecentNodes(
                 ownerUserId,
                 SpaceType.PERSONAL,
-                PageRequest.of(0, 50));
-        return fileNodeSupport.toNodeDtos(nodes);
+                PageRequest.of(safePage, safeSize));
+        return PageResponse.of(
+                fileNodeSupport.toNodeDtos(nodes.getContent(), ownerUserId),
+                safePage,
+                safeSize,
+                nodes.getTotalElements());
     }
 
     /**
@@ -381,8 +394,13 @@ public class FileManagerService {
      * @param fileIds 待打包文件 ID 列表
      * @return 打包条目，文件夹与回收站节点不产出条目
      */
-    @Transactional(readOnly = true)
     public List<ZipPackEntry> planZipEntries(UUID userId, List<String> fileIds) {
+        // 打包入口在同类内自调用，注解式事务不会经过代理；这里显式开短事务，
+        // 保证校验、对象定位与字节合计读取同一快照。
+        return transactionTemplate.execute(status -> planZipEntriesInTransaction(userId, fileIds));
+    }
+
+    private List<ZipPackEntry> planZipEntriesInTransaction(UUID userId, List<String> fileIds) {
         List<UUID> nodeIds = fileIds.stream().map(this::parseFileId).distinct().toList();
         Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(nodeIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node));

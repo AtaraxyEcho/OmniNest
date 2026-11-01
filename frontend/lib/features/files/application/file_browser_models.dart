@@ -219,7 +219,20 @@ class FileBrowserState {
   final List<FileNode> favoriteFiles;
 
   /// 已收藏节点 id 集（表格/网格行内星标依据，跨分区一致）。
-  Set<String> get favoriteIdSet => favoriteFiles.map((f) => f.id).toSet();
+  ///
+  /// 同时采信列表接口下推的 favorited 标记：收藏列表的预载有单页上限，
+  /// 累计收藏超过一页后不能只靠 favoriteFiles 推断星标。
+  Set<String> get favoriteIdSet {
+    final ids = favoriteFiles.map((f) => f.id).toSet();
+    for (final pool in [files, recentFiles, recycleBin]) {
+      for (final node in pool) {
+        if (node.favorited) {
+          ids.add(node.id);
+        }
+      }
+    }
+    return ids;
+  }
 
   final List<SharedFileItem> sharedWithMe;
   final FilesSubPageMeta sharedWithMeMeta;

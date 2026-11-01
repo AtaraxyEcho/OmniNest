@@ -35,7 +35,14 @@ public class AdminUserContentGuardRepository {
             "背景素材",
             "外部存储",
             "集成账号",
-            "内容资产"
+            "内容资产",
+            "影视库来源",
+            "影视条目",
+            "电影",
+            "剧集",
+            "音乐曲目",
+            "音乐专辑",
+            "音乐艺人"
     );
 
     private static final String CONTENT_COUNT_SQL = """
@@ -50,7 +57,14 @@ public class AdminUserContentGuardRepository {
               (select count(*) from omni.backdrop_assets where owner_user_id = :userId),
               (select count(*) from omni.storage_external_accounts where owner_user_id = :userId),
               (select count(*) from omni.integration_accounts where owner_user_id = :userId),
-              (select count(*) from omni.content_assets where owner_user_id = :userId)
+              (select count(*) from omni.content_assets where owner_user_id = :userId),
+              (select count(*) from omni.video_library_sources where owner_user_id = :userId),
+              (select count(*) from omni.media_video_items where owner_user_id = :userId),
+              (select count(*) from omni.media_movies where owner_user_id = :userId),
+              (select count(*) from omni.media_tv_series where owner_user_id = :userId),
+              (select count(*) from omni.music_tracks where owner_user_id = :userId),
+              (select count(*) from omni.music_albums where owner_user_id = :userId),
+              (select count(*) from omni.music_artists where owner_user_id = :userId)
             """;
 
     private final EntityManager entityManager;

@@ -2,6 +2,7 @@ package com.omninest.modules.backdrop.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
@@ -116,6 +117,7 @@ public class BackdropAssetService {
     private final BackdropScanTaskService backdropScanTaskService;
     private final RateLimitService rateLimitService;
     private final BackdropVideoThumbnailExtractor videoThumbnailExtractor;
+    private final TempStagingPort tempStagingPort;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -143,6 +145,7 @@ public class BackdropAssetService {
             BackdropScanTaskService backdropScanTaskService,
             RateLimitService rateLimitService,
             BackdropVideoThumbnailExtractor videoThumbnailExtractor,
+            TempStagingPort tempStagingPort,
             PlatformTransactionManager transactionManager
     ) {
         this.backdropAssetRepository = backdropAssetRepository;
@@ -155,6 +158,7 @@ public class BackdropAssetService {
         this.backdropScanTaskService = backdropScanTaskService;
         this.rateLimitService = rateLimitService;
         this.videoThumbnailExtractor = videoThumbnailExtractor;
+        this.tempStagingPort = tempStagingPort;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -200,7 +204,8 @@ public class BackdropAssetService {
         UUID assetId = UUID.randomUUID();
         Path stagingFile = null;
         try {
-            stagingFile = Files.createTempFile("backdrop-upload-", "." + clientExtension);
+            stagingFile = tempStagingPort.createTempFile(
+                    "backdrop", "backdrop-upload-", "." + clientExtension);
             long writtenBytes;
             String sha256;
             try (InputStream input = file.getInputStream()) {
@@ -502,13 +507,7 @@ public class BackdropAssetService {
                     ownerUserId, assetId, ex);
             return null;
         } finally {
-            if (playbackFile != null) {
-                try {
-                    Files.deleteIfExists(playbackFile);
-                } catch (IOException ex) {
-                    log.debug("播放衍生临时文件清理失败: {}", ex.getMessage());
-                }
-            }
+            tempStagingPort.deleteQuietly(playbackFile);
         }
     }
 
@@ -523,7 +522,8 @@ public class BackdropAssetService {
         }
         Path thumbnailFile = null;
         try {
-            thumbnailFile = Files.createTempFile("backdrop-thumb-", thumbnailExtension());
+            thumbnailFile = tempStagingPort.createTempFile(
+                    "backdrop", "backdrop-thumb-", thumbnailExtension());
             Thumbnails.of(stagingFile.toFile())
                     .size(THUMBNAIL_MAX_WIDTH, THUMBNAIL_MAX_HEIGHT)
                     .keepAspectRatio(true)
@@ -537,13 +537,7 @@ public class BackdropAssetService {
         } catch (IOException ex) {
             throw new UncheckedIOException("背景素材缩略图生成失败", ex);
         } finally {
-            if (thumbnailFile != null) {
-                try {
-                    Files.deleteIfExists(thumbnailFile);
-                } catch (IOException ex) {
-                    log.debug("背景图片缩略图临时文件清理失败: {}", ex.getMessage());
-                }
-            }
+            tempStagingPort.deleteQuietly(thumbnailFile);
         }
     }
 
@@ -569,13 +563,7 @@ public class BackdropAssetService {
                     ownerUserId, assetId, ex);
             return null;
         } finally {
-            if (thumbnailFile != null) {
-                try {
-                    Files.deleteIfExists(thumbnailFile);
-                } catch (IOException ex) {
-                    log.debug("背景视频缩略图临时文件清理失败: {}", ex.getMessage());
-                }
-            }
+            tempStagingPort.deleteQuietly(thumbnailFile);
         }
     }
 
@@ -875,14 +863,7 @@ public class BackdropAssetService {
     }
 
     private void deleteStagingQuietly(Path stagingFile) {
-        if (stagingFile == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(stagingFile);
-        } catch (IOException ex) {
-            log.debug("背景素材 staging 清理失败: {}", ex.getMessage());
-        }
+        tempStagingPort.deleteQuietly(stagingFile);
     }
 
     /**

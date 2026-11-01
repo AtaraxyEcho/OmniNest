@@ -2645,6 +2645,11 @@ ALTER TABLE "omni"."auth_users" ADD CONSTRAINT "chk_auth_users_quota" CHECK (quo
 
 ALTER TABLE "omni"."auth_users" ADD CONSTRAINT "auth_users_pkey" PRIMARY KEY ("id");
 
+-- 头像反查用于文件删除解绑与孤儿扫描，按 file_id 反查必须走索引。
+CREATE INDEX "idx_auth_users_avatar_file" ON "omni"."auth_users" USING btree (
+  "avatar_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE avatar_file_id IS NOT NULL;
+
 ALTER TABLE "omni"."config_entries" ADD CONSTRAINT "uniq_config_entries_key" UNIQUE ("config_key");
 
 ALTER TABLE "omni"."config_entries" ADD CONSTRAINT "chk_config_entries_value_type" CHECK (value_type::text = ANY (ARRAY['STRING'::character varying::text, 'NUMBER'::character varying::text, 'BOOLEAN'::character varying::text, 'JSON'::character varying::text]));
@@ -3344,6 +3349,11 @@ CREATE INDEX "idx_photo_albums_owner" ON "omni"."photo_albums" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
 
+-- 相册封面反查用于文件删除解绑与孤儿扫描。
+CREATE INDEX "idx_photo_albums_cover_file" ON "omni"."photo_albums" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
+
 ALTER TABLE "omni"."photo_albums" ADD CONSTRAINT "photo_albums_photo_count_check" CHECK (photo_count >= 0);
 
 ALTER TABLE "omni"."photo_albums" ADD CONSTRAINT "photo_albums_pkey" PRIMARY KEY ("id");
@@ -3363,6 +3373,12 @@ ALTER TABLE "omni"."photo_batch_tasks" ADD CONSTRAINT "photo_batch_tasks_pkey" P
 
 CREATE INDEX "idx_photo_edit_versions_photo" ON "omni"."photo_edit_versions" USING btree (
   "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+
+-- 版本号在同一照片下唯一：并发编辑由照片行锁串行分配，唯一索引兜底防止重复编号。
+CREATE UNIQUE INDEX "uniq_photo_edit_versions_photo_ver" ON "omni"."photo_edit_versions" USING btree (
+  "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "version_number" "pg_catalog"."int4_ops" ASC NULLS LAST
 );
 
 ALTER TABLE "omni"."photo_edit_versions" ADD CONSTRAINT "ck_photo_edit_versions_params_json_size" CHECK (octet_length(edit_params::text) <= 65536);
@@ -3728,6 +3744,9 @@ CREATE INDEX "idx_import_tasks_status" ON "omni"."storage_import_tasks" USING bt
 CREATE INDEX "idx_import_tasks_task" ON "omni"."storage_import_tasks" USING btree (
   "task_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_import_tasks_external_account" ON "omni"."storage_import_tasks" USING btree (
+  "external_account_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE external_account_id IS NOT NULL;
 
 ALTER TABLE "omni"."storage_import_tasks" ADD CONSTRAINT "storage_import_tasks_pkey" PRIMARY KEY ("id");
 

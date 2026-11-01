@@ -781,9 +781,9 @@ public class MusicController {
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
-    @GetMapping("/api/v1/music/platform/{platform}/info")
+    @GetMapping({"/api/v1/music/platform/{platform}/info", "/api/v1/music/platforms/{platform}/info"})
     CompletableFuture<ApiResponse<PlatformUserInfo>> platformInfo(
-            @PathVariable String platform
+            @PathVariable @Size(max = 32) String platform
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return onlineDispatcher.online(() -> musicPlatformAccountService.getUserInfo(

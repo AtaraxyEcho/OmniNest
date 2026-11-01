@@ -85,6 +85,15 @@ class ProductionSecretsValidatorTest {
     }
 
     @Test
+    @DisplayName("prod 启动成功：未启用图像分析侧车时不要求侧车密钥")
+    void succeedsWhenOptionalSidecarSecretIsBlank() {
+        MockEnvironment environment = completeProdEnvironment();
+        environment.setProperty("photo.ai.secret", "");
+        assertThatCode(() -> new ProductionSecretsValidator(environment).validate())
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("prod 启动成功：关键凭据均已显式配置")
     void succeedsWhenSecretsAreConfigured() {
         assertThatCode(() -> new ProductionSecretsValidator(completeProdEnvironment()).validate())

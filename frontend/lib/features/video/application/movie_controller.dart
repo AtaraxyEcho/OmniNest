@@ -267,10 +267,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   Future<MovieCenterState> build() async {
     // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
     ref.watch(sessionEpochProvider);
+    // 检索词与防抖计时器都属于上一个会话：不清理会让新账号首屏带着旧关键词，
+    // 待触发的计时器还会回写旧结果。
+    _searchKeyword = '';
+    _searchDebounce?.cancel();
+    ref.onDispose(() => _searchDebounce?.cancel());
     final loaded = await _loadState();
     final section = _pendingSection ?? ref.read(movieCenterSectionProvider);
     _pendingSection = null;
-    _searchDebounce?.cancel();
     final restored =
         section == loaded.section ? loaded : loaded.copyWith(section: section);
     // 恢复非电影分区时主动重载分区数据，避免管理页只显示空任务列表。
@@ -314,7 +318,13 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       throw StateError(next.errorMessage!);
     }
     _applyRefreshedState(current, next);
-    await _loadSection(current?.section ?? MovieSection.movies, force: true);
+    // 分区同样以回写时刻的实况为准：await 期间页面可能已切栏。
+    final liveSection =
+        state.asData?.value.section ??
+        _pendingSection ??
+        current?.section ??
+        MovieSection.movies;
+    await _loadSection(liveSection, force: true);
   }
 
   void _applyRefreshedState(MovieCenterState? current, MovieCenterState next) {
@@ -670,10 +680,10 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     }
   }
 
-  final List<String> _partialErrors = [];
-
   Future<MovieCenterState> _loadState() async {
-    _partialErrors.clear();
+    // 刷新与实时事件可能并发执行：错误收集必须是本次加载的局部变量，
+    // 共享实例字段会互相清空或混入对方的分区错误。
+    final partialErrors = <String>[];
     final emptyPage = const MediaPage<MovieVideoItem>(
       items: [],
       page: 0,
@@ -682,15 +692,17 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       totalPages: 0,
     );
     final results = await Future.wait([
-      _safe(_api.dashboard, MovieDashboard.empty()),
+      _safe(_api.dashboard, MovieDashboard.empty(), partialErrors),
       _safe(
         () => _api.libraryPage(mediaType: 'MOVIE', keyword: _searchKeyword),
         emptyPage,
+        partialErrors,
       ),
       // 分集一并拉取：影片管理需要电影+剧集/动漫全集；电影分区仍按 mediaType 过滤。
       _safe(
         () => _api.libraryPage(mediaType: 'EPISODE', keyword: _searchKeyword),
         emptyPage,
+        partialErrors,
       ),
       // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
       // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
@@ -703,6 +715,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           totalElements: 0,
           totalPages: 0,
         ),
+        partialErrors,
       ),
       _safe(
         () => _api.seriesByTypePage(seriesType: 'ANIME'),
@@ -713,6 +726,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           totalElements: 0,
           totalPages: 0,
         ),
+        partialErrors,
       ),
     ]);
     final dashboard = results[0] as MovieDashboard;
@@ -742,15 +756,19 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       episodePage: episodePage.page,
       episodeHasMore: episodePage.page + 1 < episodePage.totalPages,
       loadedSections: const {MovieSection.movies},
-      errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
+      errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
     );
   }
 
-  Future<T> _safe<T>(Future<T> Function() call, T fallback) async {
+  Future<T> _safe<T>(
+    Future<T> Function() call,
+    T fallback,
+    List<String> partialErrors,
+  ) async {
     try {
       return await call();
     } on Exception catch (e) {
-      _partialErrors.add(describeUserFacingError(e).message);
+      partialErrors.add(describeUserFacingError(e).message);
       return fallback;
     }
   }

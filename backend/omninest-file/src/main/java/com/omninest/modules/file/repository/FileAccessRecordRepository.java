@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -33,7 +34,7 @@ public interface FileAccessRecordRepository extends JpaRepository<FileAccessReco
               and record.fileNode.spaceType = :spaceType
             order by record.lastAccessedAt desc
             """)
-    List<FileNode> findRecentNodes(
+    Page<FileNode> findRecentNodes(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("spaceType") SpaceType spaceType,
             Pageable pageable);

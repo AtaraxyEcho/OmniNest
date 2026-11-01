@@ -56,7 +56,7 @@ public class SharedSpaceController {
             @RequestParam(defaultValue = "100") int size) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
         var files = sharedSpaceService.listSharedSpaceFilesPage(parentId, operatorId, page, size);
-        List<FileNodeDto> dtos = fileNodeSupport.toNodeDtos(files.getContent());
+        List<FileNodeDto> dtos = fileNodeSupport.toNodeDtos(files.getContent(), operatorId);
         return ApiResponse.success(PageResponse.of(dtos, files.getNumber(), files.getSize(), files.getTotalElements()));
     }
 

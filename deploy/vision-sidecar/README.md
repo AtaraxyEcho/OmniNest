@@ -12,7 +12,8 @@
 
 ## API
 
-除健康检查外，接口都要求 `X-OmniNest-Sidecar-Token` 请求头。
+除健康检查外，接口都要求 `X-OmniNest-Timestamp` 与 `X-OmniNest-Signature` 请求头；
+签名是「时间戳 + 方法 + 路径」的 HMAC-SHA256，共享密钥本身不出现在请求里。
 
 | 接口 | 说明 |
 | --- | --- |
