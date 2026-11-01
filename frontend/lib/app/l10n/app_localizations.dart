@@ -16499,6 +16499,18 @@ abstract class AppLocalizations {
   /// **'Favorites'**
   String get musicDeckFavorites;
 
+  /// No description provided for @musicMute.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute'**
+  String get musicMute;
+
+  /// No description provided for @musicUnmute.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute'**
+  String get musicUnmute;
+
   /// No description provided for @musicDeckRecent.
   ///
   /// In en, this message translates to:

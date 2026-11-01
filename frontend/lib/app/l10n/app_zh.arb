@@ -3850,6 +3850,8 @@
   "musicDeckLibrary": "曲库",
   "musicDeckPlaylists": "歌单",
   "musicDeckFavorites": "收藏",
+  "musicMute": "静音",
+  "musicUnmute": "取消静音",
   "musicDeckRecent": "最近播放",
   "musicDeckLocalManagement": "本地资源",
   "musicDeckMore": "更多",

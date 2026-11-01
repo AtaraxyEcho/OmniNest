@@ -9035,6 +9035,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeckFavorites => 'Favorites';
 
   @override
+  String get musicMute => 'Mute';
+
+  @override
+  String get musicUnmute => 'Unmute';
+
+  @override
   String get musicDeckRecent => 'Recently played';
 
   @override

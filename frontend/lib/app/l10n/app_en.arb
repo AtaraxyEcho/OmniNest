@@ -3981,6 +3981,8 @@
   "musicDeckLibrary": "Library",
   "musicDeckPlaylists": "Playlists",
   "musicDeckFavorites": "Favorites",
+  "musicMute": "Mute",
+  "musicUnmute": "Unmute",
   "musicDeckRecent": "Recently played",
   "musicDeckLocalManagement": "Local resources",
   "musicDeckMore": "More",

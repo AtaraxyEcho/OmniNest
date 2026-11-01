@@ -338,7 +338,7 @@ class _FileTileState extends State<_FileTile> {
 }
 
 /// 网格卡片内联收藏星标：与表格行内星标同图标语义（实心=已收藏），
-/// 28px 命中区、悬停提示，点击切换收藏。
+/// 36px 命中区、悬停提示，点击切换收藏。
 class _GridFavoriteStar extends StatefulWidget {
   const _GridFavoriteStar({required this.favorited, required this.onToggle});
 
@@ -368,8 +368,8 @@ class _GridFavoriteStarState extends State<_GridFavoriteStar> {
           behavior: HitTestBehavior.opaque,
           onTap: widget.onToggle,
           child: Container(
-            width: 28,
-            height: 28,
+            width: 36,
+            height: 36,
             alignment: Alignment.center,
             color:
                 _hovering ? colors.surfaceContainerHighest : Colors.transparent,

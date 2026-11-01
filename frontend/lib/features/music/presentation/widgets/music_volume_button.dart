@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
@@ -322,6 +323,7 @@ class _MusicVolumeColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = volume <= 0;
+    final l10n = AppLocalizations.of(context);
     final normalized = (volume / 100).clamp(0.0, 1.0);
     return Container(
       width: 40,
@@ -359,18 +361,25 @@ class _MusicVolumeColumn extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: onToggleMute,
-                  child: SizedBox.square(
-                    dimension: 22,
-                    child: Icon(
-                      muted
-                          ? Icons.volume_off_rounded
-                          : Icons.volume_up_rounded,
-                      size: 14,
-                      color:
-                          muted ? iconColor.withValues(alpha: 0.7) : iconColor,
+                Semantics(
+                  button: true,
+                  toggled: muted,
+                  label: muted ? l10n.musicUnmute : l10n.musicMute,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: onToggleMute,
+                    child: SizedBox.square(
+                      dimension: 22,
+                      child: Icon(
+                        muted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        size: 14,
+                        color:
+                            muted
+                                ? iconColor.withValues(alpha: 0.7)
+                                : iconColor,
+                      ),
                     ),
                   ),
                 ),

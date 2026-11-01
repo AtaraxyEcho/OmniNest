@@ -8773,6 +8773,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicDeckFavorites => '收藏';
 
   @override
+  String get musicMute => '静音';
+
+  @override
+  String get musicUnmute => '取消静音';
+
+  @override
   String get musicDeckRecent => '最近播放';
 
   @override

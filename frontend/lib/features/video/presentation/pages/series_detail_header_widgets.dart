@@ -141,20 +141,25 @@ class _Backdrop extends StatelessWidget {
                   Material(
                     color: Colors.black.withValues(alpha: 0.45),
                     shape: const CircleBorder(),
-                    child: InkWell(
-                      onTap: onToggleFavorite,
-                      customBorder: const CircleBorder(),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Icon(
-                          favorited
-                              ? Icons.star_rounded
-                              : Icons.star_outline_rounded,
-                          size: 22,
-                          color:
-                              favorited
-                                  ? MovieDetailTheme.accent
-                                  : Colors.white,
+                    child: Semantics(
+                      button: true,
+                      toggled: favorited,
+                      label: l10n.videoFavorite,
+                      child: InkWell(
+                        onTap: onToggleFavorite,
+                        customBorder: const CircleBorder(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(7),
+                          child: Icon(
+                            favorited
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            size: 22,
+                            color:
+                                favorited
+                                    ? MovieDetailTheme.accent
+                                    : Colors.white,
+                          ),
                         ),
                       ),
                     ),
