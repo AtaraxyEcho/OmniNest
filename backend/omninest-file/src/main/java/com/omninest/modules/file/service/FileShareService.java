@@ -389,8 +389,22 @@ public class FileShareService {
      * @param request     更新请求
      * @return 更新后的分享链接信息（不含明文令牌以外的凭据）
      */
-    @Transactional(rollbackFor = Exception.class)
     public FileShareLinkDto updateShare(UUID ownerUserId, UUID shareId, UpdateShareLinkRequest request) {
+        // 事务外先算密码哈希：空白串表示清除密码，不需要哈希。
+        boolean passwordProvided = request.password() != null;
+        String passwordHash = null;
+        if (passwordProvided && !request.password().isBlank()) {
+            SharePasswordPolicy.requireEncodable(request.password());
+            passwordHash = passwordEncoder.encode(request.password());
+        }
+        final String finalPasswordHash = passwordHash;
+        return transactionTemplate.execute(status -> updateShareInTransaction(
+                ownerUserId, shareId, request, passwordProvided, finalPasswordHash));
+    }
+
+    private FileShareLinkDto updateShareInTransaction(
+            UUID ownerUserId, UUID shareId, UpdateShareLinkRequest request,
+            boolean passwordProvided, String passwordHash) {
         ShareLink share = shareLinkRepository.findByIdAndOwnerUserId(shareId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
         if (share.getDisabledAt() != null) {
@@ -416,10 +430,8 @@ public class FileShareService {
         if (maxAccessCount != null) {
             share.setMaxAccessCount(maxAccessCount > 0 ? maxAccessCount : null);
         }
-        if (request.password() != null) {
-            SharePasswordPolicy.requireEncodable(request.password());
-            share.setPasswordHash(
-                    request.password().isBlank() ? null : passwordEncoder.encode(request.password()));
+        if (passwordProvided) {
+            share.setPasswordHash(passwordHash);
         }
         ShareLink saved = shareLinkRepository.save(share);
         readThroughCache.invalidate("omninest:share:link:" + saved.getTokenHash());
