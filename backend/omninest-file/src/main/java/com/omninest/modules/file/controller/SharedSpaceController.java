@@ -10,6 +10,7 @@ import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.service.FileNodeSupport;
 import com.omninest.modules.file.dto.MoveToSpaceRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
+import com.omninest.modules.file.dto.SharedSpaceRolePermissionDto;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
 import com.omninest.modules.file.service.SharedSpaceQuotaService;
 import com.omninest.modules.file.service.SharedSpaceService;
@@ -124,6 +125,14 @@ public class SharedSpaceController {
         UUID operatorId = currentUserContext.requireCurrentUserId();
         sharedSpaceService.updateConfig(operatorId, request.maxBytes(), request.enabled());
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "管理员：查询角色权限矩阵", description = "返回全部角色当前的共享空间能力，未配置的角色按全 false 返回")
+    @GetMapping("/permissions")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
+    public ApiResponse<List<SharedSpaceRolePermissionDto>> listRolePermissions() {
+        UUID operatorId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(sharedSpaceService.listRolePermissions(operatorId));
     }
 
     @Operation(summary = "管理员：设置角色权限")

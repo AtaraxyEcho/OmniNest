@@ -839,6 +839,8 @@
   "clipboardCopyFailed": "复制失败，请手动选择复制",
   "filesPasswordLabel": "密码",
   "filesSharePasswordLabel": "密码: {password}",
+  "filesShareCopyLink": "复制分享链接",
+  "filesShareCopyPassword": "复制提取码",
   "@filesSharePasswordLabel": {
     "placeholders": {
       "password": {}

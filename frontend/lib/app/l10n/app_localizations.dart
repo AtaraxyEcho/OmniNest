@@ -4483,6 +4483,18 @@ abstract class AppLocalizations {
   /// **'Password: {password}'**
   String filesSharePasswordLabel(Object password);
 
+  /// No description provided for @filesShareCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy share link'**
+  String get filesShareCopyLink;
+
+  /// No description provided for @filesShareCopyPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy access code'**
+  String get filesShareCopyPassword;
+
   /// No description provided for @filesCopyLinkWithPassword.
   ///
   /// In en, this message translates to:

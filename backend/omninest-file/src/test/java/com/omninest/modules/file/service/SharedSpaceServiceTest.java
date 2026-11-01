@@ -31,6 +31,7 @@ import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.quota.port.AdminActorVerifier;
+import com.omninest.modules.user.port.RoleLookup;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -87,7 +88,7 @@ class SharedSpaceServiceTest {
                 fileNodeScanQueryRepository, configValueProvider, eventPublisher,
                 fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
-                mock(AdminAuditRecorder.class)
+                mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );
     }
 

@@ -2397,6 +2397,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get filesShareCopyLink => 'Copy share link';
+
+  @override
+  String get filesShareCopyPassword => 'Copy access code';
+
+  @override
   String get filesCopyLinkWithPassword => 'Copy link (with password)';
 
   @override

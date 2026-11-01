@@ -950,6 +950,8 @@
   "clipboardCopyFailed": "Copy failed, please select and copy manually",
   "filesPasswordLabel": "Password",
   "filesSharePasswordLabel": "Password: {password}",
+  "filesShareCopyLink": "Copy share link",
+  "filesShareCopyPassword": "Copy access code",
   "@filesSharePasswordLabel": {
     "placeholders": {
       "password": {}

@@ -21,15 +21,18 @@ import com.omninest.modules.file.domain.SharedSpacePermission.Action;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
+import com.omninest.modules.file.dto.SharedSpaceRolePermissionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.quota.port.AdminActorVerifier;
+import com.omninest.modules.user.port.RoleLookup;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -38,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -80,6 +84,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     private final RuntimeConfigCommand runtimeConfigCommand;
     private final AdminActorVerifier adminActorVerifier;
     private final AdminAuditRecorder adminAuditRecorder;
+    private final RoleLookup roleLookup;
 
     /**
      * 检查共享空间是否启用。
@@ -753,6 +758,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
             Boolean canDownload, Boolean canDeleteOwn, Boolean canDeleteAny,
             Boolean canMoveTo, Boolean canMoveFrom, Boolean canCreateFolder) {
         adminActorVerifier.requireFreshAdminActor(operatorId);
+        // 角色标识来自请求体：不校验存在性会写入永远匹配不到角色的幽灵权限行。
+        if (!roleLookup.existsById(roleId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "角色不存在");
+        }
         SharedSpacePermission perm = permissionRepository.findByRoleId(roleId)
                 .orElseGet(() -> {
                     SharedSpacePermission p = new SharedSpacePermission();
@@ -784,5 +793,37 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 roleId,
                 auditPayload);
         log.info("共享空间权限更新: roleId={}", roleId);
+    }
+
+    /**
+     * 查询全部角色的共享空间权限矩阵。
+     *
+     * <p>管理端只能逐角色写入、看不到整体配置，等于无法确认"谁还能删别人文件"。
+     * 未配置过的角色按全 false 返回，避免把"没配"误读成"已关闭"或"已授权"。</p>
+     *
+     * @param operatorId 操作者用户标识
+     * @return 按角色编码排序的权限矩阵
+     */
+    @Transactional(readOnly = true)
+    public List<SharedSpaceRolePermissionDto> listRolePermissions(UUID operatorId) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
+        Map<UUID, SharedSpacePermission> configured = permissionRepository.findAll().stream()
+                .collect(Collectors.toMap(SharedSpacePermission::getRoleId, p -> p, (l, r) -> l));
+        return roleLookup.listAll().stream()
+                .sorted(Comparator.comparing(RoleLookup.RoleRef::code, String.CASE_INSENSITIVE_ORDER))
+                .map(role -> {
+                    SharedSpacePermission perm = configured.get(role.id());
+                    return perm == null
+                            ? new SharedSpaceRolePermissionDto(
+                                    role.id(), role.code(), false, false, false,
+                                    false, false, false, false, false)
+                            : new SharedSpaceRolePermissionDto(
+                                    role.id(), role.code(), perm.isCanBrowse(),
+                                    perm.isCanUpload(), perm.isCanDownload(),
+                                    perm.isCanDeleteOwn(), perm.isCanDeleteAny(),
+                                    perm.isCanMoveTo(), perm.isCanMoveFrom(),
+                                    perm.isCanCreateFolder());
+                })
+                .toList();
     }
 }

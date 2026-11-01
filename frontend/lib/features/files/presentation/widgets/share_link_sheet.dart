@@ -62,9 +62,10 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
     final l10n = AppLocalizations.of(context);
     // 弹窗可能被遮罩、下滑或外层关闭键关闭；统一在打开时清空上一份分享状态，
     // 避免快速切换文件时短暂显示上一个文件的链接。
-    ProviderScope.containerOf(context, listen: false)
-        .read(shareLinkControllerProvider.notifier)
-        .reset();
+    ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(shareLinkControllerProvider.notifier).reset();
     // 面板经根导航器呈现，默认拿不到壳层暗皮肤与 Files 环境重绑；
     // 在调用点捕获宿主环境，面板子树内重放。
     final ambience = MobileSheetAmbience.capture(context);
@@ -516,18 +517,25 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                       ),
                     ),
                   ),
-                  InkWell(
-                    onTap:
-                        shareUrl == null
-                            ? null
-                            : () => _copyToClipboard(shareUrl),
-                    borderRadius: BorderRadius.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.copy,
-                        size: 16,
-                        color: context.filesColors.primary,
+                  Tooltip(
+                    message: l10n.filesShareCopyLink,
+                    child: Semantics(
+                      button: true,
+                      label: l10n.filesShareCopyLink,
+                      child: InkWell(
+                        onTap:
+                            shareUrl == null
+                                ? null
+                                : () => _copyToClipboard(shareUrl),
+                        borderRadius: BorderRadius.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.copy,
+                            size: 16,
+                            color: context.filesColors.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -554,15 +562,23 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    InkWell(
-                      onTap: () => _copyToClipboard(share.generatedPassword!),
-                      borderRadius: BorderRadius.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: Icon(
-                          Icons.copy,
-                          size: 13,
-                          color: context.filesColors.onSurface,
+                    Tooltip(
+                      message: l10n.filesShareCopyPassword,
+                      child: Semantics(
+                        button: true,
+                        label: l10n.filesShareCopyPassword,
+                        child: InkWell(
+                          onTap:
+                              () => _copyToClipboard(share.generatedPassword!),
+                          borderRadius: BorderRadius.zero,
+                          child: Padding(
+                            padding: const EdgeInsets.all(3),
+                            child: Icon(
+                              Icons.copy,
+                              size: 13,
+                              color: context.filesColors.onSurface,
+                            ),
+                          ),
                         ),
                       ),
                     ),

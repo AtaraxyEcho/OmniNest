@@ -32,6 +32,7 @@ import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.quota.port.AdminActorVerifier;
+import com.omninest.modules.user.port.RoleLookup;
 import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.audit.AdminAuditRecorder;
 import java.util.ArrayList;
@@ -104,7 +105,7 @@ class SharedSpaceIntegrationTest {
                 fileNodeScanQueryRepository, configValueProvider, eventPublisher,
                 fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
-                mock(AdminAuditRecorder.class)
+                mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );
     }
 

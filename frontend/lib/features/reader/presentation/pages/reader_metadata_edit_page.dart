@@ -1,7 +1,6 @@
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -609,7 +608,8 @@ class _ReaderMetadataEditPageState
           .read(readerCenterControllerProvider.notifier)
           .uploadCover(
             itemId: widget.itemId,
-            imageBytes: Uint8List.fromList(bytes),
+            // readBytes 已经返回 Uint8List，再包一层 fromList 只是白拷一份。
+            imageBytes: bytes,
             fileName: file.name,
           );
       if (!mounted) {

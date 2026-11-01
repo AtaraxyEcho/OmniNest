@@ -2317,6 +2317,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get filesShareCopyLink => '复制分享链接';
+
+  @override
+  String get filesShareCopyPassword => '复制提取码';
+
+  @override
   String get filesCopyLinkWithPassword => '复制链接（含密码）';
 
   @override

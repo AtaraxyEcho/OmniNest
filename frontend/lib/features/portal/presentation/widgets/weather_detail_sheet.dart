@@ -338,6 +338,12 @@ class _WeatherSceneBackdrop extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asset =
         ref.watch(appBackdropControllerProvider).asData?.value.selectedBackdrop;
+    // 这一层只是顶部约 250px 的背景：按视口物理宽度解码即可，
+    // 不限制会把 4K 壁纸整图解码进内存。
+    final cacheWidth =
+        (MediaQuery.sizeOf(context).width *
+                MediaQuery.devicePixelRatioOf(context))
+            .round();
     final sceneUrl =
         asset?.isVideo == true
             ? (asset?.thumbnailPath?.isNotEmpty == true
@@ -365,6 +371,7 @@ class _WeatherSceneBackdrop extends ConsumerWidget {
               ]),
               child: Image.network(
                 sceneUrl,
+                cacheWidth: cacheWidth,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => bundled,
               ),

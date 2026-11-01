@@ -513,6 +513,15 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
       return;
     }
     final file = result.first;
+    // 先看长度再读字节：选到超大图时 readBytes 会先把整份内容读进内存。
+    final length = await file.length();
+    if (!mounted) {
+      return;
+    }
+    if (length != null && length > FileSizeThresholds.avatarUploadMaxBytes) {
+      showOmniFeedback(context, l10n.profileAvatarSizeError);
+      return;
+    }
     final bytes = await file.readBytes();
     if (!mounted || bytes.isEmpty) {
       return;

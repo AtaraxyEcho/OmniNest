@@ -114,6 +114,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
     if (result.isEmpty) return;
     final file = result.first;
+    // 先看长度再读字节：选到几百 MB 的图时，readBytes 会先把整份内容读进内存。
+    final length = await file.length();
+    if (!mounted) {
+      return;
+    }
+    if (length != null && length > FileSizeThresholds.avatarUploadMaxBytes) {
+      _showMessage(l10n.profileAvatarSizeError);
+      return;
+    }
     final bytes = await file.readBytes();
     if (!mounted) {
       return;
