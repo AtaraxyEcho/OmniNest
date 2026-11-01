@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/theme/app_theme_colors.dart';
 
 /// 阅读器控制层的响应式密度。
 enum ReaderControlDensity { compact, medium, expanded }
@@ -85,7 +86,7 @@ class ReaderSheetSpec {
 
   /// `.sheet-layer` 的 `rgb(15 18 16 / 42%)`。稿子这层还带 `blur(3px)`；正文页
   /// 是整屏滚动/翻页表面，全屏 BackdropFilter 在低端安卓上直接掉帧，只保留色相。
-  static const Color scrimColor = Color(0x6B0F1210);
+  static const Color scrimColor = AppThemeColors.readerScrim;
 
   /// `.bottom-sheet` 的 `width: min(100%, 680px)`。
   static const double maxWidth = 680;

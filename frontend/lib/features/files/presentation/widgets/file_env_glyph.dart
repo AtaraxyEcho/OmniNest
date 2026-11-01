@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme_colors.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
@@ -7,20 +8,20 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 
 /// 文件类型功能编码色：六组「淡底 + 亮前景」（violet/blue/red/amber/
-/// cyan/green）。属功能编码而非强调色，且按禁紫规范不落入 app/theme。
+/// cyan/green）。属功能编码而非强调色；常量统一落在 [AppThemeColors]。
 abstract final class FileEnvTypeColors {
-  static const Color violet = Color(0xFFB3A4EF);
-  static const Color violetBg = Color(0x267B64D5);
-  static const Color blue = Color(0xFF91BAF2);
-  static const Color blueBg = Color(0x2B4C84D2);
-  static const Color red = Color(0xFFE69696);
-  static const Color redBg = Color(0x24DA5050);
-  static const Color amber = Color(0xFFE9BD7C);
-  static const Color amberBg = Color(0x24D18A34);
-  static const Color cyan = Color(0xFF7FD5CC);
-  static const Color cyanBg = Color(0x2436A499);
-  static const Color green = Color(0xFF9BD18D);
-  static const Color greenBg = Color(0x244F9E41);
+  static const Color violet = AppThemeColors.filesEnvViolet;
+  static const Color violetBg = AppThemeColors.filesEnvVioletBg;
+  static const Color blue = AppThemeColors.filesEnvBlue;
+  static const Color blueBg = AppThemeColors.filesEnvBlueBg;
+  static const Color red = AppThemeColors.filesEnvRed;
+  static const Color redBg = AppThemeColors.filesEnvRedBg;
+  static const Color amber = AppThemeColors.filesEnvAmber;
+  static const Color amberBg = AppThemeColors.filesEnvAmberBg;
+  static const Color cyan = AppThemeColors.filesEnvCyan;
+  static const Color cyanBg = AppThemeColors.filesEnvCyanBg;
+  static const Color green = AppThemeColors.filesEnvGreen;
+  static const Color greenBg = AppThemeColors.filesEnvGreenBg;
 
   /// 浅极性同位色。上面那批粉彩是暗玻璃上的取值，压在各自色舱底
   /// （14-17% 同色相叠加在 `#f1f4ed` 上）只有 1.35-1.74:1，
@@ -28,15 +29,15 @@ abstract final class FileEnvTypeColors {
   /// 推出到舱底 ≥4.5：violet 4.62 / blue 4.65 / red 4.53 / amber 4.53 /
   /// cyan 4.76 / green 4.71。舱底沿用暗档那批淡底，浅态下它本身就是
   /// 一层柔和的同类色 wash。
-  static const Color violetOnPaper = Color(0xFF6345DE);
-  static const Color blueOnPaper = Color(0xFF175EBF);
-  static const Color redOnPaper = Color(0xFFBB2D2D);
-  static const Color amberOnPaper = Color(0xFF8C5D17);
-  static const Color cyanOnPaper = Color(0xFF246E66);
-  static const Color greenOnPaper = Color(0xFF3B6F2D);
+  static const Color violetOnPaper = AppThemeColors.filesEnvVioletOnPaper;
+  static const Color blueOnPaper = AppThemeColors.filesEnvBlueOnPaper;
+  static const Color redOnPaper = AppThemeColors.filesEnvRedOnPaper;
+  static const Color amberOnPaper = AppThemeColors.filesEnvAmberOnPaper;
+  static const Color cyanOnPaper = AppThemeColors.filesEnvCyanOnPaper;
+  static const Color greenOnPaper = AppThemeColors.filesEnvGreenOnPaper;
 
   /// 视频分类信息条的前景色（与六组类型舱解耦）。
-  static const Color videoCategory = Color(0xFF0EA5E9);
+  static const Color videoCategory = AppThemeColors.filesVideoCategory;
 }
 
 /// 移动壳层文件类型图形：40×40 r13 淡底亮前景的描边类型图标。

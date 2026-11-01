@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme_colors.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -30,10 +31,6 @@ import 'package:omninest/features/music/presentation/player/music_playback_setti
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
 part 'music_mobile_now_playing_pages.dart';
-
-/// 沉浸播放器背景的两团环境光晕：玫瑰与青。
-const Color _ambienceRose = Color(0x597E4880);
-const Color _ambienceTeal = Color(0x57396469);
 
 /// 样例播放页的第一页索引（封面页）。
 const int _musicCoverPage = 0;
@@ -516,7 +513,10 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.55,
-                        colors: [_ambienceRose, Colors.transparent],
+                        colors: [
+                          AppThemeColors.musicAmbienceRose,
+                          Colors.transparent,
+                        ],
                       ),
                     ),
                   ),
@@ -531,7 +531,10 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.5,
-                        colors: [_ambienceTeal, Colors.transparent],
+                        colors: [
+                          AppThemeColors.musicAmbienceTeal,
+                          Colors.transparent,
+                        ],
                       ),
                     ),
                   ),
