@@ -140,8 +140,8 @@ public class AdminUserService {
      * @param request 创建请求
      * @return 新创建用户
      */
-    @Transactional(rollbackFor = Exception.class)
     public AuthUserDto createUser(AdminCreateUserRequest request) {
+        // 校验与 BCrypt 放在事务外：Strength 12 单次 250-350ms，放进去会整段占住连接。
         UUID actorUserId = currentUserContext.requireCurrentUserId();
         AuthUser actor = adminActorGuard.requireFreshAdminActor(actorUserId);
         String username = normalizeUsername(request.username());
@@ -149,9 +149,16 @@ public class AdminUserService {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
         }
         passwordPolicy.validate(username, request.password());
+        String passwordHash = passwordEncoder.encode(request.password());
+        return transactionTemplate.execute(status ->
+                createUserInTransaction(request, actor, actorUserId, username, passwordHash));
+    }
+
+    private AuthUserDto createUserInTransaction(AdminCreateUserRequest request, AuthUser actor,
+                                                UUID actorUserId, String username, String passwordHash) {
         AuthUser user = new AuthUser();
         user.setUsername(username);
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPasswordHash(passwordHash);
         user.setDisplayName(normalizeDisplayName(request.displayName(), username));
         user.setEmail(normalizeEmail(request.email()));
         user.setStatus(normalizeStatus(request.status()));

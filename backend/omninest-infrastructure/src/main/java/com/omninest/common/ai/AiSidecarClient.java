@@ -50,6 +50,8 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
     private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
+    /** 与侧车 {@code SIGNATURE_PROTOCOL} 对齐；不一致说明只升级了一侧。 */
+    private static final String EXPECTED_SIGNATURE_PROTOCOL = "v2";
 
     private final AiSidecarProperties properties;
     private final TempStagingPort tempStagingPort;
@@ -163,7 +165,15 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                     .GET()
                     .build();
             String responseBody = sendRequest(request);
-            String version = JsonSupport.readTree(responseBody).path("pipelineVersion").asString(null);
+            JsonNode probe = JsonSupport.readTree(responseBody);
+            String protocol = probe.path("signatureProtocol").asString(null);
+            if (protocol != null && !EXPECTED_SIGNATURE_PROTOCOL.equals(protocol.trim())) {
+                // 签名协议是两侧共同契约：这里只告警不拒绝，混跑时服务仍可用、
+                // 日志直接指出该升级哪一侧，比启动即失败更适合自托管。
+                log.error("图像分析侧车签名协议不匹配: sidecar={}, backend={}",
+                        protocol, EXPECTED_SIGNATURE_PROTOCOL);
+            }
+            String version = probe.path("pipelineVersion").asString(null);
             return version == null || version.isBlank() ? null : version.trim();
         } catch (RuntimeException exception) {
             log.warn("侧车流水线版本探测失败: endpoint={}, errorType={}",

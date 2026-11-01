@@ -763,6 +763,8 @@ async def ready():
         "status": "ok",
         "pipelineVersion": current_content_pipeline_version(),
         "ocrVersion": OCR_PIPELINE_VERSION,
+        # 签名协议的显式版本：后端版本探测据此发现"只升级了一侧"的混跑。
+        "signatureProtocol": SIGNATURE_PROTOCOL,
     }
 
 

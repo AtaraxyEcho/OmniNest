@@ -137,8 +137,8 @@ public class VideoStreamService {
      * @param ownerUserId 目录所有者
      * @param videoItemId 视频条目标识
      */
-    public void requireStreamable(UUID ownerUserId, UUID videoItemId) {
-        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+    public void requireStreamable(MediaVideoItem item) {
+        // 调用方已用播放令牌校验过可读性并拿到条目，这里不再重复一次读库+授权判定。
         VideoLiveInputFormats.requireDemuxer(item.getContainerFormat());
         if (ffmpegRuntime.isDisabled()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");

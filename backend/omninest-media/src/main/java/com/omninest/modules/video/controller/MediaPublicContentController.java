@@ -78,7 +78,7 @@ public class MediaPublicContentController {
                 mediaContentAccessService.requireTokenVideoAccess(token, videoItemId);
         // 转码开关与容器格式都可能快速失败：先校验再固定 media 响应头，
         // 否则 503/400 会以 video/mp4 的损坏流发给播放器。
-        videoStreamService.requireStreamable(access.item().getOwnerUserId(), access.item().getId());
+        videoStreamService.requireStreamable(access.item());
         // 并发槽位是唯一仍需等待的资源性检查，同样必须在响应提交前占好：
         // 满载时抛出 503，播放器可以重试而不是收到一段标记为 video/mp4 的空流。
         videoStreamService.acquireStreamSlot(access.item().getId());
