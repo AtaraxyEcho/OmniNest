@@ -41,10 +41,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 分享访问服务。
  * 负责分享密码校验、公开访问/预览、短期会话访问与接受分享落盘。
+ *
+ * <p>密码比对（BCrypt）必须发生在事务外：分享访问是公开端点，错输口令是最常见的
+ * 请求，把 250-350ms 的计算包进事务等于让连接池替访客的错误等待买单。
  *
  * @author OmniNest
  */
@@ -65,17 +69,20 @@ public class FileShareAccessService {
     private final StorageQuotaService storageQuotaService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 预览分享链接内容（公开端点，无需登录）。
      * 预览不消耗访问次数，仅校验密码和链接有效性。
+     *
+     * <p>整个方法只有两次独立读取，因此不开事务：读链接、比对口令、读节点各自
+     * 使用独立的短连接。该入口已废弃，保留仅为兼容历史调用方。
      *
      * @param rawToken 分享明文 token
      * @param password 分享密码，可空
      * @return 分享预览信息
      */
     @Deprecated(forRemoval = true)
-    @Transactional(readOnly = true)
     public FileSharePreviewDto previewShare(String rawToken, String password) {
         String tokenHash = FileShareService.sha256(rawToken);
         requireShareRateLimit(tokenHash, null);
@@ -89,11 +96,7 @@ public class FileShareAccessService {
         if (link.getMaxAccessCount() != null && link.getAccessCount() >= link.getMaxAccessCount()) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接访问次数已达上限");
         }
-        if (link.getPasswordHash() != null) {
-            if (password == null || !passwordEncoder.matches(password, link.getPasswordHash())) {
-                throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
-            }
-        }
+        verifySharePassword(link, password);
 
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(),
@@ -114,12 +117,13 @@ public class FileShareAccessService {
     /**
      * 接受分享，将文件保存到当前用户名下。
      *
+     * <p>链接读取与密码比对在事务外，事务只覆盖消费次数与转存写入。
+     *
      * @param userId  接受用户 ID
      * @param rawToken 分享明文 token
      * @param request 接受请求（目标目录与密码）
      */
     @Deprecated(forRemoval = true)
-    @Transactional(rollbackFor = Exception.class)
     public void acceptShare(UUID userId, String rawToken, AcceptShareRequest request) {
         String tokenHash = FileShareService.sha256(rawToken);
         requireShareRateLimit(tokenHash, null);
@@ -130,14 +134,18 @@ public class FileShareAccessService {
         if (link.getExpiresAt() != null && Instant.now().isAfter(link.getExpiresAt())) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接已过期");
         }
-        if (link.getPasswordHash() != null) {
-            String pwd = request != null ? request.password() : null;
-            if (pwd == null || !passwordEncoder.matches(pwd, link.getPasswordHash())) {
-                throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
-            }
-        }
+        verifySharePassword(link, request != null ? request.password() : null);
+        transactionTemplate.executeWithoutResult(
+                status -> acceptShareInTransaction(userId, link, tokenHash, request));
+    }
 
-        link = consumeShareAccess(link, tokenHash);
+    private void acceptShareInTransaction(
+            UUID userId,
+            ShareLink cachedLink,
+            String tokenHash,
+            AcceptShareRequest request
+    ) {
+        ShareLink link = consumeShareAccess(cachedLink, tokenHash);
 
         FileNode sourceNode = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(),
@@ -162,15 +170,18 @@ public class FileShareAccessService {
      * 不再重复扣减。文件夹分享没有单文件下载动作，若把消费放在下载上，
      * {@code maxAccessCount} 永远不会生效。</p>
      *
+     * <p>不声明事务：密码比对由 {@link ResourceShareLinkService#issueConsumedSession}
+     * 在它自己的事务之外完成，这里若包一层事务会把 BCrypt 重新圈回连接里。</p>
+     *
      * @param rawToken       分享明文 token
      * @param password       分享密码
      * @param clientAddress  客户端地址
      * @return 短期会话信息
      */
-    @Transactional(rollbackFor = Exception.class)
     public ShareAccessSessionDto issueShareSession(String rawToken, String password, String clientAddress) {
         ShareAccessSessionDto session = resourceShareLinkService.issueConsumedSession(
                 rawToken, password, null, clientAddress);
+        // 会话消费已提交，通知直接发送；若上层将来重新套事务，仍走 afterCommit。
         notifyShareAccessedAfterCommit(FileShareService.sha256(rawToken));
         return session;
     }
@@ -417,6 +428,18 @@ public class FileShareAccessService {
             acceptFolderShare(userId, sourceNode, targetParentId);
         } else {
             acceptFileShare(userId, sourceNode, targetParentId);
+        }
+    }
+
+    /**
+     * 校验分享密码。调用方必须位于事务之外：BCrypt 计算不得占用数据库连接。
+     */
+    private void verifySharePassword(ShareLink link, String password) {
+        if (link.getPasswordHash() == null) {
+            return;
+        }
+        if (password == null || !passwordEncoder.matches(password, link.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
         }
     }
 

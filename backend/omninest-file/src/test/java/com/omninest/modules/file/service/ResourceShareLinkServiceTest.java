@@ -26,6 +26,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 通用资源分享链接服务单元测试。
@@ -50,7 +52,9 @@ class ResourceShareLinkServiceTest {
             sessionService,
             rateLimitService,
             credentialCipher,
-            readThroughCache
+            readThroughCache,
+            // 回调内只用仓储桩，事务模板用 mock 管理器即可：execute 照常执行回调。
+            new TransactionTemplate(mock(PlatformTransactionManager.class))
     );
 
     /**

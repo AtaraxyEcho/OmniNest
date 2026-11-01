@@ -23,9 +23,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 通用资源分享链接应用服务。
+ *
+ * <p>密码哈希与比对（BCrypt）统一放在事务边界之外：分享访问是公开热路径，
+ * 每次错输都会触发一次 250-350ms 的计算，若包在事务里会持续占住连接池。
  *
  * @author OmniNest
  */
@@ -40,11 +44,15 @@ public class ResourceShareLinkService {
     private final RateLimitService rateLimitService;
     private final CredentialCipher credentialCipher;
     private final ReadThroughCache readThroughCache;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 校验密码并创建短期会话，不消费分享访问次数。
+     *
+     * <p>不声明事务：本方法只有一次链接读取，读取后还要跑一次 BCrypt 比对。
+     * 若整段包在事务里，BCrypt 的 250-350ms 会一直占着数据库连接，而比对结果
+     * 并不参与任何写入，开事务没有收益。
      */
-    @Transactional(readOnly = true)
     public ShareAccessSessionDto issueSession(
             String rawToken,
             String password,
@@ -63,8 +71,11 @@ public class ResourceShareLinkService {
         return new ShareAccessSessionDto(session.token(), session.expiresAt());
     }
 
-    /** 校验密码、消费一次访问次数并创建短期会话。 */
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 校验密码、消费一次访问次数并创建短期会话。
+     *
+     * <p>密码比对在事务外完成，事务只覆盖消费次数与会话签发两步。
+     */
     public ShareAccessSessionDto issueConsumedSession(
             String rawToken,
             String password,
@@ -75,13 +86,15 @@ public class ResourceShareLinkService {
         requireAuthenticationRateLimit(tokenHash, clientAddress);
         ShareLink link = requireValidLink(tokenHash, expectedResourceType);
         verifyPassword(link, password, clientAddress);
-        consume(link);
-        ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
-                tokenHash,
-                sessionResourceType(expectedResourceType, link),
-                link.getExpiresAt()
-        );
-        return new ShareAccessSessionDto(session.token(), session.expiresAt());
+        return transactionTemplate.execute(status -> {
+            consume(link);
+            ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
+                    tokenHash,
+                    sessionResourceType(expectedResourceType, link),
+                    link.getExpiresAt()
+            );
+            return new ShareAccessSessionDto(session.token(), session.expiresAt());
+        });
     }
 
     /**
@@ -136,6 +149,8 @@ public class ResourceShareLinkService {
     /**
      * 创建资源分享链接。
      *
+     * <p>密码哈希在事务外计算，事务只做一次插入。
+     *
      * @param ownerUserId 所有者用户 ID
      * @param resourceType 资源类型
      * @param resourceId 资源 ID
@@ -144,7 +159,6 @@ public class ResourceShareLinkService {
      * @param maxAccessCount 可选最大访问次数
      * @return 分享链接描述符
      */
-    @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto create(
             UUID ownerUserId,
             String resourceType,
@@ -167,15 +181,44 @@ public class ResourceShareLinkService {
     /**
      * 创建资源分享链接，可附带照片分享策略。
      *
+     * <p>BCrypt Strength 12 单次约 250-350ms，放在事务内会让连接被整段占用，
+     * 因此先算哈希，再进入只做插入的事务。
+     *
      * @param includeLocation 公开访问是否包含位置（非照片类型忽略）
      * @param originalQuality 公开访问是否签发原图（非照片类型忽略）
      */
-    @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto create(
             UUID ownerUserId,
             String resourceType,
             UUID resourceId,
             String password,
+            Instant expiresAt,
+            Integer maxAccessCount,
+            boolean includeLocation,
+            boolean originalQuality) {
+        String passwordHash = null;
+        if (password != null && !password.isBlank()) {
+            SharePasswordPolicy.requireEncodable(password);
+            passwordHash = passwordEncoder.encode(password);
+        }
+        final String finalPasswordHash = passwordHash;
+        return transactionTemplate.execute(status -> createInTransaction(
+                ownerUserId,
+                resourceType,
+                resourceId,
+                finalPasswordHash,
+                expiresAt,
+                maxAccessCount,
+                includeLocation,
+                originalQuality
+        ));
+    }
+
+    private ResourceShareLinkDto createInTransaction(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String passwordHash,
             Instant expiresAt,
             Integer maxAccessCount,
             boolean includeLocation,
@@ -192,9 +235,8 @@ public class ResourceShareLinkService {
         share.setMaxAccessCount(maxAccessCount);
         share.setIncludeLocation(includeLocation);
         share.setOriginalQuality(originalQuality);
-        if (password != null && !password.isBlank()) {
-            SharePasswordPolicy.requireEncodable(password);
-            share.setPasswordHash(passwordEncoder.encode(password));
+        if (passwordHash != null) {
+            share.setPasswordHash(passwordHash);
         }
         return toDto(shareLinkRepository.save(share), rawToken);
     }
@@ -267,11 +309,39 @@ public class ResourceShareLinkService {
      * @param originalQuality 公开访问是否签发原图
      * @return 更新后的分享链接描述符，含可供重新复制的明文令牌
      */
-    @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto update(
             UUID ownerUserId,
             UUID shareId,
             String password,
+            Instant expiresAt,
+            Integer maxAccessCount,
+            boolean includeLocation,
+            boolean originalQuality) {
+        // 事务外先算密码哈希：空白串表示清除密码，不需要哈希。
+        boolean passwordProvided = password != null;
+        String passwordHash = null;
+        if (passwordProvided && !password.isBlank()) {
+            SharePasswordPolicy.requireEncodable(password);
+            passwordHash = passwordEncoder.encode(password);
+        }
+        final String finalPasswordHash = passwordHash;
+        return transactionTemplate.execute(status -> updateInTransaction(
+                ownerUserId,
+                shareId,
+                passwordProvided,
+                finalPasswordHash,
+                expiresAt,
+                maxAccessCount,
+                includeLocation,
+                originalQuality
+        ));
+    }
+
+    private ResourceShareLinkDto updateInTransaction(
+            UUID ownerUserId,
+            UUID shareId,
+            boolean passwordProvided,
+            String passwordHash,
             Instant expiresAt,
             Integer maxAccessCount,
             boolean includeLocation,
@@ -297,9 +367,8 @@ public class ResourceShareLinkService {
         share.setMaxAccessCount(maxAccessCount);
         share.setIncludeLocation(includeLocation);
         share.setOriginalQuality(originalQuality);
-        if (password != null) {
-            SharePasswordPolicy.requireEncodable(password);
-            share.setPasswordHash(password.isBlank() ? null : passwordEncoder.encode(password));
+        if (passwordProvided) {
+            share.setPasswordHash(passwordHash);
         }
         ShareLink saved = shareLinkRepository.save(share);
         readThroughCache.invalidate("omninest:share:link:" + saved.getTokenHash());
@@ -370,19 +439,23 @@ public class ResourceShareLinkService {
     /**
      * 校验公开分享访问并原子增加访问次数。
      *
+     * <p>链接读取与密码比对都在事务外，事务只覆盖消费次数与回读最新计数。
+     * 密码错误是最常见的访客路径，不能让每次错输都占住连接跑一次 BCrypt。
+     *
      * @param rawToken 原始分享令牌
      * @param password 可选访问密码
      * @param expectedResourceType 期望的资源类型
      * @return 已授权的分享链接描述符
      */
-    @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto authorize(String rawToken, String password, String expectedResourceType) {
         ShareLink link = requireValidLink(sha256(rawToken), expectedResourceType);
         verifyPassword(link, password, null);
-        consume(link);
-        ShareLink consumed = shareLinkRepository.findById(link.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
-        return toDto(consumed, null);
+        return transactionTemplate.execute(status -> {
+            consume(link);
+            ShareLink consumed = shareLinkRepository.findById(link.getId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
+            return toDto(consumed, null);
+        });
     }
 
     private ShareLink requireValidLink(String tokenHash, String expectedResourceType) {
@@ -398,6 +471,9 @@ public class ResourceShareLinkService {
         return link;
     }
 
+    /**
+     * 校验访问密码。调用方必须位于事务之外，BCrypt 计算不得占用连接。
+     */
     private void verifyPassword(ShareLink link, String password, String clientAddress) {
         if (link.getPasswordHash() == null) {
             return;

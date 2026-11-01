@@ -40,6 +40,8 @@ import org.mockito.Mockito;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * FileShareAccessService 分享文件夹浏览的单元测试。
@@ -78,7 +80,8 @@ class FileShareAccessServiceTest {
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             rateLimitService, notificationService,
             fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport, storageQuotaService,
-            syncEventRecorder, Mockito.mock(FileIndexSyncService.class)
+            syncEventRecorder, Mockito.mock(FileIndexSyncService.class),
+            new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class))
     );
 
     @BeforeEach

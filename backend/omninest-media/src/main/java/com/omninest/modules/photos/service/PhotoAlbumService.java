@@ -247,8 +247,10 @@ public class PhotoAlbumService {
 
     /**
      * 创建相册分享链接。
+     *
+     * <p>不声明事务：口令哈希由 {@link ResourceShareLinkService#create} 在事务外
+     * 计算，这里若再包一层事务会把 BCrypt 重新圈回数据库连接里。
      */
-    @Transactional(rollbackFor = Exception.class)
     public PhotoShareLinkDto createAlbumShare(UUID ownerUserId, UUID albumId, CreateAlbumShareRequest request) {
         requireAlbum(ownerUserId, albumId);
         return toShareDto(resourceShareLinkService.create(
@@ -290,7 +292,6 @@ public class PhotoAlbumService {
      * {@link ResourceShareLinkService#update} 按所有者完成，与
      * {@link #revokeAlbumShare} 同一口径。
      */
-    @Transactional(rollbackFor = Exception.class)
     public PhotoShareLinkDto updatePhotoShare(
             UUID ownerUserId,
             UUID shareId,
@@ -340,8 +341,9 @@ public class PhotoAlbumService {
 
     /**
      * 创建单张照片分享链接。
+     *
+     * <p>事务边界与 {@link #createAlbumShare} 一致：哈希在委托方法内、事务外完成。
      */
-    @Transactional(rollbackFor = Exception.class)
     public PhotoShareLinkDto createPhotoShare(UUID ownerUserId, UUID photoId, CreateAlbumShareRequest request) {
         requirePhoto(ownerUserId, photoId);
         return toShareDto(resourceShareLinkService.create(
@@ -370,8 +372,9 @@ public class PhotoAlbumService {
 
     /**
      * 通过公开链接发起共享单张照片会话。
+     *
+     * <p>不声明事务：密码比对必须在委托方法的事务之外执行。
      */
-    @Transactional(rollbackFor = Exception.class)
     public ShareAccessSessionDto issueSharedPhotoSession(
             String rawToken,
             String password,
@@ -513,8 +516,9 @@ public class PhotoAlbumService {
 
     /**
      * 通过公开链接访问共享相册。
+     *
+     * <p>不声明事务：密码比对必须在委托方法的事务之外执行。
      */
-    @Transactional(rollbackFor = Exception.class)
     public ShareAccessSessionDto issueSharedAlbumSession(
             String rawToken,
             String password,

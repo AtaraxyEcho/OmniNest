@@ -166,7 +166,7 @@ class FileManagerServiceTest {
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder, rateLimitService,
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class), shareTransactionTemplate());
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
     private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
             externalAccountRepository,
@@ -1374,7 +1374,7 @@ class FileManagerServiceTest {
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class), shareTransactionTemplate());
 
         // 模拟：文件存在
         FileNode file = node("report.xlsx", "application/vnd.ms-excel", 4096);
@@ -1470,7 +1470,7 @@ class FileManagerServiceTest {
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class), shareTransactionTemplate());
 
         FileNode file = node("photo.jpg", "image/jpeg", 2048);
         file.setCurrentObjectId(OBJECT_ID);
