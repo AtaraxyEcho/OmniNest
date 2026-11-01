@@ -13,7 +13,7 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 
-import 'movie_feedback.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';

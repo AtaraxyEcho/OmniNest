@@ -1,6 +1,5 @@
 package com.omninest.modules.video.service;
 
-import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.service.FileQueryService;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -34,10 +33,8 @@ public class VideoSourceInputResolver {
      * @return 本机进程可读取的地址或路径
      */
     public String resolveLocalInput(UUID ownerUserId, UUID fileNodeId) {
-        FileProcessInput localInput = fileQueryService.createOwnedProcessInput(ownerUserId, fileNodeId);
-        if ("LOCAL_FILESYSTEM".equals(localInput.providerType())) {
-            return localInput.input();
-        }
+        // 容器视角输入对 LOCAL_FILESYSTEM 与进程路径一致，对象存储只在这里签一次；
+        // 先取 createOwnedProcessInput 再按 provider 判一次会白查一次库、白签一次 URL。
         return fileQueryService.createOwnedContainerProcessInput(ownerUserId, fileNodeId).input();
     }
 }

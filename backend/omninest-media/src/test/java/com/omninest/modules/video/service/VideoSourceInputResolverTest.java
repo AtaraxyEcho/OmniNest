@@ -28,21 +28,21 @@ class VideoSourceInputResolverTest {
     @Test
     @DisplayName("LOCAL_FILESYSTEM 使用本机进程路径，而不是 ffmpeg 容器路径")
     void localFilesystemUsesProcessPath() {
-        when(fileQueryService.createOwnedProcessInput(OWNER, NODE))
+        when(fileQueryService.createOwnedContainerProcessInput(OWNER, NODE))
                 .thenReturn(new FileProcessInput(NODE, "LOCAL_FILESYSTEM", "/host/media/movie.mkv"));
 
         assertThat(resolver.resolveLocalInput(OWNER, NODE)).isEqualTo("/host/media/movie.mkv");
-        verify(fileQueryService, never()).createOwnedContainerProcessInput(OWNER, NODE);
+        // 容器视角输入对本地来源本身就返回进程路径，不能再多查一次库、多签一次 URL。
+        verify(fileQueryService, never()).createOwnedProcessInput(OWNER, NODE);
     }
 
     @Test
-    @DisplayName("对象存储仍使用容器网络端点，后端本机与容器内都可解析")
+    @DisplayName("对象存储仍使用容器网络端点，且只解析一次")
     void objectStorageUsesContainerEndpoint() {
-        when(fileQueryService.createOwnedProcessInput(OWNER, NODE))
-                .thenReturn(new FileProcessInput(NODE, "MINIO", "http://public:9000/signed"));
         when(fileQueryService.createOwnedContainerProcessInput(OWNER, NODE))
                 .thenReturn(new FileProcessInput(NODE, "MINIO", "http://minio:9000/signed"));
 
         assertThat(resolver.resolveLocalInput(OWNER, NODE)).isEqualTo("http://minio:9000/signed");
+        verify(fileQueryService, never()).createOwnedProcessInput(OWNER, NODE);
     }
 }

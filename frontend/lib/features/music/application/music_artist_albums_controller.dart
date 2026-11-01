@@ -7,25 +7,25 @@ import 'package:omninest/features/music/domain/music_models.dart';
 class MusicArtistAlbumsState {
   const MusicArtistAlbumsState({
     this.albumsByArtist = const <String, List<MusicAlbum>>{},
-    this.loadingArtistId,
+    this.loadingArtistIds = const <String>{},
     this.errorMessage,
   });
 
   final Map<String, List<MusicAlbum>> albumsByArtist;
-  final String? loadingArtistId;
+
+  /// 按艺人记录加载态：同时展开两个艺人时，先返回的一个不能把另一个的加载态清掉。
+  final Set<String> loadingArtistIds;
   final String? errorMessage;
 
   MusicArtistAlbumsState copyWith({
     Map<String, List<MusicAlbum>>? albumsByArtist,
-    String? loadingArtistId,
-    bool clearLoading = false,
+    Set<String>? loadingArtistIds,
     String? errorMessage,
     bool clearError = false,
   }) {
     return MusicArtistAlbumsState(
       albumsByArtist: albumsByArtist ?? this.albumsByArtist,
-      loadingArtistId:
-          clearLoading ? null : (loadingArtistId ?? this.loadingArtistId),
+      loadingArtistIds: loadingArtistIds ?? this.loadingArtistIds,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -47,22 +47,30 @@ class MusicArtistAlbumsController extends Notifier<MusicArtistAlbumsState> {
   Future<void> ensureLoaded(String artistId) async {
     final current = state;
     if (current.albumsByArtist.containsKey(artistId) ||
-        current.loadingArtistId == artistId) {
+        current.loadingArtistIds.contains(artistId)) {
       return;
     }
-    state = current.copyWith(loadingArtistId: artistId, clearError: true);
+    state = current.copyWith(
+      loadingArtistIds: {...current.loadingArtistIds, artistId},
+      clearError: true,
+    );
     try {
       final albums = await ref.read(musicApiProvider).artistAlbums(artistId);
-      final latest = state;
-      final next = <String, List<MusicAlbum>>{
-        ...latest.albumsByArtist,
-        artistId: albums,
-      };
-      state = latest.copyWith(albumsByArtist: next, clearLoading: true);
-    } on Exception catch (error) {
+      if (!ref.mounted) {
+        return;
+      }
       final latest = state;
       state = latest.copyWith(
-        clearLoading: true,
+        albumsByArtist: {...latest.albumsByArtist, artistId: albums},
+        loadingArtistIds: {...latest.loadingArtistIds}..remove(artistId),
+      );
+    } on Exception catch (error) {
+      if (!ref.mounted) {
+        return;
+      }
+      final latest = state;
+      state = latest.copyWith(
+        loadingArtistIds: {...latest.loadingArtistIds}..remove(artistId),
         errorMessage: describeUserFacingError(error).message,
       );
     }

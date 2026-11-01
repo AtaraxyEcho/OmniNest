@@ -41,6 +41,11 @@ docker compose up -d vision-sidecar
 
 后端与侧车的推理接口认证从「明文令牌 + 时间戳 + HMAC」收敛为「时间戳 + HMAC」，请求里不再携带共享密钥。两侧必须使用同一仓库版本升级；只升级一侧时旧侧车会以 401 拒绝新后端（新侧车也会拒绝仍发旧令牌头之外的缺失签名请求）。开发与生产 Compose 都从 `deploy/vision-sidecar` 构建镜像，按 Compose 一起发布即可保持同步。
 
+签名载荷现已包含查询串（`时间戳
+方法
+路径
+查询串`），且 `POST /analyze-content` 的 HMAC 校验提前到并发信号量与 Multipart 解析之前。这两点同样是**协议级变更**：后端与侧车必须同版本发布，混跑会出现全部推理请求 401，或未签名请求先占满推理槽。
+
 ## 模型缓存与就绪检查
 
 Compose 将命名卷 `omninest-ai-models` 挂载到 `/app/models`。将 `mobileclip2_s0_vision_fp32.onnx` 与 `policy_text_embeds.npz` 放入该卷即可启用轻量视觉标签；RapidOCR 模型随安装包内置。删除卷不会丢失 OCR 能力，但会移除视觉档模型资产。

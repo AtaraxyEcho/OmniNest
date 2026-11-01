@@ -2598,6 +2598,10 @@ CREATE INDEX "idx_login_audit_user" ON "omni"."auth_login_audit" USING btree (
   "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+-- 保留清理按时间删除，前导列是 user_id 的索引扫不到全表时间窗口。
+CREATE INDEX "idx_login_audit_created_at" ON "omni"."auth_login_audit" USING btree (
+  "created_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
 
 ALTER TABLE "omni"."auth_login_audit" ADD CONSTRAINT "auth_login_audit_pkey" PRIMARY KEY ("id");
 
@@ -2618,6 +2622,10 @@ ALTER TABLE "omni"."auth_roles" ADD CONSTRAINT "auth_roles_pkey" PRIMARY KEY ("i
 CREATE INDEX "idx_session_revocations_user_session" ON "omni"."auth_session_revocations" USING btree (
   "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "session_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+-- 保留清理按撤销时间删除：已有索引以 user_id 打头，无法支撑按时间扫批。
+CREATE INDEX "idx_session_revocations_revoked_at" ON "omni"."auth_session_revocations" USING btree (
+  "revoked_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
 );
 
 ALTER TABLE "omni"."auth_session_revocations" ADD CONSTRAINT "auth_session_revocations_pkey" PRIMARY KEY ("id");

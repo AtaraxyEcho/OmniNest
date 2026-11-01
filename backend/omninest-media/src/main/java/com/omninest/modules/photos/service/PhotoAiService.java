@@ -203,9 +203,12 @@ public class PhotoAiService {
         }
         Integer width = photo.getWidth();
         Integer height = photo.getHeight();
-        return width != null
-                && height != null
-                && Math.max(width, height) > MAX_DIRECT_ORIGINAL_SIDE;
+        if (width == null || height == null) {
+            // 宽高未探测时不代表图小：高压缩比的大像素图体积可以很小，
+            // 直接发原图会让侧车解码上亿像素。交给降采样路径自行探测尺寸。
+            return true;
+        }
+        return Math.max(width, height) > MAX_DIRECT_ORIGINAL_SIDE;
     }
 
     private byte[] readCover(UUID ownerUserId, PhotoItem photo) {

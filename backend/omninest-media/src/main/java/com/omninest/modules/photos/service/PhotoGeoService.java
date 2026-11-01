@@ -145,15 +145,17 @@ public class PhotoGeoService {
 
         int rateLimit = Math.max(1, configService.geoRateLimitPerSecond());
 
-        // Redis 分布式预检：多实例部署时防止超过全局速率
-        if (!distributedRateLimiter.tryAcquire("nominatim:geo", rateLimit, Duration.ofSeconds(1))) {
-            log.warn("Nominatim 分布式速率限制，跳过本次查询");
+        // 先做进程内间距整形：它最多阻塞 RATE_LIMIT_WAIT 把突发削平，
+        // 排队后再向 Redis 申请秒级配额，同秒进来的第二个任务才有机会被平滑到下一秒。
+        // 顺序反过来时非阻塞的分布式检查会立即拒绝，排队能力形同虚设。
+        if (!rateLimiter.tryAcquire(rateLimit, RATE_LIMIT_WAIT)) {
+            log.warn("Nominatim 速率限制等待超时，跳过本次查询");
             return Map.of();
         }
 
-        // 进程内间距控制：确保单实例内请求间隔不低于 1 秒
-        if (!rateLimiter.tryAcquire(rateLimit, RATE_LIMIT_WAIT)) {
-            log.warn("Nominatim 速率限制等待超时，跳过本次查询");
+        // Redis 分布式预检：多实例部署时防止超过全局速率
+        if (!distributedRateLimiter.tryAcquire("nominatim:geo", rateLimit, Duration.ofSeconds(1))) {
+            log.warn("Nominatim 分布式速率限制，跳过本次查询");
             return Map.of();
         }
 

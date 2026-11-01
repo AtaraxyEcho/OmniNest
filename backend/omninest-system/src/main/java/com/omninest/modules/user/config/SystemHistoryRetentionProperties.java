@@ -39,6 +39,12 @@ public class SystemHistoryRetentionProperties {
      */
     private Duration notificationMaximumAge = Duration.ofDays(90);
 
+    /**
+     * 会话撤销记录与过期会话行的保留时长。默认 35 天，覆盖刷新令牌 30 天有效期再留缓冲：
+     * 窗口之外的记录不会再被任何令牌引用。
+     */
+    private Duration credentialHistoryMaximumAge = Duration.ofDays(35);
+
     private int batchSize = 500;
 
     private int maximumBatches = 20;

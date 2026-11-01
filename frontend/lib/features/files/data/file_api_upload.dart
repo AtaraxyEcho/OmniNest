@@ -113,26 +113,29 @@ mixin FileApiUpload on FileApiBase {
     FileUploadProgressCallback? onProgress,
   }) async {
     final dioCancelToken = CancelToken();
-    cancellationToken?.addListener(
-      () => dioCancelToken.cancel('file-upload-cancelled'),
-    );
-    final response = await _uploadDio.put<dynamic>(
-      uploadUrl,
-      data: data,
-      cancelToken: dioCancelToken,
-      onSendProgress: onProgress,
-      options: Options(
-        contentType: FileApiBase._binaryContentType,
-        headers: {Headers.contentLengthHeader: contentLength},
-        responseType: ResponseType.plain,
-        validateStatus:
-            (status) => status != null && status >= 200 && status < 300,
-      ),
-    );
-    return (response.headers.value('etag') ??
-            response.headers.value('ETag') ??
-            '')
-        .replaceAll('"', '');
+    void forwardCancel() => dioCancelToken.cancel('file-upload-cancelled');
+    cancellationToken?.addListener(forwardCancel);
+    try {
+      final response = await _uploadDio.put<dynamic>(
+        uploadUrl,
+        data: data,
+        cancelToken: dioCancelToken,
+        onSendProgress: onProgress,
+        options: Options(
+          contentType: FileApiBase._binaryContentType,
+          headers: {Headers.contentLengthHeader: contentLength},
+          responseType: ResponseType.plain,
+          validateStatus:
+              (status) => status != null && status >= 200 && status < 300,
+        ),
+      );
+      return (response.headers.value('etag') ??
+              response.headers.value('ETag') ??
+              '')
+          .replaceAll('"', '');
+    } finally {
+      cancellationToken?.removeListener(forwardCancel);
+    }
   }
 
   Future<FileUploadCompleteResult> completeUploadSession({

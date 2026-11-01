@@ -117,21 +117,18 @@ class PhotoEditorPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final navigator = Navigator.of(context, rootNavigator: true);
     // 整图上传可能耗时数秒；保存期间用不可取消的遮罩明确告知正在提交。
-    unawaited(
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        useRootNavigator: true,
-        builder:
-            (_) => const PopScope(
-              canPop: false,
-              child: Center(child: AppLoading()),
-            ),
-      ),
+    // 保留具体路由而不是 pop 栈顶：保存期间若有其它全局弹窗入栈，pop 会关错那一层。
+    final savingRoute = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (_) =>
+              const PopScope(canPop: false, child: Center(child: AppLoading())),
     );
+    unawaited(navigator.push(savingRoute));
     void dismissSavingOverlay() {
-      if (navigator.mounted) {
-        navigator.pop();
+      if (savingRoute.isActive) {
+        navigator.removeRoute(savingRoute);
       }
     }
 

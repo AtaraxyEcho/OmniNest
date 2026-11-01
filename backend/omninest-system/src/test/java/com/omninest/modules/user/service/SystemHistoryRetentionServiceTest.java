@@ -7,6 +7,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
 import com.omninest.modules.user.port.PurgeHistoryRetention;
 import com.omninest.modules.user.repository.AuditLogRetentionRepository;
+import com.omninest.modules.user.repository.AuthHistoryRetentionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +30,7 @@ class SystemHistoryRetentionServiceTest {
             Mockito.mock(ConfigHistoryRetentionService.class);
     private final PurgeHistoryRetention purgeHistoryRetention = Mockito.mock(PurgeHistoryRetention.class);
     private final NotificationMaintenance notificationMaintenance = Mockito.mock(NotificationMaintenance.class);
+    private final AuthHistoryRetentionRepository authHistoryRepository = Mockito.mock(AuthHistoryRetentionRepository.class);
     private final SystemHistoryRetentionProperties properties = new SystemHistoryRetentionProperties();
     private final SystemHistoryRetentionService service = new SystemHistoryRetentionService(
             taskRecordService,
@@ -37,6 +39,7 @@ class SystemHistoryRetentionServiceTest {
             configHistoryRetentionService,
             purgeHistoryRetention,
             notificationMaintenance,
+            authHistoryRepository,
             properties
     );
 

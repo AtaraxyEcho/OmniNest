@@ -7,6 +7,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
 import com.omninest.modules.user.port.PurgeHistoryRetention;
 import com.omninest.modules.user.repository.AuditLogRetentionRepository;
+import com.omninest.modules.user.repository.AuthHistoryRetentionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import java.util.function.IntSupplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -37,6 +39,7 @@ public class SystemHistoryRetentionService {
     private final ConfigHistoryRetentionService configHistoryRetentionService;
     private final PurgeHistoryRetention purgeHistoryRetention;
     private final NotificationMaintenance notificationMaintenance;
+    private final AuthHistoryRetentionRepository authHistoryRepository;
     private final SystemHistoryRetentionProperties properties;
 
     /**
@@ -58,10 +61,81 @@ public class SystemHistoryRetentionService {
         int deletedAuditLogs = cleanupAuditLogs(now, batchSize, maximumBatches);
         int deletedConfigHistories = cleanupConfigHistories(now, batchSize, maximumBatches);
         int deletedNotifications = cleanupNotifications(now, batchSize, maximumBatches);
+        int deletedRevocations = cleanupSessionRevocations(now, batchSize, maximumBatches);
+        int deletedSessions = cleanupExpiredSessions(now, batchSize, maximumBatches);
+        int deletedLoginAudits = cleanupLoginAudits(now, batchSize, maximumBatches);
         log.info("系统历史保留清理完成: deletedTasks={}, deletedDispatches={}, deletedPurgeEntries={}, "
-                        + "deletedAuditLogs={}, deletedConfigHistories={}, deletedNotifications={}",
+                        + "deletedAuditLogs={}, deletedConfigHistories={}, deletedNotifications={}, "
+                        + "deletedRevocations={}, deletedSessions={}, deletedLoginAudits={}",
                 deletedTasks, deletedDispatches, deletedPurgeEntries,
-                deletedAuditLogs, deletedConfigHistories, deletedNotifications);
+                deletedAuditLogs, deletedConfigHistories, deletedNotifications,
+                deletedRevocations, deletedSessions, deletedLoginAudits);
+    }
+
+    /**
+     * 清理超过刷新令牌最大生命周期的会话撤销记录。
+     *
+     * <p>撤销记录只需覆盖 refresh token 的有效期：窗口之外不会再有任何令牌凭它判定。
+     * 该表每次受保护请求都要查，不清理会持续拖慢鉴权。</p>
+     */
+    private int cleanupSessionRevocations(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getCredentialHistoryMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("会话撤销记录保留时间配置无效，跳过撤销记录清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> {
+                    List<UUID> ids = authHistoryRepository.findRevocationIdsBefore(
+                            cutoff, PageRequest.of(0, batchSize));
+                    return ids.isEmpty() ? 0 : authHistoryRepository.deleteRevocationsByIds(ids);
+                },
+                batchSize,
+                maximumBatches
+        );
+    }
+
+    /**
+     * 清理过期已久的会话行。
+     */
+    private int cleanupExpiredSessions(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getCredentialHistoryMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("会话保留时间配置无效，跳过过期会话清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> {
+                    List<UUID> ids = authHistoryRepository.findSessionIdsExpiredBefore(
+                            cutoff, PageRequest.of(0, batchSize));
+                    return ids.isEmpty() ? 0 : authHistoryRepository.deleteSessionsByIds(ids);
+                },
+                batchSize,
+                maximumBatches
+        );
+    }
+
+    /**
+     * 按审计保留期清理登录审计。
+     */
+    private int cleanupLoginAudits(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getAuditMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("登录审计保留时间配置无效，跳过登录审计清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> {
+                    List<UUID> ids = authHistoryRepository.findLoginAuditIdsBefore(
+                            cutoff, PageRequest.of(0, batchSize));
+                    return ids.isEmpty() ? 0 : authHistoryRepository.deleteLoginAuditByIds(ids);
+                },
+                batchSize,
+                maximumBatches
+        );
     }
 
     /**

@@ -306,25 +306,29 @@ final _imageResolutionProvider = FutureProvider.autoDispose
     .family<String?, String>((ref, url) async {
       final completer = Completer<ui.Image>();
       final stream = NetworkImage(url).resolve(const ImageConfiguration());
-      stream.addListener(
-        ImageStreamListener(
-          (info, _) {
-            if (!completer.isCompleted) {
-              completer.complete(info.image);
-            }
-          },
-          onError: (error, stackTrace) {
-            if (!completer.isCompleted) {
-              completer.completeError(error, stackTrace);
-            }
-          },
-        ),
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (info, _) {
+          if (!completer.isCompleted) {
+            completer.complete(info.image);
+          }
+        },
+        onError: (error, stackTrace) {
+          if (!completer.isCompleted) {
+            completer.completeError(error, stackTrace);
+          }
+        },
       );
+      stream.addListener(listener);
       try {
         final image = await completer.future;
         return '${image.width} × ${image.height}';
       } on Object {
         return null;
+      } finally {
+        // 首帧取到即摘掉监听：不摘会把整张全尺寸图钉在 ImageCache 里，
+        // 属性面板每看一张图片就多留一份无法回收的 ui.Image。
+        stream.removeListener(listener);
       }
     });
 

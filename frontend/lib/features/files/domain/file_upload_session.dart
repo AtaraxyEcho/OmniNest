@@ -46,6 +46,12 @@ class FileUploadCancellationToken {
     _listeners.add(listener);
   }
 
+  /// 移除监听：分片上传每次都会注册一个转发闭包，用完必须摘掉，
+  /// 否则千片大文件会把上千个闭包与 CancelToken 一直挂在会话上。
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
+
   void cancel() {
     if (_isCancelled) {
       return;
