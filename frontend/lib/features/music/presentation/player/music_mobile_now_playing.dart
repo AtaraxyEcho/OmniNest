@@ -5,7 +5,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/app_theme_colors.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -28,6 +27,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_lyri
 import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
+import 'package:omninest/features/music/presentation/theme/music_ambience_colors.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
 part 'music_mobile_now_playing_pages.dart';
@@ -513,10 +513,7 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.55,
-                        colors: [
-                          AppThemeColors.musicAmbienceRose,
-                          Colors.transparent,
-                        ],
+                        colors: [MusicAmbienceColors.rose, Colors.transparent],
                       ),
                     ),
                   ),
@@ -531,10 +528,7 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.5,
-                        colors: [
-                          AppThemeColors.musicAmbienceTeal,
-                          Colors.transparent,
-                        ],
+                        colors: [MusicAmbienceColors.teal, Colors.transparent],
                       ),
                     ),
                   ),

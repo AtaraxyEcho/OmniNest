@@ -8,10 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 /// 设计规格）是颜色的合法来源，登记在此；其余展示层源码出现 `Color(0x`
 /// 即失败，必须收敛到 AppThemeColors 或所在模块的 ThemeExtension。
 const _paletteSources = <String>{
+  'lib/features/files/presentation/widgets/file_env_glyph.dart',
   'lib/features/library/presentation/theme/library_space_colors.dart',
   'lib/features/music/presentation/player/music_immersive_layout_spec.dart',
   'lib/features/music/presentation/player/music_immersive_lyric_spec.dart',
   'lib/features/music/presentation/player/music_immersive_style.dart',
+  'lib/features/music/presentation/theme/music_ambience_colors.dart',
   'lib/features/music/presentation/theme/music_visual_swatches.dart',
   'lib/features/photos/presentation/widgets/frame_palette.dart',
   'lib/features/portal/presentation/theme/weather_atmospheres.dart',
