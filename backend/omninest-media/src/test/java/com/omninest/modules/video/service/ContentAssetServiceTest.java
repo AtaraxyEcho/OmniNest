@@ -2,6 +2,7 @@ package com.omninest.modules.video.service;
 
 import org.mockito.Mockito;
 import java.util.List;
+import java.util.Map;
 import java.time.Instant;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,12 +148,15 @@ class ContentAssetServiceTest {
                 any(),
                 any()
         )).thenReturn(List.of(asset));
-        when(fileQueryService.createDownloadUrlAs(OWNER_ID, posterFileId))
-                .thenReturn(new FileDownloadUrlDto(
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any()))
+                .thenReturn(Map.of(
                         posterFileId,
-                        "poster.jpg",
-                        "http://localhost:9000/user-files/poster.jpg",
-                        Instant.parse("2026-05-22T12:00:00Z")
+                        new FileDownloadUrlDto(
+                                posterFileId,
+                                "poster.jpg",
+                                "http://localhost:9000/user-files/poster.jpg",
+                                Instant.parse("2026-05-22T12:00:00Z")
+                        )
                 ));
 
         var assets = contentAssetService.primaryVideoAssets(OWNER_ID, List.of(VIDEO_ID));

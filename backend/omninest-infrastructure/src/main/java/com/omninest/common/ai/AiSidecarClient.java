@@ -368,6 +368,12 @@ public class AiSidecarClient implements ImageAnalysisGateway {
             return;
         }
         String responseSummary = summarizeErrorResponse(responseBody);
+        if (statusCode == 401) {
+            // 签名协议是后端与侧车的共同契约：401 几乎只出现在两侧版本不一致时，
+            // 这里点明排查方向，避免被当成"密钥错误"排查半天。
+            log.warn("图像分析侧车拒绝签名，后端与侧车可能不是同一版本: {}",
+                    responseSummary.isEmpty() ? "no-detail" : responseSummary);
+        }
         throw new IllegalStateException(
                 "图像分析侧车调用失败，状态码=" + statusCode
                         + (responseSummary.isEmpty() ? "" : "，响应摘要=" + responseSummary)

@@ -510,12 +510,20 @@ public class DerivedAssetStorageService {
         String objectSha256 = sha256(normalizedSource);
         try {
             objectStorageClient.putObject(stagingKey, normalizedSource, mimeType);
-            return storeInNewTransactionWithRetry(() -> {
-                requireTargetWritable(ownerUserId, normalizedPath);
-                objectStorageClient.copyObject(stagingKey, finalKey);
-                return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
-                        bucketName, objectKey, normalizedPath, sizeBytes, objectSha256);
-            });
+            // 跨桶复制在事务外完成：大体积转码产物复制可达数十秒，放进 REQUIRES_NEW
+            // 会让一个独立连接整段挂起。复制成功而落库失败时补偿删除已复制的对象。
+            objectStorageClient.copyObject(stagingKey, finalKey);
+            try {
+                return storeInNewTransactionWithRetry(() -> {
+                    requireTargetWritable(ownerUserId, normalizedPath);
+                    return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
+                            bucketName, objectKey, normalizedPath, sizeBytes, objectSha256);
+                });
+            } catch (RuntimeException exception) {
+                // 元数据未提交时 finalKey 无人引用，必须回收，否则每次失败都留一个孤儿。
+                removeStagingObject(finalKey);
+                throw exception;
+            }
         } finally {
             removeStagingObject(stagingKey);
         }

@@ -17,9 +17,11 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -317,18 +319,40 @@ public class ContentAssetService {
         if (ownerUserId == null || resourceIds == null || resourceIds.isEmpty()) {
             return Map.of();
         }
+        // 先选出每个资源每种类型的第一条资产，再一次性批量签名：
+        // putIfAbsent 的取值参数会被提前求值，原写法即使命中已存在类型也会白签一次 URL。
+        Map<UUID, Map<String, ContentAsset>> selected = new LinkedHashMap<>();
+        Set<UUID> fileNodeIds = new LinkedHashSet<>();
+        for (ContentAsset asset : contentAssetRepository.listPrimaryAssets(
+                ownerUserId,
+                resourceType,
+                resourceIds,
+                List.of(AssetType.POSTER.getValue(), AssetType.BACKDROP.getValue()))) {
+            Map<String, ContentAsset> byType = selected.computeIfAbsent(
+                    asset.getResourceId(), ignored -> new LinkedHashMap<>());
+            if (byType.putIfAbsent(asset.getAssetType(), asset) == null
+                    && asset.getFileNodeId() != null) {
+                fileNodeIds.add(asset.getFileNodeId());
+            }
+        }
+        Map<UUID, FileDownloadUrlDto> urls = Map.of();
+        if (!fileNodeIds.isEmpty()) {
+            try {
+                urls = fileQueryService.createDownloadUrlsAs(ownerUserId, fileNodeIds);
+            } catch (RuntimeException exception) {
+                // 与逐条签名时的降级口径一致：签名失败不能让整个列表接口失败，
+                // 缺 URL 的条目回退到外部地址或空值。
+                log.warn("批量解析内容资产 URL 失败，降级为外部地址: assetCount={}, errorType={}",
+                        fileNodeIds.size(), exception.getClass().getSimpleName());
+            }
+        }
+        final Map<UUID, FileDownloadUrlDto> resolvedUrls = urls;
         Map<UUID, Map<String, MovieContentAssetDto>> grouped = new LinkedHashMap<>();
-        contentAssetRepository
-                .listPrimaryAssets(
-                        ownerUserId,
-                        resourceType,
-                        resourceIds,
-                        List.of(AssetType.POSTER.getValue(), AssetType.BACKDROP.getValue())
-                )
-                .stream()
-                .forEach(asset -> grouped
-                        .computeIfAbsent(asset.getResourceId(), ignored -> new LinkedHashMap<>())
-                        .putIfAbsent(asset.getAssetType(), toDto(ownerUserId, asset)));
+        selected.forEach((resourceId, byType) -> {
+            Map<String, MovieContentAssetDto> dtos = new LinkedHashMap<>();
+            byType.forEach((assetType, asset) -> dtos.put(assetType, toDto(asset, resolvedUrls)));
+            grouped.put(resourceId, dtos);
+        });
         return grouped;
     }
 
@@ -450,6 +474,32 @@ public class ContentAssetService {
                 asset.isPrimary(),
                 asset.getMetadata() == null ? Map.of() : asset.getMetadata()
         );
+    }
+
+    private MovieContentAssetDto toDto(ContentAsset asset, Map<UUID, FileDownloadUrlDto> urls) {
+        return new MovieContentAssetDto(
+                asset.getId(),
+                asset.getAssetType(),
+                asset.getFileNodeId(),
+                assetUrl(asset, urls),
+                asset.getProvider(),
+                asset.getLanguage(),
+                asset.isPrimary(),
+                asset.getMetadata() == null ? Map.of() : asset.getMetadata()
+        );
+    }
+
+    private String assetUrl(ContentAsset asset, Map<UUID, FileDownloadUrlDto> urls) {
+        if (asset.getFileNodeId() != null) {
+            FileDownloadUrlDto downloadUrl = urls.get(asset.getFileNodeId());
+            if (downloadUrl != null) {
+                return downloadUrl.downloadUrl();
+            }
+        }
+        if (asset.getExternalUrl() != null && !asset.getExternalUrl().isBlank()) {
+            return asset.getExternalUrl();
+        }
+        return null;
     }
 
     private String assetUrl(UUID ownerUserId, ContentAsset asset) {

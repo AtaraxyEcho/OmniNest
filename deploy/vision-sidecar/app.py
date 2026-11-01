@@ -31,6 +31,8 @@ logger = logging.getLogger("omninest-vision-sidecar")
 
 SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp"
 SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature"
+# 签名载荷含查询串的那一版；两侧必须同版本发布。
+SIGNATURE_PROTOCOL = "v2"
 SIDECAR_CLOCK_SKEW_SECONDS = 300
 SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
 MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
@@ -427,7 +429,12 @@ def _require_sidecar_auth(
         timestamp_value, request.method, request.url.path, request.url.query
     )
     if not hmac.compare_digest(signature, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        # 带上协议版本：两侧混跑时后端日志能直接定位到"签名格式不一致"，
+        # 而不是只看到一片 401。
+        raise HTTPException(
+            status_code=401,
+            detail=f"Unauthorized (signature protocol {SIGNATURE_PROTOCOL})",
+        )
 
 
 async def _read_image_bytes(image: UploadFile) -> bytes:

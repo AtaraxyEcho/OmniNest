@@ -144,7 +144,9 @@ public class VideoItemDtoConverter {
         BatchIndex index = new BatchIndex(movieMap, episodeMap, seriesMap,
                 moviePosterAssetMap, movieBackdropAssetMap,
                 seriesPosterAssetMap, seriesBackdropAssetMap,
-                loadAvailability(List.of(item.getFileNodeId())));
+                loadAvailability(List.of(item.getFileNodeId())),
+                buildSeriesCast(seriesMap),
+                buildSeriesCrew(seriesMap));
         return toVideoDto(
                 requesterUserId,
                 item,
@@ -160,7 +162,10 @@ public class VideoItemDtoConverter {
             Map<UUID, UUID> movieBackdropAssetMap,
             Map<UUID, UUID> seriesPosterAssetMap,
             Map<UUID, UUID> seriesBackdropAssetMap,
-            Map<UUID, String> availabilityByFileNodeId
+            Map<UUID, String> availabilityByFileNodeId,
+            // 同一季的 N 集共享同一条剧集记录：演职员与头像 URL 只解析一次，避免 N 倍查库。
+            Map<UUID, List<CastMemberDto>> seriesCast,
+            Map<UUID, List<CrewMemberDto>> seriesCrew
     ) {}
 
     private BatchIndex buildBatchIndex(List<MediaVideoItem> items) {
@@ -226,7 +231,23 @@ public class VideoItemDtoConverter {
         return new BatchIndex(movieMap, episodeMap, seriesMap,
                 moviePosterAssetMap, movieBackdropAssetMap,
                 seriesPosterAssetMap, seriesBackdropAssetMap,
-                loadAvailability(items.stream().map(MediaVideoItem::getFileNodeId).toList()));
+                loadAvailability(items.stream().map(MediaVideoItem::getFileNodeId).toList()),
+                buildSeriesCast(seriesMap),
+                buildSeriesCrew(seriesMap));
+    }
+
+    private Map<UUID, List<CastMemberDto>> buildSeriesCast(Map<UUID, MediaTvSeries> seriesMap) {
+        Map<UUID, List<CastMemberDto>> result = new LinkedHashMap<>();
+        seriesMap.forEach((seriesId, series) -> result.put(seriesId,
+                catalogMappers.toCastDtos(series.getOwnerUserId(), series.getCastMembers())));
+        return result;
+    }
+
+    private Map<UUID, List<CrewMemberDto>> buildSeriesCrew(Map<UUID, MediaTvSeries> seriesMap) {
+        Map<UUID, List<CrewMemberDto>> result = new LinkedHashMap<>();
+        seriesMap.forEach((seriesId, series) -> result.put(seriesId,
+                catalogMappers.toCrewDtos(series.getOwnerUserId(), series.getCrewMembers())));
+        return result;
     }
 
     private void loadPrimaryAssets(
@@ -349,10 +370,16 @@ public class VideoItemDtoConverter {
                     }
                     if (genres.isEmpty()) genres = catalogMappers.extractGenreNames(series.getGenres());
                     if (castMembers.isEmpty()) {
-                        castMembers = catalogMappers.toCastDtos(catalogOwnerUserId, series.getCastMembers());
+                        List<CastMemberDto> preparedCast = index.seriesCast().get(series.getId());
+                        castMembers = preparedCast != null
+                                ? preparedCast
+                                : catalogMappers.toCastDtos(catalogOwnerUserId, series.getCastMembers());
                     }
                     if (crewMembers.isEmpty()) {
-                        crewMembers = catalogMappers.toCrewDtos(catalogOwnerUserId, series.getCrewMembers());
+                        List<CrewMemberDto> preparedCrew = index.seriesCrew().get(series.getId());
+                        crewMembers = preparedCrew != null
+                                ? preparedCrew
+                                : catalogMappers.toCrewDtos(catalogOwnerUserId, series.getCrewMembers());
                     }
                     if (contentRating == null) contentRating = series.getContentRating();
                 }

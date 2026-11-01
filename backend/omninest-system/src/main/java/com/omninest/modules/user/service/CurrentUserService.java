@@ -152,35 +152,42 @@ public class CurrentUserService implements UserProfileCacheEvictor {
      * @param oldPassword 原密码
      * @param newPassword 新密码
      */
-    @Transactional(rollbackFor = Exception.class)
     public void changePassword(UUID userId, String oldPassword, String newPassword) {
         // 改密会校验原密码，必须和登录一样有限流：否则拿到已登录会话即可高频爆破原密码。
         if (!rateLimitService.tryAcquire(
                 "user:" + userId + ":password-change", 5, Duration.ofMinutes(15))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "密码修改尝试过于频繁，请稍后再试");
         }
-        AuthUser user = authUserRepository.findById(userId)
+        AuthUser snapshot = authUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        if (!UserStatus.ACTIVE.getValue().equals(user.getStatus())) {
+        if (!UserStatus.ACTIVE.getValue().equals(snapshot.getStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不可用");
         }
-        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+        // BCrypt（Strength 12）单次 250-350ms：校验与哈希都放在事务外，
+        // 否则一次改密会独占数据库连接 600ms 以上。
+        if (!passwordEncoder.matches(oldPassword, snapshot.getPasswordHash())) {
             throw new BusinessException(ErrorCode.OLD_PASSWORD_INVALID, "原密码错误");
         }
-        passwordPolicy.validate(user.getUsername(), newPassword);
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        authUserRepository.save(user);
-        // 提交后再淘汰：提交前淘汰会被并发的 /me 读到旧行并重新回填缓存。
-        evictProfileCacheAfterCommit(userId);
+        passwordPolicy.validate(snapshot.getUsername(), newPassword);
+        String newPasswordHash = passwordEncoder.encode(newPassword);
 
-        // 改密后撤销除当前会话外的全部活跃会话，阻断被盗 refresh 会话继续存活
         UUID currentSessionId = currentUserContext.currentSessionId();
-        userSessionRevocationService.revokeAllExcept(userId, currentSessionId, "PASSWORD_CHANGED");
+        transactionTemplate.executeWithoutResult(status -> {
+            AuthUser managed = authUserRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+            managed.setPasswordHash(newPasswordHash);
+            authUserRepository.save(managed);
+            // 提交后再淘汰：提交前淘汰会被并发的 /me 读到旧行并重新回填缓存。
+            evictProfileCacheAfterCommit(userId);
 
-        // 发送密码修改通知
-        notificationService.notifyOrLog(userId, "PASSWORD_CHANGED",
-                "密码已修改", "您的账户密码已成功修改",
-                Map.of("timestamp", Instant.now().toString()));
+            // 改密后撤销除当前会话外的全部活跃会话，阻断被盗 refresh 会话继续存活
+            userSessionRevocationService.revokeAllExcept(userId, currentSessionId, "PASSWORD_CHANGED");
+
+            // 发送密码修改通知
+            notificationService.notifyOrLog(userId, "PASSWORD_CHANGED",
+                    "密码已修改", "您的账户密码已成功修改",
+                    Map.of("timestamp", Instant.now().toString()));
+        });
     }
 
     /**
