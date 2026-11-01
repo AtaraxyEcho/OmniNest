@@ -11939,6 +11939,12 @@ abstract class AppLocalizations {
   /// **'Cover updated'**
   String get readerCoverUpdated;
 
+  /// No description provided for @readerCoverTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Cover images must be 12 MB or smaller'**
+  String get readerCoverTooLarge;
+
   /// No description provided for @readerOperationFailedError.
   ///
   /// In en, this message translates to:
@@ -17092,6 +17098,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read the selected cover image'**
   String get musicCoverReadFailed;
+
+  /// No description provided for @musicLyricsTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics files must be 2 MB or smaller'**
+  String get musicLyricsTooLarge;
 
   /// No description provided for @musicLyricsReadFailed.
   ///

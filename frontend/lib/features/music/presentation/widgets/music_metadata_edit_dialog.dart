@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -522,6 +523,17 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       }
       if (result.isNotEmpty) {
         final file = result.first;
+        final length = await file.length();
+        if (!mounted || generation != _filePickGeneration) {
+          return;
+        }
+        if (length != null && length > FileSizeThresholds.musicCoverMaxBytes) {
+          _setStatus(
+            AppLocalizations.of(context).musicPlaylistCoverTooLarge,
+            error: true,
+          );
+          return;
+        }
         final bytes = await file.readBytes();
         if (!mounted || generation != _filePickGeneration) {
           return;
@@ -576,6 +588,17 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       }
       if (result.isNotEmpty) {
         final file = result.first;
+        final length = await file.length();
+        if (!mounted || generation != _filePickGeneration) {
+          return;
+        }
+        if (length != null && length > FileSizeThresholds.musicLyricsMaxBytes) {
+          _setStatus(
+            AppLocalizations.of(context).musicLyricsTooLarge,
+            error: true,
+          );
+          return;
+        }
         final bytes = await file.readBytes();
         if (!mounted || generation != _filePickGeneration) {
           return;

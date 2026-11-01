@@ -2681,6 +2681,7 @@
   "readerSelectCoverImage": "选择封面图片",
   "readerUnknownFile": "未知文件",
   "readerCoverUpdated": "封面已更新",
+  "readerCoverTooLarge": "封面图片不能超过 12 MB",
   "readerOperationFailedError": "操作失败: {error}",
   "@readerOperationFailedError": {
     "placeholders": {
@@ -3995,6 +3996,7 @@
   "musicLyricsFile": "歌词文件",
   "musicLyricsPick": "选择歌词文件（LRC / TXT / SRT / VTT）",
   "musicCoverReadFailed": "无法读取所选封面图片",
+  "musicLyricsTooLarge": "歌词文件不能超过 2 MB",
   "musicLyricsReadFailed": "无法读取所选歌词文件",
   "musicAddToPlaylistSuccess": "已加入「{name}」",
   "@musicAddToPlaylistSuccess": {

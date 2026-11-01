@@ -2807,6 +2807,7 @@
   "readerSelectCoverImage": "Select Cover Image",
   "readerUnknownFile": "Unknown file",
   "readerCoverUpdated": "Cover updated",
+  "readerCoverTooLarge": "Cover images must be 12 MB or smaller",
   "readerOperationFailedError": "Operation failed: {error}",
   "@readerOperationFailedError": {
     "placeholders": {
@@ -4126,6 +4127,7 @@
   "musicLyricsFile": "Lyrics File",
   "musicLyricsPick": "Select Lyrics File (LRC / TXT / SRT / VTT)",
   "musicCoverReadFailed": "Could not read the selected cover image",
+  "musicLyricsTooLarge": "Lyrics files must be 2 MB or smaller",
   "musicLyricsReadFailed": "Could not read the selected lyrics file",
   "musicAddToPlaylistSuccess": "Added to \"{name}\"",
   "@musicAddToPlaylistSuccess": {

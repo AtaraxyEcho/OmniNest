@@ -6318,6 +6318,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerCoverUpdated => '封面已更新';
 
   @override
+  String get readerCoverTooLarge => '封面图片不能超过 12 MB';
+
+  @override
   String readerOperationFailedError(Object error) {
     return '操作失败: $error';
   }
@@ -9086,6 +9089,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicCoverReadFailed => '无法读取所选封面图片';
+
+  @override
+  String get musicLyricsTooLarge => '歌词文件不能超过 2 MB';
 
   @override
   String get musicLyricsReadFailed => '无法读取所选歌词文件';

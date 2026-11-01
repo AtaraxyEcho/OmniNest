@@ -8,6 +8,12 @@ abstract final class FileSizeThresholds {
   /// 文本预览 Range 读取上限（1 MiB）。
   static const int textPreviewMaxBytes = 1024 * 1024;
 
+  /// 音乐封面本地读取上限（8 MiB），与后端封面请求限制一致。
+  static const int musicCoverMaxBytes = 8 * 1024 * 1024;
+
+  /// 音乐歌词本地读取上限（2 MiB，与前端文本解码限制一致）。
+  static const int musicLyricsMaxBytes = 2 * 1024 * 1024;
+
   /// 阅读封面读取上限（12 MiB，与后端 maxReaderCoverBytes 对齐取前端历史值）。
   static const int readerCoverMaxBytes = 12 * 1024 * 1024;
 

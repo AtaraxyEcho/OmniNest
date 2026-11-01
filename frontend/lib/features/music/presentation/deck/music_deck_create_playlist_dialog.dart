@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/platform/file_pick.dart';
@@ -75,7 +76,7 @@ class _MusicDeckCreatePlaylistDialogState
   }
 
   /// 服务端歌单封面上限为 8 MB，选图阶段先按同一阈值拒绝。
-  static const int _maxCoverBytes = 8 * 1024 * 1024;
+  static const int _maxCoverBytes = FileSizeThresholds.musicCoverMaxBytes;
 
   Future<void> _pickCover() async {
     // 走平台唯一出口：桌面端 file_picker 只给路径不给字节，

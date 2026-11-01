@@ -18,6 +18,7 @@ import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
+import 'package:omninest/features/video/presentation/widgets/subtitle_file_decoder.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'movie_detail_page_sections.dart';
@@ -226,6 +227,14 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
     );
     final file = result.singleOrNull;
     if (file == null || !mounted) {
+      return;
+    }
+    final length = await file.length();
+    if (!mounted) {
+      return;
+    }
+    if (length != null && length > maxLocalSubtitleBytes) {
+      showMovieFeedback(context, l10n.videoSubtitleFileTooLarge, isError: true);
       return;
     }
     final bytes = await file.readBytes();

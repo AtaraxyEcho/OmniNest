@@ -6523,6 +6523,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerCoverUpdated => 'Cover updated';
 
   @override
+  String get readerCoverTooLarge => 'Cover images must be 12 MB or smaller';
+
+  @override
   String readerOperationFailedError(Object error) {
     return 'Operation failed: $error';
   }
@@ -9365,6 +9368,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicCoverReadFailed => 'Could not read the selected cover image';
+
+  @override
+  String get musicLyricsTooLarge => 'Lyrics files must be 2 MB or smaller';
 
   @override
   String get musicLyricsReadFailed => 'Could not read the selected lyrics file';

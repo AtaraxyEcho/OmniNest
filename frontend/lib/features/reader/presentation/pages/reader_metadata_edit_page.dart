@@ -13,6 +13,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
@@ -599,6 +600,15 @@ class _ReaderMetadataEditPageState
         return;
       }
       final file = result.first;
+      final length = await file.length();
+      if (!mounted) {
+        return;
+      }
+      if (length != null && length > FileSizeThresholds.readerCoverMaxBytes) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerCoverTooLarge);
+        return;
+      }
       final bytes = await file.readBytes();
       if (!mounted) {
         return;
