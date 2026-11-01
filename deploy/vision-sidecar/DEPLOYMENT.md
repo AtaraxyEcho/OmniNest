@@ -37,7 +37,9 @@ docker compose build vision-sidecar
 docker compose up -d vision-sidecar
 ```
 
-生产环境必须在 `.env` 中设置随机的 `OMNINEST_AI_SIDECAR_SECRET`，并让后端使用相同值。完整的 PostgreSQL、RabbitMQ、MinIO、网关和 HTTPS 配置见 [`deploy/README.md`](../README.md)。
+启用侧车时，生产环境必须在 `.env` 中设置随机的 `OMNINEST_AI_SIDECAR_SECRET`，并让后端使用相同值；未部署侧车时保持为空即可（后端把它视为未启用，不会因缺少侧车密钥拒绝启动）。完整的 PostgreSQL、RabbitMQ、MinIO、网关和 HTTPS 配置见 [`deploy/README.md`](../README.md)。
+
+后端与侧车的推理接口认证从「明文令牌 + 时间戳 + HMAC」收敛为「时间戳 + HMAC」，请求里不再携带共享密钥。两侧必须使用同一仓库版本升级；只升级一侧时旧侧车会以 401 拒绝新后端（新侧车也会拒绝仍发旧令牌头之外的缺失签名请求）。开发与生产 Compose 都从 `deploy/vision-sidecar` 构建镜像，按 Compose 一起发布即可保持同步。
 
 ## 模型缓存与就绪检查
 
@@ -62,7 +64,7 @@ curl http://127.0.0.1:8090/ready
 
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
-| `OMNINEST_AI_SIDECAR_SECRET` | 空 | 受保护接口共享密钥；生产环境必须显式设置 |
+| `OMNINEST_AI_SIDECAR_SECRET` | 空 | 受保护接口共享密钥；启用侧车时必须显式设置，未启用时留空 |
 | `AI_VISION_PROFILE` | `lightweight` | 视觉档位：`lightweight` 或 `ram_plus_int8` |
 | `AI_MODEL_DIR` | `/app/models` | 视觉模型目录 |
 | `AI_MAX_IMAGE_BYTES` | `67108864` | 单张图片最大字节数 |

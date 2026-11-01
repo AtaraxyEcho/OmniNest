@@ -64,11 +64,9 @@ void main() {
         800,
         settings,
       );
-      final firstFrame = Stopwatch()..start();
       await tester.pumpWidget(
         host(SingleChildScrollView(child: blockItem(block))),
       );
-      firstFrame.stop();
 
       expect(builtRows(tester), _firstFrameRows, reason: '首帧只应构建预算内的行');
       expect(
@@ -77,9 +75,7 @@ void main() {
         reason: '预留空位后整表占据的高度必须与测量一致，否则字符偏移映射会漂',
       );
 
-      final fill = Stopwatch()..start();
       await tester.pumpAndSettle();
-      fill.stop();
 
       expect(builtRows(tester), 500, reason: '补齐后每一行都要在树里');
       expect(
@@ -87,12 +83,8 @@ void main() {
         closeTo(measured, 0.01),
         reason: '补行不得改变块高',
       );
-      // 首帧承担的工作量必须显著小于一遍建完整表；DEBUG 实测约 211ms 对 1893ms。
-      expect(
-        firstFrame.elapsedMilliseconds * 2,
-        lessThan(fill.elapsedMilliseconds),
-        reason: '首帧耗时应是整表建行的一小部分，否则分帧没有生效',
-      );
+      // 分帧是否生效由首帧行数直接证明（32 行对 500 行）；不在此断言墙钟耗时：
+      // 全量并行测试时 GC/调度抖动会让耗时比值随机翻转，而行数断言是确定性的。
     });
 
     testWidgets('定高槽位（滚动高度表）：槽位已留空位，不再测行高也不溢出', (tester) async {
