@@ -162,7 +162,7 @@ class FileManagerServiceTest {
     private final FileShareService fileShareService = new FileShareService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
-            credentialCipher);
+            credentialCipher, shareTransactionTemplate());
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder, rateLimitService,
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -1370,7 +1370,7 @@ class FileManagerServiceTest {
         FileShareService realShareService = new FileShareService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
-                credentialCipher);
+                credentialCipher, shareTransactionTemplate());
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -1466,7 +1466,7 @@ class FileManagerServiceTest {
         FileShareService realShareService = new FileShareService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
-                credentialCipher);
+                credentialCipher, shareTransactionTemplate());
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -1772,5 +1772,11 @@ class FileManagerServiceTest {
         node.setMimeType(mimeType);
         node.setSizeBytes(sizeBytes);
         return node;
+    }
+
+    /** 测试里只需事务模板照常执行回调，管理器本身不参与断言。 */
+    private static TransactionTemplate shareTransactionTemplate() {
+        return new TransactionTemplate(
+                mock(org.springframework.transaction.PlatformTransactionManager.class));
     }
 }

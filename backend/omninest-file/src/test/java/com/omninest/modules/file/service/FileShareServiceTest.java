@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文件夹级联共享测试。
@@ -55,7 +56,9 @@ class FileShareServiceTest {
             fileNodeSupport,
             syncEventWriter,
             mock(ReadThroughCache.class),
-            credentialCipher
+            credentialCipher,
+            // 回调内只用仓储桩，事务模板用 mock 管理器即可：execute 照常执行回调。
+            new TransactionTemplate(mock(org.springframework.transaction.PlatformTransactionManager.class))
     );
 
     @Test

@@ -48,6 +48,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 分享链接管理服务。
@@ -73,6 +74,7 @@ public class FileShareService {
     private final FileSyncEventWriter syncEventWriter;
     private final ReadThroughCache readThroughCache;
     private final CredentialCipher credentialCipher;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 分页查询收到的分享。
@@ -283,8 +285,26 @@ public class FileShareService {
      * @param request     创建请求
      * @return 分享链接信息（含明文 token 与生成密码）
      */
-    @Transactional(rollbackFor = Exception.class)
     public FileShareLinkDto createShare(UUID ownerUserId, CreateShareLinkRequest request) {
+        // 事务外先算密码哈希：BCrypt Strength 12 单次 250-350ms，放事务里会整段占住连接。
+        String generatedPassword = null;
+        String passwordHash = null;
+        if (request.password() != null && !request.password().isBlank()) {
+            SharePasswordPolicy.requireEncodable(request.password());
+            passwordHash = passwordEncoder.encode(request.password());
+        } else if (request.generatePassword()) {
+            generatedPassword = generateRandomPassword(10);
+            passwordHash = passwordEncoder.encode(generatedPassword);
+        }
+        final String finalPasswordHash = passwordHash;
+        final String finalGeneratedPassword = generatedPassword;
+        return transactionTemplate.execute(status -> createShareInTransaction(
+                ownerUserId, request, finalPasswordHash, finalGeneratedPassword));
+    }
+
+    private FileShareLinkDto createShareInTransaction(
+            UUID ownerUserId, CreateShareLinkRequest request,
+            String passwordHash, String generatedPassword) {
         FileNode node = fileNodeSupport.findActiveNode(ownerUserId, request.resourceId());
         fileNodeSupport.requireShareable(node);
         // 共享空间文件夹的子树可能混有其他成员上传的内容，对外分享会越过空间边界；
@@ -307,13 +327,8 @@ public class FileShareService {
         share.setExpiresAt(request.parsedExpiresAt());
         share.setMaxAccessCount(request.maxAccessCount());
 
-        String generatedPassword = null;
-        if (request.password() != null && !request.password().isBlank()) {
-            SharePasswordPolicy.requireEncodable(request.password());
-            share.setPasswordHash(passwordEncoder.encode(request.password()));
-        } else if (request.generatePassword()) {
-            generatedPassword = generateRandomPassword(10);
-            share.setPasswordHash(passwordEncoder.encode(generatedPassword));
+        if (passwordHash != null) {
+            share.setPasswordHash(passwordHash);
         }
 
         ShareLink saved = shareLinkRepository.save(share);
