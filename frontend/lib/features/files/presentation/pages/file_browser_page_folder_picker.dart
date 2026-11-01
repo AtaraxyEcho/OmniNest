@@ -31,6 +31,10 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
   int _page = 0;
   int _loadGeneration = 0;
 
+  /// 自动追页上限：只在当前页没有目录时使用，避免大平层目录无限翻页。
+  static const int _maxAutoScanPages = 5;
+  int _scannedPages = 0;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +55,7 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
         _folders = [];
         _page = 0;
         _hasMore = true;
+        _scannedPages = 0;
       }
       _loading = reset;
       _loadingMore = !reset;
@@ -77,17 +82,22 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
         _loadingMore = false;
       });
       // 当前页只有普通文件时继续向后找目录，不能把“本页没有目录”显示成空文件夹。
-      if (_folders.isEmpty && _hasMore) {
-        _loadFolders();
+      // 顺序等待并设页数上限：不等待的递归会在大平层目录下叠出请求风暴。
+      if (_folders.isEmpty && _hasMore && _scannedPages < _maxAutoScanPages) {
+        _scannedPages++;
+        await _loadFolders();
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _loadGeneration) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       setState(() {
         _loading = false;
         _loadingMore = false;
-        _error = AppLocalizations.of(context).filesLoadFailed('');
+        _error = l10n.filesLoadFailed(
+          describeUserFacingError(error, l10n: l10n).message,
+        );
       });
     }
   }

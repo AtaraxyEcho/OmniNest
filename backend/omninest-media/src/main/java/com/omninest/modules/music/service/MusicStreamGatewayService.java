@@ -2,6 +2,7 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.InlineContentPolicy;
 import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -307,11 +308,21 @@ public class MusicStreamGatewayService {
             HttpResponse<InputStream> upstreamResponse,
             MusicPlaybackSession session
     ) {
+        // 上游第三方 CDN 可能被劫持或返回错误页：直接把 Content-Type 透传会让
+        // text/html / image/svg+xml 在本服务同源下内联执行。命中可执行类型时
+        // 降级为字节流并按附件下发，与公开媒体内容端点同口径。
+        String upstreamContentType = contentType(upstreamResponse, session);
+        boolean executable = InlineContentPolicy.isExecutable(upstreamContentType);
         ResponseEntity.BodyBuilder builder = ResponseEntity.status(upstreamResponse.statusCode())
-                .header("Content-Type", contentType(upstreamResponse, session))
+                .header("Content-Type",
+                        executable ? InlineContentPolicy.FALLBACK_MIME_TYPE : upstreamContentType)
+                .header("X-Content-Type-Options", "nosniff")
                 .header("Accept-Ranges", "bytes")
                 .header("Cache-Control", "no-store, no-cache, must-revalidate")
                 .header("Pragma", "no-cache");
+        if (executable) {
+            builder.header(HttpHeaders.CONTENT_DISPOSITION, "attachment");
+        }
         contentLength(upstreamResponse).ifPresent(value -> builder.header("Content-Length", value));
         upstreamResponse.headers().firstValue("Content-Range")
                 .ifPresent(value -> builder.header("Content-Range", value));

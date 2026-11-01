@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
 import com.omninest.common.user.RoleDeletedEvent;
@@ -48,6 +49,7 @@ class AdminRoleServiceTest {
     private final AdminAuditLogService auditLogService = mock(AdminAuditLogService.class);
     private final UserSessionRevocationService userSessionRevocationService =
             mock(UserSessionRevocationService.class);
+    private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
@@ -57,6 +59,7 @@ class AdminRoleServiceTest {
             authPermissionRepository,
             auditLogService,
             userSessionRevocationService,
+            currentUserContext,
             adminActorGuard,
             currentUserService,
             eventPublisher

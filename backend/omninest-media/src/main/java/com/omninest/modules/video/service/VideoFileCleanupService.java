@@ -14,6 +14,7 @@ import com.omninest.modules.media.service.MediaPlaybackCleanupService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.ContentAsset;
 import com.omninest.modules.video.domain.MediaMovie;
+import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaTvEpisode;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
@@ -141,6 +142,18 @@ public class VideoFileCleanupService implements
             PurgeContributionWriter writer
     ) {
         List<UUID> videoIds = videos.stream().map(MediaVideoItem::getId).toList();
+        // 内嵌字幕提取出的 DERIVED 节点只被字幕轨道的 fileNodeId 引用：finalizePurge
+        // 会直接删掉轨道行，这里不收集就会留下 deleted=false 的永久孤儿（连孤儿扫描器
+        // 也不会回收，因为它只处理已标记删除的节点）。
+        List<UUID> subtitleFileNodeIds = subtitleTrackRepository
+                .findByOwnerUserIdAndVideoItemIdIn(context.ownerUserId(), videoIds)
+                .stream()
+                .map(MediaSubtitleTrack::getFileNodeId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!subtitleFileNodeIds.isEmpty()) {
+            writer.addFileNodeIds(subtitleFileNodeIds);
+        }
         addContentAssetFiles(writer, context.ownerUserId(), ResourceType.VIDEO_ITEM, videoIds);
         contributeMovieAssets(context, writer, videos, videoIds);
         contributeEpisodeAndSeriesAssets(context, writer, videos, videoIds);
@@ -367,6 +380,12 @@ public class VideoFileCleanupService implements
                 .forEach(episode -> episode.setStillFileId(null));
         videoCollectionRepository.findByCoverFileIdIn(fileIds)
                 .forEach(collection -> collection.setCoverFileId(null));
+        // 自定义海报/背景图可能来自云盘里的任意图片节点：只清实体字段会留下指向已删
+        // 节点的资产行，后续按资产表反查签名地址就取不到内容。
+        List<ContentAsset> danglingAssets = contentAssetRepository.findByFileNodeIdIn(fileIds);
+        if (!danglingAssets.isEmpty()) {
+            contentAssetRepository.deleteAll(danglingAssets);
+        }
     }
 
     private void cleanupContentAssets(UUID ownerUserId, List<UUID> resourceIds) {

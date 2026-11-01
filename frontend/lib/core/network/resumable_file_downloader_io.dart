@@ -90,6 +90,7 @@ Future<void> downloadResumableFileToPath({
       destination: destination,
       responseBody: responseBody,
       append: append,
+      maxBytes: ticket.sizeBytes > 0 ? ticket.sizeBytes : null,
     );
     break;
   }
@@ -183,13 +184,24 @@ Future<void> _writeResponse({
   required File destination,
   required ResponseBody responseBody,
   required bool append,
+  int? maxBytes,
 }) async {
   RandomAccessFile? output;
   try {
     output = await destination.open(
       mode: append ? FileMode.append : FileMode.write,
     );
+    var written =
+        append && await destination.exists() ? await destination.length() : 0;
     await for (final chunk in responseBody.stream) {
+      written += chunk.length;
+      // 边写边校验上限：只在流结束后校验会让异常超长响应先把磁盘写满。
+      if (maxBytes != null && written > maxBytes) {
+        throw AppException(
+          code: 'DOWNLOAD_SIZE_EXCEEDED',
+          message: '下载内容超出声明的文件大小',
+        );
+      }
       await output.writeFrom(chunk);
     }
     await output.flush();
@@ -229,8 +241,14 @@ Future<_ResumeMetadata?> _readMetadata(File file) async {
 Future<void> _writeMetadata(File file, _ResumeMetadata metadata) async {
   final temporary = File('${file.path}.writing');
   await temporary.writeAsString(jsonEncode(metadata.toJson()), flush: true);
-  await _deleteIfExists(file);
-  await temporary.rename(file.path);
+  try {
+    // 直接覆盖重命名：先删后改名之间存在进程中断就丢元数据的窗口。
+    await temporary.rename(file.path);
+  } on FileSystemException {
+    // Windows 上目标存在时 rename 会失败，退化为删除后重试。
+    await _deleteIfExists(file);
+    await temporary.rename(file.path);
+  }
 }
 
 Future<int> _existingLength(File file) async {

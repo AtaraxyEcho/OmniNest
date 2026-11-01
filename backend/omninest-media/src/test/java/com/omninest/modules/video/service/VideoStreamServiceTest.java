@@ -107,7 +107,9 @@ class VideoStreamServiceTest {
                 VIDEO_ITEM_ID,
                 audioFileNodeId,
                 12L,
-                output
+                null,
+                output,
+                true
         );
 
         spyService.streamByAudioMode(OWNER_ID, VIDEO_ITEM_ID, 12L, "cached", output);
@@ -117,7 +119,9 @@ class VideoStreamServiceTest {
                 VIDEO_ITEM_ID,
                 audioFileNodeId,
                 12L,
-                output
+                null,
+                output,
+                true
         );
     }
 
@@ -145,7 +149,9 @@ class VideoStreamServiceTest {
                 VIDEO_ITEM_ID,
                 audioFileNodeId,
                 0L,
-                output
+                null,
+                output,
+                true
         );
 
         spyService.streamByAudioMode(requester, VIDEO_ITEM_ID, 0L, "cached", output);
@@ -156,7 +162,9 @@ class VideoStreamServiceTest {
                 VIDEO_ITEM_ID,
                 audioFileNodeId,
                 0L,
-                output
+                null,
+                output,
+                true
         );
     }
 

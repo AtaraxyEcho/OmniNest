@@ -35,6 +35,19 @@ public interface MediaSubtitleTrackRepository extends JpaRepository<MediaSubtitl
     List<MediaSubtitleTrack> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
 
     /**
+     * 按视频条目批量查询字幕轨道。
+     *
+     * <p>永久删除时用来回收内嵌提取出的派生子幕节点：这些节点的唯一业务引用就是
+     * 轨道行的 {@code fileNodeId}，轨道删除后再也无人指向它们。</p>
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param videoItemIds 视频条目标识
+     * @return 字幕轨道
+     */
+    List<MediaSubtitleTrack> findByOwnerUserIdAndVideoItemIdIn(
+            UUID ownerUserId, Collection<UUID> videoItemIds);
+
+    /**
      * 按字幕文件节点批量删除全部字幕轨道。
      *
      * @param fileNodeIds 文件节点 ID

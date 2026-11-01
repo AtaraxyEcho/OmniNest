@@ -108,6 +108,10 @@ public class MediaProbeService {
             process = processStarter.start(List.of(
                     "ffprobe",
                     "-v", "quiet",
+                    "-nostdin",
+                    // 输入虽然是本地暂存文件，但容器内可内嵌远程引用（HLS 清单、MOV dref）；
+                    // 不限制协议白名单时 ffprobe 会替我们出网。与 VideoFfmpegRuntime 同口径。
+                    "-protocol_whitelist", "file,crypto,data",
                     "-print_format", "json",
                     "-show_format",
                     "-show_streams",

@@ -259,7 +259,7 @@ class SharedSpaceIntegrationTest {
             assertThat(file.getOwnerUserId()).isEqualTo(USER_A);
             assertThat(file.getUploadedBy()).isNull();
             verify(sharedSpaceQuotaService).decreaseUsage(1024L, 1L);
-            verify(storageQuotaService).incrementUsage(USER_A, 1024L);
+            verify(storageQuotaService).chargeUsage(USER_A, 1024L);
         }
 
         @Test

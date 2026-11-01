@@ -402,8 +402,9 @@ class ContentAnalysis(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _sidecar_signature(timestamp: int, method: str, path: str) -> str:
-    canonical = f"{timestamp}\n{method}\n{path}".encode()
+def _sidecar_signature(timestamp: int, method: str, path: str, query: str) -> str:
+    # 查询串一并入签名：只签路径时，同一路径上的分析参数（hint/skipOcr 等）可被中间人改写。
+    canonical = f"{timestamp}\n{method}\n{path}\n{query}".encode()
     return hmac.new(SIDECAR_SECRET.encode(), canonical, hashlib.sha256).hexdigest()
 
 
@@ -422,7 +423,9 @@ def _require_sidecar_auth(
         raise HTTPException(status_code=401, detail="Unauthorized") from exception
     if abs(time.time() - timestamp_value) > SIDECAR_CLOCK_SKEW_SECONDS:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    expected = _sidecar_signature(timestamp_value, request.method, request.url.path)
+    expected = _sidecar_signature(
+        timestamp_value, request.method, request.url.path, request.url.query
+    )
     if not hmac.compare_digest(signature, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -713,6 +716,20 @@ MULTIPART_OVERHEAD_BYTES = 64 * 1024
 async def guard_analysis_uploads(request: Request, call_next):
     if request.url.path != "/analyze-content":
         return await call_next(request)
+    # 鉴权必须先于并发槽与请求体解析：路由依赖在手写中间件之后才执行，
+    # 未签名请求若能先占住唯一的推理槽，慢速 Multipart 就能把合法分析全部饿死。
+    try:
+        _require_sidecar_auth(
+            request,
+            request.headers.get(SIDECAR_TIMESTAMP_HEADER),
+            request.headers.get(SIDECAR_SIGNATURE_HEADER),
+        )
+    except HTTPException as exception:
+        return JSONResponse(
+            status_code=exception.status_code,
+            content={"detail": exception.detail},
+            headers=dict(exception.headers or {}),
+        )
     declared_length = request.headers.get("content-length")
     if declared_length is not None:
         try:

@@ -11,6 +11,7 @@ import 'package:omninest/features/files/application/file_download_url_provider.d
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
+import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/application/music_platform_qr_session_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
@@ -42,6 +43,8 @@ final List<ProviderOrFamily> _resetProviders = <ProviderOrFamily>[
   movieCenterSectionProvider,
   musicDashboardProvider,
   musicCenterControllerProvider,
+  // 常驻的睡眠定时器必须随会话重置，否则登出后倒计时仍在跑。
+  musicSleepTimerControllerProvider,
   musicHistoryControllerProvider,
   musicPlatformLibraryProvider,
   musicDailyRecommendationProvider,

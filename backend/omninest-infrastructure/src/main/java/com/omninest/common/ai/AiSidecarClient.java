@@ -241,7 +241,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                     .uri(uri)
                     .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 600)))
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .headers(authHeaders("POST", uri.getPath()))
+                    .headers(authHeaders("POST", uri.getPath(), uri.getRawQuery()))
                     .POST(HttpRequest.BodyPublishers.ofFile(multipartFile))
                     .build();
             return sendRequest(request);
@@ -298,10 +298,12 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      * 图片再做一遍哈希；时间戳窗口把捕获的请求限制在 5 分钟内，路径绑定阻止把推理签名
      * 挪用到其他接口。</p>
      */
-    private String[] authHeaders(String method, String path) {
+    private String[] authHeaders(String method, String path, String query) {
         String secret = requireSecret();
         long timestamp = Instant.now().getEpochSecond();
-        String canonical = timestamp + "\n" + method + "\n" + path;
+        // 与侧车同口径：查询串也进签名，防止同一路径上的分析参数被中间人改写。
+        String canonical = timestamp + "\n" + method + "\n" + path + "\n"
+                + (query == null ? "" : query);
         String signature;
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);

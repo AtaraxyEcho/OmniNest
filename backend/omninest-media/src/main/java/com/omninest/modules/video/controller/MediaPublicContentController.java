@@ -79,17 +79,25 @@ public class MediaPublicContentController {
         // 转码开关与容器格式都可能快速失败：先校验再固定 media 响应头，
         // 否则 503/400 会以 video/mp4 的损坏流发给播放器。
         videoStreamService.requireStreamable(access.item().getOwnerUserId(), access.item().getId());
-        response.setContentType("video/mp4");
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        response.setHeader("Transfer-Encoding", "chunked");
-        videoStreamService.streamByAudioMode(
-                access.item().getOwnerUserId(),
-                access.item().getId(),
-                access.requesterUserId(),
-                Math.max(0, start),
-                audioMode,
-                response.getOutputStream()
-        );
+        // 并发槽位是唯一仍需等待的资源性检查，同样必须在响应提交前占好：
+        // 满载时抛出 503，播放器可以重试而不是收到一段标记为 video/mp4 的空流。
+        videoStreamService.acquireStreamSlot(access.item().getId());
+        try {
+            response.setContentType("video/mp4");
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            response.setHeader("Transfer-Encoding", "chunked");
+            videoStreamService.streamByAudioMode(
+                    access.item().getOwnerUserId(),
+                    access.item().getId(),
+                    access.requesterUserId(),
+                    Math.max(0, start),
+                    audioMode,
+                    response.getOutputStream(),
+                    true
+            );
+        } finally {
+            videoStreamService.releaseStreamSlotForRequest();
+        }
     }
 
     @Operation(summary = "读取媒体字幕", description = "校验媒体级短期令牌并返回 UTF-8 字幕")

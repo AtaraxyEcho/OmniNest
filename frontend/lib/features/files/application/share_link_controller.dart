@@ -40,11 +40,16 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
         expiresAt: expiresAt,
         maxAccessCount: maxAccessCount,
       );
+      if (!ref.mounted) {
+        return link;
+      }
       state = AsyncData(link);
       await _refreshShareLists();
       return link;
     } on Object catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      if (ref.mounted) {
+        state = AsyncError(error, stackTrace);
+      }
       return null;
     }
   }
@@ -68,11 +73,16 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
         expiresAt: expiresAt,
         maxAccessCount: maxAccessCount,
       );
+      if (!ref.mounted) {
+        return link;
+      }
       state = AsyncData(link);
       await _refreshShareLists();
       return link;
     } on Object catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      if (ref.mounted) {
+        state = AsyncError(error, stackTrace);
+      }
       return null;
     }
   }
@@ -81,12 +91,18 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
   Future<void> revokeShare(String shareId) async {
     final repository = ref.read(fileRepositoryProvider);
     await repository.revokeShare(shareId);
+    if (!ref.mounted) {
+      return;
+    }
     state = const AsyncData(null);
     await _refreshShareLists();
   }
 
   /// 定向刷新分享相关列表，避免重建整个文件浏览器 Controller。
   Future<void> _refreshShareLists() async {
+    if (!ref.mounted) {
+      return;
+    }
     if (ref.exists(myShareLinksProvider)) {
       await ref.read(myShareLinksProvider.notifier).load();
     }

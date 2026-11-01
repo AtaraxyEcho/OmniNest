@@ -364,7 +364,7 @@ class SharedSpaceServiceTest {
             service.moveToPersonalSpace(FILE_ID, USER_A);
 
             verify(sharedSpaceQuotaService).decreaseUsage(2048L, 1L);
-            verify(storageQuotaService).incrementUsage(USER_A, 2048L);
+            verify(storageQuotaService).chargeUsage(USER_A, 2048L);
         }
 
         @Test

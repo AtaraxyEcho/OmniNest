@@ -2,6 +2,9 @@ package com.omninest.modules.video.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.FilePurgeTaskDto;
@@ -45,6 +48,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -72,6 +76,7 @@ public class VideoLibraryController {
     private final MovieTaskService movieTaskService;
     private final SubtitleManagementService subtitleManagementService;
     private final VideoProbeService videoProbeService;
+    private final RateLimitService rateLimitService;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
 
     @Operation(summary = "获取视频仪表盘", description = "返回用户的视频概览信息，包括最近观看、收藏数量等")
@@ -496,7 +501,13 @@ public class VideoLibraryController {
     @PostMapping("/api/v1/video/items/{videoItemId}/probe")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     ApiResponse<Boolean> probeItem(@PathVariable UUID videoItemId) {
-        videoProbeService.probeByVideoItemId(currentUserContext.requireCurrentUserId(), videoItemId);
+        UUID userId = currentUserContext.requireCurrentUserId();
+        // 同步探测最多跑 3 次 ffprobe，非本地来源还要整文件暂存：按用户限流，
+        // 避免单个账号把请求线程与转码槽位同时占满。
+        if (!rateLimitService.tryAcquire("video:probe:" + userId, 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "探测操作过于频繁，请稍后再试");
+        }
+        videoProbeService.probeByVideoItemId(userId, videoItemId);
         return ApiResponse.success(true);
     }
 

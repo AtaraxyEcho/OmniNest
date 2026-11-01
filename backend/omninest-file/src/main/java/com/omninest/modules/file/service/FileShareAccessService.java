@@ -484,8 +484,9 @@ public class FileShareAccessService {
      * 把已用空间反复刷成负数并绕过配额。</p>
      */
     private void chargePersonalQuota(UUID userId, long bytes) {
-        storageQuotaService.checkQuota(userId, bytes);
-        storageQuotaService.incrementUsage(userId, bytes);
+        // 条件更新一次性完成校验与扣减：先 checkQuota 再 incrementUsage 会被并发请求
+        // 一起放行后写超配额。
+        storageQuotaService.chargeUsage(userId, bytes);
     }
 
     private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {

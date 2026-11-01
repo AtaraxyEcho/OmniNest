@@ -215,7 +215,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             return new PlaybackUrlResult(null, null, null, "请求被中断");
         } catch (IOException | RuntimeException ex) {
             log.warn("网易云播放URL异常: songId={}, message={}", songId, ex.getMessage());
-            return new PlaybackUrlResult(null, null, null, "请求异常: " + ex.getMessage());
+            // 用户可见文案固定脱敏：异常消息里可能带内网主机名与端口。
+            return new PlaybackUrlResult(null, null, null, "音源服务暂时不可用，请稍后重试");
         }
     }
 

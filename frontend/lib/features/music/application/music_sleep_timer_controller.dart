@@ -29,10 +29,12 @@ class MusicSleepTimerState {
   }
 }
 
-final musicSleepTimerControllerProvider = NotifierProvider.autoDispose<
-  MusicSleepTimerController,
-  MusicSleepTimerState
->(MusicSleepTimerController.new);
+/// 定时关闭控制器常驻：倒计时必须在关闭设置弹窗后继续生效，因此不能 autoDispose，
+/// 登出时由会话重置统一 cancel。
+final musicSleepTimerControllerProvider =
+    NotifierProvider<MusicSleepTimerController, MusicSleepTimerState>(
+      MusicSleepTimerController.new,
+    );
 
 /// 定时关闭控制器：倒计时归零后暂停播放；播放完当前曲立即停止。
 class MusicSleepTimerController extends Notifier<MusicSleepTimerState> {
@@ -77,9 +79,11 @@ class MusicSleepTimerController extends Notifier<MusicSleepTimerState> {
   }
 
   /// 当前曲目自然播完时调用；不处于"播完当前曲"模式时忽略。
-  Future<void> onTrackCompleted() async {
+  ///
+  /// @return 是否已按睡眠定时器停止播放（true 时调用方不要再自动切歌）
+  Future<bool> onTrackCompleted() async {
     if (!state.stopAfterCurrentTrack || _disposed) {
-      return;
+      return false;
     }
     state = const MusicSleepTimerState();
     try {
@@ -88,6 +92,7 @@ class MusicSleepTimerController extends Notifier<MusicSleepTimerState> {
     } on Object {
       // 定时关闭触发的暂停失败属末端动作，任务已达成（停止播放），忽略。
     }
+    return true;
   }
 
   void cancel() {

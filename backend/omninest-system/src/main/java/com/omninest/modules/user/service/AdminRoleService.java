@@ -2,6 +2,7 @@ package com.omninest.modules.user.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
 import com.omninest.common.user.RoleDeletedEvent;
 import com.omninest.modules.user.domain.AuthPermission;
@@ -54,6 +55,7 @@ public class AdminRoleService {
     private final AuthPermissionRepository authPermissionRepository;
     private final AdminAuditLogService auditLogService;
     private final UserSessionRevocationService userSessionRevocationService;
+    private final CurrentUserContext currentUserContext;
     private final AdminActorGuard adminActorGuard;
     private final CurrentUserService currentUserService;
     private final ApplicationEventPublisher eventPublisher;
@@ -116,7 +118,18 @@ public class AdminRoleService {
                 .stream()
                 .map(AuthUser::getId)
                 .toList();
-        userSessionRevocationService.revokeAll(affectedUserIds, "管理员更新角色权限");
+        // 管理员改的是自己所属角色的权限时保留其当前会话，否则前端紧随其后的
+        // refreshSession 会因会话已吊销而把人踢下线；其余受影响用户照常全部吊销。
+        List<UUID> otherUserIds = affectedUserIds.stream()
+                .filter(id -> !id.equals(actorUserId))
+                .toList();
+        if (!otherUserIds.isEmpty()) {
+            userSessionRevocationService.revokeAll(otherUserIds, "管理员更新角色权限");
+        }
+        if (affectedUserIds.contains(actorUserId)) {
+            userSessionRevocationService.revokeAllExcept(
+                    actorUserId, currentUserContext.currentSessionId(), "管理员更新角色权限");
+        }
         // 资料缓存含角色与权限快照，不主动驱逐会让受影响用户在 TTL 内向 /api/v1/me 报旧权限
         affectedUserIds.forEach(currentUserService::evictProfileCacheAfterCommit);
         Map<String, Object> payload = new LinkedHashMap<>();

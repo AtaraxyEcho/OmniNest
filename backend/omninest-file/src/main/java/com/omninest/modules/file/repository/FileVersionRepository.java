@@ -35,6 +35,15 @@ public interface FileVersionRepository extends JpaRepository<FileVersion, UUID> 
     boolean existsByObjectIdAndFileNodeIdNot(UUID objectId, UUID fileNodeId);
 
     /**
+     * 判断对象是否已作为指定节点的历史版本登记。
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param objectId 文件对象 ID
+     * @return 该节点是否已持有同一对象的版本记录
+     */
+    boolean existsByFileNodeIdAndObjectId(UUID fileNodeId, UUID objectId);
+
+    /**
      * 批量查询仍由未进入任何永久删除任务的历史版本引用的对象。
      *
      * <p>与节点引用同口径：已挂到其他 purge 任务的版本行也会被物理清理，

@@ -139,8 +139,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         return;
       }
       _showMessage(l10n.profileAvatarSuccess);
-    } catch (_) {
-      _showMessage(l10n.profileAvatarFailed);
+    } catch (error) {
+      // 与移动端一致：展示具体失败原因（格式/大小/扫描），并用错误样式。
+      _showMessage(
+        describeUserFacingError(error, l10n: l10n).message,
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 
@@ -503,9 +507,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return ChangePasswordDialog.show(context);
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    OmniFeedbackSeverity severity = OmniFeedbackSeverity.info,
+  }) {
     if (!mounted) return;
-    showOmniFeedback(context, message);
+    showOmniFeedback(context, message, severity: severity);
   }
 }
 

@@ -64,18 +64,27 @@ class LoginPageController extends Notifier<LoginPageState> {
           .read(authSessionProvider.notifier)
           .signInWithCredentials(username: username, password: password);
       if (result.requiresTwoFactor) {
+        if (!ref.mounted) {
+          return false;
+        }
         state = LoginPageState(challenge: result.challenge);
         return false;
       }
       return true;
     } on DioException catch (error) {
-      state = LoginPageState(error: _mapDioError(error));
+      if (ref.mounted) {
+        state = LoginPageState(error: _mapDioError(error));
+      }
       return false;
     } on AppException catch (error) {
-      state = LoginPageState(error: LoginPageMessage(error.message));
+      if (ref.mounted) {
+        state = LoginPageState(error: LoginPageMessage(error.message));
+      }
       return false;
     } catch (_) {
-      state = const LoginPageState(error: LoginPageGenericError());
+      if (ref.mounted) {
+        state = const LoginPageState(error: LoginPageGenericError());
+      }
       return false;
     }
   }

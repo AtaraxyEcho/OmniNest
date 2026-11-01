@@ -288,7 +288,14 @@ public class AdminUserService {
         user.getRoles().clear();
         resolvedRoles.forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
-        userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
+        if (actor.getId().equals(userId)) {
+            // 管理员改自己的角色时保留当前会话：前端紧接着的 refreshSession 要凭它换取
+            // 携带新权限的令牌，连当前会话一起吊销会把人立刻踢下线。
+            userSessionRevocationService.revokeAllExcept(
+                    userId, currentUserContext.currentSessionId(), "管理员更新用户角色");
+        } else {
+            userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
+        }
         currentUserService.evictProfileCacheAfterCommit(userId);
         auditLogService.recordWithMetadata(
                 actor.getId(),

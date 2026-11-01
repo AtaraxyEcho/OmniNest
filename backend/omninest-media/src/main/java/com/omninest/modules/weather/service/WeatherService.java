@@ -266,10 +266,13 @@ public class WeatherService {
 
     private ResolvedWeatherLocation resolveLocation(String location, Map<String, String> config, String lang) {
         if (isLatLon(location)) {
+            // 坐标先归一化到固定精度：原始浮点串既会让 GPS 漂移逐次击穿缓存，
+            // 又会把极小坐标写成科学计数法。
+            String normalized = WeatherCoordinates.normalize(location);
             // GPS 只给了坐标：用 GeoAPI 反查真实城市名，失败也不阻断天气查询。
-            ResolvedWeatherLocation geo = lookupGeoLocation(location, config, lang);
+            ResolvedWeatherLocation geo = lookupGeoLocation(normalized, config, lang);
             return new ResolvedWeatherLocation(
-                    location, location, geo == null ? "" : geo.locationName());
+                    normalized, normalized, geo == null ? "" : geo.locationName());
         }
         // 城市名由用户偏好/配置直接提供，展示名优先用入参，不依赖 Geo 返回字段。
         ResolvedWeatherLocation resolved = lookupGeoLocation(location, config, lang);
@@ -377,7 +380,8 @@ public class WeatherService {
                 return null;
             }
 
-            String latLon = lon + "," + lat;
+            // 与坐标入参同一份格式化：同一城市无论来自入参还是 GeoAPI 都落到同一个缓存键。
+            String latLon = WeatherCoordinates.normalize(lon + "," + lat);
             String name = first.path("name").asString(null);
             ResolvedWeatherLocation location = new ResolvedWeatherLocation(
                     id, latLon, name == null ? "" : name.trim());

@@ -33,6 +33,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -62,6 +63,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExternalStorageController {
     private static final String OAUTH_BINDING_COOKIE = "omninest_oauth_binding";
     private static final Duration OAUTH_BINDING_TTL = Duration.ofMinutes(10);
+    /** 连接器编码是匿名端点上的路径变量，先按白名单字符集收口再进日志与业务。 */
+    private static final Pattern PROVIDER_CODE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,32}$");
 
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
@@ -115,6 +118,10 @@ public class ExternalStorageController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
+        // 匿名端点：连接器编码先按白名单字符集收口，任意路径串不得进入日志与业务处理。
+        if (providerCode == null || !PROVIDER_CODE_PATTERN.matcher(providerCode).matches()) {
+            return oauthResultPage("error");
+        }
         // 匿名端点：按可信代理边界取客户端地址做限流，避免成为可无限重放的探测入口。
         String clientIp = clientIpResolver.resolve(
                 request.getRemoteAddr(),

@@ -308,7 +308,7 @@ class SidecarTokenTest(unittest.TestCase):
     def _request(self) -> SimpleNamespace:
         return SimpleNamespace(
             method="POST",
-            url=SimpleNamespace(path="/analyze-content"),
+            url=SimpleNamespace(path="/analyze-content", query=""),
         )
 
     def test_sidecar_auth_requires_timestamp_and_signature(self):
@@ -325,7 +325,7 @@ class SidecarTokenTest(unittest.TestCase):
     def test_sidecar_auth_accepts_valid_timestamp_and_signature(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             timestamp = int(time.time())
-            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
+            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
             self.assertIsNone(app._require_sidecar_auth(
                 self._request(), str(timestamp), signature
             ))
@@ -333,11 +333,11 @@ class SidecarTokenTest(unittest.TestCase):
     def test_sidecar_auth_rejects_stale_timestamp_and_tampered_path(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             timestamp = int(time.time()) - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
-            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content")
+            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
             with self.assertRaises(HTTPException) as stale:
                 app._require_sidecar_auth(self._request(), str(timestamp), signature)
             fresh = int(time.time())
-            wrong_signature = app._sidecar_signature(fresh, "POST", "/health")
+            wrong_signature = app._sidecar_signature(fresh, "POST", "/health", "")
             with self.assertRaises(HTTPException) as tampered:
                 app._require_sidecar_auth(self._request(), str(fresh), wrong_signature)
 
@@ -349,6 +349,32 @@ class SidecarTokenTest(unittest.TestCase):
             with self.assertRaises(HTTPException) as context:
                 app._require_sidecar_auth(self._request())
         self.assertEqual(503, context.exception.status_code)
+
+    def test_unauthenticated_analysis_is_rejected_before_taking_the_slot(self):
+        """未签名请求不得先占推理槽：否则慢速 Multipart 能把合法分析饿死。"""
+        events: list[str] = []
+
+        class _SlotSpy:
+            def __enter__(self):
+                events.append("acquired")
+                return self
+
+            def __exit__(self, *args):
+                events.append("released")
+                return False
+
+        request = SimpleNamespace(
+            url=SimpleNamespace(path="/analyze-content", query=""),
+            headers={},
+            method="POST",
+        )
+        with patch.object(app, "SIDECAR_SECRET", "expected-secret"), patch.object(
+            app, "inference_slots", _SlotSpy()
+        ):
+            response = asyncio.run(app.guard_analysis_uploads(request, lambda _: None))
+
+        self.assertEqual(401, response.status_code)
+        self.assertEqual([], events)
 
 
 if __name__ == "__main__":

@@ -51,11 +51,6 @@ public class ContentAssetService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final PlatformTransactionManager transactionManager;
 
-    @Transactional(rollbackFor = Exception.class)
-    public void syncPrimaryVideoAssets(MediaVideoItem item, ScrapeCandidateDto candidate) {
-        // 已废弃：元数据资产现在通过 syncPrimaryMovieAssets / syncPrimarySeriesAssets 同步到逻辑实体
-    }
-
     @Async("mediaAsyncExecutor")
     public void syncVideoScreenshots(MediaVideoItem item, List<String> screenshotUrls, String provider, String externalId) {
         if (item == null || item.getId() == null || screenshotUrls == null || screenshotUrls.isEmpty()) {

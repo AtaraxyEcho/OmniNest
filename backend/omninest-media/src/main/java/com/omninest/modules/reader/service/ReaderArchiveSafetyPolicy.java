@@ -95,7 +95,7 @@ public class ReaderArchiveSafetyPolicy {
         return new ArchiveReadSession();
     }
 
-    private String normalizeEntryName(String entryName) {
+    private String normalizeEntryName(String entryName, boolean directory) {
         if (entryName == null || entryName.isBlank() || entryName.indexOf('\0') >= 0) {
             throw invalidArchive("压缩包条目路径无效");
         }
@@ -114,6 +114,10 @@ public class ReaderArchiveSafetyPolicy {
             segments.addLast(segment);
         }
         if (segments.isEmpty()) {
+            if (directory) {
+                // 显式根目录项（"./" 或只有 "." 的条目）没有可提取内容。
+                return "";
+            }
             throw invalidArchive("压缩包条目路径无效");
         }
         return String.join("/", segments);
@@ -171,8 +175,11 @@ public class ReaderArchiveSafetyPolicy {
             if (entryCount > properties.getMaxEntries()) {
                 throw invalidArchive("压缩包条目数量超出限制");
             }
-            String normalizedName = normalizeEntryName(entry.getName());
-            if (!normalizedEntryNames.add(normalizedName)) {
+            boolean directory = entry.isDirectory();
+            String normalizedName = normalizeEntryName(entry.getName(), directory);
+            // 目录条目只承载结构信息：部分打包器会把同一条目录项重复写入，
+            // 命中重复不该让整包被判为非法；根目录项 "./" 归一化为空串。
+            if (!directory && !normalizedEntryNames.add(normalizedName)) {
                 throw invalidArchive("压缩包包含重复条目路径");
             }
 

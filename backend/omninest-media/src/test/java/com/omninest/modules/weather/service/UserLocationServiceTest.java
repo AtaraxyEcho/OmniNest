@@ -38,7 +38,8 @@ class UserLocationServiceTest {
                 snapshotCaptor.capture(),
                 Mockito.eq(Duration.ofDays(7))
         );
-        assertThat(snapshotCaptor.getValue().latLon()).isEqualTo("121.4737,31.2304");
+        // 坐标统一按两位小数落库：既是天气缓存键，也避免极小坐标输出科学计数法。
+        assertThat(snapshotCaptor.getValue().latLon()).isEqualTo("121.47,31.23");
         assertThat(snapshotCaptor.getValue().source()).isEqualTo("device");
         assertThat(snapshotCaptor.getValue().reportedAt()).isAfterOrEqualTo(beforeSave);
     }

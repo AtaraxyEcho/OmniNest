@@ -361,8 +361,8 @@ public class FileIngressPromotionService {
             return;
         }
         if (session.getQuotaReservationId() == null) {
-            storageQuotaService.checkQuota(session.getOwnerUserId(), session.getTotalSizeBytes());
-            storageQuotaService.incrementUsage(session.getOwnerUserId(), session.getTotalSizeBytes());
+            // 无预留分支没有 precheck 的原子保护，必须用条件更新扣减。
+            storageQuotaService.chargeUsage(session.getOwnerUserId(), session.getTotalSizeBytes());
             return;
         }
         storageQuotaService.settleReservation("UPLOAD", session.getId(), session.getTotalSizeBytes());

@@ -31,7 +31,7 @@ public class UserLocationService {
     public void saveLocation(UUID userId, double lat, double lon, String source) {
         locationStore.save(
                 userId,
-                new UserLocationSnapshot(lon + "," + lat, source, Instant.now()),
+                new UserLocationSnapshot(WeatherCoordinates.format(lon, lat), source, Instant.now()),
                 LOCATION_TTL
         );
     }

@@ -12,6 +12,7 @@ import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_media_session.dart';
+import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/music/domain/music_cover_paths.dart';
@@ -496,6 +497,14 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     // 单曲循环会重播同一地址：先记录播完事实，同步链路据此走重放而不是空 play()。
     _completedForLoadedItem = true;
     await _persistCurrent(completed: true);
+    // 睡眠定时器选了「播完当前曲目停止」时不再自动切下一首。
+    final stoppedBySleepTimer =
+        await ref
+            .read(musicSleepTimerControllerProvider.notifier)
+            .onTrackCompleted();
+    if (stoppedBySleepTimer) {
+      return;
+    }
     // 自动推进：顺序与随机档首尾循环，手动下一首才总是前进一格。
     await ref
         .read(musicCenterControllerProvider.notifier)

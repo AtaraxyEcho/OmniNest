@@ -82,7 +82,9 @@ class MediaProbeServiceTest {
         probing.runFfprobe(PROBE_INPUT);
 
         assertThat(command.get()).containsExactly(
-                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "ffprobe", "-v", "quiet", "-nostdin",
+                "-protocol_whitelist", "file,crypto,data",
+                "-print_format", "json",
                 "-show_format", "-show_streams", PROBE_INPUT.toAbsolutePath().normalize().toString());
     }
 

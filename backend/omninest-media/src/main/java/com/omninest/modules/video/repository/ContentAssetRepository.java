@@ -52,6 +52,16 @@ public interface ContentAssetRepository extends JpaRepository<ContentAsset, UUID
     List<ContentAsset> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
 
     /**
+     * 按内容文件节点批量查询资产行。
+     *
+     * <p>云盘侧永久删除自定义海报/背景图时用来回收指向已删节点的资产记录。</p>
+     *
+     * @param fileNodeIds 文件节点 ID
+     * @return 引用这些节点的资产行
+     */
+    List<ContentAsset> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
+
+    /**
      * 批量查询 ContentAsset（避免 N+1）。
      */
     List<ContentAsset> findAllByOwnerUserIdAndResourceTypeAndResourceIdIn(

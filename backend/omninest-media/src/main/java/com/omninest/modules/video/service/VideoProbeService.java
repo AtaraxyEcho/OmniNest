@@ -172,9 +172,9 @@ public class VideoProbeService {
         UUID ownerUserId = item.getOwnerUserId();
         UUID fileNodeId = item.getFileNodeId();
         if (!probeSlots().tryAcquire()) {
-            log.warn("ffprobe 并发已达上限，跳过本次探测: itemId={}, limit={}",
-                    item.getId(), probeConcurrency);
-            return;
+            log.warn("ffprobe 并发已达上限: itemId={}, limit={}", item.getId(), probeConcurrency);
+            // 手动探测按同步语义返回：静默跳过会让接口回 200，用户误以为探测已完成。
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "媒体探测任务繁忙，请稍后重试");
         }
         try {
             // 首尾窗口暂存与 ffprobe 均为 I/O 或 CPU 密集段，置于事务之外，避免独占数据库连接。

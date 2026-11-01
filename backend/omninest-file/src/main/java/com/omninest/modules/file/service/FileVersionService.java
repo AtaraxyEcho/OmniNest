@@ -100,7 +100,7 @@ public class FileVersionService {
         if (!isObjectOwnedByUser(newObject, ownerUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象不属于当前用户");
         }
-        rejectObjectAliasedToOtherNode(ownerUserId, fileNodeId, newObject.getId());
+        rejectObjectAliasedToOtherNode(ownerUserId, node, newObject.getId());
         // 入口晋升的 asVersion 对象已落到 users/{uid}/...，会话结果可能尚未回写；
         // 仅对仍处于 uploads/ 暂存前缀的对象强制「必须来自本次上传会话」。
         String newObjectKey = newObject.getObjectKey() == null ? "" : newObject.getObjectKey();
@@ -148,8 +148,8 @@ public class FileVersionService {
             sharedSpaceQuotaService.increaseUsage(bytes, 0);
             return;
         }
-        storageQuotaService.checkQuota(node.getOwnerUserId(), bytes);
-        storageQuotaService.incrementUsage(node.getOwnerUserId(), bytes);
+        // 与上传路径同为原子扣减：并发保存同一用户版本时不能一起通过预检再写超配额。
+        storageQuotaService.chargeUsage(node.getOwnerUserId(), bytes);
     }
 
     /**
@@ -257,7 +257,14 @@ public class FileVersionService {
         return fileNodeSupport.toNodeDto(saved);
     }
 
-    private void rejectObjectAliasedToOtherNode(UUID ownerUserId, UUID fileNodeId, UUID objectId) {
+    private void rejectObjectAliasedToOtherNode(UUID ownerUserId, FileNode node, UUID objectId) {
+        UUID fileNodeId = node.getId();
+        // 重复提交当前对象或该节点已登记过的版本对象时，插入的是一条指向同一物理字节的
+        // 重复版本记录，并按新版本再扣一次配额。必须连自身一起排重。
+        if (objectId.equals(node.getCurrentObjectId())
+                || fileVersionRepository.existsByFileNodeIdAndObjectId(fileNodeId, objectId)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该存储对象已绑定到当前文件版本");
+        }
         if (fileNodeRepository.existsActiveByOwnerUserIdAndObjectId(ownerUserId, objectId, fileNodeId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件使用");
         }

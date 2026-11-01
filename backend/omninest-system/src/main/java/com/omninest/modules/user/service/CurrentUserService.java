@@ -170,7 +170,8 @@ public class CurrentUserService implements UserProfileCacheEvictor {
         passwordPolicy.validate(user.getUsername(), newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         authUserRepository.save(user);
-        evictProfileCache(userId);
+        // 提交后再淘汰：提交前淘汰会被并发的 /me 读到旧行并重新回填缓存。
+        evictProfileCacheAfterCommit(userId);
 
         // 改密后撤销除当前会话外的全部活跃会话，阻断被盗 refresh 会话继续存活
         UUID currentSessionId = currentUserContext.currentSessionId();
@@ -217,22 +218,28 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "头像上传失败");
         }
 
-        transactionTemplate.executeWithoutResult(status -> {
-            AuthUser managed = authUserRepository.findById(userId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-            managed.setAvatarFileId(avatarFileId);
-            authUserRepository.save(managed);
-            // 同一用户其他设备的会话资料（头像/显示名）经偏好作用域事件即时重拉。
-            syncEventRecorder.record(new SyncEventCommand(
-                    userId,
-                    SyncScope.PREFERENCES,
-                    "USER_PROFILE",
-                    "USER_PROFILE",
-                    SyncAction.UPDATED,
-                    null,
-                    Map.of()
-            ));
-        });
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                AuthUser managed = authUserRepository.findById(userId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+                managed.setAvatarFileId(avatarFileId);
+                authUserRepository.save(managed);
+                // 同一用户其他设备的会话资料（头像/显示名）经偏好作用域事件即时重拉。
+                syncEventRecorder.record(new SyncEventCommand(
+                        userId,
+                        SyncScope.PREFERENCES,
+                        "USER_PROFILE",
+                        "USER_PROFILE",
+                        SyncAction.UPDATED,
+                        null,
+                        Map.of()
+                ));
+            });
+        } catch (RuntimeException exception) {
+            // 落库失败时新对象没有任何引用，必须回收，否则每次失败上传都留一个孤儿头像。
+            removeAvatarQuietly(userId, avatarFileId);
+            throw exception;
+        }
         evictProfileCache(userId);
         removeAvatarQuietly(userId, oldAvatarFileId);
 
@@ -344,7 +351,8 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             return currentUser();
         }
         authUserRepository.save(user);
-        evictProfileCache(userId);
+        // 提交后再淘汰，避免提交窗口内被并发读回填旧资料。
+        evictProfileCacheAfterCommit(userId);
         log.info("用户资料已更新: userId={}, fields={}", userId, changedFields);
         syncEventRecorder.record(new SyncEventCommand(
                 userId,

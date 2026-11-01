@@ -169,6 +169,17 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
         validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
+        // 改名会按月重写整棵子树的 normalizedPath，等价于处置目录内所有成员的内容：
+        // 与删除、迁回个人空间同判据，混有他人上传文件时非管理级操作者不能整体改名。
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())
+                && !canAccess(operatorId, Action.CAN_DELETE_ANY)
+                && fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                        SpaceType.SHARED,
+                        LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"),
+                        operatorId
+                ) > 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无权整体重命名");
+        }
 
         String newName = SharedSpaceSupport.normalizeNodeName(request.name());
         if (node.getName().equals(newName)) {
@@ -340,7 +351,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
             moveDescendants(descendants, node, oldPath, SpaceType.PERSONAL, targetUserId, null);
         }
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
-        storageQuotaService.incrementUsage(targetUserId, stats.totalBytes());
+        // 上面的 checkQuota 只做快速失败；真正计入必须走条件更新，否则并发迁入会写超配额。
+        storageQuotaService.chargeUsage(targetUserId, stats.totalBytes());
         // 按变更前收集的完整子树投递索引同步：此刻子孙已变为 PERSONAL，
         // 再按 SHARED 条件查询会返回空列表，导致整棵子树搜索索引漏更新。
         scheduleIndexAndEvent(targetUserId, subtreeIds, node.getId(), SyncAction.UPDATED);

@@ -79,6 +79,24 @@ public class VideoStreamService {
         streamSlots.release();
     }
 
+    /**
+     * 在固定响应头之前占用一路流槽位。
+     *
+     * <p>控制器必须先拿到槽位再写 {@code Content-Type}：槽位耗尽抛出的 503 只能在
+     * 响应提交前生效，否则播放器收到的是一段标着 {@code video/mp4} 的损坏流。
+     * 调用方取得槽位后必须在 finally 中调用 {@link #releaseStreamSlotForRequest()}。</p>
+     *
+     * @param videoItemId 视频条目标识，仅用于日志
+     */
+    public void acquireStreamSlot(UUID videoItemId) {
+        requireStreamSlot(videoItemId);
+    }
+
+    /** 释放由 {@link #acquireStreamSlot(UUID)} 占用的槽位。 */
+    public void releaseStreamSlotForRequest() {
+        releaseStreamSlot();
+    }
+
     public VideoStreamService(
             MediaVideoItemRepository videoItemRepository,
             VideoSourceInputResolver sourceInputResolver,
@@ -164,6 +182,24 @@ public class VideoStreamService {
             String audioMode,
             OutputStream output
     ) {
+        streamByAudioMode(ownerUserId, videoItemId, viewerUserId, startSeconds, audioMode, output, false);
+    }
+
+    /**
+     * 按音频模式输出转码流，并声明调用方是否已预先占用流槽位。
+     *
+     * @param slotPreAcquired 调用方已在写响应头之前调用 {@link #acquireStreamSlot(UUID)}
+     */
+    public void streamByAudioMode(
+            UUID ownerUserId,
+            UUID videoItemId,
+            UUID viewerUserId,
+            long startSeconds,
+            String audioMode,
+            OutputStream output,
+            boolean slotPreAcquired
+    ) {
+        boolean ownSlot = !slotPreAcquired;
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
         UUID catalogOwnerId = sourceItem.getOwnerUserId();
         String streamKey = streamKey(viewerUserId, videoItemId);
@@ -177,10 +213,11 @@ public class VideoStreamService {
             UUID audioFileNodeId = audioCached.get().getFileNodeId();
             log.info("使用缓存音频 mux: videoItemId={}, audioFileNodeId={}", videoItemId, audioFileNodeId);
             if (streamKey == null) {
-                streamWithCachedAudio(catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, output);
+                streamWithCachedAudio(
+                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, null, output, ownSlot);
             } else {
                 streamWithCachedAudio(
-                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, streamKey, output);
+                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, streamKey, output, ownSlot);
             }
             return;
         }
@@ -190,9 +227,9 @@ public class VideoStreamService {
             log.info("使用原始音频实时转码: videoItemId={}", videoItemId);
         }
         if (streamKey == null) {
-            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, output);
+            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, null, output, ownSlot);
         } else {
-            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, streamKey, output);
+            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, streamKey, output, ownSlot);
         }
     }
 
@@ -242,11 +279,12 @@ public class VideoStreamService {
     public void streamAudioTranscoded(
             UUID ownerUserId, UUID videoItemId, long startSeconds, OutputStream output
     ) {
-        streamAudioTranscoded(ownerUserId, videoItemId, startSeconds, null, output);
+        streamAudioTranscoded(ownerUserId, videoItemId, startSeconds, null, output, true);
     }
 
     private void streamAudioTranscoded(
-            UUID ownerUserId, UUID videoItemId, long startSeconds, String streamKey, OutputStream output
+            UUID ownerUserId, UUID videoItemId, long startSeconds, String streamKey,
+            OutputStream output, boolean ownSlot
     ) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
 
@@ -258,7 +296,10 @@ public class VideoStreamService {
         List<String> ffmpegArgs = buildTranscodeArgs(demuxer, internalUrl, startSeconds);
         StreamCommand streamCommand = buildStreamCommand(ffmpegArgs);
         terminateActiveStream(streamKey);
-        requireStreamSlot(videoItemId);
+        // 槽位可能已由控制器在写响应头之前占好，此时只释放不重复占用。
+        if (ownSlot) {
+            requireStreamSlot(videoItemId);
+        }
 
         Process process = null;
         Thread timeoutThread = null;
@@ -313,7 +354,9 @@ public class VideoStreamService {
             if (timeoutThread != null) {
                 timeoutThread.interrupt();
             }
-            releaseStreamSlot();
+            if (ownSlot) {
+                releaseStreamSlot();
+            }
         }
     }
 
@@ -331,12 +374,17 @@ public class VideoStreamService {
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
             long startSeconds, OutputStream output
     ) {
-        streamWithCachedAudio(ownerUserId, sourceVideoItemId, audioFileNodeId, startSeconds, null, output);
+        streamWithCachedAudio(ownerUserId, sourceVideoItemId, audioFileNodeId, startSeconds, null, output, true);
     }
 
-    private void streamWithCachedAudio(
+    /**
+     * 将原始视频流 + 缓存的 AAC 音频流 mux 为 fMP4 推送给浏览器。
+     *
+     * @param ownSlot 本次调用是否自行占用并释放流槽位；控制器已预先占位时传 false
+     */
+    public void streamWithCachedAudio(
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
-            long startSeconds, String streamKey, OutputStream output
+            long startSeconds, String streamKey, OutputStream output, boolean ownSlot
     ) {
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
 
@@ -351,7 +399,9 @@ public class VideoStreamService {
                 videoDemuxer, videoInternalUrl, audioInternalUrl, startSeconds);
         StreamCommand streamCommand = buildStreamCommand(ffmpegArgs);
         terminateActiveStream(streamKey);
-        requireStreamSlot(sourceVideoItemId);
+        if (ownSlot) {
+            requireStreamSlot(sourceVideoItemId);
+        }
 
         Process process = null;
         Thread timeoutThread = null;
@@ -409,7 +459,9 @@ public class VideoStreamService {
             if (timeoutThread != null) {
                 timeoutThread.interrupt();
             }
-            releaseStreamSlot();
+            if (ownSlot) {
+                releaseStreamSlot();
+            }
         }
     }
 

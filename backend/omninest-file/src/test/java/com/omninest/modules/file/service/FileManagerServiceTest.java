@@ -502,8 +502,7 @@ class FileManagerServiceTest {
         assertThat(saved.getNodeType()).isEqualTo("FILE");
         assertThat(link.getAccessCount()).isEqualTo(1);
         // 转存进来的文件同样是接收方的占用：漏加计会让"转存—清空回收站"倒扣配额。
-        verify(storageQuotaService).checkQuota(RECIPIENT_ID, 2048L);
-        verify(storageQuotaService).incrementUsage(RECIPIENT_ID, 2048L);
+        verify(storageQuotaService).chargeUsage(RECIPIENT_ID, 2048L);
     }
 
     @Test
@@ -758,7 +757,7 @@ class FileManagerServiceTest {
         assertThat(result.spaceType()).isEqualTo(SpaceType.SHARED.getValue());
         verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
         verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
-        verify(storageQuotaService, Mockito.never()).incrementUsage(any(), anyLong());
+        verify(storageQuotaService, Mockito.never()).chargeUsage(any(), anyLong());
     }
 
     @Test
@@ -998,8 +997,7 @@ class FileManagerServiceTest {
         fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, null, true);
 
         // 直接版本接口没有上传会话结算，必须由版本服务扣减新增对象字节。
-        verify(storageQuotaService).checkQuota(OWNER_ID, 200L);
-        verify(storageQuotaService).incrementUsage(OWNER_ID, 200L);
+        verify(storageQuotaService).chargeUsage(OWNER_ID, 200L);
     }
 
     @Test
@@ -1023,7 +1021,7 @@ class FileManagerServiceTest {
         fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, null, false);
 
         // 入口晋升已由 settleUploadQuota 结算，版本服务不得重复加计。
-        verify(storageQuotaService, never()).incrementUsage(any(), anyLong());
+        verify(storageQuotaService, never()).chargeUsage(any(), anyLong());
         verify(sharedSpaceQuotaService, never()).increaseUsage(anyLong(), anyLong());
     }
 

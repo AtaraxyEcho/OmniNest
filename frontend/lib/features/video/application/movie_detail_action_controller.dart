@@ -57,9 +57,14 @@ class MovieDetailActionController extends Notifier<MovieDetailActionState> {
     state = state.copyWith(favoritedOverride: next);
     try {
       await apply(next);
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(favoritedOverride: next);
     } on Exception {
-      state = state.copyWith(favoritedOverride: current);
+      if (ref.mounted) {
+        state = state.copyWith(favoritedOverride: current);
+      }
       rethrow;
     } finally {
       _favoriteInFlight = false;
@@ -83,7 +88,9 @@ class MovieDetailActionController extends Notifier<MovieDetailActionState> {
       return true;
     } finally {
       _saveInFlight = false;
-      state = state.copyWith(saving: false);
+      if (ref.mounted) {
+        state = state.copyWith(saving: false);
+      }
     }
   }
 
@@ -98,7 +105,9 @@ class MovieDetailActionController extends Notifier<MovieDetailActionState> {
       await apply();
     } finally {
       _uploadInFlight = false;
-      state = state.copyWith(uploading: false);
+      if (ref.mounted) {
+        state = state.copyWith(uploading: false);
+      }
     }
   }
 }
