@@ -7,6 +7,7 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/network/session_gate.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
 import 'package:omninest/core/preferences/preference_sync_service.dart';
 import 'package:omninest/core/storage/local_database.dart';
@@ -46,6 +47,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     refreshSession:
         () => ref.read(authSessionProvider.notifier).refreshSession(),
     readPermissions: readPermissions,
+    sessionGate: ref.watch(sessionGateProvider),
   );
   // 自动写回缺 activity/preference 写权限时静默跳过，不发网络；
   // 用户主动写由 API 预检抛 FORBIDDEN，后端 @PreAuthorize 兜底。

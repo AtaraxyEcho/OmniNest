@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/environment_providers.dart';
+import 'package:omninest/core/network/session_gate.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
@@ -281,6 +282,9 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     final userId = state.value?.user?.id;
     final store = ref.read(authSessionStoreProvider);
     final accessToken = store.readAccessToken();
+    // 先关掉客户端侧的身份通道：随后的 provider 级联重建不得再向服务端
+    // 发出注定 401 的请求。闸门独立于 ApiClient 实例，重建后的客户端同样生效。
+    ref.read(sessionGateProvider).markEnded();
     state = const AsyncData(AuthSessionState.unauthenticated());
 
     String? storedRefreshToken;

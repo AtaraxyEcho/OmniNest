@@ -8,6 +8,7 @@ import 'package:omninest/core/auth/auth_session_store.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
+import 'package:omninest/core/network/session_gate.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
 typedef AccessTokenReader = String? Function();
@@ -21,11 +22,13 @@ class ApiClient {
     AccessTokenReader? readAccessToken,
     SessionRefresher? refreshSession,
     PermissionReader? readPermissions,
+    SessionGate? sessionGate,
     HttpClientAdapter? httpClientAdapter,
   }) : _sessionStore = sessionStore,
        _readAccessToken = readAccessToken,
        _refreshSession = refreshSession,
        _readPermissions = readPermissions,
+       _sessionGate = sessionGate,
        _apiBaseUri = Uri.tryParse(environment.apiBaseUrl),
        dio = Dio(
          BaseOptions(
@@ -64,6 +67,13 @@ class ApiClient {
               options.extra[_requestTokenKey] = token;
               // 带上令牌即视为会话已重建，恢复刷新尝试。
               _refreshRejected = false;
+              _sessionGate?.markActive();
+            } else if (_sessionEnded && requiresSession(options.path)) {
+              // 会话已确定失效且未重新登录：退出登录后 Photo/File 等 provider
+              // 会成批重建并各发一个注定 401 的请求。本地直接拒绝，既不占
+              // 连接也不让服务端限流额度为一次登出买单。
+              handler.reject(_sessionEndedError(options));
+              return;
             }
           }
           handler.next(options);
@@ -132,6 +142,62 @@ class ApiClient {
   static const _requestTokenKey = 'omninest.requestAccessToken';
   static const _retriedKey = 'omninest.authRetried';
 
+  /// 匿名可达的接口路径，逐条对齐后端安全链（见 `SecurityConfig` 的
+  /// `publicContentFilterChain` 与 `securityFilterChain`）。
+  ///
+  /// 只用于「会话已失效时的本地短路」判断：命中即照常发请求，让服务端
+  /// 自己决定是否放行。任何新增的匿名端点都必须同步登记，否则退出登录后
+  /// 该端点会被本地拒绝，表现为功能莫名不可用。
+  @visibleForTesting
+  static final List<RegExp> anonymousPathPatterns = <RegExp>[
+    // 登录、注册、刷新、登出：登出本身幂等，过期令牌也必须能调通。
+    RegExp(r'^/auth/(login|register|refresh|logout)(/|$)'),
+    RegExp(r'^/setup(/|$)'),
+    // 分享链接：/s/{token} 与 authorize/preview/children 匿名可达；
+    // accept 需要登录身份，交给服务端按 Bearer 鉴权。
+    RegExp(r'^/s/[^/]+(/|$)'),
+    RegExp(r'^/public(/|$)'),
+    RegExp(r'^/share(/|$)'),
+    // 外部存储 OAuth 回调由浏览器从三方站点匿名回跳。
+    RegExp(r'^/external-connectors/[^/]+/oauth/callback$'),
+    // 播放流由查询串中的一次性播放令牌鉴权，不带 Bearer。
+    RegExp(r'^/music/playback/sessions/[^/]+/stream$'),
+  ];
+
+  /// 该路径是否需要已登录身份。判断基准是相对 [BaseOptions.baseUrl] 的路径。
+  @visibleForTesting
+  static bool requiresSession(String path) {
+    for (final pattern in anonymousPathPatterns) {
+      if (pattern.hasMatch(path)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// 会话已结束时的本地 401。
+  ///
+  /// 携带合成响应而不是裸异常：读取 `response.data` 业务信封的调用方仍能
+  /// 看到与真实 401 一致的错误码，二进制接口则按常规网络失败处理。
+  DioException _sessionEndedError(RequestOptions options) {
+    const message = '未登录或会话已过期';
+    return DioException(
+      requestOptions: options,
+      type: DioExceptionType.unknown,
+      error: const AppException(code: 'UNAUTHORIZED', message: message),
+      response: Response<dynamic>(
+        requestOptions: options,
+        statusCode: 401,
+        statusMessage: message,
+        data: const {
+          'code': 401,
+          'errorName': 'UNAUTHORIZED',
+          'message': message,
+        },
+      ),
+    );
+  }
+
   /// 外部签名地址使用此标记，避免向对象存储泄露 JWT。
   final Uri? _apiBaseUri;
 
@@ -142,6 +208,7 @@ class ApiClient {
   final AccessTokenReader? _readAccessToken;
   final SessionRefresher? _refreshSession;
   final PermissionReader? _readPermissions;
+  final SessionGate? _sessionGate;
   String? _manualAccessToken;
   Future<bool>? _refreshing;
 
@@ -150,6 +217,9 @@ class ApiClient {
   /// 否则退出登录后每个轮询请求都会再触发一次注定 401 的 `/auth/refresh`，
   /// 与业务请求成对刷屏。重新登录带上令牌后由 [dio] 的请求拦截解除。
   bool _refreshRejected = false;
+
+  /// 会话是否已结束：内部刷新结论，或登出流程置位的共享信号。
+  bool get _sessionEnded => _refreshRejected || (_sessionGate?.ended ?? false);
 
   /// 当前会话是否持有指定权限码。
   ///
@@ -183,6 +253,19 @@ class ApiClient {
     if (store != null) {
       unawaited(store.saveAccessToken(token));
     }
+  }
+
+  /// 声明会话已结束：在再次携带令牌之前，需要身份的请求一律本地拒绝。
+  ///
+  /// 登出必须显式调用。只靠首个 401 触发刷新失败再置位太晚——退出登录会让
+  /// Photo/File 等 provider 立即重建，那批请求往往在首个刷新结果回来之前就
+  /// 已经全部发出去了。
+  ///
+  /// 生产登出走共享 [SessionGate]（登出会重建 ApiClient 实例）；这里同时
+  /// 置位实例标记，便于单独持有客户端的调用方立即生效。
+  void markSessionEnded() {
+    _refreshRejected = true;
+    _sessionGate?.markEnded();
   }
 
   String? currentAccessToken() {
@@ -224,7 +307,7 @@ class ApiClient {
   }
 
   bool _isUnrecoverableSession401(Response<dynamic> response) {
-    if (response.statusCode != 401 || !_refreshRejected) {
+    if (response.statusCode != 401 || !_sessionEnded) {
       return false;
     }
     if (response.requestOptions.extra[skipAuthorizationKey] == true) {
@@ -250,7 +333,7 @@ class ApiClient {
   bool _shouldRefresh(Response<dynamic> response) {
     // 会话已确定失效且尚未重新登录时不再尝试刷新，避免退出登录后
     // 轮询请求成对刷出 /auth/refresh + 业务接口的 401。
-    if (_refreshRejected) {
+    if (_sessionEnded) {
       return false;
     }
     // 只有 401 才代表访问令牌本身需要轮换。403 是 RBAC 权限拒绝：换一枚新令牌换不来
