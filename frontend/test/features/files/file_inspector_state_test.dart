@@ -78,10 +78,11 @@ void main() {
   });
 
   test('导航清理点同步清空检视态（11 处 _clearInspection）', () {
-    final source =
-        File(
-          'lib/features/files/application/file_browser_controller.dart',
-        ).readAsStringSync();
+    // 导航动作分散在主类与分区动作分片中，契约按整个控制器库计数。
+    final source = [
+      'lib/features/files/application/file_browser_controller.dart',
+      'lib/features/files/application/file_browser_section_actions.dart',
+    ].map((path) => File(path).readAsStringSync()).join('\n');
     final count = '_clearInspection();'.allMatches(source).length;
     expect(count, 11);
   });

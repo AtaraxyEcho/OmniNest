@@ -28,4 +28,13 @@ extension FileBrowserPageMappers on FileBrowserController {
       totalPages: page.totalPages,
     );
   }
+
+  /// 可选初始化请求：失败（含测试假体的 UnimplementedError）时回落默认值。
+  Future<T> _optionalOr<T>(Future<T> Function() call, T fallback) async {
+    try {
+      return await call();
+    } on Object {
+      return fallback;
+    }
+  }
 }
