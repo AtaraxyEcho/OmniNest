@@ -182,6 +182,35 @@ final adminAuditActionsProvider = FutureProvider<List<String>>((ref) {
   return ref.watch(adminOperationsApiProvider).auditActions();
 });
 
+/// 审计动作下拉选项：全集与当前页兜底合并后在派生层排序一次。
+///
+/// 供日志中心直接消费，构建期不再克隆整页动作集合并重排。
+final adminAuditActionOptionsProvider = Provider.autoDispose
+    .family<List<String>, AdminLogPageQuery>((ref, query) {
+      final known =
+          ref.watch(adminAuditActionsProvider).asData?.value ??
+          const <String>[];
+      final page = ref.watch(adminLogPageProvider(query)).asData?.value;
+      final actions = <String>{
+        ...known,
+        ...?page?.items.map((item) => item.action),
+        if (query.action != 'ALL') query.action,
+      };
+      return actions.toList()..sort();
+    });
+
+/// 任务类型下拉选项：从当前页任务派生，随分页数据变化重算。
+final adminTaskTypeOptionsProvider = Provider.autoDispose
+    .family<List<String>, AdminTaskPageQuery>((ref, query) {
+      final page = ref.watch(adminTaskPageProvider(query)).asData?.value;
+      final types = <String>{
+        'ALL',
+        ...?page?.items.map((item) => item.taskType),
+        if (query.taskType != 'ALL') query.taskType,
+      };
+      return types.toList()..sort();
+    });
+
 final adminStorageProvider = FutureProvider<AdminStorageManagementView>((ref) {
   ref.watch(sessionEpochProvider);
 

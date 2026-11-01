@@ -317,10 +317,7 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
     if (season == null || season.episodes.isEmpty) {
       return (previous: null, next: null);
     }
-    final episodes = [...season.episodes]..sort(
-      (left, right) =>
-          (left.episodeNumber ?? 0).compareTo(right.episodeNumber ?? 0),
-    );
+    final episodes = season.episodes;
     final currentIndex = episodes.indexWhere(
       (episode) => episode.id == widget.videoItemId,
     );

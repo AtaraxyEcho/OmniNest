@@ -10,30 +10,16 @@ class AdminRolesPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final query = ref.watch(adminSearchProvider).toLowerCase();
     final filteredRoles =
-        (query.isEmpty
-                ? view.roles
-                : view.roles.where(
+        query.isEmpty
+            ? view.roles
+            : view.roles
+                .where(
                   (role) =>
                       role.code.toLowerCase().contains(query) ||
                       role.name.toLowerCase().contains(query) ||
                       role.description.toLowerCase().contains(query),
-                ))
-            .toList()
-          // 内置角色按 超管→管理员→成员→访客 固定次序，自定义角色按编码序殿后。
-          ..sort((a, b) {
-            const builtinOrder = [
-              AdminRoles.superAdmin,
-              AdminRoles.admin,
-              AdminRoles.member,
-              AdminRoles.guest,
-            ];
-            final ai = builtinOrder.indexOf(a.code);
-            final bi = builtinOrder.indexOf(b.code);
-            if (ai != bi) {
-              return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
-            }
-            return a.code.compareTo(b.code);
-          });
+                )
+                .toList();
     final permissionTotal = filteredRoles.fold<int>(
       0,
       (total, role) => total + role.permissions.length,

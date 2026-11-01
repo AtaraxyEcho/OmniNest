@@ -26,63 +26,6 @@ bool _isRemovedConfigKey(String key) {
   }.contains(key);
 }
 
-/// 分组排列序号：provider 前缀分组在前，其余按模块类别顺序，
-/// 保证统一表格内同组相邻、组间按稳定顺序排列。
-int _configGroupOrder(AdminConfigEntry entry) {
-  final key = entry.key;
-  if (_startsWithAny(key, const [
-    'music.musicbrainz',
-    'music.metadata-provider.musicbrainz',
-  ])) {
-    return 0;
-  }
-  if (_startsWithAny(key, const [
-    'media.tmdb',
-    'media.metadata-provider.tmdb',
-  ])) {
-    return 1;
-  }
-  if (_startsWithAny(key, const [
-    'reader.gbooks',
-    'reader.metadata-provider.google-books',
-  ])) {
-    return 2;
-  }
-  if (_startsWithAny(key, const [
-    'reader.openlib',
-    'reader.metadata-provider.open-library',
-  ])) {
-    return 3;
-  }
-  if (key.startsWith('photo.ai')) {
-    return 4;
-  }
-  if (_startsWithAny(key, const ['music.netease', 'music.platform.netease'])) {
-    return 5;
-  }
-  if (key.startsWith('weather.qweather')) {
-    return 7;
-  }
-  return 9 + _configCategoryOrder(entry.category);
-}
-
-int _configCategoryOrder(String category) {
-  return switch (category) {
-    'media' => 0,
-    'reader' => 1,
-    'music' => 2,
-    'photo' => 3,
-    'storage' => 4,
-    'upload' => 5,
-    'security' => 6,
-    'auth' => 7,
-    'weather' => 8,
-    'backdrop' => 9,
-    'general' => 10,
-    _ => 11,
-  };
-}
-
 String _configGroup(AppLocalizations l10n, AdminConfigEntry entry) {
   if (_startsWithAny(entry.key, const [
     'music.musicbrainz',

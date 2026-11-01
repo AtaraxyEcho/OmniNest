@@ -94,7 +94,14 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
         child: AdminListSkeleton(),
       );
     }
-    return _buildPage(context, page, dlqAsync, busy: taskAsync.isLoading);
+    final taskTypes = ref.watch(adminTaskTypeOptionsProvider(query));
+    return _buildPage(
+      context,
+      page,
+      dlqAsync,
+      taskTypes: taskTypes,
+      busy: taskAsync.isLoading,
+    );
   }
 
   /// 调整每页条数：重置回第一页并清空批量选择。
@@ -197,17 +204,11 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     BuildContext context,
     AdminPage<AdminTaskRecord> page,
     AsyncValue<List<AdminDlqTask>> dlqAsync, {
+    required List<String> taskTypes,
     required bool busy,
   }) {
     final l10n = AppLocalizations.of(context);
     final colors = context.adminColors;
-    final taskTypes =
-        <String>{
-            'ALL',
-            ...page.items.map((item) => item.taskType),
-            if (_taskType != 'ALL') _taskType,
-          }.toList()
-          ..sort();
     final running = page.items.where((item) => item.status == 'RUNNING').length;
     final queued = page.items.where((item) => item.status == 'QUEUED').length;
     final retryWait =

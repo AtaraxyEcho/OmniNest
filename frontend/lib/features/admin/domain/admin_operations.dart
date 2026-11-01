@@ -1,3 +1,5 @@
+import 'package:omninest/features/admin/domain/admin_user.dart';
+
 part 'admin_operations_storage_models.dart';
 
 class AdminRoleManagementView {
@@ -7,8 +9,12 @@ class AdminRoleManagementView {
   });
 
   factory AdminRoleManagementView.fromJson(Map<String, dynamic> json) {
+    // 内置角色按 超管→管理员→成员→访客 固定次序，自定义角色按编码序殿后。
+    final roles =
+        _list(json['roles']).map(AdminRoleDetail.fromJson).toList()
+          ..sort(_compareAdminRoles);
     return AdminRoleManagementView(
-      roles: _list(json['roles']).map(AdminRoleDetail.fromJson).toList(),
+      roles: roles,
       permissions:
           _list(
             json['permissions'],
@@ -18,6 +24,17 @@ class AdminRoleManagementView {
 
   final List<AdminRoleDetail> roles;
   final List<AdminPermissionDetail> permissions;
+}
+
+int _compareAdminRoles(AdminRoleDetail left, AdminRoleDetail right) {
+  final leftIndex = AdminRoles.allRoles.indexOf(left.code);
+  final rightIndex = AdminRoles.allRoles.indexOf(right.code);
+  if (leftIndex != rightIndex) {
+    return (leftIndex < 0 ? 99 : leftIndex).compareTo(
+      rightIndex < 0 ? 99 : rightIndex,
+    );
+  }
+  return left.code.compareTo(right.code);
 }
 
 class AdminRoleDetail {
@@ -105,12 +122,81 @@ class AdminConfigManagementView {
   const AdminConfigManagementView({required this.items});
 
   factory AdminConfigManagementView.fromJson(Map<String, dynamic> json) {
-    return AdminConfigManagementView(
-      items: _list(json['items']).map(AdminConfigEntry.fromJson).toList(),
-    );
+    // provider 前缀分组在前，其余按模块类别顺序；同组内按配置键升序。
+    final items =
+        _list(json['items']).map(AdminConfigEntry.fromJson).toList()
+          ..sort((left, right) {
+            final groupOrder = adminConfigGroupOrder(
+              left,
+            ).compareTo(adminConfigGroupOrder(right));
+            if (groupOrder != 0) {
+              return groupOrder;
+            }
+            return left.key.compareTo(right.key);
+          });
+    return AdminConfigManagementView(items: items);
   }
 
   final List<AdminConfigEntry> items;
+}
+
+bool _startsWithAny(String value, List<String> prefixes) {
+  return prefixes.any(value.startsWith);
+}
+
+int adminConfigGroupOrder(AdminConfigEntry entry) {
+  final key = entry.key;
+  if (_startsWithAny(key, const [
+    'music.musicbrainz',
+    'music.metadata-provider.musicbrainz',
+  ])) {
+    return 0;
+  }
+  if (_startsWithAny(key, const [
+    'media.tmdb',
+    'media.metadata-provider.tmdb',
+  ])) {
+    return 1;
+  }
+  if (_startsWithAny(key, const [
+    'reader.gbooks',
+    'reader.metadata-provider.google-books',
+  ])) {
+    return 2;
+  }
+  if (_startsWithAny(key, const [
+    'reader.openlib',
+    'reader.metadata-provider.open-library',
+  ])) {
+    return 3;
+  }
+  if (key.startsWith('photo.ai')) {
+    return 4;
+  }
+  if (_startsWithAny(key, const ['music.netease', 'music.platform.netease'])) {
+    return 5;
+  }
+  if (key.startsWith('weather.qweather')) {
+    return 7;
+  }
+  return 9 + _adminConfigCategoryOrder(entry.category);
+}
+
+int _adminConfigCategoryOrder(String category) {
+  return switch (category) {
+    'media' => 0,
+    'reader' => 1,
+    'music' => 2,
+    'photo' => 3,
+    'storage' => 4,
+    'upload' => 5,
+    'security' => 6,
+    'auth' => 7,
+    'weather' => 8,
+    'backdrop' => 9,
+    'general' => 10,
+    _ => 11,
+  };
 }
 
 class AdminConfigEntry {

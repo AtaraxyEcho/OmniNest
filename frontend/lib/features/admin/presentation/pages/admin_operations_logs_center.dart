@@ -121,16 +121,8 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
     final auditPage = auditAsync.value ?? _lastAuditPage;
     final loginPage = loginAsync.value ?? _lastLoginPage;
     // 动作选项必须覆盖库内全部动作：只从当前页聚合会让未出现在首屏或筛选后的
-    // 动作永远无法被选中；集合由后端按实际写入值返回，不做前端手抄。
-    final knownActions =
-        ref.watch(adminAuditActionsProvider).value ?? const <String>[];
-    final actionOptions =
-        <String>{
-            ...knownActions,
-            ...?auditPage?.items.map((item) => item.action),
-            if (_auditAction != 'ALL') _auditAction,
-          }.toList()
-          ..sort();
+    // 动作永远无法被选中；合并与排序在派生层完成，构建期直接消费。
+    final actionOptions = ref.watch(adminAuditActionOptionsProvider(auditKey));
     final currentOptions = <String>['ALL', ...actionOptions];
 
     return LayoutBuilder(

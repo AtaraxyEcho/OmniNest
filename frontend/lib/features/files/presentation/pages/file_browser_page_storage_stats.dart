@@ -63,8 +63,7 @@ class _HostedStorageStatsPage extends ConsumerWidget {
     }
 
     final usedBytes = current.usedBytes;
-    final types = [...current.typeDistribution]
-      ..sort((a, b) => b.sizeBytes.compareTo(a.sizeBytes));
+    final types = current.typeDistribution;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

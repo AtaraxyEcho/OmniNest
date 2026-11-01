@@ -450,11 +450,9 @@ class _PmNotificationsSectionState
                     ),
                   ),
               data: (list) {
-                final sorted = [...list]
-                  ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
                 return Column(
                   children: [
-                    for (final type in sorted)
+                    for (final type in list)
                       _PmRow(
                         icon: Icons.campaign_outlined,
                         label: notificationTypeLabel(type.typeCode, l10n),

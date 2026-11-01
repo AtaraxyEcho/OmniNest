@@ -176,12 +176,6 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
     }
   }
 
-  List<MovieSeason> get _sortedSeasons {
-    final seasons = [...widget.detail.seasons]
-      ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
-    return seasons;
-  }
-
   Future<void> _toggleFavorite(bool current) async {
     final actions = ref.read(movieDetailActionProvider.notifier);
     try {
@@ -354,7 +348,7 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
                       const SizedBox(height: 16),
                       _SeasonAccordion(
                         seriesId: series.id,
-                        seasons: _sortedSeasons,
+                        seasons: widget.detail.seasons,
                         openSeasonId: _openSeasonId,
                         onToggle: (seasonId) {
                           setState(() {

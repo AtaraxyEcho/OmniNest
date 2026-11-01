@@ -606,12 +606,16 @@ class MovieSeasonDetail {
   final List<MovieVideoItem> episodes;
 
   factory MovieSeasonDetail.fromJson(Map<String, dynamic> json) {
+    final episodes =
+        MovieJson.asList(json['episodes']).map(MovieVideoItem.fromJson).toList()
+          // 相邻集导航依赖集号顺序；在响应边界排一次，播放页不再每次构建重排。
+          ..sort(
+            (left, right) =>
+                (left.episodeNumber ?? 0).compareTo(right.episodeNumber ?? 0),
+          );
     return MovieSeasonDetail(
       season: MovieSeason.fromJson(MovieJson.asMap(json['season'])),
-      episodes:
-          MovieJson.asList(
-            json['episodes'],
-          ).map(MovieVideoItem.fromJson).toList(),
+      episodes: episodes,
     );
   }
 }
@@ -634,10 +638,15 @@ class MovieSeriesDetail {
   final bool writable;
 
   factory MovieSeriesDetail.fromJson(Map<String, dynamic> json) {
+    final seasons =
+        MovieJson.asList(json['seasons']).map(MovieSeason.fromJson).toList()
+          // 详情页按季号升序展示；在响应边界排一次，构建期不再克隆重排。
+          ..sort(
+            (left, right) => left.seasonNumber.compareTo(right.seasonNumber),
+          );
     return MovieSeriesDetail(
       series: MovieSeries.fromJson(MovieJson.asMap(json['series'])),
-      seasons:
-          MovieJson.asList(json['seasons']).map(MovieSeason.fromJson).toList(),
+      seasons: seasons,
       cast:
           MovieJson.asList(json['cast']).map(MovieCastMember.fromJson).toList(),
       crew:

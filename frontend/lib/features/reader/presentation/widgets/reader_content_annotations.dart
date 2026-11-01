@@ -11,17 +11,20 @@ abstract final class ReaderContentAnnotationProjector {
     List<ReaderAnnotation> annotations,
   ) {
     if (annotations.isEmpty) return blocks;
+    // 批注按起点排一次，供所有行/块复用；逐行内切分时不再各自排序。
+    final orderedAnnotations = [...annotations]
+      ..sort((left, right) => left.startOffset.compareTo(right.startOffset));
     return blocks.map((block) {
       if (block is ParagraphBlock) {
         return ParagraphBlock(
-          lines: _applyToLines(block.lines, annotations),
+          lines: _applyToLines(block.lines, orderedAnnotations),
           hasTrailingSpacing: block.hasTrailingSpacing,
           style: block.style,
         );
       }
       if (block is BlockquoteBlock) {
         return BlockquoteBlock(
-          lines: _applyToLines(block.lines, annotations),
+          lines: _applyToLines(block.lines, orderedAnnotations),
           startOffset: block.startOffset,
           style: block.style,
           hasTopPadding: block.hasTopPadding,
@@ -33,7 +36,7 @@ abstract final class ReaderContentAnnotationProjector {
           items:
               block.items.map((item) {
                 return ListItemData(
-                  spans: _applyToSpans(item.spans, annotations),
+                  spans: _applyToSpans(item.spans, orderedAnnotations),
                 );
               }).toList(),
           isOrdered: block.isOrdered,
@@ -47,7 +50,7 @@ abstract final class ReaderContentAnnotationProjector {
                 return TableRowData(
                   cells:
                       row.cells.map((cell) {
-                        return _applyToSpans(cell, annotations);
+                        return _applyToSpans(cell, orderedAnnotations);
                       }).toList(),
                   isHeader: row.isHeader,
                 );
@@ -106,10 +109,7 @@ abstract final class ReaderContentAnnotationProjector {
                   annotation.startOffset < spanEnd &&
                   annotation.endOffset > spanStart,
             )
-            .toList()
-          ..sort(
-            (left, right) => left.startOffset.compareTo(right.startOffset),
-          );
+            .toList();
     if (overlapping.isEmpty) return [span];
 
     final result = <ReaderInlineSpan>[];

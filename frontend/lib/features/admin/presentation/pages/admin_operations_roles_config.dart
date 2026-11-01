@@ -14,6 +14,8 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
   int _pageSize = 10;
   String _groupFilter = 'ALL';
   AdminListSort? _configSort;
+  String? _groupNamesSignature;
+  List<String> _sortedGroupNamesCache = const [];
 
   @override
   void initState() {
@@ -24,6 +26,18 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
     });
   }
 
+  /// 分组名按语言排序；结果随分组集合或语言变化才重排，构建期直接复用。
+  List<String> _sortedGroupNames(Iterable<String> names) {
+    final signature =
+        '${Localizations.localeOf(context).languageCode}|${names.join('\u0000')}';
+    if (signature == _groupNamesSignature) {
+      return _sortedGroupNamesCache;
+    }
+    _groupNamesSignature = signature;
+    _sortedGroupNamesCache = names.toList()..sort();
+    return _sortedGroupNamesCache;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -31,16 +45,7 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
     final all =
         widget.view.items
             .where((item) => !_isRemovedConfigKey(item.key))
-            .toList()
-          ..sort((a, b) {
-            final groupOrder = _configGroupOrder(
-              a,
-            ).compareTo(_configGroupOrder(b));
-            if (groupOrder != 0) {
-              return groupOrder;
-            }
-            return a.key.compareTo(b.key);
-          });
+            .toList();
     // 分组计数必须是全量数据的纯函数：从 widget.view.items 现算，
     // 不得取筛选或搜索后的中间列表，否则选中分组或检索时其余 chip
     // 会显示 0，只有点选后才恢复真实计数。
@@ -49,7 +54,7 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
       final group = _configGroup(l10n, item);
       groupCounts[group] = (groupCounts[group] ?? 0) + 1;
     }
-    final groupNames = groupCounts.keys.toList()..sort();
+    final groupNames = _sortedGroupNames(groupCounts.keys);
     final groupFiltered =
         _groupFilter == 'ALL'
             ? all
@@ -292,7 +297,9 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
       if (result != 0) {
         return result;
       }
-      final groupOrder = _configGroupOrder(a).compareTo(_configGroupOrder(b));
+      final groupOrder = adminConfigGroupOrder(
+        a,
+      ).compareTo(adminConfigGroupOrder(b));
       if (groupOrder != 0) {
         return groupOrder;
       }

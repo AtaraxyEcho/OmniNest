@@ -264,26 +264,31 @@ class FileApiResponseParser {
 
   FileStorageStats _parseStorageStats(Map<String, dynamic> json) {
     final rawTypes = json['typeDistribution'];
+    final typeDistribution =
+        rawTypes is List
+            ? rawTypes
+                .whereType<Map<String, dynamic>>()
+                .map(
+                  (item) => FileTypeStats(
+                    category:
+                        item['category']?.toString() ?? AppErrorCodes.other,
+                    count: asInt(item['count']),
+                    sizeBytes: asInt(item['sizeBytes']),
+                  ),
+                )
+                .toList()
+            : <FileTypeStats>[];
+    // 展示侧按体积从大到小排列；在数据边界排一次，页面构建不再克隆重排。
+    typeDistribution.sort(
+      (left, right) => right.sizeBytes.compareTo(left.sizeBytes),
+    );
     return FileStorageStats(
       totalFiles: asInt(json['totalFiles']),
       totalFolders: asInt(json['totalFolders']),
       usedBytes: asInt(json['usedBytes']),
       quotaBytes: asInt(json['quotaBytes']),
       quotaStatus: json['quotaStatus']?.toString() ?? 'NORMAL',
-      typeDistribution:
-          rawTypes is List
-              ? rawTypes
-                  .whereType<Map<String, dynamic>>()
-                  .map(
-                    (item) => FileTypeStats(
-                      category:
-                          item['category']?.toString() ?? AppErrorCodes.other,
-                      count: asInt(item['count']),
-                      sizeBytes: asInt(item['sizeBytes']),
-                    ),
-                  )
-                  .toList()
-              : const [],
+      typeDistribution: typeDistribution,
     );
   }
 
