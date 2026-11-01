@@ -48,7 +48,6 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/presentation/widgets/reader_view_page_mixin.dart': 807,
   'lib/features/search/presentation/widgets/global_search_overlay.dart': 1083,
   'lib/features/setup/presentation/pages/initial_setup_page.dart': 989,
-  'lib/features/video/data/movie_api.dart': 1125,
   'lib/features/video/presentation/pages/movie_player_page.dart': 919,
   'lib/features/video/presentation/widgets/movie_admin_list.dart': 983,
 };
