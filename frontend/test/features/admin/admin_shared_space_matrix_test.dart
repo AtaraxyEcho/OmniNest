@@ -11,17 +11,17 @@ import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 
 class _SessionNotifier extends AuthSessionNotifier {
+  _SessionNotifier(this._permissions);
+
+  final Set<String> _permissions;
+
   @override
   Future<AuthSessionState> build() async => AuthSessionState(
     user: UserProfile(
       id: 'user-1',
       username: 'admin',
       role: 'ADMIN',
-      permissions: {
-        'system:user:read',
-        'system:config:read',
-        'system:config:manage',
-      },
+      permissions: _permissions,
     ),
   );
 }
@@ -76,7 +76,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          authSessionProvider.overrideWith(_SessionNotifier.new),
+          authSessionProvider.overrideWith(
+            () => _SessionNotifier({
+              'system:user:read',
+              'system:config:read',
+              'system:config:manage',
+            }),
+          ),
           sharedSpacePermissionsProvider.overrideWith(
             (ref) => Future.value(const [_permission]),
           ),
@@ -100,9 +106,11 @@ void main() {
     final l10n = AppLocalizations.of(
       tester.element(find.byType(AdminRolesPage)),
     );
-    actions = ProviderScope.containerOf(
-      tester.element(find.byType(AdminRolesPage)),
-    ).read(adminOperationsActionsProvider) as _RecordingActions;
+    actions =
+        ProviderScope.containerOf(
+              tester.element(find.byType(AdminRolesPage)),
+            ).read(adminOperationsActionsProvider)
+            as _RecordingActions;
 
     // 浏览位默认勾选；取消后矩阵进入脏状态，保存按钮才可用。
     await tester.tap(find.byType(Checkbox).first);
@@ -123,5 +131,39 @@ void main() {
     expect(actions.saved, hasLength(1));
     expect(actions.saved.single.first.canBrowse, isFalse);
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('只有角色只读权限时不渲染共享空间矩阵', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 1600);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionProvider.overrideWith(
+            () => _SessionNotifier({'system:user:read'}),
+          ),
+          sharedSpacePermissionsProvider.overrideWith(
+            (ref) => Future.value(const [_permission]),
+          ),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: AdminRolesPage(view: _view)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final l10n = AppLocalizations.of(
+      tester.element(find.byType(AdminRolesPage)),
+    );
+
+    expect(find.text(l10n.adminSharedSpaceMatrixTitle), findsNothing);
   });
 }

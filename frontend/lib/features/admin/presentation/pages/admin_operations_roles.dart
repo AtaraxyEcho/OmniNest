@@ -8,6 +8,10 @@ class AdminRolesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final permissions =
+        ref.watch(authSessionProvider).value?.user?.permissions ??
+        const <String>{};
+    final canManageSharedSpace = permissions.contains('system:config:manage');
     final query = ref.watch(adminSearchProvider).toLowerCase();
     final filteredRoles =
         query.isEmpty
@@ -95,8 +99,10 @@ class AdminRolesPage extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _PermissionMatrixPreview(permissions: view.permissions),
-        const SizedBox(height: 20),
-        const _SharedSpacePermissionSection(),
+        if (canManageSharedSpace) ...[
+          const SizedBox(height: 20),
+          const _SharedSpacePermissionSection(),
+        ],
       ],
     );
   }
