@@ -938,6 +938,96 @@ abstract class AppLocalizations {
   /// **'Notification Types'**
   String get notificationTypesHeader;
 
+  /// No description provided for @notificationEmailTestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Test email'**
+  String get notificationEmailTestTitle;
+
+  /// No description provided for @notificationEmailTestSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a test email with the current SMTP settings to verify the configuration.'**
+  String get notificationEmailTestSubtitle;
+
+  /// No description provided for @notificationEmailTestAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send test email'**
+  String get notificationEmailTestAction;
+
+  /// No description provided for @notificationEmailTestConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This sends a test email using the current SMTP settings. Continue?'**
+  String get notificationEmailTestConfirm;
+
+  /// No description provided for @notificationEmailTestRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient (optional)'**
+  String get notificationEmailTestRecipient;
+
+  /// No description provided for @notificationEmailTestRecipientHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to send to the current admin\'s address'**
+  String get notificationEmailTestRecipientHint;
+
+  /// No description provided for @notificationEmailTestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Test email sent'**
+  String get notificationEmailTestSent;
+
+  /// No description provided for @notificationTypeAdminTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification type management'**
+  String get notificationTypeAdminTitle;
+
+  /// No description provided for @notificationTypeAdminSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable or disable notification types globally; disabled types are not delivered to any user.'**
+  String get notificationTypeAdminSubtitle;
+
+  /// No description provided for @notificationTypeAdminEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notification types.'**
+  String get notificationTypeAdminEmpty;
+
+  /// No description provided for @notificationTypeAdminConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get notificationTypeAdminConfirm;
+
+  /// No description provided for @notificationTypeAdminUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification type updated'**
+  String get notificationTypeAdminUpdated;
+
+  /// No description provided for @notificationTypeAdminToggleConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Set \"{label}\" to {state}?'**
+  String notificationTypeAdminToggleConfirm(String label, String state);
+
+  /// No description provided for @notificationTypeAdminStateEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'enabled'**
+  String get notificationTypeAdminStateEnabled;
+
+  /// No description provided for @notificationTypeAdminStateDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'disabled'**
+  String get notificationTypeAdminStateDisabled;
+
   /// No description provided for @notificationTimeNow.
   ///
   /// In en, this message translates to:
@@ -10606,6 +10696,354 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'External Storage'**
   String get adminNavExternalStorage;
+
+  /// No description provided for @adminNavMaintenance.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get adminNavMaintenance;
+
+  /// No description provided for @adminMaintenanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance & audit'**
+  String get adminMaintenanceTitle;
+
+  /// No description provided for @adminMaintenanceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'One place for site-wide shares, photo geo data and unavailable media sources.'**
+  String get adminMaintenanceSubtitle;
+
+  /// No description provided for @adminMaintenanceNoPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role has no maintenance panels available.'**
+  String get adminMaintenanceNoPermission;
+
+  /// No description provided for @adminMaintenanceConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get adminMaintenanceConfirm;
+
+  /// No description provided for @adminMaintenanceSharesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Site-wide share audit'**
+  String get adminMaintenanceSharesTitle;
+
+  /// No description provided for @adminMaintenanceSharesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review active share links created by any user and how often they were opened.'**
+  String get adminMaintenanceSharesSubtitle;
+
+  /// No description provided for @adminMaintenanceSharesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No share links.'**
+  String get adminMaintenanceSharesEmpty;
+
+  /// No description provided for @adminMaintenanceSharesResource.
+  ///
+  /// In en, this message translates to:
+  /// **'Resource'**
+  String get adminMaintenanceSharesResource;
+
+  /// No description provided for @adminMaintenanceSharesOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get adminMaintenanceSharesOwner;
+
+  /// No description provided for @adminMaintenanceSharesStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get adminMaintenanceSharesStatus;
+
+  /// No description provided for @adminMaintenanceSharesAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Accesses'**
+  String get adminMaintenanceSharesAccess;
+
+  /// No description provided for @adminMaintenanceSharesCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get adminMaintenanceSharesCreated;
+
+  /// No description provided for @adminMaintenanceSharesExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get adminMaintenanceSharesExpires;
+
+  /// No description provided for @adminMaintenanceShareStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminMaintenanceShareStatusActive;
+
+  /// No description provided for @adminMaintenanceShareStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get adminMaintenanceShareStatusDisabled;
+
+  /// No description provided for @adminMaintenanceShareStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get adminMaintenanceShareStatusExpired;
+
+  /// No description provided for @adminMaintenancePhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo geo data'**
+  String get adminMaintenancePhotoTitle;
+
+  /// No description provided for @adminMaintenancePhotoSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import GeoNames data, reload the index, backfill photo locations and rescan motion photos.'**
+  String get adminMaintenancePhotoSubtitle;
+
+  /// No description provided for @adminMaintenanceGeoImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import dataset'**
+  String get adminMaintenanceGeoImport;
+
+  /// No description provided for @adminMaintenanceGeoReload.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload index'**
+  String get adminMaintenanceGeoReload;
+
+  /// No description provided for @adminMaintenanceGeoBackfill.
+  ///
+  /// In en, this message translates to:
+  /// **'Backfill locations'**
+  String get adminMaintenanceGeoBackfill;
+
+  /// No description provided for @adminMaintenanceMotionRescan.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan motion photos'**
+  String get adminMaintenanceMotionRescan;
+
+  /// No description provided for @adminMaintenanceGeoConfirmImport.
+  ///
+  /// In en, this message translates to:
+  /// **'This reads the dump files from the server\'s shared directory and creates a background import task. Continue?'**
+  String get adminMaintenanceGeoConfirmImport;
+
+  /// No description provided for @adminMaintenanceGeoConfirmReload.
+  ///
+  /// In en, this message translates to:
+  /// **'This reloads this instance\'s in-memory index from the published dataset. Continue?'**
+  String get adminMaintenanceGeoConfirmReload;
+
+  /// No description provided for @adminMaintenanceGeoConfirmBackfill.
+  ///
+  /// In en, this message translates to:
+  /// **'This creates a background backfill task for photos with coordinates but no place name. Continue?'**
+  String get adminMaintenanceGeoConfirmBackfill;
+
+  /// No description provided for @adminMaintenanceMotionConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This rescans previously imported decodable JPEGs for motion-photo markers and extracts their videos. Continue?'**
+  String get adminMaintenanceMotionConfirm;
+
+  /// No description provided for @adminMaintenanceGeoDumpDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Dump date'**
+  String get adminMaintenanceGeoDumpDate;
+
+  /// No description provided for @adminMaintenanceGeoDumpDateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 2026-01-01'**
+  String get adminMaintenanceGeoDumpDateHint;
+
+  /// No description provided for @adminMaintenanceGeoDumpDateRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the dump date'**
+  String get adminMaintenanceGeoDumpDateRequired;
+
+  /// No description provided for @adminMaintenanceGeoSourceHash.
+  ///
+  /// In en, this message translates to:
+  /// **'Source hash (optional)'**
+  String get adminMaintenanceGeoSourceHash;
+
+  /// No description provided for @adminMaintenanceGeoBatchSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch size (optional)'**
+  String get adminMaintenanceGeoBatchSize;
+
+  /// No description provided for @adminMaintenanceGeoTaskCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Task created: {taskId}'**
+  String adminMaintenanceGeoTaskCreated(String taskId);
+
+  /// No description provided for @adminMaintenanceGeoTaskReused.
+  ///
+  /// In en, this message translates to:
+  /// **'Reused the active backfill task: {taskId}'**
+  String adminMaintenanceGeoTaskReused(String taskId);
+
+  /// No description provided for @adminMaintenanceGeoReloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Reloaded dataset: {version}'**
+  String adminMaintenanceGeoReloaded(String version);
+
+  /// No description provided for @adminMaintenanceGeoReloadedEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Reloaded (no published dataset yet)'**
+  String get adminMaintenanceGeoReloadedEmpty;
+
+  /// No description provided for @adminMaintenanceUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable media'**
+  String get adminMaintenanceUnavailableTitle;
+
+  /// No description provided for @adminMaintenanceUnavailableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries that are missing or unreadable in local media libraries.'**
+  String get adminMaintenanceUnavailableSubtitle;
+
+  /// No description provided for @adminMaintenanceUnavailableEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No unavailable entries.'**
+  String get adminMaintenanceUnavailableEmpty;
+
+  /// No description provided for @adminMaintenanceUnavailableName.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get adminMaintenanceUnavailableName;
+
+  /// No description provided for @adminMaintenanceUnavailableStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get adminMaintenanceUnavailableStatus;
+
+  /// No description provided for @adminMaintenanceUnavailableSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing since'**
+  String get adminMaintenanceUnavailableSince;
+
+  /// No description provided for @adminMaintenanceUnavailableConfirmations.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmations'**
+  String get adminMaintenanceUnavailableConfirmations;
+
+  /// No description provided for @adminSharedSpaceMatrixTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared space capability matrix'**
+  String get adminSharedSpaceMatrixTitle;
+
+  /// No description provided for @adminSharedSpaceMatrixSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure browse, upload, download, delete, move and folder creation per role. Changes apply immediately.'**
+  String get adminSharedSpaceMatrixSubtitle;
+
+  /// No description provided for @adminSharedSpaceMatrixSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save matrix'**
+  String get adminSharedSpaceMatrixSave;
+
+  /// No description provided for @adminSharedSpaceMatrixConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This updates shared space capabilities for {count} roles. Continue?'**
+  String adminSharedSpaceMatrixConfirm(String count);
+
+  /// No description provided for @adminSharedSpaceMatrixSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared space capabilities updated'**
+  String get adminSharedSpaceMatrixSaved;
+
+  /// No description provided for @adminSharedSpaceMatrixEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No roles to configure.'**
+  String get adminSharedSpaceMatrixEmpty;
+
+  /// No description provided for @adminSharedSpaceRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get adminSharedSpaceRole;
+
+  /// No description provided for @adminSharedSpaceCapabilityBrowse.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse'**
+  String get adminSharedSpaceCapabilityBrowse;
+
+  /// No description provided for @adminSharedSpaceCapabilityUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get adminSharedSpaceCapabilityUpload;
+
+  /// No description provided for @adminSharedSpaceCapabilityDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get adminSharedSpaceCapabilityDownload;
+
+  /// No description provided for @adminSharedSpaceCapabilityDeleteOwn.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete own'**
+  String get adminSharedSpaceCapabilityDeleteOwn;
+
+  /// No description provided for @adminSharedSpaceCapabilityDeleteAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete any'**
+  String get adminSharedSpaceCapabilityDeleteAny;
+
+  /// No description provided for @adminSharedSpaceCapabilityMoveTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Move in'**
+  String get adminSharedSpaceCapabilityMoveTo;
+
+  /// No description provided for @adminSharedSpaceCapabilityMoveFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Move out'**
+  String get adminSharedSpaceCapabilityMoveFrom;
+
+  /// No description provided for @adminSharedSpaceCapabilityCreateFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'New folder'**
+  String get adminSharedSpaceCapabilityCreateFolder;
 
   /// No description provided for @adminOverviewTitle.
   ///

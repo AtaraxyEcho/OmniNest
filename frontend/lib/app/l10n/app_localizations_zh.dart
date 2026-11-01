@@ -442,6 +442,54 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationTypesHeader => '通知类型';
 
   @override
+  String get notificationEmailTestTitle => '测试邮件';
+
+  @override
+  String get notificationEmailTestSubtitle =>
+      '按当前 SMTP 配置立即发送一封测试邮件，便于确认配置是否可用。';
+
+  @override
+  String get notificationEmailTestAction => '发送测试邮件';
+
+  @override
+  String get notificationEmailTestConfirm => '将按当前 SMTP 配置发送一封测试邮件，继续？';
+
+  @override
+  String get notificationEmailTestRecipient => '收件邮箱（可选）';
+
+  @override
+  String get notificationEmailTestRecipientHint => '留空则发送给当前管理员绑定的邮箱';
+
+  @override
+  String get notificationEmailTestSent => '测试邮件已发送';
+
+  @override
+  String get notificationTypeAdminTitle => '通知类型管理';
+
+  @override
+  String get notificationTypeAdminSubtitle => '全局启用或停用通知类型；停用后所有用户都不再收到该类通知。';
+
+  @override
+  String get notificationTypeAdminEmpty => '暂无通知类型。';
+
+  @override
+  String get notificationTypeAdminConfirm => '修改';
+
+  @override
+  String get notificationTypeAdminUpdated => '通知类型已更新';
+
+  @override
+  String notificationTypeAdminToggleConfirm(String label, String state) {
+    return '将把「$label」设为$state，继续？';
+  }
+
+  @override
+  String get notificationTypeAdminStateEnabled => '启用';
+
+  @override
+  String get notificationTypeAdminStateDisabled => '停用';
+
+  @override
   String get notificationTimeNow => '刚刚';
 
   @override
@@ -5600,6 +5648,192 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminNavExternalStorage => '外部存储';
+
+  @override
+  String get adminNavMaintenance => '维护与审计';
+
+  @override
+  String get adminMaintenanceTitle => '维护与审计';
+
+  @override
+  String get adminMaintenanceSubtitle => '全站分享、照片地理数据与不可用媒体源的集中维护入口。';
+
+  @override
+  String get adminMaintenanceNoPermission => '当前角色没有可用的维护面板。';
+
+  @override
+  String get adminMaintenanceConfirm => '执行';
+
+  @override
+  String get adminMaintenanceSharesTitle => '全站分享审计';
+
+  @override
+  String get adminMaintenanceSharesSubtitle => '查看全部用户创建的未撤销分享链接及其访问情况。';
+
+  @override
+  String get adminMaintenanceSharesEmpty => '暂无分享链接。';
+
+  @override
+  String get adminMaintenanceSharesResource => '资源';
+
+  @override
+  String get adminMaintenanceSharesOwner => '所有者';
+
+  @override
+  String get adminMaintenanceSharesStatus => '状态';
+
+  @override
+  String get adminMaintenanceSharesAccess => '访问次数';
+
+  @override
+  String get adminMaintenanceSharesCreated => '创建时间';
+
+  @override
+  String get adminMaintenanceSharesExpires => '过期时间';
+
+  @override
+  String get adminMaintenanceShareStatusActive => '生效中';
+
+  @override
+  String get adminMaintenanceShareStatusDisabled => '已停用';
+
+  @override
+  String get adminMaintenanceShareStatusExpired => '已过期';
+
+  @override
+  String get adminMaintenancePhotoTitle => '照片地理库维护';
+
+  @override
+  String get adminMaintenancePhotoSubtitle =>
+      '导入 GeoNames 数据集、重载索引、回填照片位置与回扫动态照片。';
+
+  @override
+  String get adminMaintenanceGeoImport => '导入数据集';
+
+  @override
+  String get adminMaintenanceGeoReload => '重载索引';
+
+  @override
+  String get adminMaintenanceGeoBackfill => '回填位置';
+
+  @override
+  String get adminMaintenanceMotionRescan => '回扫动态照片';
+
+  @override
+  String get adminMaintenanceGeoConfirmImport =>
+      '将从服务端共享目录读取 dump 文件并创建后台导入任务，继续？';
+
+  @override
+  String get adminMaintenanceGeoConfirmReload => '将本实例内存索引重载到当前已发布数据集，继续？';
+
+  @override
+  String get adminMaintenanceGeoConfirmBackfill => '为有坐标但缺地名的照片创建后台回填任务，继续？';
+
+  @override
+  String get adminMaintenanceMotionConfirm =>
+      '为历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频，继续？';
+
+  @override
+  String get adminMaintenanceGeoDumpDate => '数据日期';
+
+  @override
+  String get adminMaintenanceGeoDumpDateHint => '例如 2026-01-01';
+
+  @override
+  String get adminMaintenanceGeoDumpDateRequired => '请填写数据日期';
+
+  @override
+  String get adminMaintenanceGeoSourceHash => '来源校验值（可选）';
+
+  @override
+  String get adminMaintenanceGeoBatchSize => '每批条数（可选）';
+
+  @override
+  String adminMaintenanceGeoTaskCreated(String taskId) {
+    return '任务已创建：$taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoTaskReused(String taskId) {
+    return '已复用现有回填任务：$taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoReloaded(String version) {
+    return '已重载数据集：$version';
+  }
+
+  @override
+  String get adminMaintenanceGeoReloadedEmpty => '已重载（当前没有已发布数据集）';
+
+  @override
+  String get adminMaintenanceUnavailableTitle => '不可用影视源';
+
+  @override
+  String get adminMaintenanceUnavailableSubtitle => '本地影视库中已缺失或不可读的条目。';
+
+  @override
+  String get adminMaintenanceUnavailableEmpty => '没有不可用条目。';
+
+  @override
+  String get adminMaintenanceUnavailableName => '标题';
+
+  @override
+  String get adminMaintenanceUnavailableStatus => '状态';
+
+  @override
+  String get adminMaintenanceUnavailableSince => '缺失起始';
+
+  @override
+  String get adminMaintenanceUnavailableConfirmations => '确认次数';
+
+  @override
+  String get adminSharedSpaceMatrixTitle => '共享空间能力矩阵';
+
+  @override
+  String get adminSharedSpaceMatrixSubtitle =>
+      '按角色配置浏览、上传、下载、删除、移动与建目录能力；保存后立即生效。';
+
+  @override
+  String get adminSharedSpaceMatrixSave => '保存矩阵';
+
+  @override
+  String adminSharedSpaceMatrixConfirm(String count) {
+    return '将更新 $count 个角色的共享空间能力，继续？';
+  }
+
+  @override
+  String get adminSharedSpaceMatrixSaved => '共享空间能力已更新';
+
+  @override
+  String get adminSharedSpaceMatrixEmpty => '暂无角色可配置。';
+
+  @override
+  String get adminSharedSpaceRole => '角色';
+
+  @override
+  String get adminSharedSpaceCapabilityBrowse => '浏览';
+
+  @override
+  String get adminSharedSpaceCapabilityUpload => '上传';
+
+  @override
+  String get adminSharedSpaceCapabilityDownload => '下载';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteOwn => '删自己的';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteAny => '删任意';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveTo => '移入';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveFrom => '移出';
+
+  @override
+  String get adminSharedSpaceCapabilityCreateFolder => '建目录';
 
   @override
   String get adminOverviewTitle => '管理控制台';

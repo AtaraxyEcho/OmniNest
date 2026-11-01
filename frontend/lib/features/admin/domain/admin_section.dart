@@ -11,6 +11,7 @@ enum AdminSection {
   logs(group: AdminSectionGroup.operations, pathSegment: 'logs'),
   tasks(group: AdminSectionGroup.operations, pathSegment: 'tasks'),
   sessions(group: AdminSectionGroup.operations, pathSegment: 'sessions'),
+  maintenance(group: AdminSectionGroup.operations, pathSegment: 'maintenance'),
   users(group: AdminSectionGroup.identity, pathSegment: 'users'),
   roles(group: AdminSectionGroup.identity, pathSegment: 'roles'),
   config(group: AdminSectionGroup.configuration, pathSegment: 'config'),
@@ -39,6 +40,11 @@ enum AdminSection {
       AdminSection.storage ||
       AdminSection.externalStorage => {'system:config:read'},
       AdminSection.tasks => {'task:admin'},
+      AdminSection.maintenance => {
+        'system:user:manage',
+        'photo:admin',
+        'media:library:manage',
+      },
       AdminSection.users => {'system:user:read'},
       // 角色页同时依赖 /admin/roles 与 /admin/roles/detail
       AdminSection.roles => {'system:user:read', 'system:config:read'},

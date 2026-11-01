@@ -19,6 +19,7 @@ import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
+import 'package:omninest/features/notifications/data/notification_email_admin_api.dart';
 import 'package:omninest/features/notifications/data/notification_type_api.dart';
 import 'package:omninest/features/profile/data/me_api.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -107,6 +108,12 @@ final preferenceSyncServiceProvider = Provider<PreferenceSyncService>((ref) {
 
 final notificationTypeApiProvider = Provider<NotificationTypeApi>((ref) {
   return NotificationTypeApi(ref.watch(apiClientProvider));
+});
+
+final notificationEmailAdminApiProvider = Provider<NotificationEmailAdminApi>((
+  ref,
+) {
+  return NotificationEmailAdminApi(ref.watch(apiClientProvider));
 });
 
 final meApiProvider = Provider<MeApi>((ref) {

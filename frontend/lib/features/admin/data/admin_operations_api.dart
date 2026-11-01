@@ -211,6 +211,118 @@ class AdminOperationsApi {
     return parseAuditActions(response.data);
   }
 
+  /// 全站分享链接审计：按创建时间倒序分页。
+  Future<AdminPage<AdminFileShareLink>> shareLinksPage({
+    required int page,
+    required int size,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/files/shares',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return AdminPage.fromJson(
+      parseData(response.data),
+      AdminFileShareLink.fromJson,
+    );
+  }
+
+  /// 共享空间角色能力矩阵。
+  Future<List<AdminSharedSpacePermission>> sharedSpacePermissions() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/shared-space/permissions',
+    );
+    final data = parseEnvelope(response.data)['data'];
+    if (data is! List) {
+      return const [];
+    }
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => AdminSharedSpacePermission.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  /// 保存单个角色的共享空间能力。
+  Future<void> updateSharedSpacePermission(
+    AdminSharedSpacePermission permission,
+  ) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/shared-space/permissions/${permission.roleId}',
+      data: {
+        'canBrowse': permission.canBrowse,
+        'canUpload': permission.canUpload,
+        'canDownload': permission.canDownload,
+        'canDeleteOwn': permission.canDeleteOwn,
+        'canDeleteAny': permission.canDeleteAny,
+        'canMoveTo': permission.canMoveTo,
+        'canMoveFrom': permission.canMoveFrom,
+        'canCreateFolder': permission.canCreateFolder,
+      },
+    );
+    parseEnvelope(response.data);
+  }
+
+  /// 创建 GeoNames 数据集导入任务。
+  Future<AdminGeoImportResult> importGeoDataset({
+    required String dumpDate,
+    String? sourceHash,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/photos/geo/import',
+      data: {
+        'dumpDate': dumpDate,
+        if (sourceHash != null && sourceHash.isNotEmpty)
+          'sourceHash': sourceHash,
+      },
+    );
+    return AdminGeoImportResult.fromJson(parseData(response.data));
+  }
+
+  /// 将本实例内存索引重载到当前已发布数据集。
+  Future<String?> reloadGeoIndex() async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/photos/geo/reload',
+    );
+    final data = parseData(response.data);
+    final version = data['datasetVersion']?.toString();
+    return version == null || version.isEmpty ? null : version;
+  }
+
+  /// 创建存量照片位置回填任务。
+  Future<AdminGeoBackfillResult> backfillGeo({int? batchSize}) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/photos/geo/backfill',
+      queryParameters: {if (batchSize != null) 'batchSize': batchSize},
+    );
+    return AdminGeoBackfillResult.fromJson(parseData(response.data));
+  }
+
+  /// 回扫动态照片，返回任务 ID。
+  Future<String> reanalyzeMotionPhotos() async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/photos/motion/reanalyze',
+    );
+    return parseData(response.data)['taskId']?.toString() ?? '';
+  }
+
+  /// 本地媒体库中已不可用的视频条目。
+  Future<AdminPage<AdminUnavailableMedia>> unavailableMediaPage({
+    required int page,
+    required int size,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/library-sources/unavailable',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return AdminPage.fromJson(
+      parseData(response.data),
+      AdminUnavailableMedia.fromJson,
+    );
+  }
+
   Future<AdminStorageManagementView> storage() async {
     final responses = await Future.wait([
       apiClient.dio.get<Map<String, dynamic>>('/admin/storage'),

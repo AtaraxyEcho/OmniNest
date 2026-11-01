@@ -95,6 +95,8 @@ class AdminRolesPage extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _PermissionMatrixPreview(permissions: view.permissions),
+        const SizedBox(height: 20),
+        const _SharedSpacePermissionSection(),
       ],
     );
   }

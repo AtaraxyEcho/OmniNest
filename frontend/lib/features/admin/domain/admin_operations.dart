@@ -1,6 +1,7 @@
 import 'package:omninest/features/admin/domain/admin_user.dart';
 
 part 'admin_operations_storage_models.dart';
+part 'admin_maintenance_models.dart';
 
 class AdminRoleManagementView {
   const AdminRoleManagementView({

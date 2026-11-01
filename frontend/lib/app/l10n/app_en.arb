@@ -160,6 +160,27 @@
   "notificationTypeSecurityScanFailed": "Security Scan Failed",
   "notificationTypeSecurityScanFailedDesc": "A file failed the security scan and was quarantined",
   "notificationTypesHeader": "Notification Types",
+  "notificationEmailTestTitle": "Test email",
+  "notificationEmailTestSubtitle": "Send a test email with the current SMTP settings to verify the configuration.",
+  "notificationEmailTestAction": "Send test email",
+  "notificationEmailTestConfirm": "This sends a test email using the current SMTP settings. Continue?",
+  "notificationEmailTestRecipient": "Recipient (optional)",
+  "notificationEmailTestRecipientHint": "Leave empty to send to the current admin's address",
+  "notificationEmailTestSent": "Test email sent",
+  "notificationTypeAdminTitle": "Notification type management",
+  "notificationTypeAdminSubtitle": "Enable or disable notification types globally; disabled types are not delivered to any user.",
+  "notificationTypeAdminEmpty": "No notification types.",
+  "notificationTypeAdminConfirm": "Change",
+  "notificationTypeAdminUpdated": "Notification type updated",
+  "notificationTypeAdminToggleConfirm": "Set \"{label}\" to {state}?",
+  "@notificationTypeAdminToggleConfirm": {
+    "placeholders": {
+      "label": { "type": "String" },
+      "state": { "type": "String" }
+    }
+  },
+  "notificationTypeAdminStateEnabled": "enabled",
+  "notificationTypeAdminStateDisabled": "disabled",
   "notificationTimeNow": "Just now",
   "notificationTimeMinutes": "{n} min",
   "@notificationTimeMinutes": {
@@ -2447,6 +2468,84 @@
   "adminNavConfig": "Config Center",
   "adminNavStorage": "Storage Management",
   "adminNavExternalStorage": "External Storage",
+  "adminNavMaintenance": "Maintenance",
+  "adminMaintenanceTitle": "Maintenance & audit",
+  "adminMaintenanceSubtitle": "One place for site-wide shares, photo geo data and unavailable media sources.",
+  "adminMaintenanceNoPermission": "Your role has no maintenance panels available.",
+  "adminMaintenanceConfirm": "Run",
+  "adminMaintenanceSharesTitle": "Site-wide share audit",
+  "adminMaintenanceSharesSubtitle": "Review active share links created by any user and how often they were opened.",
+  "adminMaintenanceSharesEmpty": "No share links.",
+  "adminMaintenanceSharesResource": "Resource",
+  "adminMaintenanceSharesOwner": "Owner",
+  "adminMaintenanceSharesStatus": "Status",
+  "adminMaintenanceSharesAccess": "Accesses",
+  "adminMaintenanceSharesCreated": "Created",
+  "adminMaintenanceSharesExpires": "Expires",
+  "adminMaintenanceShareStatusActive": "Active",
+  "adminMaintenanceShareStatusDisabled": "Disabled",
+  "adminMaintenanceShareStatusExpired": "Expired",
+  "adminMaintenancePhotoTitle": "Photo geo data",
+  "adminMaintenancePhotoSubtitle": "Import GeoNames data, reload the index, backfill photo locations and rescan motion photos.",
+  "adminMaintenanceGeoImport": "Import dataset",
+  "adminMaintenanceGeoReload": "Reload index",
+  "adminMaintenanceGeoBackfill": "Backfill locations",
+  "adminMaintenanceMotionRescan": "Rescan motion photos",
+  "adminMaintenanceGeoConfirmImport": "This reads the dump files from the server's shared directory and creates a background import task. Continue?",
+  "adminMaintenanceGeoConfirmReload": "This reloads this instance's in-memory index from the published dataset. Continue?",
+  "adminMaintenanceGeoConfirmBackfill": "This creates a background backfill task for photos with coordinates but no place name. Continue?",
+  "adminMaintenanceMotionConfirm": "This rescans previously imported decodable JPEGs for motion-photo markers and extracts their videos. Continue?",
+  "adminMaintenanceGeoDumpDate": "Dump date",
+  "adminMaintenanceGeoDumpDateHint": "e.g. 2026-01-01",
+  "adminMaintenanceGeoDumpDateRequired": "Enter the dump date",
+  "adminMaintenanceGeoSourceHash": "Source hash (optional)",
+  "adminMaintenanceGeoBatchSize": "Batch size (optional)",
+  "adminMaintenanceGeoTaskCreated": "Task created: {taskId}",
+  "@adminMaintenanceGeoTaskCreated": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoTaskReused": "Reused the active backfill task: {taskId}",
+  "@adminMaintenanceGeoTaskReused": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoReloaded": "Reloaded dataset: {version}",
+  "@adminMaintenanceGeoReloaded": {
+    "placeholders": {
+      "version": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoReloadedEmpty": "Reloaded (no published dataset yet)",
+  "adminMaintenanceUnavailableTitle": "Unavailable media",
+  "adminMaintenanceUnavailableSubtitle": "Entries that are missing or unreadable in local media libraries.",
+  "adminMaintenanceUnavailableEmpty": "No unavailable entries.",
+  "adminMaintenanceUnavailableName": "Title",
+  "adminMaintenanceUnavailableStatus": "Status",
+  "adminMaintenanceUnavailableSince": "Missing since",
+  "adminMaintenanceUnavailableConfirmations": "Confirmations",
+  "adminSharedSpaceMatrixTitle": "Shared space capability matrix",
+  "adminSharedSpaceMatrixSubtitle": "Configure browse, upload, download, delete, move and folder creation per role. Changes apply immediately.",
+  "adminSharedSpaceMatrixSave": "Save matrix",
+  "adminSharedSpaceMatrixConfirm": "This updates shared space capabilities for {count} roles. Continue?",
+  "@adminSharedSpaceMatrixConfirm": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
+  "adminSharedSpaceMatrixSaved": "Shared space capabilities updated",
+  "adminSharedSpaceMatrixEmpty": "No roles to configure.",
+  "adminSharedSpaceRole": "Role",
+  "adminSharedSpaceCapabilityBrowse": "Browse",
+  "adminSharedSpaceCapabilityUpload": "Upload",
+  "adminSharedSpaceCapabilityDownload": "Download",
+  "adminSharedSpaceCapabilityDeleteOwn": "Delete own",
+  "adminSharedSpaceCapabilityDeleteAny": "Delete any",
+  "adminSharedSpaceCapabilityMoveTo": "Move in",
+  "adminSharedSpaceCapabilityMoveFrom": "Move out",
+  "adminSharedSpaceCapabilityCreateFolder": "New folder",
   "adminOverviewTitle": "Admin Console",
   "adminOverviewSubtitle": "Key metrics of users, permissions, runtime status and storage capacity.",
   "adminMonitoringTitle": "System Monitor",

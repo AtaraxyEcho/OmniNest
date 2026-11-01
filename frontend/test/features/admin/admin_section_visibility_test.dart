@@ -13,6 +13,22 @@ void main() {
     expect(AdminSection.roles.isVisibleTo({'task:admin'}), isFalse);
   });
 
+  test('维护分区接受分享、照片或媒体库任一管理权限', () {
+    expect(
+      AdminSection.maintenance.isVisibleTo({'system:user:manage'}),
+      isTrue,
+    );
+    expect(AdminSection.maintenance.isVisibleTo({'photo:admin'}), isTrue);
+    expect(
+      AdminSection.maintenance.isVisibleTo({'media:library:manage'}),
+      isTrue,
+    );
+    expect(
+      AdminSection.maintenance.isVisibleTo({'system:config:read'}),
+      isFalse,
+    );
+  });
+
   test('成员权限集不可打开任何管理分区', () {
     final member = {
       'profile:read',

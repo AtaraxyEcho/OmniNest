@@ -44,6 +44,9 @@ typedef AdminLoginAuditPageQuery =
 /// 批量操作逐项执行结果：成功条数与失败条目的 ID。
 typedef AdminBatchResult = ({int successCount, List<String> failedIds});
 
+/// 只有页码与条数的列表查询键（审计与只读维护列表共用）。
+typedef AdminPagedQuery = ({int page, int size});
+
 class AdminPage<T> {
   const AdminPage({
     required this.items,

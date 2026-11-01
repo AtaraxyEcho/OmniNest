@@ -160,6 +160,27 @@
   "notificationTypeSecurityScanFailed": "安全扫描失败",
   "notificationTypeSecurityScanFailedDesc": "文件未能通过安全扫描，已被隔离",
   "notificationTypesHeader": "通知类型",
+  "notificationEmailTestTitle": "测试邮件",
+  "notificationEmailTestSubtitle": "按当前 SMTP 配置立即发送一封测试邮件，便于确认配置是否可用。",
+  "notificationEmailTestAction": "发送测试邮件",
+  "notificationEmailTestConfirm": "将按当前 SMTP 配置发送一封测试邮件，继续？",
+  "notificationEmailTestRecipient": "收件邮箱（可选）",
+  "notificationEmailTestRecipientHint": "留空则发送给当前管理员绑定的邮箱",
+  "notificationEmailTestSent": "测试邮件已发送",
+  "notificationTypeAdminTitle": "通知类型管理",
+  "notificationTypeAdminSubtitle": "全局启用或停用通知类型；停用后所有用户都不再收到该类通知。",
+  "notificationTypeAdminEmpty": "暂无通知类型。",
+  "notificationTypeAdminConfirm": "修改",
+  "notificationTypeAdminUpdated": "通知类型已更新",
+  "notificationTypeAdminToggleConfirm": "将把「{label}」设为{state}，继续？",
+  "@notificationTypeAdminToggleConfirm": {
+    "placeholders": {
+      "label": { "type": "String" },
+      "state": { "type": "String" }
+    }
+  },
+  "notificationTypeAdminStateEnabled": "启用",
+  "notificationTypeAdminStateDisabled": "停用",
   "notificationTimeNow": "刚刚",
   "notificationTimeMinutes": "{n}分钟",
   "@notificationTimeMinutes": {
@@ -2321,6 +2342,84 @@
   "adminNavConfig": "配置中心",
   "adminNavStorage": "存储管理",
   "adminNavExternalStorage": "外部存储",
+  "adminNavMaintenance": "维护与审计",
+  "adminMaintenanceTitle": "维护与审计",
+  "adminMaintenanceSubtitle": "全站分享、照片地理数据与不可用媒体源的集中维护入口。",
+  "adminMaintenanceNoPermission": "当前角色没有可用的维护面板。",
+  "adminMaintenanceConfirm": "执行",
+  "adminMaintenanceSharesTitle": "全站分享审计",
+  "adminMaintenanceSharesSubtitle": "查看全部用户创建的未撤销分享链接及其访问情况。",
+  "adminMaintenanceSharesEmpty": "暂无分享链接。",
+  "adminMaintenanceSharesResource": "资源",
+  "adminMaintenanceSharesOwner": "所有者",
+  "adminMaintenanceSharesStatus": "状态",
+  "adminMaintenanceSharesAccess": "访问次数",
+  "adminMaintenanceSharesCreated": "创建时间",
+  "adminMaintenanceSharesExpires": "过期时间",
+  "adminMaintenanceShareStatusActive": "生效中",
+  "adminMaintenanceShareStatusDisabled": "已停用",
+  "adminMaintenanceShareStatusExpired": "已过期",
+  "adminMaintenancePhotoTitle": "照片地理库维护",
+  "adminMaintenancePhotoSubtitle": "导入 GeoNames 数据集、重载索引、回填照片位置与回扫动态照片。",
+  "adminMaintenanceGeoImport": "导入数据集",
+  "adminMaintenanceGeoReload": "重载索引",
+  "adminMaintenanceGeoBackfill": "回填位置",
+  "adminMaintenanceMotionRescan": "回扫动态照片",
+  "adminMaintenanceGeoConfirmImport": "将从服务端共享目录读取 dump 文件并创建后台导入任务，继续？",
+  "adminMaintenanceGeoConfirmReload": "将本实例内存索引重载到当前已发布数据集，继续？",
+  "adminMaintenanceGeoConfirmBackfill": "为有坐标但缺地名的照片创建后台回填任务，继续？",
+  "adminMaintenanceMotionConfirm": "为历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频，继续？",
+  "adminMaintenanceGeoDumpDate": "数据日期",
+  "adminMaintenanceGeoDumpDateHint": "例如 2026-01-01",
+  "adminMaintenanceGeoDumpDateRequired": "请填写数据日期",
+  "adminMaintenanceGeoSourceHash": "来源校验值（可选）",
+  "adminMaintenanceGeoBatchSize": "每批条数（可选）",
+  "adminMaintenanceGeoTaskCreated": "任务已创建：{taskId}",
+  "@adminMaintenanceGeoTaskCreated": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoTaskReused": "已复用现有回填任务：{taskId}",
+  "@adminMaintenanceGeoTaskReused": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoReloaded": "已重载数据集：{version}",
+  "@adminMaintenanceGeoReloaded": {
+    "placeholders": {
+      "version": { "type": "String" }
+    }
+  },
+  "adminMaintenanceGeoReloadedEmpty": "已重载（当前没有已发布数据集）",
+  "adminMaintenanceUnavailableTitle": "不可用影视源",
+  "adminMaintenanceUnavailableSubtitle": "本地影视库中已缺失或不可读的条目。",
+  "adminMaintenanceUnavailableEmpty": "没有不可用条目。",
+  "adminMaintenanceUnavailableName": "标题",
+  "adminMaintenanceUnavailableStatus": "状态",
+  "adminMaintenanceUnavailableSince": "缺失起始",
+  "adminMaintenanceUnavailableConfirmations": "确认次数",
+  "adminSharedSpaceMatrixTitle": "共享空间能力矩阵",
+  "adminSharedSpaceMatrixSubtitle": "按角色配置浏览、上传、下载、删除、移动与建目录能力；保存后立即生效。",
+  "adminSharedSpaceMatrixSave": "保存矩阵",
+  "adminSharedSpaceMatrixConfirm": "将更新 {count} 个角色的共享空间能力，继续？",
+  "@adminSharedSpaceMatrixConfirm": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
+  "adminSharedSpaceMatrixSaved": "共享空间能力已更新",
+  "adminSharedSpaceMatrixEmpty": "暂无角色可配置。",
+  "adminSharedSpaceRole": "角色",
+  "adminSharedSpaceCapabilityBrowse": "浏览",
+  "adminSharedSpaceCapabilityUpload": "上传",
+  "adminSharedSpaceCapabilityDownload": "下载",
+  "adminSharedSpaceCapabilityDeleteOwn": "删自己的",
+  "adminSharedSpaceCapabilityDeleteAny": "删任意",
+  "adminSharedSpaceCapabilityMoveTo": "移入",
+  "adminSharedSpaceCapabilityMoveFrom": "移出",
+  "adminSharedSpaceCapabilityCreateFolder": "建目录",
   "adminOverviewTitle": "管理控制台",
   "adminOverviewSubtitle": "汇总用户、权限、运行状态和存储能力的关键指标。",
   "adminMonitoringTitle": "系统监控",

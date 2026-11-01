@@ -3,6 +3,7 @@ class NotificationTypeConfig {
   const NotificationTypeConfig({
     required this.typeCode,
     required this.label,
+    this.id,
     this.description,
     this.icon,
     this.color,
@@ -12,6 +13,7 @@ class NotificationTypeConfig {
 
   factory NotificationTypeConfig.fromJson(Map<String, dynamic> json) {
     return NotificationTypeConfig(
+      id: json['id']?.toString(),
       typeCode: json['typeCode']?.toString() ?? '',
       label: json['label']?.toString() ?? '',
       description: json['description']?.toString(),
@@ -22,6 +24,8 @@ class NotificationTypeConfig {
     );
   }
 
+  /// 服务端主键；降级列表没有可写 ID。
+  final String? id;
   final String typeCode;
   final String label;
   final String? description;

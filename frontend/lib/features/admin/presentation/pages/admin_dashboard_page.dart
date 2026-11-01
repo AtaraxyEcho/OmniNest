@@ -153,6 +153,7 @@ class _AdminSectionBody extends ConsumerWidget {
           builder: (view) => AdminExternalStoragePage(view: view),
         ),
       AdminSection.sessions => const AdminSessionsPage(),
+      AdminSection.maintenance => const AdminMaintenancePage(),
     };
   }
 }

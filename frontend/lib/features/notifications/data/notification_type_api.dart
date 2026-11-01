@@ -39,4 +39,22 @@ class NotificationTypeApi {
         .map((e) => NotificationTypeConfig.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  /// 管理员更新通知类型；未传字段保持原值，这里只切换启用状态。
+  Future<NotificationTypeConfig> updateType(
+    String id, {
+    required bool enabled,
+  }) async {
+    final response = await _client.dio.put<Map<String, dynamic>>(
+      '/notification-types/$id',
+      data: {'enabled': enabled},
+    );
+    final data = response.data;
+    ensureEnvelopeSuccess(data, fallbackMessage: '通知类型更新失败');
+    final raw = data!['data'];
+    if (raw is! Map<String, dynamic>) {
+      throw StateError('通知类型响应格式不正确');
+    }
+    return NotificationTypeConfig.fromJson(raw);
+  }
 }

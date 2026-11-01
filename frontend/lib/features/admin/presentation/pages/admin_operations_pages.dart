@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
+import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
@@ -45,6 +46,8 @@ part 'admin_operations_external_storage.dart';
 part 'admin_operations_library.dart';
 part 'admin_operations_sessions.dart';
 part 'admin_operations_dlq.dart';
+part 'admin_maintenance_page.dart';
+part 'admin_shared_space_matrix.dart';
 
 // ── 详情弹窗共享组件 ──────────────────────────────────────────────────
 

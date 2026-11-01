@@ -158,6 +158,7 @@ IconData _iconFor(AdminSection section) {
     AdminSection.logs => Icons.receipt_long_outlined,
     AdminSection.tasks => Icons.task_alt_outlined,
     AdminSection.sessions => Icons.devices_rounded,
+    AdminSection.maintenance => Icons.build_outlined,
     AdminSection.users => Icons.badge_outlined,
     AdminSection.roles => Icons.verified_user_outlined,
     AdminSection.config => Icons.tune_outlined,
@@ -172,6 +173,7 @@ String _sectionLabel(AppLocalizations l10n, AdminSection section) {
     AdminSection.logs => l10n.adminNavLogs,
     AdminSection.tasks => l10n.adminNavTasks,
     AdminSection.sessions => l10n.adminNavSessions,
+    AdminSection.maintenance => l10n.adminNavMaintenance,
     AdminSection.users => l10n.adminNavUsers,
     AdminSection.roles => l10n.adminNavRoles,
     AdminSection.config => l10n.adminNavConfig,
@@ -186,6 +188,7 @@ String _sectionTitle(AppLocalizations l10n, AdminSection section) {
     AdminSection.logs => l10n.adminLogsTitle,
     AdminSection.tasks => l10n.adminTasksTitle,
     AdminSection.sessions => l10n.adminSessionsTitle,
+    AdminSection.maintenance => l10n.adminMaintenanceTitle,
     AdminSection.users => l10n.adminUsersTitle,
     AdminSection.roles => l10n.adminRolesTitle,
     AdminSection.config => l10n.adminConfigTitle,
@@ -222,7 +225,8 @@ int _adminDockIndex(AdminSection section) {
     AdminSection.logs => 3,
     AdminSection.config ||
     AdminSection.storage ||
-    AdminSection.externalStorage => 4,
+    AdminSection.externalStorage ||
+    AdminSection.maintenance => 4,
   };
 }
 

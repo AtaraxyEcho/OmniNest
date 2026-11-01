@@ -465,6 +465,57 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypesHeader => 'Notification Types';
 
   @override
+  String get notificationEmailTestTitle => 'Test email';
+
+  @override
+  String get notificationEmailTestSubtitle =>
+      'Send a test email with the current SMTP settings to verify the configuration.';
+
+  @override
+  String get notificationEmailTestAction => 'Send test email';
+
+  @override
+  String get notificationEmailTestConfirm =>
+      'This sends a test email using the current SMTP settings. Continue?';
+
+  @override
+  String get notificationEmailTestRecipient => 'Recipient (optional)';
+
+  @override
+  String get notificationEmailTestRecipientHint =>
+      'Leave empty to send to the current admin\'s address';
+
+  @override
+  String get notificationEmailTestSent => 'Test email sent';
+
+  @override
+  String get notificationTypeAdminTitle => 'Notification type management';
+
+  @override
+  String get notificationTypeAdminSubtitle =>
+      'Enable or disable notification types globally; disabled types are not delivered to any user.';
+
+  @override
+  String get notificationTypeAdminEmpty => 'No notification types.';
+
+  @override
+  String get notificationTypeAdminConfirm => 'Change';
+
+  @override
+  String get notificationTypeAdminUpdated => 'Notification type updated';
+
+  @override
+  String notificationTypeAdminToggleConfirm(String label, String state) {
+    return 'Set \"$label\" to $state?';
+  }
+
+  @override
+  String get notificationTypeAdminStateEnabled => 'enabled';
+
+  @override
+  String get notificationTypeAdminStateDisabled => 'disabled';
+
+  @override
   String get notificationTimeNow => 'Just now';
 
   @override
@@ -5780,6 +5831,199 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminNavExternalStorage => 'External Storage';
+
+  @override
+  String get adminNavMaintenance => 'Maintenance';
+
+  @override
+  String get adminMaintenanceTitle => 'Maintenance & audit';
+
+  @override
+  String get adminMaintenanceSubtitle =>
+      'One place for site-wide shares, photo geo data and unavailable media sources.';
+
+  @override
+  String get adminMaintenanceNoPermission =>
+      'Your role has no maintenance panels available.';
+
+  @override
+  String get adminMaintenanceConfirm => 'Run';
+
+  @override
+  String get adminMaintenanceSharesTitle => 'Site-wide share audit';
+
+  @override
+  String get adminMaintenanceSharesSubtitle =>
+      'Review active share links created by any user and how often they were opened.';
+
+  @override
+  String get adminMaintenanceSharesEmpty => 'No share links.';
+
+  @override
+  String get adminMaintenanceSharesResource => 'Resource';
+
+  @override
+  String get adminMaintenanceSharesOwner => 'Owner';
+
+  @override
+  String get adminMaintenanceSharesStatus => 'Status';
+
+  @override
+  String get adminMaintenanceSharesAccess => 'Accesses';
+
+  @override
+  String get adminMaintenanceSharesCreated => 'Created';
+
+  @override
+  String get adminMaintenanceSharesExpires => 'Expires';
+
+  @override
+  String get adminMaintenanceShareStatusActive => 'Active';
+
+  @override
+  String get adminMaintenanceShareStatusDisabled => 'Disabled';
+
+  @override
+  String get adminMaintenanceShareStatusExpired => 'Expired';
+
+  @override
+  String get adminMaintenancePhotoTitle => 'Photo geo data';
+
+  @override
+  String get adminMaintenancePhotoSubtitle =>
+      'Import GeoNames data, reload the index, backfill photo locations and rescan motion photos.';
+
+  @override
+  String get adminMaintenanceGeoImport => 'Import dataset';
+
+  @override
+  String get adminMaintenanceGeoReload => 'Reload index';
+
+  @override
+  String get adminMaintenanceGeoBackfill => 'Backfill locations';
+
+  @override
+  String get adminMaintenanceMotionRescan => 'Rescan motion photos';
+
+  @override
+  String get adminMaintenanceGeoConfirmImport =>
+      'This reads the dump files from the server\'s shared directory and creates a background import task. Continue?';
+
+  @override
+  String get adminMaintenanceGeoConfirmReload =>
+      'This reloads this instance\'s in-memory index from the published dataset. Continue?';
+
+  @override
+  String get adminMaintenanceGeoConfirmBackfill =>
+      'This creates a background backfill task for photos with coordinates but no place name. Continue?';
+
+  @override
+  String get adminMaintenanceMotionConfirm =>
+      'This rescans previously imported decodable JPEGs for motion-photo markers and extracts their videos. Continue?';
+
+  @override
+  String get adminMaintenanceGeoDumpDate => 'Dump date';
+
+  @override
+  String get adminMaintenanceGeoDumpDateHint => 'e.g. 2026-01-01';
+
+  @override
+  String get adminMaintenanceGeoDumpDateRequired => 'Enter the dump date';
+
+  @override
+  String get adminMaintenanceGeoSourceHash => 'Source hash (optional)';
+
+  @override
+  String get adminMaintenanceGeoBatchSize => 'Batch size (optional)';
+
+  @override
+  String adminMaintenanceGeoTaskCreated(String taskId) {
+    return 'Task created: $taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoTaskReused(String taskId) {
+    return 'Reused the active backfill task: $taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoReloaded(String version) {
+    return 'Reloaded dataset: $version';
+  }
+
+  @override
+  String get adminMaintenanceGeoReloadedEmpty =>
+      'Reloaded (no published dataset yet)';
+
+  @override
+  String get adminMaintenanceUnavailableTitle => 'Unavailable media';
+
+  @override
+  String get adminMaintenanceUnavailableSubtitle =>
+      'Entries that are missing or unreadable in local media libraries.';
+
+  @override
+  String get adminMaintenanceUnavailableEmpty => 'No unavailable entries.';
+
+  @override
+  String get adminMaintenanceUnavailableName => 'Title';
+
+  @override
+  String get adminMaintenanceUnavailableStatus => 'Status';
+
+  @override
+  String get adminMaintenanceUnavailableSince => 'Missing since';
+
+  @override
+  String get adminMaintenanceUnavailableConfirmations => 'Confirmations';
+
+  @override
+  String get adminSharedSpaceMatrixTitle => 'Shared space capability matrix';
+
+  @override
+  String get adminSharedSpaceMatrixSubtitle =>
+      'Configure browse, upload, download, delete, move and folder creation per role. Changes apply immediately.';
+
+  @override
+  String get adminSharedSpaceMatrixSave => 'Save matrix';
+
+  @override
+  String adminSharedSpaceMatrixConfirm(String count) {
+    return 'This updates shared space capabilities for $count roles. Continue?';
+  }
+
+  @override
+  String get adminSharedSpaceMatrixSaved => 'Shared space capabilities updated';
+
+  @override
+  String get adminSharedSpaceMatrixEmpty => 'No roles to configure.';
+
+  @override
+  String get adminSharedSpaceRole => 'Role';
+
+  @override
+  String get adminSharedSpaceCapabilityBrowse => 'Browse';
+
+  @override
+  String get adminSharedSpaceCapabilityUpload => 'Upload';
+
+  @override
+  String get adminSharedSpaceCapabilityDownload => 'Download';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteOwn => 'Delete own';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteAny => 'Delete any';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveTo => 'Move in';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveFrom => 'Move out';
+
+  @override
+  String get adminSharedSpaceCapabilityCreateFolder => 'New folder';
 
   @override
   String get adminOverviewTitle => 'Admin Console';

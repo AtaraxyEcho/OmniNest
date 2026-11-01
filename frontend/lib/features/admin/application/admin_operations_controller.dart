@@ -57,8 +57,12 @@ class AdminSectionRefresher {
         _ref.invalidate(adminUserControllerProvider);
       case AdminSection.roles:
         _ref.invalidate(adminRolesProvider);
+        _ref.invalidate(sharedSpacePermissionsProvider);
       case AdminSection.config:
         _ref.invalidate(adminConfigsProvider);
+      case AdminSection.maintenance:
+        _ref.invalidate(adminShareLinksProvider);
+        _ref.invalidate(adminUnavailableMediaProvider);
       case AdminSection.storage:
         _ref.invalidate(adminStorageProvider);
         _ref
@@ -209,6 +213,31 @@ final adminTaskTypeOptionsProvider = Provider.autoDispose
         if (query.taskType != 'ALL') query.taskType,
       };
       return types.toList()..sort();
+    });
+
+/// 全站分享链接审计分页。
+final adminShareLinksProvider = FutureProvider.autoDispose
+    .family<AdminPage<AdminFileShareLink>, AdminPagedQuery>((ref, query) {
+      ref.watch(sessionEpochProvider);
+      return ref
+          .watch(adminOperationsApiProvider)
+          .shareLinksPage(page: query.page, size: query.size);
+    });
+
+/// 共享空间角色能力矩阵；切换角色页时重新拉取。
+final sharedSpacePermissionsProvider =
+    FutureProvider<List<AdminSharedSpacePermission>>((ref) {
+      ref.watch(sessionEpochProvider);
+      return ref.watch(adminOperationsApiProvider).sharedSpacePermissions();
+    });
+
+/// 本地媒体库不可用条目分页。
+final adminUnavailableMediaProvider = FutureProvider.autoDispose
+    .family<AdminPage<AdminUnavailableMedia>, AdminPagedQuery>((ref, query) {
+      ref.watch(sessionEpochProvider);
+      return ref
+          .watch(adminOperationsApiProvider)
+          .unavailableMediaPage(page: query.page, size: query.size);
     });
 
 final adminStorageProvider = FutureProvider<AdminStorageManagementView>((ref) {
@@ -378,6 +407,42 @@ class AdminOperationsActions {
   Future<void> deleteRole(String roleCode) async {
     await _api.deleteRole(roleCode);
     ref.invalidate(adminRolesProvider);
+  }
+
+  /// 保存共享空间能力矩阵；整批写完后只失效一次，避免逐角色刷新竞态。
+  Future<void> updateSharedSpaceRolePermissions(
+    List<AdminSharedSpacePermission> permissions,
+  ) async {
+    for (final permission in permissions) {
+      await _api.updateSharedSpacePermission(permission);
+    }
+    ref.invalidate(sharedSpacePermissionsProvider);
+  }
+
+  Future<AdminGeoImportResult> importGeoDataset({
+    required String dumpDate,
+    String? sourceHash,
+  }) async {
+    final result = await _api.importGeoDataset(
+      dumpDate: dumpDate,
+      sourceHash: sourceHash,
+    );
+    ref.invalidate(adminTaskPageProvider);
+    return result;
+  }
+
+  Future<String?> reloadGeoIndex() => _api.reloadGeoIndex();
+
+  Future<AdminGeoBackfillResult> backfillGeo({int? batchSize}) async {
+    final result = await _api.backfillGeo(batchSize: batchSize);
+    ref.invalidate(adminTaskPageProvider);
+    return result;
+  }
+
+  Future<String> reanalyzeMotionPhotos() async {
+    final taskId = await _api.reanalyzeMotionPhotos();
+    ref.invalidate(adminTaskPageProvider);
+    return taskId;
   }
 
   /// 角色权限变更影响当前用户所属角色时轮换本地 JWT，使 claims 与服务端一致。
