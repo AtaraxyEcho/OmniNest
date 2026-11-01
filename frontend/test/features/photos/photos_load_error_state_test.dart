@@ -86,4 +86,82 @@ void main() {
     expect(find.byType(AppErrorView), findsOneWidget);
     expect(find.text('还没有照片'), findsNothing);
   });
+
+  test('同因局部错误只保留一条，成功刷新后横幅必须清除', () async {
+    final repository = _MockPhotoRepository();
+    const sessionLost = AppException(
+      code: 'UNAUTHORIZED',
+      message: '会话已在其他设备登录',
+    );
+    // 四个并行加载因同一原因失败，横幅不应把同一句话重复四遍。
+    when(() => repository.dashboard()).thenThrow(sessionLost);
+    when(
+      () => repository.listPhotos(
+        query: any(named: 'query'),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenThrow(sessionLost);
+    when(
+      () => repository.listFavorites(
+        query: any(named: 'query'),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenThrow(sessionLost);
+    when(
+      () => repository.listAlbumsPage(
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenThrow(sessionLost);
+
+    final container = ProviderContainer(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+        photoRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final failed = await container.read(photoCenterControllerProvider.future);
+    expect(failed.errorMessage, '会话已在其他设备登录');
+
+    // 重新登录后成功刷新：copyWith 的 errorMessage 传 null 等于「不修改」，
+    // 少了 clearError 横幅会永远留在页面上。
+    when(
+      () => repository.dashboard(),
+    ).thenAnswer((_) async => PhotoDashboard.empty());
+    when(
+      () => repository.listPhotos(
+        query: any(named: 'query'),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => PhotoPage.empty());
+    when(
+      () => repository.listFavorites(
+        query: any(named: 'query'),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => PhotoPage.empty());
+    when(
+      () => repository.listAlbumsPage(
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenAnswer((_) async => PhotoAlbumPage.empty());
+
+    await container.read(photoCenterControllerProvider.notifier).refresh();
+
+    expect(
+      container.read(photoCenterControllerProvider).requireValue.errorMessage,
+      isNull,
+    );
+  });
 }

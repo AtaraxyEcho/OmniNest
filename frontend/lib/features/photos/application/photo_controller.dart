@@ -136,7 +136,8 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       favoritePage: favoritePage.page,
       photoTotalElements: photoPage.totalElements,
       favoriteTotalElements: favoritePage.totalElements,
-      errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
+      errorMessage:
+          partialErrors.isEmpty ? null : partialErrors.toSet().join('；'),
     );
   }
 
@@ -203,7 +204,11 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
         favoriteRefreshVersion: live.favoriteRefreshVersion + 1,
         clearPhotoPageError: true,
         clearFavoritePageError: true,
-        errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
+        // copyWith 把 errorMessage 的 null 当作「不修改」，只传 null 清不掉上一轮的
+        // 局部错误横幅（会话被吊销后重新登录，仍会显示「已在其他设备登录」）。
+        clearError: partialErrors.isEmpty,
+        errorMessage:
+            partialErrors.isEmpty ? null : partialErrors.toSet().join('；'),
       ),
     );
     // 时间线在移入回收站/恢复后计数会变化：已加载过则强制重载，保证徽章与列表一致。

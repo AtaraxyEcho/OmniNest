@@ -36,7 +36,10 @@ class RealtimeStompClient implements RealtimeTransport {
     required this.url,
     required this.accessTokenResolver,
     Random? random,
-  }) : _random = random ?? Random();
+    StompClient Function(StompConfig config)? clientFactory,
+  }) : _random = random ?? Random(),
+       _clientFactory =
+           clientFactory ?? ((config) => StompClient(config: config));
 
   static const _reconnectDelays = <Duration>[
     Duration(seconds: 1),
@@ -55,6 +58,9 @@ class RealtimeStompClient implements RealtimeTransport {
   /// 每次建立连接时实时解析访问令牌；令牌在会话内轮换后重连仍可用。
   final String Function() accessTokenResolver;
   final Random _random;
+
+  /// STOMP 客户端构造入口，测试用桩替换以复现连接中途断开的竞态。
+  final StompClient Function(StompConfig config) _clientFactory;
   final StreamController<RealtimeSyncEvent> _syncEvents =
       StreamController<RealtimeSyncEvent>.broadcast();
   final StreamController<Map<String, dynamic>> _notifications =
@@ -127,16 +133,32 @@ class RealtimeStompClient implements RealtimeTransport {
     _connectTimeoutTimer = null;
     final client = _client;
     _client = null;
-    client?.deactivate();
+    _deactivateQuietly(client);
     _setState(RealtimeTransportState.disconnected);
+  }
+
+  /// 拆除客户端，容忍「底层 WebSocket 已断开时补发 DISCONNECT 帧」的抛出。
+  ///
+  /// 库的 `deactivate()` 会先 `dispose()`，连接标记仍在时走 DISCONNECT 帧发送；
+  /// 服务端因会话吊销先关链时该帧必然失败并抛状态异常。本地对象此刻已被丢弃，
+  /// 异常没有可恢复的语义，逃逸出去只会污染全局错误上报。
+  void _deactivateQuietly(StompClient? client) {
+    if (client == null) return;
+    try {
+      client.deactivate();
+    } on StompBadStateException catch (error) {
+      if (kDebugMode) {
+        devLog('实时连接拆除时已断开: $error');
+      }
+    }
   }
 
   void _open() {
     if (_disposed || !_desired || _client != null) return;
     _setState(RealtimeTransportState.connecting);
     final accessToken = accessTokenResolver();
-    final client = StompClient(
-      config: StompConfig(
+    final client = _clientFactory(
+      StompConfig(
         url: url,
         onConnect: _onConnect,
         onDisconnect: _onDisconnect,
@@ -175,11 +197,21 @@ class RealtimeStompClient implements RealtimeTransport {
     }
     _reconnectAttempt = 0;
     _setState(RealtimeTransportState.connected);
-    _client?.subscribe(destination: '/user/queue/sync', callback: _onSyncFrame);
-    _client?.subscribe(
-      destination: '/user/queue/notifications',
-      callback: _onNotificationFrame,
-    );
+    try {
+      _client?.subscribe(
+        destination: '/user/queue/sync',
+        callback: _onSyncFrame,
+      );
+      _client?.subscribe(
+        destination: '/user/queue/notifications',
+        callback: _onNotificationFrame,
+      );
+    } on StompBadStateException {
+      // CONNECT 与 SUBSCRIBE 之间底层 WebSocket 已断开时，库在发送帧的位置抛状态异常。
+      // 不接住它会逃逸到 zone，并把状态留在 connected、_client 指向已失效连接，
+      // 本会话的推送与通知流从此不会再重连。
+      _handleConnectionLoss('订阅帧发送时连接已断开');
+    }
   }
 
   void _onSyncFrame(StompFrame frame) {
@@ -235,7 +267,7 @@ class RealtimeStompClient implements RealtimeTransport {
     _connectTimeoutTimer = null;
     final client = _client;
     _client = null;
-    client?.deactivate();
+    _deactivateQuietly(client);
     _setState(RealtimeTransportState.disconnected);
     if (kDebugMode) {
       devLog(message);

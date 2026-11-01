@@ -286,7 +286,8 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       searchQuery: from.searchQuery,
       sortBy: from.sortBy,
       librarySegment: from.librarySegment,
-      errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
+      errorMessage:
+          partialErrors.isEmpty ? null : partialErrors.toSet().join('；'),
     );
   }
 

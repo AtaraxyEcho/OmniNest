@@ -257,7 +257,8 @@ extension MusicCenterStateLoad on MusicCenterController {
       selectedArtistTracks: resolvedArtistTracks,
       lastScanJob: lastScanJob,
       neteaseUserInfo: platformInfo['netease'],
-      errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
+      errorMessage:
+          _partialErrors.isEmpty ? null : _partialErrors.toSet().join('；'),
     );
   }
 

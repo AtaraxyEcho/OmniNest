@@ -756,7 +756,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       episodePage: episodePage.page,
       episodeHasMore: episodePage.page + 1 < episodePage.totalPages,
       loadedSections: const {MovieSection.movies},
-      errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
+      errorMessage:
+          partialErrors.isEmpty ? null : partialErrors.toSet().join('；'),
     );
   }
 

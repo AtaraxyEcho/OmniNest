@@ -417,7 +417,7 @@ public class AuthService {
         String platform = ClientPlatform.normalize(clientPlatform);
         UUID sessionId = UUID.randomUUID();
         // 同平台互斥会按旧会话逐条写吊销记录，且吊销必须独立提交（登录失败也不得复活旧会话）。
-        // 放在事务外执行，才不会在持有连接时再申请第二个连接。
+        // 放在会话登记事务之外：吊销内部是 REQUIRES_NEW，嵌在外层事务里会同时占两个连接。
         enforceSamePlatformMutex(profile.getId(), platform, sessionId);
         Instant loginAt = Instant.now();
         transactionTemplate.execute(status -> {
@@ -741,8 +741,10 @@ public class AuthService {
             sessionRevocationService.revokeSession(
                     userId, session.getId(), authenticationTokenPolicy.refreshTokenTtl());
         }
-        activeSessionRepository.revokeByUserAndPlatformExcluding(
-                userId, clientPlatform, newSessionId, "同平台新设备登录");
+        // 批量吊销是 @Modifying 更新，必须由事务承载；单独开短事务而不是复用调用方事务，
+        // 才不会和上面 REQUIRES_NEW 的逐条写入同时占住两个连接。
+        transactionTemplate.execute(status -> activeSessionRepository.revokeByUserAndPlatformExcluding(
+                userId, clientPlatform, newSessionId, "同平台新设备登录"));
         log.info("同平台互斥: userId={}, platform={}, 已撤销会话数={}",
                 userId, clientPlatform, existingSessions.size());
     }
