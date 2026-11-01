@@ -14,6 +14,7 @@ import com.omninest.modules.video.config.VideoStreamProperties;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -237,5 +238,52 @@ class VideoStreamServiceTest {
                 "-protocol_whitelist", "http,https,tcp,tls",
                 "-f", "aac", "-i", "http://minio/audio.aac");
         assertThat(args).doesNotContain("file,crypto,data,http,https,tcp,tls");
+    }
+
+    /**
+     * 槽位耗尽必须拒绝，且失败的获取不能留下痕迹：归还后要能重新取满。
+     *
+     * <p>拖动进度条会连续重开流，槽位若不回收，实例会逐步失去全部转码通道。
+     * 用 10ms 等待超时避免用例受默认 2s 拖累，整条链路不碰 ffmpeg。</p>
+     */
+    @Test
+    void streamSlotRejectsWhenExhaustedAndRecoversAfterRelease() {
+        VideoStreamService limited = serviceWithStreamSlots(2, Duration.ofMillis(10));
+
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        assertThatThrownBy(() -> limited.acquireStreamSlot(VIDEO_ITEM_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+
+        // 归还一路即可再次获取，说明拒绝的那次没有吃掉别人的 permit。
+        limited.releaseStreamSlotForRequest();
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+
+        // 全部归还后仍能恰好取满两路，多取一路仍被拒：既没泄漏也没被放大。
+        limited.releaseStreamSlotForRequest();
+        limited.releaseStreamSlotForRequest();
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        assertThatThrownBy(() -> limited.acquireStreamSlot(VIDEO_ITEM_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+        limited.releaseStreamSlotForRequest();
+        limited.releaseStreamSlotForRequest();
+    }
+
+    private VideoStreamService serviceWithStreamSlots(int maxConcurrentStreams, Duration slotWaitTimeout) {
+        VideoStreamProperties properties = new VideoStreamProperties();
+        properties.setMaxConcurrentStreams(maxConcurrentStreams);
+        properties.setSlotWaitTimeout(slotWaitTimeout);
+        return new VideoStreamService(
+                videoItemRepository,
+                sourceInputResolver,
+                mediaContentAccessService,
+                properties,
+                ffmpegRuntime
+        );
     }
 }
