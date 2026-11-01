@@ -35,6 +35,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 两步验证凭据服务测试。
@@ -62,7 +64,9 @@ class TwoFactorServiceTest {
                 authUserRepository,
                 passwordEncoder,
                 credentialCipher,
-                payloadAuthenticator
+                payloadAuthenticator,
+                // 回调内只用仓储桩，事务模板用 mock 管理器即可：execute 照常执行回调。
+                new TransactionTemplate(mock(PlatformTransactionManager.class))
         );
         userId = UUID.randomUUID();
         user = new AuthUser();

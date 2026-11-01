@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 两步验证（TOTP）凭据服务：注册引导、确认启用、关闭与登录验证码校验。
@@ -52,6 +53,7 @@ public class TwoFactorService {
     private final PasswordEncoder passwordEncoder;
     private final CredentialCipher credentialCipher;
     private final PayloadAuthenticator payloadAuthenticator;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 生成待确认的 TOTP 秘钥，重复调用会覆盖旧的未确认秘钥。
@@ -60,10 +62,23 @@ public class TwoFactorService {
      * @param password 登录密码（复核防会话劫持后偷偷开启）
      * @return 秘钥与 otpauth URI
      */
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 生成待确认的 TOTP 秘钥，重复调用会覆盖旧的未确认秘钥。
+     *
+     * <p>登录密码比对（BCrypt）在事务外完成，事务只覆盖秘钥写入。开启与关闭
+     * 两步验证都要复核密码，把计算放进事务会让一次错输占住连接 250-350ms。
+     *
+     * @param userId 用户标识
+     * @param password 登录密码（复核防会话劫持后偷偷开启）
+     * @return 秘钥与 otpauth URI
+     */
     public TwoFactorSetupResponse startSetup(UUID userId, String password) {
         AuthUser user = requireUser(userId);
         requirePassword(user, password);
+        return transactionTemplate.execute(status -> startSetupInTransaction(userId, user));
+    }
+
+    private TwoFactorSetupResponse startSetupInTransaction(UUID userId, AuthUser user) {
         if (isEnabled(userId)) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_ALREADY_ENABLED, "两步验证已开启");
         }
@@ -113,12 +128,22 @@ public class TwoFactorService {
      * @param password 登录密码（复核防会话劫持后偷偷关闭）
      * @param code 当前动态验证码或一次性备份码（证明仍持有认证器）
      */
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 关闭两步验证并清除全部凭据与备份码。
+     *
+     * <p>密码比对在事务外完成，事务从验证码校验开始。
+     *
+     * @param userId 用户标识
+     * @param password 登录密码（复核防会话劫持后偷偷关闭）
+     * @param code 当前动态验证码或一次性备份码（证明仍持有认证器）
+     */
     public void disable(UUID userId, String password, String code) {
         AuthUser user = requireUser(userId);
         requirePassword(user, password);
-        verifyCode(userId, code);
-        clearCredentials(userId);
+        transactionTemplate.executeWithoutResult(status -> {
+            verifyCode(userId, code);
+            clearCredentials(userId);
+        });
         log.info("两步验证已关闭: userId={}", userId);
     }
 
@@ -279,6 +304,9 @@ public class TwoFactorService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
     }
 
+    /**
+     * 复核登录密码。调用方必须位于事务之外：BCrypt 计算不得占用数据库连接。
+     */
     private void requirePassword(AuthUser user, String password) {
         if (password == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");

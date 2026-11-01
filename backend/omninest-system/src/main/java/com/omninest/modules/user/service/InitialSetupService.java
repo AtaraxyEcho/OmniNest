@@ -28,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 管理首次安装状态并以一次性流程创建超级管理员。
@@ -55,6 +56,7 @@ public class InitialSetupService {
     private final TwoFactorService twoFactorService;
     private final ConfigCenterService configCenterService;
     private final StorageQuotaService storageQuotaService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 查询首次安装向导状态。
@@ -99,9 +101,22 @@ public class InitialSetupService {
      * @param request 超级管理员资料
      * @return 启用两步验证时的一次性备份码，未启用时为 null
      */
-    @Transactional(rollbackFor = Exception.class)
     public List<String> createSuperAdmin(String setupToken, InitialSetupRequest request) {
+        // 令牌校验、用户名规范化与密码校验都不碰数据库，因此连同 BCrypt 一起放在事务外：
+        // 事务内随后会锁系统实例行，把 250-350ms 的哈希留在锁里会让并发安装请求一起排队。
         requireValidSetupToken(setupToken);
+        String username = request.username().trim().toLowerCase(Locale.ROOT);
+        passwordPolicy.validate(username, request.password());
+        String passwordHash = passwordEncoder.encode(request.password());
+        return transactionTemplate.execute(status -> createSuperAdminInTransaction(
+                request, username, passwordHash));
+    }
+
+    private List<String> createSuperAdminInTransaction(
+            InitialSetupRequest request,
+            String username,
+            String passwordHash
+    ) {
         SystemInstance systemInstance = lockSystemInstance();
         if (properties.isPersistentStateEnabled()
                 && systemInstance.getSetupState() == SystemInstanceState.READY) {
@@ -115,11 +130,9 @@ public class InitialSetupService {
         if (authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.CONFLICT, "首次安装已经完成");
         }
-        String username = request.username().trim().toLowerCase(Locale.ROOT);
         if (authUserRepository.existsByUsername(username)) {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
         }
-        passwordPolicy.validate(username, request.password());
         // 管理员在向导里主动提交了 TOTP 秘钥时也必须绑定：配置未强制不等于可以丢弃，
         // 否则扫码完成后凭据被静默忽略，账户看起来开了两步验证实际没有。
         boolean twoFactorSubmitted = request.totpSecret() != null && !request.totpSecret().isBlank();
@@ -134,7 +147,7 @@ public class InitialSetupService {
 
         AuthUser user = new AuthUser();
         user.setUsername(username);
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPasswordHash(passwordHash);
         user.setDisplayName(normalizeDisplayName(request.displayName(), username));
         user.setEmail(normalizeEmail(request.email()));
         user.setStatus(UserStatus.ACTIVE.getValue());

@@ -28,6 +28,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 首次安装服务测试。
@@ -54,7 +56,9 @@ class InitialSetupServiceTest {
             new PasswordPolicy(),
             twoFactorService,
             configCenterService,
-            storageQuotaService
+            storageQuotaService,
+            // 回调内只用仓储桩，事务模板用 mock 管理器即可：execute 照常执行回调。
+            new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class))
     );
 
     @BeforeEach
