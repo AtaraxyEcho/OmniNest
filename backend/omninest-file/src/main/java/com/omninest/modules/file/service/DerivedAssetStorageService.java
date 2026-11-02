@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -522,12 +523,17 @@ public class DerivedAssetStorageService {
             // 跨桶复制在事务外完成：大体积转码产物复制可达数十秒，放进 REQUIRES_NEW
             // 会让一个独立连接整段挂起。复制成功而落库失败时补偿删除已复制的对象。
             objectStorageClient.copyObject(stagingKey, finalKey);
+            AtomicReference<ReplacedObject> replaced = new AtomicReference<>();
             try {
-                return storeInNewTransactionWithRetry(() -> {
+                UUID nodeId = storeInNewTransactionWithRetry(() -> {
                     requireTargetWritable(ownerUserId, spaceType, normalizedPath);
                     return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
-                            bucketName, objectKey, normalizedPath, sizeBytes, objectSha256);
+                            bucketName, objectKey, normalizedPath, sizeBytes, objectSha256, replaced);
                 });
+                // 新元数据已提交，旧对象不再被这个节点引用；回收必须发生在提交之后，
+                // 否则事务回滚时会把节点仍在使用的旧对象删掉。
+                cleanupReplacedObject(replaced.get());
+                return nodeId;
             } catch (RuntimeException exception) {
                 // 只回收本次新建的对象键；同键已存在说明它可能被旧 FileObject 引用，
                 // 删除会把仍然有效的派生资产变成悬空引用。残留的未引用对象由
@@ -547,7 +553,8 @@ public class DerivedAssetStorageService {
      */
     private UUID persistFileMetadata(UUID ownerUserId, String fileName, String mimeType,
             SpaceType spaceType, String bucketName, String objectKey,
-            String normalizedPath, long sizeBytes, String sha256) {
+            String normalizedPath, long sizeBytes, String sha256,
+            AtomicReference<ReplacedObject> replaced) {
         FileObject object = fileObjectRepository
                 .findByBucketNameAndObjectKey(bucketName, objectKey)
                 .orElseGet(FileObject::new);
@@ -561,6 +568,7 @@ public class DerivedAssetStorageService {
         FileNode node = fileNodeRepository
                 .findActivePath(ownerUserId, spaceType, normalizedPath)
                 .orElseGet(FileNode::new);
+        UUID previousObjectId = node.getCurrentObjectId();
         node.setOwnerUserId(ownerUserId);
         node.setParentId(null);
         node.setNodeType("FILE");
@@ -572,7 +580,41 @@ public class DerivedAssetStorageService {
         node.setSourceType(SOURCE_TYPE_DERIVED);
         node.setDeleted(false);
         node.setSpaceType(spaceType);
-        return fileNodeRepository.save(node).getId();
+        UUID savedNodeId = fileNodeRepository.save(node).getId();
+        if (previousObjectId != null && !previousObjectId.equals(savedObject.getId())) {
+            fileObjectRepository.findById(previousObjectId).ifPresent(previous -> replaced.set(
+                    new ReplacedObject(previous.getId(), previous.getBucketName(), previous.getObjectKey())));
+        }
+        return savedNodeId;
+    }
+
+    /**
+     * 回收被覆盖的旧派生对象：先删元数据行，再删物理对象。
+     *
+     * <p>删除前复核是否仍有活动或回收站节点引用；派生资产不进入文件版本链，
+     * 因此不需要额外检查版本表。物理删除失败时元数据行已消失，孤儿扫描器
+     * 会按年龄清理残留对象。</p>
+     */
+    private void cleanupReplacedObject(ReplacedObject replacedObject) {
+        if (replacedObject == null) {
+            return;
+        }
+        try {
+            if (fileNodeRepository.countByCurrentObjectId(replacedObject.objectId()) > 0) {
+                return;
+            }
+            newTransaction().executeWithoutResult(status ->
+                    fileObjectRepository.deleteById(replacedObject.objectId()));
+            removeStagingObject(new ObjectStorageKey(
+                    replacedObject.bucketName(), replacedObject.objectKey()));
+        } catch (RuntimeException exception) {
+            log.warn("旧派生对象回收失败: objectId={}, errorType={}",
+                    replacedObject.objectId(), exception.getClass().getSimpleName());
+        }
+    }
+
+    /** 被新内容替换掉的旧对象，仅在元数据提交成功后回收。 */
+    private record ReplacedObject(UUID objectId, String bucketName, String objectKey) {
     }
 
     private void requireTargetWritable(UUID ownerUserId, SpaceType spaceType, String normalizedPath) {

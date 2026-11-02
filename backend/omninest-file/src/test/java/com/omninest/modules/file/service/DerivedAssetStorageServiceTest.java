@@ -386,6 +386,63 @@ class DerivedAssetStorageServiceTest {
     }
 
     @Test
+    void storeReclaimsReplacedObjectAfterMetadataCommits(@TempDir Path tempDirectory) throws Exception {
+        Path sourceFile = tempDirectory.resolve("new-cover.jpg");
+        Files.writeString(sourceFile, "new-content", StandardCharsets.UTF_8);
+        FileNode node = new FileNode();
+        node.setId(FILE_NODE_ID);
+        node.setOwnerUserId(OWNER_ID);
+        node.setSourceType("DERIVED");
+        node.setCurrentObjectId(FILE_OBJECT_ID);
+        FileObject previous = new FileObject();
+        previous.setId(FILE_OBJECT_ID);
+        previous.setBucketName("derived-assets");
+        previous.setObjectKey("derived/old-cover.jpg");
+        when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(FILE_OBJECT_ID)).thenReturn(Optional.of(previous));
+        when(fileObjectRepository.findByBucketNameAndObjectKey(any(), any())).thenReturn(Optional.empty());
+        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
+            FileObject saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+        when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
+            FileNode saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(FILE_NODE_ID);
+            }
+            return saved;
+        });
+        when(fileNodeRepository.countByCurrentObjectId(FILE_OBJECT_ID)).thenReturn(0L);
+        DerivedAssetStorageService service = new DerivedAssetStorageService(
+                objectStorageBuckets(),
+                objectStorageClient,
+                fileObjectRepository,
+                fileNodeRepository,
+                safeUrlValidator,
+                transactionTemplate,
+                new FileTransferLimitsProperties(),
+                tempStagingPort()
+        );
+
+        UUID nodeId = service.store(
+                OWNER_ID,
+                "READER_ITEM",
+                RESOURCE_ID,
+                "COVER",
+                "cover.jpg",
+                "cover.jpg",
+                "image/jpeg",
+                sourceFile
+        );
+
+        assertThat(nodeId).isEqualTo(FILE_NODE_ID);
+        verify(fileObjectRepository).deleteById(FILE_OBJECT_ID);
+        verify(objectStorageClient).removeObject(
+                new ObjectStorageKey("derived-assets", "derived/old-cover.jpg"));
+    }
+
+    @Test
     void storeRemoteDownloadsAssetIntoDerivedBucketAndFileNode() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/poster.jpg", exchange -> {
