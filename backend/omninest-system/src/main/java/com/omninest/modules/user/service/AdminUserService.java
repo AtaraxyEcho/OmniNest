@@ -19,6 +19,7 @@ import com.omninest.modules.user.util.AuthUserMapper;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -255,13 +256,14 @@ public class AdminUserService {
      *
      * @param userIds 用户标识列表
      * @param rawStatus 目标状态
-     * @return 成功数量与失败用户 ID 列表
+     * @return 成功数量、失败用户 ID 与逐项业务原因
      */
     public AdminBatchUserStatusResult batchUpdateUserStatus(List<UUID> userIds, String rawStatus) {
         // 状态合法性前置校验：非法值整体拒绝，不逐项吞为失败项。
         normalizeStatus(rawStatus);
         int successCount = 0;
         List<UUID> failedIds = new ArrayList<>();
+        Map<UUID, String> failureReasons = new LinkedHashMap<>();
         for (UUID userId : userIds) {
             try {
                 transactionTemplate.executeWithoutResult(status -> executeUpdateUserStatus(userId, rawStatus));
@@ -272,9 +274,10 @@ public class AdminUserService {
                 log.warn("批量更新用户状态跳过受限项: targetUserId={}, status={}, reason={}",
                         userId, rawStatus, ex.getMessage());
                 failedIds.add(userId);
+                failureReasons.put(userId, ex.getMessage());
             }
         }
-        return new AdminBatchUserStatusResult(successCount, failedIds);
+        return new AdminBatchUserStatusResult(successCount, failedIds, failureReasons);
     }
 
     /**

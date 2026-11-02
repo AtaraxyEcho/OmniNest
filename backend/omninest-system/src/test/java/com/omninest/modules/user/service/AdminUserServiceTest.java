@@ -255,6 +255,9 @@ class AdminUserServiceTest {
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(result.failedIds()).containsExactly(missingId, superAdminId);
+        assertThat(result.failureReasons())
+                .containsKeys(missingId, superAdminId)
+                .allSatisfy((userId, reason) -> assertThat(reason).isNotBlank());
         assertThat(member.getStatus()).isEqualTo("DISABLED");
         verify(userSessionRevocationService).revokeAll(List.of(okId), "管理员更新用户状态");
         verify(auditLogService).recordWithMetadata(

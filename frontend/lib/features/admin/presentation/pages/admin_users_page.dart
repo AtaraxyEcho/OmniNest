@@ -19,6 +19,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'admin_user_dialogs.dart';
+part 'admin_users_batch_actions.dart';
 
 /// 角色编码到本地化名称的映射，未知编码原样返回。
 String adminRoleDisplayName(AppLocalizations l10n, String role) {
@@ -662,63 +663,6 @@ class _UserManagementPanel extends ConsumerWidget {
             user.id,
             disabling ? AdminUserStatus.disabled : AdminUserStatus.active,
           );
-    } catch (error) {
-      if (context.mounted) {
-        showOmniFeedback(
-          context,
-          describeUserFacingError(error, l10n: l10n).message,
-          severity: OmniFeedbackSeverity.error,
-        );
-      }
-    }
-  }
-
-  /// 批量启用/禁用：确认后走后端逐项端点，失败项不中断其余用户；
-  /// 完成反馈复用任务批量口径（成功/失败计数）。
-  Future<void> _batchUpdateUserStatus(
-    BuildContext context,
-    WidgetRef ref,
-    List<AdminUser> targets, {
-    required bool disabling,
-  }) async {
-    if (targets.isEmpty) {
-      return;
-    }
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showWorkstationConfirmDialog(
-      context,
-      title:
-          disabling ? l10n.adminBatchDisableUsers : l10n.adminBatchEnableUsers,
-      message:
-          disabling
-              ? l10n.adminBatchDisableConfirmMessage('${targets.length}')
-              : l10n.adminBatchEnableConfirmMessage('${targets.length}'),
-      confirmLabel: disabling ? l10n.adminDisable : l10n.adminEnabled,
-      destructive: disabling,
-    );
-    if (!confirmed || !context.mounted) {
-      return;
-    }
-    try {
-      final result = await ref
-          .read(adminUserControllerProvider.notifier)
-          .batchUpdateUserStatus(
-            targets.map((user) => user.id).toList(),
-            disabling ? AdminUserStatus.disabled : AdminUserStatus.active,
-          );
-      if (context.mounted) {
-        showOmniFeedback(
-          context,
-          l10n.adminBatchCompleted(
-            result.successCount,
-            result.failedIds.length,
-          ),
-          severity:
-              result.failedIds.isEmpty
-                  ? OmniFeedbackSeverity.success
-                  : OmniFeedbackSeverity.warning,
-        );
-      }
     } catch (error) {
       if (context.mounted) {
         showOmniFeedback(

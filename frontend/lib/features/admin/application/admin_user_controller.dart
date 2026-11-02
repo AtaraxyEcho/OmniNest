@@ -312,10 +312,14 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
 
   /// 批量更新用户状态：后端逐项执行并返回失败清单；
   /// 完成后清空选择并刷新列表（选中集内的行状态已变化，保留无意义）。
-  Future<({int successCount, List<String> failedIds})> batchUpdateUserStatus(
-    List<String> userIds,
-    String status,
-  ) async {
+  Future<
+    ({
+      int successCount,
+      List<String> failedIds,
+      Map<String, String> failureReasons,
+    })
+  >
+  batchUpdateUserStatus(List<String> userIds, String status) async {
     final result = await _api.batchUpdateUserStatus(userIds, status);
     await _fetch(resetSelection: true);
     return result;

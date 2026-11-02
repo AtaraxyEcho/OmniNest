@@ -74,11 +74,15 @@ class AdminUserApi {
     return int.tryParse(data?.toString() ?? '') ?? 0;
   }
 
-  /// 批量更新用户状态（启用/禁用）：逐项执行，失败项计入 failedIds。
-  Future<({int successCount, List<String> failedIds})> batchUpdateUserStatus(
-    List<String> userIds,
-    String status,
-  ) async {
+  /// 批量更新用户状态（启用/禁用）：逐项执行，失败项及原因逐项返回。
+  Future<
+    ({
+      int successCount,
+      List<String> failedIds,
+      Map<String, String> failureReasons,
+    })
+  >
+  batchUpdateUserStatus(List<String> userIds, String status) async {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
       '/admin/users/status/batch',
       data: {'userIds': userIds, 'status': status},
@@ -89,7 +93,20 @@ class AdminUserApi {
         (data['failedIds'] as List? ?? [])
             .map((item) => item.toString())
             .toList();
-    return (successCount: successCount, failedIds: failedIds);
+    final failureReasons = <String, String>{};
+    final rawReasons = data['failureReasons'];
+    if (rawReasons is Map) {
+      rawReasons.forEach((key, value) {
+        if (key != null && value != null) {
+          failureReasons[key.toString()] = value.toString();
+        }
+      });
+    }
+    return (
+      successCount: successCount,
+      failedIds: failedIds,
+      failureReasons: failureReasons,
+    );
   }
 
   /// 删除空账户用户；后端对自我删除、SUPER_ADMIN 与仍有内容归属的账户

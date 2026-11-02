@@ -49,9 +49,10 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
     private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
     private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
+    private static final String SIDECAR_NONCE_HEADER = "X-OmniNest-Nonce";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     /** 与侧车 {@code SIGNATURE_PROTOCOL} 对齐；不一致说明只升级了一侧。 */
-    private static final String EXPECTED_SIGNATURE_PROTOCOL = "v2";
+    private static final String EXPECTED_SIGNATURE_PROTOCOL = "v3";
 
     private final AiSidecarProperties properties;
     private final TempStagingPort tempStagingPort;
@@ -301,19 +302,20 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     }
 
     /**
-     * 生成推理请求的认证头：秒级时间戳 + 方法/路径 HMAC。
+     * 生成推理请求的认证头：秒级时间戳 + 方法/路径/查询串 + 一次性 nonce 的 HMAC。
      *
      * <p>只发签名，不发主密钥：后端与侧车之间默认是明文 HTTP，把共享密钥放进请求头
      * 会让 HMAC「密钥不出进程」的意义消失。签名不覆盖 multipart 请求体，避免为几十 MB
-     * 图片再做一遍哈希；时间戳窗口把捕获的请求限制在 5 分钟内，路径绑定阻止把推理签名
-     * 挪用到其他接口。</p>
+     * 图片再做一遍哈希；nonce 由侧车在时间窗口内去重，截获的签名无法重放，路径与查询串
+     * 绑定阻止把推理签名挪用到其他接口。</p>
      */
     private String[] authHeaders(String method, String path, String query) {
         String secret = requireSecret();
         long timestamp = Instant.now().getEpochSecond();
+        String nonce = UUID.randomUUID().toString();
         // 与侧车同口径：查询串也进签名，防止同一路径上的分析参数被中间人改写。
         String canonical = timestamp + "\n" + method + "\n" + path + "\n"
-                + (query == null ? "" : query);
+                + (query == null ? "" : query) + "\n" + nonce;
         String signature;
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
@@ -325,7 +327,8 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         }
         return new String[]{
                 SIDECAR_TIMESTAMP_HEADER, Long.toString(timestamp),
-                SIDECAR_SIGNATURE_HEADER, signature
+                SIDECAR_SIGNATURE_HEADER, signature,
+                SIDECAR_NONCE_HEADER, nonce
         };
     }
 

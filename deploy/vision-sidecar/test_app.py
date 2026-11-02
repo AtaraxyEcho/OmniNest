@@ -5,6 +5,7 @@ import io
 import os
 import time
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -323,24 +324,55 @@ class SidecarTokenTest(unittest.TestCase):
             url=SimpleNamespace(path="/analyze-content", query=""),
         )
 
-    def test_sidecar_auth_requires_timestamp_and_signature(self):
+    def _nonce(self) -> str:
+        return uuid.uuid4().hex
+
+    def test_sidecar_auth_requires_timestamp_signature_and_nonce(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             with self.assertRaises(HTTPException) as missing:
                 app._require_sidecar_auth(self._request())
             timestamp = int(time.time())
             with self.assertRaises(HTTPException) as missing_signature:
-                app._require_sidecar_auth(self._request(), str(timestamp), None)
+                app._require_sidecar_auth(
+                    self._request(), str(timestamp), None, self._nonce()
+                )
+            nonce = self._nonce()
+            signature = app._sidecar_signature(
+                timestamp, "POST", "/analyze-content", "", nonce
+            )
+            with self.assertRaises(HTTPException) as missing_nonce:
+                app._require_sidecar_auth(self._request(), str(timestamp), signature)
 
         self.assertEqual(401, missing.exception.status_code)
         self.assertEqual(401, missing_signature.exception.status_code)
+        self.assertEqual(401, missing_nonce.exception.status_code)
 
-    def test_sidecar_auth_accepts_valid_timestamp_and_signature(self):
+    def test_sidecar_auth_accepts_valid_timestamp_signature_and_nonce(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             timestamp = int(time.time())
-            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
+            nonce = self._nonce()
+            signature = app._sidecar_signature(
+                timestamp, "POST", "/analyze-content", "", nonce
+            )
             self.assertIsNone(app._require_sidecar_auth(
-                self._request(), str(timestamp), signature
+                self._request(), str(timestamp), signature, nonce
             ))
+
+    def test_sidecar_auth_rejects_replayed_nonce(self):
+        with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
+            timestamp = int(time.time())
+            nonce = self._nonce()
+            signature = app._sidecar_signature(
+                timestamp, "POST", "/analyze-content", "", nonce
+            )
+            self.assertIsNone(app._require_sidecar_auth(
+                self._request(), str(timestamp), signature, nonce
+            ))
+            with self.assertRaises(HTTPException) as replay:
+                app._require_sidecar_auth(
+                    self._request(), str(timestamp), signature, nonce
+                )
+        self.assertEqual(401, replay.exception.status_code)
 
     def test_sidecar_auth_is_verified_once_per_request(self):
         """排队后路由依赖二次校验必须复用首次结果，不能被时钟窗口误拒。"""
@@ -348,21 +380,38 @@ class SidecarTokenTest(unittest.TestCase):
             request = self._request()
             request.state = SimpleNamespace()
             timestamp = int(time.time())
-            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
-            self.assertIsNone(app._require_sidecar_auth(request, str(timestamp), signature))
+            nonce = self._nonce()
+            signature = app._sidecar_signature(
+                timestamp, "POST", "/analyze-content", "", nonce
+            )
+            self.assertIsNone(app._require_sidecar_auth(
+                request, str(timestamp), signature, nonce
+            ))
             stale = timestamp - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
-            self.assertIsNone(app._require_sidecar_auth(request, str(stale), "tampered"))
+            self.assertIsNone(app._require_sidecar_auth(
+                request, str(stale), "tampered", self._nonce()
+            ))
 
     def test_sidecar_auth_rejects_stale_timestamp_and_tampered_path(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
             timestamp = int(time.time()) - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
-            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
+            nonce = self._nonce()
+            signature = app._sidecar_signature(
+                timestamp, "POST", "/analyze-content", "", nonce
+            )
             with self.assertRaises(HTTPException) as stale:
-                app._require_sidecar_auth(self._request(), str(timestamp), signature)
+                app._require_sidecar_auth(
+                    self._request(), str(timestamp), signature, nonce
+                )
             fresh = int(time.time())
-            wrong_signature = app._sidecar_signature(fresh, "POST", "/health", "")
+            fresh_nonce = self._nonce()
+            wrong_signature = app._sidecar_signature(
+                fresh, "POST", "/health", "", fresh_nonce
+            )
             with self.assertRaises(HTTPException) as tampered:
-                app._require_sidecar_auth(self._request(), str(fresh), wrong_signature)
+                app._require_sidecar_auth(
+                    self._request(), str(fresh), wrong_signature, fresh_nonce
+                )
 
         self.assertEqual(401, stale.exception.status_code)
         self.assertEqual(401, tampered.exception.status_code)

@@ -11,6 +11,7 @@ import hmac
 import io
 import logging
 import os
+import re
 import threading
 import time
 from asyncio import Semaphore, to_thread
@@ -31,9 +32,16 @@ logger = logging.getLogger("omninest-vision-sidecar")
 
 SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp"
 SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature"
-# 签名载荷含查询串的那一版；两侧必须同版本发布。
-SIGNATURE_PROTOCOL = "v2"
+SIDECAR_NONCE_HEADER = "X-OmniNest-Nonce"
+# 签名载荷含查询串与一次性 nonce 的那一版；两侧必须同版本发布。
+SIGNATURE_PROTOCOL = "v3"
 SIDECAR_CLOCK_SKEW_SECONDS = 300
+# nonce 只需覆盖时间戳可接受的整个窗口；窗口外的请求会先被时钟校验拒绝。
+NONCE_TTL_SECONDS = SIDECAR_CLOCK_SKEW_SECONDS * 2 + 60
+MAX_TRACKED_NONCES = 100_000
+_NONCE_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}")
+_nonce_lock = threading.Lock()
+_seen_nonces: Dict[str, float] = {}
 SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
 MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
@@ -404,16 +412,36 @@ class ContentAnalysis(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _sidecar_signature(timestamp: int, method: str, path: str, query: str) -> str:
+def _sidecar_signature(timestamp: int, method: str, path: str, query: str, nonce: str) -> str:
     # 查询串一并入签名：只签路径时，同一路径上的分析参数（hint/skipOcr 等）可被中间人改写。
-    canonical = f"{timestamp}\n{method}\n{path}\n{query}".encode()
+    # nonce 让截获的签名在时间窗口内也只能使用一次，无需为几十 MB 的图片再做一遍摘要。
+    canonical = f"{timestamp}\n{method}\n{path}\n{query}\n{nonce}".encode()
     return hmac.new(SIDECAR_SECRET.encode(), canonical, hashlib.sha256).hexdigest()
+
+
+def _consume_nonce(nonce: str) -> None:
+    """登记一次性 nonce；重放或非法格式一律拒绝。"""
+    if not nonce or not _NONCE_PATTERN.fullmatch(nonce):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    now = time.time()
+    with _nonce_lock:
+        if len(_seen_nonces) >= MAX_TRACKED_NONCES:
+            expired = [key for key, expires_at in _seen_nonces.items() if expires_at <= now]
+            for key in expired:
+                del _seen_nonces[key]
+            if len(_seen_nonces) >= MAX_TRACKED_NONCES:
+                # 只接受已通过签名校验的请求，容量耗尽按 fail-closed 处理。
+                raise HTTPException(status_code=503, detail="Nonce store is full")
+        if _seen_nonces.get(nonce, 0) > now:
+            raise HTTPException(status_code=401, detail="Unauthorized (replayed nonce)")
+        _seen_nonces[nonce] = now + NONCE_TTL_SECONDS
 
 
 def _require_sidecar_auth(
     request: Request,
     timestamp: Annotated[str | None, Header(alias=SIDECAR_TIMESTAMP_HEADER)] = None,
     signature: Annotated[str | None, Header(alias=SIDECAR_SIGNATURE_HEADER)] = None,
+    nonce: Annotated[str | None, Header(alias=SIDECAR_NONCE_HEADER)] = None,
 ) -> None:
     # 中间件在进入推理槽前已校验一次；高负载排队接近时钟窗口上限后，路由依赖
     # 会再次执行本函数。同一请求只校验一次，避免合法请求排队后被时间戳误拒。
@@ -422,7 +450,7 @@ def _require_sidecar_auth(
         return
     if not SIDECAR_SECRET:
         raise HTTPException(status_code=503, detail="AI sidecar authentication is not configured")
-    if timestamp is None or signature is None:
+    if timestamp is None or signature is None or nonce is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         timestamp_value = int(timestamp)
@@ -431,7 +459,7 @@ def _require_sidecar_auth(
     if abs(time.time() - timestamp_value) > SIDECAR_CLOCK_SKEW_SECONDS:
         raise HTTPException(status_code=401, detail="Unauthorized")
     expected = _sidecar_signature(
-        timestamp_value, request.method, request.url.path, request.url.query
+        timestamp_value, request.method, request.url.path, request.url.query, nonce
     )
     if not hmac.compare_digest(signature, expected):
         # 带上协议版本：两侧混跑时后端日志能直接定位到"签名格式不一致"，
@@ -440,6 +468,7 @@ def _require_sidecar_auth(
             status_code=401,
             detail=f"Unauthorized (signature protocol {SIGNATURE_PROTOCOL})",
         )
+    _consume_nonce(nonce)
     if request_state is not None:
         request_state.sidecar_auth_verified = True
 
@@ -744,6 +773,7 @@ async def guard_analysis_uploads(request: Request, call_next):
             request,
             request.headers.get(SIDECAR_TIMESTAMP_HEADER),
             request.headers.get(SIDECAR_SIGNATURE_HEADER),
+            request.headers.get(SIDECAR_NONCE_HEADER),
         )
     except HTTPException as exception:
         return JSONResponse(
