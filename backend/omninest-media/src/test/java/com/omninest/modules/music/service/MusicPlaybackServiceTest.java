@@ -251,6 +251,7 @@ class MusicPlaybackServiceTest {
 
     private MediaPlaybackProgress progress(String mediaKey, long position, long duration) {
         MediaPlaybackProgress progress = new MediaPlaybackProgress();
+        progress.setVersion(0L);
         progress.setOwnerUserId(OWNER_ID);
         progress.setMediaType(MediaPlaybackType.MUSIC.value());
         progress.setMediaKey(mediaKey);

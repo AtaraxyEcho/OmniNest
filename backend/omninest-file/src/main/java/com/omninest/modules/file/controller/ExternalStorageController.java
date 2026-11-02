@@ -133,16 +133,18 @@ public class ExternalStorageController {
                     "ip:" + clientIp + ":external-oauth-callback", 20, Duration.ofMinutes(1))) {
                 throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
             }
-            // 限流拒绝不是一次真正的授权回跳，保留 Cookie 让用户稍后重试；
-            // 只有进入业务处理（含三方拒绝）才清除一次性绑定凭证。
+            if (error != null && !error.isBlank()) {
+                // 三方拒绝或伪造的顶层跳转可能不带 state：此时不清 Cookie，
+                // 否则跨站导航只需命中本端点就能擦掉用户正在进行的绑定。
+                return oauthResultPage("error");
+            }
+            // 只有 state 与绑定 nonce 校验通过（handleCallback 内部完成）后才清除
+            // 一次性绑定凭证，避免未验签的请求擦除合法会话。
+            oauthService.handleCallback(providerCode, state, authorizationCode, bindingNonce);
             response.addHeader(
                     HttpHeaders.SET_COOKIE,
                     bindingCookie("", Duration.ZERO).toString()
             );
-            if (error != null && !error.isBlank()) {
-                return oauthResultPage("error");
-            }
-            oauthService.handleCallback(providerCode, state, authorizationCode, bindingNonce);
             return oauthResultPage("success");
         } catch (BusinessException exception) {
             // 浏览器顶层标签页拿到 JSON 既无法关闭也无法回跳；过期 state、限流

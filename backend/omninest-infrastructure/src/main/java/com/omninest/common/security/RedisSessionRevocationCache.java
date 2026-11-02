@@ -1,6 +1,7 @@
 package com.omninest.common.security;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -26,6 +27,7 @@ public class RedisSessionRevocationCache implements SessionRevocationCache {
 
     private static final String BLACKLIST_PREFIX = "session:blacklist:";
     private static final String NOT_REVOKED_PREFIX = "session:blacklist-ok:";
+    private static final String ACCESS_TOKEN_CUTOFF_PREFIX = "session:access-cutoff:";
     /** 旧版按用户存的 Set 无 TTL 时，迁移出的单会话键保留期。 */
     private static final Duration LEGACY_MIGRATION_TTL = Duration.ofDays(30);
 
@@ -125,6 +127,46 @@ public class RedisSessionRevocationCache implements SessionRevocationCache {
         } catch (RuntimeException exception) {
             log.warn("Redis 会话未撤销标记写入失败: userId={}, sessionId={}", userId, sessionId, exception);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void markAccessTokenCutoff(UUID userId, Instant cutoff, Duration ttl) {
+        if (userId == null || cutoff == null || ttl == null || ttl.isZero() || ttl.isNegative()) {
+            return;
+        }
+        // 存秒级 epoch：JWT 的 iat 同样是秒级，比较时不会因毫秒截断把刷新后的
+        // 同秒新令牌误判为陈旧，导致前端 401 刷新死循环。
+        try {
+            redis.opsForValue().set(accessTokenCutoffKey(userId), Long.toString(cutoff.getEpochSecond()), ttl);
+        } catch (RuntimeException exception) {
+            log.warn("Redis 访问令牌截止时间写入失败: userId={}", userId, exception);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Optional<Instant> accessTokenCutoff(UUID userId) {
+        if (userId == null) {
+            return Optional.empty();
+        }
+        try {
+            String value = redis.opsForValue().get(accessTokenCutoffKey(userId));
+            return value == null || value.isBlank()
+                    ? Optional.empty()
+                    : Optional.of(Instant.ofEpochSecond(Long.parseLong(value)));
+        } catch (RuntimeException exception) {
+            log.warn("Redis 访问令牌截止时间读取失败: userId={}", userId, exception);
+            return Optional.empty();
+        }
+    }
+
+    private String accessTokenCutoffKey(UUID userId) {
+        return ACCESS_TOKEN_CUTOFF_PREFIX + userId;
     }
 
     private String revokedKey(UUID userId, UUID sessionId) {

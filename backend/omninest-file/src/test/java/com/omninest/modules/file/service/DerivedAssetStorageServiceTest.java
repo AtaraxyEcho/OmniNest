@@ -253,7 +253,7 @@ class DerivedAssetStorageServiceTest {
         object.setBucketName("derived-assets");
         object.setObjectKey("derived/owner/photo.jpg");
         String expectedPath = "/.metadata/PHOTO_ITEM/" + RESOURCE_ID + "/POSTER/cover.jpg";
-        when(fileNodeRepository.findActivePath(OWNER_ID, expectedPath)).thenReturn(Optional.of(node));
+        when(fileNodeRepository.findActivePath(OWNER_ID, SpaceType.PERSONAL, expectedPath)).thenReturn(Optional.of(node));
         when(fileObjectRepository.findById(FILE_OBJECT_ID)).thenReturn(Optional.of(object));
         when(objectStorageClient.objectExists(
                 new ObjectStorageKey("derived-assets", "derived/owner/photo.jpg")
@@ -284,7 +284,7 @@ class DerivedAssetStorageServiceTest {
     void storePathUploadsCallerOwnedFileWithoutDeletingIt(@TempDir Path tempDirectory) throws Exception {
         Path sourceFile = tempDirectory.resolve("photos.zip");
         Files.writeString(sourceFile, "zip-content", StandardCharsets.UTF_8);
-        when(fileNodeRepository.findActivePath(any(), any())).thenReturn(Optional.empty());
+        when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.empty());
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(FILE_OBJECT_ID);
@@ -336,7 +336,7 @@ class DerivedAssetStorageServiceTest {
     void storePathKeepsLogicalAndStorageFileNamesIndependent(@TempDir Path tempDirectory) throws Exception {
         Path sourceFile = tempDirectory.resolve("transcoded.mp4");
         Files.writeString(sourceFile, "video-content", StandardCharsets.UTF_8);
-        when(fileNodeRepository.findActivePath(any(), any())).thenReturn(Optional.empty());
+        when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.empty());
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(FILE_OBJECT_ID);
@@ -375,7 +375,9 @@ class DerivedAssetStorageServiceTest {
         ArgumentCaptor<ObjectStorageKey> targetKeyCaptor = ArgumentCaptor.forClass(ObjectStorageKey.class);
         verify(objectStorageClient).copyObject(any(), targetKeyCaptor.capture());
         assertThat(targetKeyCaptor.getValue().objectKey())
-                .endsWith("/VIDEO/60000000-0000-0000-0000-000000000001/TRANSCODE/h265.mp4");
+                .startsWith("derived/10000000-0000-0000-0000-000000000001/"
+                        + "VIDEO/60000000-0000-0000-0000-000000000001/TRANSCODE/")
+                .endsWith("_h265.mp4");
         ArgumentCaptor<FileNode> nodeCaptor = ArgumentCaptor.forClass(FileNode.class);
         verify(fileNodeRepository).save(nodeCaptor.capture());
         assertThat(nodeCaptor.getValue().getName()).isEqualTo(logicalName);
@@ -401,7 +403,7 @@ class DerivedAssetStorageServiceTest {
         server.start();
         try {
             String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/redirect";
-            when(fileNodeRepository.findActivePath(any(), any())).thenReturn(Optional.empty());
+            when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.empty());
             when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
                 FileObject object = invocation.getArgument(0);
                 object.setId(FILE_OBJECT_ID);
@@ -445,7 +447,9 @@ class DerivedAssetStorageServiceTest {
             verify(objectStorageClient).copyObject(any(), targetKeyCaptor.capture());
             assertThat(targetKeyCaptor.getValue().bucket()).isEqualTo("derived-assets");
             assertThat(targetKeyCaptor.getValue().objectKey())
-                    .isEqualTo("derived/10000000-0000-0000-0000-000000000001/VIDEO_ITEM/60000000-0000-0000-0000-000000000001/POSTER/poster.jpg");
+                    .startsWith("derived/10000000-0000-0000-0000-000000000001/"
+                            + "VIDEO_ITEM/60000000-0000-0000-0000-000000000001/POSTER/")
+                    .endsWith("_poster.jpg");
             ArgumentCaptor<FileNode> nodeCaptor = ArgumentCaptor.forClass(FileNode.class);
             verify(fileNodeRepository).save(nodeCaptor.capture());
             assertThat(nodeCaptor.getValue().getSourceType()).isEqualTo("DERIVED");
@@ -488,7 +492,7 @@ class DerivedAssetStorageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("派生资源大小超出限制");
 
-        when(fileNodeRepository.findActivePath(any(), any())).thenReturn(Optional.empty());
+        when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.empty());
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(FILE_OBJECT_ID);
@@ -533,7 +537,7 @@ class DerivedAssetStorageServiceTest {
         when(fileObjectRepository.save(any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(fileNodeRepository.findActivePath(any(), any())).thenReturn(Optional.empty());
+        when(fileNodeRepository.findActivePath(any(), any(), any())).thenReturn(Optional.empty());
         when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
             FileNode node = invocation.getArgument(0);
             node.setId(FILE_NODE_ID);
@@ -563,7 +567,8 @@ class DerivedAssetStorageServiceTest {
 
         assertThat(fileNodeId).isEqualTo(FILE_NODE_ID);
         verify(fileObjectRepository, times(2)).save(any());
-        verify(fileObjectRepository, times(2)).findByBucketNameAndObjectKey(any(), any());
+        // 一次写入前检查同键是否已存在，另两次来自元数据落库的冲突重试。
+        verify(fileObjectRepository, times(3)).findByBucketNameAndObjectKey(any(), any());
     }
 
     private ObjectStorageBuckets objectStorageBuckets() {

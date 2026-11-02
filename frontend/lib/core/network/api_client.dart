@@ -401,9 +401,9 @@ class ApiClient {
         response: response,
       );
     }
-    if (requestOptions.data is FormData) {
-      // 重放已 finalize 的 FormData 会抛 StateError；上传请求只刷新令牌，
-      // 由调用方按 401 提示重试。
+    if (requestOptions.data is FormData || requestOptions.data is Stream) {
+      // 重放已 finalize 的 FormData 或单次订阅 Stream 会抛 StateError；
+      // 这类请求只刷新令牌，由调用方按 401 提示重试。
       throw DioException.badResponse(
         statusCode: response.statusCode ?? 401,
         requestOptions: requestOptions,

@@ -944,6 +944,7 @@ Future<void> _showNfoPreview(BuildContext context, MovieVideoItem item) async {
                 final nfoAsync = dialogRef.watch(
                   movieNfoPreviewProvider(item.id),
                 );
+                final l10n = AppLocalizations.of(dialogContext);
                 return nfoAsync.when(
                   data:
                       (nfo) => SingleChildScrollView(
@@ -963,9 +964,7 @@ Future<void> _showNfoPreview(BuildContext context, MovieVideoItem item) async {
                   error:
                       (e, _) => Center(
                         child: Text(
-                          AppLocalizations.of(
-                            dialogContext,
-                          ).videoLoadFailedWith(e.toString()),
+                          l10n.videoLoadFailedWith(movieErrorMessage(e, l10n)),
                         ),
                       ),
                 );

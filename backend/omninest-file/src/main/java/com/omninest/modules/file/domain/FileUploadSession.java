@@ -100,7 +100,7 @@ public class FileUploadSession {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "space_type", nullable = false, length = 20)

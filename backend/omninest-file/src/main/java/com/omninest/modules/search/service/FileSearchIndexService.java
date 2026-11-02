@@ -236,7 +236,8 @@ public class FileSearchIndexService implements Closeable {
                     fileNodeId, ownerUserId, title, spaceType
             );
         } catch (Exception e) {
-            log.error("Lucene 索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+            throw indexFailure(
+                    "Lucene 索引写入失败: fileNodeId=" + fileNodeId + ", ownerUserId=" + ownerUserId, e);
         }
     }
 
@@ -341,7 +342,8 @@ public class FileSearchIndexService implements Closeable {
             });
             log.debug("批量删除索引: count={}, indexKey={}", fileNodeIds.size(), indexKey);
         } catch (Exception e) {
-            log.error("Lucene 索引批量删除失败: count={}, indexKey={}", fileNodeIds.size(), indexKey, e);
+            throw indexFailure(
+                    "Lucene 索引批量删除失败: count=" + fileNodeIds.size() + ", indexKey=" + indexKey, e);
         }
     }
 
@@ -401,7 +403,8 @@ public class FileSearchIndexService implements Closeable {
                 }
                 log.debug("批量索引文件: count={}, indexKey={}", indexDocs.size(), indexKey);
             } catch (Exception e) {
-                log.error("Lucene 索引批量写入失败: count={}, indexKey={}", indexDocs.size(), indexKey, e);
+                throw indexFailure(
+                        "Lucene 索引批量写入失败: count=" + indexDocs.size() + ", indexKey=" + indexKey, e);
             }
         }
     }
@@ -463,8 +466,17 @@ public class FileSearchIndexService implements Closeable {
                     fileNodeId, ownerUserId, chunks.size(), spaceType
             );
         } catch (Exception e) {
-            log.error("Lucene 分块索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+            throw indexFailure(
+                    "Lucene 分块索引写入失败: fileNodeId=" + fileNodeId + ", ownerUserId=" + ownerUserId, e);
         }
+    }
+
+    /**
+     * 索引写失败必须向上抛出：消费侧据此重试并进入死信，不能把任务标成成功。
+     */
+    private IllegalStateException indexFailure(String message, Exception cause) {
+        log.error("{}", message, cause);
+        return new IllegalStateException(message, cause);
     }
 
     /**

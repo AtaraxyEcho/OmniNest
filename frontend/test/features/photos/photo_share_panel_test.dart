@@ -22,9 +22,9 @@ final _selectedChip = find.byWidgetPredicate(
   (widget) => widget is Semantics && widget.properties.selected == true,
 );
 
-PhotoItem _photo() {
+PhotoItem _photo({String id = 'photo-1'}) {
   return PhotoItem(
-    id: 'photo-1',
+    id: id,
     fileNodeId: 'file-1',
     title: 'Motion Shot',
     format: 'JPEG',
@@ -184,6 +184,58 @@ Future<void> _pumpPanel(WidgetTester tester, PhotoRepository repository) async {
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 500));
+}
+
+/// 可切换可见性与目标照片的面板宿主，用于验证 didUpdateWidget 的加载次数。
+class _PanelHost extends StatefulWidget {
+  const _PanelHost({required this.repository, super.key});
+
+  final PhotoRepository repository;
+
+  @override
+  State<_PanelHost> createState() => _PanelHostState();
+}
+
+class _PanelHostState extends State<_PanelHost> {
+  bool _visible = false;
+  String _photoId = 'photo-1';
+
+  void update({required bool visible, required String photoId}) {
+    setState(() {
+      _visible = visible;
+      _photoId = photoId;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: [
+        photoRepositoryProvider.overrideWithValue(widget.repository),
+        presetAppEnvironmentProvider.overrideWithValue(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        theme: OmniNestTheme.dark(),
+        home: Scaffold(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Colors.black),
+              PhotoSharePanel(visible: _visible, photo: _photo(id: _photoId)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder target) async {
@@ -556,6 +608,30 @@ void main() {
     );
     expect(find.text('创建链接'), findsNothing);
     _verifyNeverCreate(repository);
+  });
+
+  testWidgets('同时变为可见并切换照片时只加载一次分享状态', (tester) async {
+    final repository = _MockPhotoRepository();
+    var listCalls = 0;
+    when(() => repository.listPhotoShares(any())).thenAnswer((_) async {
+      listCalls += 1;
+      return <PhotoShareLink>[];
+    });
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final hostKey = GlobalKey<_PanelHostState>();
+
+    await tester.pumpWidget(_PanelHost(key: hostKey, repository: repository));
+    await tester.pump();
+    expect(listCalls, 0);
+
+    hostKey.currentState!.update(visible: true, photoId: 'photo-2');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(listCalls, 1);
   });
 
   testWidgets('多条链接时面板固定编辑最新一条，其余只计数不隐身', (tester) async {

@@ -97,6 +97,23 @@ public class VideoStreamService {
         releaseStreamSlot();
     }
 
+    /**
+     * 在申请转码槽位前终止同一观看者在当前视频上的旧流。
+     *
+     * <p>拖动进度条会重新发起流请求；若全局槽位已被占满（其中可能包含该观看者
+     * 自己的旧 ffmpeg），先申请槽位会等待超时并返回 503，永远走不到后续的
+     * 「替换旧流」步骤。先终止旧流可立即释放其槽位。</p>
+     *
+     * @param requesterUserId 实际请求者，可为空
+     * @param ownerUserId 目录所有者，仅在请求者为空时兜底
+     * @param videoItemId 视频条目 ID
+     */
+    public void terminateActiveStreamForRequester(
+            UUID requesterUserId, UUID ownerUserId, UUID videoItemId) {
+        UUID viewerUserId = requesterUserId != null ? requesterUserId : ownerUserId;
+        terminateActiveStream(streamKey(viewerUserId, videoItemId));
+    }
+
     public VideoStreamService(
             MediaVideoItemRepository videoItemRepository,
             VideoSourceInputResolver sourceInputResolver,

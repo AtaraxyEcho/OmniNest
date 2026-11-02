@@ -71,9 +71,39 @@ class MediaProbeServiceTest {
     }
 
     @Test
+    void streamDurationNaKeepParsedDimensions() {
+        String json = """
+                {
+                  "streams": [
+                    {"codec_type": "video", "width": 1920, "height": 1080, "duration": "N/A"}
+                  ],
+                  "format": {"duration": "N/A"}
+                }
+                """;
+        FileMediaInfoDto info = service.parseProbeJson(json);
+        assertThat(info.durationSeconds()).isNull();
+        assertThat(info.width()).isEqualTo(1920);
+        assertThat(info.height()).isEqualTo(1080);
+    }
+
+    @Test
+    void failedProbeIsNotCached() {
+        AtomicReference<Integer> attempts = new AtomicReference<>(0);
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            attempts.updateAndGet(value -> value + 1);
+            throw new IOException("ffprobe 超时");
+        }, new TestTempStagingPort());
+
+        assertThat(probing.probe("transient-failure", PROBE_INPUT).isEmpty()).isTrue();
+        assertThat(probing.probe("transient-failure", PROBE_INPUT).isEmpty()).isTrue();
+
+        assertThat(attempts.get()).isEqualTo(2);
+    }
+
+    @Test
     void probeCommandAsksFfprobeForJsonAndCarriesLocalInput() throws Exception {
         AtomicReference<List<String>> command = new AtomicReference<>();
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             command.set(args);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
@@ -95,7 +125,7 @@ class MediaProbeServiceTest {
     @Test
     void probeInputNeverBecomesAnAddress() throws Exception {
         AtomicReference<List<String>> command = new AtomicReference<>();
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             command.set(args);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
@@ -111,7 +141,7 @@ class MediaProbeServiceTest {
     @Test
     void probeReadsOutputFromRedirectedFileAndDeletesItAfterwards() throws Exception {
         AtomicReference<Path> outputFile = new AtomicReference<>();
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             outputFile.set(file);
             Files.writeString(file, PROBE_JSON);
             return new FakeProcess(true, false, 0);
@@ -127,7 +157,7 @@ class MediaProbeServiceTest {
     void probeBoundsRetainedOutputAtConfiguredLimit() throws Exception {
         byte[] output = new byte[MediaProbeService.MAX_OUTPUT_BYTES + 4096];
         Arrays.fill(output, (byte) 'a');
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             Files.write(file, output);
             return new FakeProcess(true, false, 0);
         }, new TestTempStagingPort());
@@ -140,7 +170,7 @@ class MediaProbeServiceTest {
     @Test
     void hungProcessIsKilledAndReportedAsTimeout() throws Exception {
         FakeProcess process = new FakeProcess(false, false, 0);
-        MediaProbeService probing = new MediaProbeService((args, file) -> process, new TestTempStagingPort());
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> process, new TestTempStagingPort());
 
         assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
                 .isInstanceOf(IOException.class)
@@ -150,7 +180,7 @@ class MediaProbeServiceTest {
 
     @Test
     void probeFailureWithoutInterruptKeepsThreadInterruptFlagClear() {
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             throw new IOException("ffprobe 未安装");
         }, new TestTempStagingPort());
 
@@ -161,7 +191,7 @@ class MediaProbeServiceTest {
     @Test
     void outputTempFileIsDeletedWhenProcessCannotStart() throws Exception {
         AtomicReference<Path> outputFile = new AtomicReference<>();
-        MediaProbeService probing = new MediaProbeService((args, file) -> {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
             outputFile.set(file);
             throw new IOException("ffprobe 未安装");
         }, new TestTempStagingPort());
@@ -173,7 +203,7 @@ class MediaProbeServiceTest {
 
     @Test
     void interruptWhileWaitingIsPropagatedToCallerFlag() {
-        MediaProbeService probing = new MediaProbeService(
+        MediaProbeService probing = MediaProbeService.forTesting(
                 (args, file) -> new FakeProcess(true, true, 0), new TestTempStagingPort());
 
         try {

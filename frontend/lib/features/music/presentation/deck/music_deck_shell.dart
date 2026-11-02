@@ -760,7 +760,7 @@ class _MobileSettingsFab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return SizedBox.square(
-      dimension: 46,
+      dimension: 48,
       child: Tooltip(
         message: l10n.musicPlaybackSettings,
         child: IconButton(

@@ -24,6 +24,9 @@ import javax.imageio.stream.MemoryCacheImageInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
+import net.coobird.thumbnailator.util.exif.ExifFilterUtils;
+import net.coobird.thumbnailator.util.exif.ExifUtils;
+import net.coobird.thumbnailator.util.exif.Orientation;
 import org.springframework.stereotype.Service;
 
 /**
@@ -249,6 +252,9 @@ public class PhotoAiService {
                     while (Math.max(width, height) / step > OCR_DOWNSAMPLE_MAX_SIDE) {
                         step++;
                     }
+                    // 手机竖拍照片的方向只记录在 EXIF 中：传入已解码的 BufferedImage 后
+                    // Thumbnailator 无法再读取方向，必须在导出前显式应用旋转/镜像滤镜。
+                    Orientation orientation = readExifOrientation(reader, fileId);
                     ImageReadParam param = reader.getDefaultReadParam();
                     if (step > 1) {
                         // 解码阶段直接抽样：避免先在堆内展开全尺寸 BufferedImage 再缩放。
@@ -256,11 +262,14 @@ public class PhotoAiService {
                     }
                     BufferedImage sampled = reader.read(0, param);
                     ByteArrayOutputStream output = new ByteArrayOutputStream(512 * 1024);
-                    Thumbnails.of(sampled)
+                    var builder = Thumbnails.of(sampled)
                             .scale(1)
                             .outputFormat("jpg")
-                            .outputQuality(OCR_DOWNSAMPLE_QUALITY)
-                            .toOutputStream(output);
+                            .outputQuality(OCR_DOWNSAMPLE_QUALITY);
+                    if (orientation != null && orientation != Orientation.TOP_LEFT) {
+                        builder.addFilter(ExifFilterUtils.getFilterForOrientation(orientation));
+                    }
+                    builder.toOutputStream(output);
                     return output.toByteArray();
                 } finally {
                     reader.dispose();
@@ -270,6 +279,17 @@ public class PhotoAiService {
             throw exception;
         } catch (IOException exception) {
             throw new IllegalStateException("照片分析图像下采样失败", exception);
+        }
+    }
+
+    private Orientation readExifOrientation(ImageReader reader, UUID fileId) {
+        try {
+            return ExifUtils.getExifOrientation(reader, 0);
+        } catch (Exception exception) {
+            // EXIF 缺失或损坏时按原方向处理，不能因方向元数据阻断整条分析链路。
+            log.debug("读取照片 EXIF Orientation 忽略: fileId={}, errorType={}",
+                    fileId, exception.getClass().getSimpleName());
+            return null;
         }
     }
 

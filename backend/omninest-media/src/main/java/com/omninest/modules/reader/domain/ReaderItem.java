@@ -105,7 +105,7 @@ public class ReaderItem {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillCreatedFields() {

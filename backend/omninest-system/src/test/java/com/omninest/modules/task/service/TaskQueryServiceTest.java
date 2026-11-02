@@ -88,7 +88,7 @@ class TaskQueryServiceTest {
         record.setMaxRetries(3);
         record.setCreatedAt(Instant.now());
         record.setUpdatedAt(Instant.now());
-        record.setVersion(0);
+        record.setVersion(0L);
         return record;
     }
 

@@ -36,7 +36,15 @@ class _CachedShareSession {
 
 abstract class FileApiBase {
   FileApiBase(this.apiClient, {Dio? uploadDio})
-    : _uploadDio = uploadDio ?? Dio();
+    : _uploadDio =
+          uploadDio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 15),
+              sendTimeout: const Duration(minutes: 5),
+              receiveTimeout: const Duration(seconds: 30),
+            ),
+          );
 
   static const String _binaryContentType = 'application/octet-stream';
   static const int _textPreviewMaxBytes =

@@ -88,7 +88,7 @@ class MobileEnvInlineIconButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
           child: SizedBox.square(
-            dimension: 38,
+            dimension: 48,
             child: Icon(icon, size: iconSize, color: context.env.inkMuted),
           ),
         ),

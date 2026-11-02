@@ -641,14 +641,16 @@ class AuthServiceTest {
                     "2fa-token", "000000", "web", null, null, "127.0.0.1", "test"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("两步验证码错误");
-            verify(rateLimitService, never())
-                    .tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), anyInt(), any(Duration.class));
+            // 校验验证码前先占用挑战令牌，输错后归还，后续仍可重试同一挑战。
+            verify(rateLimitService)
+                    .tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), eq(1), any(Duration.class));
+            verify(rateLimitService).release("omninest:2fa:challenge:challenge-jti");
 
             var token = service.completeTwoFactorLogin(
                     "2fa-token", "123456", "web", null, null, "127.0.0.1", "test");
 
             assertThat(token.accessToken()).isEqualTo("access-token");
-            verify(rateLimitService)
+            verify(rateLimitService, times(2))
                     .tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), eq(1), any(Duration.class));
         }
 
@@ -670,6 +672,9 @@ class AuthServiceTest {
                     "2fa-token", "654321", "web", null, null, "127.0.0.1", "test"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("已使用");
+            // 重放已消费的挑战必须在进入 verifyCode 前被拦截，不能先消耗备份码。
+            verify(twoFactorService, never()).verifyCode(user.getId(), "654321");
+            verify(twoFactorService, times(1)).verifyCode(user.getId(), "123456");
         }
 
         @Test

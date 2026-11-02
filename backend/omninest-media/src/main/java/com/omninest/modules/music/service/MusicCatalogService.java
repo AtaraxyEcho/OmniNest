@@ -59,7 +59,8 @@ public class MusicCatalogService {
             String musicBrainzReleaseGroupId,
             Map<String, Object> providerMetadata
     ) {
-        Optional<MusicAlbum> existingAlbum = findAlbum(ownerUserId, musicBrainzReleaseId, musicBrainzReleaseGroupId, albumTitle);
+        Optional<MusicAlbum> existingAlbum = findAlbum(
+                ownerUserId, musicBrainzReleaseId, musicBrainzReleaseGroupId, albumTitle, artistName);
         MusicAlbum album = existingAlbum.orElseGet(() -> {
             log.debug("解析专辑（新建）");
             return new MusicAlbum();
@@ -128,7 +129,9 @@ public class MusicCatalogService {
             Map<String, Object> providerMetadata,
             Map<String, MusicAlbum> cache
     ) {
-        String cacheKey = ownerUserId + "|" + (albumTitle == null ? "" : albumTitle.trim().toLowerCase());
+        String cacheKey = ownerUserId + "|"
+                + (artistName == null ? "" : artistName.trim().toLowerCase())
+                + "|" + (albumTitle == null ? "" : albumTitle.trim().toLowerCase());
         if (cache.containsKey(cacheKey)) {
             return cache.get(cacheKey);
         }
@@ -143,11 +146,12 @@ public class MusicCatalogService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void refreshStatisticsBatch(UUID ownerUserId, Set<UUID> artistIds, Set<UUID> albumIds) {
-        for (UUID artistId : artistIds) {
-            refreshArtist(ownerUserId, artistId);
+        // 批量更新收敛为两条 SQL：逐条 find/count/sum/save 在整库扫描时会产生 4N 次往返。
+        if (artistIds != null && !artistIds.isEmpty()) {
+            artistRepository.refreshStatisticsBatch(ownerUserId, artistIds);
         }
-        for (UUID albumId : albumIds) {
-            refreshAlbum(ownerUserId, albumId);
+        if (albumIds != null && !albumIds.isEmpty()) {
+            albumRepository.refreshStatisticsBatch(ownerUserId, albumIds);
         }
     }
 
@@ -171,7 +175,8 @@ public class MusicCatalogService {
             UUID ownerUserId,
             String musicBrainzReleaseId,
             String musicBrainzReleaseGroupId,
-            String albumTitle
+            String albumTitle,
+            String artistName
     ) {
         if (hasText(musicBrainzReleaseId)) {
             Optional<MusicAlbum> album = albumRepository.findByOwnerUserIdAndMusicBrainzReleaseId(
@@ -192,7 +197,13 @@ public class MusicCatalogService {
             }
         }
         if (hasText(albumTitle)) {
-            return albumRepository.findByOwnerUserIdAndTitleIgnoreCase(ownerUserId, albumTitle.trim());
+            // 专辑身份包含艺术家：同名专辑在两位歌手之间必须隔离，不能回退到
+            // 单值 findByName 查询（多行会抛 IncorrectResultSizeDataAccessException）。
+            return hasText(artistName)
+                    ? albumRepository.findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCase(
+                            ownerUserId, albumTitle.trim(), artistName.trim())
+                    : albumRepository.findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNull(
+                            ownerUserId, albumTitle.trim());
         }
         return Optional.empty();
     }

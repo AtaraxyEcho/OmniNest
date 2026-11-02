@@ -62,7 +62,8 @@ Future<void> _registerDeepLinkProtocol() async {
 /// Windows 注册 omninest:// 协议到当前用户注册表（无需管理员）。
 Future<void> _registerWindowsProtocol() async {
   final exe = Platform.resolvedExecutable;
-  final command = '"$exe" "%1"';
+  // -- 终止选项解析：主题或深链参数以 -- 开头时不会被引擎当成启动开关。
+  final command = '"$exe" -- "%1"';
   await Process.run('reg', [
     'add',
     r'HKCU\Software\Classes\omninest',
@@ -97,11 +98,11 @@ Future<void> _registerLinuxProtocol() async {
     return;
   }
   final appDir = Directory('$home/.local/share/applications');
-  if (!appDir.existsSync()) {
-    appDir.createSync(recursive: true);
+  if (!await appDir.exists()) {
+    await appDir.create(recursive: true);
   }
   final desktopFile = File('${appDir.path}/omninest.desktop');
-  desktopFile.writeAsStringSync(
+  await desktopFile.writeAsString(
     buildLinuxDesktopEntry(Platform.resolvedExecutable),
   );
   await Process.run('xdg-mime', [

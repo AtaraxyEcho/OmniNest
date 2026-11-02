@@ -337,6 +337,10 @@ public class FileShareAccessService {
         if (link.getExpiresAt() != null && Instant.now().isAfter(link.getExpiresAt())) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接已过期");
         }
+        // 定向分享与公开分享共用同一个访问次数上限：达到上限后受让人也不能继续浏览。
+        if (link.getMaxAccessCount() != null && link.getAccessCount() >= link.getMaxAccessCount()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "分享链接访问次数已达上限");
+        }
         return childrenOfShareLink(link, parentId, page, size);
     }
 

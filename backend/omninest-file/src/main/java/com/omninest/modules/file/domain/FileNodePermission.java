@@ -49,7 +49,7 @@ public class FileNodePermission {
     private Instant updatedAt;
 
     @Version
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillCreatedFields() {

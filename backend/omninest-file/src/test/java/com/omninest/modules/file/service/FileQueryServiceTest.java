@@ -332,7 +332,7 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
                 .thenReturn(Optional.of(folder));
         when(fileNodeRepository.findVisibleSubtreeCategoryPage(
-                eq(OWNER_ID), eq("/Media/"), eq("video"),
+                eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("/Media/"), eq("video"),
                 ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(clip)));
 

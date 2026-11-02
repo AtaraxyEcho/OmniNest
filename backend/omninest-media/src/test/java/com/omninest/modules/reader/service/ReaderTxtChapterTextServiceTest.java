@@ -601,6 +601,7 @@ class ReaderTxtChapterTextServiceTest {
     private ReaderTextChapter chapter(int index, long start, long end) {
         ReaderTextChapter chapter = new ReaderTextChapter();
         chapter.setId(UUID.randomUUID());
+        chapter.setVersion(0L);
         chapter.setReaderItemId(ITEM_ID);
         chapter.setChapterIndex(index);
         chapter.setChapterKey("chapter_" + index);
@@ -620,6 +621,7 @@ class ReaderTxtChapterTextServiceTest {
     private ReaderTextChapter derivedChapter(ReaderTextParser.TextChapterDraft draft) {
         ReaderTextChapter chapter = new ReaderTextChapter();
         chapter.setId(UUID.randomUUID());
+        chapter.setVersion(0L);
         chapter.setReaderItemId(ITEM_ID);
         chapter.setChapterIndex(draft.chapterIndex());
         chapter.setChapterKey(draft.chapterKey());

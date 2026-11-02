@@ -44,7 +44,7 @@ public class PhotoTag {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     @PrePersist
     void prePersist() {

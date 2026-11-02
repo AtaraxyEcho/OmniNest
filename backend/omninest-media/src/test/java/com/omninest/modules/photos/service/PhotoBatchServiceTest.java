@@ -119,7 +119,7 @@ class PhotoBatchServiceTest {
         // 桩模拟 Hibernate merge 行为；修复前返回值被丢弃，收尾保存仍带旧版本。
         when(batchTaskRepository.save(any(PhotoBatchTask.class))).thenAnswer(invocation -> {
             PhotoBatchTask saved = invocation.getArgument(0);
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         });
         // 执行入口会先把 ID 收敛到"仍归当前用户且未删除"的照片（见 retainOwnedActive）。
@@ -141,7 +141,7 @@ class PhotoBatchServiceTest {
     void createBatchTaskEnqueuesThroughOutbox() {
         when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
             PhotoBatchTask saved = invocation.getArgument(0);
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         });
 
@@ -177,7 +177,7 @@ class PhotoBatchServiceTest {
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
         when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
             PhotoBatchTask saved = invocation.getArgument(0);
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         });
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID)))
@@ -216,7 +216,7 @@ class PhotoBatchServiceTest {
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
         when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
             PhotoBatchTask saved = invocation.getArgument(0);
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         });
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID)))
@@ -289,7 +289,7 @@ class PhotoBatchServiceTest {
             PhotoBatchTask saved = invocation.getArgument(0);
             savedVersions.add(saved.getVersion());
             // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         }).when(batchTaskRepository).save(any(PhotoBatchTask.class));
         stubDownloadArchiveSource(photo());
@@ -487,6 +487,7 @@ class PhotoBatchServiceTest {
     private PhotoBatchTask downloadTask() {
         PhotoBatchTask task = new PhotoBatchTask();
         task.setId(TASK_ID);
+        task.setVersion(0L);
         task.setTaskId(TASK_ID);
         task.setOwnerUserId(OWNER_ID);
         task.setTaskType("DOWNLOAD");

@@ -186,7 +186,8 @@ class RetryInterceptor extends Interceptor {
   bool _isRetrySafe(RequestOptions options) {
     // FormData 发送一次后即 finalized，二次发送会抛 StateError（Error 而非
     // Exception，会穿透 on Exception 导致未捕获崩溃）。
-    if (options.data is FormData) {
+    if (options.data is FormData || options.data is Stream) {
+      // 单次订阅流与 FormData 同样不可重放：第二次监听会抛 StateError。
       return false;
     }
     if (_isIdempotent(options.method)) {

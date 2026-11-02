@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -95,12 +96,14 @@ public class ReaderCoverExtractionService {
             log.info("自动提取阅读封面完成: itemId={}, overwrite={}", itemId, overwrite);
             return true;
         } catch (RuntimeException exception) {
-            if (coverFileId != null) {
+            // 同一路径的派生存储会原地复用同一个 FileNode：新封面落库失败时该 ID
+            // 可能仍是条目正在使用的旧封面，删除等于把既有封面清空。
+            if (coverFileId != null && !Objects.equals(coverFileId, previousCoverFileId)) {
                 derivedAssetStorageService.deleteOwned(item.getOwnerUserId(), coverFileId);
             }
             throw exception;
         } catch (IOException exception) {
-            if (coverFileId != null) {
+            if (coverFileId != null && !Objects.equals(coverFileId, previousCoverFileId)) {
                 derivedAssetStorageService.deleteOwned(item.getOwnerUserId(), coverFileId);
             }
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "封面图片保存失败");

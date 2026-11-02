@@ -367,7 +367,12 @@ Future<void> _showCollectionItems(
                         child: Text(
                           AppLocalizations.of(
                             dialogContext,
-                          ).videoLoadFailedWith(e.toString()),
+                          ).videoLoadFailedWith(
+                            movieErrorMessage(
+                              e,
+                              AppLocalizations.of(dialogContext),
+                            ),
+                          ),
                         ),
                       ),
                 );

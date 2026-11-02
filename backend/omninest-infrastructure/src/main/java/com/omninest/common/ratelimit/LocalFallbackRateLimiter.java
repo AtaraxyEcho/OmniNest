@@ -82,6 +82,19 @@ public final class LocalFallbackRateLimiter {
         return counter.count.incrementAndGet() <= limit;
     }
 
+    /**
+     * 删除本地窗口计数，归还一次性凭证占位。
+     *
+     * @param key 限流键
+     */
+    static void release(String key) {
+        if (key == null) {
+            return;
+        }
+        SHORT_WINDOW_COUNTERS.invalidate(key);
+        LONG_WINDOW_COUNTERS.invalidate(key);
+    }
+
     private static final class WindowCounter {
         private final long windowNanos;
         private final AtomicInteger count = new AtomicInteger();

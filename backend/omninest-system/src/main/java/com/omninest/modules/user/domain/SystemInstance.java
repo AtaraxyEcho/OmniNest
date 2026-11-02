@@ -63,7 +63,7 @@ public class SystemInstance {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     /**
      * 将系统实例标记为安装完成。

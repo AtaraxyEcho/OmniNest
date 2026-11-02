@@ -96,7 +96,7 @@ public class BackdropAsset {
     /** 乐观锁版本号。 */
     @Version
     @Column(name = "version", nullable = false)
-    private long version;
+    private Long version;
 
     /** 创建时间。 */
     @Column(name = "created_at", nullable = false)

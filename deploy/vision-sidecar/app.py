@@ -22,7 +22,7 @@ import numpy as np
 import onnxruntime as ort
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
-from PIL import Image
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 from rapidocr_onnxruntime import RapidOCR
 
@@ -415,6 +415,11 @@ def _require_sidecar_auth(
     timestamp: Annotated[str | None, Header(alias=SIDECAR_TIMESTAMP_HEADER)] = None,
     signature: Annotated[str | None, Header(alias=SIDECAR_SIGNATURE_HEADER)] = None,
 ) -> None:
+    # 中间件在进入推理槽前已校验一次；高负载排队接近时钟窗口上限后，路由依赖
+    # 会再次执行本函数。同一请求只校验一次，避免合法请求排队后被时间戳误拒。
+    request_state = getattr(request, "state", None)
+    if request_state is not None and getattr(request_state, "sidecar_auth_verified", False):
+        return
     if not SIDECAR_SECRET:
         raise HTTPException(status_code=503, detail="AI sidecar authentication is not configured")
     if timestamp is None or signature is None:
@@ -435,6 +440,8 @@ def _require_sidecar_auth(
             status_code=401,
             detail=f"Unauthorized (signature protocol {SIGNATURE_PROTOCOL})",
         )
+    if request_state is not None:
+        request_state.sidecar_auth_verified = True
 
 
 async def _read_image_bytes(image: UploadFile) -> bytes:
@@ -453,8 +460,8 @@ async def _read_image_bytes(image: UploadFile) -> bytes:
 
 def _decode_single_pass_bgr(raw_bytes: bytes) -> np.ndarray:
     try:
-        with Image.open(io.BytesIO(raw_bytes)) as decoded:
-            width, height = decoded.size
+        with Image.open(io.BytesIO(raw_bytes)) as raw_image:
+            width, height = raw_image.size
             if (
                 width <= 0
                 or height <= 0
@@ -465,14 +472,21 @@ def _decode_single_pass_bgr(raw_bytes: bytes) -> np.ndarray:
                 raise HTTPException(status_code=413, detail="Image dimensions exceed limit")
             # JPEG 可先按目标尺寸解码；其余格式由 thumbnail 在解码后缩小。
             # 两者都不放大，小图保持原尺寸，避免无谓插值。
-            decoded.draft("RGB", (DECODE_MAX_SIDE, DECODE_MAX_SIDE))
-            if decoded.width > DECODE_MAX_SIDE or decoded.height > DECODE_MAX_SIDE:
-                decoded.thumbnail(
-                    (DECODE_MAX_SIDE, DECODE_MAX_SIDE),
-                    Image.Resampling.LANCZOS,
-                )
-            rgb = decoded.convert("RGB")
-            return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
+            raw_image.draft("RGB", (DECODE_MAX_SIDE, DECODE_MAX_SIDE))
+            # 手机竖拍照片以横置传感器像素存储，靠 EXIF Orientation 标记显示方向；
+            # 不校正会让 OCR 与视觉模型拿到旋转后的构图。
+            decoded = ImageOps.exif_transpose(raw_image)
+            try:
+                if decoded.width > DECODE_MAX_SIDE or decoded.height > DECODE_MAX_SIDE:
+                    decoded.thumbnail(
+                        (DECODE_MAX_SIDE, DECODE_MAX_SIDE),
+                        Image.Resampling.LANCZOS,
+                    )
+                rgb = decoded.convert("RGB")
+                return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
+            finally:
+                if decoded is not raw_image:
+                    decoded.close()
     except HTTPException:
         raise
     except Image.DecompressionBombError as exception:

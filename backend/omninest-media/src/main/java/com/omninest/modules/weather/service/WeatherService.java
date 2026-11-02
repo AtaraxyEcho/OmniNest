@@ -235,7 +235,8 @@ public class WeatherService {
                                     : effectiveDisplayName);
                     // 外部接口返回非 200 业务码时 aggregateWeather 返回空对象；
                     // 把空结果写缓存会让一次瞬时故障在整个 TTL 内都表现为"无天气"。
-                    if (!result.equals(WeatherDto.empty())) {
+                    // 7 日预报子请求超时降级时也跳过缓存：残缺温度不应锁定整个 TTL。
+                    if (!result.equals(WeatherDto.empty()) && !result.daily().isEmpty()) {
                         weatherCacheStore.saveWeather(requestKey, result);
                     }
                     return result;
@@ -595,8 +596,9 @@ public class WeatherService {
             hourlyForecasts = parseHourlyForecasts(weather24h.path("hourly"));
         }
 
+        double currentTemp = now.path("temp").asDouble();
         return new WeatherDto(
-            now.path("temp").asDouble(), now.path("feelsLike").asDouble(),
+            currentTemp, now.path("feelsLike").asDouble(),
             now.path("text").asString(null), now.path("icon").asString(null),
             valueWithUnit(now, "humidity", "%"), valueWithUnit(now, "windSpeed", " km/h"),
             now.path("windDir").asString(null), valueWithUnit(now, "pressure", " hPa"),
@@ -609,8 +611,9 @@ public class WeatherService {
             air != null ? getStringSafe(air, "category", "--") : "--",
             weatherNow.path("updateTime").asString(null),
             air != null ? getStringSafe(air, "advice", "") : "",
-            today != null ? today.path("tempMax").asDouble() : 0.0,
-            today != null ? today.path("tempMin").asDouble() : 0.0,
+            // 7 日预报降级时用当前实测温度兜底，不能把最高/最低温显示成 0.0°C。
+            today != null ? today.path("tempMax").asDouble() : currentTemp,
+            today != null ? today.path("tempMin").asDouble() : currentTemp,
             valueWithUnit(now, "precip", " mm"),
             getStringSafe(now, "windScale", "--"),
             today != null ? getStringSafe(today, "textDay", "--") : "--",

@@ -342,7 +342,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     }
     setState(() => _lyricsSearching = false);
     if (failure != null) {
-      _setStatus(l10n.musicSaveFailed(failure.toString()), error: true);
+      final friendly =
+          describeUserFacingError(failure, l10n: l10n).displayMessage;
+      _setStatus(l10n.musicSaveFailed(friendly), error: true);
       return;
     }
     final lyrics = result?.bestLyrics;

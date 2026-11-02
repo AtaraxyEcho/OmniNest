@@ -82,6 +82,8 @@ class UserSessionRevocationServiceTest {
         Mockito.verify(activeSessionRepository)
                 .revokeByUserIdExcluding(USER_ID, keptSessionId, "PASSWORD_CHANGED");
         Mockito.verify(sessionRevocationService).recordRevocations(USER_ID, List.of(revokedSessionId));
+        Mockito.verify(sessionRevocationService).invalidateAccessTokensBefore(
+                Mockito.eq(USER_ID), Mockito.any());
     }
 
     @Test
@@ -98,5 +100,8 @@ class UserSessionRevocationServiceTest {
         Mockito.verify(activeSessionRepository, Mockito.never())
                 .revokeByUserIdExcluding(Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.verify(sessionRevocationService, Mockito.never()).recordRevocations(Mockito.any(), Mockito.anyList());
+        // 即使没有其它会话要撤销，保留会话的权限变更仍要推进访问令牌截止时间。
+        Mockito.verify(sessionRevocationService).invalidateAccessTokensBefore(
+                Mockito.eq(USER_ID), Mockito.any());
     }
 }

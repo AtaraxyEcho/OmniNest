@@ -76,6 +76,8 @@ public class DerivedAssetStorageService {
     /** 复用 HttpClient 实例，避免每次请求创建新连接池 */
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(DOWNLOAD_TIMEOUT)
+            // 重定向在 download 内手动逐跳校验；客户端自动跟随会绕过对跳转后地址的 SSRF 检查。
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     private final ObjectStorageBuckets objectStorageBuckets;
@@ -172,7 +174,8 @@ public class DerivedAssetStorageService {
             String fileName
     ) {
         String path = normalizedPath(resourceType, resourceId, assetType, fileName);
-        return fileNodeRepository.findActivePath(ownerUserId, path)
+        // 现有派生资产写入均为个人空间；带上 spaceType 防止同路径的共享节点造成多行命中。
+        return fileNodeRepository.findActivePath(ownerUserId, SpaceType.PERSONAL, path)
                 .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType())
                         && node.getCurrentObjectId() != null)
                 .map(FileNode::getId);
@@ -261,7 +264,7 @@ public class DerivedAssetStorageService {
         TransactionTemplate readOnly = newTransaction();
         readOnly.setReadOnly(true);
         ObjectStorageKey key = readOnly.execute(status ->
-                fileNodeRepository.findActivePath(ownerUserId, path)
+                fileNodeRepository.findActivePath(ownerUserId, SpaceType.PERSONAL, path)
                         .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType()))
                         .map(FileNode::getCurrentObjectId)
                         .flatMap(fileObjectRepository::findById)
@@ -491,12 +494,18 @@ public class DerivedAssetStorageService {
         if (sizeBytes <= 0 || sizeBytes > maxBytes) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源大小超出限制");
         }
+        // 对象上传与全文件摘要都在数据库事务之外完成：完整内容产物可达数十 GB，
+        // 放在事务里会在整个网络传输与磁盘摘要期间独占连接与行锁。
+        String objectSha256 = sha256(normalizedSource);
+        String shortHash = objectSha256.length() >= 12 ? objectSha256.substring(0, 12) : objectSha256;
+        // 对象键纳入内容摘要：覆盖同一逻辑路径的派生资产时新旧物理对象隔离，
+        // 落库失败只可能回收本次写入，不会删掉旧 FileObject 仍在引用的对象。
         String objectKey = "derived/"
                 + ownerUserId + "/"
                 + segment(resourceType) + "/"
                 + resourceId + "/"
                 + segment(assetType) + "/"
-                + safeFileName(storageFileName);
+                + shortHash + "_" + safeFileName(storageFileName);
         String bucketName = objectStorageBuckets.derivedAssets();
         ObjectStorageKey finalKey = new ObjectStorageKey(bucketName, objectKey);
         ObjectStorageKey stagingKey = new ObjectStorageKey(
@@ -504,10 +513,10 @@ public class DerivedAssetStorageService {
                 "derived-staging/" + ownerUserId + "/" + UUID.randomUUID() + "/" + safeFileName(storageFileName)
         );
         String normalizedPath = normalizedPath(resourceType, resourceId, assetType, fileName);
-        requireTargetWritable(ownerUserId, normalizedPath);
-        // 对象上传与全文件摘要都在数据库事务之外完成：完整内容产物可达数十 GB，
-        // 放在事务里会在整个网络传输与磁盘摘要期间独占连接与行锁。
-        String objectSha256 = sha256(normalizedSource);
+        requireTargetWritable(ownerUserId, spaceType, normalizedPath);
+        boolean existedBefore = fileObjectRepository
+                .findByBucketNameAndObjectKey(bucketName, objectKey)
+                .isPresent();
         try {
             objectStorageClient.putObject(stagingKey, normalizedSource, mimeType);
             // 跨桶复制在事务外完成：大体积转码产物复制可达数十秒，放进 REQUIRES_NEW
@@ -515,13 +524,17 @@ public class DerivedAssetStorageService {
             objectStorageClient.copyObject(stagingKey, finalKey);
             try {
                 return storeInNewTransactionWithRetry(() -> {
-                    requireTargetWritable(ownerUserId, normalizedPath);
+                    requireTargetWritable(ownerUserId, spaceType, normalizedPath);
                     return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
                             bucketName, objectKey, normalizedPath, sizeBytes, objectSha256);
                 });
             } catch (RuntimeException exception) {
-                // 元数据未提交时 finalKey 无人引用，必须回收，否则每次失败都留一个孤儿。
-                removeStagingObject(finalKey);
+                // 只回收本次新建的对象键；同键已存在说明它可能被旧 FileObject 引用，
+                // 删除会把仍然有效的派生资产变成悬空引用。残留的未引用对象由
+                // DerivedAssetOrphanScanner 按年龄兜底清理。
+                if (!existedBefore) {
+                    removeStagingObject(finalKey);
+                }
                 throw exception;
             }
         } finally {
@@ -546,7 +559,7 @@ public class DerivedAssetStorageService {
         FileObject savedObject = fileObjectRepository.save(object);
 
         FileNode node = fileNodeRepository
-                .findActivePath(ownerUserId, normalizedPath)
+                .findActivePath(ownerUserId, spaceType, normalizedPath)
                 .orElseGet(FileNode::new);
         node.setOwnerUserId(ownerUserId);
         node.setParentId(null);
@@ -562,8 +575,8 @@ public class DerivedAssetStorageService {
         return fileNodeRepository.save(node).getId();
     }
 
-    private void requireTargetWritable(UUID ownerUserId, String normalizedPath) {
-        fileNodeRepository.findActivePath(ownerUserId, normalizedPath).ifPresent(node -> {
+    private void requireTargetWritable(UUID ownerUserId, SpaceType spaceType, String normalizedPath) {
+        fileNodeRepository.findActivePath(ownerUserId, spaceType, normalizedPath).ifPresent(node -> {
             if (node.getPurgeState() != null && node.getPurgeState() != FilePurgeState.NONE) {
                 throw new BusinessException(ErrorCode.FILE_LIFECYCLE_CONFLICT, "派生资源正在永久删除");
             }

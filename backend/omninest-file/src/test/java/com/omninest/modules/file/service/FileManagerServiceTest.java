@@ -848,7 +848,7 @@ class FileManagerServiceTest {
         var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, null);
 
         assertThat(result.name()).isEqualTo("report.pdf");
-        verify(fileNodeRepository).save(any(FileNode.class));
+        verify(fileNodeRepository).saveAll(any());
     }
 
     @Test
@@ -878,8 +878,10 @@ class FileManagerServiceTest {
         assertThat(result.name()).isEqualTo("report (2).pdf");
         assertThat(result.normalizedPath()).isEqualTo("/report (2).pdf");
         // 序号插在扩展名之前，副本仍按原扩展名识别
-        verify(fileNodeRepository).save(argThat(copy -> "report (2).pdf".equals(copy.getName())
-                && OBJECT_ID.equals(copy.getCurrentObjectId())));
+        assertThat(savedCopies()).anySatisfy(copy -> {
+            assertThat(copy.getName()).isEqualTo("report (2).pdf");
+            assertThat(copy.getCurrentObjectId()).isEqualTo(OBJECT_ID);
+        });
     }
 
     @Test
@@ -912,8 +914,19 @@ class FileManagerServiceTest {
         // 只有顶层副本改名；子节点落在新建的父目录下，不可能与兄弟冲突
         assertThat(result.name()).isEqualTo("Album (1)");
         assertThat(result.normalizedPath()).isEqualTo("/Album (1)");
-        verify(fileNodeRepository).save(argThat(copy -> "/Album (1)/inner.txt".equals(copy.getNormalizedPath())
-                && "inner.txt".equals(copy.getName())));
+        assertThat(savedCopies()).anySatisfy(copy -> {
+            assertThat(copy.getNormalizedPath()).isEqualTo("/Album (1)/inner.txt");
+            assertThat(copy.getName()).isEqualTo("inner.txt");
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<FileNode> savedCopies() {
+        ArgumentCaptor<Iterable<FileNode>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(fileNodeRepository).saveAll(captor.capture());
+        List<FileNode> copies = new ArrayList<>();
+        captor.getValue().forEach(copies::add);
+        return copies;
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -67,16 +68,20 @@ public class UserSessionRevocationService {
                 .map(AuthActiveSession::getId)
                 .filter(sessionId -> keepSessionId == null || !sessionId.equals(keepSessionId))
                 .toList();
-        if (sessionIds.isEmpty()) {
-            return;
+        Instant permissionCutoff = Instant.now();
+        if (!sessionIds.isEmpty()) {
+            if (keepSessionId == null) {
+                activeSessionRepository.revokeByUserIdIn(List.of(userId), reason);
+            } else {
+                activeSessionRepository.revokeByUserIdExcluding(userId, keepSessionId, reason);
+            }
+            sessionRevocationService.recordRevocations(userId, sessionIds);
         }
-        if (keepSessionId == null) {
-            activeSessionRepository.revokeByUserIdIn(List.of(userId), reason);
-        } else {
-            activeSessionRepository.revokeByUserIdExcluding(userId, keepSessionId, reason);
-        }
-        sessionRevocationService.recordRevocations(userId, sessionIds);
-        registerAfterCommit(Map.of(userId, sessionIds));
+        // 保留会话的权限变更不会撤销 sid，旧访问令牌仍携带变更前的高权限声明；
+        // 无论是否还有其它会话，都要把截止时间推进到本次变更之后。
+        registerAfterCommit(
+                sessionIds.isEmpty() ? Map.of() : Map.of(userId, sessionIds),
+                () -> sessionRevocationService.invalidateAccessTokensBefore(userId, permissionCutoff));
     }
 
     private void registerAfterCommit(Map<UUID, List<UUID>> sessionsByUser) {
@@ -88,6 +93,21 @@ public class UserSessionRevocationService {
             @Override
             public void afterCommit() {
                 writeBlacklist(sessionsByUser);
+            }
+        });
+    }
+
+    private void registerAfterCommit(Map<UUID, List<UUID>> sessionsByUser, Runnable afterCommitAction) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            writeBlacklist(sessionsByUser);
+            afterCommitAction.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                writeBlacklist(sessionsByUser);
+                afterCommitAction.run();
             }
         });
     }

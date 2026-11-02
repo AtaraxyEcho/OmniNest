@@ -513,7 +513,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
             ),
             _MetricCard(
               label: l10n.filesExternalStorage,
-              value: accounts.toSet().map((a) => a.provider).length.toString(),
+              value: accounts.map((a) => a.provider).toSet().length.toString(),
               detail: l10n.filesCurrentView,
               color: context.filesColors.onSurface,
             ),

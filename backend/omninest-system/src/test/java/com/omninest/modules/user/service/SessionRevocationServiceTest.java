@@ -1,9 +1,11 @@
 package com.omninest.modules.user.service;
 
+import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.SessionRevocationCache;
 import com.omninest.modules.user.domain.SessionRevocationEntity;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +25,7 @@ class SessionRevocationServiceTest {
     private SessionRevocationJpaRepository repository;
     private SessionRevocationCache cache;
     private SessionRevocationWriter writer;
+    private AuthenticationTokenPolicy authenticationTokenPolicy;
     private SessionRevocationService service;
 
     @BeforeEach
@@ -30,7 +33,32 @@ class SessionRevocationServiceTest {
         repository = Mockito.mock(SessionRevocationJpaRepository.class);
         cache = Mockito.mock(SessionRevocationCache.class);
         writer = Mockito.mock(SessionRevocationWriter.class);
-        service = new SessionRevocationService(repository, cache, writer);
+        authenticationTokenPolicy = Mockito.mock(AuthenticationTokenPolicy.class);
+        Mockito.when(authenticationTokenPolicy.accessTokenTtl()).thenReturn(Duration.ofMinutes(30));
+        service = new SessionRevocationService(repository, cache, writer, authenticationTokenPolicy);
+    }
+
+    @Test
+    void tokenIssuedBeforePermissionCutoffIsStale() {
+        UUID userId = UUID.randomUUID();
+        Instant cutoff = Instant.parse("2026-11-02T10:00:00Z");
+        Mockito.when(cache.accessTokenCutoff(userId)).thenReturn(Optional.of(cutoff));
+
+        Assertions.assertThat(service.isTokenStale(userId, cutoff.minusSeconds(1))).isTrue();
+        Assertions.assertThat(service.isTokenStale(userId, cutoff)).isFalse();
+        Assertions.assertThat(service.isTokenStale(userId, cutoff.plusSeconds(1))).isFalse();
+        Assertions.assertThat(service.isTokenStale(userId, null)).isTrue();
+    }
+
+    @Test
+    void invalidateAccessTokensUsesConfiguredAccessTokenTtl() {
+        UUID userId = UUID.randomUUID();
+        Instant cutoff = Instant.now();
+
+        service.invalidateAccessTokensBefore(userId, cutoff);
+
+        Mockito.verify(cache).markAccessTokenCutoff(
+                userId, cutoff, Duration.ofMinutes(30));
     }
 
     @Test

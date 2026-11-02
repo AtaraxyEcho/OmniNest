@@ -32,16 +32,21 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
     private final SessionRevocationChecker revocationChecker;
 
     /**
-     * 登出必须幂等：即使当前会话已被撤销，也要允许控制器清 Cookie 与吊销刷新令牌。
+     * 登出与刷新必须可通行：登出要幂等清 Cookie；刷新要能凭刷新令牌换掉
+     * 因权限变更而陈旧的访问令牌，否则切割旧令牌的检查会把恢复入口一起挡死。
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String servletPath = request.getServletPath();
-        if (servletPath != null && "/api/v1/auth/logout".equals(servletPath)) {
+        if (isCredentialRotationPath(servletPath)) {
             return true;
         }
-        String requestUri = request.getRequestURI();
-        return requestUri != null && requestUri.endsWith("/api/v1/auth/logout");
+        return isCredentialRotationPath(request.getRequestURI());
+    }
+
+    private boolean isCredentialRotationPath(String path) {
+        return path != null
+                && (path.endsWith("/api/v1/auth/logout") || path.endsWith("/api/v1/auth/refresh"));
     }
 
     @Override
@@ -62,6 +67,12 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
                 UUID sessionId = UUID.fromString(sid);
                 if (revocationChecker.isRevoked(userId, sessionId)) {
                     log.info("session revoked: userId={}, sessionId={}", userId, sessionId);
+                    writeRevokedResponse(response);
+                    return;
+                }
+                if (revocationChecker.isTokenStale(userId, jwt.getIssuedAt())) {
+                    log.info("access token stale after permission change: userId={}, sessionId={}",
+                            userId, sessionId);
                     writeRevokedResponse(response);
                     return;
                 }

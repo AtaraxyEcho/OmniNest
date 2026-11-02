@@ -79,6 +79,10 @@ public class MediaPublicContentController {
         // 转码开关与容器格式都可能快速失败：先校验再固定 media 响应头，
         // 否则 503/400 会以 video/mp4 的损坏流发给播放器。
         videoStreamService.requireStreamable(access.item());
+        // 先终止同一观看者的旧流：槽位满载且包含该观看者自己的旧 ffmpeg 时，
+        // 直接申请新槽位只会等待超时返回 503（拖动进度条自死锁）。
+        videoStreamService.terminateActiveStreamForRequester(
+                access.requesterUserId(), access.item().getOwnerUserId(), access.item().getId());
         // 并发槽位是唯一仍需等待的资源性检查，同样必须在响应提交前占好：
         // 满载时抛出 503，播放器可以重试而不是收到一段标记为 video/mp4 的空流。
         videoStreamService.acquireStreamSlot(access.item().getId());

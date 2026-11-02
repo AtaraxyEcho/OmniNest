@@ -63,6 +63,8 @@ public class FileManagerService {
      * {@code file_nodes.name} 列宽；副本追加序号时按它截短词干。
      */
     private static final int MAX_NAME_LENGTH = 255;
+    /** 单次同步复制的子树节点上限，与分享转存保持同一量级。 */
+    private static final int MAX_SYNC_COPY_NODES = 2_000;
 
     private final FileNodeRepository fileNodeRepository;
     private final FileAccessRecordRepository accessRecordRepository;
@@ -183,6 +185,10 @@ public class FileManagerService {
                     .toList());
         }
 
+        if (subtree.size() > MAX_SYNC_COPY_NODES) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "单次复制目录包含节点过多（上限 " + MAX_SYNC_COPY_NODES + " 个），请分批复制");
+        }
         long fileCount = subtree.stream()
                 .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
                 .count();
@@ -192,25 +198,26 @@ public class FileManagerService {
                 .sum();
         chargeQuotaForCopy(userId, source.getSpaceType(), totalBytes, fileCount);
 
-        Map<UUID, FileNode> parentById = new HashMap<>();
-        parentById.put(source.getId(), null);
-        List<UUID> copiedIds = new ArrayList<>(subtree.size());
+        Map<UUID, FileNode> copyById = new HashMap<>();
+        List<FileNode> copies = new ArrayList<>(subtree.size());
         FileNode copiedRoot = null;
         for (FileNode node : subtree) {
-            FileNode newParent = node == source ? targetParent : parentById.get(node.getParentId());
+            FileNode newParent = node == source ? targetParent : copyById.get(node.getParentId());
             if (node != source && newParent == null) {
                 // 祖先被回收站或跨空间过滤掉时整条分支一并跳过，避免生成挂空父级的孤儿节点
                 continue;
             }
             FileNode copy = copyNodeShape(node, userId, newParent, source.getSpaceType(),
                     node == source ? copyName : node.getName());
-            FileNode saved = fileNodeRepository.save(copy);
             if (node == source) {
-                copiedRoot = saved;
+                copiedRoot = copy;
             }
-            parentById.put(node.getId(), saved);
-            copiedIds.add(saved.getId());
+            copyById.put(node.getId(), copy);
+            copies.add(copy);
         }
+        // 预生成主键后整棵子树一次 saveAll：逐节点 save 会为每行单独 flush。
+        fileNodeRepository.saveAll(copies);
+        List<UUID> copiedIds = copies.stream().map(FileNode::getId).toList();
         fileIndexSyncService.scheduleAfterCommit(userId, copiedIds);
         recordFileEvent(userId, copiedRoot.getId(), SyncAction.CREATED);
         log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}, 复制节点数={}",
@@ -230,6 +237,7 @@ public class FileManagerService {
     private FileNode copyNodeShape(FileNode source, UUID userId, FileNode targetParent, SpaceType spaceType,
             String name) {
         FileNode copy = new FileNode();
+        copy.setId(UUID.randomUUID());
         copy.setOwnerUserId(userId);
         copy.setParentId(targetParent != null ? targetParent.getId() : null);
         copy.setNodeType(source.getNodeType());

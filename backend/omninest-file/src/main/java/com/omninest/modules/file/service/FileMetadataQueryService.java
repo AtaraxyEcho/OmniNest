@@ -347,8 +347,10 @@ public class FileMetadataQueryService {
      * @return 文件描述符，不存在时返回空
      */
     @Transactional(readOnly = true)
-    public Optional<FileDescriptor> findActivePath(UUID ownerUserId, String normalizedPath) {
-        return fileNodeRepository.findActivePath(ownerUserId, normalizedPath).map(this::toDescriptor);
+    public Optional<FileDescriptor> findActivePath(
+            UUID ownerUserId, SpaceType spaceType, String normalizedPath) {
+        return fileNodeRepository.findActivePath(ownerUserId, spaceType, normalizedPath)
+                .map(this::toDescriptor);
     }
 
     /**

@@ -70,7 +70,7 @@ public class ShareLink {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     @Override
     public boolean equals(Object other) {

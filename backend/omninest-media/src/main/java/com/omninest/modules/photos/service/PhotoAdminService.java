@@ -8,6 +8,7 @@ import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -617,7 +618,7 @@ public class PhotoAdminService {
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         String normalizedPath = "/.metadata/PHOTO_ITEM/" + photoId + "/RAW_PREVIEW/" + photoId + "_raw_preview.jpg";
-        return fileMetadataQueryService.findActivePath(ownerUserId, normalizedPath)
+        return fileMetadataQueryService.findActivePath(ownerUserId, SpaceType.PERSONAL, normalizedPath)
                 .map(node -> {
                     FileDownloadUrlDto url = fileQueryService.createDownloadUrlAs(ownerUserId, node.id());
                     return url.downloadUrl();

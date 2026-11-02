@@ -31,48 +31,74 @@ class AdminRowIconAction extends StatefulWidget {
 
 class _AdminRowIconActionState extends State<AdminRowIconAction> {
   bool _hovering = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final adminColors = context.adminColors;
     final enabled = widget.onTap != null && !widget.busy;
-    final hovering = _hovering && enabled;
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
-        onEnter: enabled ? (_) => setState(() => _hovering = true) : null,
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.busy ? null : widget.onTap,
-          child: Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            color:
-                hovering
-                    ? adminColors.surfaceContainerHighest
-                    : Colors.transparent,
-            child:
-                widget.busy
-                    ? const SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : Icon(
-                      widget.icon,
-                      size: 14,
-                      color:
-                          widget.color ??
-                          (enabled
-                              ? (hovering
-                                  ? adminColors.onSurface
-                                  : adminColors.onSurfaceVariant)
-                              : adminColors.onSurfaceVariant.withValues(
-                                alpha: 0.45,
-                              )),
-                    ),
+    final highlighted = (_hovering || _focused) && enabled;
+    final minHitSize =
+        ResponsiveBreakpoints.isCompact(MediaQuery.sizeOf(context).width)
+            ? 44.0
+            : 36.0;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.tooltip,
+      child: Tooltip(
+        message: widget.tooltip,
+        child: MouseRegion(
+          cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+          child: InkWell(
+            onTap: enabled ? widget.onTap : null,
+            onHover:
+                enabled ? (value) => setState(() => _hovering = value) : null,
+            onFocusChange:
+                enabled ? (value) => setState(() => _focused = value) : null,
+            borderRadius: BorderRadius.circular(4),
+            splashFactory: NoSplash.splashFactory,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: minHitSize,
+                minHeight: minHitSize,
+              ),
+              child: Center(
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        highlighted
+                            ? adminColors.surfaceContainerHighest
+                            : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child:
+                      widget.busy
+                          ? const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : Icon(
+                            widget.icon,
+                            size: 14,
+                            color:
+                                widget.color ??
+                                (enabled
+                                    ? (highlighted
+                                        ? adminColors.onSurface
+                                        : adminColors.onSurfaceVariant)
+                                    : adminColors.onSurfaceVariant.withValues(
+                                      alpha: 0.45,
+                                    )),
+                          ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

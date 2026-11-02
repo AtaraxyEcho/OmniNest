@@ -3,10 +3,12 @@ package com.omninest.common.ratelimit;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RedisLuaRateLimiter implements RateLimitService {
@@ -42,5 +44,20 @@ public class RedisLuaRateLimiter implements RateLimitService {
                 )
         );
         return Long.valueOf(1L).equals(allowed);
+    }
+
+    @Override
+    public void release(String key) {
+        if (!properties.enabled()) {
+            LocalFallbackRateLimiter.release(key);
+            return;
+        }
+        try {
+            redisTemplate.delete(properties.keyPrefix() + ":" + key);
+        } catch (RuntimeException exception) {
+            // 归还失败只会把一次性凭证锁到窗口结束，不影响正确性；不得让释放异常
+            // 覆盖调用方真正要返回的业务错误。
+            log.warn("限流占位释放失败: key={}, errorType={}", key, exception.getClass().getSimpleName());
+        }
     }
 }

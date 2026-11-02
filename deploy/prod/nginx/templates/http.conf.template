@@ -42,7 +42,9 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    location /api/ {
+    # ^~ 前缀匹配：否则 API 路径以 .png/.js 等后缀结尾时会被下方静态正则
+    # location 抢占，返回静态目录的 404 并附带公共缓存头。
+    location ^~ /api/ {
         # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
         # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
         client_max_body_size 2g;
@@ -57,7 +59,7 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    location /ws {
+    location ^~ /ws {
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -141,6 +143,11 @@ server {
     client_max_body_size 0;
     resolver 127.0.0.11 valid=30s ipv6=off;
     set $omninest_minio minio:9000;
+
+    # 与 HTTPS 模板的 9000 端口保持同一套嗅探与嵌入防护。
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "no-referrer" always;
 
     location / {
         proxy_pass http://$omninest_minio;

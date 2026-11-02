@@ -169,6 +169,77 @@ class ResourceShareLinkServiceTest {
     }
 
     @Test
+    void consumeEvictsShareLinkMetadataCache() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("PHOTO_ALBUM");
+        share.setResourceId(RESOURCE_ID);
+        share.setTokenHash("token-hash-1");
+        share.setPasswordHash("encoded");
+        share.setMaxAccessCount(3);
+        share.setAccessCount(0);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+        when(passwordEncoder.matches("secret", "encoded")).thenReturn(true);
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID)).thenReturn(Optional.of(share));
+
+        service.authorize("raw-token", "secret", "PHOTO_ALBUM");
+
+        verify(readThroughCache).invalidate("omninest:share:link:token-hash-1");
+    }
+
+    @Test
+    void exhaustedLinkRejectsNewSessionBeforePasswordCheck() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("PHOTO_ALBUM");
+        share.setResourceId(RESOURCE_ID);
+        share.setPasswordHash("encoded");
+        share.setMaxAccessCount(1);
+        share.setAccessCount(1);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+
+        assertThatThrownBy(() -> service.issueConsumedSession(
+                "raw-token", "secret", "PHOTO_ALBUM", "127.0.0.1"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("访问次数已达上限");
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(shareLinkRepository, never()).consumeAccess(any(), any());
+    }
+
+    @Test
+    void exhaustedLinkStillAllowsAlreadyIssuedSession() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("PHOTO_ALBUM");
+        share.setResourceId(RESOURCE_ID);
+        share.setPasswordHash("encoded");
+        share.setMaxAccessCount(1);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+        when(passwordEncoder.matches("secret", "encoded")).thenReturn(true);
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID)).thenReturn(Optional.of(share));
+
+        var session = service.issueConsumedSession(
+                "raw-token", "secret", "PHOTO_ALBUM", "127.0.0.1");
+        // 最后一次消费恰好把计数推到上限：已签发的会话仍可继续分页。
+        share.setAccessCount(1);
+
+        var dto = service.requireSession("raw-token", session.sessionToken(), "PHOTO_ALBUM");
+
+        assertThat(dto.resourceId()).isEqualTo(RESOURCE_ID);
+    }
+
+    @Test
     void consumedSessionCountsOnceAndCanBeReusedForPagination() {
         ShareLink share = new ShareLink();
         share.setId(SHARE_ID);

@@ -389,8 +389,7 @@ class _SelectionBarIconButton extends StatelessWidget {
         icon: Icon(icon, size: 21, color: context.env.onSelectionBar),
         style: IconButton.styleFrom(
           foregroundColor: context.env.onSelectionBar,
-          minimumSize: const Size.square(43),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size.square(48),
         ),
       ),
     );

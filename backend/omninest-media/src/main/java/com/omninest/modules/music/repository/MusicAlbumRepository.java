@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -105,6 +106,51 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
     Optional<MusicAlbum> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     Optional<MusicAlbum> findByOwnerUserIdAndTitleIgnoreCase(UUID ownerUserId, String title);
+
+    /**
+     * 按标题与艺术家精确匹配同名专辑，避免不同歌手的同名专辑被合并。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param title 专辑标题
+     * @param artistName 专辑艺术家
+     * @return 匹配到的专辑
+     */
+    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCase(
+            UUID ownerUserId, String title, String artistName);
+
+    /**
+     * 无艺术家信息时仅匹配没有艺术家快照的同名专辑。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param title 专辑标题
+     * @return 匹配到的专辑
+     */
+    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNull(
+            UUID ownerUserId, String title);
+
+    /**
+     * 批量重算专辑曲目数与总时长，单条 SQL 覆盖一组专辑。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param albumIds 专辑 ID 集合
+     * @return 更新的行数
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE omni.music_albums album
+            SET track_count = (
+                    SELECT COUNT(*)::int FROM omni.music_tracks track
+                    WHERE track.owner_user_id = :ownerUserId AND track.album_id = album.id),
+                total_duration = COALESCE((
+                    SELECT SUM(track.duration_seconds) FROM omni.music_tracks track
+                    WHERE track.owner_user_id = :ownerUserId AND track.album_id = album.id), 0)::int,
+                updated_at = now()
+            WHERE album.owner_user_id = :ownerUserId
+              AND album.id IN (:albumIds)
+            """, nativeQuery = true)
+    int refreshStatisticsBatch(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumIds") Collection<UUID> albumIds);
 
     @Query(value = """
             select id, owner_user_id, title, artist_name, cover_file_id, release_date,

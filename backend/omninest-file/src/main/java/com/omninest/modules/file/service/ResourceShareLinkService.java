@@ -61,7 +61,7 @@ public class ResourceShareLinkService {
     ) {
         String tokenHash = sha256(rawToken);
         requireAuthenticationRateLimit(tokenHash, clientAddress);
-        ShareLink link = requireValidLink(tokenHash, expectedResourceType);
+        ShareLink link = requireConsumableLink(tokenHash, expectedResourceType);
         verifyPassword(link, password, clientAddress);
         ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
                 tokenHash,
@@ -84,7 +84,7 @@ public class ResourceShareLinkService {
     ) {
         String tokenHash = sha256(rawToken);
         requireAuthenticationRateLimit(tokenHash, clientAddress);
-        ShareLink link = requireValidLink(tokenHash, expectedResourceType);
+        ShareLink link = requireConsumableLink(tokenHash, expectedResourceType);
         verifyPassword(link, password, clientAddress);
         return transactionTemplate.execute(status -> {
             consume(link);
@@ -114,7 +114,7 @@ public class ResourceShareLinkService {
     ) {
         String tokenHash = sha256(rawToken);
         requireSessionRateLimit(tokenHash);
-        ShareLink link = requireValidLink(tokenHash, expectedResourceType);
+        ShareLink link = requireConsumableLink(tokenHash, expectedResourceType);
         shareAccessSessionService.require(sessionToken, tokenHash, expectedResourceType);
         consume(link);
         ShareLink consumed = shareLinkRepository.findById(link.getId())
@@ -448,7 +448,7 @@ public class ResourceShareLinkService {
      * @return 已授权的分享链接描述符
      */
     public ResourceShareLinkDto authorize(String rawToken, String password, String expectedResourceType) {
-        ShareLink link = requireValidLink(sha256(rawToken), expectedResourceType);
+        ShareLink link = requireConsumableLink(sha256(rawToken), expectedResourceType);
         verifyPassword(link, password, null);
         return transactionTemplate.execute(status -> {
             consume(link);
@@ -456,6 +456,31 @@ public class ResourceShareLinkService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
             return toDto(consumed, null);
         });
+    }
+
+    /**
+     * 解析分享链接目标但不消费访问次数。
+     *
+     * <p>供业务模块在扣减访问配额前校验目标资源仍然可见（例如照片已移入回收站），
+     * 避免一次必然失败的访问白白消耗一次配额。</p>
+     *
+     * @param rawToken 分享明文 token
+     * @param expectedResourceType 期望的资源类型
+     * @return 分享目标的归属与资源标识
+     */
+    public ShareTarget resolveTarget(String rawToken, String expectedResourceType) {
+        ShareLink link = requireConsumableLink(sha256(rawToken), expectedResourceType);
+        return new ShareTarget(link.getOwnerUserId(), link.getResourceId(), link.getResourceType());
+    }
+
+    /**
+     * 分享链接目标的最小只读描述。
+     *
+     * @param ownerUserId 分享创建者
+     * @param resourceId 资源标识
+     * @param resourceType 资源类型
+     */
+    public record ShareTarget(UUID ownerUserId, UUID resourceId, String resourceType) {
     }
 
     private ShareLink requireValidLink(String tokenHash, String expectedResourceType) {
@@ -467,6 +492,20 @@ public class ResourceShareLinkService {
         }
         if (link.getExpiresAt() != null && link.getExpiresAt().isBefore(Instant.now())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "分享链接已过期");
+        }
+        return link;
+    }
+
+    /**
+     * 校验链接并确认仍有可消费的访问次数。
+     *
+     * <p>只用于「新建会话」或「即将消费」的入口。已签发会话的只读校验必须继续使用
+     * {@link #requireValidLink}：最后一次消费恰好把计数推到上限时，该会话本身仍然有效。</p>
+     */
+    private ShareLink requireConsumableLink(String tokenHash, String expectedResourceType) {
+        ShareLink link = requireValidLink(tokenHash, expectedResourceType);
+        if (link.getMaxAccessCount() != null && link.getAccessCount() >= link.getMaxAccessCount()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "分享链接访问次数已达上限");
         }
         return link;
     }
@@ -524,6 +563,9 @@ public class ResourceShareLinkService {
         if (shareLinkRepository.consumeAccess(link.getId(), now) == 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "分享链接访问次数已达上限");
         }
+        // 文件分享的只读路径走同一枚 Redis 元数据缓存；不淘汰会让缓存期内
+        // 继续展示旧的剩余次数，预检也可能误判链接仍可访问。
+        readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
     }
 
     private ResourceShareLinkDto toDto(ShareLink share, String rawToken) {

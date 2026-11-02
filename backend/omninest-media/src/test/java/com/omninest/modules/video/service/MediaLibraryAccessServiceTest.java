@@ -138,7 +138,7 @@ class MediaLibraryAccessServiceTest {
     @Test
     void userScopedStorageCannotBecomeShared() {
         VideoLibrarySource source = source(MediaLibraryVisibility.PRIVATE);
-        source.setVersion(2);
+        source.setVersion(2L);
         StorageLocation location = new StorageLocation();
         location.setScopeType("USER");
         when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
@@ -163,7 +163,7 @@ class MediaLibraryAccessServiceTest {
     @Test
     void staleVersionDoesNotMutateAccessSettings() {
         VideoLibrarySource source = source(MediaLibraryVisibility.PRIVATE);
-        source.setVersion(3);
+        source.setVersion(3L);
         when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
         when(userDirectoryQueryService.requireAuthorizationProfile(OWNER_ID)).thenReturn(manageProfile());
 
@@ -184,7 +184,7 @@ class MediaLibraryAccessServiceTest {
     @Test
     void switchingToPrivateClearsExplicitGrantsWithoutStorageLookup() {
         VideoLibrarySource source = source(MediaLibraryVisibility.SELECTED_USERS);
-        source.setVersion(4);
+        source.setVersion(4L);
         when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
         when(sourceRepository.saveAndFlush(source)).thenReturn(source);
         when(userDirectoryQueryService.requireAuthorizationProfile(OWNER_ID)).thenReturn(manageProfile());
@@ -205,7 +205,7 @@ class MediaLibraryAccessServiceTest {
     @Test
     void switchingToSelectedUsersPersistsValidatedGrant() {
         VideoLibrarySource source = source(MediaLibraryVisibility.PRIVATE);
-        source.setVersion(5);
+        source.setVersion(5L);
         StorageLocation location = new StorageLocation();
         location.setScopeType("SYSTEM");
         when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));

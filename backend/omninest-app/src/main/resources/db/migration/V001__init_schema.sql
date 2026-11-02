@@ -2774,6 +2774,22 @@ CREATE INDEX "idx_file_nodes_owner_path" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "normalized_path" "pg_catalog"."text_ops" ASC NULLS LAST
 );
+-- text_pattern_ops：默认 text_ops 在非 C collation（官方镜像为 en_US.utf8）下
+-- 不支持 LIKE 'prefix%' 的索引范围扫描，子树移动/复制/软删会退化为全用户扫描。
+CREATE INDEX "idx_file_nodes_owner_space_path_pattern_active" ON "omni"."file_nodes" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "space_type" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "normalized_path" "pg_catalog"."text_pattern_ops" ASC NULLS LAST
+) WHERE is_deleted = false;
+CREATE INDEX "idx_file_nodes_owner_deleted_path_pattern" ON "omni"."file_nodes" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "is_deleted" "pg_catalog"."bool_ops" ASC NULLS LAST,
+  "normalized_path" "pg_catalog"."text_pattern_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_file_nodes_space_path_pattern_active" ON "omni"."file_nodes" USING btree (
+  "space_type" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "normalized_path" "pg_catalog"."text_pattern_ops" ASC NULLS LAST
+) WHERE is_deleted = false;
 CREATE INDEX "idx_file_nodes_owner_purge" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "is_deleted" "pg_catalog"."bool_ops" ASC NULLS LAST,

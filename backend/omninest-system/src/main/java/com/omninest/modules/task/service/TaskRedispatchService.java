@@ -247,10 +247,12 @@ public class TaskRedispatchService {
                 "fileNodeId", requiredUuid(payload, "fileNodeId").toString(),
                 "fileObjectId", requiredUuid(payload, "fileObjectId").toString(),
                 "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                "bucket", requiredText(payload, "bucket"),
-                "objectKey", requiredText(payload, "objectKey"),
+                // 重索引事件由 FileUploadedEvent.fromNode 生成，桶与对象键按设计留空：
+                // 消费端只按 fileNodeId 经 File 模块回读内容，不能因此让重试永久失败。
+                "bucket", optionalText(payload, "bucket", ""),
+                "objectKey", optionalText(payload, "objectKey", ""),
                 "fileName", requiredText(payload, "fileName"),
-                "mimeType", requiredText(payload, "mimeType"),
+                "mimeType", optionalText(payload, "mimeType", "application/octet-stream"),
                 "sizeBytes", longValue(payload.get("sizeBytes")),
                 "occurredAt", optionalText(payload, "occurredAt", Instant.now().toString())
         );

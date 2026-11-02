@@ -224,6 +224,32 @@ void main() {
       },
     );
 
+    test(
+      'does not retry an idempotent request with a single-subscription stream body',
+      () async {
+        final handler = _TestErrorHandler();
+        final options = RequestOptions(
+          path: '/test',
+          baseUrl: 'https://example.com',
+          method: 'PUT',
+          data: Stream<List<int>>.fromIterable([
+            <int>[1, 2],
+          ]),
+        );
+        final exception = DioException(
+          type: DioExceptionType.badResponse,
+          requestOptions: options,
+          response: Response(statusCode: 503, requestOptions: options),
+        );
+
+        await interceptor.onError(exception, handler);
+
+        // 单次订阅流重放会抛 StateError，必须按不可重试处理。
+        expect(handler.nextCount, 1);
+        expect(handler.resolveCount, 0);
+      },
+    );
+
     test('does not retry POST on 429', () async {
       final handler = _TestErrorHandler();
       final exception = buildException(

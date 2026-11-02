@@ -380,6 +380,12 @@ public class PhotoAlbumService {
             String password,
             String clientAddress
     ) {
+        // 先确认照片仍然可见再消费访问次数：已移入回收站的照片不应让访客
+        // 白白消耗一次配额，也不能在扣次后才返回 404。
+        ResourceShareLinkService.ShareTarget target =
+                resourceShareLinkService.resolveTarget(rawToken, "PHOTO_ITEM");
+        photoItemRepository.findByOwnerUserIdAndId(target.ownerUserId(), target.resourceId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
         return resourceShareLinkService.issueConsumedSession(
                 rawToken, password, "PHOTO_ITEM", clientAddress);
     }

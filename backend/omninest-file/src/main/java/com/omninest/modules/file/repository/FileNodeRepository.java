@@ -58,6 +58,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.ownerUserId = :ownerUserId
+              AND n.spaceType = :spaceType
               AND n.deleted = false
               AND n.nodeType = 'FILE'
               AND n.category = :category
@@ -65,7 +66,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
               AND n.normalizedPath LIKE concat(:pathPrefix, '%') escape '\\'
             """)
     Page<FileNode> findVisibleSubtreeCategoryPage(
-            @Param("ownerUserId") UUID ownerUserId,
+            @Param("ownerUserId") UUID ownerUserId, @Param("spaceType") SpaceType spaceType,
             @Param("pathPrefix") String pathPrefix,
             @Param("category") String category,
             Pageable pageable);
@@ -491,10 +492,13 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             select node
             from FileNode node
             where node.ownerUserId = :ownerUserId
+              and node.spaceType = :spaceType
               and node.normalizedPath = :path
               and node.deleted = false
             """)
-    Optional<FileNode> findActivePath(@Param("ownerUserId") UUID ownerUserId, @Param("path") String path);
+    Optional<FileNode> findActivePath(
+            @Param("ownerUserId") UUID ownerUserId, @Param("spaceType") SpaceType spaceType,
+            @Param("path") String path);
 
     /**
      * 按来源类型与路径前缀读取活动节点，口径同上。

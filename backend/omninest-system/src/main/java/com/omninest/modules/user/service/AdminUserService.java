@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,6 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminUserService {
@@ -245,7 +247,8 @@ public class AdminUserService {
      *
      * <p>复用单行守卫与副作用（超级管理员拒改、成功后撤销该用户全部会话并记审计）；
      * 不刻意包整体事务——逐项独立提交保证某行中途失败时已成功项不回滚，
-     * 失败项（不存在、超级管理员或更新异常）计入 failedIds 供前端逐项反馈。</p>
+     * 业务拒绝（不存在、超级管理员等）计入 failedIds 供前端逐项反馈；
+     * 系统级异常直接上抛，不伪装成逐项失败。</p>
      *
      * <p>单行必须通过 {@code TransactionTemplate} 进入事务：同类自调用不走 AOP 代理，
      * 注解事务会失效，那时某行的会话撤销失败只留下已提交的状态变更。</p>
@@ -263,7 +266,11 @@ public class AdminUserService {
             try {
                 transactionTemplate.executeWithoutResult(status -> executeUpdateUserStatus(userId, rawStatus));
                 successCount++;
-            } catch (RuntimeException ex) {
+            } catch (BusinessException ex) {
+                // 只跳过可预期的逐项业务拒绝；数据库等系统级异常必须向上抛出，
+                // 否则会以 0 成功、全量 failedIds 的形式掩盖真实故障。
+                log.warn("批量更新用户状态跳过受限项: targetUserId={}, status={}, reason={}",
+                        userId, rawStatus, ex.getMessage());
                 failedIds.add(userId);
             }
         }

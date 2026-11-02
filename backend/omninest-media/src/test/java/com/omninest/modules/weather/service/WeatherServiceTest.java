@@ -611,6 +611,9 @@ class WeatherServiceTest {
             stubJwtCache();
             Map<String, String> responses = new HashMap<>();
             responses.put("/v7/weather/now", NOW_RESPONSE);
+            // 7 日预报完整才写缓存：缓存键用例必须提供非空 daily 才能命中保存分支。
+            responses.put("/v7/weather/7d",
+                    "{\"code\":\"200\",\"daily\":[{\"fxDate\":\"2025-06-01\"}]}");
             stubRestTemplateWithResponses(responses);
 
             weatherService.getRealtimeWeather("116.41,39.92", null, lang);

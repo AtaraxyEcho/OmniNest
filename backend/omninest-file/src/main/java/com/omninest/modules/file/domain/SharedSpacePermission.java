@@ -93,7 +93,7 @@ public class SharedSpacePermission {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Integer version = 0;
+    private Integer version;
 
     @PrePersist
     void fillCreatedFields() {

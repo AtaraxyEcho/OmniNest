@@ -223,7 +223,7 @@ class MusicScrapeServiceTest {
             MusicScanJob saved = invocation.getArgument(0);
             savedVersions.add(saved.getVersion());
             // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         }).when(scanJobRepository).save(any(MusicScanJob.class));
 
@@ -254,7 +254,7 @@ class MusicScrapeServiceTest {
         doAnswer(invocation -> {
             MusicScanJob saved = invocation.getArgument(0);
             savedStatuses.add(saved.getStatus());
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         }).when(scanJobRepository).save(any(MusicScanJob.class));
 
@@ -278,6 +278,7 @@ class MusicScrapeServiceTest {
     private MusicScanJob queuedJob(UUID jobId) {
         MusicScanJob job = new MusicScanJob();
         job.setId(jobId);
+        job.setVersion(0L);
         job.setTaskId(jobId);
         job.setOwnerUserId(OWNER_ID);
         job.setStatus(TaskStatus.QUEUED.getValue());

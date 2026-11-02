@@ -102,14 +102,14 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   @override
   void didUpdateWidget(PhotoSharePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.visible && !oldWidget.visible) {
-      unawaited(_loadShareState());
-    }
-    if (widget.photo.id != oldWidget.photo.id) {
+    final photoChanged = widget.photo.id != oldWidget.photo.id;
+    final becameVisible = widget.visible && !oldWidget.visible;
+    if (photoChanged) {
       _resetState();
-      if (widget.visible) {
-        unawaited(_loadShareState());
-      }
+    }
+    // 同时变为可见且切换照片时只发一次加载，避免两个分支各起一个并发请求。
+    if (becameVisible || (photoChanged && widget.visible)) {
+      unawaited(_loadShareState());
     }
   }
 

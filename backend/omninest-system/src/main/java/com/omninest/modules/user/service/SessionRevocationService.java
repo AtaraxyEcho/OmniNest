@@ -1,10 +1,12 @@
 package com.omninest.modules.user.service;
 
+import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.SessionRevocationCache;
 import com.omninest.common.security.SessionRevocationChecker;
 import com.omninest.modules.user.domain.SessionRevocationEntity;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -33,10 +35,13 @@ public class SessionRevocationService implements SessionRevocationChecker {
      * 最多再存活一个周期。数据库始终是权威，TTL 到期即回源复核。</p>
      */
     private static final Duration NOT_REVOKED_TTL = Duration.ofMinutes(1);
+    /** 令牌有效期缺失时的兜底截止时间保留时长，与默认 30 分钟访问令牌一致。 */
+    private static final Duration DEFAULT_ACCESS_TOKEN_TTL = Duration.ofMinutes(30);
 
     private final SessionRevocationJpaRepository repository;
     private final SessionRevocationCache cache;
     private final SessionRevocationWriter writer;
+    private final AuthenticationTokenPolicy authenticationTokenPolicy;
 
     /**
      * 撤销单个会话，并将撤销结果写入持久层和缓存。
@@ -99,6 +104,39 @@ public class SessionRevocationService implements SessionRevocationChecker {
      */
     public void publishRevocations(UUID userId, Collection<UUID> sessionIds, Duration ttl) {
         cache.markRevoked(userId, sessionIds, ttl);
+    }
+
+    /**
+     * 记录访问令牌截止时间：早于该时间签发的访问令牌立即失效。
+     *
+     * <p>用于权限变更保留当前会话的场景，避免旧 JWT 中的高权限声明在剩余
+     * 有效期内继续生效。记录保留时长跟随访问令牌有效期。</p>
+     *
+     * @param userId 用户标识
+     * @param cutoff 截止时间
+     */
+    public void invalidateAccessTokensBefore(UUID userId, Instant cutoff) {
+        if (userId == null || cutoff == null) {
+            return;
+        }
+        Duration ttl = authenticationTokenPolicy.accessTokenTtl();
+        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            ttl = DEFAULT_ACCESS_TOKEN_TTL;
+        }
+        cache.markAccessTokenCutoff(userId, cutoff, ttl);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isTokenStale(UUID userId, Instant issuedAt) {
+        if (issuedAt == null) {
+            return true;
+        }
+        return cache.accessTokenCutoff(userId)
+                .map(cutoff -> issuedAt.getEpochSecond() < cutoff.getEpochSecond())
+                .orElse(false);
     }
 
     /**

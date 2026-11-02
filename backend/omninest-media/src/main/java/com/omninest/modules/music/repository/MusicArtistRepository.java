@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -67,6 +68,30 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             @Param("keyword") String keyword);
 
     Optional<MusicArtist> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+
+    /**
+     * 批量重算艺术家曲目数与专辑数，单条 SQL 覆盖一组艺术家。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param artistIds 艺术家 ID 集合
+     * @return 更新的行数
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE omni.music_artists artist
+            SET track_count = (
+                    SELECT COUNT(*)::int FROM omni.music_tracks track
+                    WHERE track.owner_user_id = :ownerUserId AND track.artist_id = artist.id),
+                album_count = (
+                    SELECT COUNT(DISTINCT track.album_id)::int FROM omni.music_tracks track
+                    WHERE track.owner_user_id = :ownerUserId AND track.artist_id = artist.id),
+                updated_at = now()
+            WHERE artist.owner_user_id = :ownerUserId
+              AND artist.id IN (:artistIds)
+            """, nativeQuery = true)
+    int refreshStatisticsBatch(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistIds") Collection<UUID> artistIds);
 
     Optional<MusicArtist> findByOwnerUserIdAndNameIgnoreCase(UUID ownerUserId, String name);
 

@@ -562,6 +562,27 @@ void main() {
       },
     );
 
+    test('accept stops when authorize still requires a password', () async {
+      final adapter = _ShareCapturingAdapter(
+        body: {'code': 200, 'message': 'success', 'data': null},
+        authorizeBody: {
+          'code': 401,
+          'errorName': 'SHARE_PASSWORD_REQUIRED',
+          'message': '需要访问密码',
+          'data': null,
+        },
+        authorizeStatusCode: 401,
+      );
+      final api = _createShareApi(adapter);
+
+      final result = await api.accept('token-abc');
+
+      // 未拿到会话时不得发送 accept 请求，更不能把 'null' 写进会话头。
+      expect(adapter.lastPath, '/s/token-abc/authorize');
+      expect(result, isA<ShareAcceptError>());
+      expect((result as ShareAcceptError).message, AppErrorCodes.needPassword);
+    });
+
     test('accept omits password in body when not provided', () async {
       final adapter = _ShareCapturingAdapter(
         body: {'code': 200, 'message': 'success', 'data': null},
@@ -711,11 +732,15 @@ class _ShareCapturingAdapter implements HttpClientAdapter {
     required this.body,
     this.httpStatusCode = 200,
     this.throwException,
+    this.authorizeBody,
+    this.authorizeStatusCode = 200,
   });
 
   final Map<String, dynamic> body;
   final int httpStatusCode;
   final DioException? throwException;
+  final Map<String, dynamic>? authorizeBody;
+  final int authorizeStatusCode;
   String? lastMethod;
   String? lastPath;
   Map<String, dynamic>? lastQueryParams;
@@ -742,12 +767,15 @@ class _ShareCapturingAdapter implements HttpClientAdapter {
       authorizeCount += 1;
       lastAuthorizeData = options.data;
       return ResponseBody.fromString(
-        jsonEncode({
-          'code': 200,
-          'message': 'success',
-          'data': {'sessionToken': 'session-test'},
-        }),
-        200,
+        jsonEncode(
+          authorizeBody ??
+              {
+                'code': 200,
+                'message': 'success',
+                'data': {'sessionToken': 'session-test'},
+              },
+        ),
+        authorizeStatusCode,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
         },

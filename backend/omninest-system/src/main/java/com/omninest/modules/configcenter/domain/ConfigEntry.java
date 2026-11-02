@@ -57,7 +57,7 @@ public class ConfigEntry {
     private Instant updatedAt;
 
     @Version
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillCreateFields() {

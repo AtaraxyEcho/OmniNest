@@ -131,6 +131,7 @@ class MediaLibraryApplyExecutorTest {
 
         MediaScanCandidate candidate = new MediaScanCandidate();
         candidate.setId(UUID.fromString("70000000-0000-0000-0000-000000000001"));
+        candidate.setVersion(0L);
         candidate.setOwnerUserId(OWNER_ID);
         candidate.setScanRunId(RUN_ID);
         candidate.setLibrarySourceId(SOURCE_ID);

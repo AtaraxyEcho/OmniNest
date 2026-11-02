@@ -483,7 +483,7 @@ class LocalDatabase extends _$LocalDatabase {
       await (delete(cachedReaderChapters)
         ..where((table) => table.userId.isIn(owned))).go();
       await (delete(cachedReaderImages)
-        ..where((table) => table.userId.equals(userId))).go();
+        ..where((table) => table.userId.isIn(owned))).go();
       await (delete(syncClientStates)
         ..where((table) => table.userId.equals(userId))).go();
       await (delete(syncPendingInvalidations)

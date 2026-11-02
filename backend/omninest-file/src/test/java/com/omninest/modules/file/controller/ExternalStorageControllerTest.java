@@ -104,6 +104,10 @@ class ExternalStorageControllerTest {
         assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=success");
         verify(oauthService).handleCallback(
                 CALLBACK_PROVIDER, "state-value", "authorization-code", BINDING_NONCE);
+        // state 与绑定 nonce 校验通过后才清除一次性 Cookie。
+        ArgumentCaptor<String> clearedCookie = ArgumentCaptor.forClass(String.class);
+        verify(servletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), clearedCookie.capture());
+        assertThat(clearedCookie.getValue()).contains("omninest_oauth_binding=");
     }
 
     @Test
@@ -118,6 +122,8 @@ class ExternalStorageControllerTest {
         assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=error");
         verify(oauthService, never()).handleCallback(
                 anyString(), anyString(), anyString(), anyString());
+        // 未验签的跨站顶层导航不得擦除用户正在进行的绑定 Cookie。
+        verify(servletResponse, never()).addHeader(eq(HttpHeaders.SET_COOKIE), anyString());
     }
 
     @Test
@@ -183,7 +189,8 @@ class ExternalStorageControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation())
                 .hasToString("https://nest.example.com/#/files?oauth=error");
-        verify(servletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), anyString());
+        // 回调在验签前失败时无法确认绑定归属，保留 Cookie 避免被跨站跳转擦除。
+        verify(servletResponse, never()).addHeader(eq(HttpHeaders.SET_COOKIE), anyString());
     }
 
     @Test

@@ -88,6 +88,18 @@ class ImageBoundaryTest(unittest.TestCase):
             bgr = app._decode_single_pass_bgr(data)
         self.assertEqual((300, 600, 3), bgr.shape)
 
+    def test_decode_applies_exif_orientation(self):
+        """竖拍照片按 EXIF Orientation 6 转正，长边方向必须交换。"""
+        image = Image.new("RGB", (40, 20), (255, 0, 0))
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", exif=exif.tobytes())
+
+        bgr = app._decode_single_pass_bgr(buffer.getvalue())
+
+        self.assertEqual((40, 20, 3), bgr.shape)
+
 
 class _FakeOcr:
     def __init__(self, result):
@@ -329,6 +341,17 @@ class SidecarTokenTest(unittest.TestCase):
             self.assertIsNone(app._require_sidecar_auth(
                 self._request(), str(timestamp), signature
             ))
+
+    def test_sidecar_auth_is_verified_once_per_request(self):
+        """排队后路由依赖二次校验必须复用首次结果，不能被时钟窗口误拒。"""
+        with patch.object(app, "SIDECAR_SECRET", "expected-secret"):
+            request = self._request()
+            request.state = SimpleNamespace()
+            timestamp = int(time.time())
+            signature = app._sidecar_signature(timestamp, "POST", "/analyze-content", "")
+            self.assertIsNone(app._require_sidecar_auth(request, str(timestamp), signature))
+            stale = timestamp - app.SIDECAR_CLOCK_SKEW_SECONDS - 1
+            self.assertIsNone(app._require_sidecar_auth(request, str(stale), "tampered"))
 
     def test_sidecar_auth_rejects_stale_timestamp_and_tampered_path(self):
         with patch.object(app, "SIDECAR_SECRET", "expected-secret"):

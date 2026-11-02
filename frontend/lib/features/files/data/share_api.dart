@@ -142,6 +142,10 @@ class ShareApi implements PublicShareRepository {
   }) async {
     try {
       final sessionToken = await _ensureSession(token, password);
+      if (sessionToken == null) {
+        // 未拿到会话时不得继续发送，否则请求头会被序列化成字符串 'null'。
+        return ShareAcceptResult.error(AppErrorCodes.needPassword);
+      }
       final client = _authDio ?? _dio;
       final response = await client.post<Map<String, dynamic>>(
         '/s/$token/accept',

@@ -68,7 +68,7 @@ public class IntegrationAccount {
 
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     /**
      * 初始化主键和审计时间。

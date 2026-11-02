@@ -362,7 +362,7 @@ class _UserManagementPanel extends ConsumerWidget {
             ),
           ],
           minTableWidth: 1240,
-          actionColumnWidth: 168,
+          actionColumnWidth: 240,
           showCheckboxes: true,
           isChecked:
               (index) => state.selectedIds.contains(state.users[index].id),

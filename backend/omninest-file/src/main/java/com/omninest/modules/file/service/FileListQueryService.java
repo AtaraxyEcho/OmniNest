@@ -83,6 +83,7 @@ class FileListQueryService {
         } else {
             nodes = fileNodeRepository.findVisibleSubtreeCategoryPage(
                     ownerUserId,
+                    SpaceType.PERSONAL,
                     resolveSubtreePrefix(ownerUserId, parentId),
                     normalizedCategory,
                     pageable);

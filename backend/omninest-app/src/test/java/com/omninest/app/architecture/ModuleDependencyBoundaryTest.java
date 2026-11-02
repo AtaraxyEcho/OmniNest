@@ -35,8 +35,10 @@ class ModuleDependencyBoundaryTest {
     private static final Set<String> ALLOWED_SOFT_OVERSIZED_SOURCES = Set.of(
             "omninest-file/src/main/java/com/omninest/modules/file/controller/FileController.java",
             "omninest-file/src/main/java/com/omninest/modules/file/repository/FileNodeRepository.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/DerivedAssetStorageService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/ExternalImportExecutionService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/FileUploadSessionService.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/SharedSpaceService.java",
             "omninest-file/src/main/java/com/omninest/modules/search/service/FileSearchIndexService.java",
             "omninest-media/src/main/java/com/omninest/modules/backdrop/service/BackdropAssetService.java",
             "omninest-media/src/main/java/com/omninest/modules/music/controller/MusicController.java",

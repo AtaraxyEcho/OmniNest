@@ -148,6 +148,28 @@ class TaskRedispatchServiceTest {
     }
 
     @Test
+    void rebuildsFileIndexPayloadWithEmptyBucketAndObjectKey() {
+        // 重索引事件按设计不带桶与对象键，消费端只按 fileNodeId 回读内容；
+        // 重投不能因此判为缺少必填字段而永久失败。
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID,
+                null,
+                "FILE_INDEX",
+                QueueNames.FILE_INDEX_ROUTING_KEY,
+                """
+                        {"fileNodeId":"30000000-0000-0000-0000-000000000001",
+                         "fileObjectId":"40000000-0000-0000-0000-000000000001",
+                         "ownerUserId":"10000000-0000-0000-0000-000000000001",
+                         "bucket":"","objectKey":"","fileName":"a.txt","mimeType":"","sizeBytes":1}
+                        """);
+
+        assertThat(payload)
+                .containsEntry("bucket", "")
+                .containsEntry("objectKey", "")
+                .containsEntry("mimeType", "application/octet-stream");
+    }
+
+    @Test
     void redispatchPrefersLatestDispatchPayloadOverRecordPayload() {
         TaskDispatch dispatch = new TaskDispatch();
         dispatch.setTaskId(TASK_ID);

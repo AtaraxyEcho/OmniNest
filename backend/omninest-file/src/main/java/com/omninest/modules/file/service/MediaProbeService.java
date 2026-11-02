@@ -15,7 +15,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -45,18 +44,22 @@ public class MediaProbeService {
             .maximumSize(500)
             .expireAfterWrite(2, TimeUnit.HOURS)
             .build();
-    private final ProcessStarter processStarter;
+    private ProcessStarter processStarter = MediaProbeService::startFfprobe;
     private final TempStagingPort tempStagingPort;
 
-    @Autowired
     public MediaProbeService(TempStagingPort tempStagingPort) {
-        this(MediaProbeService::startFfprobe, tempStagingPort);
+        this.tempStagingPort = tempStagingPort;
     }
 
-    /** 隔离系统进程 API 的测试边界，与 video 模块的外部进程执行器同一形态。 */
-    MediaProbeService(ProcessStarter processStarter, TempStagingPort tempStagingPort) {
-        this.processStarter = processStarter;
-        this.tempStagingPort = tempStagingPort;
+    /**
+     * 隔离系统进程 API 的测试入口，与 video 模块的外部进程执行器同一形态。
+     *
+     * <p>保持单一构造器，Spring 才能自动完成构造器注入；测试通过本工厂替换进程启动边界。</p>
+     */
+    static MediaProbeService forTesting(ProcessStarter processStarter, TempStagingPort tempStagingPort) {
+        MediaProbeService service = new MediaProbeService(tempStagingPort);
+        service.processStarter = processStarter;
+        return service;
     }
 
     /**
@@ -67,7 +70,17 @@ public class MediaProbeService {
      * @return 媒体元数据，失败为空对象
      */
     public FileMediaInfoDto probe(String contentKey, Path probeInput) {
-        return cache.get(contentKey, key -> probeOnce(probeInput));
+        FileMediaInfoDto cached = cache.getIfPresent(contentKey);
+        if (cached != null) {
+            return cached;
+        }
+        FileMediaInfoDto probed = probeOnce(probeInput);
+        // 只缓存成功结果：ffprobe 超时或工具缺失是瞬态故障，缓存空结果会让该内容
+        // 在 TTL 内持续拿不到元数据。失败不缓存，由下一次请求重新探测。
+        if (!probed.isEmpty()) {
+            cache.put(contentKey, probed);
+        }
+        return probed;
     }
 
     private FileMediaInfoDto probeOnce(Path probeInput) {
@@ -163,11 +176,7 @@ public class MediaProbeService {
     FileMediaInfoDto parseProbeJson(String json) {
         try {
             JsonNode root = objectMapper.readTree(json);
-            Double duration = null;
-            JsonNode format = root.get("format");
-            if (format != null && format.hasNonNull("duration")) {
-                duration = Double.parseDouble(format.get("duration").asString());
-            }
+            Double duration = parsePositiveDouble(root.path("format").path("duration"));
             Integer width = null;
             Integer height = null;
             if (root.has("streams")) {
@@ -175,8 +184,8 @@ public class MediaProbeService {
                     if ("video".equals(stream.path("codec_type").asString())) {
                         width = stream.hasNonNull("width") ? stream.get("width").asInt() : null;
                         height = stream.hasNonNull("height") ? stream.get("height").asInt() : null;
-                        if (duration == null && stream.hasNonNull("duration")) {
-                            duration = Double.parseDouble(stream.get("duration").asString());
+                        if (duration == null) {
+                            duration = parsePositiveDouble(stream.path("duration"));
                         }
                         break;
                     }
@@ -185,6 +194,28 @@ public class MediaProbeService {
             return new FileMediaInfoDto(duration, width, height);
         } catch (RuntimeException e) {
             return EMPTY;
+        }
+    }
+
+    /**
+     * 解析可缺省的非负浮点数。
+     *
+     * <p>MKV/WebM 流级 duration 常为字符串 "N/A"，真实时长在 format.duration；
+     * 这里返回 null 而不是抛异常，避免丢失已解析出的宽高与编码信息。</p>
+     */
+    private static Double parsePositiveDouble(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        String text = node.asString("").trim();
+        if (text.isEmpty() || "N/A".equalsIgnoreCase(text)) {
+            return null;
+        }
+        try {
+            double value = Double.parseDouble(text);
+            return Double.isFinite(value) && value >= 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

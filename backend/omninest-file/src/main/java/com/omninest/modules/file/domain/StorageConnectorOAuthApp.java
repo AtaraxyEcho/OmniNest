@@ -52,7 +52,7 @@ public class StorageConnectorOAuthApp {
     private Instant updatedAt;
 
     @Version
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillCreatedFields() {

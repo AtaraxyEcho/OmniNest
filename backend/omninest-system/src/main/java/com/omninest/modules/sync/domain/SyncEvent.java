@@ -91,7 +91,7 @@ public class SyncEvent {
 
     @Version
     @Column(name = "version", nullable = false)
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillDefaults() {

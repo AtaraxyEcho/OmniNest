@@ -111,7 +111,7 @@ public class TaskRecord {
     /** 乐观锁版本号 */
     @Version
     @Column(nullable = false)
-    private long version;
+    private Long version;
 
     @PrePersist
     void fillDefaults() {

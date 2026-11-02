@@ -257,7 +257,11 @@ class VideoLibrarySourceServiceTest {
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
         when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
         when(sourceRepository.save(any(VideoLibrarySource.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    VideoLibrarySource saved = invocation.getArgument(0);
+                    saved.setVersion(saved.getVersion() == null ? 0L : saved.getVersion());
+                    return saved;
+                });
 
         CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
                 "直达电影",
@@ -354,7 +358,11 @@ class VideoLibrarySourceServiceTest {
         when(storageDirectoryService.listMountChildren("media", ".", 0, 200))
                 .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
         when(sourceRepository.save(any(VideoLibrarySource.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    VideoLibrarySource saved = invocation.getArgument(0);
+                    saved.setVersion(saved.getVersion() == null ? 0L : saved.getVersion());
+                    return saved;
+                });
 
         var result = service.provisionMountLibrary(
                 OWNER_ID,
@@ -397,7 +405,11 @@ class VideoLibrarySourceServiceTest {
                 .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
         when(sourceRepository.save(any(VideoLibrarySource.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    VideoLibrarySource saved = invocation.getArgument(0);
+                    saved.setVersion(saved.getVersion() == null ? 0L : saved.getVersion());
+                    return saved;
+                });
 
         var result = service.provisionMountLibrary(
                 OWNER_ID,
@@ -533,7 +545,11 @@ class VideoLibrarySourceServiceTest {
                 .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
         when(sourceRepository.save(any(VideoLibrarySource.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    VideoLibrarySource saved = invocation.getArgument(0);
+                    saved.setVersion(saved.getVersion() == null ? 0L : saved.getVersion());
+                    return saved;
+                });
 
         var result = service.provisionMountLibrary(
                 OWNER_ID,

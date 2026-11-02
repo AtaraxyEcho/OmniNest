@@ -1,6 +1,7 @@
 package com.omninest.common.security;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,5 +56,28 @@ public interface SessionRevocationCache {
      * @param ttl 标记保留时间
      */
     default void markNotRevoked(UUID userId, UUID sessionId, Duration ttl) {
+    }
+
+    /**
+     * 记录用户级访问令牌截止时间：早于该时间签发的令牌视为陈旧。
+     *
+     * <p>用于权限变更时保留当前会话、但仍要立刻淘汰旧令牌声明的场景。记录保留时长
+     * 不短于访问令牌有效期，过期后 JWT 自身的有效期末尾已覆盖全部旧令牌。</p>
+     *
+     * @param userId 用户标识
+     * @param cutoff 截止时间（秒级精度）
+     * @param ttl 记录保留时间
+     */
+    default void markAccessTokenCutoff(UUID userId, Instant cutoff, Duration ttl) {
+    }
+
+    /**
+     * 读取用户级访问令牌截止时间。
+     *
+     * @param userId 用户标识
+     * @return 截止时间；未设置、已过期或缓存不可用时返回空
+     */
+    default Optional<Instant> accessTokenCutoff(UUID userId) {
+        return Optional.empty();
     }
 }

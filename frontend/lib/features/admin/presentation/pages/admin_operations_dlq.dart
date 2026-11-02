@@ -58,11 +58,17 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
   /// 勾选按业务 ID 保存：列表刷新或单行操作导致下标平移时，勾选仍跟着原来的任务。
   final Set<String> _selectedIds = <String>{};
 
+  int _page = 0;
+  int _pageSize = 50;
+
   @override
   void didUpdateWidget(_DlqTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query && _selectedIds.isNotEmpty) {
-      setState(_selectedIds.clear);
+    if (oldWidget.query != widget.query) {
+      _page = 0;
+      if (_selectedIds.isNotEmpty) {
+        setState(_selectedIds.clear);
+      }
     }
   }
 
@@ -181,6 +187,14 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                           false);
                 }).toList();
         final visibleSelection = _visibleSelection(filtered);
+        // 前端分页：死信可能积累数百条，一次性构建全部表格行会拖慢整帧。
+        final pageCount = (filtered.length / _pageSize).ceil().clamp(
+          1,
+          1 << 30,
+        );
+        final safePage = _page.clamp(0, pageCount - 1);
+        final pageItems =
+            filtered.skip(safePage * _pageSize).take(_pageSize).toList();
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 16),
           child: AdminTableSection(
@@ -202,16 +216,17 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
               ],
               AdminDataTable(
                 showCheckboxes: true,
+                indexBase: safePage * _pageSize,
                 isChecked:
                     (index) =>
                         index >= 0 &&
-                        index < filtered.length &&
-                        _selectedIds.contains(filtered[index].id),
+                        index < pageItems.length &&
+                        _selectedIds.contains(pageItems[index].id),
                 onRowCheck: (index, value) {
-                  if (index < 0 || index >= filtered.length) {
+                  if (index < 0 || index >= pageItems.length) {
                     return;
                   }
-                  final id = filtered[index].id;
+                  final id = pageItems[index].id;
                   setState(() {
                     value ? _selectedIds.add(id) : _selectedIds.remove(id);
                   });
@@ -234,7 +249,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                 minTableWidth: 980,
                 // 两个 48px 图标按钮需 2×48 加余量，默认 168 偏宽。
                 actionColumnWidth: 112,
-                rowCount: filtered.length,
+                rowCount: pageItems.length,
                 emptyState: AdminListEmptyState(
                   // 无死信属健康态，与“筛选无匹配”区分，避免误读为异常。
                   message:
@@ -274,7 +289,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                   ),
                 ],
                 rowCellsBuilder: (context, index) {
-                  final item = filtered[index];
+                  final item = pageItems[index];
                   // 丢弃确认以任务 ID 前 8 位短码为口令，列表同步展示短码，
                   // 悬停可见完整 ID 便于日志检索。
                   final shortId =
@@ -319,7 +334,7 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                   ];
                 },
                 actionsBuilder: (context, index) {
-                  final item = filtered[index];
+                  final item = pageItems[index];
                   return [
                     AdminRowIconAction(
                       tooltip: l10n.adminRetry,
@@ -335,6 +350,21 @@ class _DlqTabState extends ConsumerState<_DlqTab> {
                   ];
                 },
               ),
+              if (filtered.length > _pageSize) ...[
+                const SizedBox(height: 12),
+                WorkstationPaginationBar(
+                  currentPage: safePage,
+                  totalPages: pageCount,
+                  totalElements: filtered.length,
+                  rowsPerPage: _pageSize,
+                  onPageChanged: (next) => setState(() => _page = next),
+                  onRowsPerPageChanged:
+                      (next) => setState(() {
+                        _pageSize = next;
+                        _page = 0;
+                      }),
+                ),
+              ],
             ],
           ),
         );

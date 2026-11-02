@@ -117,7 +117,7 @@ class PhotoAdminServiceTest {
         when(scanJobRepository.save(any(PhotoScanJob.class))).thenAnswer(invocation -> {
             PhotoScanJob saved = invocation.getArgument(0);
             // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
-            saved.setVersion(saved.getVersion() + 1);
+            saved.setVersion(saved.getVersion() == null ? 1L : saved.getVersion() + 1L);
             return saved;
         });
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
