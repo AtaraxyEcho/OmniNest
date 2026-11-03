@@ -14,6 +14,7 @@ import com.omninest.modules.photos.repository.PhotoTagRepository;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -33,6 +34,13 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class PhotoDtoAssembler {
+
+    /** 浏览器可直接解码的栅格格式：缩略图未就绪时可安全回退到原图。 */
+    private static final Set<String> BROWSER_DECODABLE_FORMATS =
+            Set.of("JPEG", "JPG", "PNG", "WEBP", "GIF", "BMP", "AVIF");
+
+    /** 原图回退的体积上限：超过该阈值仍走缩略图，避免网格加载原始大图。 */
+    private static final long MAX_SOURCE_FALLBACK_BYTES = 15L * 1024 * 1024;
 
     private final PhotoItemRepository photoItemRepository;
     private final PhotoFavoriteRepository favoriteRepository;
@@ -141,7 +149,7 @@ public class PhotoDtoAssembler {
                 item.getGpsLocation(),
                 item.getFormat(),
                 item.getFileSize(),
-                urlOrNull(coverUrls, item.getCoverFileId()),
+                resolveCoverUrl(item, coverUrls, sourceUrls, activeFileByPhoto),
                 urlOrNull(sourceUrls, activeFileByPhoto.getOrDefault(item.getId(), item.getFileNodeId())),
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),
@@ -149,6 +157,45 @@ public class PhotoDtoAssembler {
                 tagsByPhoto.getOrDefault(item.getId(), List.of()),
                 item.getMotionState()
         )).toList();
+    }
+
+    /**
+     * 解析列表封面地址：缩略图未就绪时对安全的常规图片回退到原图。
+     *
+     * <p>刚上传或恢复的照片，缩略图由后台队列异步生成；此时 {@code coverFileId} 为空，
+     * 若直接把封面地址置空，前端网格会在队列消费完成前一直显示占位块。RAW 与超限文件
+     * 不回退：浏览器无法解码，或者会在网格里拉取原始大图。</p>
+     *
+     * @param item 列表投影
+     * @param coverUrls 封面预签名地址
+     * @param sourceUrls 原图预签名地址
+     * @param activeFileByPhoto 照片到活动文件节点的映射
+     * @return 封面地址或原图回退地址
+     */
+    private String resolveCoverUrl(
+            PhotoListItemProjection item,
+            Map<UUID, String> coverUrls,
+            Map<UUID, String> sourceUrls,
+            Map<UUID, UUID> activeFileByPhoto
+    ) {
+        String coverUrl = urlOrNull(coverUrls, item.getCoverFileId());
+        if (coverUrl != null) {
+            return coverUrl;
+        }
+        UUID activeFileId = activeFileByPhoto.getOrDefault(item.getId(), item.getFileNodeId());
+        return canFallbackToSource(item.getFormat(), item.getFileSize())
+                ? urlOrNull(sourceUrls, activeFileId)
+                : null;
+    }
+
+    private boolean canFallbackToSource(String format, long fileSize) {
+        if (format == null || format.isBlank()) {
+            return false;
+        }
+        if (fileSize > MAX_SOURCE_FALLBACK_BYTES) {
+            return false;
+        }
+        return BROWSER_DECODABLE_FORMATS.contains(format.trim().toUpperCase(Locale.ROOT));
     }
 
     /**

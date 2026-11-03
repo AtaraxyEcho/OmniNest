@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -109,7 +110,10 @@ class _PhotoAlbumPhotoPickerPageState
           ),
           PhotoHostedToolbarRow(
             minHeight: 40,
-            label: state.error ?? l10n.photosSelectedCount(selectedCount),
+            label:
+                state.error != null
+                    ? l10n.localizeStoredError(state.error!)
+                    : l10n.photosSelectedCount(selectedCount),
             actions: [
               PhotoHostedPillButton(
                 icon: Icons.check_rounded,
@@ -141,7 +145,7 @@ class _PhotoAlbumPhotoPickerPageState
           EnvEmptyState(
             icon: OmniIcons.close,
             title: l10n.photosOperationFailed,
-            message: state.error,
+            message: l10n.localizeStoredError(state.error!),
             actionLabel: l10n.coreRetry,
             onAction:
                 () => unawaited(
@@ -192,18 +196,13 @@ class _PhotoAlbumPhotoPickerPageState
         return false;
       },
       child: PhotoHostedPhotoGrid(
-        itemCount:
-            candidates.length + (state.hasMore || state.isLoadingMore ? 1 : 0),
+        itemCount: candidates.length + (_showFooter(state, candidates) ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= candidates.length) {
-            return Center(
-              child: SizedBox.square(
-                dimension: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: context.env.inkMuted,
-                ),
-              ),
+            return _PickerLoadMoreFooter(
+              state: state,
+              onRetry:
+                  () => ref.read(photoAlbumPickerProvider.notifier).loadMore(),
             );
           }
           final photo = candidates[index];
@@ -290,7 +289,9 @@ class _PhotoAlbumPhotoPickerPageState
           child:
               state.error != null && candidates.isEmpty
                   ? AppErrorView(
-                    message: state.error!,
+                    message: AppLocalizations.of(
+                      context,
+                    ).localizeStoredError(state.error!),
                     onRetry:
                         () => ref
                             .read(photoAlbumPickerProvider.notifier)
@@ -350,16 +351,18 @@ class _PhotoAlbumPhotoPickerPageState
                               ),
                           itemCount:
                               candidates.length +
-                              (state.hasMore || state.isLoadingMore ? 1 : 0),
+                              (_showFooter(state, candidates) ? 1 : 0),
                           itemBuilder: (context, index) {
                             if (index >= candidates.length) {
-                              return const Center(
-                                child: SizedBox.square(
-                                  dimension: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
+                              return _PickerLoadMoreFooter(
+                                state: state,
+                                onRetry:
+                                    () =>
+                                        ref
+                                            .read(
+                                              photoAlbumPickerProvider.notifier,
+                                            )
+                                            .loadMore(),
                               );
                             }
                             final photo = candidates[index];
@@ -407,7 +410,9 @@ class _PhotoAlbumPhotoPickerPageState
             children: [
               Expanded(
                 child: Text(
-                  state.error ?? '',
+                  state.error != null
+                      ? l10n.localizeStoredError(state.error!)
+                      : '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -454,41 +459,82 @@ class _CandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          PhotoGridTile(photo: photo, onTap: onTap),
-          if (selected)
-            Container(
+    // 只保留 PhotoGridTile 自带的点击/焦点语义：外层再包一层同 onTap 的 InkWell 会
+    // 让读屏器在同一张候选照片上报两个嵌套按钮，并出现双重水波纹。
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PhotoGridTile(photo: photo, onTap: onTap),
+        if (selected)
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: context.photosColors.primaryContainer,
+                width: 3,
+              ),
+            ),
+          ),
+        if (selected)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: context.photosColors.primaryContainer,
-                  width: 3,
-                ),
+                color: context.photosColors.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 16,
+                color: context.photosColors.surface,
               ),
             ),
-          if (selected)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: context.photosColors.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_rounded,
-                  size: 16,
-                  color: context.photosColors.surface,
-                ),
-              ),
-            ),
-        ],
+          ),
+      ],
+    );
+  }
+}
+
+/// 是否需要在网格尾部追加“加载更多/重试”条目。
+bool _showFooter(PhotoAlbumPickerState state, List<PhotoItem> candidates) {
+  if (state.isLoadingMore || state.hasMore) {
+    return true;
+  }
+  // 续页失败且已有内容时保留尾部条目，让错误可见、可点重试。
+  return state.error != null && candidates.isNotEmpty;
+}
+
+/// 候选网格尾部：加载中显示进度，失败显示可点击的重试文案。
+class _PickerLoadMoreFooter extends StatelessWidget {
+  const _PickerLoadMoreFooter({required this.state, required this.onRetry});
+
+  final PhotoAlbumPickerState state;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.error != null) {
+      final l10n = AppLocalizations.of(context);
+      return Center(
+        child: TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: Text(
+            '${l10n.localizeStoredError(state.error!)} · ${l10n.coreRetry}',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: SizedBox.square(
+        dimension: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: context.env.inkMuted,
+        ),
       ),
     );
   }

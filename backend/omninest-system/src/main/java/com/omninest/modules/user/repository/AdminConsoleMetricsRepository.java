@@ -66,7 +66,12 @@ public class AdminConsoleMetricsRepository {
         query.setParameter("taskId", taskId);
         query.setParameter("status", status);
         query.setParameter("progress", progress);
-        return taskRecord((Object[]) query.getSingleResult());
+        AdminOperationsDto.TaskRecordItem result = taskRecord((Object[]) query.getSingleResult());
+        // 原生 UPDATE 不会同步一级缓存：先把挂起的写入刷盘再清空，调用方重读才能拿到新的
+        // status/progress/version，否则补发的实时同步事件会带着更新前的旧值。
+        entityManager.flush();
+        entityManager.clear();
+        return result;
     }
 
     /**
@@ -112,7 +117,10 @@ public class AdminConsoleMetricsRepository {
         query.setParameter("status", status);
         query.setParameter("expectedStatus", expectedStatus);
         query.setParameter("reason", reason);
-        return taskRecord((Object[]) query.getSingleResult());
+        AdminOperationsDto.TaskRecordItem result = taskRecord((Object[]) query.getSingleResult());
+        entityManager.flush();
+        entityManager.clear();
+        return result;
     }
 
     // ── DTO 映射 ──────────────────────────────────────────────────────

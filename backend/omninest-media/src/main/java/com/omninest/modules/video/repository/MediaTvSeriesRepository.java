@@ -48,11 +48,44 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
 
     Optional<MediaTvSeries> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
-    Optional<MediaTvSeries> findByTmdbIdAndOwnerUserId(Integer tmdbId, UUID ownerUserId);
+    /**
+     * 按 TMDB ID 匹配系列。
+     *
+     * <p>{@code (owner_user_id, tmdb_id)} 没有唯一约束，重复刮削可能留下多行；单值查询
+     * 必须带确定性排序。</p>
+     *
+     * @param tmdbId TMDB 系列 ID
+     * @param ownerUserId 所有者用户 ID
+     * @return 最早创建的匹配系列
+     */
+    Optional<MediaTvSeries> findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(
+            Integer tmdbId, UUID ownerUserId);
 
-    Optional<MediaTvSeries> findByOwnerUserIdAndTitle(UUID ownerUserId, String title);
+    /**
+     * 按标题匹配个人网盘（{@code library_source_id IS NULL}）的系列。
+     *
+     * <p>表上只有 {@code (owner_user_id, library_source_id, lower(title))} 的局部唯一索引，
+     * 同名系列可以分属不同媒体库来源；个人网盘这一支同样允许历史重复行。因此必须限定
+     * {@code library_source_id IS NULL} 并使用 {@code findFirst} 带排序，避免多行 500。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param title 系列标题
+     * @return 最早创建的匹配系列
+     */
+    Optional<MediaTvSeries> findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
+            UUID ownerUserId, String title);
 
-    Optional<MediaTvSeries> findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+    /**
+     * 按媒体库来源与标题匹配系列。
+     *
+     * <p>局部唯一索引未被数据库强制（历史数据可能重复），仍按确定性排序取最早一行。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param librarySourceId 媒体库来源 ID
+     * @param title 系列标题
+     * @return 最早创建的匹配系列
+     */
+    Optional<MediaTvSeries> findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
             UUID ownerUserId, UUID librarySourceId, String title);
 
     List<MediaTvSeries> findByOwnerUserIdAndSeriesTypeOrderByUpdatedAtDesc(UUID ownerUserId, String seriesType);

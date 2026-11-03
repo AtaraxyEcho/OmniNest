@@ -216,10 +216,12 @@ public class LocalMediaLibraryClassifier {
             LocalDate releaseDate
     ) {
         MediaMovie existing = releaseDate == null
-                ? movieRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDateIsNull(
-                        ownerUserId, sourceId, title).orElse(null)
-                : movieRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDate(
-                        ownerUserId, sourceId, title, releaseDate).orElse(null);
+                ? movieRepository
+                        .findFirstByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDateIsNullOrderByCreatedAtAsc(
+                                ownerUserId, sourceId, title).orElse(null)
+                : movieRepository
+                        .findFirstByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDateOrderByCreatedAtAsc(
+                                ownerUserId, sourceId, title, releaseDate).orElse(null);
         if (existing != null) {
             return existing;
         }
@@ -238,7 +240,9 @@ public class LocalMediaLibraryClassifier {
             String title,
             MediaLibraryType libraryType
     ) {
-        return seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(ownerUserId, sourceId, title)
+        return seriesRepository
+                .findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
+                        ownerUserId, sourceId, title)
                 .orElseGet(() -> {
                     MediaTvSeries series = new MediaTvSeries();
                     series.setOwnerUserId(ownerUserId);

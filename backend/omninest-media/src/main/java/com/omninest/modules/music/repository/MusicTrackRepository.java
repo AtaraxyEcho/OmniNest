@@ -480,6 +480,52 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             Pageable pageable);
 
     /**
+     * 统计用户可见曲目数（个人 + 共享），口径与 {@link #findTracksVisibleToUser} 一致。
+     *
+     * <p>仪表盘若只按 {@code owner_user_id} 统计，共享空间里由其他成员上传的曲目会在
+     * 列表页可见、首页却显示 0 首。</p>
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @return 可见曲目数
+     */
+    @Query("""
+            select count(distinct t) from MusicTrack t
+            join FileNode f on t.fileNodeId = f.id
+            where f.deleted = false
+              and (
+                t.ownerUserId = :userId
+                or (:sharedType is not null and f.spaceType = :sharedType)
+              )
+            """)
+    long countVisibleToUser(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 查询用户可见的最近更新曲目，口径与 {@link #findTracksVisibleToUser} 一致。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param pageable 分页限制
+     * @return 可见曲目
+     */
+    @Query("""
+            select distinct t from MusicTrack t
+            join FileNode f on t.fileNodeId = f.id
+            where f.deleted = false
+              and (
+                t.ownerUserId = :userId
+                or (:sharedType is not null and f.spaceType = :sharedType)
+              )
+            order by t.updatedAt desc
+            """)
+    List<MusicTrack> findTopVisibleByUpdatedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
      * 按 ID 集合查询用户可见曲目（个人 + 共享空间），口径与
      * {@link #findTracksVisibleToUser} 一致。
      *

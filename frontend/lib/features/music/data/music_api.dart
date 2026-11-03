@@ -3,6 +3,7 @@ import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -762,19 +763,9 @@ class MusicApi {
     if (url.isEmpty) {
       return url;
     }
-    final parsed = Uri.tryParse(url);
-    if (parsed != null && parsed.hasScheme) {
-      return url;
-    }
-    final base = apiClient.dio.options.baseUrl;
-    if (url.startsWith('/')) {
-      final baseUri = Uri.parse(base);
-      final origin = '${baseUri.scheme}://${baseUri.authority}';
-      return '$origin${url.startsWith('/api/v1') ? url : '/api/v1$url'}';
-    }
-    final normalizedBase =
-        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    return '$normalizedBase/$url';
+    // 后端下发的可播地址可能是 `/api/v1/...` 根相对路径，也可能是省略前缀的
+    // `/music/stream/...`；统一由解析器区分，且保留子路径部署前缀。
+    return resolveServerApiUrl(apiClient.dio.options.baseUrl, url);
   }
 
   Map<String, dynamic> parseData(Map<String, dynamic>? body) {

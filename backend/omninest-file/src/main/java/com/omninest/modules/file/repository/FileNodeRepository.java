@@ -234,11 +234,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
-     * 按 ID 游标读取指定空间与路径前缀下的节点。
+     * 按 ID 游标读取指定空间与路径前缀下的节点（含回收站节点）。
      *
-     * <p>该查询驱动共享空间改名时的子树路径重写。被改写的 normalizedPath 正是过滤条件列，
-     * 用 OFFSET 翻页会让改写后的记录退出结果集、后续页整体前移，从而跳过未改写的一半节点，
-     * 因此必须按主键游标推进。</p>
+     * <p>仅供永久删除的影响面统计使用。被统计的 normalizedPath 不会被改写，OFFSET 不会
+     * 造成漏页；但路径改名必须改用 {@link #findActiveSubtreeBySpaceTypeAfterId}，因为
+     * 改名会改写过滤条件列本身，且回收站节点不允许跟着活动目录改名。</p>
      *
      * @param spaceType 空间类型
      * @param prefix 已转义的路径前缀
@@ -250,31 +250,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' "
             + "and node.id > :afterId order by node.id asc")
     List<FileNode> findSubtreeBySpaceTypeAfterId(
-            @Param("spaceType") SpaceType spaceType,
-            @Param("prefix") String prefix,
-            @Param("afterId") UUID afterId,
-            Pageable limit
-    );
-
-    /**
-     * 按主键游标翻页读取个人空间某目录下的全部后代（含回收站节点）。
-     *
-     * <p>改名/移动必须同步软删除子孙的规范化路径，否则从回收站恢复后
-     * {@code parent_id} 与 {@code normalized_path} 指向两个位置。</p>
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param spaceType 空间类型
-     * @param prefix 已转义的路径前缀
-     * @param afterId 上一页最大节点 ID，首页传最小 UUID
-     * @param limit 单批数量
-     * @return 按 ID 升序的节点批次
-     */
-    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
-            + "and node.spaceType = :spaceType "
-            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' "
-            + "and node.id > :afterId order by node.id asc")
-    List<FileNode> findPersonalSubtreeAfterId(
-            @Param("ownerUserId") UUID ownerUserId,
             @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
             @Param("afterId") UUID afterId,
@@ -542,12 +517,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             UUID ownerUserId, SpaceType spaceType, String name);
 
     boolean existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
-            UUID ownerUserId, SpaceType spaceType, UUID parentId, String name);
-
-    Optional<FileNode> findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
-            UUID ownerUserId, SpaceType spaceType, String name);
-
-    Optional<FileNode> findByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedTrue(
             UUID ownerUserId, SpaceType spaceType, UUID parentId, String name);
 
     @Query("select n from FileNode n where n.deleted = true and n.deletedAt < :cutoff")

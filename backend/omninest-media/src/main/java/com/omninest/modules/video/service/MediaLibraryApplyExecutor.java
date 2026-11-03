@@ -7,6 +7,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.LocalMediaScanEntry;
 import com.omninest.modules.file.service.LocalMediaIndexService;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaScanBatch;
 import com.omninest.modules.video.domain.MediaScanCandidate;
@@ -46,16 +47,23 @@ public class MediaLibraryApplyExecutor {
     private final LocalMediaLibraryClassifier classifier;
     private final AdaptiveChunkPolicy chunkPolicy;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final ReadThroughCache readThroughCache;
     private final MediaSyncEventService syncEventService;
     private final PlatformTransactionManager transactionManager;
 
-    /** 执行按需入库任务。 */
+    /**
+     * 执行按需入库任务。
+     *
+     * <p>LOCAL_VIDEO_LIBRARY_APPLY 在恢复调度器的回收类型里，判定依据是心跳而不是阶段；
+     * 慢速 NAS/SMB 上单个批次分类入库可能超过 stale 阈值，必须全程续期心跳，
+     * 否则任务会被判死并重投，两个消费者同时修改同一扫描运行。</p>
+     */
     public void execute(LocalVideoLibraryApplyRequestedEvent event) {
         if (!taskRecordService.claimForExecution(event.taskId(), "APPLYING")) {
             return;
         }
-        try {
+        try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(event.taskId())) {
             VideoLibrarySource source = prepare(event);
             if (applyBatches(event, source)) {
                 complete(event, source);

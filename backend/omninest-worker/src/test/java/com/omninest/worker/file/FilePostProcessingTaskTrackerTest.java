@@ -16,6 +16,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.util.Map;
@@ -30,6 +31,7 @@ class FilePostProcessingTaskTrackerTest {
 
     private TaskRecordService taskRecordService;
     private TaskDispatchService taskDispatchService;
+    private TaskHeartbeatRunner taskHeartbeatRunner;
     private FilePostProcessingTaskTracker tracker;
 
     private static final UUID OWNER = UUID.randomUUID();
@@ -40,7 +42,13 @@ class FilePostProcessingTaskTrackerTest {
     void setUp() {
         taskRecordService = Mockito.mock(TaskRecordService.class);
         taskDispatchService = Mockito.mock(TaskDispatchService.class);
-        tracker = new FilePostProcessingTaskTracker(taskRecordService, taskDispatchService);
+        // 心跳租约按引用存进 Map，未桩化的 null 会被 ConcurrentHashMap 拒绝；
+        // 这里给一个可关闭的假租约，close() 为空操作。
+        taskHeartbeatRunner = Mockito.mock(TaskHeartbeatRunner.class);
+        Mockito.when(taskHeartbeatRunner.start(Mockito.any(UUID.class)))
+                .thenReturn(Mockito.mock(TaskHeartbeatRunner.Heartbeat.class));
+        tracker = new FilePostProcessingTaskTracker(
+                taskRecordService, taskDispatchService, taskHeartbeatRunner);
     }
 
     private FileUploadedEvent event() {

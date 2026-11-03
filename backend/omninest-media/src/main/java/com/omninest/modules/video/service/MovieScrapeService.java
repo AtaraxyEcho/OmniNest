@@ -257,16 +257,14 @@ public class MovieScrapeService {
     private FileDescriptor resolveVideoFile(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = fileMetadataQueryService.findOwnedActive(ownerUserId, fileNodeId)
                 .orElse(null);
-        // 如果不是拥有者的文件，检查是否为共享文件
+        // 非拥有者文件一律交给权限矩阵：共享空间成员与父目录分享的子文件其 shared
+        // 布尔位都可能是 false，权限由空间角色或继承链推导，不能用该字段提前短路。
         if (file == null) {
             file = fileMetadataQueryService.findActiveById(fileNodeId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-            if (!file.shared()) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "文件未共享");
-            }
             FilePermission perm = filePermissionService.resolvePermission(fileNodeId, ownerUserId);
             if (!perm.allowView()) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "无查看权限");
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该视频文件");
             }
         }
         if (!NodeType.FILE.getValue().equals(file.nodeType())
@@ -289,7 +287,9 @@ public class MovieScrapeService {
         // 剧集在入库时即关联系列，确保去重和分组立即生效
         if (isEpisode && guess.title() != null && !guess.title().isBlank()) {
             String seriesTitle = guess.title().trim();
-            MediaTvSeries series = tvSeriesRepository.findByOwnerUserIdAndTitle(ownerUserId, seriesTitle)
+            MediaTvSeries series = tvSeriesRepository
+                    .findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
+                            ownerUserId, seriesTitle)
                     .orElseGet(() -> {
                         MediaTvSeries s = new MediaTvSeries();
                         s.setOwnerUserId(ownerUserId);

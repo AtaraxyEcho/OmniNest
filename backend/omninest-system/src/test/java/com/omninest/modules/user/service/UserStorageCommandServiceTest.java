@@ -2,15 +2,17 @@ package com.omninest.modules.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.repository.AuthUserRepository;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 /**
  * 用户存储写入服务测试。
@@ -37,41 +39,33 @@ class UserStorageCommandServiceTest {
     }
 
     /**
-     * 验证校准只批量保存发生变化的用户。
+     * 对账只按列写回发生变化的用户：整实体 saveAll 会把对账窗口内的并发改密/改昵称一起覆盖，
+     * 并让单个乐观锁冲突拖垮整批事务。
      */
     @Test
-    void reconcileUsageSavesChangedUsersInBatch() {
+    void reconcileUsageUpdatesOnlyChangedUsersColumn() {
         UUID unchangedId = UUID.fromString("10000000-0000-0000-0000-000000000002");
-        AuthUser changed = user(USER_ID, 100);
-        AuthUser unchanged = user(unchangedId, 50);
-        when(authUserRepository.findAllById(Map.of(USER_ID, 300L, unchangedId, 50L).keySet()))
-                .thenReturn(List.of(changed, unchanged));
+        when(authUserRepository.reconcileUsedBytes(USER_ID, 300L)).thenReturn(1);
+        when(authUserRepository.reconcileUsedBytes(unchangedId, 50L)).thenReturn(0);
 
-        int result = service.reconcileUsage(Map.of(USER_ID, 300L, unchangedId, 50L));
+        List<UUID> result = service.reconcileUsage(Map.of(USER_ID, 300L, unchangedId, 50L));
 
-        assertThat(result).isEqualTo(1);
-        verify(authUserRepository).saveAll(List.of(changed));
-        assertThat(changed.getUsedBytes()).isEqualTo(300);
+        assertThat(result).containsExactly(USER_ID);
+        verify(authUserRepository).reconcileUsedBytes(USER_ID, 300L);
+        verify(authUserRepository).reconcileUsedBytes(unchangedId, 50L);
+        verify(authUserRepository, never()).saveAll(ArgumentMatchers.anyCollection());
     }
 
     @Test
     void reconcileUsageTreatsMissingAggregateAsZero() {
-        AuthUser changed = user(USER_ID, 100);
-        when(authUserRepository.findAllById(Map.of(USER_ID, 0L).keySet()))
-                .thenReturn(List.of(changed));
+        // 聚合缺失（用户已全部删除）必须写 0 而不是跳过，否则残留用量永久占着配额。
+        Map<UUID, Long> actualUsage = new HashMap<>();
+        actualUsage.put(USER_ID, null);
+        when(authUserRepository.reconcileUsedBytes(USER_ID, 0L)).thenReturn(1);
 
-        int result = service.reconcileUsage(Map.of(USER_ID, 0L));
+        List<UUID> result = service.reconcileUsage(actualUsage);
 
-        assertThat(result).isEqualTo(1);
-        assertThat(changed.getUsedBytes()).isZero();
-        verify(authUserRepository).saveAll(List.of(changed));
-    }
-
-    private AuthUser user(UUID id, long usedBytes) {
-        AuthUser user = new AuthUser();
-        user.setId(id);
-        user.setUsername("user");
-        user.setUsedBytes(usedBytes);
-        return user;
+        assertThat(result).containsExactly(USER_ID);
+        verify(authUserRepository).reconcileUsedBytes(USER_ID, 0L);
     }
 }

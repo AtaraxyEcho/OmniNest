@@ -312,11 +312,10 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
           Semantics(
             button: true,
             label: l10n.coreClose,
-            child: Tooltip(
-              message: l10n.coreClose,
-              child: IconButton(
-                onPressed: _close,
-                padding: EdgeInsets.zero,
+            child: IconButton(
+              onPressed: _close,
+              tooltip: l10n.coreClose,
+              padding: EdgeInsets.zero,
                 // 关闭属于逃生控件，命中区必须补到 48；视觉圆仍按原型尺寸，
                 // 绘制在图标侧而不是按钮背景上。
                 icon: Container(
@@ -332,10 +331,9 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                     color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
-                style: IconButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+              style: IconButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),

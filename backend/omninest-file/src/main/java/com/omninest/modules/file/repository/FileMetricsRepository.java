@@ -293,4 +293,33 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
             @Param("fileNodeId") UUID fileNodeId,
             @Param("spaceType") String spaceType,
             @Param("deleted") boolean deleted);
+
+    /**
+     * 汇总一批文件节点除当前对象外的历史版本字节数。
+     *
+     * <p>回收站恢复按实际复活的文件集合补记共享空间用量：按路径前缀汇总会把同一路径下
+     * 更早期单独删除、且不会随本次恢复复活的历史文件版本一并计入，导致账本虚增。</p>
+     *
+     * @param fileNodeIds 文件节点 ID 集合（调用方按批切分，避免超出 JDBC 参数上限）
+     * @param spaceType 空间类型
+     * @param deleted 统计已软删除还是活动节点
+     * @return 历史版本对象字节数
+     */
+    @Query(value = """
+            select coalesce(sum(f.size_bytes), 0)
+            from (
+                select distinct v.file_node_id, v.object_id
+                from omni.file_versions v
+                join omni.file_nodes n on n.id = v.file_node_id
+                where n.id in (:fileNodeIds)
+                  and n.space_type = :spaceType
+                  and n.is_deleted = :deleted
+                  and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            ) distinct_versions
+            join omni.file_objects f on f.id = distinct_versions.object_id
+            """, nativeQuery = true)
+    long sumVersionBytesForNodes(
+            @Param("fileNodeIds") Collection<UUID> fileNodeIds,
+            @Param("spaceType") String spaceType,
+            @Param("deleted") boolean deleted);
 }

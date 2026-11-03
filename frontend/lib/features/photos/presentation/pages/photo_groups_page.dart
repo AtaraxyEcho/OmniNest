@@ -110,64 +110,73 @@ class _YearList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final languageCode = Localizations.localeOf(context).languageCode;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
-      children: [
+    // 单滚动容器 + 多段 SliverGrid：年份可能有几十年，外层一次性构建全部年份与月份
+    // 的盒式 GridView（shrinkWrap + NeverScrollable）会让首帧构建所有砖块。
+    return CustomScrollView(
+      slivers: [
         for (final year in timeline.years) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(2, 3, 2, 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '${year.year}',
-                    style: TextStyle(
-                      fontFamily: AppTypography.serifFamily,
-                      fontFamilyFallback: AppTypography.serifFamilyFallback,
-                      fontSize: AppTypography.displayMedium,
-                      height: 1.0,
-                      fontWeight: FontWeight.w400,
-                      color: context.env.ink,
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(22, 7, 22, 20),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      '${year.year}',
+                      style: TextStyle(
+                        fontFamily: AppTypography.serifFamily,
+                        fontFamilyFallback:
+                            AppTypography.serifFamilyFallback,
+                        fontSize: AppTypography.displayMedium,
+                        height: 1.0,
+                        fontWeight: FontWeight.w400,
+                        color: context.env.ink,
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    AppLocalizations.of(
-                      context,
-                    ).photosAlbumPhotoCountLabel(_yearPhotoCount(year)),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 9, // ignore: font_size_whitelist
-                      color: context.env.inkMuted,
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      AppLocalizations.of(
+                        context,
+                      ).photosAlbumPhotoCountLabel(_yearPhotoCount(year)),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 9, // ignore: font_size_whitelist
+                        color: context.env.inkMuted,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 5,
-            crossAxisSpacing: 5,
-            children: [
-              for (final month in year.months)
-                _MonthTile(
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverGrid(
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 5,
+                    crossAxisSpacing: 5,
+                  ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final month = year.months[index];
+                return _MonthTile(
                   year: year.year,
                   month: month,
                   label:
                       DateFormat.MMM(
                         languageCode,
                       ).format(DateTime(year.year, month.month)).toUpperCase(),
-                ),
-            ],
+                );
+              }, childCount: year.months.length),
+            ),
           ),
         ],
+        const SliverPadding(padding: EdgeInsets.only(bottom: 96)),
       ],
     );
   }

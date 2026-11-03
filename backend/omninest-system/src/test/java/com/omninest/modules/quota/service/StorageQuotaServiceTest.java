@@ -328,13 +328,13 @@ class StorageQuotaServiceTest {
     void batchUpdateQuotaRejectsRevokedActor() {
         UUID operatorId = UUID.randomUUID();
         doThrow(new BusinessException(ErrorCode.FORBIDDEN, "操作者已失去管理权限"))
-                .when(adminActorVerifier).requireFreshAdminActor(operatorId);
+                .when(adminActorVerifier).requireFreshAdminAndCheckSuperAdmin(operatorId);
 
         assertThatThrownBy(() -> service.batchUpdateQuota(List.of(USER_ID), 5000, operatorId))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
 
-        verify(userStorageCommand, never()).updateQuota(any(), anyLong());
+        verify(userStorageCommand, never()).updateQuotaBatch(any(), anyLong());
         verifyNoInteractions(userAccountQuery, auditRecorder);
     }
 
@@ -421,26 +421,34 @@ class StorageQuotaServiceTest {
     void batchUpdateQuotaSkipsSuperAdmin() {
         UserAccountSummary normalUser = userWith(1000, 200);
         UserAccountSummary superAdmin = superAdminUser(0, 0);
-        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(normalUser));
-        when(userAccountQuery.findById(SUPER_ADMIN_ID)).thenReturn(Optional.of(superAdmin));
+        UUID operatorId = UUID.randomUUID();
+        when(adminActorVerifier.requireFreshAdminAndCheckSuperAdmin(operatorId)).thenReturn(true);
+        when(userAccountQuery.findSummariesByIds(Set.of(USER_ID, SUPER_ADMIN_ID)))
+                .thenReturn(Map.of(USER_ID, normalUser, SUPER_ADMIN_ID, superAdmin));
 
         int updated = service.batchUpdateQuota(
-                List.of(USER_ID, SUPER_ADMIN_ID), 5000, UUID.randomUUID());
+                List.of(USER_ID, SUPER_ADMIN_ID), 5000, operatorId);
 
         assertThat(updated).isEqualTo(1);
-        verify(userStorageCommand).updateQuota(USER_ID, 5000);
+        // 超管行不写库；实际变更集合用一条批量 UPDATE 落，而不是逐条 updateQuota。
+        verify(userStorageCommand).updateQuotaBatch(List.of(USER_ID), 5000);
+        verify(userStorageCommand, never()).updateQuota(any(), anyLong());
     }
 
     @Test
     @DisplayName("batchUpdateQuota: 已有用量的账号可以批量设置为 0（无限制）")
     void batchUpdateQuotaAllowsZeroForUsedAccount() {
         UserAccountSummary normalUser = userWith(1000, 800);
-        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(normalUser));
+        UUID operatorId = UUID.randomUUID();
+        // 0 是无限额语义，只有超级管理员能批量下发；普通管理员走这条会先被 :322 拒绝。
+        when(adminActorVerifier.requireFreshAdminAndCheckSuperAdmin(operatorId)).thenReturn(true);
+        when(userAccountQuery.findSummariesByIds(Set.of(USER_ID)))
+                .thenReturn(Map.of(USER_ID, normalUser));
 
-        int updated = service.batchUpdateQuota(List.of(USER_ID), 0, UUID.randomUUID());
+        int updated = service.batchUpdateQuota(List.of(USER_ID), 0, operatorId);
 
         assertThat(updated).isEqualTo(1);
-        verify(userStorageCommand).updateQuota(USER_ID, 0);
+        verify(userStorageCommand).updateQuotaBatch(List.of(USER_ID), 0);
     }
 
     @Test
@@ -457,7 +465,9 @@ class StorageQuotaServiceTest {
                 .thenReturn(Map.of(firstBatch.getFirst(), 1024L));
         when(storageMetricsQuery.actualUsageByUsers(List.of(finalUserId)))
                 .thenReturn(Map.of());
-        when(userStorageCommand.reconcileUsage(any())).thenReturn(2, 1);
+        // reconcileUsage 现在返回被校准命中的用户 ID，便于上层逐个失效资料缓存。
+        when(userStorageCommand.reconcileUsage(any()))
+                .thenReturn(List.of(firstBatch.getFirst(), firstBatch.get(1)), List.of(finalUserId));
 
         int updated = service.recalculateAllUsages();
 

@@ -56,6 +56,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class FileShareAccessService {
+
+    /** 单次同步转存的子树节点上限，与 {@code FileManagerService.MAX_SYNC_COPY_NODES} 同量级。 */
+    private static final int MAX_SYNC_TRANSFER_NODES = 2_000;
+
     private final FileNodeRepository fileNodeRepository;
     private final ShareLinkRepository shareLinkRepository;
     private final FileShareRecipientRepository shareRecipientRepository;
@@ -559,6 +563,12 @@ public class FileShareAccessService {
                         sourceFolder.getOwnerUserId(),
                         sourceFolder.getSpaceType(),
                         LikePatterns.escapeSpecials(sourceFolder.getNormalizedPath() + "/"));
+        // 与 FileManagerService.copyNode 同量级的同步复制护栏：整棵目录树会一次性载入内存
+        // 并在单个事务内写完，超大分享目录足以打爆 API 容器堆内存并长时间占住连接。
+        if (descendants.size() + 1 > MAX_SYNC_TRANSFER_NODES) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "分享文件夹包含节点过多（上限 " + MAX_SYNC_TRANSFER_NODES + " 个），请按子文件夹分批保存");
+        }
 
         List<FileNode> pending = new ArrayList<>();
         pending.add(newFolder);
@@ -608,8 +618,14 @@ public class FileShareAccessService {
         }
         List<FileNode> savedNodes = fileNodeRepository.saveAll(pending);
         chargePersonalQuota(userId, totalBytes);
-        fileIndexSyncService.scheduleAfterCommit(
-                userId, savedNodes.stream().map(FileNode::getId).toList());
+        // 只把文件节点投递全文索引：文件夹既没有内容可索引，入队只会产生无效查询。
+        List<UUID> fileIdsToIndex = savedNodes.stream()
+                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
+                .map(FileNode::getId)
+                .toList();
+        if (!fileIdsToIndex.isEmpty()) {
+            fileIndexSyncService.scheduleAfterCommit(userId, fileIdsToIndex);
+        }
         recordFileEvent(userId, newFolder.getId(), SyncAction.CREATED);
     }
 

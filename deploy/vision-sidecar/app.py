@@ -4,6 +4,7 @@ OmniNest 图像识别侧车服务。
 """
 
 import asyncio
+from collections import OrderedDict
 import ctypes
 import gc
 import hashlib
@@ -41,7 +42,9 @@ NONCE_TTL_SECONDS = SIDECAR_CLOCK_SKEW_SECONDS * 2 + 60
 MAX_TRACKED_NONCES = 100_000
 _NONCE_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}")
 _nonce_lock = threading.Lock()
-_seen_nonces: Dict[str, float] = {}
+# 插入顺序即过期时间顺序（TTL 固定），队首永远是最早过期的条目；
+# 用 dict 时满载淘汰要全表扫描并阻塞 _nonce_lock，是单请求就能触发的拒绝服务面。
+_seen_nonces: OrderedDict[str, float] = OrderedDict()
 SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
 MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
@@ -425,15 +428,21 @@ def _consume_nonce(nonce: str) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     now = time.time()
     with _nonce_lock:
-        if len(_seen_nonces) >= MAX_TRACKED_NONCES:
-            expired = [key for key, expires_at in _seen_nonces.items() if expires_at <= now]
-            for key in expired:
-                del _seen_nonces[key]
-            if len(_seen_nonces) >= MAX_TRACKED_NONCES:
-                # 只接受已通过签名校验的请求，容量耗尽按 fail-closed 处理。
-                raise HTTPException(status_code=503, detail="Nonce store is full")
+        # 均摊 O(1)：从队首弹出所有已过期条目，正常流量下几乎每次只需看一个。
+        while _seen_nonces:
+            oldest_nonce, oldest_expires_at = next(iter(_seen_nonces.items()))
+            if oldest_expires_at > now:
+                break
+            del _seen_nonces[oldest_nonce]
         if _seen_nonces.get(nonce, 0) > now:
             raise HTTPException(status_code=401, detail="Unauthorized (replayed nonce)")
+        if len(_seen_nonces) >= MAX_TRACKED_NONCES:
+            # 只接受已通过签名校验的请求，容量耗尽按 fail-closed 处理。
+            raise HTTPException(status_code=503, detail="Nonce store is full")
+        # 头部淘汰依赖"插入顺序即过期顺序"：对已存在的键直接赋值会保留它原来的位置，
+        # 于是过期后重用的 nonce 会把一个未来过期时间挂在队首，淘汰循环永久停在那里，
+        # 最终把容量上限变成常态 503。先删后插才能把它挪到队尾。
+        _seen_nonces.pop(nonce, None)
         _seen_nonces[nonce] = now + NONCE_TTL_SECONDS
 
 

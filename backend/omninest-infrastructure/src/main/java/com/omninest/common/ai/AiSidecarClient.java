@@ -6,6 +6,7 @@ import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.OutboundEndpointRules;
 import com.omninest.common.security.SafeUrlValidator;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -161,7 +162,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         try {
             // /ready 是无需鉴权的探针端点，不再携带静态令牌，避免凭据无谓出现在探测链路。
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint + "/ready"))
+                    .uri(URI.create(requireEndpoint(endpoint) + "/ready"))
                     .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 30)))
                     .GET()
                     .build();
@@ -345,15 +346,19 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         if (normalizedEndpoint.isEmpty()) {
             throw new IllegalArgumentException("图像分析侧车地址不能为空");
         }
-        // 地址来自配置中心，按自建端点档位复核：放行环回与内网（sidecar 常与本服务同机同网），
-        // 但拒绝链路本地（含云元数据段）、多播与保留段。
         URI parsed;
         try {
             parsed = URI.create(normalizedEndpoint);
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("图像分析侧车地址格式无效");
         }
-        safeUrlValidator.requireSelfHostedSafeHost(parsed);
+        // 统一走 OutboundEndpointRules：只允许 http/https、禁止用户信息与元数据主机，
+        // 并按自建端点档位复核主机（放行环回与内网，拒绝链路本地/多播/保留段）。
+        // 只查 host 会放过 file: 等协议与 user:pass@ 形式，拼接 /ready 后来源也会错位。
+        OutboundEndpointRules.requireConfiguredEndpoint(normalizedEndpoint, parsed, safeUrlValidator);
+        if (parsed.getRawQuery() != null || parsed.getRawFragment() != null) {
+            throw new IllegalArgumentException("图像分析侧车地址不允许包含查询参数或片段");
+        }
         return normalizedEndpoint;
     }
 

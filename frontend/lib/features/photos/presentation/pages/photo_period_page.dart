@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
@@ -122,7 +123,9 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          state.error!,
+                          AppLocalizations.of(
+                            context,
+                          ).localizeStoredError(state.error!),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: context.photosColors.onSurfaceVariant,
@@ -189,7 +192,29 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
                     }, childCount: photos.length),
                   ),
                 ),
-              if (state.hasMore || state.isLoadingMore)
+              // 续页失败时必须在列表尾部给出行内提示与重试入口：只把错误塞进 state
+              // 而不展示，用户点“加载更多”会毫无反应，看起来像按钮失灵。
+              if (state.error != null && photos.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 28),
+                    child: Center(
+                      child: TextButton.icon(
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(photoPeriodProvider.notifier)
+                                    .loadMore(),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(
+                          '${AppLocalizations.of(context).localizeStoredError(state.error!)} · ${AppLocalizations.of(context).coreRetry}',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else if (state.hasMore || state.isLoadingMore)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 28),

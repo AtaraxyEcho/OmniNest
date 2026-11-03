@@ -8,6 +8,8 @@ import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.repository.AuthUserRepository;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -102,32 +104,44 @@ public class UserStorageCommandService implements UserStorageCommand {
     }
 
     /**
-     * 按实际用量校准指定批次用户的已使用存储。
+     * 批量设置存储配额。
      *
-     * @param actualUsage 以用户 ID 为键的实际用量
-     * @return 被修正的用户数
+     * <p>单条 UPDATE 只改配额列，既消除逐户读取 + 整行写回的 N+1，也避免把并发修改的
+     * 密码、昵称、用量覆盖回旧快照。</p>
+     *
+     * @param userIds 目标用户 ID 集合
+     * @param quotaBytes 配额字节数
+     * @return 更新的行数
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int reconcileUsage(Map<UUID, Long> actualUsage) {
-        if (actualUsage == null || actualUsage.isEmpty()) {
+    public int updateQuotaBatch(Collection<UUID> userIds, long quotaBytes) {
+        if (userIds == null || userIds.isEmpty()) {
             return 0;
         }
-        List<AuthUser> changedUsers = authUserRepository.findAllById(actualUsage.keySet())
-                .stream()
-                .filter(user -> {
-                    long actual = Math.max(0, actualUsage.getOrDefault(user.getId(), 0L));
-                    if (user.getUsedBytes() != actual) {
-                        user.setUsedBytes(actual);
-                        return true;
-                    }
-                    return false;
-                })
-                .toList();
-        if (!changedUsers.isEmpty()) {
-            authUserRepository.saveAll(changedUsers);
+        return authUserRepository.updateQuotaBatch(userIds, quotaBytes);
+    }
+
+    /**
+     * 按实际用量校准指定批次用户的已使用存储。
+     *
+     * @param actualUsage 以用户 ID 为键的实际用量
+     * @return 实际发生变更的用户 ID 列表
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<UUID> reconcileUsage(Map<UUID, Long> actualUsage) {
+        if (actualUsage == null || actualUsage.isEmpty()) {
+            return List.of();
         }
-        return changedUsers.size();
+        List<UUID> changedUserIds = new ArrayList<>();
+        for (Map.Entry<UUID, Long> entry : actualUsage.entrySet()) {
+            long actual = Math.max(0L, entry.getValue() == null ? 0L : entry.getValue());
+            if (authUserRepository.reconcileUsedBytes(entry.getKey(), actual) > 0) {
+                changedUserIds.add(entry.getKey());
+            }
+        }
+        return List.copyOf(changedUserIds);
     }
 
     private UserAccountSummary toSummary(AuthUser user) {

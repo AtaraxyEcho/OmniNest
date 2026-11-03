@@ -138,6 +138,9 @@ class MeApi {
     final response = await _client.dio.get<Map<String, dynamic>>(
       '/me/web-share-base-url',
     );
+    // 本类其余方法都做信封校验：漏掉这一步会把 401/403 当成“未配置分享基址”，
+    // 用户看到的分享链接静默退化为本机地址。
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '获取分享链接基址失败');
     final data = response.data?['data'];
     if (data is String && data.isNotEmpty) {
       return data;

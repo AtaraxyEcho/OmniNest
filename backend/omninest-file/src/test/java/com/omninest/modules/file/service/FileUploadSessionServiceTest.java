@@ -268,9 +268,6 @@ class FileUploadSessionServiceTest {
         // 否则会把共享节点当成本人目录里的已有文件返回给前端复用。
         when(fileNodeRepository.findActiveNameConflict(OWNER_ID, SpaceType.PERSONAL, null, "photo.jpg"))
                 .thenReturn(Optional.empty());
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
-                OWNER_ID, SpaceType.PERSONAL, "photo.jpg"))
-                .thenReturn(Optional.empty());
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(objectStorageClient.createUploadUrl(any(), any())).thenReturn(URI.create("http://minio/direct"));
 

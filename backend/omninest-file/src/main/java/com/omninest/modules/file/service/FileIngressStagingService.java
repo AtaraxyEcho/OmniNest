@@ -151,6 +151,16 @@ public class FileIngressStagingService {
     }
 
     /**
+     * 在调用方事务内标记入库记录可用，暂存对象由调用方在提交后清理。
+     *
+     * @param ingressItemId 入库记录 ID
+     * @param resultFileNodeId 发布后的文件节点 ID
+     */
+    public void markAvailableWithinTransaction(UUID ingressItemId, UUID resultFileNodeId) {
+        ingressLifecycleService.markAvailableWithinTransaction(ingressItemId, resultFileNodeId);
+    }
+
+    /**
      * 清理暂存对象（入库记录保留，终态记录由保留期回收任务处理）。
      *
      * @param ingressItemId 入库记录 ID

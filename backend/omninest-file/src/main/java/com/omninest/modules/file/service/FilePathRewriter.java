@@ -5,6 +5,7 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,9 +27,15 @@ public class FilePathRewriter {
     private static final int REWRITE_BATCH_SIZE = 500;
 
     private final FileNodeRepository fileNodeRepository;
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository;
 
     /**
-     * 级联重写子树规范化路径（包含回收站里的子孙）。
+     * 级联重写活动子树的规范化路径。
+     *
+     * <p>只重写 {@code deleted = false} 的节点：回收站节点保留删除时的路径，恢复时由
+     * {@code recomputeRestoredPaths} 按 {@code parent_id} 链重算。若把已删节点一并改写，
+     * 用户“删除 /docs → 新建 /docs → 改名为 /archive”后，回收站里旧 /docs 的子文件
+     * 会被改成 /archive/...，与仍指向旧父目录的 parent_id 彻底脱节。</p>
      *
      * @param ownerUserId 所有者用户 ID（共享空间忽略）
      * @param spaceType 空间类型
@@ -46,9 +53,9 @@ public class FilePathRewriter {
         UUID afterId = new UUID(0L, 0L);
         while (true) {
             List<FileNode> batch = spaceType == SpaceType.SHARED
-                    ? fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+                    ? subtreeQueryRepository.findActiveSubtreeBySpaceTypeAfterId(
                             spaceType, prefix, afterId, PageRequest.of(0, REWRITE_BATCH_SIZE))
-                    : fileNodeRepository.findPersonalSubtreeAfterId(
+                    : subtreeQueryRepository.findActivePersonalSubtreeAfterId(
                             ownerUserId, spaceType, prefix, afterId,
                             PageRequest.of(0, REWRITE_BATCH_SIZE));
             if (batch.isEmpty()) {
@@ -68,42 +75,44 @@ public class FilePathRewriter {
     }
 
     /**
-     * 恢复前按父级当前路径重算整棵恢复子树：祖先链从根到叶，目标节点再按最终父路径落位，
-     * 子孙沿用相对后缀整体平移。
+     * 恢复前按父级当前路径重算整棵恢复子树。
+     *
+     * <p>祖先链从根到叶逐层落位，目标节点按最终父路径落位，子孙再按 {@code parent_id}
+     * 找到已重算的父路径逐层拼接。恢复子树来自按 {@code parent_id} 的广度优先收集，
+     * 天然满足父在子前，因此这里不再依赖旧字符串前缀——旧前缀可能已被活动目录改名
+     * 或回收站历史删除污染。</p>
      *
      * @param node 待恢复节点
      * @param ancestors 一并恢复的已删除祖先链（从根到叶）
-     * @param descendants 随同恢复的已删除子孙
+     * @param descendants 随同恢复的已删除子孙（父节点先于子节点）
      */
     public void recomputeRestoredPaths(
             FileNode node, List<FileNode> ancestors, List<FileNode> descendants) {
-        Map<UUID, FileNode> ancestorById = new LinkedHashMap<>();
-        ancestors.forEach(ancestor -> ancestorById.put(ancestor.getId(), ancestor));
+        Map<UUID, FileNode> knownById = new LinkedHashMap<>();
+        ancestors.forEach(ancestor -> knownById.put(ancestor.getId(), ancestor));
         for (FileNode ancestor : ancestors) {
             FileNode restoredParent = ancestor.getParentId() == null
                     ? null
-                    : ancestorById.get(ancestor.getParentId());
+                    : knownById.get(ancestor.getParentId());
             String parentPath = restoredParent != null
                     ? restoredParent.getNormalizedPath()
                     : resolveActiveParentPath(ancestor);
             ancestor.setNormalizedPath(joinNodePath(parentPath, ancestor.getName()));
         }
-        FileNode restoredParent = node.getParentId() == null ? null : ancestorById.get(node.getParentId());
-        String parentPath = restoredParent != null
+        FileNode restoredParent = node.getParentId() == null ? null : knownById.get(node.getParentId());
+        String nodeParentPath = restoredParent != null
                 ? restoredParent.getNormalizedPath()
                 : resolveActiveParentPath(node);
-        String oldPath = node.getNormalizedPath();
-        String newPath = joinNodePath(parentPath, node.getName());
-        node.setNormalizedPath(newPath);
-        if (oldPath == null || oldPath.equals(newPath)) {
-            return;
-        }
-        String oldPrefix = oldPath + "/";
+        node.setNormalizedPath(joinNodePath(nodeParentPath, node.getName()));
+        knownById.put(node.getId(), node);
+
         for (FileNode descendant : descendants) {
-            String path = descendant.getNormalizedPath();
-            if (path != null && path.startsWith(oldPrefix)) {
-                descendant.setNormalizedPath(newPath + path.substring(oldPath.length()));
-            }
+            FileNode parent = knownById.get(descendant.getParentId());
+            String parentPath = parent != null
+                    ? parent.getNormalizedPath()
+                    : resolveActiveParentPath(descendant);
+            descendant.setNormalizedPath(joinNodePath(parentPath, descendant.getName()));
+            knownById.put(descendant.getId(), descendant);
         }
     }
 

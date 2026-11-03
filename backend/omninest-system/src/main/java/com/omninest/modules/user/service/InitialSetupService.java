@@ -17,6 +17,7 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.SystemInstanceRepository;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.DateTimeException;
@@ -57,6 +58,20 @@ public class InitialSetupService {
     private final ConfigCenterService configCenterService;
     private final StorageQuotaService storageQuotaService;
     private final TransactionTemplate transactionTemplate;
+
+    /**
+     * 启动时提示不退化的安装判定来源。
+     *
+     * <p>{@code persistent-state-enabled=false} 只应出现在自动化测试里；生产开启会让
+     * 安装向导按“是否存在超管”判定，超管被误删或降权后向导重新暴露。</p>
+     */
+    @PostConstruct
+    void warnOnNonPersistentSetupState() {
+        if (!properties.isPersistentStateEnabled() && properties.isEnabled()) {
+            log.warn("安装向导未使用 system_instance 持久化状态判定，仅适用于测试环境；"
+                    + "生产部署请设置 OMNINEST_SETUP_PERSISTENT_STATE_ENABLED=true");
+        }
+    }
 
     /**
      * 查询首次安装向导状态。

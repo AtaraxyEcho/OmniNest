@@ -1,6 +1,8 @@
 package com.omninest.worker.runtime;
 
 import com.omninest.common.runtime.WorkerRuntimeRegistry;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.common.runtime.WorkerRuntimeState;
 import com.omninest.common.runtime.WorkerRuntimeState.CapabilityStatus;
 import com.omninest.modules.photos.service.PhotosRuntimeConfigService;
@@ -31,6 +33,7 @@ public class WorkerRuntimeReporter {
     private final WorkerRuntimeRegistry runtimeRegistry;
     private final WorkerRuntimeProperties runtimeProperties;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
+    private final SafeUrlValidator safeUrlValidator;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -88,12 +91,24 @@ public class WorkerRuntimeReporter {
         }
     }
 
+    /**
+     * 构造侧车就绪探针地址，并按配置基址规则复核。
+     *
+     * <p>探针虽不需要鉴权，但仍然是服务端主动出站：只校验 HTTP 状态码而不校验目标，
+     * 配置里写成 {@code file:}/{@code http://169.254.169.254} 或带查询串时，
+     * 探测本身就会成为 SSRF 通道。这里统一走 {@link OutboundEndpointRules}，
+     * 与 {@code AiSidecarClient} 保持同一判据。</p>
+     */
     private URI readinessUri(String endpoint) {
         String normalized = endpoint == null ? "" : endpoint.trim();
         if (normalized.isBlank()) {
             throw new IllegalArgumentException("照片 AI 地址为空");
         }
-        return URI.create(normalized.endsWith("/") ? normalized + "ready" : normalized + "/ready");
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        URI target = URI.create(normalized + "/ready");
+        return OutboundEndpointRules.requireConfiguredEndpoint(normalized, target, safeUrlValidator);
     }
 
 }

@@ -76,14 +76,14 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
     }
   }
 
-  /// 加载下一页；无更多、正在加载或存在错误时忽略重复触发。
+  /// 加载下一页；无更多或正在加载时忽略重复触发。
+  ///
+  /// 上一页失败后必须允许直接重试：把 `error != null` 当作入口守卫会让触底加载
+  /// 永久锁死，用户只能下拉刷新整页、丢掉滚动位置。
   Future<void> loadMore() async {
     final current = state;
     final period = current.period;
-    if (period == null ||
-        !current.hasMore ||
-        current.isLoadingMore ||
-        current.error != null) {
+    if (period == null || !current.hasMore || current.isLoadingMore) {
       return;
     }
     final generation = _generation;
@@ -103,31 +103,34 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
             month: period.$2,
             page: current.nextPage,
           );
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
-      final existingIds = current.photos.map((p) => p.id).toSet();
+      // 回写基准取发布时刻的实况：请求窗口内用户可能已滚动触发下一次加载。
+      final live = state;
+      final existingIds = live.photos.map((p) => p.id).toSet();
       final merged = [
-        ...current.photos,
+        ...live.photos,
         ...page.items.where((p) => !existingIds.contains(p.id)),
       ];
       state = PhotoPeriodState(
-        period: current.period,
+        period: live.period,
         photos: merged,
         totalElements: page.totalElements,
-        nextPage: current.nextPage + 1,
+        nextPage: live.nextPage + 1,
         hasMore: page.hasMore,
       );
     } on Exception catch (e) {
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
+      final live = state;
       state = PhotoPeriodState(
-        period: current.period,
-        photos: current.photos,
-        totalElements: current.totalElements,
-        nextPage: current.nextPage,
-        hasMore: current.hasMore,
+        period: live.period,
+        photos: live.photos,
+        totalElements: live.totalElements,
+        nextPage: live.nextPage,
+        hasMore: live.hasMore,
         error: describeUserFacingError(e).message,
       );
     }

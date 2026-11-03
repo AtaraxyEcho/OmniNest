@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
 
 /// 音乐封面专域缓存管理器。
 ///
@@ -88,11 +89,8 @@ String resolveApiAbsoluteUrl(Dio dio, String url) {
   if (!url.startsWith('/api/v1/')) {
     return url;
   }
-  final base = Uri.tryParse(dio.options.baseUrl);
-  if (base == null || !base.hasScheme || base.authority.isEmpty) {
-    return url;
-  }
-  return '${base.scheme}://${base.authority}$url';
+  // 保留子路径部署前缀：apiBaseUrl 可能是 https://host/omninest/api/v1。
+  return resolveServerApiUrl(dio.options.baseUrl, url);
 }
 
 /// [ResponseBody] 到 [FileServiceResponse] 的适配。

@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -63,6 +64,28 @@ public interface UserAccountQuery {
      * @return 以用户 ID 为键的状态映射；不存在的用户不出现在结果里
      */
     Map<UUID, String> findStatuses(Collection<UUID> userIds);
+
+    /**
+     * 批量查询用户账户摘要。
+     *
+     * <p>管理台批量操作必须一次取回全部目标账户，逐户 {@link #findById(UUID)} 会退化成
+     * 每条目标两次 JOIN 查询的 N+1。</p>
+     *
+     * @param userIds 用户 ID 集合
+     * @return 以用户 ID 为键的摘要映射；不存在的用户不出现在结果里
+     */
+    Map<UUID, UserAccountSummary> findSummariesByIds(Collection<UUID> userIds);
+
+    /**
+     * 查询一组用户中持有管理员角色的用户 ID。
+     *
+     * <p>配额模块需要判断目标是否为管理员，但不掌握角色编码；由用户模块给出结论，
+     * 避免把角色实体或角色编码泄漏到其他模块。</p>
+     *
+     * @param userIds 用户 ID 集合
+     * @return 持有管理员（含超级管理员）角色的用户 ID
+     */
+    Set<UUID> findAdminUserIds(Collection<UUID> userIds);
 
     /**
      * 按用户标识游标查询一批账户标识。

@@ -23,6 +23,7 @@ import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedSpaceRolePermissionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
@@ -65,11 +66,15 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     /** 子树路径重写的单批条目数。 */
     private static final int SUBTREE_REWRITE_BATCH_SIZE = 500;
 
+    /** 按节点集合汇总历史版本字节时的单批上限，避免超出 JDBC 参数上限。 */
+    private static final int VERSION_BYTES_BATCH_SIZE = 1000;
+
     /** 共享空间配置的审计资源标识（配置本身不是业务实体）。 */
     private static final UUID SHARED_SPACE_CONFIG_AUDIT_ID =
             UUID.nameUUIDFromBytes("shared-space-config".getBytes(StandardCharsets.UTF_8));
 
     private final FileNodeRepository fileNodeRepository;
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository;
     private final FileMetricsRepository fileMetricsRepository;
     private final SharedSpacePermissionRepository permissionRepository;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
@@ -78,6 +83,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     private final SharedSpaceCascadeCleanup cascadeCleanup;
     private final FileNodeScanQueryRepository fileNodeScanQueryRepository;
     private final ConfigValueProvider configValueProvider;
+    private final FileRestoreSupport fileRestoreSupport;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
@@ -217,10 +223,13 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     }
 
     /**
-     * 按主键游标分页重写子树规范化路径。
+     * 按主键游标分页重写活动子树的规范化路径。
      *
      * <p>驱动共享空间改名时的后代路径级联更新。只给 LIKE 用转义形式，路径改写仍按原始
      * oldPath 长度定位，不能让反斜杠进 substring。</p>
+     *
+     * <p>只重写 {@code deleted = false} 的节点：回收站节点保留删除时的路径，恢复时按
+     * {@code parent_id} 链重算，跟着活动目录改名会让其路径与父级指向脱节。</p>
      *
      * <p>翻页必须按 ID 游标而不是 OFFSET：改写掉的 normalizedPath 就是过滤条件列，
      * 第一批记录改写后已不再匹配 oldPath 前缀，剩余记录整体前移，OFFSET 会让一半节点漏改，
@@ -237,7 +246,7 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         String prefix = LikePatterns.escapeSpecials(oldPath + "/");
         UUID afterId = new UUID(0L, 0L);
         while (true) {
-            List<FileNode> batch = fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+            List<FileNode> batch = subtreeQueryRepository.findActiveSubtreeBySpaceTypeAfterId(
                     spaceType, prefix, afterId, PageRequest.of(0, SUBTREE_REWRITE_BATCH_SIZE));
             if (batch.isEmpty()) {
                 return;
@@ -607,22 +616,31 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
      * @return 恢复后应补记的字节数与文件数
      */
     public SubtreeStats calculateRestoreSubtreeStats(FileNode node) {
-        String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
         if (NodeType.FILE.getValue().equals(node.getNodeType())) {
             long versionBytes = fileMetricsRepository.sumVersionBytesForNode(
                     node.getId(), SpaceType.SHARED.getValue(), true);
             return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
         }
-        List<Object[]> rows = fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, prefix);
+        // 只统计本次真正会复活的节点：按路径前缀汇总会把同一路径下更早期单独删除、
+        // 不随本次目录恢复的历史文件一并计入，账本因此虚增且无法回退。
+        List<FileNode> restorable = fileRestoreSupport.deletedSubtreeNodes(node);
         long totalBytes = 0L;
         long fileCount = 0L;
-        if (!rows.isEmpty()) {
-            Object[] row = rows.getFirst();
-            totalBytes = SharedSpaceSupport.toLong(row[0]);
-            fileCount = SharedSpaceSupport.toLong(row[1]);
+        List<UUID> restoredFileIds = new ArrayList<>();
+        for (FileNode child : restorable) {
+            if (!NodeType.FILE.getValue().equals(child.getNodeType())) {
+                continue;
+            }
+            totalBytes += child.getSizeBytes();
+            fileCount++;
+            restoredFileIds.add(child.getId());
         }
-        totalBytes += fileMetricsRepository.sumVersionBytesUnderPathInSpace(
-                SpaceType.SHARED.getValue(), prefix, true);
+        for (int start = 0; start < restoredFileIds.size(); start += VERSION_BYTES_BATCH_SIZE) {
+            List<UUID> batch = restoredFileIds.subList(
+                    start, Math.min(start + VERSION_BYTES_BATCH_SIZE, restoredFileIds.size()));
+            totalBytes += fileMetricsRepository.sumVersionBytesForNodes(
+                    batch, SpaceType.SHARED.getValue(), true);
+        }
         return new SubtreeStats(totalBytes, fileCount);
     }
 

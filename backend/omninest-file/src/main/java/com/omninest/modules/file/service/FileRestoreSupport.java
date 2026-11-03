@@ -7,10 +7,16 @@ import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,19 +33,76 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class FileRestoreSupport {
 
+    /**
+     * 目录删除与子节点标记在同一事务内批量写入，时间戳理论上一致；不同数据库/时钟精度
+     * 下允许极小偏差。早于该窗口的已删节点视为更早的独立删除，不随目录一起复活。
+     */
+    private static final Duration DELETION_BATCH_SKEW = Duration.ofMillis(500);
+
     private final FileNodeRepository fileNodeRepository;
-    private final FileNodeLookupSupport lookup;
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository;
 
     /**
-     * 取子树内待恢复的软删除节点。
+     * 按 {@code parent_id} 广度优先收集随该目录一同删除、且可以安全复活的子孙节点。
+     *
+     * <p>不能按 {@code normalized_path} 前缀收集：同一路径下允许先后删除多个同名文件，
+     * 它们同时在回收站共存，前缀收集会把历史上所有曾在该路径下删除过的节点全部置为
+     * 未删除，事务提交时直接撞击活动路径唯一索引，导致整个文件夹无法恢复。</p>
+     *
+     * <p>三级过滤：只收本空间/本所有者的节点；只收删除时间不早于根节点删除批次的节点；
+     * 同层同名只保留最新一条，且跳过同目录已存在活动同名节点的记录。</p>
+     *
+     * @param node 待恢复的根节点
+     * @return 可安全复活的子孙节点（父节点先于子节点）
      */
     List<FileNode> deletedSubtreeNodes(FileNode node) {
-        if (node.getSpaceType() == SpaceType.SHARED) {
-            return fileNodeRepository.findDeletedBySpaceTypeAndNormalizedPathStartingWith(
-                    SpaceType.SHARED, lookup.subtreePrefix(node));
+        if (!NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+            return List.of();
         }
-        return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                node.getOwnerUserId(), node.getSpaceType(), lookup.subtreePrefix(node));
+        Instant rootDeletedAt = node.getDeletedAt();
+        SpaceType spaceType = node.getSpaceType();
+        List<FileNode> result = new ArrayList<>();
+        List<UUID> frontier = List.of(node.getId());
+        while (!frontier.isEmpty()) {
+            List<FileNode> children = subtreeQueryRepository.findRestorableChildrenByParentIds(
+                    spaceType, frontier);
+            if (children.isEmpty()) {
+                break;
+            }
+            Set<String> activeSiblingKeys = new HashSet<>();
+            for (FileNode active : subtreeQueryRepository.findActiveChildrenByParentIds(spaceType, frontier)) {
+                activeSiblingKeys.add(siblingKey(active));
+            }
+            Set<String> seenSiblingKeys = new HashSet<>();
+            List<UUID> nextFrontier = new ArrayList<>();
+            for (FileNode child : children) {
+                if (spaceType == SpaceType.PERSONAL
+                        && !Objects.equals(child.getOwnerUserId(), node.getOwnerUserId())) {
+                    continue;
+                }
+                // 早于文件夹删除时间单独删掉的历史旧文件不随文件夹整棵复活。
+                if (rootDeletedAt != null
+                        && child.getDeletedAt() != null
+                        && child.getDeletedAt().isBefore(rootDeletedAt.minus(DELETION_BATCH_SKEW))) {
+                    continue;
+                }
+                String key = siblingKey(child);
+                // 同目录已有活动同名节点：复活必然撞唯一索引，保留其在回收站的独立状态。
+                if (activeSiblingKeys.contains(key) || !seenSiblingKeys.add(key)) {
+                    continue;
+                }
+                result.add(child);
+                if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
+                    nextFrontier.add(child.getId());
+                }
+            }
+            frontier = nextFrontier;
+        }
+        return result;
+    }
+
+    private String siblingKey(FileNode node) {
+        return node.getParentId() + ":" + node.getName().toLowerCase(Locale.ROOT);
     }
 
     /**

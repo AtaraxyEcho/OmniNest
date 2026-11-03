@@ -387,6 +387,10 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     try {
       final task = await _api.scanLibrary(incremental: incremental);
       await refresh();
+      // 扫描是长耗时动作：页面退出后不得继续写已销毁的 Notifier 状态。
+      if (!ref.mounted) {
+        return;
+      }
       final refreshed = state.asData?.value ?? current;
       state = AsyncData(refreshed.copyWith(lastTask: task));
     } on Exception catch (e) {

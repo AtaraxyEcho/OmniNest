@@ -32,7 +32,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -59,6 +61,9 @@ class TaskQueryServiceTest {
     private TaskDispatchRepository taskDispatchRepository;
 
     @Mock
+    private TaskRecordService taskRecordService;
+
+    @Mock
     private RateLimitService rateLimitService;
 
     private TaskQueryService taskQueryService;
@@ -69,6 +74,7 @@ class TaskQueryServiceTest {
                 .thenReturn(true);
         taskQueryService = new TaskQueryService(
                 taskRecordRepository,
+                taskRecordService,
                 new TaskRedispatchService(taskDispatchService, taskDispatchRepository),
                 rateLimitService
         );
@@ -278,14 +284,10 @@ class TaskQueryServiceTest {
             // Act
             taskQueryService.retryDlqEntry(taskId);
 
-            // Assert
-            assertThat(dlqTask.getStatus()).isEqualTo("QUEUED");
-            assertThat(dlqTask.getRetryCount()).isZero();
-            assertThat(dlqTask.getErrorMessage()).isNull();
-            assertThat(dlqTask.getStackSummary()).isNull();
-            assertThat(dlqTask.getNextRetryAt()).isNull();
-            assertThat(dlqTask.getCompletedAt()).isNull();
-            verify(taskRecordRepository).save(dlqTask);
+            // Assert：状态重置已下沉到 TaskRecordService.resetToQueued，本入口只负责编排
+            // 「先重置、再重新投递」。逐字段的重置断言属于 resetToQueued 自身的职责边界。
+            InOrder order = Mockito.inOrder(taskRecordService, taskDispatchService);
+            order.verify(taskRecordService).resetToQueued(dlqTask);
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
             verify(taskDispatchService).enqueue(
@@ -406,13 +408,8 @@ class TaskQueryServiceTest {
 
             taskQueryService.retryOwned(OWNER_ID, taskId);
 
-            assertThat(task.getStatus()).isEqualTo(TaskStatus.QUEUED.getValue());
-            assertThat(task.getRetryCount()).isZero();
-            assertThat(task.getErrorMessage()).isNull();
-            assertThat(task.getStackSummary()).isNull();
-            assertThat(task.getNextRetryAt()).isNull();
-            assertThat(task.getCompletedAt()).isNull();
-            verify(taskRecordRepository).save(task);
+            InOrder order = Mockito.inOrder(taskRecordService, taskDispatchService);
+            order.verify(taskRecordService).resetToQueued(task);
             verify(taskDispatchService).enqueue(eq(taskId), any(), any(), any());
         }
 

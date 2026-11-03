@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.SafeUrlValidator;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ class PhotoGeoServiceTest {
     private PhotosRuntimeConfigService configService;
     private GeoCityIndex geoCityIndex;
     private MeterRegistry meterRegistry;
+    private SafeUrlValidator safeUrlValidator;
     private PhotoGeoService service;
 
     @BeforeEach
@@ -29,6 +31,7 @@ class PhotoGeoServiceTest {
         NominatimRateLimiter rateLimiter = Mockito.mock(NominatimRateLimiter.class);
         RateLimitService distributedRateLimiter = Mockito.mock(RateLimitService.class);
         meterRegistry = new SimpleMeterRegistry();
+        safeUrlValidator = Mockito.mock(SafeUrlValidator.class);
 
         when(configService.isGeoOfflineEnabled()).thenReturn(true);
         when(configService.geoMaxDistanceKm()).thenReturn(100);
@@ -39,7 +42,8 @@ class PhotoGeoServiceTest {
                 rateLimiter,
                 distributedRateLimiter,
                 meterRegistry,
-                geoCityIndex);
+                geoCityIndex,
+                safeUrlValidator);
     }
 
     private GeoCitySnapshot snapshotWithNearCity() {

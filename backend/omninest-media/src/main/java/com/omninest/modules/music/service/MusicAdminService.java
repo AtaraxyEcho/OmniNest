@@ -57,6 +57,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -944,27 +945,49 @@ public class MusicAdminService {
     }
 
     private MusicArtist artist(UUID ownerUserId, String name) {
-        return artistRepository.findByOwnerUserIdAndNameIgnoreCase(ownerUserId, name)
+        String normalizedName = name == null ? "" : name.trim();
+        return artistRepository
+                .findFirstByOwnerUserIdAndNameIgnoreCaseOrderByCreatedAtAsc(ownerUserId, normalizedName)
                 .orElseGet(() -> {
                     MusicArtist created = new MusicArtist();
                     created.setOwnerUserId(ownerUserId);
-                    created.setName(name);
+                    created.setName(normalizedName);
                     created.setTrackCount(0);
                     created.setAlbumCount(0);
                     return artistRepository.save(created);
                 });
     }
 
+    /**
+     * 解析曲目所属专辑。
+     *
+     * <p>专辑身份是“标题 + 艺术家”：同名专辑可以合法分属不同歌手。历史实现忽略
+     * {@code artistName} 直接按标题取单值，既有把曲目并入另一位歌手同名专辑的错误归并，
+     * 也会在存在两张同名专辑时抛 {@code IncorrectResultSizeDataAccessException}。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param title 专辑标题
+     * @param artistName 专辑艺术家，可为空
+     * @return 已有或新建的专辑
+     */
     private MusicAlbum album(UUID ownerUserId, String title, String artistName) {
-        return albumRepository.findByOwnerUserIdAndTitleIgnoreCase(ownerUserId, title)
-                .orElseGet(() -> {
-                    MusicAlbum created = new MusicAlbum();
-                    created.setOwnerUserId(ownerUserId);
-                    created.setTitle(title);
-                    created.setArtistName(artistName);
-                    created.setTrackCount(0);
-                    return albumRepository.save(created);
-                });
+        String normalizedTitle = title == null ? "" : title.trim();
+        String normalizedArtist = artistName == null || artistName.isBlank() ? null : artistName.trim();
+        Optional<MusicAlbum> existing = normalizedArtist == null
+                ? albumRepository
+                        .findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNullOrderByCreatedAtAsc(
+                                ownerUserId, normalizedTitle)
+                : albumRepository
+                        .findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCaseOrderByCreatedAtAsc(
+                                ownerUserId, normalizedTitle, normalizedArtist);
+        return existing.orElseGet(() -> {
+            MusicAlbum created = new MusicAlbum();
+            created.setOwnerUserId(ownerUserId);
+            created.setTitle(normalizedTitle);
+            created.setArtistName(normalizedArtist);
+            created.setTrackCount(0);
+            return albumRepository.save(created);
+        });
     }
 
     private boolean isAudioFile(FileDescriptor file) {

@@ -1,6 +1,13 @@
 -- OmniNest 当前版本数据库基线（由项目维护，禁止再写入导出工具元数据）。
 CREATE SCHEMA IF NOT EXISTS omni;
 
+-- 前导通配符 LIKE（%keyword%）无法命中 B-Tree，曲库/影视/用户目录的模糊检索会退化为
+-- 全范围扫描。pg_trgm 的 GIN 索引专门服务这类查询；扩展不可用时迁移会在初始化阶段
+-- 直接失败，而不是等到数据量上来后才发现检索变慢。
+-- 必须显式落到 public：操作符类引用写的是 "public"."gin_trgm_ops"，留给 PG 自行选
+-- 目标 schema 时，扩展会装进 search_path 首位的 schema，操作符类随之解析不到。
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA "public";
+
 CREATE TABLE "omni"."audit_logs" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "actor_user_id" uuid,
@@ -4326,3 +4333,17 @@ COMMENT ON COLUMN "omni"."sys_task_dispatches"."last_error_code" IS '最近一�
 COMMENT ON COLUMN "omni"."sys_task_dispatches"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."sys_task_dispatches"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."sys_task_dispatches"."version" IS '乐观锁版本号';
+
+-- ── 模糊检索索引（pg_trgm）────────────────────────────────────────────
+-- 与 Lucene 全文索引分工：这里服务管理台与媒体库的“包含匹配”筛选，
+-- 表达式必须与查询里的 LOWER(...) 完全一致，否则索引不会被命中。
+CREATE INDEX "idx_music_tracks_title_trgm" ON "omni"."music_tracks"
+  USING gin (lower("title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_music_tracks_artist_trgm" ON "omni"."music_tracks"
+  USING gin (lower("artist_name") "public"."gin_trgm_ops");
+CREATE INDEX "idx_media_movies_title_trgm" ON "omni"."media_movies"
+  USING gin (lower("title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_media_tv_series_title_trgm" ON "omni"."media_tv_series"
+  USING gin (lower("title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_auth_users_username_trgm" ON "omni"."auth_users"
+  USING gin (lower("username") "public"."gin_trgm_ops");

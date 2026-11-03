@@ -5,12 +5,14 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,17 @@ public class FilePostProcessingTaskTracker {
 
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
+
+    /**
+     * 领取成功期间持有的心跳租约。
+     *
+     * <p>恢复调度器按 {@code heartbeatAt is null or heartbeatAt < cutoff} 判定僵尸任务，
+     * 而 {@code markRunning} 只在领取时播一次心跳。大文件正文提取、缩略图与实况照片处理
+     * 都可能超过 stale 阈值，届时原线程仍在跑、消息却被重投，两个消费者改同一个节点。
+     * 租约放在本组件而不是逐个消费者：五个任务类型共用这一条生命周期，漏一个就是复发。</p>
+     */
+    private final Map<UUID, TaskHeartbeatRunner.Heartbeat> heartbeats = new ConcurrentHashMap<>();
 
     /**
      * 已解析并领取的任务上下文。
@@ -76,6 +89,7 @@ public class FilePostProcessingTaskTracker {
                     if (!taskRecordService.claimForExecution(record.getId(), phase)) {
                         return new TrackedTask(record.getId(), false);
                     }
+                    heartbeats.put(record.getId(), taskHeartbeatRunner.start(record.getId()));
                     return new TrackedTask(record.getId(), true);
                 })
                 .orElse(new TrackedTask(null, false));
@@ -89,7 +103,26 @@ public class FilePostProcessingTaskTracker {
      */
     public void complete(UUID taskId, Map<String, Object> result) {
         if (taskId != null) {
-            taskRecordService.markCompleted(taskId, result);
+            try {
+                taskRecordService.markCompleted(taskId, result);
+            } finally {
+                stopHeartbeat(taskId);
+            }
+        }
+    }
+
+    /**
+     * 释放任务的心跳租约；租约不存在时为空操作。
+     *
+     * @param taskId 任务 ID
+     */
+    private void stopHeartbeat(UUID taskId) {
+        if (taskId == null) {
+            return;
+        }
+        TaskHeartbeatRunner.Heartbeat heartbeat = heartbeats.remove(taskId);
+        if (heartbeat != null) {
+            heartbeat.close();
         }
     }
 
@@ -109,6 +142,8 @@ public class FilePostProcessingTaskTracker {
             Object event,
             Throwable exception) {
         String errorSummary = errorSummary(exception);
+        // 重试与死信都要先释放租约：重投后由下一次 begin 重新领取并重新起心跳。
+        stopHeartbeat(taskId);
         if (taskId == null) {
             log.warn("文件后处理失败且无任务记录，仅丢弃消息: taskType={}, errorType={}",
                     taskType, errorSummary);

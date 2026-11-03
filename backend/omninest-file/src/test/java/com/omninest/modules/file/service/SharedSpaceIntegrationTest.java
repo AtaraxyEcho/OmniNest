@@ -27,6 +27,7 @@ import com.omninest.modules.file.domain.SharedSpacePermission.Action;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
 import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
@@ -76,6 +77,7 @@ class SharedSpaceIntegrationTest {
 
     // ── Mock 依赖 ──
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository = mock(FileNodeSubtreeQueryRepository.class);
     private final FileMetricsRepository fileMetricsRepository = mock(FileMetricsRepository.class);
     private final SharedSpacePermissionRepository permissionRepository = mock(SharedSpacePermissionRepository.class);
     private final SharedSpaceQuotaService sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
@@ -100,10 +102,10 @@ class SharedSpaceIntegrationTest {
                 .thenReturn(Optional.of("107374182400"));
 
         service = new SharedSpaceService(
-                fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
+                fileNodeRepository, subtreeQueryRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, cascadeCleanup,
-                fileNodeScanQueryRepository, configValueProvider, eventPublisher,
-                fileIndexSyncService, syncEventRecorder,
+                fileNodeScanQueryRepository, configValueProvider, new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
+                eventPublisher, fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );

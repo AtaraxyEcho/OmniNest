@@ -1,6 +1,7 @@
 package com.omninest.modules.task.service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -24,7 +25,25 @@ public class TaskHeartbeatRunner {
 
     private static final Duration DEFAULT_INTERVAL = Duration.ofSeconds(30);
 
+    /**
+     * 单次心跳租约的最长存活时间。
+     *
+     * <p>调用方若在网络异常等路径上漏掉 close，租约会一直刷新心跳，让恢复调度器永远
+     * 看不到已经卡死的任务——这比不续期更危险。租约到期后自行停止，把主动权交回调度器。</p>
+     */
+    private static final Duration MAX_LEASE_LIFETIME = Duration.ofHours(6);
+
     private final TaskRecordService taskRecordService;
+
+    /**
+     * 启动周期心跳，只刷新心跳时间，不改写任务进度。
+     *
+     * @param taskId 任务 ID
+     * @return 可关闭的心跳租约
+     */
+    public Heartbeat start(UUID taskId) {
+        return heartbeatLoop(taskId, () -> taskRecordService.touchHeartbeat(taskId));
+    }
 
     /**
      * 启动周期心跳。
@@ -34,7 +53,7 @@ public class TaskHeartbeatRunner {
      * @return 可关闭的心跳租约
      */
     public Heartbeat start(UUID taskId, int progress) {
-        return start(taskId, () -> progress);
+        return heartbeatLoop(taskId, () -> taskRecordService.updateProgress(taskId, progress));
     }
 
     /**
@@ -45,7 +64,12 @@ public class TaskHeartbeatRunner {
      * @return 可关闭的心跳租约
      */
     public Heartbeat start(UUID taskId, IntSupplier progressSupplier) {
+        return heartbeatLoop(taskId, () -> taskRecordService.updateProgress(taskId, progressSupplier.getAsInt()));
+    }
+
+    private Heartbeat heartbeatLoop(UUID taskId, Runnable keepAlive) {
         AtomicBoolean running = new AtomicBoolean(true);
+        Instant deadline = Instant.now().plus(MAX_LEASE_LIFETIME);
         Thread thread = Thread.ofVirtual()
                 .name("task-heartbeat-" + taskId)
                 .start(() -> {
@@ -59,8 +83,13 @@ public class TaskHeartbeatRunner {
                         if (!running.get()) {
                             return;
                         }
+                        if (Instant.now().isAfter(deadline)) {
+                            log.warn("任务心跳租约超过最长存活时间并自行停止，交回恢复调度器: taskId={}", taskId);
+                            running.set(false);
+                            return;
+                        }
                         try {
-                            taskRecordService.updateProgress(taskId, progressSupplier.getAsInt());
+                            keepAlive.run();
                         } catch (RuntimeException exception) {
                             log.debug("任务心跳刷新失败: taskId={}, errorType={}",
                                     taskId, exception.getClass().getSimpleName());

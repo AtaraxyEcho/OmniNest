@@ -189,18 +189,15 @@ public class FileManagerService {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "单次复制目录包含节点过多（上限 " + MAX_SYNC_COPY_NODES + " 个），请分批复制");
         }
-        long fileCount = subtree.stream()
-                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
-                .count();
-        long totalBytes = subtree.stream()
-                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
-                .mapToLong(FileNode::getSizeBytes)
-                .sum();
-        chargeQuotaForCopy(userId, source.getSpaceType(), totalBytes, fileCount);
 
+        // 先按“实际会创建副本的节点”生成复制计划，再按计划计费：
+        // 历史数据可能存在父节点缺失或软删除状态不一致的孤儿分支，它们会被跳过；
+        // 若按扫到的整棵子树预扣配额，跳过的字节数与文件数就永久虚增在账上。
         Map<UUID, FileNode> copyById = new HashMap<>();
         List<FileNode> copies = new ArrayList<>(subtree.size());
         FileNode copiedRoot = null;
+        long fileCount = 0L;
+        long totalBytes = 0L;
         for (FileNode node : subtree) {
             FileNode newParent = node == source ? targetParent : copyById.get(node.getParentId());
             if (node != source && newParent == null) {
@@ -214,14 +211,23 @@ public class FileManagerService {
             }
             copyById.put(node.getId(), copy);
             copies.add(copy);
+            if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+                totalBytes += node.getSizeBytes();
+                fileCount++;
+            }
         }
+        chargeQuotaForCopy(userId, source.getSpaceType(), totalBytes, fileCount);
         // 预生成主键后整棵子树一次 saveAll：逐节点 save 会为每行单独 flush。
         fileNodeRepository.saveAll(copies);
-        List<UUID> copiedIds = copies.stream().map(FileNode::getId).toList();
-        fileIndexSyncService.scheduleAfterCommit(userId, copiedIds);
+        // 索引只认文件节点：文件夹没有可提取的正文，投递进去只会让 Worker 空跑一轮查询。
+        List<UUID> copiedFileIds = copies.stream()
+                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
+                .map(FileNode::getId)
+                .toList();
+        fileIndexSyncService.scheduleAfterCommit(userId, copiedFileIds);
         recordFileEvent(userId, copiedRoot.getId(), SyncAction.CREATED);
         log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}, 复制节点数={}",
-                sourceId, copiedRoot.getId(), userId, copiedIds.size());
+                sourceId, copiedRoot.getId(), userId, copies.size());
         return fileNodeSupport.toNodeDto(copiedRoot);
     }
 

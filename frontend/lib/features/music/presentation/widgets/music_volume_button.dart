@@ -275,21 +275,21 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
           ),
         );
       case MusicVolumeButtonStyle.flat:
-        return Tooltip(
-          message: message,
-          child: MouseRegion(
-            onEnter: (_) => _setButtonHovered(true),
-            onExit: (_) => _setButtonHovered(false),
-            child: IconButton(
-              onPressed: _togglePanel,
-              style:
-                  _portal.isShowing
-                      ? IconButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.10),
-                      )
-                      : null,
-              icon: icon,
-            ),
+        // tooltip 交给 IconButton 自带语义节点：外层再包 Tooltip 会分裂出
+        // 两个提示层，读屏器在同一按钮上播报两次。
+        return MouseRegion(
+          onEnter: (_) => _setButtonHovered(true),
+          onExit: (_) => _setButtonHovered(false),
+          child: IconButton(
+            onPressed: _togglePanel,
+            tooltip: message,
+            style:
+                _portal.isShowing
+                    ? IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.10),
+                    )
+                    : null,
+            icon: icon,
           ),
         );
     }

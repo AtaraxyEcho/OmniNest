@@ -79,14 +79,15 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
     }
   }
 
-  /// 加载下一页候选；无更多、正在加载或存在错误时忽略重复触发。
+  /// 加载下一页候选；无更多或正在加载时忽略重复触发。
+  ///
+  /// 失败后必须允许重试（不再以 `error != null` 短路），否则一次瞬时超时就会
+  /// 让选择页永久停在第 0 页。回写一律以发布时刻的实况为准：`await` 之前抓的
+  /// 快照会覆盖请求窗口内用户新勾选的照片。
   Future<void> loadMore() async {
     final current = state;
     final albumId = current.albumId;
-    if (albumId == null ||
-        !current.hasMore ||
-        current.isLoadingMore ||
-        current.error != null) {
+    if (albumId == null || !current.hasMore || current.isLoadingMore) {
       return;
     }
     final generation = _generation;
@@ -103,33 +104,35 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
       final page = await ref
           .read(photoRepositoryProvider)
           .listAlbumCandidates(albumId: albumId, page: current.nextPage);
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
-      final existingIds = current.candidates.map((p) => p.id).toSet();
+      final live = state;
+      final existingIds = live.candidates.map((p) => p.id).toSet();
       final merged = [
-        ...current.candidates,
+        ...live.candidates,
         ...page.items.where((p) => !existingIds.contains(p.id)),
       ];
       state = PhotoAlbumPickerState(
-        albumId: current.albumId,
+        albumId: live.albumId,
         candidates: merged,
-        selectedIds: current.selectedIds,
+        selectedIds: live.selectedIds,
         totalElements: page.totalElements,
-        nextPage: current.nextPage + 1,
+        nextPage: live.nextPage + 1,
         hasMore: page.hasMore,
       );
     } on Exception catch (e) {
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
+      final live = state;
       state = PhotoAlbumPickerState(
-        albumId: current.albumId,
-        candidates: current.candidates,
-        selectedIds: current.selectedIds,
-        totalElements: current.totalElements,
-        nextPage: current.nextPage,
-        hasMore: current.hasMore,
+        albumId: live.albumId,
+        candidates: live.candidates,
+        selectedIds: live.selectedIds,
+        totalElements: live.totalElements,
+        nextPage: live.nextPage,
+        hasMore: live.hasMore,
         error: describeUserFacingError(e).message,
       );
     }
@@ -200,11 +203,17 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
             albumId: albumId,
             photoIds: current.selectedIds.toList(),
           );
+      if (!ref.mounted) {
+        return true;
+      }
       ref.invalidate(photoAlbumDetailProvider(albumId));
       final center = ref.read(photoCenterControllerProvider.notifier);
       await center.refresh();
       return true;
     } on Exception catch (e) {
+      if (!ref.mounted) {
+        return false;
+      }
       state = PhotoAlbumPickerState(
         albumId: current.albumId,
         candidates: current.candidates,

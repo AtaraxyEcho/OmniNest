@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -122,6 +123,41 @@ public class UserAccountQueryService implements UserAccountQuery {
             statuses.put(user.getId(), user.getStatus());
         }
         return Map.copyOf(statuses);
+    }
+
+    /**
+     * 批量查询用户账户摘要。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 以用户 ID 为键的摘要映射
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, UserAccountSummary> findSummariesByIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UserAccountSummary> summaries = new LinkedHashMap<>();
+        for (AuthUser user : authUserRepository.findAllWithRolesByIdIn(userIds)) {
+            summaries.put(user.getId(), toSummary(user));
+        }
+        return Map.copyOf(summaries);
+    }
+
+    /**
+     * 查询一组用户中持有管理员角色的用户 ID。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 持有管理员或超级管理员角色的用户 ID
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findAdminUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(authUserRepository.findIdsHavingAnyRole(
+                userIds, List.of(Roles.ADMIN, Roles.SUPER_ADMIN)));
     }
 
     /**

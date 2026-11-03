@@ -1,4 +1,5 @@
 import 'package:omninest/features/video/data/movie_api.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/domain/movie_playback_repository.dart';
 
@@ -37,19 +38,11 @@ class MoviePlaybackRepositoryImpl implements MoviePlaybackRepository {
   }
 
   String _resolveApiRelativeUrl(String url) {
-    if (!url.startsWith('/')) {
-      return url;
-    }
-    final baseUrl = _api.apiClient.dio.options.baseUrl;
-    return Uri.parse(baseUrl).resolve(url).toString();
+    return resolveServerApiUrl(_api.apiClient.dio.options.baseUrl, url);
   }
 
   String _resolveStreamUrl(String streamUrl) {
-    final baseUrl = _api.apiClient.dio.options.baseUrl;
-    if (streamUrl.startsWith('/api/')) {
-      return Uri.parse(baseUrl).resolve(streamUrl).toString();
-    }
-    return '${baseUrl.replaceFirst(RegExp(r'/$'), '')}$streamUrl';
+    return resolveServerApiUrl(_api.apiClient.dio.options.baseUrl, streamUrl);
   }
 
   @override

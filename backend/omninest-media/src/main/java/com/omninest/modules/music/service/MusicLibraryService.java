@@ -113,18 +113,24 @@ public class MusicLibraryService {
 
     /**
      * 从数据库加载音乐仪表盘数据。
+     *
+     * <p>计数与“最近更新/高频”榜单必须与列表页使用同一可见性口径（个人 + 共享），
+     * 否则共享空间音乐在歌曲/专辑标签页可见，首页却显示 0 首 0 张。</p>
      */
     private MusicDashboardDto loadDashboard(UUID ownerUserId) {
+        SpaceType sharedType = sharedVisibility(ownerUserId);
+        Pageable top12 = PageRequest.of(0, 12);
         return new MusicDashboardDto(
-                trackRepository.countByOwnerUserId(ownerUserId),
-                albumRepository.countActiveByOwnerUserId(ownerUserId),
-                artistRepository.countActiveByOwnerUserId(ownerUserId),
+                trackRepository.countVisibleToUser(ownerUserId, sharedType),
+                albumRepository.countVisibleActive(ownerUserId, sharedType),
+                artistRepository.countVisibleActive(ownerUserId, sharedType),
                 playHistoryRepository.countByOwnerUserId(ownerUserId),
-                toTrackSummaryDtos(ownerUserId, trackRepository.findTop12ByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)),
-                albumRepository.findTop12ActiveByOwnerUserId(ownerUserId).stream()
+                toTrackSummaryDtos(ownerUserId, trackRepository.findTopVisibleByUpdatedAtDesc(
+                        ownerUserId, sharedType, top12)),
+                albumRepository.findTopVisibleActiveByUpdatedAtDesc(ownerUserId, sharedType, top12).stream()
                         .map(this::toAlbumDto)
                         .toList(),
-                artistRepository.findTop12ActiveByOwnerUserId(ownerUserId).stream()
+                artistRepository.findTopVisibleActiveByTrackCountDesc(ownerUserId, sharedType, top12).stream()
                         .map(this::toArtistDto)
                         .toList()
         );

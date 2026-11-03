@@ -26,11 +26,14 @@ server {
         default_type text/plain;
     }
 
-    location = /api/v1/files/batch/download {
+    # 子路径部署（OMNINEST_WEB_BASE_PATH=/omninest/）下前端请求带前缀，
+    # 这里必须同样带上并剥离后再转发，否则请求会落到静态规则返回 404。
+    location = ${OMNINEST_WEB_BASE_PATH}api/v1/files/batch/download {
         client_max_body_size 64k;
         limit_conn omninest_batch_download 2;
         limit_conn_status 429;
         limit_conn_log_level warn;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
@@ -44,10 +47,11 @@ server {
 
     # ^~ 前缀匹配：否则 API 路径以 .png/.js 等后缀结尾时会被下方静态正则
     # location 抢占，返回静态目录的 404 并附带公共缓存头。
-    location ^~ /api/ {
+    location ^~ ${OMNINEST_WEB_BASE_PATH}api/ {
         # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
         # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
         client_max_body_size 2g;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
@@ -59,7 +63,8 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    location ^~ /ws {
+    location ^~ ${OMNINEST_WEB_BASE_PATH}ws {
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(ws.*)$ /$1 break;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

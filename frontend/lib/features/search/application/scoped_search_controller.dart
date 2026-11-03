@@ -33,6 +33,7 @@ class ScopedSearchGroup {
     required this.scope,
     required this.results,
     this.unavailable = false,
+    this.hasMore = false,
   });
 
   final ScopedSearchId scope;
@@ -42,7 +43,12 @@ class ScopedSearchGroup {
   /// 不吞掉其它档的结果，也不把整次搜索判失败。
   final bool unavailable;
 
-  bool get hasMore => results.length >= ScopedSearchLimits.perSource;
+  /// 本页是否还有下一页。
+  ///
+  /// 必须由“本页返回条数”在取数时判定并固化：用合并后的总长度推导会让
+  /// “首屏 20 条 + 次页 0 条”仍然满足 `>= perSource`，用户每次滚到底都会再发一页，
+  /// 形成永不停止的翻页请求。
+  final bool hasMore;
 }
 
 /// 一次查询的结果批次。
@@ -59,17 +65,20 @@ class ScopedSearchBatch {
   /// 批次对应的查询词，用于加载更多时丢弃已过期的翻页。
   final String query;
 
+  /// 扁平化的“全部”结果。
+  ///
+  /// 截断上限随已加载页数增长：固定 60 条会让第 1 页之后拉回的数据对用户完全不可见，
+  /// 看起来像“加载更多没有反应”。
   List<ScopedSearchResult> get results {
+    final maxItems = (page + 1) * ScopedSearchLimits.total;
     final merged = <ScopedSearchResult>[];
     for (final group in groups) {
       merged.addAll(group.results);
-      if (merged.length >= ScopedSearchLimits.total) {
+      if (merged.length >= maxItems) {
         break;
       }
     }
-    return merged.length > ScopedSearchLimits.total
-        ? merged.sublist(0, ScopedSearchLimits.total)
-        : merged;
+    return merged.length > maxItems ? merged.sublist(0, maxItems) : merged;
   }
 
   bool get hasMore => groups.any((group) => group.hasMore);
@@ -87,6 +96,7 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
   static const Duration _debounce = Duration(milliseconds: 300);
 
   int _generation = 0;
+  bool _isLoadingMore = false;
   CancelToken? _cancelToken;
   ScopedSearchBatch _last = const ScopedSearchBatch(
     groups: <ScopedSearchGroup>[],
@@ -98,7 +108,10 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
   Future<ScopedSearchBatch> build() async {
     final query = ref.watch(searchQueryProvider).trim();
     final scope = ref.watch(scopedSearchSelectionProvider)?.scope;
-    ref.onDispose(() => _cancelToken?.cancel());
+    ref.onDispose(() {
+      _generation++;
+      _cancelToken?.cancel();
+    });
     if (query.isEmpty) {
       _last = const ScopedSearchBatch(
         groups: <ScopedSearchGroup>[],
@@ -112,6 +125,10 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
 
   /// 追加下一页。所有档共用同一页号，翻页结果按档合并。
   Future<void> loadMore() async {
+    // 触底会连续触发多次：没有门闩时第二次滚动会取消正在飞行的翻页请求。
+    if (_isLoadingMore) {
+      return;
+    }
     final current = state.asData?.value;
     final query = ref.read(searchQueryProvider).trim();
     if (current == null ||
@@ -120,16 +137,21 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
         current.query != query) {
       return;
     }
-    final next = await _run(
-      query,
-      ref.read(scopedSearchSelectionProvider)?.scope,
-      page: current.page + 1,
-      replace: false,
-    );
-    if (next == null) {
-      return;
+    _isLoadingMore = true;
+    try {
+      final next = await _run(
+        query,
+        ref.read(scopedSearchSelectionProvider)?.scope,
+        page: current.page + 1,
+        replace: false,
+      );
+      if (!ref.mounted || next == null) {
+        return;
+      }
+      state = AsyncData(next);
+    } finally {
+      _isLoadingMore = false;
     }
-    state = AsyncData(next);
   }
 
   /// 返回 `null` 表示本次结果已被更新的请求作废，调用方保留上一批。
@@ -147,12 +169,14 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
         replace
             ? const <ScopedSearchGroup>[]
             : (state.asData?.value.groups ?? const <ScopedSearchGroup>[]);
-    final targets = _targets(scope);
+    final targets = _scrollTargets(scope, previous, replace);
 
-    // 防抖：连续输入只保留最后一次请求，旧响应靠 generation 丢弃。
-    await Future<void>.delayed(_debounce);
-    if (generation != _generation || cancelToken.isCancelled) {
-      return null;
+    // 防抖只服务连续输入：翻页是显式动作，等 300ms 只会让触底加载变钝。
+    if (replace) {
+      await Future<void>.delayed(_debounce);
+      if (generation != _generation || cancelToken.isCancelled) {
+        return null;
+      }
     }
 
     final settled = await Future.wait(<Future<ScopedSearchGroup>>[
@@ -184,7 +208,11 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
         page: page,
         cancelToken: cancelToken,
       );
-      return ScopedSearchGroup(scope: source.scope, results: results);
+      return ScopedSearchGroup(
+        scope: source.scope,
+        results: results,
+        hasMore: results.length >= ScopedSearchLimits.perSource,
+      );
     } on Exception {
       // 主动取消的批次在 generation 检查处就被丢弃，到这里只剩真失败：
       // 只把该档标成未能返回，保留其它档结果。
@@ -206,6 +234,23 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
         : <ScopedSearchSource>[source];
   }
 
+  /// 翻页时只请求“本档还有下一页”的来源，已到底的档直接沿用上一批结果。
+  List<ScopedSearchSource> _scrollTargets(
+    ScopedSearchId? scope,
+    List<ScopedSearchGroup> previous,
+    bool replace,
+  ) {
+    final targets = _targets(scope);
+    if (replace || previous.isEmpty) {
+      return targets;
+    }
+    final exhausted = <ScopedSearchId>{
+      for (final group in previous)
+        if (!group.hasMore) group.scope,
+    };
+    return targets.where((source) => !exhausted.contains(source.scope)).toList();
+  }
+
   List<ScopedSearchGroup> _merge(
     List<ScopedSearchGroup> previous,
     List<ScopedSearchGroup> settled,
@@ -213,20 +258,34 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
     if (previous.isEmpty) {
       return settled;
     }
-    return <ScopedSearchGroup>[
-      for (final group in settled)
+    final settledByScope = <ScopedSearchId, ScopedSearchGroup>{
+      for (final group in settled) group.scope: group,
+    };
+    final merged = <ScopedSearchGroup>[];
+    for (final group in previous) {
+      final fresh = settledByScope.remove(group.scope);
+      if (fresh == null) {
+        // 该档已无下一页，本轮没有请求它：原样保留，不能让它从结果里消失。
+        merged.add(group);
+        continue;
+      }
+      final seenRoutes = group.results.map((item) => item.detailRoute).toSet();
+      merged.add(
         ScopedSearchGroup(
-          scope: group.scope,
+          scope: fresh.scope,
           results: <ScopedSearchResult>[
-            ...(previous
-                    .where((item) => item.scope == group.scope)
-                    .firstOrNull
-                    ?.results ??
-                const <ScopedSearchResult>[]),
             ...group.results,
+            ...fresh.results.where(
+              (item) => !seenRoutes.contains(item.detailRoute),
+            ),
           ],
-          unavailable: group.unavailable,
+          unavailable: fresh.unavailable,
+          hasMore: fresh.hasMore,
         ),
-    ];
+      );
+    }
+    // 新出现（上一批尚未返回）的档追加在末尾，保持注册表顺序。
+    merged.addAll(settledByScope.values);
+    return merged;
   }
 }

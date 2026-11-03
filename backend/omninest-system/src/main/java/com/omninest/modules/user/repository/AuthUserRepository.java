@@ -267,4 +267,75 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             WHERE user.id = :userId
             """)
     int decrementUsageAtomic(@Param("userId") UUID userId, @Param("bytes") long bytes);
+
+    /**
+     * 批量加载用户及其角色。
+     *
+     * <p>管理台批量调额、对账等场景必须在一次查询内取回角色集合，否则每个目标用户都会
+     * 触发一次角色 JOIN 查询，形成 N+1。</p>
+     *
+     * @param ids 用户 ID 集合
+     * @return 用户列表
+     */
+    @EntityGraph(attributePaths = "roles")
+    @Query("select user from AuthUser user where user.id in :ids")
+    List<AuthUser> findAllWithRolesByIdIn(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * 查询一组用户中持有指定角色编码的用户 ID。
+     *
+     * <p>配额端口需要判断“目标是否为管理员”，但不应把角色实体暴露给配额模块。</p>
+     *
+     * @param ids 用户 ID 集合
+     * @param roleCodes 角色编码集合
+     * @return 持有任一角色编码的用户 ID
+     */
+    @Query("select distinct user.id from AuthUser user join user.roles role "
+            + "where user.id in :ids and role.code in :roleCodes")
+    List<UUID> findIdsHavingAnyRole(
+            @Param("ids") Collection<UUID> ids,
+            @Param("roleCodes") Collection<String> roleCodes);
+
+    /**
+     * 批量设置存储配额。
+     *
+     * <p>逐户 {@code save} 会把整行实体写回，覆盖对账窗口内并发修改的密码、昵称等列；
+     * 单条 UPDATE 只改配额列，并自增版本号以让其他会话的乐观锁失效。</p>
+     *
+     * @param userIds 目标用户 ID 集合
+     * @param quotaBytes 新配额字节数
+     * @return 更新的行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE AuthUser user
+            SET user.quotaBytes = :quotaBytes,
+                user.version = user.version + 1
+            WHERE user.id IN :userIds
+            """)
+    int updateQuotaBatch(
+            @Param("userIds") Collection<UUID> userIds,
+            @Param("quotaBytes") long quotaBytes);
+
+    /**
+     * 按实际用量校准单个用户的已使用字节。
+     *
+     * <p>只改 {@code used_bytes} 一列：对账把整批实体 {@code saveAll} 回库时会用读取时的
+     * 快照覆盖并发修改的密码、昵称，并可能与文件写入的原子增量互相覆盖。</p>
+     *
+     * @param userId 用户 ID
+     * @param actualBytes 实际用量字节数
+     * @return 发生变更时为 1，无需变更时为 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE AuthUser user
+            SET user.usedBytes = :actualBytes,
+                user.version = user.version + 1
+            WHERE user.id = :userId
+              AND user.usedBytes <> :actualBytes
+            """)
+    int reconcileUsedBytes(
+            @Param("userId") UUID userId,
+            @Param("actualBytes") long actualBytes);
 }

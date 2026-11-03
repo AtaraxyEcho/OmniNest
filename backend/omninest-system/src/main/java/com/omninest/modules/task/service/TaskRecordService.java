@@ -360,6 +360,42 @@ public class TaskRecordService {
     }
 
     /**
+     * 把任务重置为排队态，供用户侧与管理端“重试”复用。
+     *
+     * <p>重试必须同时清空进度与心跳：残留的进度百分比会让排队中的任务看起来仍停在
+     * 上一次失败的位置，残留的 {@code heartbeat_at} 会让恢复调度器按旧时间判定僵尸；
+     * 状态变更还要补发 {@code SyncScope.TASKS} 事件，否则管理台与其它标签页看不到重试。</p>
+     *
+     * @param task 目标任务（调用方已完成资格校验）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void resetToQueued(TaskRecord task) {
+        task.setStatus(TaskStatus.QUEUED.getValue());
+        task.setRetryCount(0);
+        task.setProgress(0);
+        task.setHeartbeatAt(null);
+        task.setErrorMessage(null);
+        task.setStackSummary(null);
+        task.setNextRetryAt(null);
+        task.setCompletedAt(null);
+        taskRecordRepository.save(task);
+        recordEvent(task, SyncAction.UPDATED);
+    }
+
+    /**
+     * 为已在别处完成的状态变更补发 {@code SyncScope.TASKS} 实时事件。
+     *
+     * <p>管理端用原生 UPDATE 做状态守卫更新，绕过了 JPA 实体回调；不补发事件时，
+     * 管理台与其它已打开标签页看不到任务被取消、重试或丢弃。</p>
+     *
+     * @param taskId 任务 ID
+     */
+    public void publishSyncEvent(UUID taskId) {
+        taskRecordRepository.findById(taskId)
+                .ifPresent(record -> recordEvent(record, SyncAction.UPDATED));
+    }
+
+    /**
      * 判断任务是否已经被取消，供长任务在进度边界执行协作式中断。
      *
      * @param taskId 任务 ID
@@ -395,6 +431,25 @@ public class TaskRecordService {
         if (progressBucket(previousProgress) != progressBucket(normalizedProgress) || normalizedProgress == 100) {
             recordEvent(record, SyncAction.PROGRESS);
         }
+    }
+
+    /**
+     * 仅刷新任务心跳，不推进也不回退进度。
+     *
+     * <p>长任务的阶段边界才更新进度（例如批量入库每跑完一批才写 30/60/90），
+     * 期间的定期保活不能借用 {@link #updateProgress}，否则固定进度值会把用户看到的
+     * 进度条拉回起点。</p>
+     *
+     * @param taskId 任务 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void touchHeartbeat(UUID taskId) {
+        TaskRecord record = requireTask(taskId);
+        if (isTerminal(record)) {
+            return;
+        }
+        record.setHeartbeatAt(Instant.now());
+        taskRecordRepository.save(record);
     }
 
     /**

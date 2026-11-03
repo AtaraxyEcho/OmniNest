@@ -136,8 +136,19 @@ class MyShareLinksNotifier extends AsyncNotifier<List<FileShareLink>> {
   Future<void> load() async {
     state = const AsyncLoading();
     final repository = ref.read(fileRepositoryProvider);
-    final links = await repository.listMyShares();
-    state = AsyncData(links);
+    try {
+      final links = await repository.listMyShares();
+      // autoDispose：列表页关闭后 Ref 已销毁，继续写 state 会抛 Bad state。
+      if (!ref.mounted) {
+        return;
+      }
+      state = AsyncData(links);
+    } on Object catch (error, stackTrace) {
+      if (!ref.mounted) {
+        return;
+      }
+      state = AsyncError(error, stackTrace);
+    }
   }
 
   /// 撤销分享链接并刷新列表。

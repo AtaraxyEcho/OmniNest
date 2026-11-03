@@ -28,6 +28,7 @@ import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.DerivedAssetRequest;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -76,6 +77,7 @@ public class MovieScrapeExecutionService {
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private TransactionTemplate transactionTemplate;
 
     @PostConstruct
@@ -94,6 +96,14 @@ public class MovieScrapeExecutionService {
         if (!taskRecordService.claimForExecution(event.taskId(), "SCRAPING")) {
             return;
         }
+        // 刮削按提供器串行发外部 HTTP，剧集还要回写分集与海报，单批可能超过恢复调度器
+        // 的 stale 阈值；被判僵尸后重投会与仍在执行的本线程并发改同一条媒体行。
+        try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(event.taskId())) {
+            executeClaimed(event);
+        }
+    }
+
+    private void executeClaimed(MediaScrapeRequestedEvent event) {
         fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
 
         // 一个文件只有一条业务行，行 owner 是文件所有者：按 fileNodeId 定位，
@@ -430,7 +440,7 @@ public class MovieScrapeExecutionService {
         }
 
         try {
-            return movieRepository.findByTmdbIdAndOwnerUserId(tmdbId, ownerUserId)
+            return movieRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(tmdbId, ownerUserId)
                     .orElseGet(() -> {
                         MediaMovie movie = new MediaMovie();
                         movie.setOwnerUserId(ownerUserId);
@@ -440,7 +450,7 @@ public class MovieScrapeExecutionService {
                     });
         } catch (DataIntegrityViolationException e) {
             log.info("并发创建电影冲突，重新查找: tmdbId={}, ownerUserId={}", tmdbId, ownerUserId);
-            return movieRepository.findByTmdbIdAndOwnerUserId(tmdbId, ownerUserId)
+            return movieRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(tmdbId, ownerUserId)
                     .orElseThrow(() -> new IllegalStateException("唯一约束冲突后仍无法找到电影记录: tmdbId=" + tmdbId));
         }
     }
@@ -479,7 +489,7 @@ public class MovieScrapeExecutionService {
         }
 
         try {
-            return tvSeriesRepository.findByTmdbIdAndOwnerUserId(tmdbId, ownerUserId)
+            return tvSeriesRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(tmdbId, ownerUserId)
                     .map(existing -> {
                         if (existing.getLibrarySourceId() == null && librarySourceId != null) {
                             existing.setLibrarySourceId(librarySourceId);
@@ -519,7 +529,7 @@ public class MovieScrapeExecutionService {
                     });
         } catch (DataIntegrityViolationException e) {
             log.info("并发创建系列冲突，重新查找: tmdbId={}, ownerUserId={}", tmdbId, ownerUserId);
-            return tvSeriesRepository.findByTmdbIdAndOwnerUserId(tmdbId, ownerUserId)
+            return tvSeriesRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(tmdbId, ownerUserId)
                     .orElseThrow(() -> new IllegalStateException("唯一约束冲突后仍无法找到系列记录: tmdbId=" + tmdbId));
         }
     }

@@ -38,7 +38,11 @@ class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
     final generation = ++_generation;
     _cancelToken?.cancel();
     _cancelToken = null;
-    ref.onDispose(() => _cancelToken?.cancel());
+    // 销毁时递增代次：autoDispose 后即使旧 Future 仍会回来，也不会再写状态。
+    ref.onDispose(() {
+      _generation++;
+      _cancelToken?.cancel();
+    });
     if (query.isEmpty) {
       _lastResults = const [];
       return _lastResults;
@@ -46,7 +50,7 @@ class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
     // 每个字符都打一次搜索接口会放大后端压力，并让旧响应有机会覆盖新结果；
     // 去抖后仍以 generation 丢弃过期响应，CancelToken 取消底层请求。
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (generation != _generation) {
+    if (!ref.mounted || generation != _generation) {
       return _lastResults;
     }
     final cancelToken = CancelToken();
@@ -54,14 +58,15 @@ class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
     final api = ref.read(searchApiProvider);
     try {
       final results = await api.search(query, cancelToken: cancelToken);
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return _lastResults;
       }
       _lastResults = results;
       return results;
     } on Exception catch (error) {
-      if (error is DioException && CancelToken.isCancel(error) ||
-          generation != _generation) {
+      if (!ref.mounted ||
+          generation != _generation ||
+          error is DioException && CancelToken.isCancel(error)) {
         return _lastResults;
       }
       rethrow;
@@ -70,6 +75,9 @@ class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
 
   Future<void> search(String query) async {
     ref.read(searchQueryProvider.notifier).updateQuery(query);
+    if (!ref.mounted) {
+      return;
+    }
     ref.invalidateSelf();
   }
 }

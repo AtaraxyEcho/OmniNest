@@ -79,10 +79,17 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
       final next = await ref
           .read(photoRepositoryProvider)
           .listByTagPage(tag, page: _page + 1);
+      // autoDispose：标签页被关闭后 Ref 已销毁，继续写 state 会抛 Bad state。
+      if (!ref.mounted) {
+        return;
+      }
       _page += 1;
-      final seen = current.items.map((item) => item.id).toSet();
+      // 合并基准取请求窗口结束时的实况状态：用 await 前抓的 current 发布会丢掉这段
+      // 窗口里的写入（并发翻页、加载标志复位）。
+      final live = state.asData?.value ?? current;
+      final seen = live.items.map((item) => item.id).toSet();
       final merged = <PhotoItem>[
-        ...current.items,
+        ...live.items,
         ...next.items.where((item) => !seen.contains(item.id)),
       ];
       state = AsyncData(
@@ -93,6 +100,9 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
         ),
       );
     } on Object {
+      if (!ref.mounted) {
+        return;
+      }
       // 失败只复位加载中标志：整份回滚 await 前抓的快照会覆盖请求窗口内的写入，
       // 尾部重试行由视图承载。
       final live = state.asData?.value;

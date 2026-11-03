@@ -3,6 +3,7 @@ package com.omninest.worker.runtime;
 import com.sun.net.httpserver.HttpServer;
 import com.omninest.common.runtime.WorkerRuntimeRegistry;
 import com.omninest.common.runtime.WorkerRuntimeState;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.photos.service.PhotosRuntimeConfigService;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -32,7 +33,9 @@ class WorkerRuntimeReporterTest {
         WorkerRuntimeReporter reporter = new WorkerRuntimeReporter(
                 registry,
                 runtimeProperties,
-                photosConfig
+                photosConfig,
+                // 端点闸门由 OutboundEndpointRules 用例覆盖，本用例只验证上报链路。
+                Mockito.mock(SafeUrlValidator.class)
         );
 
         reporter.publish();
@@ -70,7 +73,8 @@ class WorkerRuntimeReporterTest {
             WorkerRuntimeReporter reporter = new WorkerRuntimeReporter(
                     registry,
                     runtimeProperties,
-                    photosConfig
+                    photosConfig,
+                    Mockito.mock(SafeUrlValidator.class)
             );
 
             reporter.publish();

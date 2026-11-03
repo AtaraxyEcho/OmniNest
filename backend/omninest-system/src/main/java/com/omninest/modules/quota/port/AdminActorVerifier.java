@@ -21,6 +21,17 @@ public interface AdminActorVerifier {
     void requireFreshAdminActor(UUID actorUserId);
 
     /**
+     * 校验操作者当前仍是可用管理员，并返回其是否为超级管理员。
+     *
+     * <p>批量入口要在循环外一次性判定操作者权限，避免每个目标用户都重复加载一次
+     * 操作者角色与权限集合（4N 级 N+1 的主要来源）。</p>
+     *
+     * @param actorUserId 操作者用户标识
+     * @return 操作者是否超级管理员
+     */
+    boolean requireFreshAdminAndCheckSuperAdmin(UUID actorUserId);
+
+    /**
      * 校验操作者有权修改目标用户的存储配额。
      *
      * <p>配额是自我提权最近的一条路：普通管理员可以把自己或同级别管理员的配额改成

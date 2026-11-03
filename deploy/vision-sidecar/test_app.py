@@ -449,5 +449,67 @@ class SidecarTokenTest(unittest.TestCase):
         self.assertEqual([], events)
 
 
+class NonceStoreEvictionTest(unittest.TestCase):
+    """验证 nonce 存储的队首淘汰、过期重用位置与容量 fail-closed 边界。"""
+
+    def setUp(self):
+        app._seen_nonces.clear()
+
+    def tearDown(self):
+        app._seen_nonces.clear()
+
+    @staticmethod
+    def _nonce(label: str, index: int) -> str:
+        # _NONCE_PATTERN 要求 16-128 个 [A-Za-z0-9_-] 字符，用固定前缀加长序号补齐。
+        return f"{label}-{index:020d}"
+
+    def test_expired_head_entries_are_evicted_before_capacity_refusal(self):
+        """满载时队首过期条目必须先被淘汰，新 nonce 应成功登记而不是 503。"""
+        now = time.time()
+        with patch.object(app, "MAX_TRACKED_NONCES", 8):
+            for index in range(4):
+                app._seen_nonces[self._nonce("expired-slot", index)] = now - 1
+            for index in range(4):
+                app._seen_nonces[self._nonce("live-slot", index)] = now + 300
+            fresh = self._nonce("fresh-request", 1)
+
+            app._consume_nonce(fresh)
+
+            self.assertIn(fresh, app._seen_nonces)
+            self.assertEqual(5, len(app._seen_nonces))
+
+    def test_reused_expired_nonce_is_reinserted_at_the_tail(self):
+        """过期后重用的 nonce 必须挪到队尾：对已存在键直接赋值会保留旧位置，
+        未来过期时间挂在存活条目之后，队首淘汰循环将永久停摆。"""
+        now = time.time()
+        stale = self._nonce("reused-nonce", 7)
+        app._seen_nonces[self._nonce("live-head-entry", 1)] = now + 5
+        app._seen_nonces[stale] = now - 1
+        app._seen_nonces[self._nonce("live-tail-entry", 2)] = now + 10
+
+        app._consume_nonce(stale)
+
+        self.assertEqual(stale, next(reversed(app._seen_nonces)))
+        # 插入顺序即过期顺序是队首淘汰的前提，重用后该不变量必须成立。
+        expiries = list(app._seen_nonces.values())
+        self.assertEqual(sorted(expiries), expiries)
+        # 重用条目仍在有效期内，再次提交必须按重放拒绝。
+        with self.assertRaises(HTTPException) as replay:
+            app._consume_nonce(stale)
+        self.assertEqual(401, replay.exception.status_code)
+
+    def test_full_store_of_live_nonces_still_fails_closed(self):
+        """全部为存活 nonce 的满载存储必须保持 503 fail-closed，不能被淘汰逻辑放行。"""
+        now = time.time()
+        with patch.object(app, "MAX_TRACKED_NONCES", 8):
+            for index in range(8):
+                app._seen_nonces[self._nonce("saturating-nonce", index)] = now + 300
+            fresh = self._nonce("late-request", 1)
+            with self.assertRaises(HTTPException) as full:
+                app._consume_nonce(fresh)
+        self.assertEqual(503, full.exception.status_code)
+        self.assertNotIn(fresh, app._seen_nonces)
+
+
 if __name__ == "__main__":
     unittest.main()

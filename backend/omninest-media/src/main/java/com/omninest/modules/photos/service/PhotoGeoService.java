@@ -4,6 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -54,6 +56,7 @@ public class PhotoGeoService {
     private final RateLimitService distributedRateLimiter;
     private final MeterRegistry meterRegistry;
     private final GeoCityIndex geoCityIndex;
+    private final SafeUrlValidator safeUrlValidator;
 
     private final Cache<String, Map<String, Object>> cache = Caffeine.newBuilder()
             .maximumSize(MAX_CACHE_ENTRIES)
@@ -61,8 +64,11 @@ public class PhotoGeoService {
             .recordStats()
             .build();
 
+    // 显式禁用重定向：代码内置的是公网地址，但上游返回 302 指向内网或云元数据地址时，
+    // 自动跟随会绕过首次校验直接打到受限目标。
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     /**
@@ -164,7 +170,9 @@ public class PhotoGeoService {
                     + "?lat=" + latitude.toPlainString()
                     + "&lon=" + longitude.toPlainString()
                     + "&format=json&accept-language=zh&zoom=14";
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+            // 每次请求前复核 DNS 解析结果，拒绝环回、内网与链路本地地址。
+            URI target = OutboundEndpointRules.requirePublicEndpoint(URI.create(url), safeUrlValidator);
+            HttpRequest request = HttpRequest.newBuilder(target)
                     .timeout(TIMEOUT)
                     .header("User-Agent", "OmniNest/1.0 (photo-geocoder)")
                     .GET()

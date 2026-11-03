@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,7 +102,14 @@ class BackdropAssetServiceTest {
                 invocation.getArgument(1), "file", "https://signed/" + invocation.getArgument(1),
                 Instant.now().plusSeconds(900)));
 
-        service = new BackdropAssetService(
+        service = newService(afterCommitFiringTransactionManager());
+    }
+
+    /**
+     * 以指定事务管理器装配被测服务，其余协作者复用同一组 mock。
+     */
+    private BackdropAssetService newService(PlatformTransactionManager manager) {
+        return new BackdropAssetService(
                 backdropAssetRepository,
                 runtimeConfigService,
                 derivedAssetStorageService,
@@ -113,7 +121,7 @@ class BackdropAssetServiceTest {
                 rateLimitService,
                 videoThumbnailExtractor,
                 new TestTempStagingPort(),
-                afterCommitFiringTransactionManager()
+                manager
         );
     }
 
@@ -172,6 +180,7 @@ class BackdropAssetServiceTest {
         verify(derivedAssetStorageService, never()).store(any(), anyString(), any(), anyString(), anyString(),
                 anyString(), any(java.nio.file.Path.class));
         verify(ingressStagingService, never()).markAvailable(any(), any());
+        verify(ingressStagingService, never()).markAvailableWithinTransaction(any(), any());
     }
 
     @Test
@@ -398,7 +407,7 @@ class BackdropAssetServiceTest {
         assertThat(processing.getFileNodeId()).isEqualTo(publishedNodeId);
         assertThat(processing.getThumbFileId()).isEqualTo(thumbFileId);
         verify(storageQuotaService).settleReservation("BACKDROP_UPLOAD", processing.getId(), 1024L);
-        verify(ingressStagingService).markAvailable(ingressItemId, publishedNodeId);
+        verify(ingressStagingService).markAvailableWithinTransaction(ingressItemId, publishedNodeId);
         verify(derivedAssetStorageService, never()).deleteOwned(any(), any());
     }
 
@@ -426,6 +435,7 @@ class BackdropAssetServiceTest {
         assertThat(processing.getFileNodeId()).isNull();
         verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", processing.getId());
         verify(ingressStagingService, never()).markAvailable(any(), any());
+        verify(ingressStagingService, never()).markAvailableWithinTransaction(any(), any());
     }
 
     @Test
@@ -496,6 +506,136 @@ class BackdropAssetServiceTest {
         Path thumbnailPath = pathCaptor.getAllValues().get(1);
         assertThat(thumbnailPath.getFileName().toString()).startsWith("backdrop-thumb-");
         assertThat(Files.exists(thumbnailPath)).isFalse();
+    }
+
+    @Test
+    void publishTransactionMemberFailureRollsBackReadyWriteAndMarksFailed() throws IOException {
+        BackdropAsset processing = readyAsset();
+        processing.setStatus(BackdropAssetStatus.PROCESSING);
+        processing.setFileNodeId(null);
+        processing.setThumbFileId(null);
+        UUID ingressItemId = UUID.randomUUID();
+        UUID publishedNodeId = UUID.randomUUID();
+        UUID thumbFileId = UUID.randomUUID();
+        Path tempFile = Files.createTempFile("staged-test", ".png");
+        Files.write(tempFile, pngBytes());
+        when(ingressStagingService.copyToTempFile(ingressItemId)).thenReturn(tempFile);
+        when(derivedAssetStorageService.store(
+                eq(OWNER_ID), anyString(), eq(processing.getId()), anyString(), anyString(), anyString(),
+                any(Path.class)))
+                .thenReturn(publishedNodeId, thumbFileId);
+
+        // 模拟真实数据库事务语义：findById 每次返回游离副本，事务内 save 只暂存，
+        // 提交才落行、回滚整体丢弃；任何一步移出事务都会被下方布尔位抓到。
+        AtomicBoolean insidePublishTransaction = new AtomicBoolean(false);
+        AtomicBoolean readySaveInsideTransaction = new AtomicBoolean(false);
+        AtomicBoolean settleInsideTransaction = new AtomicBoolean(false);
+        AtomicBoolean markAvailableInsideTransaction = new AtomicBoolean(false);
+        AtomicReference<BackdropAsset> committedRow = new AtomicReference<>(detachedCopy(processing));
+        AtomicReference<BackdropAsset> stagedSave = new AtomicReference<>();
+        PlatformTransactionManager recordingManager = new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(TransactionDefinition definition) {
+                if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.initSynchronization();
+                }
+                stagedSave.set(null);
+                insidePublishTransaction.set(true);
+                return new SimpleTransactionStatus();
+            }
+
+            @Override
+            public void commit(TransactionStatus status) {
+                insidePublishTransaction.set(false);
+                BackdropAsset pending = stagedSave.getAndSet(null);
+                if (pending != null) {
+                    committedRow.set(pending);
+                }
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationUtils.triggerAfterCommit();
+                    TransactionSynchronizationManager.clearSynchronization();
+                }
+            }
+
+            @Override
+            public void rollback(TransactionStatus status) {
+                insidePublishTransaction.set(false);
+                stagedSave.set(null);
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.clearSynchronization();
+                }
+            }
+        };
+        BackdropAssetService transactionalService = newService(recordingManager);
+
+        when(backdropAssetRepository.findById(processing.getId()))
+                .thenAnswer(invocation -> Optional.of(detachedCopy(committedRow.get())));
+        when(backdropAssetRepository.save(any(BackdropAsset.class))).thenAnswer(invocation -> {
+            BackdropAsset candidate = invocation.getArgument(0);
+            if (insidePublishTransaction.get()) {
+                stagedSave.set(detachedCopy(candidate));
+                if (candidate.getStatus() == BackdropAssetStatus.READY) {
+                    readySaveInsideTransaction.set(true);
+                }
+            } else {
+                committedRow.set(detachedCopy(candidate));
+            }
+            return candidate;
+        });
+        Mockito.doAnswer(invocation -> {
+            settleInsideTransaction.set(insidePublishTransaction.get());
+            return null;
+        }).when(storageQuotaService).settleReservation(anyString(), any(UUID.class), anyLong());
+        Mockito.doAnswer(invocation -> {
+            markAvailableInsideTransaction.set(insidePublishTransaction.get());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "入库记录标记可用失败");
+        }).when(ingressStagingService).markAvailableWithinTransaction(any(UUID.class), any(UUID.class));
+
+        assertThatThrownBy(() -> transactionalService.completeStagedAsset(
+                OWNER_ID, processing.getId(), ingressItemId, "original.png"))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode().getCode()).isEqualTo(4001));
+
+        // READY 写入、配额结算与入库记录置可用必须同处一个事务回调内。
+        assertThat(readySaveInsideTransaction).isTrue();
+        assertThat(settleInsideTransaction).isTrue();
+        assertThat(markAvailableInsideTransaction).isTrue();
+        // 事务回滚后 READY 写入未落库，failProcessingAsset 面对的仍是 PROCESSING 行，
+        // FAILED 迁移被真正应用，不会出现 READY 且孤儿化。
+        assertThat(committedRow.get().getStatus()).isEqualTo(BackdropAssetStatus.FAILED);
+        assertThat(committedRow.get().getFileNodeId()).isNull();
+        assertThat(committedRow.get().getThumbFileId()).isNull();
+        verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", processing.getId());
+        // 本次已落库的原始与缩略图对象必须显式回收。
+        verify(derivedAssetStorageService).deleteOwned(OWNER_ID, publishedNodeId);
+        verify(derivedAssetStorageService).deleteOwned(OWNER_ID, thumbFileId);
+        verify(ingressStagingService, never()).releaseObject(any(UUID.class));
+    }
+
+    /**
+     * 生成实体的游离副本，模拟数据库读到的独立行对象。
+     */
+    private static BackdropAsset detachedCopy(BackdropAsset source) {
+        BackdropAsset copy = new BackdropAsset();
+        copy.setId(source.getId());
+        copy.setOwnerUserId(source.getOwnerUserId());
+        copy.setTitle(source.getTitle());
+        copy.setMediaType(source.getMediaType());
+        copy.setFileNodeId(source.getFileNodeId());
+        copy.setPlaybackFileId(source.getPlaybackFileId());
+        copy.setThumbFileId(source.getThumbFileId());
+        copy.setWidth(source.getWidth());
+        copy.setHeight(source.getHeight());
+        copy.setDurationMs(source.getDurationMs());
+        copy.setVideoCodec(source.getVideoCodec());
+        copy.setFileSize(source.getFileSize());
+        copy.setSha256(source.getSha256());
+        copy.setStatus(source.getStatus());
+        copy.setFailReason(source.getFailReason());
+        copy.setVersion(source.getVersion());
+        copy.setCreatedAt(source.getCreatedAt());
+        copy.setUpdatedAt(source.getUpdatedAt());
+        return copy;
     }
 
     private UUID stubFreshInsert() {

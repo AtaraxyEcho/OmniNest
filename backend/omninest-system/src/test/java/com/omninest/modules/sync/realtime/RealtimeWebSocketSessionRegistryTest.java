@@ -47,7 +47,8 @@ class RealtimeWebSocketSessionRegistryTest {
         Mockito.when(session.isOpen()).thenReturn(true);
         WebSocketHandler handler = Mockito.mock(WebSocketHandler.class);
         registry.decorate(handler).afterConnectionEstablished(session);
-        registry.authorize("session-1", userId, sid, Instant.now().plusSeconds(600));
+        registry.authorize("session-1", userId, sid,
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(600));
         Mockito.when(revocationChecker.isRevoked(userId, sid)).thenReturn(true);
 
         registry.closeInvalidSessions();
@@ -61,6 +62,7 @@ class RealtimeWebSocketSessionRegistryTest {
                 "missing-session",
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                Instant.now().minusSeconds(60),
                 Instant.now().plusSeconds(600)
         )).isInstanceOf(RealtimeAuthenticationException.class)
                 .hasMessageContaining("不存在");
@@ -78,6 +80,7 @@ class RealtimeWebSocketSessionRegistryTest {
                 "closed-session",
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                Instant.now().minusSeconds(60),
                 Instant.now().plusSeconds(600)
         )).isInstanceOf(RealtimeAuthenticationException.class)
                 .hasMessageContaining("不存在");
@@ -228,7 +231,8 @@ class RealtimeWebSocketSessionRegistryTest {
         Mockito.verify(handler, Mockito.never()).afterConnectionEstablished(third);
         Mockito.verify(third).close(Mockito.argThat(status -> status.getCode() == 1013));
 
-        registry.authorize("pending-1", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(600));
+        registry.authorize("pending-1", UUID.randomUUID(), UUID.randomUUID(),
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(600));
         // 晋升只归还自己那一格待认证配额，第二条连接仍占着剩下的那一格。
         assertThat(pendingSessionCount()).isEqualTo(1D);
 
@@ -249,7 +253,7 @@ class RealtimeWebSocketSessionRegistryTest {
 
         decorated.afterConnectionEstablished(session);
         registry.authorize("promoted-then-closed", UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().plusSeconds(600));
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(600));
         decorated.afterConnectionClosed(session, CloseStatus.NORMAL);
 
         // 晋升时已归还待认证配额，关闭时不能再扣一次：负数会把这道限流变成摆设。

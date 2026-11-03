@@ -1,5 +1,7 @@
 package com.omninest.common.user;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -55,10 +57,21 @@ public interface UserStorageCommand {
     void updateQuota(UUID userId, long quotaBytes);
 
     /**
+     * 批量设置用户存储配额。
+     *
+     * <p>只更新配额列，避免逐户整行 {@code save} 覆盖并发修改的密码、昵称与用量。</p>
+     *
+     * @param userIds 目标用户 ID 集合
+     * @param quotaBytes 配额字节数
+     * @return 更新的行数
+     */
+    int updateQuotaBatch(Collection<UUID> userIds, long quotaBytes);
+
+    /**
      * 按实际用量校准指定批次用户的已使用存储。
      *
      * @param actualUsage 以用户 ID 为键的实际用量
-     * @return 被修正的用户数
+     * @return 实际发生变更的用户 ID 列表，供调用方淘汰各自的资料缓存
      */
-    int reconcileUsage(Map<UUID, Long> actualUsage);
+    List<UUID> reconcileUsage(Map<UUID, Long> actualUsage);
 }

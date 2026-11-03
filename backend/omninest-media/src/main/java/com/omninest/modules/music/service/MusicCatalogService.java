@@ -166,7 +166,8 @@ public class MusicCatalogService {
             }
         }
         if (hasText(artistName)) {
-            return artistRepository.findByOwnerUserIdAndNameIgnoreCase(ownerUserId, artistName.trim());
+            return artistRepository.findFirstByOwnerUserIdAndNameIgnoreCaseOrderByCreatedAtAsc(
+                    ownerUserId, artistName.trim());
         }
         return Optional.empty();
     }
@@ -200,10 +201,12 @@ public class MusicCatalogService {
             // 专辑身份包含艺术家：同名专辑在两位歌手之间必须隔离，不能回退到
             // 单值 findByName 查询（多行会抛 IncorrectResultSizeDataAccessException）。
             return hasText(artistName)
-                    ? albumRepository.findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCase(
-                            ownerUserId, albumTitle.trim(), artistName.trim())
-                    : albumRepository.findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNull(
-                            ownerUserId, albumTitle.trim());
+                    ? albumRepository
+                            .findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCaseOrderByCreatedAtAsc(
+                                    ownerUserId, albumTitle.trim(), artistName.trim())
+                    : albumRepository
+                            .findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNullOrderByCreatedAtAsc(
+                                    ownerUserId, albumTitle.trim());
         }
         return Optional.empty();
     }

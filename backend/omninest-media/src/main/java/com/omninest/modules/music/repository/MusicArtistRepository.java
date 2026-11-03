@@ -49,6 +49,47 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             Pageable pageable);
 
     /**
+     * 统计当前用户可见的活动歌手数（个人 + 共享）。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @return 可见歌手数
+     */
+    @Query("""
+            select count(distinct artist) from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    long countVisibleActive(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 查询当前用户可见的高频歌手（个人 + 共享）。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param pageable 分页限制
+     * @return 可见歌手
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            order by artist.trackCount desc, artist.updatedAt desc
+            """)
+    List<MusicArtist> findTopVisibleActiveByTrackCountDesc(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
      * 搜索当前用户可见的活动歌手。
      */
     @Query("""
@@ -93,7 +134,19 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             @Param("ownerUserId") UUID ownerUserId,
             @Param("artistIds") Collection<UUID> artistIds);
 
-    Optional<MusicArtist> findByOwnerUserIdAndNameIgnoreCase(UUID ownerUserId, String name);
+    /**
+     * 按规范化名称匹配艺术家。
+     *
+     * <p>{@code (owner_user_id, lower(name))} 没有唯一约束：通过 MusicBrainz 刮削可以导入
+     * 同名但 {@code musicbrainzArtistId} 不同的两位歌手。返回单值必须带确定性排序，
+     * 否则多行会抛 {@code IncorrectResultSizeDataAccessException}。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param name 艺术家名称
+     * @return 最早创建的匹配艺术家
+     */
+    Optional<MusicArtist> findFirstByOwnerUserIdAndNameIgnoreCaseOrderByCreatedAtAsc(
+            UUID ownerUserId, String name);
 
     @Query(value = """
             select id, owner_user_id, name, avatar_file_id, bio, track_count,

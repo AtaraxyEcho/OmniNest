@@ -27,6 +27,7 @@ import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
 import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -61,6 +62,7 @@ class SharedSpaceServiceTest {
     private static final UUID CHILD_FILE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository = mock(FileNodeSubtreeQueryRepository.class);
     private final FileMetricsRepository fileMetricsRepository = mock(FileMetricsRepository.class);
     private final SharedSpacePermissionRepository permissionRepository = mock(SharedSpacePermissionRepository.class);
     private final SharedSpaceQuotaService sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
@@ -83,10 +85,10 @@ class SharedSpaceServiceTest {
         when(configValueProvider.findByKey("shared_space.enabled"))
                 .thenReturn(Optional.of("true"));
         service = new SharedSpaceService(
-                fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
+                fileNodeRepository, subtreeQueryRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, cascadeCleanup,
-                fileNodeScanQueryRepository, configValueProvider, eventPublisher,
-                fileIndexSyncService, syncEventRecorder,
+                fileNodeScanQueryRepository, configValueProvider, new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
+                eventPublisher, fileIndexSyncService, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );
@@ -254,7 +256,10 @@ class SharedSpaceServiceTest {
             assertThat(folder.getNormalizedPath()).isEqualTo("/movies");
             assertThat(child.getNormalizedPath()).isEqualTo("/movies/movie.mkv");
             // 跨空间移动不得再按路径前缀盲扫目标空间：那会把其他用户/成员的同名子树一起改掉。
+            // 活动节点专用变体同样禁止，否则改用新前缀查询即可绕过本断言。
             verify(fileNodeRepository, never()).findSubtreeBySpaceTypeAfterId(
+                    any(), anyString(), any(), any());
+            verify(subtreeQueryRepository, never()).findActiveSubtreeBySpaceTypeAfterId(
                     any(), anyString(), any(), any());
         }
 
@@ -295,8 +300,9 @@ class SharedSpaceServiceTest {
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("cinema"))).thenReturn(false);
             // 改写掉的记录不再匹配旧前缀：按 OFFSET 递增翻页会整批跳过未改写的后代，
-            // 因此每一批都必须从上一批最大 ID 继续。
-            when(fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+            // 因此每一批都必须从上一批最大 ID 继续。改名只允许触碰活动节点，
+            // 回收站里的同名历史节点必须留给恢复流程按 parent_id 重算。
+            when(subtreeQueryRepository.findActiveSubtreeBySpaceTypeAfterId(
                     eq(SpaceType.SHARED), eq("/movies/"), any(UUID.class), any(Pageable.class)))
                     .thenReturn(List.of(first))
                     .thenReturn(List.of(second))
@@ -308,7 +314,7 @@ class SharedSpaceServiceTest {
             assertThat(first.getNormalizedPath()).isEqualTo("/cinema/a.mkv");
             assertThat(second.getNormalizedPath()).isEqualTo("/cinema/b.mkv");
             ArgumentCaptor<UUID> cursors = ArgumentCaptor.forClass(UUID.class);
-            verify(fileNodeRepository, Mockito.times(3)).findSubtreeBySpaceTypeAfterId(
+            verify(subtreeQueryRepository, Mockito.times(3)).findActiveSubtreeBySpaceTypeAfterId(
                     eq(SpaceType.SHARED), eq("/movies/"), cursors.capture(), any(Pageable.class));
             assertThat(cursors.getAllValues()).containsExactly(
                     new UUID(0L, 0L), first.getId(), second.getId());
@@ -723,11 +729,19 @@ class SharedSpaceServiceTest {
         }
 
         @Test
-        @DisplayName("目录节点汇总子树内已删除文件，不按目录创建者过滤")
+        @DisplayName("目录节点汇总随目录一同复活的子孙文件，不按目录创建者过滤")
         void folderNodeAggregatesDeletedFilesInSpace() {
             FileNode folder = sharedFolder(FOLDER_ID, USER_A, "movies");
-            when(fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, "/movies/"))
-                    .thenReturn(List.<Object[]>of(new Object[]{4096L, 3L}));
+            // 统计口径必须与恢复实际复活的集合一致：按 parent_id 收集，而不是按旧路径前缀求和。
+            FileNode first = sharedFile(UUID.randomUUID(), USER_B, "a.mkv", 1024L);
+            FileNode second = sharedFile(UUID.randomUUID(), USER_B, "b.mkv", 2048L);
+            FileNode third = sharedFile(UUID.randomUUID(), USER_A, "c.mkv", 1024L);
+            first.setParentId(FOLDER_ID);
+            second.setParentId(FOLDER_ID);
+            third.setParentId(FOLDER_ID);
+            when(subtreeQueryRepository.findRestorableChildrenByParentIds(
+                    SpaceType.SHARED, List.of(FOLDER_ID)))
+                    .thenReturn(List.of(first, second, third));
 
             SharedSpaceService.SubtreeStats stats = service.calculateRestoreSubtreeStats(folder);
 

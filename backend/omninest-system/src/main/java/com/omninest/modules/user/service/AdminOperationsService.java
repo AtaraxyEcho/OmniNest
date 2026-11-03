@@ -214,6 +214,7 @@ public class AdminOperationsService {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "任务状态已变化，请刷新后重试");
         }
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
+        taskRecordService.publishSyncEvent(taskId);
         return maskCrossOwnerSummary(retried, actorUserId);
     }
 
@@ -244,6 +245,7 @@ public class AdminOperationsService {
                 taskId,
                 Map.of("reason", TASK_CANCEL_REASON, "previousStatus", currentStatus)
         );
+        taskRecordService.publishSyncEvent(taskId);
         return maskCrossOwnerSummary(cancelled, actorUserId);
     }
 
@@ -273,6 +275,7 @@ public class AdminOperationsService {
                 taskId,
                 Map.of("previousStatus", currentStatus)
         );
+        taskRecordService.publishSyncEvent(taskId);
         return maskCrossOwnerSummary(discarded, actorUserId);
     }
 

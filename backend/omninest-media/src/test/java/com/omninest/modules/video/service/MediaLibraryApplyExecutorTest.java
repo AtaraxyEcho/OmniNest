@@ -16,6 +16,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.LocalMediaScanEntry;
 import com.omninest.modules.file.service.LocalMediaIndexService;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaScanCandidate;
 import com.omninest.modules.video.domain.MediaScanRun;
@@ -77,6 +78,8 @@ class MediaLibraryApplyExecutorTest {
     @Mock
     private MediaSyncEventService syncEventService;
     @Mock
+    private TaskHeartbeatRunner taskHeartbeatRunner;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private MediaLibraryApplyExecutor executor;
@@ -93,6 +96,7 @@ class MediaLibraryApplyExecutorTest {
                 classifier,
                 chunkPolicy,
                 taskRecordService,
+                taskHeartbeatRunner,
                 readThroughCache,
                 syncEventService,
                 transactionManager

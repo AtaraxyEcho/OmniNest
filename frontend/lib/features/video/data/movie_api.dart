@@ -6,6 +6,7 @@ import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
@@ -65,12 +66,7 @@ abstract class MovieApiBase {
 
   String? _resolveApiUrl(String? url) {
     if (url == null || url.isEmpty) return url;
-    final parsed = Uri.tryParse(url);
-    if (parsed != null && parsed.hasScheme) return url;
-    if (!url.startsWith('/')) return url;
-    final baseUri = Uri.parse(apiClient.dio.options.baseUrl);
-    final origin = '${baseUri.scheme}://${baseUri.authority}';
-    return '$origin$url';
+    return resolveServerApiUrl(apiClient.dio.options.baseUrl, url);
   }
 
   /// 演员头像：MinIO 绝对地址直接使用；TMDB 相对头像路径降级拼接 TMDB 图床。

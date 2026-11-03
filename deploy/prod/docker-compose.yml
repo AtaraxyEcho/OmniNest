@@ -427,6 +427,9 @@ services:
   vision-sidecar:
     profiles:
       - photo-ai
+    # 必须显式命名镜像：ship-images.sh 转运的就是这个 tag。缺少 image: 时 compose 只会
+    # 按 project-service 名构建一个匿名镜像，离线目标机拿到转运包仍会尝试本地构建。
+    image: ${OMNINEST_VISION_SIDECAR_IMAGE:-omninest-vision-sidecar}:${OMNINEST_IMAGE_TAG:-0.1.0}
     build:
       context: ../vision-sidecar
       dockerfile: Dockerfile

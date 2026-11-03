@@ -258,6 +258,10 @@ public class AuthService {
     /**
      * 强制角色注册引导：用户确认保存备份码后换取登录令牌。
      *
+     * <p>完成令牌必须先“占位”再登录、失败时归还：一次性核销后再建会话，一旦建会话
+     * 失败（Redis 抖动、数据库异常），用户已完成 2FA 绑定却再也无法用同一令牌完成登录，
+     * 只能回到登录页重来。占位语义与 {@code completeTwoFactorLogin} 保持一致。</p>
+     *
      * @param finalizeToken 完成令牌
      * @param clientPlatform 客户端平台
      * @param deviceId 设备标识
@@ -274,14 +278,21 @@ public class AuthService {
             String ipAddress,
             String userAgent
     ) {
-        UUID userId = verifyChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
+        Jwt challengeJwt = decodeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
+        UUID userId = parseUserId(challengeJwt.getSubject());
         AuthUser profile = loadActiveUserWithRoles(userId);
         if (!twoFactorService.isEnabled(userId)) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置");
         }
-        log.info("管理员两步验证注册完成: userId={}, platform={}", userId, clientPlatform);
-        consumeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
-        return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+        String jti = challengeJwt.getClaimAsString("jti");
+        reserveChallengeToken(jti);
+        try {
+            log.info("管理员两步验证注册完成: userId={}, platform={}", userId, clientPlatform);
+            return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+        } catch (RuntimeException exception) {
+            releaseChallengeToken(jti);
+            throw exception;
+        }
     }
 
     /**

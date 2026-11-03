@@ -14,9 +14,12 @@ import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -297,7 +300,12 @@ public class StorageQuotaService {
      * 批量修改多个用户的存储配额。
      * 跳过超级管理员和新配额不足的用户，返回实际修改数。
      *
-     * <p>与 {@link #updateQuota} 同样先复核操作者当前的管理员身份。</p>
+     * <p>批量入口的判定顺序必须是“先定位目标、再校验权限”：管理台“全选本页”天然包含
+     * 操作者自身与超级管理员，若先做逐条权限校验，会因“不能修改自己的配额”直接 403
+     * 让整批回滚，用户永远无法使用批量调额。</p>
+     *
+     * <p>操作者权限在循环外加载一次，目标用户与管理员身份各用一条批量查询解析，
+     * 配额更新走单条 UPDATE，避免 4N 级 N+1。</p>
      *
      * @param userIds      目标用户 ID 列表
      * @param newQuotaBytes 新配额字节数
@@ -306,36 +314,57 @@ public class StorageQuotaService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int batchUpdateQuota(List<UUID> userIds, long newQuotaBytes, UUID operatorId) {
-        adminActorVerifier.requireFreshAdminActor(operatorId);
-        int updated = 0;
-        for (UUID userId : userIds) {
-            // 批量入口不得成为绕过单条权限判定的旁路：越权目标要抛错，而不是被静默跳过。
-            adminActorVerifier.requireQuotaMutationAuthority(
-                    operatorId, userId, newQuotaBytes <= 0);
-            UserAccountSummary user = userAccountQuery.findById(userId).orElse(null);
+        if (userIds == null || userIds.isEmpty()) {
+            return 0;
+        }
+        boolean operatorIsSuperAdmin = adminActorVerifier.requireFreshAdminAndCheckSuperAdmin(operatorId);
+        if (!operatorIsSuperAdmin && newQuotaBytes <= 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可将存储配额设为无限制");
+        }
+        Set<UUID> targets = new LinkedHashSet<>(userIds);
+        // 批量场景按“跳过操作者自身”处理，而不是照搬单条入口的拒绝语义。
+        targets.remove(operatorId);
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        Map<UUID, UserAccountSummary> summaries = userAccountQuery.findSummariesByIds(targets);
+        Set<UUID> adminTargets = operatorIsSuperAdmin
+                ? Set.of()
+                : userAccountQuery.findAdminUserIds(targets);
+        List<UserAccountSummary> updatable = new ArrayList<>();
+        for (UUID userId : targets) {
+            UserAccountSummary user = summaries.get(userId);
             if (user == null || user.superAdmin()) {
                 continue;
+            }
+            // 普通管理员不得在批量列表里夹带同级管理员：越权必须显式失败，不能静默跳过。
+            if (adminTargets.contains(userId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可调整管理员的存储配额");
             }
             // 0 表示无限制，批量修改同样允许已用账号切到无限额。
             if (newQuotaBytes > 0 && newQuotaBytes < user.usedBytes()) {
                 continue;
             }
-            long oldQuota = user.quotaBytes();
-            userStorageCommand.updateQuota(userId, newQuotaBytes);
-            evictProfileCacheAfterCommit(userId);
+            updatable.add(user);
+        }
+        if (updatable.isEmpty()) {
+            return 0;
+        }
+        List<UUID> targetIds = updatable.stream().map(UserAccountSummary::id).toList();
+        userStorageCommand.updateQuotaBatch(targetIds, newQuotaBytes);
+        for (UserAccountSummary user : updatable) {
+            evictProfileCacheAfterCommit(user.id());
             auditRecorder.recordWithPayload(
                     operatorId,
                     "ADMIN_QUOTA_UPDATE",
                     "auth_users",
-                    userId,
-                    quotaAuditPayload(oldQuota, newQuotaBytes, operatorId)
+                    user.id(),
+                    quotaAuditPayload(user.quotaBytes(), newQuotaBytes, operatorId)
             );
-            updated++;
         }
-        if (updated > 0) {
-            log.info("批量更新用户存储配额: 目标 {} 人, 实际修改 {} 人, 新配额={} bytes", userIds.size(), updated, newQuotaBytes);
-        }
-        return updated;
+        log.info("批量更新用户存储配额: 目标 {} 人, 实际修改 {} 人, 新配额={} bytes",
+                userIds.size(), updatable.size(), newQuotaBytes);
+        return updatable.size();
     }
 
     /**
@@ -359,6 +388,9 @@ public class StorageQuotaService {
     /**
      * 重算所有用户的存储用量（从 file_objects + file_nodes 实际数据）。
      *
+     * <p>对账修正的是用户资料里的 {@code used_bytes}，必须同步淘汰该用户的 Redis 资料缓存，
+     * 否则个人中心与顶栏在缓存 TTL 内仍展示修正前的错误用量。</p>
+     *
      * @return 修正用户数
      */
     public int recalculateAllUsages() {
@@ -372,7 +404,9 @@ public class StorageQuotaService {
             Map<UUID, Long> actualUsage = new LinkedHashMap<>();
             userIds.forEach(userId -> actualUsage.put(userId, 0L));
             actualUsage.putAll(storageMetricsQuery.actualUsageByUsers(userIds));
-            updated += userStorageCommand.reconcileUsage(Map.copyOf(actualUsage));
+            List<UUID> changedUserIds = userStorageCommand.reconcileUsage(Map.copyOf(actualUsage));
+            changedUserIds.forEach(this::evictProfileCacheAfterCommit);
+            updated += changedUserIds.size();
             cursor = userIds.getLast();
             if (userIds.size() < USAGE_RECONCILE_BATCH_SIZE) {
                 return updated;

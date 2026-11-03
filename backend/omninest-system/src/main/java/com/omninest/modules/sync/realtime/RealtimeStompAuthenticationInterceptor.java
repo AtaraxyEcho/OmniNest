@@ -82,11 +82,15 @@ public class RealtimeStompAuthenticationInterceptor implements ChannelIntercepto
         UUID userId = parseUuid(jwt.getSubject(), "JWT sub 无效");
         UUID sid = parseUuid(jwt.getClaimAsString("sid"), "JWT sid 无效");
         Instant expiresAt = jwt.getExpiresAt();
+        Instant issuedAt = jwt.getIssuedAt();
         if (expiresAt == null || !expiresAt.isAfter(Instant.now())) {
             throw new RealtimeAuthenticationException("实时连接凭证已过期");
         }
-        if (sessionRevocationChecker.isRevoked(userId, sid)) {
-            throw new RealtimeAuthenticationException("实时连接会话已撤销");
+        // 与 HTTP 的 SessionRevocationFilter 保持对称：只查 isRevoked 会让被降权用户
+        // 凭旧令牌继续挂在长连接上接收实时同步事件与通知，直到 JWT 自然过期。
+        if (sessionRevocationChecker.isRevoked(userId, sid)
+                || sessionRevocationChecker.isTokenStale(userId, issuedAt)) {
+            throw new RealtimeAuthenticationException("实时连接会话已撤销或凭证已失效");
         }
 
         Collection<String> authorityNames = TokenAuthorityMapper.map(jwt.getClaims());
@@ -109,7 +113,7 @@ public class RealtimeStompAuthenticationInterceptor implements ChannelIntercepto
                 userId.toString()
         );
         accessor.setUser(authentication);
-        sessionRegistry.authorize(sessionId, userId, sid, expiresAt);
+        sessionRegistry.authorize(sessionId, userId, sid, issuedAt, expiresAt);
     }
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {
@@ -136,8 +140,9 @@ public class RealtimeStompAuthenticationInterceptor implements ChannelIntercepto
         }
         UUID userId = parseUuid(jwt.getSubject(), "JWT sub 无效");
         UUID sid = parseUuid(jwt.getClaimAsString("sid"), "JWT sid 无效");
-        if (sessionRevocationChecker.isRevoked(userId, sid)) {
-            throw new RealtimeAuthenticationException("实时连接会话已撤销");
+        if (sessionRevocationChecker.isRevoked(userId, sid)
+                || sessionRevocationChecker.isTokenStale(userId, jwt.getIssuedAt())) {
+            throw new RealtimeAuthenticationException("实时连接会话已撤销或凭证已失效");
         }
     }
 

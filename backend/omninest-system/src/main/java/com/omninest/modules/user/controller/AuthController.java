@@ -45,6 +45,8 @@ public class AuthController {
     private static final String DEVICE_ID_HEADER = "X-Device-Id";
     private static final String DEVICE_NAME_HEADER = "X-Device-Name";
     private static final String REFRESH_COOKIE_NAME = "omninest_refresh_token";
+    /** 刷新 Cookie 改用站点根 Path 之前中的作用域，仅用于清除残留。 */
+    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/v1/auth";
 
     private final AuthService authService;
     private final BrowserSecurityPolicy browserSecurityPolicy;
@@ -329,16 +331,33 @@ public class AuthController {
         return null;
     }
 
+    /**
+     * 写入刷新 Cookie。
+     *
+     * <p>Path 必须是站点根：子路径部署（{@code OMNINEST_WEB_BASE_PATH=/omninest/}）下浏览器看到的请求
+     * URI 是 {@code /omninest/api/v1/auth/refresh}，按客户端路径匹配规则，作用域为
+     * {@code /api/v1/auth} 的 Cookie 不会被附上，刷新即掉登录。后端看不到该前缀（nginx 已剥离），
+     * 因此不能按前缀收窄；Cookie 仅由认证端点读取，收窄作用域不是它的安全边界。</p>
+     *
+     * <p>同时清除旧作用域的残留 Cookie：浏览器里可能还留着升级前写在 {@code /api/v1/auth} 的同名
+     * Cookie，同名 Cookie 按路径长者优先回传，会让认证端点读到已被撤销的旧令牌而持续 401。</p>
+     */
     private void writeRefreshCookie(HttpServletResponse response, String refreshToken, String expiresAt) {
         if (refreshToken == null || refreshToken.isBlank()) {
             return;
         }
-        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
+        addRefreshCookie(response, refreshToken, "/", resolveMaxAge(expiresAt));
+        addRefreshCookie(response, "", LEGACY_REFRESH_COOKIE_PATH, Duration.ZERO);
+    }
+
+    private void addRefreshCookie(
+            HttpServletResponse response, String value, String path, Duration maxAge) {
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, value)
                 .httpOnly(true)
                 .secure(refreshCookieSecure())
                 .sameSite(refreshCookieSameSite())
-                .path("/api/v1/auth")
-                .maxAge(resolveMaxAge(expiresAt))
+                .path(path)
+                .maxAge(maxAge)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
@@ -374,16 +393,11 @@ public class AuthController {
         }
     }
 
-    // 登出时以相同属性覆盖刷新 Cookie，使浏览器立即删除。
+    // 登出时以相同属性覆盖刷新 Cookie，使浏览器立即删除；两条 Path 都要清，否则旧作用域的
+    // 残留 Cookie 会在下次登录后继续遮住站点根那枚。
     private void clearRefreshCookie(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
-                .httpOnly(true)
-                .secure(refreshCookieSecure())
-                .sameSite(refreshCookieSameSite())
-                .path("/api/v1/auth")
-                .maxAge(Duration.ZERO)
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        addRefreshCookie(response, "", "/", Duration.ZERO);
+        addRefreshCookie(response, "", LEGACY_REFRESH_COOKIE_PATH, Duration.ZERO);
     }
 
     private String normalizeUsernameKey(String rawUsername) {

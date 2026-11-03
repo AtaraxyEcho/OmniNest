@@ -124,14 +124,16 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
      * @param sessionId WebSocket 会话标识
      * @param userId 用户标识
      * @param sid 登录会话标识
+     * @param issuedAt JWT 签发时间，用于权限变更后的陈旧令牌判定
      * @param expiresAt JWT 过期时间
      */
-    public void authorize(String sessionId, UUID userId, UUID sid, Instant expiresAt) {
+    public void authorize(
+            String sessionId, UUID userId, UUID sid, Instant issuedAt, Instant expiresAt) {
         SessionContext current = sessions.get(sessionId);
         if (current == null || !current.session().isOpen()) {
             throw new RealtimeAuthenticationException("WebSocket 会话不存在或已关闭");
         }
-        if (!sessions.replace(sessionId, current, current.authorized(userId, sid, expiresAt))) {
+        if (!sessions.replace(sessionId, current, current.authorized(userId, sid, issuedAt, expiresAt))) {
             throw new RealtimeAuthenticationException("WebSocket 会话已关闭");
         }
         // 只有从待认证态晋升时才归还待认证配额；同一连接重复 CONNECT 不得把计数扣成负数。
@@ -164,7 +166,10 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
         if (!context.expiresAt().isAfter(now)) {
             return true;
         }
-        return sessionRevocationChecker.isRevoked(context.userId(), context.sid());
+        // 与 HTTP 过滤器对称：保留会话的权限变更只写 user-revoked-before 时间戳，
+        // 不撤销 sid；只看 isRevoked 会让旧令牌继续占用长连接。
+        return sessionRevocationChecker.isRevoked(context.userId(), context.sid())
+                || sessionRevocationChecker.isTokenStale(context.userId(), context.issuedAt());
     }
 
     private void close(String sessionId, WebSocketSession session) {
@@ -251,14 +256,15 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
             Instant connectedAt,
             UUID userId,
             UUID sid,
+            Instant issuedAt,
             Instant expiresAt
     ) {
         private static SessionContext connected(WebSocketSession session, Instant connectedAt) {
-            return new SessionContext(session, connectedAt, null, null, null);
+            return new SessionContext(session, connectedAt, null, null, null, null);
         }
 
-        private SessionContext authorized(UUID userId, UUID sid, Instant expiresAt) {
-            return new SessionContext(session, connectedAt, userId, sid, expiresAt);
+        private SessionContext authorized(UUID userId, UUID sid, Instant issuedAt, Instant expiresAt) {
+            return new SessionContext(session, connectedAt, userId, sid, issuedAt, expiresAt);
         }
     }
 }

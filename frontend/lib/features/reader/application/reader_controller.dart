@@ -307,8 +307,9 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
         page: current.itemsPage + 1,
       );
       final latest = state.asData?.value;
-      if (latest == null || generation != _itemsGeneration) {
-        // 换代说明用户已经切了分段或改了关键词：这一页属于旧窗口，不能追加。
+      if (!ref.mounted || latest == null || generation != _itemsGeneration) {
+        // 换代说明用户已经切了分段或改了关键词：这一页属于旧窗口，不能追加；
+        // Provider 已销毁时继续写 state 会抛 Bad state。
         return;
       }
       final seen = latest.items.map((item) => item.id).toSet();
@@ -324,6 +325,9 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
         ),
       );
     } on Exception {
+      if (!ref.mounted) {
+        return;
+      }
       final latest = state.asData?.value;
       if (latest != null) {
         state = AsyncData(latest.copyWith(itemsLoadingMore: false));
@@ -389,6 +393,9 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     if (strict && next.errorMessage != null) {
       throw StateError(next.errorMessage!);
     }
+    if (!ref.mounted) {
+      return;
+    }
     if (generation != _itemsGeneration) {
       // 取数在飞期间用户已经换了筛选并另起一轮：这一份属于旧条件，丢弃。
       return;
@@ -447,7 +454,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     state = AsyncData(next.copyWith(itemsLoadingMore: false));
     unawaited(
       _loadState(next).then((loaded) {
-        if (generation != _itemsGeneration) {
+        if (!ref.mounted || generation != _itemsGeneration) {
           return;
         }
         final live = _liveOr(next);
@@ -478,6 +485,10 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
   }) async {
     try {
       final submission = await _api.deleteItem(itemId, cascade: cascade);
+      // 删除是长耗时任务：页面已退出时不得再触碰 ref 与 state。
+      if (!ref.mounted) {
+        return submission;
+      }
       final current = state.asData?.value;
       if (current != null) {
         state = AsyncData(

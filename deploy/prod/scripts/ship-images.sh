@@ -2,11 +2,12 @@
 # 在本机构建自建镜像后，将其转运到无法直连 Docker Hub / googleapis 的目标主机：
 # docker save | gzip | ssh docker load。目标机已存在相同镜像时 load 幂等（层复用，秒级完成）。
 #
-# 用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--dry-run]
-#   --key      SSH 私钥路径；缺省走 ssh-agent 或默认密钥
-#   --tag      自建镜像标签；缺省读取 ../.env 的 OMNINEST_IMAGE_TAG，再退回 0.1.0
-#   --minio    一并转运 MinIO 官方镜像（镜像加速源对部分 RELEASE 标签返回 403 时的绕行）
-#   --dry-run  只校验并打印将转运的镜像，不实际传输
+# 用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--vision-sidecar] [--dry-run]
+#   --key            SSH 私钥路径；缺省走 ssh-agent 或默认密钥
+#   --tag            自建镜像标签；缺省读取 ../.env 的 OMNINEST_IMAGE_TAG，再退回 0.1.0
+#   --minio          一并转运 MinIO 官方镜像（镜像加速源对部分 RELEASE 标签返回 403 时的绕行）
+#   --vision-sidecar 一并转运图像分析侧车镜像（photo-ai profile 依赖它；本机不存在时可省略）
+#   --dry-run        只校验并打印将转运的镜像，不实际传输
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,15 +16,17 @@ target=""
 key=""
 tag=""
 include_minio=false
+include_vision_sidecar=false
 dry_run=false
 while [ $# -gt 0 ]; do
     case "$1" in
         --key) key="${2:?--key 缺少参数}"; shift 2 ;;
         --tag) tag="${2:?--tag 缺少参数}"; shift 2 ;;
         --minio) include_minio=true; shift ;;
+        --vision-sidecar) include_vision_sidecar=true; shift ;;
         --dry-run) dry_run=true; shift ;;
         -h|--help)
-            echo "用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--dry-run]"
+            echo "用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--vision-sidecar] [--dry-run]"
             exit 0
             ;;
         -*)
@@ -41,7 +44,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 if [ -z "$target" ]; then
-    echo "用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--dry-run]" >&2
+    echo "用法: sh scripts/ship-images.sh <user>@<host> [--key KEY] [--tag TAG] [--minio] [--vision-sidecar] [--dry-run]" >&2
     exit 2
 fi
 
@@ -54,6 +57,13 @@ if [ -z "$tag" ]; then
 fi
 
 images="omninest/backend:${tag} omninest/nginx:${tag} omninest-netease-music-api:${tag}"
+if [ "$include_vision_sidecar" = "true" ]; then
+    images="$images omninest-vision-sidecar:${tag}"
+elif docker image inspect "omninest-vision-sidecar:${tag}" >/dev/null 2>&1; then
+    # 显式开关优先；未指定时只要本机存在该镜像就一并转运，
+    # 避免离线目标机启用 photo-ai profile 时才发现缺少侧车镜像。
+    images="$images omninest-vision-sidecar:${tag}"
+fi
 if [ "$include_minio" = "true" ]; then
     minio_image="$(grep -oE 'minio/minio:[A-Za-z0-9._-]+' "$SCRIPT_DIR/../docker-compose.yml" | head -n 1)"
     if [ -z "$minio_image" ]; then

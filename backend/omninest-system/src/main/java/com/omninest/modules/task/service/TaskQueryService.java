@@ -34,6 +34,7 @@ public class TaskQueryService {
     private static final String RETRY_LIMIT_KEY_PREFIX = "task:retry:";
 
     private final TaskRecordRepository taskRecordRepository;
+    private final TaskRecordService taskRecordService;
     private final TaskRedispatchService taskRedispatchService;
     private final RateLimitService rateLimitService;
 
@@ -174,13 +175,7 @@ public class TaskQueryService {
         if (!TaskStatus.DLQ.getValue().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅可重试死信队列中的任务");
         }
-        task.setStatus(TaskStatus.QUEUED.getValue());
-        task.setRetryCount(0);
-        task.setErrorMessage(null);
-        task.setStackSummary(null);
-        task.setNextRetryAt(null);
-        task.setCompletedAt(null);
-        taskRecordRepository.save(task);
+        taskRecordService.resetToQueued(task);
         taskRedispatchService.redispatch(task);
         log.info("重试死信任务并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
     }
@@ -203,13 +198,7 @@ public class TaskQueryService {
         if (!TaskStatus.FAILED.getValue().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅可重试失败状态的本人任务");
         }
-        task.setStatus(TaskStatus.QUEUED.getValue());
-        task.setRetryCount(0);
-        task.setErrorMessage(null);
-        task.setStackSummary(null);
-        task.setNextRetryAt(null);
-        task.setCompletedAt(null);
-        taskRecordRepository.save(task);
+        taskRecordService.resetToQueued(task);
         taskRedispatchService.redispatch(task);
         log.info("本人任务重试并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
     }

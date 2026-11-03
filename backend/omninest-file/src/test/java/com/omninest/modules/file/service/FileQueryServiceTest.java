@@ -37,6 +37,7 @@ import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
@@ -69,6 +70,7 @@ class FileQueryServiceTest {
     private static final UUID OTHER_OWNER_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
     private final FileNodeRepository fileNodeRepository = Mockito.mock(FileNodeRepository.class);
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository = Mockito.mock(FileNodeSubtreeQueryRepository.class);
     private final FileObjectRepository fileObjectRepository = Mockito.mock(FileObjectRepository.class);
     private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
     private final ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
@@ -136,13 +138,13 @@ class FileQueryServiceTest {
                 sharedSpaceService,
                 sharedSpaceQuotaService,
                 transactionTemplate,
-                new FilePathRewriter(fileNodeRepository),
+                new FilePathRewriter(fileNodeRepository, subtreeQueryRepository),
                 lookup,
                 assembler,
                 shareRecipientAccessService,
                 listQueryService,
                 downloadService,
-                new FileRestoreSupport(fileNodeRepository, lookup),
+                new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
                 new FileSubtreeSoftDeleter(fileNodeRepository, fileIndexSyncService, eventPublisher, lookup)
         );
     }
@@ -482,7 +484,7 @@ class FileQueryServiceTest {
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
-        when(fileNodeRepository.findPersonalSubtreeAfterId(
+        when(subtreeQueryRepository.findActivePersonalSubtreeAfterId(
                 ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/Docs/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(child), List.of());
@@ -512,7 +514,7 @@ class FileQueryServiceTest {
                 OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
         // 前缀进 LIKE 必须带转义；未转义时 /S01XE01/ 这类兄弟目录会被一起改名。
-        when(fileNodeRepository.findPersonalSubtreeAfterId(
+        when(subtreeQueryRepository.findActivePersonalSubtreeAfterId(
                 ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/S01\\_E01/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(child), List.of());
@@ -523,7 +525,7 @@ class FileQueryServiceTest {
 
         fileQueryService.renameNode(OWNER_ID, folderId, new RenameFileNodeRequest("Archive"));
 
-        verify(fileNodeRepository, times(2)).findPersonalSubtreeAfterId(
+        verify(subtreeQueryRepository, times(2)).findActivePersonalSubtreeAfterId(
                 ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/S01\\_E01/"), ArgumentMatchers.any(), ArgumentMatchers.any());
         // 子节点路径重写仍按原始 oldPath 定位，转义串不得进 substring。
@@ -546,7 +548,7 @@ class FileQueryServiceTest {
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, targetFolderId, "Docs"))
                 .thenReturn(false);
-        when(fileNodeRepository.findPersonalSubtreeAfterId(
+        when(subtreeQueryRepository.findActivePersonalSubtreeAfterId(
                 ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/Docs/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(child), List.of());
@@ -682,8 +684,8 @@ class FileQueryServiceTest {
                 .thenReturn(Optional.of(parent));
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, parentId, "old")).thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/old/")).thenReturn(List.of(child));
+        when(subtreeQueryRepository.findRestorableChildrenByParentIds(
+                SpaceType.PERSONAL, List.of(folderId))).thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
@@ -1036,8 +1038,8 @@ class FileQueryServiceTest {
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, "Docs"))
                 .thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
+        when(subtreeQueryRepository.findRestorableChildrenByParentIds(
+                SpaceType.PERSONAL, List.of(folderId)))
                 .thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1072,10 +1074,8 @@ class FileQueryServiceTest {
                 OWNER_ID, SpaceType.PERSONAL, "Docs")).thenReturn(false);
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, folderId, "a.txt")).thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/a.txt/")).thenReturn(List.of());
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/")).thenReturn(List.of(child, sibling));
+        when(subtreeQueryRepository.findRestorableChildrenByParentIds(
+                SpaceType.PERSONAL, List.of(folderId))).thenReturn(List.of(child, sibling));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 

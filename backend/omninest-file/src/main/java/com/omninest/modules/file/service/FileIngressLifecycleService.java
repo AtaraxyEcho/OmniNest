@@ -88,6 +88,25 @@ public class FileIngressLifecycleService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markAvailable(UUID ingressId, UUID fileNodeId) {
+        applyAvailable(ingressId, fileNodeId);
+    }
+
+    /**
+     * 在调用方现有事务内标记文件已经发布为业务节点。
+     *
+     * <p>发布链路要求“业务资产置可用 + 配额结算 + 入库记录置可用”原子提交，任何一步失败
+     * 都必须整体回滚；{@link #markAvailable} 的独立事务会破坏该原子性，因此发布方在
+     * 自身事务块内改用本方法。无事务上下文调用直接抛异常，避免误用后静默降级。</p>
+     *
+     * @param ingressId 入库记录标识
+     * @param fileNodeId 文件节点标识
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void markAvailableWithinTransaction(UUID ingressId, UUID fileNodeId) {
+        applyAvailable(ingressId, fileNodeId);
+    }
+
+    private void applyAvailable(UUID ingressId, UUID fileNodeId) {
         FileIngressItem item = requireItem(ingressId);
         item.setStatus(FileIngressStatus.AVAILABLE);
         item.setResultFileNodeId(fileNodeId);

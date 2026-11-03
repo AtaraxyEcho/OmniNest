@@ -287,16 +287,35 @@ public class BackdropAssetService {
                     userStorageCommand.decrementUsage(ownerUserId, settledBytes);
                 }
             }
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
-                    deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
-                    deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
-                }
+            registerAfterCommitCleanup(() -> {
+                deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
+                deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
+                deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
             });
         });
         log.info("背景素材已删除: userId={}, assetId={}", ownerUserId, assetId);
+    }
+
+    /**
+     * 注册提交后清理动作。
+     *
+     * <p>事务同步器只允许在活动事务中注册；从无事务上下文调用（例如补偿路径、测试或
+     * 未来被非事务入口复用）会直接抛 {@link IllegalStateException}。这里统一收敛为
+     * “有事务则提交后执行，无事务则立即执行”，避免调用点各自复制守卫而漏改。</p>
+     *
+     * @param action 清理动作
+     */
+    private void registerAfterCommitCleanup(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     /**
@@ -628,12 +647,28 @@ public class BackdropAssetService {
             thumbNodeId = generateAndStoreThumbnail(
                     ownerUserId, assetId, stagingFile, media, publishedNodeId);
             String videoCodec = probeVideoCodecForNotice(stagingFile, media);
-            finalizePublishedAsset(
-                    ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions, videoCodec);
-            BackdropAsset asset = backdropAssetRepository.findById(assetId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
-            storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, asset.getFileSize());
-            ingressStagingService.markAvailable(ingressItemId, publishedNodeId);
+            UUID publishedOriginalId = publishedNodeId;
+            UUID publishedThumbId = thumbNodeId;
+            // 资产置 READY、配额结算与入库记录置可用必须同生共死：
+            // 任何一步失败都要整体回滚到 PROCESSING，后续 catch 才能安全地把资产置 FAILED。
+            transactionTemplate.executeWithoutResult(status -> {
+                finalizePublishedAsset(
+                        ownerUserId, assetId, publishedOriginalId, null, publishedThumbId,
+                        dimensions, videoCodec);
+                BackdropAsset asset = backdropAssetRepository.findById(assetId)
+                        .orElseThrow(() -> new BusinessException(
+                                ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
+                storageQuotaService.settleReservation(
+                        RESERVATION_SOURCE_TYPE, assetId, asset.getFileSize());
+                ingressStagingService.markAvailableWithinTransaction(ingressItemId, publishedOriginalId);
+            });
+            // 隔离桶对象只是暂存副本：删除失败不影响业务一致性，由保留期回收兜底。
+            try {
+                ingressStagingService.releaseObject(ingressItemId);
+            } catch (RuntimeException cleanupException) {
+                log.warn("背景素材隔离对象清理失败,等待保留期回收: assetId={}, ingressId={}",
+                        assetId, ingressItemId, cleanupException);
+            }
             log.info("背景素材异步发布完成: userId={}, assetId={}", ownerUserId, assetId);
         } catch (IOException ex) {
             deletePublishedOnFailure(ownerUserId, publishedNodeId, thumbNodeId);

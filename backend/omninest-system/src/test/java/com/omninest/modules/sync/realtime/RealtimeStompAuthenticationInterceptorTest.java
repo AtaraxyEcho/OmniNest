@@ -27,6 +27,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
  */
 class RealtimeStompAuthenticationInterceptorTest {
 
+    /** 固定签发时间：认证时要与 isTokenStale 对齐，必须能在断言里复用同一个值。 */
+    private static final Instant ISSUED_AT = Instant.parse("2026-01-01T00:00:00Z");
+
     private final JwtDecoder jwtDecoder = Mockito.mock(JwtDecoder.class);
     private final SessionRevocationChecker revocationChecker = Mockito.mock(SessionRevocationChecker.class);
     private final RealtimeWebSocketSessionRegistry sessionRegistry =
@@ -54,7 +57,8 @@ class RealtimeStompAuthenticationInterceptorTest {
 
         assertThat(accessor.getUser()).isNotNull();
         assertThat(accessor.getUser().getName()).isEqualTo(userId.toString());
-        Mockito.verify(sessionRegistry).authorize("ws-session-1", userId, sid, expiresAt);
+        Mockito.verify(sessionRegistry)
+                .authorize("ws-session-1", userId, sid, ISSUED_AT, expiresAt);
     }
 
     @Test
@@ -165,7 +169,7 @@ class RealtimeStompAuthenticationInterceptorTest {
                 .subject(userId.toString())
                 .claim("sid", sid.toString())
                 .claim("token_use", "access")
-                .issuedAt(Instant.now())
+                .issuedAt(ISSUED_AT)
                 .expiresAt(expiresAt)
                 .build();
     }

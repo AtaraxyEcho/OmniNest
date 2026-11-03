@@ -85,6 +85,39 @@ class AuthControllerCookieTest {
     }
 
     @Test
+    void refreshCookieIsScopedToSiteRootForSubpathDeployment() throws Exception {
+        MockHttpServletResponse loginResponse = new MockHttpServletResponse();
+        controller.login(
+                new LoginRequest("root", "secret"),
+                "web",
+                "browser-1",
+                "Chrome",
+                request(),
+                loginResponse
+        );
+
+        MockHttpServletRequest logoutRequest = request();
+        logoutRequest.setCookies(new Cookie("omninest_refresh_token", "refresh-token"));
+        MockHttpServletResponse logoutResponse = new MockHttpServletResponse();
+        controller.logout(new RefreshRequest(null), "web", logoutRequest, logoutResponse);
+
+        // 子路径部署下浏览器侧 URI 带站点前缀，Path 收窄到 /api/v1/auth 会让刷新请求收不到 Cookie。
+        // 写入与清除必须同一条 Path，否则登出清不掉。
+        assertThat(loginResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("Path=/;")
+                .doesNotContain("Path=/api");
+        assertThat(logoutResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("Path=/;")
+                .doesNotContain("Path=/api");
+
+        // 旧作用域残留的同名 Cookie 会按路径长者优先回传，遮住新 Cookie，必须一并清除。
+        assertThat(loginResponse.getHeaders(HttpHeaders.SET_COOKIE))
+                .anyMatch(header -> header.contains("Path=/api/v1/auth") && header.contains("Max-Age=0"));
+        assertThat(logoutResponse.getHeaders(HttpHeaders.SET_COOKIE))
+                .anyMatch(header -> header.contains("Path=/api/v1/auth") && header.contains("Max-Age=0"));
+    }
+
+    @Test
     void nativeLoginKeepsRefreshTokenInBodyAndDoesNotWriteCookie() {
         MockHttpServletResponse servletResponse = new MockHttpServletResponse();
 

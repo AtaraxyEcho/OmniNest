@@ -142,7 +142,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesMovieFolderAsOneMovieEntityWithoutMetadataLookup() {
         VideoLibrarySource source = source(MediaLibraryType.MOVIE, "Movies");
-        when(movieRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDate(
+        when(movieRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleAndReleaseDateOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "Dune Part Two", LocalDate.of(2024, 1, 1)))
                 .thenReturn(Optional.empty());
         when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID)).thenReturn(Optional.empty());
@@ -167,7 +167,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesTvEpisodeIntoSeriesSeasonAndEpisodeWithoutMetadataLookup() {
         VideoLibrarySource source = source(MediaLibraryType.TV_SERIES, "TV Series");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "Foundation")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 2))
                 .thenReturn(Optional.empty());
@@ -197,7 +197,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesAnimeNumericEpisodeAndPreservesAnimeSeriesType() {
         VideoLibrarySource source = source(MediaLibraryType.ANIME, "Anime");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "Frieren")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 1))
                 .thenReturn(Optional.empty());
@@ -224,7 +224,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesUnicodeRomanSeasonSuffixFromSeriesDirectory() {
         VideoLibrarySource source = source(MediaLibraryType.ANIME, "Anime");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "Aotu World")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 3))
                 .thenReturn(Optional.empty());
@@ -250,7 +250,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesSpFileAsSeasonZeroWithoutCollidingWithRegularEpisode() {
         VideoLibrarySource source = source(MediaLibraryType.ANIME, "Anime");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "Aotu World")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 0))
                 .thenReturn(Optional.empty());
@@ -273,7 +273,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesChineseNamedSeasonDirectoryWhenFileOnlyContainsEpisodeNumber() {
         VideoLibrarySource source = source(MediaLibraryType.ANIME, "Anime");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "葬送的芙莉莲")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 2))
                 .thenReturn(Optional.empty());
@@ -298,7 +298,7 @@ class LocalMediaLibraryClassifierTest {
     @Test
     void classifiesEpisodeNumberAppendedToChineseSeriesName() {
         VideoLibrarySource source = source(MediaLibraryType.TV_SERIES, "TV Series");
-        when(seriesRepository.findByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCase(
+        when(seriesRepository.findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                 OWNER_ID, SOURCE_ID, "仙剑奇侠传三")).thenReturn(Optional.empty());
         when(seasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 1))
                 .thenReturn(Optional.empty());

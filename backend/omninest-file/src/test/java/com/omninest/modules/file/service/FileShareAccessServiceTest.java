@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.sync.UserSyncEventRecorder;
@@ -29,6 +30,7 @@ import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -75,12 +77,13 @@ class FileShareAccessServiceTest {
     private final FileNodeSupport fileNodeSupport = Mockito.mock(FileNodeSupport.class);
     private final StorageQuotaService storageQuotaService = Mockito.mock(StorageQuotaService.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
+    private final FileIndexSyncService fileIndexSyncService = Mockito.mock(FileIndexSyncService.class);
 
     private final FileShareAccessService service = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             rateLimitService, notificationService,
             fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport, storageQuotaService,
-            syncEventRecorder, Mockito.mock(FileIndexSyncService.class),
+            syncEventRecorder, fileIndexSyncService,
             new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class))
     );
 
@@ -294,6 +297,60 @@ class FileShareAccessServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("共享空间文件夹");
         verify(fileNodeRepository, Mockito.never()).saveAll(Mockito.anyList());
+    }
+
+    @Test
+    void oversizedFolderShareIsRejectedBeforeAnyNodeIsSaved() {
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID))
+                .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
+        // 2000 个后代加根目录共 2001 个节点，超过 MAX_SYNC_TRANSFER_NODES=2000 的同步转存护栏。
+        List<FileNode> descendants = new ArrayList<>();
+        for (int index = 0; index < 2_000; index++) {
+            descendants.add(node(UUID.randomUUID(), "/docs/file-" + index + ".txt", NodeType.FILE));
+        }
+        when(fileNodeRepository.findDescendantsByPrefixOrdered(OWNER, SpaceType.PERSONAL, "/docs/"))
+                .thenReturn(descendants);
+
+        assertThatThrownBy(() -> service.acceptShare(RECIPIENT, TOKEN, new AcceptShareRequest(null, null)))
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR);
+                    assertThat(exception.getMessage()).contains("节点过多");
+                });
+
+        // 护栏必须在任何落盘之前生效：不建节点、不扣配额、不入队索引、不发同步事件。
+        verify(fileNodeRepository, never()).saveAll(Mockito.anyList());
+        verify(fileIndexSyncService, never()).scheduleAfterCommit(any(), any());
+        verify(storageQuotaService, never()).chargeUsage(any(), Mockito.anyLong());
+        Mockito.verifyNoInteractions(syncEventRecorder);
+    }
+
+    @Test
+    void acceptFolderShareEnqueuesIndexOnlyForFileNodes() {
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID))
+                .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
+        FileNode subFolder = node(SUB_FOLDER_ID, "/docs/sub", NodeType.FOLDER);
+        FileNode report = node(FILE_ID, "/docs/sub/report.pdf", NodeType.FILE);
+        report.setSizeBytes(2048L);
+        when(fileNodeRepository.findDescendantsByPrefixOrdered(OWNER, SpaceType.PERSONAL, "/docs/"))
+                .thenReturn(List.of(subFolder, report));
+        when(fileNodeRepository.saveAll(Mockito.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.acceptShare(RECIPIENT, TOKEN, new AcceptShareRequest(null, null));
+
+        ArgumentCaptor<List<FileNode>> saved = ArgumentCaptor.forClass(List.class);
+        verify(fileNodeRepository).saveAll(saved.capture());
+        List<UUID> savedFileIds = saved.getValue().stream()
+                .filter(savedNode -> NodeType.FILE.getValue().equals(savedNode.getNodeType()))
+                .map(FileNode::getId)
+                .toList();
+        ArgumentCaptor<List<UUID>> indexed = ArgumentCaptor.forClass(List.class);
+        verify(fileIndexSyncService).scheduleAfterCommit(eq(RECIPIENT), indexed.capture());
+        // 文件夹没有可索引内容：全文索引队列只收 FILE 节点 ID。
+        assertThat(savedFileIds).hasSize(1);
+        assertThat(indexed.getValue()).containsExactlyElementsOf(savedFileIds);
     }
 
     private ShareLink share(String resourceType) {

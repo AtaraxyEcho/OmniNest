@@ -761,16 +761,14 @@ class _MobileSettingsFab extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return SizedBox.square(
       dimension: 48,
-      child: Tooltip(
-        message: l10n.musicPlaybackSettings,
-        child: IconButton(
-          onPressed: onPressed,
-          icon: const Icon(Icons.equalizer_rounded, size: 20),
-          style: IconButton.styleFrom(
-            backgroundColor: MusicChromeColors.panelBackground,
-            foregroundColor: MusicChromeColors.nearWhite,
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
-          ),
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: l10n.musicPlaybackSettings,
+        icon: const Icon(Icons.equalizer_rounded, size: 20),
+        style: IconButton.styleFrom(
+          backgroundColor: MusicChromeColors.panelBackground,
+          foregroundColor: MusicChromeColors.nearWhite,
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
         ),
       ),
     );

@@ -26,7 +26,12 @@ class SharedFolderBrowseNotifier extends AsyncNotifier<SharedFolderBrowse?> {
   int _generation = 0;
 
   @override
-  SharedFolderBrowse? build() => null;
+  SharedFolderBrowse? build() {
+    // Provider 销毁后再次进入会复用同一个 Notifier 字段：不递增代次会让
+    // 关闭弹窗前发出的请求把旧目录结果写回新会话。
+    ref.onDispose(() => _generation++);
+    return null;
+  }
 
   /// 打开某条分享的根目录。
   Future<void> open(String shareId) async {
@@ -65,12 +70,13 @@ class SharedFolderBrowseNotifier extends AsyncNotifier<SharedFolderBrowse?> {
             shareId: _shareId,
             parentId: trail.isEmpty ? null : trail.last.id,
           );
-      if (generation != _generation) {
+      // autoDispose：页面关闭后 Ref 已销毁，写 state 会抛 Bad state。
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = AsyncData(SharedFolderBrowse(trail: trail, page: page));
     } on Object catch (error, stackTrace) {
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = AsyncError(error, stackTrace);

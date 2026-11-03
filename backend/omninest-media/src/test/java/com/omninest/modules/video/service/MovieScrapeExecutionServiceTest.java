@@ -30,6 +30,7 @@ import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.notification.service.NotificationService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Optional;
@@ -70,6 +71,9 @@ class MovieScrapeExecutionServiceTest {
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final PlatformTransactionManager transactionManager =
             Mockito.mock(PlatformTransactionManager.class);
+    // 心跳租约未桩化时 start() 返回 null；try-with-resources 对 null 资源不尝试 close，
+    // 因此执行链路可以照常跑，不需要为心跳再造一个假租约。
+    private final TaskHeartbeatRunner taskHeartbeatRunner = Mockito.mock(TaskHeartbeatRunner.class);
     private final MovieScrapeExecutionService executionService =
             new MovieScrapeExecutionService(
                     configService,
@@ -87,7 +91,8 @@ class MovieScrapeExecutionServiceTest {
                     syncEventService,
                     fileLifecycleGuard,
                     readThroughCache,
-                    transactionManager
+                    transactionManager,
+                    taskHeartbeatRunner
             );
 
     @BeforeEach
@@ -133,7 +138,7 @@ class MovieScrapeExecutionServiceTest {
                 null, null, null, null, null, null, null, null, null, null, null
         );
         when(provider.search(new FileNameGuess("Inception", 2010, null, null))).thenReturn(List.of(candidate));
-        when(movieRepository.findByTmdbIdAndOwnerUserId(any(), eq(OWNER_ID))).thenReturn(Optional.empty());
+        when(movieRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(any(), eq(OWNER_ID))).thenReturn(Optional.empty());
         when(movieRepository.save(any(MediaMovie.class))).thenAnswer(invocation -> {
             MediaMovie m = invocation.getArgument(0);
             m.setId(UUID.randomUUID());
@@ -164,7 +169,7 @@ class MovieScrapeExecutionServiceTest {
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
         );
         when(provider.search(new FileNameGuess("Inception", 2010, null, null))).thenReturn(List.of(candidate));
-        when(movieRepository.findByTmdbIdAndOwnerUserId(any(), eq(OWNER_ID))).thenReturn(Optional.empty());
+        when(movieRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(any(), eq(OWNER_ID))).thenReturn(Optional.empty());
         when(movieRepository.save(any(MediaMovie.class))).thenAnswer(invocation -> {
             MediaMovie saved = invocation.getArgument(0);
             if (saved.getId() == null) {
@@ -225,7 +230,7 @@ class MovieScrapeExecutionServiceTest {
                 List.of()
         );
         when(provider.search(new FileNameGuess("示例剧集", 2019, null, null))).thenReturn(List.of(candidate));
-        when(tvSeriesRepository.findByTmdbIdAndOwnerUserId(1399, OWNER_ID)).thenReturn(Optional.empty());
+        when(tvSeriesRepository.findFirstByTmdbIdAndOwnerUserIdOrderByCreatedAtAsc(1399, OWNER_ID)).thenReturn(Optional.empty());
         java.util.concurrent.atomic.AtomicReference<MediaTvSeries> savedSeries =
                 new java.util.concurrent.atomic.AtomicReference<>();
         when(tvSeriesRepository.save(any(MediaTvSeries.class))).thenAnswer(invocation -> {

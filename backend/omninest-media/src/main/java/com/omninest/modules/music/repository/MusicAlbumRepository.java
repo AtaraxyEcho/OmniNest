@@ -68,6 +68,49 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
             Pageable pageable);
 
     /**
+     * 统计当前用户可见的活动专辑数（个人 + 共享）。
+     *
+     * <p>口径与 {@link #findVisibleActiveAlbums} 完全一致，供首页仪表盘使用。</p>
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @return 可见专辑数
+     */
+    @Query("""
+            select count(distinct album) from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (album.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    long countVisibleActive(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 查询当前用户可见的最近更新专辑（个人 + 共享）。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param pageable 分页限制
+     * @return 可见专辑
+     */
+    @Query("""
+            select distinct album from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (album.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            order by album.updatedAt desc
+            """)
+    List<MusicAlbum> findTopVisibleActiveByUpdatedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
      * 搜索当前用户可见的活动专辑。
      */
     @Query("""
@@ -105,27 +148,31 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
 
     Optional<MusicAlbum> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
-    Optional<MusicAlbum> findByOwnerUserIdAndTitleIgnoreCase(UUID ownerUserId, String title);
-
     /**
      * 按标题与艺术家精确匹配同名专辑，避免不同歌手的同名专辑被合并。
+     *
+     * <p>专辑身份是“标题 + 艺术家”，该组合在库中没有唯一约束：同一歌手也可能因刮削
+     * 先后产生重复行。返回单值必须带确定性排序，否则多行会抛
+     * {@code IncorrectResultSizeDataAccessException} 变成 HTTP 500。</p>
      *
      * @param ownerUserId 所有者用户 ID
      * @param title 专辑标题
      * @param artistName 专辑艺术家
      * @return 匹配到的专辑
      */
-    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCase(
+    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIgnoreCaseOrderByCreatedAtAsc(
             UUID ownerUserId, String title, String artistName);
 
     /**
      * 无艺术家信息时仅匹配没有艺术家快照的同名专辑。
      *
+     * <p>同样需要确定性排序：艺术家为空的历史专辑同样允许存在多行。</p>
+     *
      * @param ownerUserId 所有者用户 ID
      * @param title 专辑标题
      * @return 匹配到的专辑
      */
-    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNull(
+    Optional<MusicAlbum> findFirstByOwnerUserIdAndTitleIgnoreCaseAndArtistNameIsNullOrderByCreatedAtAsc(
             UUID ownerUserId, String title);
 
     /**
