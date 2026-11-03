@@ -41,7 +41,8 @@ class _AnimatedCardState extends State<AnimatedCard>
       begin: const Offset(0, 0.1),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    if (!widget.enabled) {
+    // 减少动态效果下直接落终态：入场淡入与上滑只是装饰，跳过它不改变内容。
+    if (!widget.enabled || MotionToken.prefersReducedOnPlatform()) {
       _controller.value = 1;
       return;
     }

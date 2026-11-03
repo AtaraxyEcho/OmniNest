@@ -34,13 +34,19 @@ class MotionToken {
 
   /// 在尚未建立组件上下文时根据平台无障碍设置解析动画时长。
   static Duration resolveForPlatform(Duration duration) {
+    return prefersReducedOnPlatform() ? Duration.zero : duration;
+  }
+
+  /// 在尚未建立组件上下文时判断平台是否要求关闭动画。
+  ///
+  /// 给 `initState` 里就要决定「直接落终态还是播一遍」的控制器用：
+  /// 那时读 `MediaQuery` 依赖还太早。
+  static bool prefersReducedOnPlatform() {
     return WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .disableAnimations
-        ? Duration.zero
-        : duration;
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
   }
 
   /// 统一的减弱动效判定：当前上下文是否要求关闭动画。

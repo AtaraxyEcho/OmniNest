@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dar
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
@@ -751,49 +752,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _contentLoader?.invalidateAll();
     _contentLoader = null;
     super.dispose();
-  }
-
-  /// dispose 兜底备份用的本章字符偏移；无法可信地确定时返回 null。
-  ///
-  /// 滚动模式用视口缓存换算（元素已 defunct，viewportAnchorY/computePageWidth
-  /// 内的 MediaQuery 查找会断言，只能用 didChangeDependencies 捕获的视口）。
-  /// 翻页模式按当前页起始字符偏移记入 positionTracker，因此直接取 tracker，
-  /// 不能以 `hasClients` 作门——旧实现整块挂在 hasClients 下，页模式下这条
-  /// 兜底从未执行过；模式切换后残留的 scroll client 也会拿旧章偏移解释新页。
-  int? _exitBackupCharOffset() {
-    if (_isPageMode || !_scrollController.hasClients) {
-      if (positionTracker.chapterId != _currentChapterId) {
-        return null;
-      }
-      return positionTracker.charOffset;
-    }
-    final max = _scrollController.position.maxScrollExtent;
-    if (max <= 0) {
-      return null;
-    }
-    final size = _lastViewportSize ?? _pageViewportSize;
-    if (size == null || size.width <= 0) {
-      return null;
-    }
-    final chromeLayout = ReaderChromeLayout.resolve(
-      immersiveMode: _settings.immersiveMode,
-      isPageMode: _isPageMode,
-    );
-    final topInset = _settings.immersiveMode ? 0.0 : _lastViewPaddingTop;
-    final anchorY =
-        (size.height - topInset - chromeLayout.viewportVerticalReserve) * 0.25;
-    final controlLayout = ReaderControlLayout.resolve(
-      viewport: size,
-      fontSize: _settings.fontSize,
-      textScale: _lastTextScale,
-    );
-    return _contentLoader?.contentYToCharOffset(
-      _currentChapterId,
-      _scrollController.offset + anchorY,
-      pageWidth: controlLayout.textColumnWidth,
-      settings: _settings,
-      textScale: _lastTextScale,
-    );
   }
 
   /// 将音量键拦截开关同步到原生层（仅 Android 实际生效）。

@@ -1,5 +1,8 @@
 part of 'reader_view_page.dart';
 
+/// 滚动模式跳章首/章尾的滑行时长；减动效下改走 jumpTo。
+const Duration _chapterBoundaryScrollDuration = Duration(milliseconds: 220);
+
 extension _ReaderViewPageCommands on _ReaderViewPageState {
   KeyEventResult _handleReaderKeyEvent(
     KeyEvent event,
@@ -247,10 +250,16 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (!_scrollController.hasClients) {
       return;
     }
+    final target = start ? 0.0 : _scrollController.position.maxScrollExtent;
+    // 减动效下不做全书高度的滑行：位移本身是导航目的，动画只是过程。
+    if (MotionToken.prefersReduced(context)) {
+      _scrollController.jumpTo(target);
+      return;
+    }
     unawaited(
       _scrollController.animateTo(
-        start ? 0 : _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
+        target,
+        duration: _chapterBoundaryScrollDuration,
         curve: Curves.easeOutCubic,
       ),
     );

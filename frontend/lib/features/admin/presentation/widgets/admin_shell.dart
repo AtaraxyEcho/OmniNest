@@ -28,11 +28,15 @@ import 'package:omninest/features/admin/application/admin_console_controller.dar
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/theme/admin_workstation_theme.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_status_dot.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 part 'admin_shell_navigation.dart';
+
+/// 分区切换的纯淡入时长；系统要求减少动态效果时由 `MotionToken.reduced` 归零。
+const Duration _sectionFadeDuration = Duration(milliseconds: 160);
 
 /// 管理控制台工位外壳。
 ///
@@ -176,7 +180,7 @@ class _AdminShellBody extends StatelessWidget {
     );
     // 规范：侧栏切换联动主区 160ms 纯淡入，不做位移动画。
     final content = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 160),
+      duration: MotionToken.reduced(context, _sectionFadeDuration),
       switchInCurve: MotionToken.curve,
       switchOutCurve: MotionToken.curveIn,
       // 分区切换会整棵替换内容，退场子树排除语义。
@@ -318,7 +322,7 @@ class _AdminSideHeader extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    _StatusDot(color: dotColor, pulsing: pulsing),
+                    AdminStatusDot(color: dotColor, pulsing: pulsing),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -337,92 +341,6 @@ class _AdminSideHeader extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 状态指示灯：规范唯一允许的正圆元素。
-///
-/// 心跳脉冲为克制动效：仅持续约 5 秒（3 个周期）后保持常亮，
-/// 避免长驻动画干扰焦点与自动化校验。
-class _StatusDot extends StatefulWidget {
-  const _StatusDot({required this.color, this.pulsing = false});
-
-  final Color color;
-  final bool pulsing;
-
-  @override
-  State<_StatusDot> createState() => _StatusDotState();
-}
-
-class _StatusDotState extends State<_StatusDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  Timer? _pulseStopTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    if (widget.pulsing) {
-      _controller.repeat(reverse: true);
-      _pulseStopTimer = Timer(const Duration(seconds: 5), () {
-        _controller.stop();
-        _controller.value = 1;
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _StatusDot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.pulsing == oldWidget.pulsing) {
-      return;
-    }
-    // 最常见路径：connecting(不闪)→healthy(脉冲)。不重启控制器会让
-    // FadeTransition 钉死在 0.35 透明度，在线灯反而最暗。
-    _pulseStopTimer?.cancel();
-    _pulseStopTimer = null;
-    if (widget.pulsing) {
-      _controller
-        ..value = 0
-        ..repeat(reverse: true);
-      _pulseStopTimer = Timer(const Duration(seconds: 5), () {
-        _controller.stop();
-        _controller.value = 1;
-      });
-    } else {
-      _controller.stop();
-      _controller.value = 1;
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulseStopTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dot = Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-    );
-    if (!widget.pulsing) {
-      return dot;
-    }
-    return FadeTransition(
-      opacity: Tween(
-        begin: 0.35,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
-      child: dot,
     );
   }
 }
@@ -631,7 +549,7 @@ class _AdminOnlineBadge extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _StatusDot(color: dotColor, pulsing: pulsing),
+          AdminStatusDot(color: dotColor, pulsing: pulsing),
           const SizedBox(width: 6),
           Text(
             phase == null || phase == RealtimePhase.signedOut

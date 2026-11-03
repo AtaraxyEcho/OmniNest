@@ -1,5 +1,9 @@
 part of 'reader_view_page_builders.dart';
 
+/// 「返回原进度」浮层的轨道位移与淡入淡出时长；减动效下由 `MotionToken.reduced` 归零。
+const Duration _returnHintSlideDuration = Duration(milliseconds: 250);
+const Duration _returnHintFadeDuration = Duration(milliseconds: 300);
+
 /// 「返回原进度」与「其他设备进度」浮动控件构建。
 extension ReaderViewPageBuildersReturn on ReaderViewPageBuilders {
   Widget buildReturnToProgressControl() {
@@ -11,11 +15,11 @@ extension ReaderViewPageBuildersReturn on ReaderViewPageBuilders {
       left: 0,
       right: 0,
       bottom: bottomOffset,
-      duration: const Duration(milliseconds: 250),
+      duration: MotionToken.reduced(context, _returnHintSlideDuration),
       curve: Curves.easeOut,
       child: AnimatedOpacity(
         opacity: showReturnControl ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 300),
+        duration: MotionToken.reduced(context, _returnHintFadeDuration),
         child: ReaderReturnToProgressControl(
           settings: settings,
           label: l10n.readerReturnToProgress,
@@ -49,11 +53,11 @@ extension ReaderViewPageBuildersReturn on ReaderViewPageBuilders {
       left: 0,
       right: 0,
       bottom: bottomOffset,
-      duration: const Duration(milliseconds: 250),
+      duration: MotionToken.reduced(context, _returnHintSlideDuration),
       curve: Curves.easeOut,
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 300),
+        duration: MotionToken.reduced(context, _returnHintFadeDuration),
         // 淡出后的候选快照仍留在状态里，不可见时必须挡住点击，
         // 否则空按会把本机位置悄悄跳到远端进度。
         child: IgnorePointer(

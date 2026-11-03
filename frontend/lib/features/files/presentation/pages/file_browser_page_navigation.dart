@@ -194,7 +194,13 @@ class _PulsingStatusDotState extends State<_PulsingStatusDot>
     _controller = AnimationController(
       vsync: this,
       duration: MotionToken.stagger,
-    )..repeat(reverse: true);
+    );
+    // 减少动态效果下灯保持常亮：脉冲只用于吸引注意，不承载状态信息。
+    if (MotionToken.prefersReducedOnPlatform()) {
+      _controller.value = 1;
+      return;
+    }
+    _controller.repeat(reverse: true);
   }
 
   @override

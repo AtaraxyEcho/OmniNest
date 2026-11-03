@@ -27,7 +27,9 @@ void main() {
     'lib/features/music/presentation/widgets/music_platform_qr_panel.dart 2800':
         '二维码刷新倒计时环，属内容节奏',
     // 数据/进度动画：与 MotionToken.chart 同档，不是交互反馈。
-    'lib/features/admin/presentation/widgets/admin_shell.dart 1600': '工作区指示动画',
+    // 状态灯控制器原在 admin_shell.dart，随键盘无障碍整改拆到独立文件。
+    'lib/features/admin/presentation/widgets/admin_status_dot.dart 1600':
+        '工作区指示动画',
     'lib/features/portal/presentation/widgets/portal_mobile_system_widgets.dart 600':
         '进度条填充动画',
     'lib/features/portal/presentation/widgets/storage_overview_widget.dart 800':

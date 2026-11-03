@@ -8,6 +8,17 @@ library;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/workstation_focus_target.dart';
+
+/// 工位控件的状态过渡时长：只有 1px 边框与底色换色，几何尺寸不变。
+///
+/// 走 `MotionToken.reduced` 而不是裸常量，系统开启「减少动态效果」时直接
+/// 跳到终态，不做颜色渐变。
+const Duration _stateChangeDuration = Duration(milliseconds: 120);
+
+/// 方形开关的滑块位移：比配色切换略长，让 20px 位移看得清方向。
+const Duration _switchChangeDuration = Duration(milliseconds: 140);
 
 /// 工位输入装饰：1px 细线直角、凹入槽体底色。
 ///
@@ -83,40 +94,57 @@ class _WorkstationIconButtonState extends State<WorkstationIconButton> {
     final scheme = Theme.of(context).colorScheme;
     final enabled = widget.onPressed != null;
     final active = widget.active;
-    final border =
-        active
-            ? scheme.outlineVariant
-            : _hovering && enabled
-            ? scheme.onSurface
-            : scheme.outline;
-    final foreground =
-        !enabled
-            ? scheme.onSurfaceVariant.withValues(alpha: 0.45)
-            : active || _hovering
-            ? scheme.onSurface
-            : scheme.onSurfaceVariant;
     return Tooltip(
       message: widget.tooltip,
-      child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: widget.size,
-            height: widget.size,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color:
-                  active ? scheme.surfaceContainerHighest : Colors.transparent,
-              border: Border.all(color: border, width: 1),
+      child: WorkstationFocusTarget(
+        enabled: enabled,
+        semanticLabel: widget.tooltip,
+        selected: active,
+        onActivate: widget.onPressed ?? () {},
+        builder: (context, focused) {
+          final emphasized = active || _hovering || focused;
+          final border =
+              active
+                  ? scheme.outlineVariant
+                  : emphasized && enabled
+                  ? scheme.onSurface
+                  : scheme.outline;
+          final foreground =
+              !enabled
+                  ? scheme.onSurfaceVariant.withValues(alpha: 0.45)
+                  : emphasized
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant;
+          return MouseRegion(
+            cursor:
+                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: widget.onPressed,
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, _stateChangeDuration),
+                width: widget.size,
+                height: widget.size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      active
+                          ? scheme.surfaceContainerHighest
+                          : Colors.transparent,
+                  border: Border.all(color: border, width: 1),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: widget.iconSize,
+                  color: foreground,
+                ),
+              ),
             ),
-            child: Icon(widget.icon, size: widget.iconSize, color: foreground),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -208,53 +236,62 @@ class _SegmentButtonState extends State<_SegmentButton> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final selected = widget.selected;
-    final foreground =
-        selected
-            ? scheme.onSurface
-            : _hovering
-            ? scheme.onSurface
-            : scheme.onSurfaceVariant;
-    final background =
-        selected
-            ? scheme.surfaceContainerHighest
-            : _hovering
-            ? scheme.surfaceContainer
-            : Colors.transparent;
     return Tooltip(
       message: widget.segment.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            height: widget.height - 2,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            color: background,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.segment.icon, size: 16, color: foreground),
-                if (widget.segment.label != null) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.segment.label!,
-                    style: TextStyle(
-                      fontSize: AppTypography.labelMedium,
-                      height: 16 / AppTypography.labelMedium,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: foreground,
-                    ),
-                  ),
-                ],
-              ],
+      child: WorkstationFocusTarget(
+        enabled: true,
+        semanticLabel: widget.segment.tooltip,
+        selected: selected,
+        onActivate: widget.onTap,
+        builder: (context, focused) {
+          final emphasized = _hovering || focused;
+          final foreground =
+              selected || emphasized
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant;
+          final background =
+              selected
+                  ? scheme.surfaceContainerHighest
+                  : emphasized
+                  ? scheme.surfaceContainer
+                  : Colors.transparent;
+          return MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, _stateChangeDuration),
+                height: widget.height - 2,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                color: background,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.segment.icon, size: 16, color: foreground),
+                    if (widget.segment.label != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.segment.label!,
+                        style: TextStyle(
+                          fontSize: AppTypography.labelMedium,
+                          height: 16 / AppTypography.labelMedium,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color: foreground,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -316,53 +353,68 @@ class _WorkstationActionButtonState extends State<WorkstationActionButton> {
         border = scheme.error.withValues(alpha: 0.55);
         hoverBackground = scheme.error.withValues(alpha: 0.10);
     }
-    return MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color:
-                !enabled
-                    ? scheme.surfaceContainerLow
-                    : _hovering
-                    ? hoverBackground
-                    : background,
-            border: Border.all(
-              color: !enabled ? scheme.outlineVariant : border,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.icon != null) ...[
-                Icon(
-                  widget.icon,
-                  size: 14,
-                  color: !enabled ? scheme.onSurfaceVariant : foreground,
-                ),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: AppTypography.labelMedium,
-                  fontWeight:
-                      widget.variant == WorkstationActionButtonVariant.primary
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                  color: !enabled ? scheme.onSurfaceVariant : foreground,
+    return WorkstationFocusTarget(
+      enabled: enabled,
+      semanticLabel: widget.label,
+      onActivate: widget.onPressed ?? () {},
+      builder: (context, focused) {
+        final fill =
+            !enabled
+                ? scheme.surfaceContainerLow
+                : (_hovering || focused)
+                ? hoverBackground
+                : background;
+        return MouseRegion(
+          cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            onTap: widget.onPressed,
+            child: AnimatedContainer(
+              duration: MotionToken.reduced(context, _stateChangeDuration),
+              height: height,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: fill,
+                border: Border.all(
+                  color:
+                      !enabled
+                          ? scheme.outlineVariant
+                          : focused
+                          ? scheme.onSurface
+                          : border,
                 ),
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(
+                      widget.icon,
+                      size: 14,
+                      color: !enabled ? scheme.onSurfaceVariant : foreground,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: AppTypography.labelMedium,
+                      fontWeight:
+                          widget.variant ==
+                                  WorkstationActionButtonVariant.primary
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                      color: !enabled ? scheme.onSurfaceVariant : foreground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -412,83 +464,89 @@ class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final interactive = widget.enabled && widget.onChanged != null;
     final value = widget.value;
-    // 输入边界用交互强边框，未选中时悬停仅 1px 细线精准变色。
-    final borderColor =
-        value
-            ? scheme.onSurface
-            : _hovering && interactive
-            ? scheme.onSurface
-            : scheme.outline;
     final target = AppControlTokens.isDesktopDensity ? widget.size + 10 : 44.0;
-    return Semantics(
-      checked: value,
+    return WorkstationFocusTarget(
       enabled: interactive,
-      button: true,
-      child: MouseRegion(
-        cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: interactive ? _handleTap : null,
-          child: SizedBox.square(
-            dimension: target,
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: widget.size,
-                height: widget.size,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  // 勾选=弱抬升底 + 强边框 + 同色 ✔，与工位分段控件的选中口径一致；
-                  // 实底反白在浅色主题下会变成黑块配浅色勾。
-                  color:
-                      value || (_hovering && interactive)
-                          ? scheme.surfaceContainerHighest
-                          : Colors.transparent,
-                  border: Border.all(color: borderColor, width: 1),
-                ),
-                child:
-                    value
-                        ? TweenAnimationBuilder<double>(
-                          key: const ValueKey('files-check-pop'),
-                          tween: Tween(begin: 0.4, end: 1),
-                          duration: const Duration(milliseconds: 120),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, scale, child) {
-                            return Opacity(
-                              opacity: scale.clamp(0.0, 1.0),
-                              child: Transform.scale(
-                                scale: scale,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: Text(
-                            '✔',
-                            style: TextStyle(
-                              fontSize: widget.size * 0.72,
-                              height: 1,
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
+      checked: value,
+      onActivate: _handleTap,
+      builder: (context, focused) {
+        final scheme = Theme.of(context).colorScheme;
+        // 输入边界用交互强边框，未选中时悬停仅 1px 细线精准变色。
+        final borderColor =
+            value
+                ? scheme.onSurface
+                : (_hovering || focused) && interactive
+                ? scheme.onSurface
+                : scheme.outline;
+        return MouseRegion(
+          cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: interactive ? _handleTap : null,
+            child: SizedBox.square(
+              dimension: target,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: MotionToken.reduced(context, _stateChangeDuration),
+                  width: widget.size,
+                  height: widget.size,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    // 勾选=弱抬升底 + 强边框 + 同色 ✔，与工位分段控件的选中口径一致；
+                    // 实底反白在浅色主题下会变成黑块配浅色勾。
+                    color:
+                        value || ((_hovering || focused) && interactive)
+                            ? scheme.surfaceContainerHighest
+                            : Colors.transparent,
+                    border: Border.all(color: borderColor, width: 1),
+                  ),
+                  child:
+                      value
+                          ? TweenAnimationBuilder<double>(
+                            key: const ValueKey('files-check-pop'),
+                            tween: Tween(begin: 0.4, end: 1),
+                            duration: MotionToken.reduced(
+                              context,
+                              _stateChangeDuration,
                             ),
-                          ),
-                        )
-                        : widget.indeterminate
-                        ? Container(
-                          width: widget.size * 0.55,
-                          height: 1,
-                          color: scheme.onSurface,
-                        )
-                        : null,
+                            curve: Curves.easeOutCubic,
+                            builder: (context, scale, child) {
+                              return Opacity(
+                                opacity: scale.clamp(0.0, 1.0),
+                                child: Transform.scale(
+                                  scale: scale,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              '✔',
+                              style: TextStyle(
+                                fontSize: widget.size * 0.72,
+                                height: 1,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                          )
+                          : widget.indeterminate
+                          ? Container(
+                            width: widget.size * 0.55,
+                            height: 1,
+                            color: scheme.onSurface,
+                          )
+                          : null,
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -527,37 +585,6 @@ class WorkstationToggle extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final interactive = enabled && onChanged != null;
     final selected = value;
-    final borderColor =
-        selected
-            ? scheme.onSurface
-            : interactive
-            ? scheme.outline
-            : scheme.outlineVariant;
-
-    final Widget track = AnimatedContainer(
-      // 轨道键：测试与调用方定位轨道几何（32×16）用。
-      key: const ValueKey('workstation-toggle-track'),
-      duration: const Duration(milliseconds: 120),
-      width: 32,
-      height: 16,
-      // 轨道内宽 30：滑块 10 + 两侧各 2px 余量，选中态右移 16px。
-      padding: EdgeInsets.only(
-        top: 2,
-        bottom: 2,
-        left: selected ? 18 : 2,
-        right: selected ? 2 : 18,
-      ),
-      decoration: BoxDecoration(
-        color: selected ? scheme.onSurface : scheme.surfaceContainerHighest,
-        border: Border.all(color: borderColor, width: 1),
-      ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        width: 10,
-        height: 10,
-        color: selected ? scheme.surface : scheme.outline,
-      ),
-    );
 
     void handleTap() {
       final onChanged = this.onChanged;
@@ -567,12 +594,49 @@ class WorkstationToggle extends StatelessWidget {
       onChanged(!value);
     }
 
-    final Widget content;
-    if (label == null) {
-      final target = AppControlTokens.isDesktopDensity ? 42.0 : 44.0;
-      content = SizedBox.square(dimension: target, child: Center(child: track));
-    } else {
-      content = Padding(
+    Widget trackFor(bool focused) {
+      final borderColor =
+          selected
+              ? scheme.onSurface
+              : interactive && focused
+              ? scheme.onSurface
+              : interactive
+              ? scheme.outline
+              : scheme.outlineVariant;
+      final transition = MotionToken.reduced(context, _stateChangeDuration);
+      return AnimatedContainer(
+        // 轨道键：测试与调用方定位轨道几何（32×16）用。
+        key: const ValueKey('workstation-toggle-track'),
+        duration: transition,
+        width: 32,
+        height: 16,
+        // 轨道内宽 30：滑块 10 + 两侧各 2px 余量，选中态右移 16px。
+        padding: EdgeInsets.only(
+          top: 2,
+          bottom: 2,
+          left: selected ? 18 : 2,
+          right: selected ? 2 : 18,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? scheme.onSurface : scheme.surfaceContainerHighest,
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        child: AnimatedContainer(
+          duration: transition,
+          width: 10,
+          height: 10,
+          color: selected ? scheme.surface : scheme.outline,
+        ),
+      );
+    }
+
+    Widget contentFor(bool focused) {
+      final track = trackFor(focused);
+      if (label == null) {
+        final target = AppControlTokens.isDesktopDensity ? 42.0 : 44.0;
+        return SizedBox.square(dimension: target, child: Center(child: track));
+      }
+      return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
@@ -607,18 +671,24 @@ class WorkstationToggle extends StatelessWidget {
       );
     }
 
-    return Semantics(
-      toggled: selected,
+    return WorkstationFocusTarget(
       enabled: interactive,
-      button: true,
-      child: MouseRegion(
-        cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: interactive ? handleTap : null,
-          child: Opacity(opacity: interactive ? 1 : 0.45, child: content),
-        ),
-      ),
+      toggled: selected,
+      semanticLabel: label,
+      onActivate: handleTap,
+      builder:
+          (context, focused) => MouseRegion(
+            cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: interactive ? handleTap : null,
+              child: Opacity(
+                opacity: interactive ? 1 : 0.45,
+                child: contentFor(focused),
+              ),
+            ),
+          ),
     );
   }
 }
@@ -649,50 +719,58 @@ class WorkstationSwitch extends StatelessWidget {
     final trackColor =
         selected ? scheme.onSurface : scheme.surfaceContainerHighest;
     final thumbColor = selected ? scheme.surface : scheme.outline;
-    final borderColor =
-        selected
-            ? scheme.onSurface
-            : interactive
-            ? scheme.outline
-            : scheme.outlineVariant;
-    return Semantics(
-      toggled: selected,
+    return WorkstationFocusTarget(
       enabled: interactive,
-      button: true,
-      child: MouseRegion(
-        cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: interactive ? () => onChanged!(!value) : null,
-          child: SizedBox(
-            width: 44,
-            height: 28,
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: 36,
-                height: 20,
-                padding: EdgeInsets.only(
-                  left: selected ? 20 : 2,
-                  top: 3,
-                  bottom: 3,
-                  right: selected ? 2 : 20,
-                ),
-                decoration: BoxDecoration(
-                  color: trackColor,
-                  border: Border.all(color: borderColor),
-                ),
+      toggled: selected,
+      onActivate: () {
+        if (interactive) {
+          onChanged!(!value);
+        }
+      },
+      builder: (context, focused) {
+        final borderColor =
+            selected || (interactive && focused)
+                ? scheme.onSurface
+                : interactive
+                ? scheme.outline
+                : scheme.outlineVariant;
+        final transition = MotionToken.reduced(context, _switchChangeDuration);
+        return MouseRegion(
+          cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: interactive ? () => onChanged!(!value) : null,
+            child: SizedBox(
+              width: 44,
+              height: 28,
+              child: Center(
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  width: 14,
-                  height: 14,
-                  color: thumbColor,
+                  duration: transition,
+                  width: 36,
+                  height: 20,
+                  padding: EdgeInsets.only(
+                    left: selected ? 20 : 2,
+                    top: 3,
+                    bottom: 3,
+                    right: selected ? 2 : 20,
+                  ),
+                  decoration: BoxDecoration(
+                    color: trackColor,
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: AnimatedContainer(
+                    duration: transition,
+                    width: 14,
+                    height: 14,
+                    color: thumbColor,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
