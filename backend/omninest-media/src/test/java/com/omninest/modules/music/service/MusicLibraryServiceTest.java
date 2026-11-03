@@ -218,6 +218,33 @@ class MusicLibraryServiceTest {
         assertThat(tracks.get(0).id()).isEqualTo(TRACK_ID);
     }
 
+    @Test
+    void favoritesKeepFavoriteTimeOrderInsteadOfRepositoryOrder() {
+        MusicTrack older = track();
+        MusicTrack newer = track();
+        newer.setId(UUID.fromString("20000000-0000-0000-0000-000000000002"));
+        List<UUID> preferred = List.of(newer.getId(), older.getId());
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID)).thenReturn(preferred);
+        // 批量可见性查询按主键返回，顺序与收藏时间相反：服务必须按收藏顺序重排。
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, SpaceType.SHARED, preferred))
+                .thenReturn(List.of(older, newer));
+        when(favoriteRepository.findByOwnerUserIdAndTrackIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+
+        var result = libraryService.favorites(OWNER_ID);
+
+        assertThat(result).extracting(dto -> dto.id()).containsExactly(newer.getId(), older.getId());
+    }
+
+    @Test
+    void favoritesDoNotMaterializeFavoriteEntities() {
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID)).thenReturn(List.of());
+
+        assertThat(libraryService.favorites(OWNER_ID)).isEmpty();
+
+        verify(favoriteRepository, never()).findByOwnerUserIdAndTrackIdIn(eq(OWNER_ID), any());
+    }
+
     private MusicTrack track() {
         MusicTrack track = new MusicTrack();
         track.setId(TRACK_ID);

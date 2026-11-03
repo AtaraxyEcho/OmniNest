@@ -89,10 +89,13 @@ class VideoLibrarySourceServiceTest {
         VideoLibrarySource source = source("COMPLETED");
         when(accessService.requireManage(OWNER_ID, SOURCE_ID)).thenReturn(source);
         when(videoItemRepository.countByLibrarySourceId(SOURCE_ID)).thenReturn(0L);
-        when(runRepository.findAllByLibrarySourceId(SOURCE_ID)).thenReturn(List.of());
 
         service.delete(OWNER_ID, SOURCE_ID);
 
+        // 删除整个来源时候选行可达数万，必须按来源一条 bulk DELETE，不能逐轮读出再删。
+        verify(candidateRepository).deleteByLibrarySourceId(SOURCE_ID);
+        verify(batchRepository).deleteByLibrarySourceId(SOURCE_ID);
+        verify(runRepository).deleteByLibrarySourceId(SOURCE_ID);
         verify(sourceRepository).delete(source);
         verify(syncEventService).record(
                 eq(OWNER_ID),

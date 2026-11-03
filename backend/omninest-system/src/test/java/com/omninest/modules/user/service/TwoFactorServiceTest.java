@@ -80,11 +80,8 @@ class TwoFactorServiceTest {
     }
 
     @Test
-    @DisplayName("生成秘钥：密码复核通过后写入未确认凭据并返回 otpauth URI")
+    @DisplayName("生成秘钥：密码复核通过后原子写入未确认凭据并返回 otpauth URI")
     void startSetupCreatesPendingCredential() {
-        when(totpCredentialRepository.save(any(AuthTotpCredential.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         var response = service.startSetup(userId, "secret123");
 
         assertThat(response.secret()).hasSize(32).matches("[A-Z2-7]+");
@@ -92,12 +89,13 @@ class TwoFactorServiceTest {
                 .startsWith("otpauth://totp/")
                 .contains("secret=" + response.secret())
                 .contains("admin");
-        ArgumentCaptor<AuthTotpCredential> captor = ArgumentCaptor.forClass(AuthTotpCredential.class);
-        verify(totpCredentialRepository).save(captor.capture());
-        assertThat(captor.getValue().isEnabled()).isFalse();
-        assertThat(captor.getValue().getUserId()).isEqualTo(userId);
-        assertThat(captor.getValue().getSecret()).isNotEqualTo(response.secret());
-        assertThat(credentialCipher.decrypt(captor.getValue().getSecret())).isEqualTo(response.secret());
+        // 写入走 ON CONFLICT 幂等 upsert：并发发起绑定不再撞 user_id 唯一键。
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(totpCredentialRepository)
+                .stageSecret(eq(userId), captor.capture(), any(Instant.class));
+        assertThat(captor.getValue()).isNotEqualTo(response.secret());
+        assertThat(credentialCipher.decrypt(captor.getValue())).isEqualTo(response.secret());
+        verify(totpCredentialRepository, never()).save(any(AuthTotpCredential.class));
     }
 
     @Test

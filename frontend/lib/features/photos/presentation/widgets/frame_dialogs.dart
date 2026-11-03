@@ -133,6 +133,8 @@ Future<T?> showFrameChoiceDialog<T>(
                     ),
                   )
                   : ConstrainedBox(
+                    // AlertDialog 会测量内容的固有宽度，shrink-wrap 视口无法回答该
+                    // 查询，因此这里只能保持 SingleChildScrollView + Column。
                     constraints: const BoxConstraints(maxHeight: 360),
                     child: SingleChildScrollView(
                       child: Column(

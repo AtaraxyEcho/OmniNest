@@ -17,11 +17,6 @@ import org.springframework.data.repository.query.Param;
 public interface PhotoFavoriteRepository extends JpaRepository<PhotoFavorite, UUID> {
 
     /**
-     * 按用户查询收藏列表，按创建时间倒序
-     */
-    List<PhotoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
-
-    /**
      * 按用户分页查询收藏列表，按创建时间倒序。
      */
     List<PhotoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId, Pageable pageable);

@@ -11,7 +11,6 @@ import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.service.DerivedAssetRequest;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
-import com.omninest.modules.music.domain.MusicFavorite;
 import com.omninest.modules.music.domain.MusicScanJob;
 import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
@@ -34,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -239,10 +237,8 @@ public class MusicScrapeService {
         int visited = 0;
 
         try {
-            Set<UUID> favoriteTrackIds = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
-                    .stream()
-                    .map(MusicFavorite::getTrackId)
-                    .collect(Collectors.toSet());
+            Set<UUID> favoriteTrackIds = Set.copyOf(
+                    favoriteRepository.findFavoriteTrackIdsByOwnerUserId(ownerUserId));
 
             // N+1 优化：artist/album 缓存加批量统计刷新。
             Map<String, MusicArtist> artistCache = new LinkedHashMap<>();

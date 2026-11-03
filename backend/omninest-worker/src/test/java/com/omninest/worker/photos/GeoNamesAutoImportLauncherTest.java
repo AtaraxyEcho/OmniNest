@@ -12,8 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.photos.config.GeonamesImportProperties;
-import com.omninest.modules.photos.domain.GeoDataset;
-import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import com.omninest.modules.photos.service.GeoDatasetService;
 import com.omninest.modules.photos.service.PhotosRuntimeConfigService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -35,7 +33,6 @@ class GeoNamesAutoImportLauncherTest {
     Path tempDir;
 
     private GeoDatasetService geoDatasetService;
-    private GeoDatasetRepository geoDatasetRepository;
     private TaskRecordService taskRecordService;
     private PhotosRuntimeConfigService configService;
     private DistributedLock distributedLock;
@@ -44,7 +41,6 @@ class GeoNamesAutoImportLauncherTest {
     @BeforeEach
     void setUp() throws IOException {
         geoDatasetService = Mockito.mock(GeoDatasetService.class);
-        geoDatasetRepository = Mockito.mock(GeoDatasetRepository.class);
         taskRecordService = Mockito.mock(TaskRecordService.class);
         configService = Mockito.mock(PhotosRuntimeConfigService.class);
         distributedLock = Mockito.mock(DistributedLock.class);
@@ -52,8 +48,7 @@ class GeoNamesAutoImportLauncherTest {
         when(distributedLock.newToken()).thenReturn("token");
         when(distributedLock.tryLock(anyString(), anyString(), any())).thenReturn(true);
         when(configService.isGeoAutoImportEnabled()).thenReturn(true);
-        when(geoDatasetRepository.findFirstByStatusOrderByPublishedAtDesc(GeoDataset.STATUS_PUBLISHED))
-                .thenReturn(Optional.empty());
+        when(geoDatasetService.currentPublishedVersion()).thenReturn(null);
         when(taskRecordService.findActiveTaskIdsByType(anyString(), any())).thenReturn(List.of());
         when(geoDatasetService.importRootDir()).thenReturn(tempDir.toString());
         for (String file : List.of("cities5000.txt", "admin1CodesASCII.txt", "countryInfo.txt")) {
@@ -64,7 +59,6 @@ class GeoNamesAutoImportLauncherTest {
 
         launcher = new GeoNamesAutoImportLauncher(
                 geoDatasetService,
-                geoDatasetRepository,
                 taskRecordService,
                 configService,
                 distributedLock);
@@ -80,8 +74,7 @@ class GeoNamesAutoImportLauncherTest {
 
     @Test
     void skipsWhenPublishedDatasetExists() {
-        when(geoDatasetRepository.findFirstByStatusOrderByPublishedAtDesc(GeoDataset.STATUS_PUBLISHED))
-                .thenReturn(Optional.of(new GeoDataset()));
+        when(geoDatasetService.currentPublishedVersion()).thenReturn("2026-11-01-geonames-001");
 
         launcher.autoImportOnStartup();
 

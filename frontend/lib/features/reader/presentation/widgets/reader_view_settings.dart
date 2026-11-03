@@ -215,6 +215,13 @@ class ReaderViewSettings {
     );
   }
 
+  /// 在翻页与滚动之间切换阅读模式。
+  ///
+  /// 正文阅读器与漫画阅读器共用这一条判据，避免快捷键在某一侧退化成静默空实现。
+  ReaderViewSettings withReadingModeToggled() {
+    return copyWith(readingMode: readingMode == 'page' ? 'scroll' : 'page');
+  }
+
   Map<String, dynamic> toJson() => {
     'fontFamily': fontFamily,
     'fontSize': fontSize,

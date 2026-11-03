@@ -3,9 +3,7 @@ package com.omninest.worker.task;
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
-import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
-import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -14,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,7 +91,6 @@ public class GenericTaskRecoveryScheduler {
 
     private final TaskRecordService taskRecordService;
     private final DistributedLock distributedLock;
-    private final TaskDispatchRepository taskDispatchRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRedispatchService taskRedispatchService;
     private final TransactionTemplate transactionTemplate;
@@ -145,8 +143,14 @@ public class GenericTaskRecoveryScheduler {
                     Math.max(60L, stuckDispatchSeconds),
                     ChronoUnit.SECONDS
             );
-            for (TaskRecord record : taskRecordService.listStuckTasks(cutoff, cutoff, RECOVERY_BATCH_SIZE)) {
-                redispatchStuckTask(record, cutoff);
+            List<TaskRecord> stuck = taskRecordService.listStuckTasks(cutoff, cutoff, RECOVERY_BATCH_SIZE);
+            if (stuck.isEmpty()) {
+                return;
+            }
+            Map<UUID, TaskDispatchService.TaskDispatchRoute> latestRoutes = taskDispatchService.latestRoutes(
+                    stuck.stream().map(TaskRecord::getId).toList());
+            for (TaskRecord record : stuck) {
+                redispatchStuckTask(record, cutoff, latestRoutes.get(record.getId()));
             }
         } finally {
             distributedLock.unlock(SWEEP_LOCK_KEY, lockToken);
@@ -183,9 +187,8 @@ public class GenericTaskRecoveryScheduler {
      * 不得在此处直接判死信——那只会在数据库瞬断时把本可恢复的任务永久终结。</p>
      */
     private void republishOriginalMessage(UUID taskId, String taskType, Instant nextRetryAt) {
-        TaskDispatch dispatch = taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
-                .orElse(null);
-        if (dispatch == null) {
+        TaskDispatchService.TaskDispatchRoute route = taskDispatchService.latestRoute(taskId).orElse(null);
+        if (route == null) {
             taskRecordService.markDeadLetter(taskId, "WORKER_HEARTBEAT_TIMEOUT:OUTBOX_MISSING");
             log.warn("通用任务无 Outbox 记录可重投，转入死信: taskType={}, taskId={}", taskType, taskId);
             return;
@@ -193,26 +196,27 @@ public class GenericTaskRecoveryScheduler {
         taskDispatchService.enqueueAt(
                 taskId,
                 QueueNames.TASK_EXCHANGE,
-                dispatch.getRoutingKey(),
-                JsonSupport.fromJson(dispatch.getPayload(), Object.class),
+                route.routingKey(),
+                JsonSupport.fromJson(route.payloadJson(), Object.class),
                 nextRetryAt
         );
         log.warn("通用任务心跳超时已恢复重投: taskType={}, taskId={}, routingKey={}, nextRetryAt={}",
-                taskType, taskId, dispatch.getRoutingKey(), nextRetryAt);
+                taskType, taskId, route.routingKey(), nextRetryAt);
     }
 
     /**
      * 裁决单个停滞任务：无存活投递记录且最近一次投递已超出清扫窗口才重投，
      * 防止与 Outbox 正常投递、延迟重试产生重复消息风暴。
      */
-    private void redispatchStuckTask(TaskRecord record, Instant dispatchCutoff) {
-        TaskDispatch latest = taskDispatchRepository
-                .findFirstByTaskIdOrderByCreatedAtDesc(record.getId())
-                .orElse(null);
+    private void redispatchStuckTask(
+            TaskRecord record,
+            Instant dispatchCutoff,
+            TaskDispatchService.TaskDispatchRoute latest
+    ) {
         if (latest != null
-                && (DISPATCH_STATUS_PENDING.equals(latest.getStatus())
-                || DISPATCH_STATUS_PUBLISHING.equals(latest.getStatus())
-                || latest.getCreatedAt().isAfter(dispatchCutoff))) {
+                && (DISPATCH_STATUS_PENDING.equals(latest.status())
+                || DISPATCH_STATUS_PUBLISHING.equals(latest.status())
+                || latest.createdAt().isAfter(dispatchCutoff))) {
             return;
         }
         try {

@@ -339,8 +339,35 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             @Param("ids") Collection<UUID> ids
     );
 
-    @Query("select count(i) from MediaVideoItem i where i.ownerUserId = :ownerUserId and i.seriesId = :seriesId and i.seasonNumber = :seasonNumber and i.sourceVideoItemId is null")
-    long countByOwnerUserIdAndSeriesIdAndSeasonNumber(@Param("ownerUserId") UUID ownerUserId, @Param("seriesId") UUID seriesId, @Param("seasonNumber") Integer seasonNumber);
+    /**
+     * 一次算出多个系列各季的条目数，供孤立季清理批量裁决。
+     *
+     * <p>逐季 count 在 50 系列 × 8 季的场景下会打出 400 次单行查询；口径与主曲库一致，
+     * 派生版本行（{@code sourceVideoItemId} 非空）不计入。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param seriesIds 系列 ID 集合
+     * @return 各季条目数；没有任何条目的季不会出现在结果里
+     */
+    @Query("""
+            select i.seriesId as seriesId, i.seasonNumber as seasonNumber, count(i) as itemCount
+            from MediaVideoItem i
+            where i.ownerUserId = :ownerUserId and i.seriesId in :seriesIds and i.sourceVideoItemId is null
+            group by i.seriesId, i.seasonNumber
+            """)
+    List<SeasonItemCountProjection> countItemsBySeason(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds
+    );
+
+    /** 某一季的条目数投影。 */
+    interface SeasonItemCountProjection {
+        UUID getSeriesId();
+
+        Integer getSeasonNumber();
+
+        Long getItemCount();
+    }
 
     Optional<MediaVideoItem> findByOwnerUserIdAndSourceVideoItemIdAndVideoCodec(UUID ownerUserId, UUID sourceVideoItemId, String videoCodec);
 

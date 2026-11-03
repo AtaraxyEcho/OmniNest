@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -280,6 +281,62 @@ class ResourceShareLinkServiceTest {
 
         assertThat(descriptor.resourceId()).isEqualTo(RESOURCE_ID);
         assertThat(descriptor.resourceType()).isEqualTo("FILE");
+    }
+
+    @Test
+    void acceptedShareSessionConsumesAccessOnEveryUse() {
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("FILE");
+        share.setResourceId(RESOURCE_ID);
+        share.setMaxAccessCount(2);
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+        // bulk UPDATE 不回写实体：用桩让计数按数据库语义增长，到上限后返回 0 行。
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class)))
+                .thenAnswer(invocation -> {
+                    if (share.getAccessCount() >= share.getMaxAccessCount()) {
+                        return 0;
+                    }
+                    share.setAccessCount(share.getAccessCount() + 1);
+                    return 1;
+                });
+
+        var session = service.issueSession("raw-token", null, null, "127.0.0.1");
+
+        service.consumeAnySession("raw-token", session.sessionToken());
+        service.consumeAnySession("raw-token", session.sessionToken());
+
+        // 同一枚会话第三次转存必须被拒：只读校验放行写入口会让 maxAccessCount 形同虚设。
+        assertThatThrownBy(() -> service.consumeAnySession("raw-token", session.sessionToken()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+
+        verify(shareLinkRepository, times(2)).consumeAccess(eq(SHARE_ID), any(Instant.class));
+    }
+
+    @Test
+    void consumedShareSessionStillPassesReadOnlyValidationAtTheCap() {
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("FILE");
+        share.setResourceId(RESOURCE_ID);
+        share.setMaxAccessCount(1);
+        share.setAccessCount(1);
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+
+        // 已签发会话的预览与列表走只读校验；恰好触顶后不得把当前观看者踢出已看到的内容。
+        String sessionToken = sessionService.issue(
+                FileShareService.sha256("raw-token"), share.getResourceType(), null).token();
+        var descriptor = service.requireAnySession("raw-token", sessionToken);
+
+        assertThat(descriptor.resourceId()).isEqualTo(RESOURCE_ID);
+        verify(shareLinkRepository, never()).consumeAccess(eq(SHARE_ID), any(Instant.class));
     }
 
     @Test

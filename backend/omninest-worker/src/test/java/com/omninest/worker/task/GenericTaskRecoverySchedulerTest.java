@@ -10,15 +10,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.concurrency.DistributedLock;
-import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
-import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,27 +31,26 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GenericTaskRecoverySchedulerTest {
 
     private TaskRecordService taskRecordService;
-    private TaskDispatchRepository taskDispatchRepository;
     private TaskDispatchService taskDispatchService;
     private TaskRedispatchService taskRedispatchService;
     private DistributedLock distributedLock;
     private GenericTaskRecoveryScheduler scheduler;
 
     private static final UUID TASK = UUID.randomUUID();
+    private static final UUID SECOND_TASK = UUID.randomUUID();
     private static final Instant CUTOFF = Instant.now().minusSeconds(600);
     private static final Instant NEXT_RETRY = Instant.now().plusSeconds(60);
 
     @BeforeEach
     void setUp() {
         taskRecordService = Mockito.mock(TaskRecordService.class);
-        taskDispatchRepository = Mockito.mock(TaskDispatchRepository.class);
         taskDispatchService = Mockito.mock(TaskDispatchService.class);
         taskRedispatchService = Mockito.mock(TaskRedispatchService.class);
         distributedLock = Mockito.mock(DistributedLock.class);
         // 单实例用例默认总能拿到清扫锁；并发语义由锁本身保证。
         Mockito.when(distributedLock.tryLock(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(true);
         scheduler = new GenericTaskRecoveryScheduler(
-                taskRecordService, distributedLock, taskDispatchRepository,
+                taskRecordService, distributedLock,
                 taskDispatchService, taskRedispatchService,
                 new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class)));
         ReflectionTestUtils.setField(scheduler, "staleHeartbeatSeconds", 600L);
@@ -77,8 +75,8 @@ class GenericTaskRecoverySchedulerTest {
         Mockito.when(taskRecordService.recoverStaleTask(
                 Mockito.eq(TASK), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyString()))
                 .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
-        Mockito.when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.of(dispatch()));
+        Mockito.when(taskDispatchService.latestRoute(TASK))
+                .thenReturn(Optional.of(route("PUBLISHED", Instant.now().minusSeconds(7200))));
         Mockito.doThrow(new RuntimeException("broker down")).when(taskDispatchService).enqueueAt(
                 Mockito.eq(TASK), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
@@ -101,14 +99,9 @@ class GenericTaskRecoverySchedulerTest {
                 .listStuckTasks(Mockito.any(), Mockito.any(), Mockito.anyInt());
     }
 
-    private TaskDispatch dispatch() {
-        TaskDispatch dispatch = new TaskDispatch();
-        dispatch.setTaskId(TASK);
-        dispatch.setExchangeName("omni.task");
-        dispatch.setRoutingKey("thumbnail.generate");
-        dispatch.setPayload("{\"fileNodeId\":\"1\"}");
-        dispatch.setStatus("PUBLISHED");
-        return dispatch;
+    private TaskDispatchService.TaskDispatchRoute route(String status, Instant createdAt) {
+        return new TaskDispatchService.TaskDispatchRoute(
+                "thumbnail.generate", "{\"fileNodeId\":\"1\"}", status, createdAt);
     }
 
     private TaskRecord stuckRecord(String status) {
@@ -141,8 +134,8 @@ class GenericTaskRecoverySchedulerTest {
         when(taskRecordService.recoverStaleTask(
                 eq(TASK), eq("THUMBNAIL"), any(), any(), anyString()))
                 .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.of(dispatch()));
+        when(taskDispatchService.latestRoute(TASK))
+                .thenReturn(Optional.of(route("PUBLISHED", Instant.now().minusSeconds(7200))));
 
         scheduler.recoverStaleTasks();
 
@@ -173,8 +166,7 @@ class GenericTaskRecoverySchedulerTest {
         when(taskRecordService.recoverStaleTask(
                 eq(TASK), eq("PHOTO_SCAN"), any(), any(), anyString()))
                 .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.empty());
+        when(taskDispatchService.latestRoute(TASK)).thenReturn(Optional.empty());
 
         scheduler.recoverStaleTasks();
 
@@ -206,8 +198,7 @@ class GenericTaskRecoverySchedulerTest {
         TaskRecord record = stuckRecord("QUEUED");
         when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(record));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.empty());
+        when(taskDispatchService.latestRoute(TASK)).thenReturn(Optional.empty());
 
         scheduler.sweepStuckTasks();
 
@@ -217,12 +208,11 @@ class GenericTaskRecoverySchedulerTest {
     @Test
     void sweepSkipsTaskWithLiveDispatch() {
         TaskRecord record = stuckRecord("RETRY_WAIT");
-        TaskDispatch live = dispatch();
-        live.setStatus("PENDING");
+        Instant dispatchCreatedAt = Instant.now().minusSeconds(7200);
         when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(record));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.of(live));
+        when(taskDispatchService.latestRoutes(List.of(TASK)))
+                .thenReturn(Map.of(TASK, route("PENDING", dispatchCreatedAt)));
 
         scheduler.sweepStuckTasks();
 
@@ -232,15 +222,33 @@ class GenericTaskRecoverySchedulerTest {
     @Test
     void sweepSkipsTaskWithRecentDispatch() {
         TaskRecord record = stuckRecord("QUEUED");
-        TaskDispatch recent = dispatch();
-        recent.setCreatedAt(Instant.now());
+        Instant dispatchCreatedAt = Instant.now();
         when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(record));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.of(recent));
+        when(taskDispatchService.latestRoutes(List.of(TASK)))
+                .thenReturn(Map.of(TASK, route("PUBLISHED", dispatchCreatedAt)));
 
         scheduler.sweepStuckTasks();
 
         verify(taskRedispatchService, never()).redispatch(any());
+    }
+
+    @Test
+    void sweepReadsDispatchRoutesOncePerBatch() {
+        TaskRecord first = stuckRecord("QUEUED");
+        TaskRecord second = stuckRecord("RETRY_WAIT");
+        second.setId(SECOND_TASK);
+        when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(first, second));
+        when(taskDispatchService.latestRoutes(List.of(TASK, SECOND_TASK)))
+                .thenReturn(Map.of());
+
+        scheduler.sweepStuckTasks();
+
+        // 逐个查询会让一轮清扫打出与任务数等量的单行 SELECT。
+        verify(taskDispatchService).latestRoutes(List.of(TASK, SECOND_TASK));
+        verify(taskDispatchService, never()).latestRoute(any());
+        verify(taskRedispatchService).redispatch(first);
+        verify(taskRedispatchService).redispatch(second);
     }
 }

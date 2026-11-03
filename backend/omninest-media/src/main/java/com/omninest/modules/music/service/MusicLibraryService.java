@@ -301,14 +301,26 @@ public class MusicLibraryService {
 
     @Transactional(readOnly = true)
     public List<MusicTrackDto> favorites(UUID ownerUserId) {
-        List<UUID> trackIds = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId).stream()
-                .map(MusicFavorite::getTrackId)
-                .toList();
+        List<UUID> trackIds = favoriteRepository.findFavoriteTrackIdsByOwnerUserId(ownerUserId);
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(
-                ownerUserId, sharedVisibility(ownerUserId), trackIds));
+        return toTrackSummaryDtos(ownerUserId, orderByPreferred(trackIds,
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds)));
+    }
+
+    /**
+     * 按期望顺序重排查询结果：批量可见性查询只保证命中集合，不保证返回次序，
+     * 收藏与最近播放这类列表必须以用户动作时间排序。
+     */
+    private static List<MusicTrack> orderByPreferred(List<UUID> preferredIds, List<MusicTrack> tracks) {
+        Map<UUID, MusicTrack> index = tracks.stream()
+                .collect(Collectors.toMap(MusicTrack::getId, track -> track, (first, second) -> first));
+        return preferredIds.stream()
+                .map(index::get)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -326,8 +338,9 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(
-                ownerUserId, sharedVisibility(ownerUserId), trackIds));
+        return toTrackSummaryDtos(ownerUserId, orderByPreferred(trackIds,
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds)));
     }
 
     /**

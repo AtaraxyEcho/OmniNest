@@ -2,6 +2,7 @@ package com.omninest.modules.sync.repository;
 
 import com.omninest.modules.sync.domain.SyncEvent;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -84,9 +85,11 @@ public interface SyncEventRepository extends JpaRepository<SyncEvent, UUID> {
     List<SyncEvent> findClaimableEvents(@Param("now") Instant now, @Param("limit") int limit);
 
     /**
-     * 将指定实例持有租约的事件标记为已发布。
+     * 将指定实例持有租约的一批事件标记为已发布。
      *
-     * @param eventId 事件标识
+     * <p>整批共用一次事务：逐条更新会让一批消息产生等量的连接获取与提交。</p>
+     *
+     * @param eventIds 事件标识集合
      * @param instanceId 实例标识
      * @param publishedAt 发布时间
      * @return 更新行数
@@ -100,12 +103,12 @@ public interface SyncEventRepository extends JpaRepository<SyncEvent, UUID> {
                 event.lockedUntil = null,
                 event.updatedAt = :publishedAt,
                 event.version = event.version + 1
-            where event.id = :eventId
+            where event.id in :eventIds
             and event.publishStatus = 'PUBLISHING'
             and event.lockedBy = :instanceId
             """)
-    int markPublished(
-            @Param("eventId") UUID eventId,
+    int markPublishedBatch(
+            @Param("eventIds") Collection<UUID> eventIds,
             @Param("instanceId") String instanceId,
             @Param("publishedAt") Instant publishedAt
     );

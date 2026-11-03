@@ -37,6 +37,38 @@ public interface AuthTotpCredentialRepository extends JpaRepository<AuthTotpCred
     void deleteByUserId(UUID userId);
 
     /**
+     * 写入待确认的 TOTP 秘钥。
+     *
+     * <p>每个用户只允许一行凭据（{@code uniq_auth_totp_credentials_user}）：
+     * 先查后插的写法在并发发起绑定时会撞唯一键，把一次普通点击翻译成 500。</p>
+     *
+     * @param userId 用户标识
+     * @param secretCipher 加密后的新秘钥
+     * @param now 更新时间
+     * @return 插入或更新的行数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Modifying
+    @Query(value = """
+            INSERT INTO omni.auth_totp_credentials (
+                id, user_id, secret, enabled, created_at, updated_at, version
+            ) VALUES (
+                gen_random_uuid(), :userId, :secretCipher, false, :now, :now, 0
+            )
+            ON CONFLICT (user_id) DO UPDATE SET
+                secret = EXCLUDED.secret,
+                enabled = false,
+                confirmed_at = NULL,
+                last_used_step = NULL,
+                updated_at = EXCLUDED.updated_at,
+                version = auth_totp_credentials.version + 1
+            """, nativeQuery = true)
+    int stageSecret(
+            @Param("userId") UUID userId,
+            @Param("secretCipher") String secretCipher,
+            @Param("now") Instant now);
+
+    /**
      * 原子消费一个 TOTP 时间步。
      *
      * <p>并发提交同一时间窗口的验证码时，只有第一个请求能把 {@code lastUsedStep}

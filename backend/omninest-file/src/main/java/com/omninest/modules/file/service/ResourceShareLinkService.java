@@ -147,6 +147,21 @@ public class ResourceShareLinkService {
     }
 
     /**
+     * 校验文件分享会话并消费一次访问次数，供「转存到我的网盘」这类写入口使用。
+     *
+     * <p>转存若与只读预览共用 {@link #requireAnySession}，一枚 10 分钟会话可以被无限次
+     * 复用并分发给任意账号，maxAccessCount 就退化成了只在建会话时生效的软提示。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void consumeAnySession(String rawToken, String sessionToken) {
+        String tokenHash = sha256(rawToken);
+        requireSessionRateLimit(tokenHash);
+        ShareLink link = requireConsumableLink(tokenHash, null);
+        shareAccessSessionService.require(sessionToken, tokenHash, link.getResourceType());
+        consume(link);
+    }
+
+    /**
      * 创建资源分享链接。
      *
      * <p>密码哈希在事务外计算，事务只做一次插入。

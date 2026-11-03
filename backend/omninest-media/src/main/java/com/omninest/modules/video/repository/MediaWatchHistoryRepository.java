@@ -1,6 +1,7 @@
 package com.omninest.modules.video.repository;
 
 import com.omninest.modules.video.domain.MediaWatchHistory;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,48 @@ public interface MediaWatchHistoryRepository extends JpaRepository<MediaWatchHis
     long countByOwnerUserId(UUID ownerUserId);
 
     Optional<MediaWatchHistory> findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(UUID ownerUserId, UUID videoItemId);
+
+    /**
+     * 原子写入单个视频条目的观看历史。
+     *
+     * <p>同一条目每个用户只保留一行：先查后插的写法在并发上报（起播与首个心跳
+     * 同时到达）下会插出多行，历史列表与续播位置都会分裂。进度行本身已按
+     * {@code ON CONFLICT} 收口，历史行必须同口径。</p>
+     *
+     * @param id 新行标识；冲突时不使用
+     * @param ownerUserId 所有者用户 ID
+     * @param videoItemId 视频条目 ID
+     * @param positionSeconds 播放位置
+     * @param durationSeconds 视频总时长
+     * @param completed 是否看完
+     * @param playedAt 播放记录时间
+     * @return 插入或更新的行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            INSERT INTO omni.media_watch_history (
+                id, owner_user_id, video_item_id, position_seconds, duration_seconds,
+                completed, played_at, version
+            ) VALUES (
+                :id, :ownerUserId, :videoItemId, :positionSeconds, :durationSeconds,
+                :completed, :playedAt, 0
+            )
+            ON CONFLICT (owner_user_id, video_item_id) DO UPDATE SET
+                position_seconds = EXCLUDED.position_seconds,
+                duration_seconds = EXCLUDED.duration_seconds,
+                completed = EXCLUDED.completed,
+                played_at = EXCLUDED.played_at,
+                version = media_watch_history.version + 1
+            """, nativeQuery = true)
+    int upsertWatched(
+            @Param("id") UUID id,
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("videoItemId") UUID videoItemId,
+            @Param("positionSeconds") long positionSeconds,
+            @Param("durationSeconds") long durationSeconds,
+            @Param("completed") boolean completed,
+            @Param("playedAt") Instant playedAt
+    );
 
     /**
      * 查询用户在某系列下的全部观看历史，按播放时间倒序。

@@ -429,7 +429,8 @@ public class FileShareAccessService {
     ) {
         String tokenHash = FileShareService.sha256(rawToken);
         requireShareRateLimit(tokenHash, clientAddress);
-        resourceShareLinkService.requireAnySession(rawToken, sessionToken);
+        // 转存是写入口：每次都要消费一次访问次数，否则一枚会话可无限复用。
+        resourceShareLinkService.consumeAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode sourceNode = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(), link.getOwnerUserId())

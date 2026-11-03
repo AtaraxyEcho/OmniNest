@@ -61,7 +61,18 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
 
     void deleteByOwnerUserIdAndScanRunId(UUID ownerUserId, UUID scanRunId);
 
-    void deleteByScanRunId(UUID scanRunId);
+    /**
+     * 按来源批量删除候选行。
+     *
+     * <p>派生删除会先把每一行读进持久化上下文再逐条 DELETE；删除整个来源时
+     * 候选行数可达数万，必须走 bulk DELETE。</p>
+     *
+     * @param librarySourceId 影视库来源 ID
+     * @return 删除行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from MediaScanCandidate candidate where candidate.librarySourceId = :librarySourceId")
+    int deleteByLibrarySourceId(@Param("librarySourceId") UUID librarySourceId);
 
     @Query(
             value = """

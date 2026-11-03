@@ -7,7 +7,11 @@ import com.omninest.modules.task.repository.TaskDispatchRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -122,6 +126,65 @@ public class TaskDispatchService {
     }
 
     /**
+     * 读取任务最近一次投递记录的路由键与原始载荷。
+     *
+     * <p>心跳恢复要按原路由重投原消息，投递表是唯一还留有载荷的地方。跨模块的
+     * worker 不得直接注入投递仓储，因此这里给出只读端口。</p>
+     *
+     * @param taskId 任务 ID
+     * @return 最近一次投递；从未投递过时为空
+     */
+    @Transactional(readOnly = true)
+    public Optional<TaskDispatchRoute> latestRoute(UUID taskId) {
+        return repository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
+                .map(TaskDispatchService::toRoute);
+    }
+
+    /**
+     * 批量读取多个任务的最近一次投递记录。
+     *
+     * <p>停滞任务清扫一轮最多处理上百个任务，逐个查询会退化成同次数量的单行查询；
+     * 这里一次取回全部候选行，再按任务保留最新一条。</p>
+     *
+     * @param taskIds 任务 ID 集合
+     * @return 任务 ID 到最近投递记录的映射；从未投递的任务不出现在结果里
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, TaskDispatchRoute> latestRoutes(Collection<UUID> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, TaskDispatchRoute> latestByTask = new LinkedHashMap<>();
+        repository.findByTaskIdInOrderByTaskIdAscCreatedAtDesc(taskIds)
+                .forEach(record -> latestByTask.putIfAbsent(record.getTaskId(), toRoute(record)));
+        return latestByTask;
+    }
+
+    private static TaskDispatchRoute toRoute(TaskDispatch record) {
+        return new TaskDispatchRoute(
+                record.getRoutingKey(),
+                record.getPayload(),
+                record.getStatus(),
+                record.getCreatedAt());
+    }
+
+    /**
+     * 最近一次投递的重投判据。
+     *
+     * @param routingKey 原投递路由键
+     * @param payloadJson 原投递载荷 JSON
+     * @param status 投递状态：PENDING / PUBLISHING 表示链路仍在跑
+     * @param createdAt 投递记录创建时间
+     */
+    public record TaskDispatchRoute(
+            String routingKey,
+            String payloadJson,
+            String status,
+            Instant createdAt
+    ) {
+    }
+
+    /**
      * 领取一批可发布记录。
      *
      * @param now 当前时间
@@ -152,15 +215,21 @@ public class TaskDispatchService {
     }
 
     /**
-     * 标记发布成功。
+     * 批量标记发布成功，返回实际更新的行数。
      *
-     * @param dispatchId 投递记录 ID
+     * <p>行数少于入参数量说明有记录的租约在发布期间被其他实例接管，
+     * 那些记录会由接管方重新置为终态，本实例不覆盖。</p>
+     *
+     * @param dispatchIds 本批发布成功的投递记录 ID
      * @param publishedAt 发布时间
-     * @return 是否更新成功
+     * @return 实际更新行数
      */
     @Transactional(rollbackFor = Exception.class)
-    public boolean markPublished(UUID dispatchId, Instant publishedAt) {
-        return repository.markPublished(dispatchId, properties.getInstanceId(), publishedAt) == 1;
+    public int markPublishedBatch(Collection<UUID> dispatchIds, Instant publishedAt) {
+        if (dispatchIds.isEmpty()) {
+            return 0;
+        }
+        return repository.markPublishedBatch(dispatchIds, properties.getInstanceId(), publishedAt);
     }
 
     /**

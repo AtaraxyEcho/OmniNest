@@ -139,15 +139,75 @@ class VideoFileCleanupServiceTest {
                 .thenReturn(List.of(seriesId));
         Mockito.when(tvSeriesRepository.findAllByIdInAndOwnerUserId(Set.of(seriesId), OWNER_ID))
                 .thenReturn(List.of(series));
-        Mockito.when(tvSeasonRepository.findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(
-                OWNER_ID, seriesId)).thenReturn(List.of(season));
-        Mockito.when(videoItemRepository.countByOwnerUserIdAndSeriesIdAndSeasonNumber(
-                OWNER_ID, seriesId, 1)).thenReturn(2L);
+        Mockito.when(tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(
+                OWNER_ID, Set.of(seriesId))).thenReturn(List.of(season));
+        Mockito.when(videoItemRepository.countItemsBySeason(OWNER_ID, Set.of(seriesId)))
+                .thenReturn(List.of(seasonItemCount(seriesId, 1, 2L)));
 
         service.finalizePurge(purgeContext());
 
         assertThat(season.getEpisodeCount()).isEqualTo(2);
-        Mockito.verify(tvSeasonRepository).save(season);
+        Mockito.verify(tvSeasonRepository).saveAll(List.of(season));
+    }
+
+    @Test
+    void hardDeletesOrphanedSeasonWithBulkDelete() {
+        UUID seriesId = UUID.randomUUID();
+        MediaVideoItem videoItem = new MediaVideoItem();
+        videoItem.setId(VIDEO_ITEM_ID);
+        videoItem.setOwnerUserId(OWNER_ID);
+        videoItem.setFileNodeId(FILE_NODE_ID);
+        videoItem.setSeriesId(seriesId);
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(seriesId);
+        series.setOwnerUserId(OWNER_ID);
+        MediaTvSeason orphan = new MediaTvSeason();
+        orphan.setId(UUID.randomUUID());
+        orphan.setOwnerUserId(OWNER_ID);
+        orphan.setSeriesId(seriesId);
+        orphan.setSeasonNumber(3);
+        Mockito.when(videoItemRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
+                .thenReturn(List.of(videoItem));
+        Mockito.when(videoItemRepository.findSeriesIdsWithItems(OWNER_ID, Set.of(seriesId)))
+                .thenReturn(List.of(seriesId));
+        Mockito.when(tvSeriesRepository.findAllByIdInAndOwnerUserId(Set.of(seriesId), OWNER_ID))
+                .thenReturn(List.of(series));
+        Mockito.when(tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(OWNER_ID, Set.of(seriesId)))
+                .thenReturn(List.of(orphan));
+        // GROUP BY 里没有这一季，等价于条目数 0：必须整批删除而不是逐行 delete。
+        Mockito.when(videoItemRepository.countItemsBySeason(OWNER_ID, Set.of(seriesId)))
+                .thenReturn(List.of());
+
+        service.finalizePurge(purgeContext());
+
+        Mockito.verify(tvSeasonRepository)
+                .deleteByOwnerUserIdAndIdIn(OWNER_ID, List.of(orphan.getId()));
+        Mockito.verify(tvSeasonRepository, Mockito.never()).delete(orphan);
+        Mockito.verify(tvSeriesRepository, Mockito.never()).deleteByOwnerUserIdAndIdIn(
+                Mockito.eq(OWNER_ID), Mockito.any());
+    }
+
+    private static MediaVideoItemRepository.SeasonItemCountProjection seasonItemCount(
+            UUID seriesId,
+            Integer seasonNumber,
+            long itemCount
+    ) {
+        return new MediaVideoItemRepository.SeasonItemCountProjection() {
+            @Override
+            public UUID getSeriesId() {
+                return seriesId;
+            }
+
+            @Override
+            public Integer getSeasonNumber() {
+                return seasonNumber;
+            }
+
+            @Override
+            public Long getItemCount() {
+                return itemCount;
+            }
+        };
     }
 
     @Test

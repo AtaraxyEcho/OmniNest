@@ -25,9 +25,11 @@ import com.omninest.modules.video.event.MediaScrapeRequestedEvent;
 import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -107,6 +109,10 @@ public class MovieScrapeService {
         }
         Set<UUID> touchedCatalogOwners = new LinkedHashSet<>();
         int registered = 0;
+        // 系列/季缓存在整批复用：一部剧的文件通常连续出现，逐文件定位会重复同一查询。
+        Map<String, MediaTvSeries> seriesMemo = new LinkedHashMap<>();
+        Map<String, MediaTvSeason> seasonMemo = new LinkedHashMap<>();
+        List<MediaVideoItem> pendingItems = new ArrayList<>();
         for (FileDescriptor file : files) {
             MediaVideoItem existing = existingByFileNodeId.get(file.id());
             if (existing != null) {
@@ -115,10 +121,12 @@ public class MovieScrapeService {
             }
             requireFileWritableForScrape(ownerUserId, file);
             UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
-            videoItemRepository.save(pendingVideo(catalogOwnerId, file, fileNameParser.parse(file.name())));
+            pendingItems.add(pendingVideo(
+                    catalogOwnerId, file, fileNameParser.parse(file.name()), seriesMemo, seasonMemo));
             touchedCatalogOwners.add(catalogOwnerId);
             registered++;
         }
+        videoItemRepository.saveAll(pendingItems);
         for (UUID catalogOwnerId : touchedCatalogOwners) {
             readThroughCache.invalidate("omninest:dashboard:video:" + catalogOwnerId);
         }
@@ -275,6 +283,23 @@ public class MovieScrapeService {
     }
 
     private MediaVideoItem pendingVideo(UUID ownerUserId, FileDescriptor file, FileNameGuess guess) {
+        return pendingVideo(
+                ownerUserId, file, guess, new LinkedHashMap<>(), new LinkedHashMap<>());
+    }
+
+    /**
+     * 组装待刮削条目，并按批量缓存系列与季。
+     *
+     * <p>一次扫描里同一部剧的几十集共用同一个系列和同一季；不缓存会让每个文件都打两次
+     * 定位查询。缓存只在单次调用内有效，不跨请求持有实体。</p>
+     */
+    private MediaVideoItem pendingVideo(
+            UUID ownerUserId,
+            FileDescriptor file,
+            FileNameGuess guess,
+            Map<String, MediaTvSeries> seriesMemo,
+            Map<String, MediaTvSeason> seasonMemo
+    ) {
         MediaVideoItem item = new MediaVideoItem();
         item.setOwnerUserId(ownerUserId);
         item.setFileNodeId(file.id());
@@ -287,29 +312,34 @@ public class MovieScrapeService {
         // 剧集在入库时即关联系列，确保去重和分组立即生效
         if (isEpisode && guess.title() != null && !guess.title().isBlank()) {
             String seriesTitle = guess.title().trim();
-            MediaTvSeries series = tvSeriesRepository
-                    .findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
-                            ownerUserId, seriesTitle)
-                    .orElseGet(() -> {
-                        MediaTvSeries s = new MediaTvSeries();
-                        s.setOwnerUserId(ownerUserId);
-                        s.setTitle(seriesTitle);
-                        s.setMetadataStatus(MetadataStatus.PENDING.getValue());
-                        return tvSeriesRepository.save(s);
-                    });
+            MediaTvSeries series = seriesMemo.computeIfAbsent(
+                    ownerUserId + "|" + seriesTitle.toLowerCase(Locale.ROOT),
+                    key -> tvSeriesRepository
+                            .findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
+                                    ownerUserId, seriesTitle)
+                            .orElseGet(() -> {
+                                MediaTvSeries s = new MediaTvSeries();
+                                s.setOwnerUserId(ownerUserId);
+                                s.setTitle(seriesTitle);
+                                s.setMetadataStatus(MetadataStatus.PENDING.getValue());
+                                return tvSeriesRepository.save(s);
+                            }));
             item.setSeriesId(series.getId());
             if (guess.seasonNumber() != null) {
-                MediaTvSeason season = tvSeasonRepository
-                        .findByOwnerUserIdAndSeriesIdAndSeasonNumber(ownerUserId, series.getId(), guess.seasonNumber())
-                        .orElseGet(() -> {
-                            MediaTvSeason ts = new MediaTvSeason();
-                            ts.setOwnerUserId(ownerUserId);
-                            ts.setSeriesId(series.getId());
-                            ts.setSeasonNumber(guess.seasonNumber());
-                            ts.setTitle("第 " + guess.seasonNumber() + " 季");
-                            ts.setEpisodeCount(0);
-                            return tvSeasonRepository.save(ts);
-                        });
+                MediaTvSeason season = seasonMemo.computeIfAbsent(
+                        ownerUserId + "|" + series.getId() + "|" + guess.seasonNumber(),
+                        key -> tvSeasonRepository
+                                .findByOwnerUserIdAndSeriesIdAndSeasonNumber(
+                                        ownerUserId, series.getId(), guess.seasonNumber())
+                                .orElseGet(() -> {
+                                    MediaTvSeason ts = new MediaTvSeason();
+                                    ts.setOwnerUserId(ownerUserId);
+                                    ts.setSeriesId(series.getId());
+                                    ts.setSeasonNumber(guess.seasonNumber());
+                                    ts.setTitle("第 " + guess.seasonNumber() + " 季");
+                                    ts.setEpisodeCount(0);
+                                    return tvSeasonRepository.save(ts);
+                                }));
                 item.setSeasonId(season.getId());
             }
         }

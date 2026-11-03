@@ -11,9 +11,23 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface MusicFavoriteRepository extends JpaRepository<MusicFavorite, UUID> {
-    List<MusicFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
-
     List<MusicFavorite> findByOwnerUserIdAndTrackIdIn(UUID ownerUserId, Collection<UUID> trackIds);
+
+    /**
+     * 按收藏时间倒序返回曲目 ID。
+     *
+     * <p>收藏只需要 ID：物化整个实体会把行数等量的托管对象放进持久化上下文，
+     * 而调用方紧接着就丢弃它们。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 曲目 ID 列表，按收藏时间倒序
+     */
+    @Query("""
+            select favorite.trackId from MusicFavorite favorite
+            where favorite.ownerUserId = :ownerUserId
+            order by favorite.createdAt desc
+            """)
+    List<UUID> findFavoriteTrackIdsByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     Optional<MusicFavorite> findByOwnerUserIdAndTrackId(UUID ownerUserId, UUID trackId);
 

@@ -576,6 +576,13 @@ public class ExternalImportExecutionService {
             importCompletedFiles(task.getId(), tempDir);
 
         } catch (Exception e) {
+            if (ExternalImportRetryService.isTransient(e)) {
+                // 瞬时故障不在这里判终态：业务行留在执行中状态，由消费者按 1/5/15 分钟
+                // 重投并复用断点续传。此前一律 markFailed 让重试与 DLQ 都失去意义。
+                log.warn("外部存储导入瞬时失败，转入重试调度: taskId={}, errorType={}",
+                        task.getId(), e.getClass().getSimpleName());
+                throw ExternalImportTransientException.wrap(e);
+            }
             log.warn("外部存储导入失败: taskId={}, message={}", task.getId(), e.getMessage());
             markFailed(task.getId(), ExternalImportFiles.summarize(e), ThrowableDescriber.describe(e));
         } finally {

@@ -1,8 +1,6 @@
 package com.omninest.worker.photos;
 
 import com.omninest.common.concurrency.DistributedLock;
-import com.omninest.modules.photos.domain.GeoDataset;
-import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import com.omninest.modules.photos.service.GeoDatasetService;
 import com.omninest.modules.photos.service.GeonamesImportService;
 import com.omninest.modules.photos.service.PhotosRuntimeConfigService;
@@ -46,7 +44,6 @@ public class GeoNamesAutoImportLauncher {
     private static final List<String> ACTIVE_STATUSES = List.of("QUEUED", "RUNNING", "RETRY_WAIT");
 
     private final GeoDatasetService geoDatasetService;
-    private final GeoDatasetRepository geoDatasetRepository;
     private final TaskRecordService taskRecordService;
     private final PhotosRuntimeConfigService configService;
     private final DistributedLock distributedLock;
@@ -73,8 +70,7 @@ public class GeoNamesAutoImportLauncher {
             log.debug("GeoNames 自动导入开关关闭，跳过");
             return;
         }
-        if (geoDatasetRepository.findFirstByStatusOrderByPublishedAtDesc(GeoDataset.STATUS_PUBLISHED)
-                .isPresent()) {
+        if (geoDatasetService.currentPublishedVersion() != null) {
             log.debug("已有已发布 GeoNames 数据集，无需自动导入");
             return;
         }

@@ -83,14 +83,8 @@ public class TwoFactorService {
             throw new BusinessException(ErrorCode.TWO_FACTOR_ALREADY_ENABLED, "两步验证已开启");
         }
         String secret = TotpUtil.generateSecret();
-        AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
-                .orElseGet(AuthTotpCredential::new);
-        credential.setUserId(userId);
-        credential.setSecret(credentialCipher.encrypt(secret));
-        credential.setEnabled(false);
-        credential.setConfirmedAt(null);
-        credential.setLastUsedStep(null);
-        totpCredentialRepository.save(credential);
+        // 重复调用会覆盖旧的未确认秘钥；原子写入避免并发发起绑定撞 user_id 唯一键。
+        totpCredentialRepository.stageSecret(userId, credentialCipher.encrypt(secret), Instant.now());
         return new TwoFactorSetupResponse(secret, TotpUtil.otpauthUri(OTPAUTH_ISSUER, user.getUsername(), secret));
     }
 

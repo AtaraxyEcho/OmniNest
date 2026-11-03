@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +35,10 @@ class ArchitectureInvariantsTest {
 
     private static final Pattern SINGLE_RESULT_FINDER =
             Pattern.compile("Optional<[A-Za-z0-9_]+>\\s+(find[A-Za-z0-9_]*)\\(");
+
+    /** 跨模块仓储注入：模块名 + repository 包下的任意类型。 */
+    private static final Pattern CROSS_MODULE_REPOSITORY_IMPORT = Pattern.compile(
+            "import com\\.omninest\\.modules\\.([a-z0-9]+)\\.repository\\.([A-Za-z0-9_.]+);");
 
     /**
      * 单值查询里必须带确定性排序的身份列片段。 */
@@ -338,6 +345,59 @@ class ArchitectureInvariantsTest {
         assertThat(violations)
                 .as("绕过配额服务的用量写入不会淘汰资料缓存，前端配额显示会长期失真")
                 .isEmpty();
+    }
+
+    /**
+     * 仓储只能被它所属的 Maven 模块注入。
+     *
+     * <p>跨模块直接注入仓储会让"service 接口或领域事件"这条边界形同虚设：改一个模块的
+     * 表结构会连带打挂另一个模块，正是深水区耦合的入口。仓库现状是零违例，因此闸门
+     * 不留允许清单——出现违例就必须先在属主模块补一个只读端口。</p>
+     */
+    @Test
+    @DisplayName("不得跨 Maven 模块注入其他模块的仓储")
+    void repositoryImportsMustStayWithinOwningModule() throws IOException {
+        Path root = backendRoot();
+        Map<String, Set<String>> ownerByPackage = new HashMap<>();
+        for (Path module : ownedModules(root)) {
+            Path modulesDir = module.resolve("src/main/java/com/omninest/modules");
+            if (!Files.isDirectory(modulesDir)) {
+                continue;
+            }
+            try (Stream<Path> children = Files.list(modulesDir)) {
+                children.filter(Files::isDirectory)
+                        .forEach(child -> ownerByPackage
+                                .computeIfAbsent(child.getFileName().toString(), key -> new HashSet<>())
+                                .add(module.getFileName().toString()));
+            }
+        }
+
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            String module = relative(file).split("/")[0];
+            for (String line : Files.readAllLines(file)) {
+                Matcher matcher = CROSS_MODULE_REPOSITORY_IMPORT.matcher(line.trim());
+                if (!matcher.matches()) {
+                    continue;
+                }
+                Set<String> owners = ownerByPackage.getOrDefault(matcher.group(1), Set.of());
+                if (!owners.isEmpty() && !owners.contains(module)) {
+                    violations.add(relative(file) + " -> " + matcher.group(2));
+                }
+            }
+        }
+
+        assertThat(violations)
+                .as("跨模块访问数据层必须经属主模块的 service 端口，不能让表结构外溢")
+                .isEmpty();
+    }
+
+    private static List<Path> ownedModules(Path root) throws IOException {
+        try (Stream<Path> children = Files.list(root)) {
+            return children.filter(Files::isDirectory)
+                    .filter(path -> path.getFileName().toString().startsWith("omninest-"))
+                    .toList();
+        }
     }
 
     private static Path backendRoot() {

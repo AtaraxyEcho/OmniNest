@@ -5,6 +5,7 @@ import com.omninest.modules.sync.domain.SyncEvent;
 import com.omninest.modules.sync.repository.SyncEventRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,20 +50,25 @@ public class SyncOutboxStateService {
     }
 
     /**
-     * 将当前实例持有租约的事件标记为已发布。
+     * 批量将当前实例持有租约的事件标记为已发布，返回实际更新的行数。
      *
-     * @param eventId 事件标识
+     * <p>行数少于入参数量说明有事件的租约在发布期间被其他实例接管，
+     * 那些事件会由接管方重新置为终态，本实例不覆盖。</p>
+     *
+     * @param eventIds 本批发布成功的事件标识
      * @param publishedAt Broker 确认时间
-     * @return 是否成功更新状态
+     * @return 实际更新行数
      */
     @Transactional(rollbackFor = Exception.class)
-    public boolean markPublished(UUID eventId, Instant publishedAt) {
-        int updated = syncEventRepository.markPublished(
-                eventId,
+    public int markPublishedBatch(Collection<UUID> eventIds, Instant publishedAt) {
+        if (eventIds.isEmpty()) {
+            return 0;
+        }
+        return syncEventRepository.markPublishedBatch(
+                eventIds,
                 properties.getOutbox().getInstanceId(),
                 publishedAt
         );
-        return updated == 1;
     }
 
     /**

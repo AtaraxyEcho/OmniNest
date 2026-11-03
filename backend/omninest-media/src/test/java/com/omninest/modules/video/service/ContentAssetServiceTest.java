@@ -7,6 +7,8 @@ import java.time.Instant;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -74,24 +76,18 @@ class ContentAssetServiceTest {
         assertThat(result.posterFileId()).isEqualTo(posterFileId);
         assertThat(result.backdropFileId()).isEqualTo(backdropFileId);
 
-        ArgumentCaptor<ContentAsset> captor = ArgumentCaptor.forClass(ContentAsset.class);
-        verify(contentAssetRepository, Mockito.times(2)).save(captor.capture());
+        // 主资产走 ON CONFLICT 幂等 upsert：并发刮削同一资源不再撞部分唯一索引。
+        ArgumentCaptor<String> assetTypes = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<UUID> fileNodeIds = ArgumentCaptor.forClass(UUID.class);
+        verify(contentAssetRepository, Mockito.times(2)).upsertPrimary(
+                any(), eq(OWNER_ID), eq("MOVIE"), eq(movieId),
+                assetTypes.capture(), fileNodeIds.capture(), any(),
+                eq("TMDB"), anyInt(),
+                argThat(json -> json != null && json.contains("externalId")), any());
         verify(derivedAssetStorageService, Mockito.times(2)).storeRemote(any());
-        assertThat(captor.getAllValues())
-                .extracting(ContentAsset::getAssetType)
-                .containsExactlyInAnyOrder("POSTER", "BACKDROP");
-        assertThat(captor.getAllValues())
-                .extracting(ContentAsset::getFileNodeId)
+        assertThat(assetTypes.getAllValues()).containsExactlyInAnyOrder("POSTER", "BACKDROP");
+        assertThat(fileNodeIds.getAllValues())
                 .containsExactlyInAnyOrder(posterFileId, backdropFileId);
-        assertThat(captor.getAllValues())
-                .allSatisfy(asset -> {
-                    assertThat(asset.getOwnerUserId()).isEqualTo(OWNER_ID);
-                    assertThat(asset.getResourceType()).isEqualTo("MOVIE");
-                    assertThat(asset.getResourceId()).isEqualTo(movieId);
-                    assertThat(asset.isPrimary()).isTrue();
-                    assertThat(asset.getProvider()).isEqualTo("TMDB");
-                    assertThat(asset.getMetadata()).containsEntry("externalId", "123");
-                });
     }
 
     @Test

@@ -19,6 +19,9 @@ class TaskOutboxDispatcherTest {
 
     private static final UUID DISPATCH_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID TASK_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID ID_A = UUID.fromString("10000000-0000-0000-0000-00000000000a");
+    private static final UUID ID_B = UUID.fromString("10000000-0000-0000-0000-00000000000b");
+    private static final UUID ID_C = UUID.fromString("10000000-0000-0000-0000-00000000000c");
 
     private final TaskDispatchService dispatchService = mock(TaskDispatchService.class);
     private final RabbitTaskDispatchPublisher publisher = mock(RabbitTaskDispatchPublisher.class);
@@ -43,8 +46,10 @@ class TaskOutboxDispatcherTest {
         when(dispatchService.requiresDeadLetter(first, true)).thenReturn(false);
         doThrow(publishFailure("BROKER_UNAVAILABLE", true)).doNothing().when(publisher).publish(first);
         doNothing().when(publisher).publish(retry);
-        when(dispatchService.markPublished(ArgumentMatchers.eq(DISPATCH_ID), ArgumentMatchers.any(Instant.class)))
-                .thenReturn(true);
+        when(dispatchService.markPublishedBatch(
+                ArgumentMatchers.eq(List.of(DISPATCH_ID)),
+                ArgumentMatchers.any(Instant.class)))
+                .thenReturn(1);
 
         dispatcher.dispatch();
         dispatcher.dispatch();
@@ -54,9 +59,62 @@ class TaskOutboxDispatcherTest {
                 ArgumentMatchers.any(Instant.class),
                 ArgumentMatchers.eq("BROKER_UNAVAILABLE")
         );
-        verify(dispatchService).markPublished(
-                ArgumentMatchers.eq(DISPATCH_ID),
+        verify(dispatchService).markPublishedBatch(
+                ArgumentMatchers.eq(List.of(DISPATCH_ID)),
                 ArgumentMatchers.any(Instant.class)
+        );
+    }
+
+    @Test
+    void successfulBatchIsSettledWithASingleStateUpdate() {
+        List<ClaimedTaskDispatch> claimed = List.of(
+                dispatch(ID_A, 0, null),
+                dispatch(ID_B, 0, null),
+                dispatch(ID_C, 0, null)
+        );
+        when(dispatchService.claimBatch(ArgumentMatchers.any(Instant.class))).thenReturn(claimed);
+        claimed.forEach(dispatch -> when(dispatchService.isDeadLetterPending(dispatch)).thenReturn(false));
+        doNothing().when(publisher).publish(ArgumentMatchers.any(ClaimedTaskDispatch.class));
+        when(dispatchService.markPublishedBatch(
+                ArgumentMatchers.anyList(),
+                ArgumentMatchers.any(Instant.class)))
+                .thenReturn(claimed.size());
+
+        dispatcher.dispatch();
+
+        verify(dispatchService).markPublishedBatch(
+                ArgumentMatchers.eq(List.of(ID_A, ID_B, ID_C)),
+                ArgumentMatchers.any(Instant.class)
+        );
+    }
+
+    @Test
+    void failedDispatchIsExcludedFromTheSettledBatch() {
+        ClaimedTaskDispatch succeeded = dispatch(ID_A, 0, null);
+        ClaimedTaskDispatch rejected = dispatch(ID_B, 0, null);
+        when(dispatchService.claimBatch(ArgumentMatchers.any(Instant.class)))
+                .thenReturn(List.of(succeeded, rejected));
+        when(dispatchService.isDeadLetterPending(succeeded)).thenReturn(false);
+        when(dispatchService.isDeadLetterPending(rejected)).thenReturn(false);
+        when(dispatchService.requiresDeadLetter(succeeded, true)).thenReturn(false);
+        when(dispatchService.requiresDeadLetter(rejected, true)).thenReturn(false);
+        doNothing().when(publisher).publish(succeeded);
+        doThrow(publishFailure("BROKER_UNAVAILABLE", true)).when(publisher).publish(rejected);
+        when(dispatchService.markPublishedBatch(
+                ArgumentMatchers.anyList(),
+                ArgumentMatchers.any(Instant.class)))
+                .thenReturn(1);
+
+        dispatcher.dispatch();
+
+        verify(dispatchService).markPublishedBatch(
+                ArgumentMatchers.eq(List.of(ID_A)),
+                ArgumentMatchers.any(Instant.class)
+        );
+        verify(dispatchService).markFailed(
+                ArgumentMatchers.eq(rejected),
+                ArgumentMatchers.any(Instant.class),
+                ArgumentMatchers.eq("BROKER_UNAVAILABLE")
         );
     }
 
@@ -120,6 +178,18 @@ class TaskOutboxDispatcherTest {
     private ClaimedTaskDispatch dispatch(int attemptCount, String lastErrorCode) {
         return new ClaimedTaskDispatch(
                 DISPATCH_ID,
+                TASK_ID,
+                "omni.task",
+                "reader.parse",
+                "{\"taskId\":\"" + TASK_ID + "\"}",
+                attemptCount,
+                lastErrorCode
+        );
+    }
+
+    private ClaimedTaskDispatch dispatch(UUID dispatchId, int attemptCount, String lastErrorCode) {
+        return new ClaimedTaskDispatch(
+                dispatchId,
                 TASK_ID,
                 "omni.task",
                 "reader.parse",

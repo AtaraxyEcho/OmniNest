@@ -346,10 +346,8 @@ public class VideoLibrarySourceService {
             throw new BusinessException(ErrorCode.RESOURCE_IN_USE, "影视库来源仍有已入库媒体，请先清理媒体实体");
         }
         accessService.deleteForSource(sourceId);
-        for (MediaScanRun run : runRepository.findAllByLibrarySourceId(sourceId)) {
-            candidateRepository.deleteByScanRunId(run.getId());
-            batchRepository.deleteByScanRunId(run.getId());
-        }
+        candidateRepository.deleteByLibrarySourceId(sourceId);
+        batchRepository.deleteByLibrarySourceId(sourceId);
         runRepository.deleteByLibrarySourceId(sourceId);
         sourceRepository.delete(source);
         recordSourceEvent(operatorUserId, sourceId);

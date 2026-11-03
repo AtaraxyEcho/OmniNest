@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,7 @@ import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaType;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -29,9 +31,11 @@ import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /**
@@ -293,5 +297,51 @@ class MovieScrapeServiceTest {
                 FILE_ID, OWNER_ID, null, "FILE", name, "/Movies/" + name,
                 mimeType, 1024, null, "LOCAL", false, false,
                 SpaceType.PERSONAL, OWNER_ID, null, null);
+    }
+
+    private FileDescriptor file(UUID fileId, String name) {
+        return new FileDescriptor(
+                fileId, OWNER_ID, null, "FILE", name, "/Shows/" + name,
+                "video/x-matroska", 1024, null, "LOCAL", false, false,
+                SpaceType.PERSONAL, OWNER_ID, null, null);
+    }
+
+    @Test
+    void batchRegisterResolvesSeriesAndSeasonOncePerShow() {
+        UUID secondFileId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(SERIES_ID);
+        series.setOwnerUserId(OWNER_ID);
+        MediaTvSeason season = new MediaTvSeason();
+        season.setId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+        season.setOwnerUserId(OWNER_ID);
+        season.setSeriesId(SERIES_ID);
+        season.setSeasonNumber(1);
+        when(tvSeriesRepository
+                .findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
+                        eq(OWNER_ID), anyString()))
+                .thenReturn(Optional.of(series));
+        when(tvSeasonRepository.findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 1))
+                .thenReturn(Optional.of(season));
+        when(videoItemRepository.saveAll(Mockito.<List<MediaVideoItem>>any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        int registered = scrapeService.registerPendingVideosBatch(
+                OWNER_ID,
+                List.of(file(FILE_ID, "Show.S01E02.1080p.mkv"), file(secondFileId, "Show.S01E03.1080p.mkv")),
+                Map.of());
+
+        assertThat(registered).isEqualTo(2);
+        // 同一部剧的两集共用一次系列定位与一次季定位。
+        verify(tvSeriesRepository, times(1))
+                .findFirstByOwnerUserIdAndLibrarySourceIdIsNullAndTitleIgnoreCaseOrderByCreatedAtAsc(
+                        eq(OWNER_ID), anyString());
+        verify(tvSeasonRepository, times(1))
+                .findByOwnerUserIdAndSeriesIdAndSeasonNumber(OWNER_ID, SERIES_ID, 1);
+        ArgumentCaptor<List<MediaVideoItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(videoItemRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(MediaVideoItem::getSeriesId)
+                .containsExactly(SERIES_ID, SERIES_ID);
     }
 }

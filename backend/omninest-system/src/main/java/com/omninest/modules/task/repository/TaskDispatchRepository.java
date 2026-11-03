@@ -2,6 +2,7 @@ package com.omninest.modules.task.repository;
 
 import com.omninest.modules.task.domain.TaskDispatch;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,16 @@ public interface TaskDispatchRepository extends JpaRepository<TaskDispatch, UUID
      * @return 最近一次投递记录
      */
     Optional<TaskDispatch> findFirstByTaskIdOrderByCreatedAtDesc(UUID taskId);
+
+    /**
+     * 批量查询多个任务的全部投递记录，按任务分组、创建时间倒序。
+     *
+     * <p>清扫器一轮处理上百个停滞任务，逐个查最近投递会退化成上百次单行查询。</p>
+     *
+     * @param taskIds 任务 ID 集合
+     * @return 投递记录，同一任务内按创建时间倒序
+     */
+    List<TaskDispatch> findByTaskIdInOrderByTaskIdAscCreatedAtDesc(Collection<UUID> taskIds);
 
     /**
      * 领取超过保留期的已发布记录 ID，供历史清理分批删除。
@@ -73,9 +84,12 @@ public interface TaskDispatchRepository extends JpaRepository<TaskDispatch, UUID
     List<TaskDispatch> findClaimable(@Param("now") Instant now, @Param("limit") int limit);
 
     /**
-     * 将当前实例租约内记录标记为已发布。
+     * 将当前实例租约内的一批记录标记为已发布。
      *
-     * @param dispatchId 投递记录 ID
+     * <p>整批共用一次事务：逐条更新会让 100 条消息产生 100 次连接获取与提交，
+     * 在调度周期内直接吃掉连接池配额。</p>
+     *
+     * @param dispatchIds 投递记录 ID 集合
      * @param instanceId 实例 ID
      * @param publishedAt 发布时间
      * @return 更新行数
@@ -90,12 +104,12 @@ public interface TaskDispatchRepository extends JpaRepository<TaskDispatch, UUID
                 dispatch.lastErrorCode = null,
                 dispatch.updatedAt = :publishedAt,
                 dispatch.version = dispatch.version + 1
-            where dispatch.id = :dispatchId
+            where dispatch.id in :dispatchIds
             and dispatch.status = 'PUBLISHING'
             and dispatch.lockedBy = :instanceId
             """)
-    int markPublished(
-            @Param("dispatchId") UUID dispatchId,
+    int markPublishedBatch(
+            @Param("dispatchIds") Collection<UUID> dispatchIds,
             @Param("instanceId") String instanceId,
             @Param("publishedAt") Instant publishedAt
     );

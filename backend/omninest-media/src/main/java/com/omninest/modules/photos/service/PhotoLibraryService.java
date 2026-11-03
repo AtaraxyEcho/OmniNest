@@ -523,34 +523,6 @@ public class PhotoLibraryService {
         sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("favorite", false));
     }
 
-    /**
-     * 查询用户收藏照片列表
-     */
-    @Transactional(readOnly = true)
-    public List<PhotoItemDto> listFavorites(UUID ownerUserId) {
-        List<PhotoItem> photos = findFavoritePhotos(ownerUserId, 0);
-        Set<UUID> favoriteIds = photos.stream().map(PhotoItem::getId).collect(Collectors.toSet());
-        return photoDtoAssembler.mapPhotoItemDtos(ownerUserId, photos, favoriteIds);
-    }
-
-    /**
-     * 批量加载收藏照片，避免N+1查询
-     */
-    private List<PhotoItem> findFavoritePhotos(UUID ownerUserId, int limit) {
-        List<UUID> photoIds = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
-                .stream()
-                .map(PhotoFavorite::getPhotoId)
-                .toList();
-        if (photoIds.isEmpty()) {
-            return List.of();
-        }
-        List<UUID> limited = limit > 0 ? photoIds.subList(0, Math.min(limit, photoIds.size())) : photoIds;
-        Map<UUID, PhotoItem> items = photoItemRepository
-                .findActiveByOwnerUserIdAndIdIn(ownerUserId, limited).stream()
-                .collect(Collectors.toMap(PhotoItem::getId, p -> p));
-        return limited.stream().map(items::get).filter(Objects::nonNull).toList();
-    }
-
     private List<UUID> photoIds(List<PhotoItem> items) {
         return items.stream().map(PhotoItem::getId).toList();
     }

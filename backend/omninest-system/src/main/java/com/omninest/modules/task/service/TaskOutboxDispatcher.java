@@ -2,6 +2,9 @@ package com.omninest.modules.task.service;
 
 import com.omninest.modules.task.config.TaskOutboxProperties;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,16 +29,24 @@ public class TaskOutboxDispatcher {
 
     /**
      * 定时发布一批任务消息。
+     *
+     * <p>成功发送的记录在批末一次性置为已发布，避免每条消息独占一个事务与一次连接借还。</p>
      */
     @Scheduled(fixedDelayString = "${omninest.task.outbox.interval-millis:500}")
     public void dispatch() {
         if (!properties.isEnabled()) {
             return;
         }
-        dispatchService.claimBatch(Instant.now()).forEach(this::publishOne);
+        List<UUID> publishedIds = new ArrayList<>();
+        dispatchService.claimBatch(Instant.now()).forEach(dispatch -> publishOne(dispatch, publishedIds));
+        int settled = dispatchService.markPublishedBatch(publishedIds, Instant.now());
+        if (settled < publishedIds.size()) {
+            log.warn("任务消息发布成功但租约已变化: published={}, settled={}",
+                    publishedIds.size(), settled);
+        }
     }
 
-    private void publishOne(ClaimedTaskDispatch dispatch) {
+    private void publishOne(ClaimedTaskDispatch dispatch, List<UUID> publishedIds) {
         if (dispatchService.isDeadLetterPending(dispatch)) {
             publishDeadLetter(
                     dispatch,
@@ -46,10 +57,7 @@ public class TaskOutboxDispatcher {
         }
         try {
             publisher.publish(dispatch);
-            if (!dispatchService.markPublished(dispatch.id(), Instant.now())) {
-                log.warn("任务消息发布成功但租约已变化: dispatchId={}, taskId={}",
-                        dispatch.id(), dispatch.taskId());
-            }
+            publishedIds.add(dispatch.id());
         } catch (TaskDispatchPublishException exception) {
             handlePublishFailure(dispatch, exception);
         } catch (RuntimeException exception) {

@@ -231,7 +231,7 @@ class MusicScrapeServiceTest {
         track.setId(TRACK_ID);
         track.setOwnerUserId(OWNER_ID);
         when(trackRepository.countVisibleByOwnerUserId(OWNER_ID)).thenReturn(1L);
-        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID)).thenReturn(List.of());
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID)).thenReturn(List.of());
         when(trackRepository.findScrapePageAfter(eq(OWNER_ID), any(UUID.class), any(Pageable.class)))
                 .thenReturn(List.of(track));
         when(metadataProvider.providerName()).thenReturn("MusicBrainz");
@@ -259,7 +259,7 @@ class MusicScrapeServiceTest {
         }).when(scanJobRepository).save(any(MusicScanJob.class));
 
         when(trackRepository.countVisibleByOwnerUserId(OWNER_ID)).thenReturn(1L);
-        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID))
                 .thenThrow(new IllegalStateException("存储层不可用"));
 
         try {

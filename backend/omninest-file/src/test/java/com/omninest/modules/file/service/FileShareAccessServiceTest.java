@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -261,6 +262,21 @@ class FileShareAccessServiceTest {
         // 会话式入口是实际在用的分享访问路径，必须由它触发访问通知。
         Mockito.verify(notificationService).notifyOrLog(
                 eq(OWNER), eq("SHARE_ACCESSED"), anyString(), anyString(), any());
+    }
+
+    @Test
+    void acceptShareSessionConsumesQuotaBeforeCopyingAnything() {
+        doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "分享链接访问次数已达上限"))
+                .when(resourceShareLinkService).consumeAnySession(TOKEN, SESSION);
+
+        assertThatThrownBy(() -> service.acceptShareSession(
+                RECIPIENT, TOKEN, SESSION, "1.2.3.4", new AcceptShareRequest(null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("上限");
+
+        // 会话式转存必须与明文 token 转存一样扣减访问次数，否则一枚 10 分钟会话可无限复用。
+        verify(resourceShareLinkService).consumeAnySession(TOKEN, SESSION);
+        verify(fileNodeRepository, never()).saveAll(Mockito.anyList());
     }
 
     @Test

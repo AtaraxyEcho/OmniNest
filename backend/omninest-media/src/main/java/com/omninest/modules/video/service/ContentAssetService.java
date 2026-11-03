@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.media.domain.AssetType;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.ContentAsset;
@@ -256,18 +257,21 @@ public class ContentAssetService {
         fileQueryService.validateOwnedImage(ownerUserId, fileNodeId);
         ContentAsset asset = contentAssetRepository
                 .findPrimaryAsset(ownerUserId, resourceType, resourceId, assetType)
-                .orElseGet(ContentAsset::new);
-        asset.setOwnerUserId(ownerUserId);
-        asset.setResourceType(resourceType);
-        asset.setResourceId(resourceId);
-        asset.setAssetType(assetType);
-        asset.setFileNodeId(fileNodeId);
-        asset.setExternalUrl(null);
-        asset.setProvider("MANUAL");
-        asset.setSortOrder(0);
-        asset.setPrimary(true);
-        asset.setMetadata(Map.of("manual", true, "updatedAt", Instant.now().toString()));
-        contentAssetRepository.save(asset);
+                .orElse(null);
+        Map<String, Object> metadata = Map.of("manual", true, "updatedAt", Instant.now().toString());
+        contentAssetRepository.upsertPrimary(
+                asset == null ? UUID.randomUUID() : asset.getId(),
+                ownerUserId,
+                resourceType,
+                resourceId,
+                assetType,
+                fileNodeId,
+                null,
+                "MANUAL",
+                0,
+                JsonSupport.toJson(metadata),
+                Instant.now()
+        );
         return fileNodeId;
     }
 
@@ -384,26 +388,28 @@ public class ContentAssetService {
         }
         ContentAsset asset = contentAssetRepository
                 .findPrimaryAsset(ownerUserId, resourceType, resourceId, assetType)
-                .orElseGet(ContentAsset::new);
+                .orElse(null);
         String normalizedExternalUrl = externalUrl.trim();
-        UUID fileNodeId = asset.getFileNodeId();
+        UUID fileNodeId = asset == null ? null : asset.getFileNodeId();
         if (fileNodeId == null || !normalizedExternalUrl.equals(asset.getExternalUrl())) {
             UUID storedFileNodeId = storeRemoteAssetWithType(ownerUserId, resourceId, resourceType, assetType, normalizedExternalUrl, provider);
             if (storedFileNodeId != null) {
                 fileNodeId = storedFileNodeId;
             }
         }
-        asset.setOwnerUserId(ownerUserId);
-        asset.setResourceType(resourceType);
-        asset.setResourceId(resourceId);
-        asset.setAssetType(assetType);
-        asset.setFileNodeId(fileNodeId);
-        asset.setExternalUrl(normalizedExternalUrl);
-        asset.setProvider(provider);
-        asset.setSortOrder(sortOrder);
-        asset.setPrimary(true);
-        asset.setMetadata(metadata);
-        contentAssetRepository.save(asset);
+        contentAssetRepository.upsertPrimary(
+                asset == null ? UUID.randomUUID() : asset.getId(),
+                ownerUserId,
+                resourceType,
+                resourceId,
+                assetType,
+                fileNodeId,
+                normalizedExternalUrl,
+                provider,
+                sortOrder,
+                JsonSupport.toJson(metadata == null ? Map.of() : metadata),
+                Instant.now()
+        );
         return fileNodeId;
     }
 

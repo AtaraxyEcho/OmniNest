@@ -34,6 +34,7 @@ import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -323,39 +324,58 @@ public class VideoFileCleanupService implements
     }
 
     private void cleanupOrphanedSeasons(UUID ownerUserId, Set<UUID> seriesIds) {
-        for (UUID seriesId : seriesIds) {
-            List<MediaTvSeason> seasons = tvSeasonRepository
-                    .findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(ownerUserId, seriesId);
-            for (MediaTvSeason season : seasons) {
-                long episodeCount = videoItemRepository.countByOwnerUserIdAndSeriesIdAndSeasonNumber(
-                        ownerUserId,
-                        seriesId,
-                        season.getSeasonNumber()
-                );
-                if (episodeCount == 0) {
-                    tvSeasonRepository.delete(season);
-                    log.info("已清理孤立季: seriesId={}, seasonNumber={}",
-                            seriesId, season.getSeasonNumber());
-                } else if (season.getEpisodeCount() == null
-                        || season.getEpisodeCount() != (int) episodeCount) {
-                    // 存活季的集数必须随剧集永久删除收敛，否则详情页长期显示虚高集数。
-                    season.setEpisodeCount((int) episodeCount);
-                    tvSeasonRepository.save(season);
-                }
+        if (seriesIds.isEmpty()) {
+            return;
+        }
+        List<MediaTvSeason> seasons = tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(ownerUserId, seriesIds);
+        if (seasons.isEmpty()) {
+            return;
+        }
+        Map<String, Long> itemCountBySeason = new HashMap<>();
+        for (MediaVideoItemRepository.SeasonItemCountProjection row
+                : videoItemRepository.countItemsBySeason(ownerUserId, seriesIds)) {
+            if (row.getSeriesId() == null || row.getSeasonNumber() == null) {
+                continue;
+            }
+            itemCountBySeason.put(seasonKey(row.getSeriesId(), row.getSeasonNumber()), row.getItemCount());
+        }
+
+        List<UUID> orphanSeasonIds = new ArrayList<>();
+        List<MediaTvSeason> staleCountSeasons = new ArrayList<>();
+        for (MediaTvSeason season : seasons) {
+            long episodeCount = itemCountBySeason.getOrDefault(
+                    seasonKey(season.getSeriesId(), season.getSeasonNumber()), 0L);
+            if (episodeCount == 0) {
+                orphanSeasonIds.add(season.getId());
+            } else if (season.getEpisodeCount() == null || season.getEpisodeCount() != (int) episodeCount) {
+                // 存活季的集数必须随剧集永久删除收敛，否则详情页长期显示虚高集数。
+                season.setEpisodeCount((int) episodeCount);
+                staleCountSeasons.add(season);
             }
         }
+        if (!staleCountSeasons.isEmpty()) {
+            tvSeasonRepository.saveAll(staleCountSeasons);
+        }
+        if (!orphanSeasonIds.isEmpty()) {
+            tvSeasonRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, orphanSeasonIds);
+            log.info("已清理孤立季: count={}", orphanSeasonIds.size());
+        }
+    }
+
+    private static String seasonKey(UUID seriesId, Integer seasonNumber) {
+        return seriesId + "#" + seasonNumber;
     }
 
     private void deleteOrphanedSeries(UUID ownerUserId, List<UUID> seriesIds) {
         if (seriesIds.isEmpty()) {
             return;
         }
-        for (UUID seriesId : seriesIds) {
-            List<MediaTvSeason> seasons = tvSeasonRepository
-                    .findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(ownerUserId, seriesId);
-            if (!seasons.isEmpty()) {
-                tvSeasonRepository.deleteAll(seasons);
-            }
+        // 季按系列归属，一次读出再整批删除，避免每个系列一次查询。
+        List<MediaTvSeason> seasons = tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(ownerUserId, seriesIds);
+        if (!seasons.isEmpty()) {
+            tvSeasonRepository.deleteByOwnerUserIdAndIdIn(
+                    ownerUserId,
+                    seasons.stream().map(MediaTvSeason::getId).toList());
         }
         // 收藏按观看者归属，系列彻底删除后必须清理所有成员的收藏。
         seriesFavoriteRepository.deleteBySeriesIdIn(seriesIds);

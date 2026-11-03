@@ -139,6 +139,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         tryNavigateChapter(-1);
         return;
       case ReaderCommand.toggleReadingMode:
+        // Web 与不支持翻页的正文保持静默，与设置面板不出现分页开关的口径一致。
+        if (!supportsPageMode) {
+          return;
+        }
+        onSettingsChanged(_settings.withReadingModeToggled());
         return;
     }
   }

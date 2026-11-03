@@ -12,7 +12,6 @@ import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
-import com.omninest.modules.video.domain.MediaWatchHistory;
 import com.omninest.modules.video.dto.MovieDtos.PlaybackPlanDto;
 import com.omninest.modules.video.dto.MovieDtos.PlaybackProgressRequest;
 import com.omninest.modules.video.dto.MovieDtos.PlaybackSubtitleDto;
@@ -167,22 +166,15 @@ public class MoviePlaybackService {
                 request.clientUpdatedAt(),
                 request.deviceId()
         );
-        historyRepository.save(upsertHistory(requesterUserId, videoItemId, progress));
-    }
-
-    private MediaWatchHistory upsertHistory(UUID requesterUserId, UUID videoItemId, MediaPlaybackProgress progress) {
-        MediaWatchHistory history = historyRepository
-                .findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(requesterUserId, videoItemId)
-                .orElseGet(MediaWatchHistory::new);
-        history.setOwnerUserId(requesterUserId);
-        history.setVideoItemId(videoItemId);
-        history.setPositionSeconds(progress.getPositionSeconds());
-        history.setDurationSeconds(progress.getDurationSeconds());
-        history.setCompleted(progress.isCompleted());
-        // 观看历史按 played_at 倒序；实体只在 @PrePersist 填该字段，复看不刷新
-        // 就会让老片永远停在"最近观看"底部。
-        history.setPlayedAt(Instant.now());
-        return history;
+        historyRepository.upsertWatched(
+                UUID.randomUUID(),
+                requesterUserId,
+                videoItemId,
+                progress.getPositionSeconds(),
+                progress.getDurationSeconds(),
+                progress.isCompleted(),
+                Instant.now()
+        );
     }
 
     private MediaVideoItem findVideo(UUID requesterUserId, UUID videoItemId) {

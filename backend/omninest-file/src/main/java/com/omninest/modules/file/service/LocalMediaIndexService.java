@@ -286,6 +286,7 @@ public class LocalMediaIndexService {
                 continue;
             }
             FileNode node = new FileNode();
+            node.setId(UUID.randomUUID());
             node.setOwnerUserId(ownerUserId);
             node.setNodeType("FILE");
             node.setName(probed.fileName());
@@ -296,11 +297,11 @@ public class LocalMediaIndexService {
             node.setSourceType(LOCAL_FILESYSTEM);
             node.setSpaceType(SpaceType.PERSONAL);
             node.setUploadedBy(ownerUserId);
-            FileNode savedNode = fileNodeRepository.save(node);
+            dirtyNodes.add(node);
 
             FileContentRef reference = new FileContentRef();
             reference.setOwnerUserId(ownerUserId);
-            reference.setFileNodeId(savedNode.getId());
+            reference.setFileNodeId(node.getId());
             reference.setStorageLocationId(location.getId());
             reference.setRelativePath(probed.relativePath());
             reference.setProviderEtag(probed.etag());
@@ -311,7 +312,7 @@ public class LocalMediaIndexService {
             dirtyRefs.add(reference);
             registrations.put(
                     probed.relativePath(),
-                    new Registration(savedNode.getId(), true));
+                    new Registration(node.getId(), true));
         }
         if (!dirtyNodes.isEmpty()) {
             fileNodeRepository.saveAll(dirtyNodes);
