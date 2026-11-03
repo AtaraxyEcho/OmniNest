@@ -91,9 +91,7 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
       }
     } on Object catch (error) {
       if (mounted) {
-        setState(
-          () => _error = describeUserFacingError(error, l10n: l10n).message,
-        );
+        setState(() => _error = errorReason(error, l10n));
       }
     } finally {
       if (mounted) {

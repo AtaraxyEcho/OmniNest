@@ -134,7 +134,10 @@ class _PortalPagedListCardState<T>
                     children: [
                       Expanded(
                         child: Text(
-                          describeUserFacingError(error).displayMessage,
+                          describeUserFacingError(
+                            error,
+                            l10n: AppLocalizations.of(context),
+                          ).displayMessage,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),

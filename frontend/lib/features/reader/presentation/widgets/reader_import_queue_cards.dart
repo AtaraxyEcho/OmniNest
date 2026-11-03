@@ -79,7 +79,10 @@ class _ImportFromDeviceButtonState
       if (mounted) {
         showReaderSnackBar(
           context,
-          describeUserFacingError(error).displayMessage,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
         );
       }
     } finally {

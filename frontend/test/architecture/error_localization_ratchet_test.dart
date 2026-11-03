@@ -13,11 +13,12 @@ import 'package:flutter_test/flutter_test.dart';
 /// 2. 取 `.code` 做分支的稳定错误码；
 /// 3. 已交给 `localizeUserFacing(...)` 按 code 再映射的。
 ///
-/// 其余展示层调用点必须传 `l10n:`。基线取当前实测值，只降不升，和字号/时长/
-/// 加载动画棘轮同一口径；降到 0 后应把常数改成 0 变成常驻硬闸门。
+/// 其余展示层调用点必须传 `l10n:`。基线从 2026-11-03 实测的 49 处降到 4，
+/// 余下 4 处受文件大小棘轮阻塞，随文件拆分清零；在那之前任何新增不传 `l10n:`
+/// 的展示层调用都会直接判失败。
 void main() {
-  // 2026-11-03 实测：展示层未本地化且属用户可见路径的调用点 49 处；profile 组 4 处与 admin 组 8 处已补 l10n，基线降到 37。
-  const unlocalizedDisplayCeiling = 37;
+  // 2026-11-03 实测：展示层未本地化且属用户可见路径的调用点 49 处；49 处已补全 45 处（profile 4、admin 8、photos 9、music 9、reader 8、files 2、portal 1、video 2、setup 0）。剩 4 处卡在文件大小棘轮上：photo_shared_album_page 3 处与 initial_setup_page 1 处，任何补法都会让这两个已登记长文件超过基线，因此与它们的职责拆分同批做（见 FUNC-L03），拆完立刻归零。
+  const unlocalizedDisplayCeiling = 4;
 
   String normalize(String path) => path.replaceAll(r'\', '/');
 
@@ -59,6 +60,10 @@ void main() {
             end + 1,
             (end + 12).clamp(0, source.length),
           );
+          final ahead = source.substring(
+            end + 1,
+            (end + 200).clamp(0, source.length),
+          );
           final before = source.substring(
             (absolute - 60).clamp(0, source.length),
             absolute,
@@ -70,8 +75,12 @@ void main() {
                 : source.indexOf('\n', absolute),
           );
           final passesL10n = call.contains('l10n:');
+          // 日志用法有两种写法：devLog(describeUserFacingError(...)) 与
+          // 先取 message 再交给 devLog。后者在调用点之后，所以必须前看。
           final isLog =
-              before.contains('devLog(') || restOfLine.contains('devLog(');
+              before.contains('devLog(') ||
+              restOfLine.contains('devLog(') ||
+              ahead.contains('devLog(');
           final isStableCode = after.trimLeft().startsWith('.code');
           final isRemapped = before.contains('localizeUserFacing(');
           if (!passesL10n && !isLog && !isStableCode && !isRemapped) {

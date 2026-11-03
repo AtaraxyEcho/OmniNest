@@ -221,7 +221,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
         },
         error:
             (error, stackTrace) => AppErrorView(
-              message: describeUserFacingError(error).message,
+              message: errorReason(error, AppLocalizations.of(context)),
               onRetry:
                   () => ref.invalidate(readerItemDetailProvider(widget.itemId)),
             ),

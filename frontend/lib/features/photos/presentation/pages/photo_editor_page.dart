@@ -96,7 +96,11 @@ class PhotoEditorPage extends ConsumerWidget {
               ),
             ),
             body: AppErrorView(
-              message: describeUserFacingError(error).displayMessage,
+              message:
+                  describeUserFacingError(
+                    error,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage,
               onRetry: () => ref.invalidate(photoDetailProvider(photoId)),
             ),
           ),

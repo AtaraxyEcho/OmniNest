@@ -524,7 +524,7 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
     try {
       info = await ref.read(appVersionApiProvider).version();
     } on Object catch (error) {
-      failure = describeUserFacingError(error, l10n: l10n).message;
+      failure = errorReason(error, l10n);
     }
     if (!mounted) {
       return;

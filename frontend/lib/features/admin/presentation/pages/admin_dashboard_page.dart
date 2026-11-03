@@ -170,11 +170,7 @@ class _SummaryStateBuilder extends ConsumerWidget {
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(
-            message:
-                describeUserFacingError(
-                  error,
-                  l10n: AppLocalizations.of(context),
-                ).message,
+            message: errorReason(error, AppLocalizations.of(context)),
             onRetry: () => ref.invalidate(adminConsoleControllerProvider),
           ),
       loading: () => const AppLoading(),
@@ -194,11 +190,7 @@ class _UserStateBuilder extends ConsumerWidget {
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(
-            message:
-                describeUserFacingError(
-                  error,
-                  l10n: AppLocalizations.of(context),
-                ).message,
+            message: errorReason(error, AppLocalizations.of(context)),
             onRetry: () => ref.invalidate(adminUserControllerProvider),
           ),
       loading: () => const AppLoading(),
@@ -227,11 +219,7 @@ class _AsyncStateBuilder<T> extends StatelessWidget {
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(
-            message:
-                describeUserFacingError(
-                  error,
-                  l10n: AppLocalizations.of(context),
-                ).message,
+            message: errorReason(error, AppLocalizations.of(context)),
             onRetry: onRetry,
           ),
       loading: () => const AppLoading(),

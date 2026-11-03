@@ -170,7 +170,11 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
           (error, stackTrace) => Scaffold(
             backgroundColor: pageBackground,
             body: AppErrorView(
-              message: describeUserFacingError(error).displayMessage,
+              message:
+                  describeUserFacingError(
+                    error,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage,
               onRetry: () => ref.invalidate(movieCenterControllerProvider),
             ),
           ),

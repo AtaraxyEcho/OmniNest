@@ -312,10 +312,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       }
     } catch (error) {
       if (mounted) {
-        _setStatus(
-          l10n.musicSaveFailed(describeUserFacingError(error).message),
-          error: true,
-        );
+        _setStatus(l10n.musicSaveFailed(errorReason(error, l10n)), error: true);
       }
     } finally {
       if (mounted) {
@@ -424,10 +421,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       _setStatus(l10n.musicLyricsApplied(updated.title));
     } on Object catch (error) {
       if (mounted) {
-        _setStatus(
-          l10n.musicSaveFailed(describeUserFacingError(error).message),
-          error: true,
-        );
+        _setStatus(l10n.musicSaveFailed(errorReason(error, l10n)), error: true);
       }
     } finally {
       if (mounted) {
@@ -459,7 +453,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       _setStatus(
         AppLocalizations.of(
           context,
-        ).musicSaveFailed(describeUserFacingError(error).message),
+        ).musicSaveFailed(errorReason(error, AppLocalizations.of(context))),
         error: true,
       );
     } finally {
@@ -500,7 +494,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
         _setStatus(
           AppLocalizations.of(
             context,
-          ).musicSaveFailed(describeUserFacingError(error).message),
+          ).musicSaveFailed(errorReason(error, AppLocalizations.of(context))),
           error: true,
         );
       }

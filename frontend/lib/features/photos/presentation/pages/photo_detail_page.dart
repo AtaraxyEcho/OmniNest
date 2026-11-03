@@ -66,6 +66,7 @@ class PhotoDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final photoAsync = ref.watch(photoDetailProvider(photoId));
     final seed = _resolveSeedPhoto(ref, photoId);
     final photo = photoAsync.asData?.value ?? seed;
@@ -103,7 +104,7 @@ class PhotoDetailPage extends ConsumerWidget {
                             ),
                             Expanded(
                               child: AppErrorView(
-                                message: describeUserFacingError(error).message,
+                                message: errorReason(error, l10n),
                                 onRetry:
                                     () => ref.invalidate(
                                       photoDetailProvider(photoId),
@@ -631,9 +632,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       _cachedBrowsePhotos = browseScope.photos;
       _cachedCenterPhotos = centerPhotos;
       _cachedAnchorId = anchorId;
-      _pageIndexById = {
-        for (var i = 0; i < pages.length; i++) pages[i].id: i,
-      };
+      _pageIndexById = {for (var i = 0; i < pages.length; i++) pages[i].id: i};
     }
     _pages = pages;
     final index = _pageIndexById[anchorId] ?? -1;

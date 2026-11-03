@@ -109,7 +109,7 @@ class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
       loading: () => const MobileSkeletonBlock(height: 320),
       error:
           (error, _) => AppErrorView(
-            message: describeUserFacingError(error).message,
+            message: errorReason(error, AppLocalizations.of(context)),
             onRetry:
                 () => ref.invalidate(readerItemDetailProvider(widget.itemId)),
           ),
@@ -618,7 +618,7 @@ class _ChapterSection extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    describeUserFacingError(failure).message,
+                    errorReason(failure, AppLocalizations.of(context)),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

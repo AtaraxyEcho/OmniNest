@@ -502,7 +502,10 @@ class _MoviePickerDialogState extends ConsumerState<_MoviePickerDialog> {
                     return Center(
                       child: Text(
                         AppLocalizations.of(context).videoLoadFailedWith(
-                          describeUserFacingError(snapshot.error!).message,
+                          errorReason(
+                            snapshot.error!,
+                            AppLocalizations.of(context),
+                          ),
                         ),
                       ),
                     );

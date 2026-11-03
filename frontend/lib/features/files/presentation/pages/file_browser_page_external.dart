@@ -587,7 +587,7 @@ Future<void> _startOAuthAuthorize(
     if (context.mounted) {
       showOmniFeedback(
         context,
-        describeUserFacingError(error).message,
+        errorReason(error, AppLocalizations.of(context)),
         severity: OmniFeedbackSeverity.error,
       );
     }

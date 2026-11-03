@@ -81,7 +81,11 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
                 loading: () => const _MusicDeckLoading(),
                 error:
                     (error, stackTrace) => _MusicDeckError(
-                      message: describeUserFacingError(error).displayMessage,
+                      message:
+                          describeUserFacingError(
+                            error,
+                            l10n: AppLocalizations.of(context),
+                          ).displayMessage,
                       onRetry:
                           () => ref.invalidate(musicCenterControllerProvider),
                     ),

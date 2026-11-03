@@ -204,7 +204,7 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
         return;
       }
       setState(() {
-        _error = describeUserFacingError(error).message;
+        _error = errorReason(error, AppLocalizations.of(context));
         _loading = false;
       });
     }

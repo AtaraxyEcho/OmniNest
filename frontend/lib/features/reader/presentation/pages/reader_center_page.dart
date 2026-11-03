@@ -125,7 +125,11 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: AppErrorView(
-                        message: describeUserFacingError(error).displayMessage,
+                        message:
+                            describeUserFacingError(
+                              error,
+                              l10n: AppLocalizations.of(context),
+                            ).displayMessage,
                         onRetry:
                             () =>
                                 ref.invalidate(readerCenterControllerProvider),

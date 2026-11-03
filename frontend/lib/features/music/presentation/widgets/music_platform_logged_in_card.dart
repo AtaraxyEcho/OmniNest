@@ -66,9 +66,7 @@ class _MusicPlatformLoggedInCardState
       if (!mounted) {
         return;
       }
-      _showMessage(
-        l10n.musicSaveFailed(describeUserFacingError(error).message),
-      );
+      _showMessage(l10n.musicSaveFailed(errorReason(error, l10n)));
     } finally {
       if (mounted) {
         setState(() => _loggingOut = false);

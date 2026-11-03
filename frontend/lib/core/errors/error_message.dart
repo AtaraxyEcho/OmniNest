@@ -29,6 +29,13 @@ class UserFacingError {
   }
 }
 
+/// 嵌入本地化模板时使用的失败原因短句。
+///
+/// 调用点普遍把它塞进 `l10n.xxxFailed(reason)` 这类模板里；没有 `l10n` 时
+/// 这里会退回服务端原文，非中文用户看到的就不是本地化文案。
+String errorReason(Object error, AppLocalizations l10n) =>
+    describeUserFacingError(error, l10n: l10n).message;
+
 /// 将异常映射为用户可见错误。
 ///
 /// 提供 [l10n] 时优先使用本地化文案；未提供时返回稳定错误码，

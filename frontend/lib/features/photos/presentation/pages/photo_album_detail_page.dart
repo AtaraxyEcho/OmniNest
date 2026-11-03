@@ -56,14 +56,22 @@ class PhotoAlbumDetailPage extends ConsumerWidget {
               (error, stackTrace) =>
                   hosted
                       ? _HostedAlbumError(
-                        message: describeUserFacingError(error).displayMessage,
+                        message:
+                            describeUserFacingError(
+                              error,
+                              l10n: AppLocalizations.of(context),
+                            ).displayMessage,
                         onRetry:
                             () => ref.invalidate(
                               photoAlbumDetailProvider(albumId),
                             ),
                       )
                       : AppErrorView(
-                        message: describeUserFacingError(error).displayMessage,
+                        message:
+                            describeUserFacingError(
+                              error,
+                              l10n: AppLocalizations.of(context),
+                            ).displayMessage,
                         onRetry:
                             () => ref.invalidate(
                               photoAlbumDetailProvider(albumId),
@@ -406,7 +414,10 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          describeUserFacingError(error).displayMessage,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
           severity: OmniFeedbackSeverity.error,
         );
       }

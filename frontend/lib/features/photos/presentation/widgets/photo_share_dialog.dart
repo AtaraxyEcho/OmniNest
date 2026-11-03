@@ -183,6 +183,10 @@ Future<(String, String)?> showPhotoShareDialog(
                                                       revokeError =
                                                           describeUserFacingError(
                                                             error,
+                                                            l10n:
+                                                                AppLocalizations.of(
+                                                                  ctx,
+                                                                ),
                                                           ).displayMessage;
                                                     });
                                                     return;
@@ -291,6 +295,10 @@ Future<(String, String)?> showPhotoShareDialog(
                                                         revokeError =
                                                             describeUserFacingError(
                                                               error,
+                                                              l10n:
+                                                                  AppLocalizations.of(
+                                                                    ctx,
+                                                                  ),
                                                             ).displayMessage;
                                                       });
                                                       return;

@@ -570,7 +570,7 @@ class _PdfPreview extends ConsumerWidget {
       loading: () => const AppLoading(),
       error:
           (error, stackTrace) => _MediaPreviewFailure(
-            message: describeUserFacingError(error).message,
+            message: errorReason(error, AppLocalizations.of(context)),
             onRetry: () => ref.invalidate(filePreviewDownloadUrlProvider(file)),
           ),
       data: (url) {

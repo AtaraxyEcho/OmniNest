@@ -251,7 +251,11 @@ class _ReaderMetadataEditPageState
         data: _buildForm,
         error:
             (e, _) => AppErrorView(
-              message: describeUserFacingError(e).displayMessage,
+              message:
+                  describeUserFacingError(
+                    e,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage,
             ),
         loading: () => const AppLoading(),
       ),

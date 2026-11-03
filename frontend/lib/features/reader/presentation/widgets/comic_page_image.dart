@@ -81,7 +81,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     } catch (error) {
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _error = describeUserFacingError(error).message;
+          _error = errorReason(error, AppLocalizations.of(context));
           _loading = false;
         });
       }

@@ -143,7 +143,11 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
           },
           error:
               (e, _) => AppErrorView(
-                message: describeUserFacingError(e).displayMessage,
+                message:
+                    describeUserFacingError(
+                      e,
+                      l10n: AppLocalizations.of(context),
+                    ).displayMessage,
                 onBack: handleReaderExit,
                 onRetry:
                     () =>

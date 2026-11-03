@@ -85,7 +85,10 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
           _passwordError =
               _password == null || _password!.isEmpty
                   ? null
-                  : describeUserFacingError(e).displayMessage;
+                  : describeUserFacingError(
+                    e,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage;
         });
       } else {
         setState(() {
@@ -121,7 +124,11 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
 
     if (_error != null) {
       return AppErrorView(
-        message: describeUserFacingError(_error!).displayMessage,
+        message:
+            describeUserFacingError(
+              _error!,
+              l10n: AppLocalizations.of(context),
+            ).displayMessage,
         onRetry: _loadPhoto,
       );
     }

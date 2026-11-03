@@ -524,11 +524,10 @@ Future<void> _showCreatePlaylistDialog(
         );
   } on Exception catch (error) {
     if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
       _showPlaylistMessage(
         context,
-        AppLocalizations.of(
-          context,
-        ).musicPlaylistSaveFailed(describeUserFacingError(error).message),
+        l10n.musicPlaylistSaveFailed(errorReason(error, l10n)),
       );
     }
   }
@@ -564,11 +563,10 @@ Future<void> _showEditPlaylistDialog(
         );
   } on Exception catch (error) {
     if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
       _showPlaylistMessage(
         context,
-        AppLocalizations.of(
-          context,
-        ).musicPlaylistSaveFailed(describeUserFacingError(error).message),
+        l10n.musicPlaylistSaveFailed(errorReason(error, l10n)),
       );
     }
   }
@@ -612,11 +610,10 @@ Future<void> _confirmDeletePlaylist(
         .deletePlaylist(playlist);
   } on Exception catch (error) {
     if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
       _showPlaylistMessage(
         context,
-        AppLocalizations.of(
-          context,
-        ).musicPlaylistDeleteFailed(describeUserFacingError(error).message),
+        l10n.musicPlaylistDeleteFailed(errorReason(error, l10n)),
       );
     }
   }
