@@ -12,6 +12,7 @@ import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/application/music_playback_resolver.dart';
+import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -84,6 +85,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   /// 播放历史门控：`ref` 只能在类体内取用，播放流程扩展经此转接。
   bool get _canManageOwnActivity =>
       ref.read(userCapabilitiesProvider).canManageOwnActivity;
+
+  /// 恢复曲内进度：`ref` 只能在类体内取用，队列命令扩展经此转接。
+  Future<void> _primeResumePosition(String? playableKey) => ref
+      .read(musicPlaybackSessionProvider.notifier)
+      .primeResumePosition(playableKey);
 
   /// 补齐外部平台歌单曲目：`ref` 只能在类体内取用，队列命令扩展经此转接。
   Future<List<OnlineTrack>> _loadAllPlatformPlaylistTracks(

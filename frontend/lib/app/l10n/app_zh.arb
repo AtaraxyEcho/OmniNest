@@ -4963,6 +4963,7 @@
   "videoEpisodeSourceUnavailable": "来源不可用",
   "videoEpisodeCheckLibrarySource": "检查库源",
   "videoProgressSyncDeferred": "进度未同步，联网后将自动重试",
+  "videoAutoplayCountdown": "将在 {seconds} 秒后播放下一集",
   "readerTtsUnavailable": "朗读不可用，请检查系统 TTS 或稍后重试",
   "videoEmptyImportMedia": "导入媒体",
   "videoSearchScopeLoadedOnly": "仅筛选已加载的 {count} 部",

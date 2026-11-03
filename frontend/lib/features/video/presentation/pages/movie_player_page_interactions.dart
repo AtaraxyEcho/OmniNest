@@ -299,19 +299,26 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
 
   ({MovieVideoItem? previous, MovieVideoItem? next}) _watchEpisodeNavigation(
     MovieVideoItem? item,
-  ) {
+  ) => _episodeNavigation(item, watch: true);
+
+  /// 求同季相邻剧集。
+  ///
+  /// [watch] 为 true 时供 build 使用（剧集数据变化会重算）；片尾连播只需要
+  /// 事件发生那一刻的快照，用 [watch] 为 false 走 read，避免在监听里 watch 触发重建。
+  ({MovieVideoItem? previous, MovieVideoItem? next}) _episodeNavigation(
+    MovieVideoItem? item, {
+    required bool watch,
+  }) {
     final seriesId = item?.seriesId;
     final seasonNumber = item?.seasonNumber;
     if (seriesId == null || seasonNumber == null) {
       return (previous: null, next: null);
     }
+    final seasonProvider = movieSeasonDetailProvider(
+      SeasonKey(seriesId: seriesId, seasonNumber: seasonNumber),
+    );
     final season =
-        ref
-            .watch(
-              movieSeasonDetailProvider(
-                SeasonKey(seriesId: seriesId, seasonNumber: seasonNumber),
-              ),
-            )
+        (watch ? ref.watch(seasonProvider) : ref.read(seasonProvider))
             .asData
             ?.value;
     if (season == null || season.episodes.isEmpty) {

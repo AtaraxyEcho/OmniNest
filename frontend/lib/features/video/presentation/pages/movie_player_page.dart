@@ -26,6 +26,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_player_contro
 import 'package:omninest/features/video/presentation/widgets/movie_player_bottom_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_sheets.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_status_overlay.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_player_autoplay_notice.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_stream_notice.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_subtitle_overlay.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_top_bar.dart';
@@ -37,6 +38,8 @@ import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/platform/file_pick.dart';
 
 part 'movie_player_page_interactions.dart';
+part 'movie_player_page_autoplay.dart';
+part 'movie_player_page_progress.dart';
 part 'movie_player_page_tracks.dart';
 
 class MoviePlayerPage extends ConsumerStatefulWidget {
@@ -117,6 +120,13 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     Duration.zero,
   );
   Timer? _positionPollTimer;
+
+  // 片尾自动连播：本集播完且同季还有下一集时进入倒计时，倒计时结束换集。
+  StreamSubscription<bool>? _completedSub;
+  Timer? _autoplayTimer;
+  MovieVideoItem? _autoplayNextEpisode;
+  int _autoplaySecondsLeft = 0;
+  bool _autoplayDismissed = false;
   StreamSubscription<Tracks>? _tracksSub;
 
   // Web 端转码模式提示（可关闭）
@@ -202,6 +212,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     _bufferPollTimer?.cancel();
     _positionPollTimer?.cancel();
     _subtitlePositionSub?.cancel();
+    _completedSub?.cancel();
+    _autoplayTimer?.cancel();
     _activeCueIndex.dispose();
     _bufferProgress.dispose();
     _polledPosition.dispose();
@@ -567,6 +579,13 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
             ),
             // 缓冲指示器
             if (_isBuffering) const MoviePlayerBufferingIndicator(),
+            if (_autoplayNextEpisode case final next?)
+              MoviePlayerAutoplayNotice(
+                episodeTitle: next.title,
+                secondsLeft: _autoplaySecondsLeft,
+                onPlayNow: _playNextEpisodeNow,
+                onCancel: _cancelEpisodeAutoplay,
+              ),
             if (_feedback case final feedback?)
               MoviePlayerActionFeedback(
                 key: ValueKey(feedback.sequence),
@@ -580,61 +599,6 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     );
   }
 
-  Future<void> _syncCurrentProgress() async {
-    if (_loadedUrl == null || _isSeeking) return;
-    final position = _player.state.position.inSeconds;
-    final playerDur = _player.state.duration.inSeconds;
-    // fMP4 流的 duration 不可靠，优先使用播放计划的时长
-    final duration =
-        _currentDurationSeconds > 0 ? _currentDurationSeconds : playerDur;
-    if (position <= 0 && duration <= 0) return;
-    try {
-      await _playbackService.updateProgress(
-        videoItemId: widget.videoItemId,
-        positionSeconds: position,
-        durationSeconds: duration,
-        completed: isMoviePlaybackCompleted(position, duration),
-      );
-    } catch (_) {
-      devLog('播放进度同步失败');
-      _notifyProgressSyncDeferred();
-    }
-  }
-
-  /// 进度未能同步时非阻断提示一次（同一播放会话限流），播放不中断。
-  void _notifyProgressSyncDeferred() {
-    if (!mounted || _progressSyncWarned) {
-      return;
-    }
-    _progressSyncWarned = true;
-    showMovieFeedback(
-      context,
-      AppLocalizations.of(context).videoProgressSyncDeferred,
-      isError: true,
-    );
-  }
-
-  void _clearProgressSyncWarning() {
-    _progressSyncWarned = false;
-  }
-
-  void _startProgressSync(PlaybackPlan plan) {
-    _progressSyncService.start(
-      videoItemId: widget.videoItemId,
-      interval: const Duration(seconds: 20),
-      readPositionSeconds: () => _player.state.position.inSeconds,
-      readDurationSeconds: () {
-        final playerDuration = _player.state.duration.inSeconds;
-        return playerDuration > 0 ? playerDuration : plan.durationSeconds;
-      },
-      computeCompleted:
-          (position, duration) => isMoviePlaybackCompleted(position, duration),
-      shouldSkip: () => _isSeeking,
-      onSyncFailed: _notifyProgressSyncDeferred,
-      onSyncSucceeded: _clearProgressSyncWarning,
-    );
-  }
-
   void _seekRelative(int seconds) {
     final current = _player.state.position;
     final target = current + Duration(seconds: seconds);
@@ -645,6 +609,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   /// - 非 Web 端（Desktop/Android）：libmpv 原生 seek，直接调用
   /// - Web 端 fMP4 流：尝试原生 seek，若失败则重新打开流从目标位置开始
   Future<void> _seekToPosition(Duration target) async {
+    // 用户主动改播放位置说明还想留在这集：片尾倒计时不能被自动换集盖掉这个意图。
+    _cancelEpisodeAutoplay();
     final generation = ++_seekGeneration;
     if (!mounted || generation != _seekGeneration) return;
     if (!isWebPlatform) {

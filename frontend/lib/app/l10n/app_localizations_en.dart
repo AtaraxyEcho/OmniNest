@@ -11394,6 +11394,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Progress was not synced. It will retry when online.';
 
   @override
+  String videoAutoplayCountdown(int seconds) {
+    return 'Next episode in ${seconds}s';
+  }
+
+  @override
   String get readerTtsUnavailable =>
       'Read aloud is unavailable. Check system TTS or try again later';
 

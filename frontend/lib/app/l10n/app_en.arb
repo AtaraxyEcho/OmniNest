@@ -5095,6 +5095,14 @@
   "videoEpisodeSourceUnavailable": "Source unavailable",
   "videoEpisodeCheckLibrarySource": "Check library source",
   "videoProgressSyncDeferred": "Progress was not synced. It will retry when online.",
+  "videoAutoplayCountdown": "Next episode in {seconds}s",
+  "@videoAutoplayCountdown": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "readerTtsUnavailable": "Read aloud is unavailable. Check system TTS or try again later",
   "videoEmptyImportMedia": "Import media",
   "videoSearchScopeLoadedOnly": "Filtering only {count} loaded titles",

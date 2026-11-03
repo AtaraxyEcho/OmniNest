@@ -182,6 +182,114 @@ void main() {
       container.dispose();
     }
   });
+
+  test('冷启动继续播放时把已保存的曲内位置注入开流', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final player = _StubMusicAudioPlayback();
+    final container = _resumeContainer(
+      player: player,
+      progress: MusicPlaybackProgress(
+        playableKey: 'local:track-3',
+        positionSeconds: 137,
+        durationSeconds: 300,
+        completed: false,
+        updatedAt: DateTime(2026, 11, 3),
+      ),
+    );
+    try {
+      final notifier = container.read(musicPlaybackSessionProvider.notifier);
+      await container.read(musicCenterControllerProvider.future);
+      await notifier.primeResumePosition('local:track-3');
+      await notifier.syncFromCenterState();
+
+      expect(
+        player.seekCalls.last,
+        const Duration(seconds: 137),
+        reason: '开流只认 0 或待生效跳转：calls=${player.seekCalls}',
+      );
+    } finally {
+      container.dispose();
+    }
+  });
+
+  test('进度已播完时不注入跳转，恢复后从头播放', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final player = _StubMusicAudioPlayback();
+    final container = _resumeContainer(
+      player: player,
+      progress: MusicPlaybackProgress(
+        playableKey: 'local:track-3',
+        positionSeconds: 298,
+        durationSeconds: 300,
+        completed: false,
+        updatedAt: DateTime(2026, 11, 3),
+      ),
+    );
+    try {
+      final notifier = container.read(musicPlaybackSessionProvider.notifier);
+      await container.read(musicCenterControllerProvider.future);
+      await notifier.primeResumePosition('local:track-3');
+      await notifier.syncFromCenterState();
+
+      expect(
+        player.seekCalls,
+        containsAllInOrder(<Duration>[Duration.zero]),
+        reason: '距结尾 5 秒内的存档按听完处理：calls=${player.seekCalls}',
+      );
+      expect(player.seekCalls, isNot(contains(const Duration(seconds: 298))));
+    } finally {
+      container.dispose();
+    }
+  });
+}
+
+/// 构造一个"曲库已就绪、当前曲目带播放计划"的容器，用于恢复进度用例。
+ProviderContainer _resumeContainer({
+  required _StubMusicAudioPlayback player,
+  required MusicPlaybackProgress progress,
+}) {
+  final repository = _MockProgressRepository();
+  when(
+    () => repository.loadForRestore(any()),
+  ).thenAnswer((_) async => progress);
+  final item = MusicPlayableItem.local(
+    const MusicTrack(
+      id: 'track-3',
+      fileNodeId: 'file-3',
+      title: 'T',
+      artistName: 'A',
+      albumTitle: 'B',
+      format: 'FLAC',
+      favorite: false,
+    ),
+  );
+  return ProviderContainer(
+    overrides: [
+      musicAudioPlaybackProvider.overrideWith((ref) => player),
+      globalMusicProgressRepositoryProvider.overrideWith((ref) => repository),
+      musicCenterControllerProvider.overrideWith(
+        () => _FakeMusicCenterController(
+          MusicCenterState(
+            dashboard: MusicDashboard.empty(),
+            tracks: const <MusicTrack>[],
+            albums: const <MusicAlbum>[],
+            artists: const <MusicArtist>[],
+            playlists: const <MusicPlaylist>[],
+            currentItem: item,
+            playbackPlan: const MusicPlaybackPlan(
+              trackId: 'track-3',
+              url: 'https://example/track-3.mp3',
+            ),
+            playbackItems: <MusicPlayableItem>[item],
+            playbackIndex: 0,
+          ),
+        ),
+      ),
+      musicLocalPreferencesControllerProvider.overrideWith(
+        () => _FakeLocalPreferencesController(),
+      ),
+    ],
+  );
 }
 
 class _MockProgressRepository extends Mock implements MusicProgressRepository {}

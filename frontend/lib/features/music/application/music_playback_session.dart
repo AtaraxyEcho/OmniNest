@@ -16,6 +16,7 @@ import 'package:omninest/features/music/application/music_sleep_timer_controller
 import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/music/domain/music_cover_paths.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -343,6 +344,44 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   /// 清理当前错误。
   void clearError() {
     state = state.copyWith(lastError: null);
+  }
+
+  /// 冷启动或计划过期后继续播放：把已保存的曲内位置交给下一次开流。
+  ///
+  /// 只在“没有播放计划却按下播放键”这一恢复手势里调用；点歌走 playTrack，
+  /// 不经过这里，用户明确选一首歌时仍从头播。进度仓库本身带本地优先与远端补齐，
+  /// 因此跨设备继续听也能取到另一台设备写入的位置。
+  Future<void> primeResumePosition(String? playableKey) async {
+    if (playableKey == null ||
+        _loadedItem?.playableKey == playableKey ||
+        _pendingSeek != null) {
+      return;
+    }
+    final MusicPlaybackProgress? progress;
+    try {
+      progress = await _progressRepository.loadForRestore(playableKey);
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        devLog('[MusicPlaybackProgress] 读取恢复进度失败: $error');
+      }
+      return;
+    }
+    if (progress == null || progress.completed) {
+      return;
+    }
+    final target = Duration(seconds: progress.positionSeconds);
+    final duration = Duration(seconds: progress.durationSeconds);
+    // 存到距结尾 5 秒以内按“已听完”处理：重开这段录音时从头放，
+    // 而不是停在最后一帧让用户以为还在播。
+    if (target <= Duration.zero ||
+        (progress.durationSeconds > 0 &&
+            target >= duration - const Duration(seconds: 5))) {
+      return;
+    }
+    if (_loadedItem?.playableKey == playableKey || _pendingSeek != null) {
+      return;
+    }
+    _pendingSeek = (playableKey: playableKey, position: target);
   }
 
   /// 受控跳转：所有用户发起的进度跳转都走这里，而不是直接操作播放器。

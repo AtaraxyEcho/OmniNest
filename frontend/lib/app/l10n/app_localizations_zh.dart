@@ -11040,6 +11040,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoProgressSyncDeferred => '进度未同步，联网后将自动重试';
 
   @override
+  String videoAutoplayCountdown(int seconds) {
+    return '将在 $seconds 秒后播放下一集';
+  }
+
+  @override
   String get readerTtsUnavailable => '朗读不可用，请检查系统 TTS 或稍后重试';
 
   @override

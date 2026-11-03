@@ -299,6 +299,9 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       return;
     }
     if (current.playbackPlan == null && playing) {
+      // 没有播放计划却按了播放键，就是“继续上次”的手势：先把已保存的曲内位置
+      // 交给会话，随后解析计划开流时一并生效。点歌走 playTrack，不受这里影响。
+      await _primeResumePosition(current.currentItem?.playableKey);
       await playActiveTrack();
       return;
     }

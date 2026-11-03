@@ -157,6 +157,9 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         }
       });
 
+      // 片尾自动连播：每次开流重挂完成事件监听，旧的随本次开流一起作废。
+      _attachEpisodeAutoplay();
+
       // 显式激活音频和字幕轨道
       _activateTracks();
 

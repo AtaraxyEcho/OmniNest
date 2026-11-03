@@ -20722,6 +20722,12 @@ abstract class AppLocalizations {
   /// **'Progress was not synced. It will retry when online.'**
   String get videoProgressSyncDeferred;
 
+  /// No description provided for @videoAutoplayCountdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Next episode in {seconds}s'**
+  String videoAutoplayCountdown(int seconds);
+
   /// No description provided for @readerTtsUnavailable.
   ///
   /// In en, this message translates to:
