@@ -76,6 +76,8 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
     if (_checking) {
       return;
     }
+    // await 之前取本地化实例，catch 里只在 mounted 分支使用。
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _checking = true;
       _error = null;
@@ -89,7 +91,9 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
       }
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error).message);
+        setState(
+          () => _error = describeUserFacingError(error, l10n: l10n).message,
+        );
       }
     } finally {
       if (mounted) {

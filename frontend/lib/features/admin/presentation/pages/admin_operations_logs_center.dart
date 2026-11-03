@@ -213,6 +213,7 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
                     auditAsync.hasError && auditPage == null
                         ? describeUserFacingError(
                           auditAsync.error!,
+                          l10n: AppLocalizations.of(context),
                         ).displayMessage
                         : null,
                 onPageChanged: (page) => setState(() => _auditPage = page),
@@ -237,6 +238,7 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
                     loginAsync.hasError && loginPage == null
                         ? describeUserFacingError(
                           loginAsync.error!,
+                          l10n: AppLocalizations.of(context),
                         ).displayMessage
                         : null,
                 onPageChanged: (page) => setState(() => _loginPage = page),

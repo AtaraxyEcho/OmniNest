@@ -360,6 +360,8 @@ class _TwoFactorEnableDialogState
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    // await 之前取本地化实例，catch 里只在 mounted 分支使用。
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _submitting = true;
       _error = null;
@@ -368,7 +370,9 @@ class _TwoFactorEnableDialogState
       await action();
     } catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error).message);
+        setState(
+          () => _error = describeUserFacingError(error, l10n: l10n).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -485,6 +489,7 @@ class _TwoFactorDisableDialogState
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _submitting = true;
       _error = null;
@@ -503,7 +508,9 @@ class _TwoFactorDisableDialogState
       Navigator.of(context).pop();
     } catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error).message);
+        setState(
+          () => _error = describeUserFacingError(error, l10n: l10n).message,
+        );
       }
     } finally {
       if (mounted) {

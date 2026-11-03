@@ -210,7 +210,10 @@ class _RoleRow extends ConsumerWidget {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          describeUserFacingError(error).message,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).message,
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -508,7 +511,14 @@ class _CreateRoleDialogState extends ConsumerState<_CreateRoleDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = describeUserFacingError(error).message);
+        setState(
+          () =>
+              _errorMessage =
+                  describeUserFacingError(
+                    error,
+                    l10n: AppLocalizations.of(context),
+                  ).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -658,7 +668,14 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error).message);
+        setState(
+          () =>
+              _error =
+                  describeUserFacingError(
+                    error,
+                    l10n: AppLocalizations.of(context),
+                  ).message,
+        );
       }
     } finally {
       if (mounted) {

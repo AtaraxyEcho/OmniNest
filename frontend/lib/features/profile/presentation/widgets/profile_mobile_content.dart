@@ -524,7 +524,7 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
     try {
       info = await ref.read(appVersionApiProvider).version();
     } on Object catch (error) {
-      failure = describeUserFacingError(error).message;
+      failure = describeUserFacingError(error, l10n: l10n).message;
     }
     if (!mounted) {
       return;
@@ -650,13 +650,15 @@ class _ProfileIdentityHeader extends StatelessWidget {
                             fit: BoxFit.cover,
                             cacheWidth: quantizedDecodeWidth(
                               logicalWidth: 76,
-                              devicePixelRatio:
-                                  MediaQuery.devicePixelRatioOf(context),
+                              devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                context,
+                              ),
                             ),
                             cacheHeight: quantizedDecodeWidth(
                               logicalWidth: 76,
-                              devicePixelRatio:
-                                  MediaQuery.devicePixelRatioOf(context),
+                              devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                context,
+                              ),
                             ),
                             errorBuilder:
                                 (_, _, _) => _AvatarFallback(initial: initial),
