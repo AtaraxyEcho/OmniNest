@@ -6133,9 +6133,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminNoResponse => 'Server did not return admin result';
 
   @override
-  String get adminOperationFailed => 'Admin operation failed';
-
-  @override
   String get adminUserListFormat => 'User list format is incorrect';
 
   @override

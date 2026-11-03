@@ -154,4 +154,48 @@ void main() {
     await tester.pumpAndSettle();
     expect((await store.read())?.apiBaseUrl, 'https://nest.example.com/api/v1');
   });
+
+  testWidgets('地址框回车直接发起探测并写入配置', (tester) async {
+    final probe = _FakeProbeClient();
+    await _pumpPage(tester, store: store, probe: probe);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '服务器地址'),
+      'https://nest.example.com',
+    );
+    await tester.pump();
+    expect(probe.callCount, 0, reason: '改文本只做预览，不该自发探测');
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(probe.callCount, 1);
+    expect((await store.read())?.apiBaseUrl, 'https://nest.example.com/api/v1');
+  });
+
+  testWidgets('高级选项里的地址框回车同样发起探测', (tester) async {
+    final probe = _FakeProbeClient();
+    await _pumpPage(tester, store: store, probe: probe);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '服务器地址'),
+      'https://nest.example.com',
+    );
+    await tester.tap(find.text('高级选项'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '实时连接地址（可选）'),
+      'wss://nest.example.com/ws',
+    );
+    await tester.pump();
+    expect(probe.callCount, 0);
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(probe.callCount, 1);
+  });
 }

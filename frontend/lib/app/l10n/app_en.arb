@@ -2587,7 +2587,6 @@
   },
   "adminApiResponseFormat": "Admin response format is incorrect",
   "adminNoResponse": "Server did not return admin result",
-  "adminOperationFailed": "Admin operation failed",
   "adminUserListFormat": "User list format is incorrect",
   "adminUserResponseFormat": "User response format is incorrect",
   "adminNoUserResult": "Server did not return user result",

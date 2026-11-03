@@ -312,11 +312,12 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
         l10n.adminCsvExported,
         severity: OmniFeedbackSeverity.success,
       );
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
+      // 透传后端的具体业务原因，笼统的"操作失败"无法区分该重试还是去改配置。
       showOmniFeedback(
         context,
-        l10n.adminOperationFailed,
+        errorReason(error, l10n),
         severity: OmniFeedbackSeverity.error,
       );
     }

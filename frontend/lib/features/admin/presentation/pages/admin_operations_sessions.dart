@@ -722,11 +722,12 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
                 ? OmniFeedbackSeverity.success
                 : OmniFeedbackSeverity.warning,
       );
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
+      // 透传后端的具体业务原因，笼统的"操作失败"无法区分该重试还是去改配置。
       showOmniFeedback(
         context,
-        l10n.adminOperationFailed,
+        errorReason(error, l10n),
         severity: OmniFeedbackSeverity.error,
       );
     }

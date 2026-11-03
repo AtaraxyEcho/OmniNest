@@ -55,6 +55,15 @@ class _ServerSetupPageState extends ConsumerState<ServerSetupPage> {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
 
+    // 回车即探测：三个输入框共用主按钮的同一条动作与同一个门禁，
+    // 敲完地址不必再把指针移回按钮。
+    void submit() {
+      if (state.isProbing) {
+        return;
+      }
+      unawaited(_connect());
+    }
+
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -82,6 +91,7 @@ class _ServerSetupPageState extends ConsumerState<ServerSetupPage> {
                 TextField(
                   controller: _addressController,
                   onChanged: (_) => _onInputChanged(),
+                  onSubmitted: (_) => submit(),
                   enabled: !state.isProbing,
                   autocorrect: false,
                   autofillHints: const [AutofillHints.url],
@@ -115,6 +125,7 @@ class _ServerSetupPageState extends ConsumerState<ServerSetupPage> {
                   webController: _webController,
                   enabled: !state.isProbing,
                   onChanged: _onInputChanged,
+                  onSubmit: submit,
                 ),
                 if (state.error != null) ...[
                   const SizedBox(height: 12),
@@ -183,12 +194,16 @@ class _AdvancedFields extends StatelessWidget {
     required this.webController,
     required this.enabled,
     required this.onChanged,
+    required this.onSubmit,
   });
 
   final TextEditingController wsController;
   final TextEditingController webController;
   final bool enabled;
   final VoidCallback onChanged;
+
+  /// 回车提交：与主按钮同一条连接动作。
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +221,7 @@ class _AdvancedFields extends StatelessWidget {
         TextField(
           controller: wsController,
           onChanged: (_) => onChanged(),
+          onSubmitted: (_) => onSubmit(),
           enabled: enabled,
           autocorrect: false,
           decoration: InputDecoration(
@@ -217,6 +233,7 @@ class _AdvancedFields extends StatelessWidget {
         TextField(
           controller: webController,
           onChanged: (_) => onChanged(),
+          onSubmitted: (_) => onSubmit(),
           enabled: enabled,
           autocorrect: false,
           decoration: InputDecoration(

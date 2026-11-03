@@ -5933,9 +5933,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminNoResponse => '服务端没有返回 Admin 结果';
 
   @override
-  String get adminOperationFailed => 'Admin 操作失败';
-
-  @override
   String get adminUserListFormat => '用户列表格式不正确';
 
   @override

@@ -11231,12 +11231,6 @@ abstract class AppLocalizations {
   /// **'Server did not return admin result'**
   String get adminNoResponse;
 
-  /// No description provided for @adminOperationFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Admin operation failed'**
-  String get adminOperationFailed;
-
   /// No description provided for @adminUserListFormat.
   ///
   /// In en, this message translates to:

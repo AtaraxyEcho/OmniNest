@@ -632,8 +632,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     }
     // Web 端 fMP4 流模式：尝试原生 seek，失败则重新打开流
     final targetSeconds = clampMovieSeekSeconds(target, plan.durationSeconds);
+    final positionBeforeSeek = _player.state.position;
     await _player.seek(Duration(seconds: targetSeconds));
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+    // 用「首个位置事件」代替固定 800ms 盲等：拖条的迟滞几乎全花在这段死等上，
+    // 流恢复推进通常在几十毫秒内；探测上限仍是 800ms，判定口径不变。
+    await _awaitSeekProgress(positionBeforeSeek);
     if (!mounted || generation != _seekGeneration) return;
     final posAfter = _player.state.position;
     final driftMs = (posAfter.inMilliseconds - targetSeconds * 1000).abs();

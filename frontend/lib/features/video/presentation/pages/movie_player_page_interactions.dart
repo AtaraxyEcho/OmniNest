@@ -1,5 +1,9 @@
 part of 'movie_player_page.dart';
 
+/// Web fMP4 流 seek 后的探测上限：与旧的固定盲等同值，
+/// 只是不再无条件等满。
+const Duration _seekSettleTimeout = Duration(milliseconds: 800);
+
 /// 集中处理播放器键盘、手势、面板和剧集导航交互。
 extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
   KeyEventResult _handleKey(
@@ -151,6 +155,19 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
               ? MoviePlayerFeedbackPlacement.left
               : MoviePlayerFeedbackPlacement.right,
     );
+  }
+
+  /// 等待播放器报出与 seek 前不同的位置；到上限仍没报出就带着当前状态去判定。
+  ///
+  /// `orElse` 是必需的：`_player.dispose()` 后这条流会关闭，firstWhere 在没有
+  /// 匹配元素时默认抛 StateError，而退场路径正会撞上它。
+  Future<void> _awaitSeekProgress(Duration positionBeforeSeek) async {
+    await _player.stream.position
+        .firstWhere(
+          (position) => position != positionBeforeSeek,
+          orElse: () => positionBeforeSeek,
+        )
+        .timeout(_seekSettleTimeout, onTimeout: () => _player.state.position);
   }
 
   void _showActionFeedback({

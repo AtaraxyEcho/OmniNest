@@ -2461,7 +2461,6 @@
   },
   "adminApiResponseFormat": "Admin 响应格式不正确",
   "adminNoResponse": "服务端没有返回 Admin 结果",
-  "adminOperationFailed": "Admin 操作失败",
   "adminUserListFormat": "用户列表格式不正确",
   "adminUserResponseFormat": "用户响应格式不正确",
   "adminNoUserResult": "服务端没有返回用户结果",
