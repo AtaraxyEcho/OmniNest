@@ -15,7 +15,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/files/presentation/pages/file_browser_page_transfer_workspaces.dart':
       942,
   'lib/features/files/presentation/pages/file_preview_page.dart': 807,
-  'lib/features/files/presentation/widgets/share_link_sheet.dart': 966,
+  'lib/features/files/presentation/widgets/share_link_sheet.dart': 683,
   'lib/features/library/presentation/widgets/library_space_widgets.dart': 863,
   'lib/features/music/application/music_platform_library_controller.dart': 944,
   'lib/features/music/data/music_api.dart': 857,
@@ -27,11 +27,11 @@ const sourceLineCaps = <String, int>{
   'lib/features/music/presentation/player/music_immersive_player_stage.dart':
       848,
   'lib/features/music/presentation/player/music_visual_color_picker.dart': 837,
-  'lib/features/notifications/presentation/pages/notification_page.dart': 969,
+  'lib/features/notifications/presentation/pages/notification_page.dart': 478,
   'lib/features/photos/application/photo_controller_commands.dart': 925,
-  'lib/features/photos/presentation/pages/photo_detail_page.dart': 993,
+  'lib/features/photos/presentation/pages/photo_detail_page.dart': 788,
   'lib/features/photos/presentation/pages/photo_shared_album_page.dart': 597,
-  'lib/features/photos/presentation/pages/photo_slideshow_page.dart': 985,
+  'lib/features/photos/presentation/pages/photo_slideshow_page.dart': 797,
   'lib/features/portal/presentation/widgets/portal_desktop_quick_actions.dart':
       850,
   'lib/features/portal/presentation/widgets/weather_detail_dialog.dart': 937,
@@ -48,7 +48,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/presentation/widgets/reader_view_page_mixin.dart': 807,
   'lib/features/setup/presentation/pages/initial_setup_page.dart': 690,
   'lib/features/video/presentation/pages/movie_player_page.dart': 919,
-  'lib/features/video/presentation/widgets/movie_admin_list.dart': 983,
+  'lib/features/video/presentation/widgets/movie_admin_list.dart': 774,
 };
 
 /// 生成文件不参与源码尺寸与棘轮统计。

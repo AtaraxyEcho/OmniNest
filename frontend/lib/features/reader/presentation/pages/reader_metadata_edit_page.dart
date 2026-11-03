@@ -267,7 +267,6 @@ class _ReaderMetadataEditPageState
     final item = detail.item;
     return Form(
       key: _formKey,
-      onChanged: () {},
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
         child: Center(

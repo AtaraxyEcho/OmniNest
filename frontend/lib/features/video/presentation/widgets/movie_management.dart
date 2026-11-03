@@ -33,6 +33,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
 part 'movie_admin_list.dart';
+part 'movie_admin_list_widgets.dart';
 part 'movie_admin_tasks.dart';
 part 'movie_library_access_management.dart';
 part 'movie_library_review.dart';

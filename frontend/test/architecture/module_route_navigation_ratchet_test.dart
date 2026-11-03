@@ -139,21 +139,43 @@ void main() {
     );
 
     for (final path in callSites) {
-      final source = await File(path).readAsString();
-      final lines = source.split('\n');
-      for (var i = 0; i < lines.length; i++) {
-        expect(
-          rawNavigation.hasMatch(lines[i]),
-          isFalse,
-          reason:
-              '$path:${i + 1} 对 action.route 裸跳转，绕开了分支路由必须 go 的判定；'
-              '改用 navigateNotificationAction(context, action.route)',
-        );
+      // 页面实现可以拆成同库的 part 文件，因此判据按"这个库"取并集：
+      // 裸跳转在任一成员里都算违例，接线则允许落在声明了该 part 的任意成员里。
+      final sources = <String, String>{};
+      final root = await File(path).readAsString();
+      sources[path] = root;
+      for (final line in root.split('\n')) {
+        final match = RegExp("^part '([^']+)';").firstMatch(line.trim());
+        if (match == null) {
+          continue;
+        }
+        final partPath = '${File(path).parent.path}/${match.group(1)}'
+            .replaceAll(r'\', '/');
+        final part = File(partPath);
+        if (part.existsSync()) {
+          sources[partPath] = await part.readAsString();
+        }
       }
+
+      for (final entry in sources.entries) {
+        final lines = entry.value.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          expect(
+            rawNavigation.hasMatch(lines[i]),
+            isFalse,
+            reason:
+                '${entry.key}:${i + 1} 对 action.route 裸跳转，绕开了分支路由必须 go 的判定；'
+                '改用 navigateNotificationAction(context, action.route)',
+          );
+        }
+      }
+      final wired = sources.values.any(
+        (source) => source.contains('navigateNotificationAction('),
+      );
       expect(
-        source.contains('navigateNotificationAction('),
+        wired,
         isTrue,
-        reason: '$path 没有接线到 navigateNotificationAction',
+        reason: '$path 及其 part 文件都没有接线到 navigateNotificationAction',
       );
     }
   });

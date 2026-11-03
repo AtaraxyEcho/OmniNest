@@ -20,6 +20,8 @@ import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_ch
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+part 'photo_slideshow_page_actions.dart';
+part 'photo_slideshow_page_chrome.dart';
 
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
@@ -308,6 +310,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   PhotoItem get _currentPhoto => _photos[_current];
+
+  /// 跨 part 文件的状态更新入口：扩展成员不算 State 实例成员，不能直接调 setState。
+  void _updateState(VoidCallback update) {
+    if (mounted) {
+      setState(update);
+    }
+  }
 
   /// 首图加载：成功进入 ready；失败进入 failed（UI 提供重试）；无图照片按占位层就绪。
   ///
@@ -749,89 +758,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     return KeyEventResult.ignored;
   }
 
-  Future<void> _toggleFavorite(PhotoItem photo) async {
-    // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
-    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
-      if (!mounted) return;
-      showOmniFeedback(
-        context,
-        AppLocalizations.of(context).errorForbidden,
-        severity: OmniFeedbackSeverity.error,
-      );
-      return;
-    }
-    final wasFavorite = photo.favorite;
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
-      if (!mounted) return;
-      showOmniFeedback(
-        context,
-        wasFavorite
-            ? AppLocalizations.of(context).favoriteRemoved
-            : AppLocalizations.of(context).favoriteAdded,
-        severity: OmniFeedbackSeverity.success,
-      );
-      ref.invalidate(photoDetailProvider(photo.id));
-    } on Exception {
-      if (!mounted) return;
-      showOmniFeedback(
-        context,
-        AppLocalizations.of(context).photosOperationFailed,
-        severity: OmniFeedbackSeverity.error,
-      );
-    }
-  }
-
-  Future<void> _downloadPhoto(PhotoItem photo) async {
-    final sourceUrl = photo.sourceUrl;
-    if (sourceUrl == null || sourceUrl.isEmpty) return;
-    try {
-      if (kIsWeb) {
-        // 与详情页同口径：等浏览器下载真的发起再反馈，
-        // unawaited 会让外层 catch 看不见拒绝，用户点了没动静。
-        await downloadPhotoBatchInBrowser(
-          url: sourceUrl,
-          fileName: photo.downloadFileName,
-        );
-        if (!mounted) {
-          return;
-        }
-        showOmniFeedback(
-          context,
-          AppLocalizations.of(context).photosDownloadStarted,
-          severity: OmniFeedbackSeverity.success,
-        );
-        return;
-      }
-      final exportResult = await ref
-          .read(photoCenterControllerProvider.notifier)
-          .savePhotoFileToDisk(
-            url: sourceUrl,
-            sizeBytes: photo.fileSize,
-            suggestedName: photo.downloadFileName,
-          );
-      if (!mounted || exportResult is PhotoExportCancelled) return;
-      final l10n = AppLocalizations.of(context);
-      final message = switch (exportResult) {
-        PhotoExportSaved(:final path) => l10n.photosDownloadSaved(path),
-        PhotoExportShared() => l10n.photosExportShared,
-        PhotoExportCancelled() => null,
-      };
-      if (message != null) {
-        showOmniFeedback(context, message);
-      }
-    } on Exception {
-      if (!mounted) return;
-      showOmniFeedback(
-        context,
-        AppLocalizations.of(context).photosDownloadFailed,
-        severity: OmniFeedbackSeverity.error,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     _noteFrameGap();
@@ -865,120 +791,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// 舞台内容（照片层、控件与面板）：由 build 挂入场扩缩之下。
-  Widget _buildStage(BuildContext context, PhotoItem photo, bool showControls) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        switch (_phase) {
-          SlideshowPhase.loading => SlideshowLoadingStage(photo: photo),
-          SlideshowPhase.failed => SlideshowErrorRetry(
-            onRetry: () => unawaited(_retryInitialLoad()),
-          ),
-          SlideshowPhase.ready => Stack(
-            fit: StackFit.expand,
-            children: [
-              SlideshowBackdropLayers(
-                transition: _transitionFade,
-                transitioning: _transitioning,
-                leavingFrame: _leavingFrame,
-                enteringFrame: _currentFrame,
-              ),
-              SlideshowSlideLayers(
-                transition: _transitionFade,
-                transitioning: _transitioning,
-                leavingFrame: _leavingFrame,
-                enteringFrame: _currentFrame,
-              ),
-            ],
-          ),
-        },
-        SlideshowGradients(visible: showControls),
-        PhotoSlideshowTopBar(
-          photo: photo,
-          current: _current,
-          total: _photos.length,
-          visible: showControls,
-          showInfo: _showInfo,
-          showShare: _showShare,
-          onClose: () => Navigator.of(context).maybePop(),
-          onToggleFavorite: () => _toggleFavorite(photo),
-          onToggleShare:
-              () => setState(() {
-                _showShare = !_showShare;
-                if (_showShare) _showInfo = false;
-              }),
-          onDownload: () => unawaited(_downloadPhoto(photo)),
-          onToggleInfo: () => setState(() => _showInfo = !_showInfo),
-          onFullscreen: _toggleFullscreen,
-        ),
-        if (_photos.length > 1) ...[
-          SlideshowArrow(right: false, visible: showControls, onTap: _goPrev),
-          SlideshowArrow(right: true, visible: showControls, onTap: _goNext),
-        ],
-        SlideshowBottomArea(
-          photo: photo,
-          visible: showControls,
-          isPlaying: _isPlaying,
-          thumbnailsVisible: _thumbnailsVisible,
-          onTogglePlay: _togglePlay,
-          onToggleThumbnails:
-              () => setState(() => _thumbnailsVisible = !_thumbnailsVisible),
-          segments: SlideshowSegments(
-            count: _photos.length,
-            current: _current,
-            isPlaying: _isPlaying,
-            progress: _progressController,
-            onTap: (index) => unawaited(_goTo(index)),
-          ),
-          thumbnailStrip: SlideshowThumbnailStrip(
-            photos: _photos,
-            current: _current,
-            onTap: (index) => unawaited(_goTo(index)),
-          ),
-        ),
-        // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
-        if (_showInfo || _showShare)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap:
-                  () => setState(() {
-                    _showInfo = false;
-                    _showShare = false;
-                  }),
-            ),
-          ),
-        _buildInfoPanel(context, photo),
-        PhotoSharePanel(
-          visible: _showShare,
-          photo: photo,
-          onDone:
-              () => setState(() {
-                _showShare = false;
-              }),
-        ),
-      ],
-    );
-  }
-
-  // ─── Info 面板 ───
-
-  Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
-    return PhotoPanelHost(
-      visible: _showInfo,
-      onClose: () => setState(() => _showInfo = false),
-      child: PhotoInfoPanel(
-        photo: photo,
-        onShare:
-            () => setState(() {
-              _showInfo = false;
-              _showShare = true;
-            }),
       ),
     );
   }
