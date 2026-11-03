@@ -4,9 +4,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.common.user.UserDataPurgePort;
 import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.preferences.service.UserPreferenceService;
@@ -19,7 +17,6 @@ import com.omninest.modules.user.repository.AuthBackupCodeRepository;
 import com.omninest.modules.user.repository.AuthTotpCredentialRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.util.AuthUserMapper;
-import com.omninest.modules.user.util.UserAvatarObjectKeys;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,8 +56,7 @@ public class AdminUserDeletionService {
     private final AdminAuditLogService auditLogService;
     private final CurrentUserContext currentUserContext;
     private final AdminActorGuard adminActorGuard;
-    private final ObjectStorageClient objectStorageClient;
-    private final ObjectStorageBuckets objectStorageBuckets;
+    private final UserAvatarAssetPort userAvatarAssets;
     private final List<UserDataPurgePort> userDataPurgePorts;
     private final UserProfileCacheEvictor userProfileCacheEvictor;
 
@@ -140,18 +136,7 @@ public class AdminUserDeletionService {
     }
 
     private void removeAvatarQuietly(UUID userId, UUID avatarFileId) {
-        if (avatarFileId == null) {
-            return;
-        }
-        try {
-            objectStorageClient.removeObject(new ObjectStorageKey(
-                    objectStorageBuckets.derivedAssets(),
-                    UserAvatarObjectKeys.objectKey(userId, avatarFileId)
-            ));
-        } catch (RuntimeException exception) {
-            log.warn("删除用户时头像对象清理失败: userId={}, errorType={}",
-                    userId, exception.getClass().getSimpleName());
-        }
+        userAvatarAssets.release(userId, avatarFileId);
     }
 
     /**

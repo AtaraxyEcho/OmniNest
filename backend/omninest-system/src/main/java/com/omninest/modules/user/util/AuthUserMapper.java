@@ -1,14 +1,13 @@
 package com.omninest.modules.user.util;
 
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.dto.AuthUserDto;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -92,29 +91,61 @@ public final class AuthUserMapper {
     }
 
     /**
-     * 解析用户头像的 presigned 下载 URL。
+     * 以头像所有者身份解析短期下载地址。
      *
-     * <p>对象键由 {@code avatarFileId} 唯一确定，直接预签名即可；按扩展名逐个探测会让
-     * 每次映射多发几次对象存储 HEAD，还会在用户换过一次头像格式后被旧对象永久遮蔽。</p>
+     * <p>地址由文件模块按 {@code file_objects} 行签发：对象键约定收在属主模块里，
+     * 读取侧不再各自拼装；时长沿用资料接口历来的 24 小时，避免客户端在资料不重拉
+     * 期间拿到已过期地址。</p>
      *
-     * @param user               用户实体
-     * @param objectStorageClient 对象存储客户端
-     * @param objectStorageBuckets 对象存储桶名称
+     * @param user 用户实体
+     * @param avatars 头像资产端口
      * @return 头像 URL，未设置头像时返回 null
      */
-    public static String resolveAvatarUrl(AuthUser user,
-                                          ObjectStorageClient objectStorageClient,
-                                          ObjectStorageBuckets objectStorageBuckets) {
-        if (user.getAvatarFileId() == null) {
+    public static String resolveAvatarUrl(AuthUser user, UserAvatarAssetPort avatars) {
+        UUID avatarFileId = user.getAvatarFileId();
+        if (avatarFileId == null) {
             return null;
         }
-        ObjectStorageKey key = new ObjectStorageKey(
-                objectStorageBuckets.derivedAssets(),
-                UserAvatarObjectKeys.objectKey(user.getId(), user.getAvatarFileId())
-        );
-        return objectStorageClient.createDownloadUrl(key, AVATAR_URL_TTL).toString();
+        return avatars.downloadUrls(
+                user.getId(),
+                List.of(avatarFileId),
+                AVATAR_URL_TTL
+        ).get(avatarFileId);
     }
 
+    /**
+     * 整页批量解析头像地址，返回按用户 ID 取用的映射。
+     *
+     * <p>逐户签发会让一页最多 100 个用户各自回查一次节点与对象行。</p>
+     *
+     * @param users 同一页的用户实体
+     * @param avatars 头像资产端口
+     * @return 用户 ID 到头像 URL 的映射；无头像的用户不出现在结果里
+     */
+    public static Map<UUID, String> resolveAvatarUrls(
+            Collection<AuthUser> users,
+            UserAvatarAssetPort avatars
+    ) {
+        Map<UUID, UUID> nodeByUser = new LinkedHashMap<>();
+        for (AuthUser user : users) {
+            if (user.getAvatarFileId() != null) {
+                nodeByUser.put(user.getId(), user.getAvatarFileId());
+            }
+        }
+        if (nodeByUser.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> urlByNode =
+                avatars.downloadUrlsForManagedNodes(nodeByUser.values(), AVATAR_URL_TTL);
+        Map<UUID, String> urlByUser = new LinkedHashMap<>();
+        nodeByUser.forEach((userId, fileId) -> {
+            String url = urlByNode.get(fileId);
+            if (url != null) {
+                urlByUser.put(userId, url);
+            }
+        });
+        return urlByUser;
+    }
     /**
      * 计算用户的主要角色（优先级：SUPER_ADMIN > ADMIN > MEMBER > 其他 > GUEST）。
      *

@@ -27,8 +27,6 @@ import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.user.domain.AuthActiveSession;
@@ -39,6 +37,7 @@ import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +47,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.web.multipart.MultipartFile;
 import com.omninest.common.storage.ObjectStorageKey;
-import com.omninest.modules.user.util.UserAvatarObjectKeys;
+import com.omninest.common.user.UserAvatarAssetPort;
 import java.net.URI;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -64,8 +63,7 @@ class CurrentUserServiceTest {
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);
     private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-    private final ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
-    private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
+    private final UserAvatarAssetPort userAvatarAssets = mock(UserAvatarAssetPort.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final SessionRevocationService sessionRevocationService = mock(SessionRevocationService.class);
     private final UserSessionRevocationService userSessionRevocationService = mock(UserSessionRevocationService.class);
@@ -82,7 +80,7 @@ class CurrentUserServiceTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final CurrentUserService service = new CurrentUserService(
             authUserRepository, activeSessionRepository, currentUserContext, passwordEncoder,
-            new PasswordPolicy(), objectStorageClient, objectStorageBuckets, notificationService, sessionRevocationService,
+            new PasswordPolicy(), userAvatarAssets, notificationService, sessionRevocationService,
             userSessionRevocationService, readThroughCache, malwareScanGateway, syncEventRecorder,
             rateLimitService, transactionManager);
 
@@ -317,12 +315,6 @@ class CurrentUserServiceTest {
         assertThat(user.getEmail()).isNull();
     }
 
-    private static ObjectStorageBuckets createObjectStorageBuckets() {
-        ObjectStorageBuckets buckets = mock(ObjectStorageBuckets.class);
-        when(buckets.derivedAssets()).thenReturn("derived-assets");
-        return buckets;
-    }
-
     private AuthRole role(String code, String permissionCode) {
         AuthPermission permission = new AuthPermission();
         permission.setId(UUID.randomUUID());
@@ -339,29 +331,31 @@ class CurrentUserServiceTest {
     }
 
     @Test
-    void uploadAvatarStoresObjectUnderAvatarFileIdKeyInsideShortTransaction() throws IOException {
+    void uploadAvatarStoresDerivedNodeAndReleasesPreviousAvatar() throws IOException {
         UUID userId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        UUID previousAvatarFileId = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        UUID storedFileNodeId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
         AuthUser existing = new AuthUser();
         existing.setId(userId);
         existing.setUsername("root");
-        byte[] png = pngBytes();
+        existing.setAvatarFileId(previousAvatarFileId);
         when(malwareScanGateway.scan(any(), anyLong()))
                 .thenReturn(new MalwareScanGateway.ScanResult(MalwareScanGateway.Status.CLEAN, null));
         when(authUserRepository.findById(userId)).thenReturn(Optional.of(existing));
         when(authUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(objectStorageClient.createDownloadUrl(any(), any()))
-                .thenReturn(URI.create("https://minio/signed-avatar"));
+        when(userAvatarAssets.store(eq(userId), anyString(), eq("image/png"), any()))
+                .thenReturn(storedFileNodeId);
+        when(userAvatarAssets.downloadUrls(eq(userId), eq(List.of(storedFileNodeId)), any()))
+                .thenReturn(Map.of(storedFileNodeId, "https://minio/signed-avatar"));
 
-        String url = service.uploadAvatar(userId, multipartPng(png));
+        String url = service.uploadAvatar(userId, multipartPng(pngBytes()));
 
         assertThat(url).isEqualTo("https://minio/signed-avatar");
-        UUID avatarFileId = existing.getAvatarFileId();
-        assertThat(avatarFileId).isNotNull();
-        // 对象键由头像标识决定：读取侧无需按扩展名探测，旧格式头像也不可能再遮蔽新头像。
-        ArgumentCaptor<ObjectStorageKey> keyCaptor = ArgumentCaptor.forClass(ObjectStorageKey.class);
-        verify(objectStorageClient).putObject(keyCaptor.capture(), any(), anyLong(), eq("image/png"));
-        assertThat(keyCaptor.getValue().objectKey())
-                .isEqualTo(UserAvatarObjectKeys.objectKey(userId, avatarFileId));
+        // 头像标识必须是真实文件节点：地址由文件模块按对象行签发，读取侧不再拼对象键。
+        assertThat(existing.getAvatarFileId()).isEqualTo(storedFileNodeId);
+        verify(userAvatarAssets).store(eq(userId), anyString(), eq("image/png"), any());
+        // 换头像后旧节点随之回收，否则每换一次就留一个无人引用的对象。
+        verify(userAvatarAssets).release(userId, previousAvatarFileId);
         // 落库与同步事件必须落在同一事务边界内（同步事件记录器是 MANDATORY 传播）。
         InOrder order = inOrder(transactionManager, authUserRepository, syncEventRecorder);
         order.verify(transactionManager).getTransaction(any());

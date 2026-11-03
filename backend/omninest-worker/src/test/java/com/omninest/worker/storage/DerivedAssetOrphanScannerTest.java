@@ -8,7 +8,6 @@ import com.omninest.common.storage.ObjectStoragePage;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.file.service.FileObjectReferenceQuery;
 import com.omninest.modules.reader.service.ReaderPageAssetReferenceQuery;
-import com.omninest.modules.user.service.UserAvatarObjectReferenceQuery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -44,9 +43,6 @@ class DerivedAssetOrphanScannerTest {
     private ReaderPageAssetReferenceQuery readerPageAssetReferenceQuery;
 
     @Mock
-    private UserAvatarObjectReferenceQuery userAvatarObjectReferenceQuery;
-
-    @Mock
     private RedisUtil redisUtil;
 
     private DerivedAssetOrphanScanProperties properties;
@@ -60,7 +56,6 @@ class DerivedAssetOrphanScannerTest {
                 objectStorageClient,
                 fileObjectReferenceQuery,
                 readerPageAssetReferenceQuery,
-                userAvatarObjectReferenceQuery,
                 List.of(),
                 redisUtil,
                 properties
@@ -76,8 +71,6 @@ class DerivedAssetOrphanScannerTest {
                 "omninest:maintenance:derived-orphan-scan:lock",
                 "lock-token"
         )).thenReturn(true);
-        Mockito.lenient().when(userAvatarObjectReferenceQuery.findReferencedObjectKeys(Mockito.anySet()))
-                .thenReturn(Set.of());
     }
 
     @Test
@@ -98,12 +91,11 @@ class DerivedAssetOrphanScannerTest {
                 "avatars/user/avatar.webp",
                 "derived/orphan.jpg"
         );
+        // 头像已作为派生资产落 file_objects，因此和海报、页面图走同一条引用判据。
         Mockito.when(fileObjectReferenceQuery.findReferencedObjectKeys(BUCKET, candidates))
-                .thenReturn(Set.of("derived/file.jpg"));
+                .thenReturn(Set.of("derived/file.jpg", "avatars/user/avatar.webp"));
         Mockito.when(readerPageAssetReferenceQuery.findReferencedObjectKeys(BUCKET, candidates))
                 .thenReturn(Set.of("derived/page.jpg"));
-        Mockito.when(userAvatarObjectReferenceQuery.findReferencedObjectKeys(candidates))
-                .thenReturn(Set.of("avatars/user/avatar.webp"));
 
         DerivedAssetOrphanScanResult result = scanner.scanOnce();
 

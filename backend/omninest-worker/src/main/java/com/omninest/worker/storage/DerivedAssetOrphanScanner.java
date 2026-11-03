@@ -9,7 +9,6 @@ import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.file.service.DerivedObjectReferenceQuery;
 import com.omninest.modules.file.service.FileObjectReferenceQuery;
 import com.omninest.modules.reader.service.ReaderPageAssetReferenceQuery;
-import com.omninest.modules.user.service.UserAvatarObjectReferenceQuery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -42,7 +41,6 @@ public class DerivedAssetOrphanScanner {
     private final ObjectStorageClient objectStorageClient;
     private final FileObjectReferenceQuery fileObjectReferenceQuery;
     private final ReaderPageAssetReferenceQuery readerPageAssetReferenceQuery;
-    private final UserAvatarObjectReferenceQuery userAvatarObjectReferenceQuery;
     /** 额外派生对象引用源；FileObject 已单独注入，这里放其余 SPI 实现。 */
     private final List<DerivedObjectReferenceQuery> derivedObjectReferenceQueries;
     private final RedisUtil redisUtil;
@@ -197,7 +195,6 @@ public class DerivedAssetOrphanScanner {
             }
         }
         referencedKeys.addAll(readerPageAssetReferenceQuery.findReferencedObjectKeys(bucket, candidateKeys));
-        referencedKeys.addAll(userAvatarObjectReferenceQuery.findReferencedObjectKeys(candidateKeys));
         referencedKeys.retainAll(candidateKeys);
         return referencedKeys;
     }

@@ -16,14 +16,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ActiveSessionRegistry;
 import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthPermission;
@@ -67,8 +66,7 @@ class AuthServiceTest {
     private final LoginAuditService loginAuditService = mock(LoginAuditService.class);
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);
     private final NotificationService notificationService = mock(NotificationService.class);
-    private final ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
-    private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
+    private final UserAvatarAssetPort userAvatarAssets = mock(UserAvatarAssetPort.class);
     private final AuthenticationTokenPolicy authenticationTokenPolicy = mock(AuthenticationTokenPolicy.class);
     private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
     private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
@@ -99,8 +97,7 @@ class AuthServiceTest {
                 jwtEncoder,
                 jwtDecoder,
                 authenticationTokenPolicy,
-                objectStorageClient,
-                objectStorageBuckets,
+                userAvatarAssets,
                 sessionRevocationService,
                 activeSessionRegistry,
                 loginAuditService,
@@ -112,11 +109,6 @@ class AuthServiceTest {
                 storageQuotaService,
                 transactionTemplate
         );
-    }
-    private static ObjectStorageBuckets createObjectStorageBuckets() {
-        ObjectStorageBuckets buckets = mock(ObjectStorageBuckets.class);
-        when(buckets.derivedAssets()).thenReturn("derived-assets");
-        return buckets;
     }
 
     // ========== 注册测试 ==========

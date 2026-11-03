@@ -4,8 +4,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -75,8 +74,7 @@ public class AdminUserService {
     private final AdminActorGuard adminActorGuard;
     private final CurrentUserService currentUserService;
     private final TransactionTemplate transactionTemplate;
-    private final ObjectStorageClient objectStorageClient;
-    private final ObjectStorageBuckets objectStorageBuckets;
+    private final UserAvatarAssetPort userAvatarAssets;
 
     /**
      * 分页查询用户，支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤
@@ -102,12 +100,15 @@ public class AdminUserService {
                 .flatMap(user -> user.getRoles().stream())
                 .map(AuthRole::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+        // 整页一次签发：逐户签发会让一页最多 100 个用户各自回查节点与对象行。
+        Map<UUID, String> avatarUrls =
+                AuthUserMapper.resolveAvatarUrls(users.getContent(), userAvatarAssets);
         Map<UUID, Set<String>> permissionCodesByRoleId =
                 authRoleRepository.findPermissionCodesByRoleIds(roleIds);
         Set<UUID> twoFactorUserIds = twoFactorEnabledUserIds(users);
         return users.map(user -> AuthUserMapper.toDto(
                 user,
-                AuthUserMapper.resolveAvatarUrl(user, objectStorageClient, objectStorageBuckets),
+                avatarUrls.get(user.getId()),
                 permissionCodesByRoleId,
                 twoFactorUserIds.contains(user.getId())));
     }
@@ -435,8 +436,8 @@ public class AdminUserService {
     private AuthUserDto toDto(AuthUser user) {
         return authUserRepository.findWithRolesAndPermissionsById(user.getId())
                 .map(found -> AuthUserMapper.toDto(
-                        found, AuthUserMapper.resolveAvatarUrl(found, objectStorageClient, objectStorageBuckets)))
+                        found, AuthUserMapper.resolveAvatarUrl(found, userAvatarAssets)))
                 .orElseGet(() -> AuthUserMapper.toDto(
-                        user, AuthUserMapper.resolveAvatarUrl(user, objectStorageClient, objectStorageBuckets)));
+                        user, AuthUserMapper.resolveAvatarUrl(user, userAvatarAssets)));
     }
 }

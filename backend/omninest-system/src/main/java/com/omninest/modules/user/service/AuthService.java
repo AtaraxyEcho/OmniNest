@@ -6,8 +6,7 @@ import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ActiveSessionRegistry;
 import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthRole;
@@ -74,8 +73,7 @@ public class AuthService {
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
     private final AuthenticationTokenPolicy authenticationTokenPolicy;
-    private final ObjectStorageClient objectStorageClient;
-    private final ObjectStorageBuckets objectStorageBuckets;
+    private final UserAvatarAssetPort userAvatarAssets;
     private final SessionRevocationService sessionRevocationService;
     private final ActiveSessionRegistry activeSessionRegistry;
     private final LoginAuditService loginAuditService;
@@ -894,7 +892,7 @@ public class AuthService {
     }
 
     private AuthUserDto toDto(AuthUser profile) {
-        String avatarUrl = AuthUserMapper.resolveAvatarUrl(profile, objectStorageClient, objectStorageBuckets);
+        String avatarUrl = AuthUserMapper.resolveAvatarUrl(profile, userAvatarAssets);
         return AuthUserMapper.toDto(profile, avatarUrl);
     }
 

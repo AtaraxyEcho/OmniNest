@@ -8,20 +8,17 @@ import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.security.MalwareScanGateway.ScanResult;
 import com.omninest.common.security.MalwareScanGateway.Status;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.util.AuthUserMapper;
-import com.omninest.modules.user.util.UserAvatarObjectKeys;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
@@ -59,8 +56,7 @@ public class CurrentUserService implements UserProfileCacheEvictor {
     private final CurrentUserContext currentUserContext;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
-    private final ObjectStorageClient objectStorageClient;
-    private final ObjectStorageBuckets objectStorageBuckets;
+    private final UserAvatarAssetPort userAvatarAssets;
     private final NotificationPublisher notificationService;
     private final SessionRevocationService sessionRevocationService;
     private final UserSessionRevocationService userSessionRevocationService;
@@ -77,6 +73,7 @@ public class CurrentUserService implements UserProfileCacheEvictor {
     }
 
     private static final long MAX_AVATAR_SIZE = 5L * 1024 * 1024;
+    private static final Duration AVATAR_URL_TTL = Duration.ofHours(24);
     private static final String PROFILE_CACHE_PREFIX = "omninest:user:profile:";
 
     /**
@@ -212,13 +209,15 @@ public class CurrentUserService implements UserProfileCacheEvictor {
         // 每次上传换一个新标识，对象键随之改变：旧头像对象既不会被读到，也不会因浏览器
         // 按同键缓存而停留在旧图。
         UUID oldAvatarFileId = user.getAvatarFileId();
-        UUID avatarFileId = UUID.randomUUID();
-        ObjectStorageKey storageKey = new ObjectStorageKey(
-                objectStorageBuckets.derivedAssets(),
-                UserAvatarObjectKeys.objectKey(userId, avatarFileId)
-        );
+        // 每次上传换一个新节点与对象键：旧头像既不会被读到，也不会因浏览器按同键缓存而停在旧图。
+        UUID avatarFileId;
         try {
-            objectStorageClient.putObject(storageKey, file.getInputStream(), file.getSize(), contentType);
+            avatarFileId = userAvatarAssets.store(
+                    userId,
+                    "avatar-" + UUID.randomUUID() + extensionOf(file.getOriginalFilename()),
+                    contentType,
+                    file.getInputStream()
+            );
         } catch (IOException exception) {
             log.warn("读取头像上传内容失败: userId={}, errorType={}",
                     userId, exception.getClass().getSimpleName());
@@ -244,33 +243,34 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             });
         } catch (RuntimeException exception) {
             // 落库失败时新对象没有任何引用，必须回收，否则每次失败上传都留一个孤儿头像。
-            removeAvatarQuietly(userId, avatarFileId);
+            userAvatarAssets.release(userId, avatarFileId);
             throw exception;
         }
         evictProfileCache(userId);
-        removeAvatarQuietly(userId, oldAvatarFileId);
+        userAvatarAssets.release(userId, oldAvatarFileId);
 
         log.info("头像已上传: userId={}, assetType=AVATAR", userId);
 
-        return objectStorageClient.createDownloadUrl(storageKey, Duration.ofHours(24)).toString();
+        return userAvatarAssets.downloadUrls(userId, List.of(avatarFileId), AVATAR_URL_TTL)
+                .get(avatarFileId);
     }
 
     /**
      * 旧头像不再被任何资料引用，提交新头像后删除其对象，避免每次换头像留下孤儿。
      */
-    private void removeAvatarQuietly(UUID userId, UUID avatarFileId) {
-        if (avatarFileId == null) {
-            return;
+    /**
+     * 保留原扩展名只为让文件名可读；派生路径与对象键由文件模块决定。
+     */
+    private static String extensionOf(String fileName) {
+        if (fileName == null) {
+            return "";
         }
-        try {
-            objectStorageClient.removeObject(new ObjectStorageKey(
-                    objectStorageBuckets.derivedAssets(),
-                    UserAvatarObjectKeys.objectKey(userId, avatarFileId)
-            ));
-        } catch (RuntimeException exception) {
-            log.warn("旧头像对象清理失败: userId={}, assetType=AVATAR, errorType={}",
-                    userId, exception.getClass().getSimpleName());
+        int dot = fileName.lastIndexOf('.');
+        if (dot <= 0 || dot == fileName.length() - 1) {
+            return "";
         }
+        String extension = fileName.substring(dot);
+        return extension.length() <= 6 ? extension : "";
     }
 
     private String requireSafeAvatar(MultipartFile file) {
@@ -414,7 +414,7 @@ public class CurrentUserService implements UserProfileCacheEvictor {
     }
 
     private AuthUserDto toDto(AuthUser profile) {
-        String avatarUrl = AuthUserMapper.resolveAvatarUrl(profile, objectStorageClient, objectStorageBuckets);
+        String avatarUrl = AuthUserMapper.resolveAvatarUrl(profile, userAvatarAssets);
         return AuthUserMapper.toDto(profile, avatarUrl);
     }
 }

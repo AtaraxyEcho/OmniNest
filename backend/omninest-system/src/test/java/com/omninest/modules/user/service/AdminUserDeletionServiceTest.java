@@ -9,11 +9,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.user.UserAvatarAssetPort;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
-import com.omninest.common.storage.ObjectStorageBuckets;
-import com.omninest.common.storage.ObjectStorageClient;
 import java.util.List;
 
 import com.omninest.modules.notification.port.NotificationMaintenance;
@@ -56,8 +55,7 @@ class AdminUserDeletionServiceTest {
     private final AdminAuditLogService auditLogService = Mockito.mock(AdminAuditLogService.class);
     private final CurrentUserContext currentUserContext = Mockito.mock(CurrentUserContext.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
-    private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
-    private final ObjectStorageBuckets objectStorageBuckets = Mockito.mock(ObjectStorageBuckets.class);
+    private final UserAvatarAssetPort userAvatarAssets = Mockito.mock(UserAvatarAssetPort.class);
     private final UserProfileCacheEvictor userProfileCacheEvictor =
             Mockito.mock(UserProfileCacheEvictor.class);
     private final AdminUserDeletionService service = new AdminUserDeletionService(
@@ -73,8 +71,7 @@ class AdminUserDeletionServiceTest {
             auditLogService,
             currentUserContext,
             adminActorGuard,
-            objectStorageClient,
-            objectStorageBuckets,
+            userAvatarAssets,
             List.of(),
             userProfileCacheEvictor
     );
@@ -224,20 +221,19 @@ class AdminUserDeletionServiceTest {
     void deleteUserRemovesAvatarOnlyAfterCommit() {
         givenActor();
         AuthUser user = targetUser(Roles.MEMBER);
-        user.setAvatarFileId(UUID.randomUUID());
+        UUID avatarFileId = UUID.randomUUID();
+        user.setAvatarFileId(avatarFileId);
         when(authUserRepository.findWithRolesById(targetUserId)).thenReturn(Optional.of(user));
         when(adminUserContentGuardRepository.countOwnedContent(targetUserId)).thenReturn(Map.of());
-        when(objectStorageBuckets.derivedAssets()).thenReturn("derived-assets");
-
         TransactionSynchronizationManager.initSynchronization();
         try {
             service.deleteUser(targetUserId);
 
             // 事务回滚时 avatar_file_id 仍然有效，提交前绝不能删对象。
-            verify(objectStorageClient, Mockito.never()).removeObject(any());
+            verify(userAvatarAssets, Mockito.never()).release(any(), any());
             TransactionSynchronizationManager.getSynchronizations()
                     .forEach(TransactionSynchronization::afterCommit);
-            verify(objectStorageClient).removeObject(any());
+            verify(userAvatarAssets).release(targetUserId, avatarFileId);
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
