@@ -104,8 +104,12 @@ public class MediaContentAccessService {
         }
     }
 
-    /** 使用短期媒体令牌打开本地影片 Range 资源。 */
-    @Transactional(readOnly = true)
+    /**
+     * 使用短期媒体令牌打开已授权播放会话的媒体内容（本地影片走 Range 资源）。
+     *
+     * <p>不开事务：取流会向对象存储发起 GET，只读事务会把连接占用到首字节返回；
+     * 令牌校验与业务定位是各自独立的只读查询，PostgreSQL 的 READ COMMITTED 本来也是语句级快照。</p>
+     */
     public FileContentResource openPlaybackContent(String token, UUID videoItemId) {
         MediaPlaybackTokenService.MediaGrant grant = tokenService.requireGrant(token, videoItemId);
         MediaVideoItem item = requireReadableVideo(grant.requesterUserId(), videoItemId);
@@ -164,7 +168,6 @@ public class MediaContentAccessService {
     }
 
     /** 使用影片令牌读取与该影片关联的 MinIO 派生资源。 */
-    @Transactional(readOnly = true)
     public FileContentStream openVideoAsset(String token, UUID videoItemId, UUID fileNodeId) {
         MediaPlaybackTokenService.MediaGrant grant = tokenService.requireGrant(token, videoItemId);
         MediaVideoItem item = requireReadableVideo(grant.requesterUserId(), videoItemId);
@@ -184,7 +187,6 @@ public class MediaContentAccessService {
     }
 
     /** 使用系列令牌读取与该系列关联的 MinIO 派生资源。 */
-    @Transactional(readOnly = true)
     public FileContentStream openSeriesAsset(String token, UUID seriesId, UUID fileNodeId) {
         MediaPlaybackTokenService.MediaGrant grant = tokenService.requireSeriesGrant(token, seriesId);
         MediaTvSeries series = requireReadableSeries(grant.requesterUserId(), seriesId);

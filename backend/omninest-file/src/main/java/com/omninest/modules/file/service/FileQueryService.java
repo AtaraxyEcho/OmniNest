@@ -153,12 +153,10 @@ public class FileQueryService {
         return downloadContentService.createOwnedContainerProcessInput(ownerUserId, fileId);
     }
 
-    @Transactional(readOnly = true)
     public FileContentStream openOwnedFileContent(UUID ownerUserId, UUID fileId) {
         return downloadContentService.openOwnedFileContent(ownerUserId, fileId);
     }
 
-    @Transactional(readOnly = true)
     public FileContentStream openReadableFileContent(UUID userId, UUID fileId) {
         return downloadContentService.openReadableFileContent(userId, fileId);
     }

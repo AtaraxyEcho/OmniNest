@@ -392,6 +392,165 @@ class ArchitectureInvariantsTest {
                 .isEmpty();
     }
 
+    /**
+     * 会真的走网络的接收者类型与其远程方法。
+     *
+     * <p>只收“发出网络请求”的方法：MinIO 预签名是本地计算，不在其中；{@code getObject}、
+     * {@code putObject}、{@code copyObject}、{@code removeObject} 这类才算。</p>
+     */
+    private static final Map<String, List<String>> REMOTE_IO_METHODS_BY_RECEIVER_TYPE = Map.of(
+            "ObjectStorageClient", List.of(
+                    "getObject", "putObject", "copyObject", "removeObject", "objectExists", "listObjects"),
+            "DerivedAssetStorageService", List.of(
+                    "store", "storeRemote", "deleteOwned", "deleteOwnedBatch", "deleteDerivedFileNode"),
+            "FileContentAccessService", List.of(
+                    "open", "openRange", "openAuthorizedMediaStream", "openAuthorizedMediaResource"),
+            "FileQueryService", List.of(
+                    "openOwnedFileContent", "openReadableFileContent", "openDownloadableFileContent",
+                    "openDownloadableFileRange"),
+            "FilePlaybackContentService", List.of("openFileContent", "openFileRange"),
+            "FileDownloadContentService", List.of(
+                    "openOwnedFileContent", "openReadableFileContent", "openDownloadableFileContent",
+                    "openDownloadableFileRange"),
+            "ExternalStorageService", List.of("deactivateRemote", "activateRemote"));
+
+    private static final Pattern TRANSACTIONAL_FIELD =
+            Pattern.compile("private final ([A-Za-z0-9_]+)(?:<[^>]*>)?\\s+([a-z][A-Za-z0-9_]*)\\s*;");
+
+    private static final Pattern TRANSACTIONAL_METHOD_DECLARATION =
+            Pattern.compile("^\\s{4}(?:public|protected)\\s+(?:static\\s+)?[\\w<>\\[\\],.? ]+\\s+(\\w+)\\s*\\(.*$");
+
+    /**
+     * 远程内容读写不得落在数据库事务内。
+     *
+     * <p>事务里的对象存储调用会让线程在整个网络往返期间占着数据库连接，而派生资产落库
+     * 自己还要再开一个独立事务：生产配置里 worker 只有 6 个连接、scheduler 只有 4 个，
+     * 并发任务这样叠加就会一起卡在连接池上。鉴权与定位查询留在各自的短事务里，
+     * 取流、上传与删除必须在事务之外发起。</p>
+     *
+     * <p>判据是“方法确实处于事务中”：方法级 {@code @Transactional} 优先，写了
+     * {@code NOT_SUPPORTED} 视为已显式挂起；没有方法级注解时才继承类级注解。</p>
+     */
+    @Test
+    @DisplayName("远程内容 IO 必须落在数据库事务之外")
+    void remoteContentIoMustStayOutsideTransactions() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            violations.addAll(transactionalRemoteIoCalls(file));
+        }
+        assertThat(violations)
+                .as("事务内的对象存储与 Rclone 调用会长时间占用连接，并发时直接耗尽连接池")
+                .isEmpty();
+    }
+
+    private static List<String> transactionalRemoteIoCalls(Path file) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        Map<String, String> receivers = new HashMap<>();
+        for (String line : lines) {
+            Matcher matcher = TRANSACTIONAL_FIELD.matcher(line.trim());
+            if (matcher.find()) {
+                receivers.put(matcher.group(2), matcher.group(1));
+            }
+        }
+        List<String> banned = new ArrayList<>();
+        receivers.forEach((name, type) -> {
+            List<String> methods = REMOTE_IO_METHODS_BY_RECEIVER_TYPE.get(type);
+            if (methods != null) {
+                banned.add("\\b" + name + "\\.(" + String.join("|", methods) + ")\\(");
+            }
+        });
+        if (banned.isEmpty()) {
+            return List.of();
+        }
+
+        String relativePath = relative(file);
+        boolean classTransactional = classLevelTransaction(lines);
+        List<String> violations = new ArrayList<>();
+        for (int index = 0; index < lines.size(); index++) {
+            Matcher declaration = TRANSACTIONAL_METHOD_DECLARATION.matcher(lines.get(index));
+            if (!declaration.matches()) {
+                continue;
+            }
+            List<String> annotations = precedingAnnotations(lines, index);
+            boolean methodTransactional = annotations.stream().anyMatch(value -> value.startsWith("@Transactional"));
+            boolean suspended = annotations.stream()
+                    .anyMatch(value -> value.startsWith("@Transactional") && value.contains("NOT_SUPPORTED"));
+            boolean inTransaction = methodTransactional ? !suspended : classTransactional;
+            if (!inTransaction) {
+                continue;
+            }
+            String body = methodBody(lines, index);
+            for (String pattern : banned) {
+                Matcher matcher = Pattern.compile(pattern).matcher(body);
+                if (matcher.find()) {
+                    violations.add(relativePath + "#" + declaration.group(1) + " -> " + matcher.group());
+                }
+            }
+        }
+        return violations;
+    }
+
+    /** 类级 {@code @Transactional}：注解写在文件首列，紧跟在类型声明之前。 */
+    private static boolean classLevelTransaction(List<String> lines) {
+        for (String line : lines) {
+            if (line.startsWith("@Transactional")) {
+                return !line.contains("NOT_SUPPORTED");
+            }
+            if (line.startsWith("public class") || line.startsWith("class ")
+                    || line.startsWith("public final class") || line.startsWith("public abstract class")) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 取方法声明上方连续的注解行；注解与方法声明之间只允许出现空行或其他注解。
+     */
+    private static List<String> precedingAnnotations(List<String> lines, int declarationIndex) {
+        List<String> annotations = new ArrayList<>();
+        for (int index = declarationIndex - 1; index >= 0; index--) {
+            String line = lines.get(index).trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith("@")) {
+                annotations.add(0, line);
+                continue;
+            }
+            break;
+        }
+        return annotations;
+    }
+
+    /**
+     * 从方法声明行按大括号配对取出方法体。
+     */
+    private static String methodBody(List<String> lines, int declarationIndex) {
+        int depth = 0;
+        boolean opened = false;
+        StringBuilder body = new StringBuilder();
+        for (int index = declarationIndex; index < lines.size(); index++) {
+            String line = lines.get(index);
+            for (int cursor = 0; cursor < line.length(); cursor++) {
+                char character = line.charAt(cursor);
+                if (character == '{') {
+                    depth++;
+                    opened = true;
+                } else if (character == '}') {
+                    depth--;
+                }
+            }
+            if (opened) {
+                body.append(line).append('\n');
+            }
+            if (opened && depth <= 0) {
+                return body.toString();
+            }
+        }
+        return body.toString();
+    }
+
     private static List<Path> ownedModules(Path root) throws IOException {
         try (Stream<Path> children = Files.list(root)) {
             return children.filter(Files::isDirectory)

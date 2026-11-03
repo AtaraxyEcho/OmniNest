@@ -24,6 +24,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 校验封面资产回收只在完全无业务引用时执行，并且始终连缩略图一起删除。
@@ -70,6 +72,24 @@ class MusicCoverRetentionServiceTest {
         service.releaseUnreferenced(OWNER_ID, COVER_ID);
 
         assertThat(deletedBatch()).containsExactlyInAnyOrder(THUMBNAIL_ID, COVER_ID);
+    }
+
+    @Test
+    void physicalDeleteWaitsForTheCallersTransactionCommit() {
+        // 调用方事务回滚时封面引用重新生效：提交前删对象会留下指向空对象的节点，
+        // 而删除本身是逐个对象的远程往返，不能让调用方连接整段等在那里。
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.releaseUnreferenced(OWNER_ID, COVER_ID);
+
+            verify(derivedAssetStorageService, never()).deleteOwnedBatch(any(), anyCollection());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            assertThat(deletedBatch()).containsExactlyInAnyOrder(THUMBNAIL_ID, COVER_ID);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

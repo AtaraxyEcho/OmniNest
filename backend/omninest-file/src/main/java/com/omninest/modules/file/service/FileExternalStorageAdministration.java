@@ -53,12 +53,15 @@ public class FileExternalStorageAdministration implements ExternalStorageAdminis
     /**
      * 更新外部存储账户状态。
      *
+     * <p>停用动作要调用 Rclone RC，与 {@link #countAccounts()} 这类纯查询不同，这里不开事务：
+     * 停用失败时状态照旧不落库，与本方法原有语义一致；停用成功而落库失败时远端已经断开，
+     * 管理员重试即可，事务回滚并不能把远端连接重新接上。</p>
+     *
      * @param accountId 账户标识
      * @param status 目标状态
      * @return 更新后的账户摘要
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ExternalStorageAccountSummary updateStatus(UUID accountId, String status) {
         ExternalStorageStatus resolvedStatus = resolveStatus(status);
         StorageExternalAccount account = accountRepository.findById(accountId)

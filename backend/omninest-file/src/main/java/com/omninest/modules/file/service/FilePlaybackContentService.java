@@ -42,7 +42,6 @@ public class FilePlaybackContentService {
      * @param fileId 文件节点 ID
      * @return 内容流
      */
-    @Transactional(readOnly = true)
     public FileContentStream openFileContent(RequestPrincipal requester, UUID fileId) {
         return downloadContentService.openDownloadableFileContent(requester, fileId);
     }
@@ -56,7 +55,6 @@ public class FilePlaybackContentService {
      * @param length 读取字节数
      * @return 区间句柄；提供者不支持区间读时为空
      */
-    @Transactional(readOnly = true)
     public Optional<FileContentRange> openFileRange(
             RequestPrincipal requester, UUID fileId, long offset, long length) {
         return downloadContentService.openDownloadableFileRange(requester, fileId, offset, length);

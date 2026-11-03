@@ -2,12 +2,14 @@ package com.omninest.modules.reader.service;
 import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.reader.domain.ReaderItem;
@@ -22,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 阅读条目自动封面持久化测试。
@@ -41,12 +46,16 @@ class ReaderCoverExtractionServiceTest {
     private DerivedAssetStorageService derivedAssetStorageService;
     @Mock
     private MediaSyncEventService syncEventService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private ReaderCoverExtractionService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReaderCoverExtractionService(new MediaProcessingLimitsProperties(), itemRepository, derivedAssetStorageService, syncEventService);
+        service = new ReaderCoverExtractionService(new MediaProcessingLimitsProperties(), itemRepository,
+                derivedAssetStorageService, syncEventService, transactionManager);
+        service.initTransactionTemplate();
     }
 
     @Test
@@ -140,6 +149,52 @@ class ReaderCoverExtractionServiceTest {
 
         verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
         verify(itemRepository, never()).findByCoverFileIdIn(any());
+    }
+
+    @Test
+    void discardsStoreResultWhenCoverChangedDuringUpload() {
+        // 上传期间别的写入改掉了条目指向：本次产物必须回收，不能覆盖已经生效的封面。
+        UUID concurrentCoverId = UUID.fromString("40000000-0000-0000-0000-000000000004");
+        ReaderItem before = item();
+        ReaderItem after = item();
+        after.setCoverFileId(concurrentCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(before), Optional.of(after));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(InputStream.class)
+        )).thenReturn(COVER_ID);
+
+        assertThatThrownBy(() -> service.store(
+                ITEM_ID, new ReaderCoverDraft(jpegBytes(), "image/jpeg", "cover.jpg"), true))
+                .isInstanceOf(BusinessException.class);
+
+        verify(derivedAssetStorageService).deleteOwned(OWNER_ID, COVER_ID);
+        assertThat(after.getCoverFileId()).isEqualTo(concurrentCoverId);
+    }
+
+    @Test
+    void deletesReplacedCoverOnlyAfterCommit() {
+        UUID previousCoverId = UUID.fromString("40000000-0000-0000-0000-000000000005");
+        ReaderItem item = item();
+        item.setCoverFileId(previousCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(InputStream.class)
+        )).thenReturn(COVER_ID);
+        when(itemRepository.findByCoverFileIdIn(List.of(previousCoverId)))
+                .thenReturn(List.of(item));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(service.store(ITEM_ID, new ReaderCoverDraft(jpegBytes(), "image/jpeg", "cover.jpg"), true))
+                    .isTrue();
+            // 落库事务还没提交，条目仍可能回滚到旧封面：提交前删对象会留下指向空对象的节点。
+            verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            verify(derivedAssetStorageService).deleteDerivedFileNode(previousCoverId);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     private ReaderItem item() {

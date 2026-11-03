@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 负责回收不再被引用的音乐封面资产。
@@ -24,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 只要还有任何业务行引用就整体保留。</p>
  *
  * <p>调用时机是被替换或被删除的引用已经落库之后、同一事务内：引用检查依赖持久化上下文
- * 在查询前自动刷新，因此刚改写或刚批量删除的行不会再命中旧标识。</p>
+ * 在查询前自动刷新，因此刚改写或刚批量删除的行不会再命中旧标识。物理删除本身推迟到该事务
+ * 提交之后执行，回滚时不会删掉仍然生效的封面。</p>
  *
  * @author OmniNest
  */
@@ -46,7 +49,6 @@ public class MusicCoverRetentionService {
      * @param ownerUserId 所有者用户 ID
      * @param coverFileId 被替换掉的封面文件标识，空值不处理
      */
-    @Transactional
     public void releaseUnreferenced(UUID ownerUserId, UUID coverFileId) {
         if (coverFileId == null) {
             return;
@@ -57,10 +59,14 @@ public class MusicCoverRetentionService {
     /**
      * 回收一批封面标识：仍被任何业务行引用的跳过，其余连同各自缩略图一起删除。
      *
+     * <p>引用检查必须留在调用方事务内：它依赖持久化上下文在查询前自动刷新，才能看见刚改写
+     * 或刚批量删除的行。物理删除则推迟到提交之后：删除是逐个对象的远程往返，放在事务里会让
+     * 线程在整个清理期间持有连接；而调用方事务回滚时封面引用仍然有效，提前删对象只会留下
+     * 指向空对象的节点。</p>
+     *
      * @param ownerUserId 所有者用户 ID
      * @param coverFileIds 被替换或被删除的封面文件标识集合，空值项忽略
      */
-    @Transactional
     public void releaseUnreferenced(UUID ownerUserId, Collection<UUID> coverFileIds) {
         if (ownerUserId == null || coverFileIds == null || coverFileIds.isEmpty()) {
             return;
@@ -83,9 +89,26 @@ public class MusicCoverRetentionService {
         if (staleFileIds.isEmpty()) {
             return;
         }
-        int deleted = derivedAssetStorageService.deleteOwnedBatch(ownerUserId, staleFileIds);
-        log.info("已回收失效音乐封面资产: userId={}, candidates={}, deleted={}",
-                ownerUserId, candidates.size(), deleted);
+        Runnable purge = () -> {
+            try {
+                int deleted = derivedAssetStorageService.deleteOwnedBatch(ownerUserId, staleFileIds);
+                log.info("已回收失效音乐封面资产: userId={}, candidates={}, deleted={}",
+                        ownerUserId, candidates.size(), deleted);
+            } catch (RuntimeException exception) {
+                log.warn("失效音乐封面回收失败: userId={}, stale={}, errorType={}",
+                        ownerUserId, staleFileIds.size(), exception.getClass().getSimpleName());
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            purge.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                purge.run();
+            }
+        });
     }
 
     /**

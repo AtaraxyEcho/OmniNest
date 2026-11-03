@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,9 +65,16 @@ class MovieNfoServiceTest {
     private MediaTvSeriesRepository tvSeriesRepository;
     @Mock
     private DerivedAssetStorageService derivedAssetStorageService;
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private MovieNfoService service;
+
+    @BeforeEach
+    void initTransactionTemplate() {
+        service.initTransactionTemplate();
+    }
 
     @Test
     @DisplayName("导出把 NFO 字节写入派生资产，并把存储节点 ID 记进 export_path")

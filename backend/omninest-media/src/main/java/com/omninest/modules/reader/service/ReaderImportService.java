@@ -907,7 +907,7 @@ public class ReaderImportService {
     /**
      * 在事务提交后保存 PDF 封面。
      *
-     * <p>封面服务开了 REQUIRES_NEW 独立事务，首次导入时条目还没提交，那个事务查不到行就会抛
+     * <p>封面服务按条目 ID 回查条目行，首次导入时条目还没提交，那时查不到行会抛
      * BOOK_NOT_FOUND 并把整个导入一起回滚。
      */
     private void persistPdfCoverAfterCommit(UUID itemId, ReaderCoverDraft cover, boolean overwrite) {

@@ -95,7 +95,14 @@ class FileDownloadContentService {
         return fileContentAccessService.createContainerProcessInput(node);
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * 打开所有者本人的文件内容流。
+     *
+     * <p>这里刻意不开事务：{@code open} 会真的向对象存储发起 GET，连接建立与首字节
+     * 延迟都要算进数据库连接占用时长；权限与节点定位由单次只读查询完成，
+     * 之后的取流不再持有连接。PostgreSQL 的 READ COMMITTED 本来也只给到语句级快照，
+     * 包一层只读事务换不来额外一致性。</p>
+     */
     public FileContentStream openOwnedFileContent(UUID ownerUserId, UUID fileId) {
         FileNode node = lookup.findActiveNode(ownerUserId, fileId);
         if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
@@ -104,7 +111,6 @@ class FileDownloadContentService {
         return fileContentAccessService.open(node);
     }
 
-    @Transactional(readOnly = true)
     public FileContentStream openReadableFileContent(UUID userId, UUID fileId) {
         FileNode node = findReadableFileNode(userId, fileId);
         if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
@@ -118,13 +124,11 @@ class FileDownloadContentService {
         fileDownloadService.requireDownloadableNode(requester, fileId);
     }
 
-    @Transactional(readOnly = true)
     public FileContentStream openDownloadableFileContent(RequestPrincipal requester, UUID fileId) {
         FileNode node = fileDownloadService.requireDownloadableNode(requester, fileId);
         return fileContentAccessService.open(node);
     }
 
-    @Transactional(readOnly = true)
     public Optional<FileContentRange> openDownloadableFileRange(
             RequestPrincipal requester, UUID fileId, long offset, long length) {
         FileNode node = fileDownloadService.requireDownloadableNode(requester, fileId);

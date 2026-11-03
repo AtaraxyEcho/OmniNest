@@ -49,6 +49,7 @@ import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 import com.omninest.modules.reader.repository.ReaderTextChapterRepository;
 import com.omninest.modules.task.service.TaskRecordService;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -73,9 +74,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -123,6 +127,17 @@ public class ReaderItemService {
     private final PhotoInputGuard photoInputGuard;
     private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
     private final TempStagingPort tempStagingPort;
+    private final PlatformTransactionManager transactionManager;
+
+    private TransactionTemplate transactionTemplate;
+
+    /**
+     * 初始化封面上传使用的短事务模板。
+     */
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     /**
      * 列出阅读条目，支持按类型、内容类型和关键词过滤。
@@ -627,11 +642,15 @@ public class ReaderItemService {
     /**
      * 上传封面图片。
      *
+     * <p>类级只读事务在这里必须显式挂起：临时文件写入、解码校验和对象存储上传都在远程
+     * IO 上耗时，留在事务里会让线程在整个传输期间持有数据库连接，而派生元数据落库
+     * 还会再开一个独立事务。鉴权与落库各自走一次短事务。</p>
+     *
      * @param ownerUserId 所有者用户 ID
      * @param itemId      条目 ID
      * @param file        上传的文件
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void uploadCover(UUID ownerUserId, UUID itemId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件不能为空");
@@ -639,40 +658,54 @@ public class ReaderItemService {
         if (file.getSize() <= 0 || file.getSize() > processingLimits.getMaxReaderCoverBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件大小超出限制");
         }
-        ReaderItem item = requireOwnedItem(ownerUserId, itemId);
-        UUID previousCoverFileId = unreferencedCoverFileId(item);
+        String extension = getExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+        // 只放行各端渲染器都能直接解码的位图：TIFF 在此前会被接受，
+        // 存下来后客户端 Image.memory 解不开，封面永远显示成错误占位。
+        String mimeType = switch (extension) {
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".png" -> "image/png";
+            case ".webp" -> "image/webp";
+            case ".gif" -> "image/gif";
+            case ".bmp" -> "image/bmp";
+            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "封面格式不受支持");
+        };
+        UUID previousCoverFileId = transactionTemplate.execute(status ->
+                unreferencedCoverFileId(requireOwnedItem(ownerUserId, itemId)));
         Path staged = null;
+        UUID coverFileId;
         try {
             staged = tempStagingPort.createTempFile("reader-cover", "omninest-reader-cover-", ".upload");
             file.transferTo(staged);
             photoInputGuard.inspectForDecode(staged, file.getOriginalFilename());
-            String extension = getExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
-            // 只放行各端渲染器都能直接解码的位图：TIFF 在此前会被接受，
-            // 存下来后客户端 Image.memory 解不开，封面永远显示成错误占位。
-            String mimeType = switch (extension) {
-                case ".jpg", ".jpeg" -> "image/jpeg";
-                case ".png" -> "image/png";
-                case ".webp" -> "image/webp";
-                case ".gif" -> "image/gif";
-                case ".bmp" -> "image/bmp";
-                default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "封面格式不受支持");
-            };
             try (InputStream data = Files.newInputStream(staged)) {
                 String fileName = "cover_" + itemId + getExtension(file.getOriginalFilename());
-                UUID coverFileId = derivedAssetStorageService.store(
+                coverFileId = derivedAssetStorageService.store(
                         ownerUserId, "READER_ITEM", itemId, "COVER", fileName,
                         mimeType, data);
-                item.setCoverFileId(coverFileId);
-                itemRepository.save(item);
-                recordItemEvent(ownerUserId, item, SyncAction.UPDATED);
-                registerCoverCleanupAfterCommit(previousCoverFileId, coverFileId);
-                log.info("上传封面: userId={}, itemId={}", ownerUserId, itemId);
             }
         } catch (IOException ex) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "封面文件读取失败");
         } finally {
             tempStagingPort.deleteQuietly(staged);
         }
+        applyUploadedCover(ownerUserId, itemId, coverFileId, previousCoverFileId);
+        log.info("上传封面: userId={}, itemId={}", ownerUserId, itemId);
+    }
+
+    /**
+     * 短事务：把已上传的封面节点写回条目，并记录同步事件。
+     *
+     * <p>落库失败时条目仍指向旧封面；新节点已经登记在 {@code file_nodes}，
+     * 没有业务行引用它，由派生资产对账按年龄回收。</p>
+     */
+    private void applyUploadedCover(UUID ownerUserId, UUID itemId, UUID coverFileId, UUID previousCoverFileId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReaderItem item = requireOwnedItem(ownerUserId, itemId);
+            item.setCoverFileId(coverFileId);
+            itemRepository.save(item);
+            recordItemEvent(ownerUserId, item, SyncAction.UPDATED);
+            registerCoverCleanupAfterCommit(previousCoverFileId, coverFileId);
+        });
     }
 
     /**
@@ -931,10 +964,14 @@ public class ReaderItemService {
     /**
      * 将阅读源文件传输到响应输出流。
      *
+     * <p>类级只读事务在这里必须挂起：整个传输由这条连接完成，事务会把数据库连接
+     * 一直占到大文件读完为止，而这里只需要几条已定位好的元数据。</p>
+     *
      * @param descriptor 下载描述
      * @param outputStream 响应输出流
      * @throws IOException 对象读取或客户端连接写入失败
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void streamFile(DownloadDescriptor descriptor, OutputStream outputStream) throws IOException {
         try (FileContentStream content = descriptor.mediaAsset()
                 ? fileContentAccessService.openAuthorizedMediaStream(

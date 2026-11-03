@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -69,6 +70,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -139,6 +141,8 @@ class ReaderItemServiceTest {
     private TaskRecordService taskRecordService;
     @Mock
     private PhotoInputGuard photoInputGuard;
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @org.mockito.Spy
     private TempStagingPort tempStagingPort = new TestTempStagingPort();
@@ -152,6 +156,29 @@ class ReaderItemServiceTest {
     @BeforeEach
     void allowSharedSpaceVisibility() {
         lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+        itemService.initTransactionTemplate();
+    }
+
+    @Test
+    void uploadCoverStoresOutsideTransactionAndWritesBackInShortTransaction() {
+        // 上传期间的远程 IO 不能占着连接：条目读取与落库是两次独立短事务，中间没有事务模板调用。
+        UUID newCoverId = UUID.fromString("30000000-0000-0000-0000-000000000008");
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Covered Book", "EPUB");
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(itemRepository.save(item)).thenReturn(item);
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(java.io.InputStream.class)
+        )).thenReturn(newCoverId);
+
+        itemService.uploadCover(OWNER_ID, ITEM_ID, pngUpload("封面.png"));
+
+        InOrder order = inOrder(itemRepository, derivedAssetStorageService);
+        order.verify(itemRepository).findById(ITEM_ID);
+        order.verify(derivedAssetStorageService).store(
+                any(), any(), any(), any(), any(), any(), any(java.io.InputStream.class));
+        order.verify(itemRepository).findById(ITEM_ID);
+        order.verify(itemRepository).save(item);
+        assertThat(item.getCoverFileId()).isEqualTo(newCoverId);
     }
 
     @Test
