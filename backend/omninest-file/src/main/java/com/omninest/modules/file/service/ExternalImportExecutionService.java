@@ -275,7 +275,7 @@ public class ExternalImportExecutionService {
             removeObjectQuietly(quarantineKey);
             throw exception;
         }
-        ingressLifecycleService.markClean(ingressId, inspection.sha256());
+        ingressLifecycleService.markClean(ingressId, inspection.sha256(), -1L, null);
         String effectiveMimeType = ExternalImportFiles.resolveDetectedMimeType(
                 prepResult.availableName, mimeType, inspection.detectedMimeType());
         try {

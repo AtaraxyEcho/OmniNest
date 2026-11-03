@@ -51,6 +51,8 @@ public final class QueueNames {
     public static final String PHOTO_THUMBNAILS_ROUTING_KEY = "photo.thumbnails";
     public static final String PHOTO_INDEX_QUEUE = "omni.task.photo-index";
     public static final String PHOTO_INDEX_ROUTING_KEY = "photo.index";
+    public static final String PHOTO_INDEX_USER_PURGE_QUEUE = "omni.task.photo-index-user-purge";
+    public static final String PHOTO_INDEX_USER_PURGE_ROUTING_KEY = "photo.index.user-purge";
     public static final String PHOTO_BATCH_QUEUE = "omni.task.photo-batch";
     public static final String PHOTO_BATCH_ROUTING_KEY = "photo.batch";
     public static final String PHOTO_AI_QUEUE = "omni.task.photo-ai";
@@ -99,6 +101,7 @@ public final class QueueNames {
             PHOTO_SCAN_QUEUE,
             PHOTO_THUMBNAILS_QUEUE,
             PHOTO_INDEX_QUEUE,
+            PHOTO_INDEX_USER_PURGE_QUEUE,
             PHOTO_BATCH_QUEUE,
             PHOTO_AI_QUEUE,
             PHOTO_GEO_IMPORT_QUEUE,

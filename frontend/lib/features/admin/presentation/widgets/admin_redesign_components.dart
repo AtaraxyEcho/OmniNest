@@ -31,7 +31,13 @@ class _AdminSectionEntranceState extends State<AdminSectionEntrance>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!MediaQuery.disableAnimationsOf(context) && !_ctrl.isCompleted) {
+    if (MotionToken.prefersReduced(context)) {
+      // 减少动效必须直接落到终态：只跳过 forward() 会让控制器停在 0.0，
+      // 外层 FadeTransition 把整块内容抹成全透明，管理台看起来是空白页。
+      _ctrl.value = 1.0;
+      return;
+    }
+    if (!_ctrl.isCompleted && !_ctrl.isAnimating) {
       _ctrl.forward();
     }
   }

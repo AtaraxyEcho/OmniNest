@@ -1,11 +1,9 @@
 package com.omninest.common.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.error.BusinessException;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -136,10 +134,15 @@ class RedisTokenBucketRateLimiterTest {
     }
 
     @Test
-    @DisplayName("Redis 脚本返回空结果时按依赖不可用拒绝")
-    void rejectsNullScriptResultAsDependencyUnavailable() {
-        assertThatThrownBy(() -> limiter.tryConsumeToken("test", 10, 5.0))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+    @DisplayName("Redis 脚本返回空结果时退化为极小本地限额")
+    void fallsBackToLocalLimitWhenScriptResultIsNull() {
+        String key = "fallback-" + UUID.randomUUID();
+
+        assertThat(limiter.tryConsumeToken(key, 10, 5.0).allowed()).isTrue();
+        assertThat(limiter.tryConsumeToken(key, 10, 5.0).allowed()).isTrue();
+        assertThat(limiter.tryConsumeToken(key, 10, 5.0).allowed()).isTrue();
+        TokenBucketRateLimiter.TokenBucketResult rejected = limiter.tryConsumeToken(key, 10, 5.0);
+        assertThat(rejected.allowed()).isFalse();
+        assertThat(rejected.retryAfterMs()).isPositive();
     }
 }

@@ -336,7 +336,16 @@ class _ComicPageThumbnail extends ConsumerWidget {
             ),
           );
         }
-        return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        // 预览网格单格宽度约为屏宽 1/3：按显示尺寸×像素比解码，
+        // 不传 cacheWidth 时每格都会留一张原尺寸位图。
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          cacheWidth: (MediaQuery.sizeOf(context).width / 3 * 1.2)
+              .round()
+              .clamp(64, 4096),
+        );
       },
     );
   }

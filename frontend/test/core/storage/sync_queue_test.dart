@@ -38,6 +38,16 @@ void main() {
     expect(ops.last.type, 'op2');
   });
 
+  test('hasPending tolerates multiple queued rows of the same type', () async {
+    // enqueue 允许同一 type 积压多条；不带 limit(1) 的 getSingleOrNull
+    // 会在第二条起抛 StateError('Too many elements')，把调用方整条流程打挂。
+    await queue.enqueue(type: 'music.progress', payload: '{}');
+    await queue.enqueue(type: 'music.progress', payload: '{}');
+
+    expect(await queue.hasPending('music.progress'), isTrue);
+    expect(await queue.hasPending('music.favorite'), isFalse);
+  });
+
   test('markCompleted sets status and syncedAt', () async {
     final id = await queue.enqueue(type: 'test', payload: '{}');
     await queue.markCompleted(id);

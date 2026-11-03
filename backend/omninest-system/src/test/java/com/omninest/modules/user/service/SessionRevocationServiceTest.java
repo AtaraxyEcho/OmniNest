@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.SessionRevocationCache;
 import com.omninest.modules.user.domain.SessionRevocationEntity;
+import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +27,7 @@ class SessionRevocationServiceTest {
     private SessionRevocationCache cache;
     private SessionRevocationWriter writer;
     private AuthenticationTokenPolicy authenticationTokenPolicy;
+    private AuthUserRepository authUserRepository;
     private SessionRevocationService service;
 
     @BeforeEach
@@ -34,29 +36,45 @@ class SessionRevocationServiceTest {
         cache = Mockito.mock(SessionRevocationCache.class);
         writer = Mockito.mock(SessionRevocationWriter.class);
         authenticationTokenPolicy = Mockito.mock(AuthenticationTokenPolicy.class);
+        authUserRepository = Mockito.mock(AuthUserRepository.class);
         Mockito.when(authenticationTokenPolicy.accessTokenTtl()).thenReturn(Duration.ofMinutes(30));
-        service = new SessionRevocationService(repository, cache, writer, authenticationTokenPolicy);
+        service = new SessionRevocationService(
+                repository, cache, writer, authenticationTokenPolicy, authUserRepository);
     }
 
     @Test
-    void tokenIssuedBeforePermissionCutoffIsStale() {
+    void tokenIssuedBeforeOrAtPermissionCutoffIsStale() {
         UUID userId = UUID.randomUUID();
         Instant cutoff = Instant.parse("2026-11-02T10:00:00Z");
         Mockito.when(cache.accessTokenCutoff(userId)).thenReturn(Optional.of(cutoff));
 
         Assertions.assertThat(service.isTokenStale(userId, cutoff.minusSeconds(1))).isTrue();
-        Assertions.assertThat(service.isTokenStale(userId, cutoff)).isFalse();
+        // 同一秒内签发的令牌必须失效：秒级严格小于会把撤权同秒的旧权限令牌放行。
+        Assertions.assertThat(service.isTokenStale(userId, cutoff)).isTrue();
         Assertions.assertThat(service.isTokenStale(userId, cutoff.plusSeconds(1))).isFalse();
         Assertions.assertThat(service.isTokenStale(userId, null)).isTrue();
     }
 
     @Test
-    void invalidateAccessTokensUsesConfiguredAccessTokenTtl() {
+    void databaseCutoffBacksUpMissingCacheEntry() {
+        UUID userId = UUID.randomUUID();
+        Instant cutoff = Instant.parse("2026-11-02T10:00:00Z");
+        Mockito.when(cache.accessTokenCutoff(userId)).thenReturn(Optional.empty());
+        Mockito.when(authUserRepository.findAccessCutoffAt(userId)).thenReturn(Optional.of(cutoff));
+
+        Assertions.assertThat(service.isTokenStale(userId, cutoff.minusSeconds(1))).isTrue();
+        // 回源结果写回缓存，不必每个请求都查库。
+        Mockito.verify(cache).markAccessTokenCutoff(userId, cutoff, Duration.ofMinutes(30));
+    }
+
+    @Test
+    void invalidateAccessTokensWritesDatabaseAndCache() {
         UUID userId = UUID.randomUUID();
         Instant cutoff = Instant.now();
 
         service.invalidateAccessTokensBefore(userId, cutoff);
 
+        Mockito.verify(authUserRepository).advanceAccessCutoff(userId, cutoff);
         Mockito.verify(cache).markAccessTokenCutoff(
                 userId, cutoff, Duration.ofMinutes(30));
     }

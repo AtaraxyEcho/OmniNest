@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 通用任务恢复调度器。
@@ -82,11 +83,19 @@ public class GenericTaskRecoveryScheduler {
     private static final String SWEEP_LOCK_KEY = "omninest:task:sweep-stuck";
     private static final Duration SWEEP_LOCK_TTL = Duration.ofMinutes(5);
 
+    /**
+     * 心跳超时恢复的互斥键与有效期：多实例并发恢复会对同一任务重复重投，
+     * 重投不改 {@code retryCount}，等于绕过 1/5/15 分钟 ×3 的重试上限。
+     */
+    private static final String RECOVER_LOCK_KEY = "omninest:task:recover-stale";
+    private static final Duration RECOVER_LOCK_TTL = Duration.ofMinutes(5);
+
     private final TaskRecordService taskRecordService;
     private final DistributedLock distributedLock;
     private final TaskDispatchRepository taskDispatchRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRedispatchService taskRedispatchService;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${omninest.task.stale-heartbeat-seconds:600}")
     private long staleHeartbeatSeconds;
@@ -99,13 +108,22 @@ public class GenericTaskRecoveryScheduler {
      */
     @Scheduled(fixedDelayString = "${omninest.task.recovery-interval-millis:60000}")
     public void recoverStaleTasks() {
-        Instant cutoff = Instant.now().minus(
-                Math.max(60L, staleHeartbeatSeconds),
-                ChronoUnit.SECONDS
-        );
-        for (String taskType : RECOVERED_TASK_TYPES) {
-            taskRecordService.listStaleRunningTaskIds(taskType, cutoff, RECOVERY_BATCH_SIZE)
-                    .forEach(taskId -> recoverOne(taskId, taskType, cutoff));
+        String lockToken = distributedLock.newToken();
+        if (!distributedLock.tryLock(RECOVER_LOCK_KEY, lockToken, RECOVER_LOCK_TTL)) {
+            log.debug("心跳超时恢复已被其他实例持有，本轮跳过");
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(
+                    Math.max(60L, staleHeartbeatSeconds),
+                    ChronoUnit.SECONDS
+            );
+            for (String taskType : RECOVERED_TASK_TYPES) {
+                taskRecordService.listStaleRunningTaskIds(taskType, cutoff, RECOVERY_BATCH_SIZE)
+                        .forEach(taskId -> recoverOne(taskId, taskType, cutoff));
+            }
+        } finally {
+            distributedLock.unlock(RECOVER_LOCK_KEY, lockToken);
         }
     }
 
@@ -137,17 +155,21 @@ public class GenericTaskRecoveryScheduler {
 
     private void recoverOne(UUID taskId, String taskType, Instant cutoff) {
         try {
-            StaleTaskRecovery recovery = taskRecordService.recoverStaleTask(
-                    taskId,
-                    taskType,
-                    cutoff,
-                    Instant.now(),
-                    "WORKER_HEARTBEAT_TIMEOUT"
-            );
-            if (!recovery.recovered() || recovery.deadLetter()) {
-                return;
-            }
-            republishOriginalMessage(taskId, taskType, recovery.nextRetryAt());
+            // 状态裁决与重投必须在同一事务内：先提交 RETRY_WAIT 再插 Outbox，
+            // 中断在两步之间会让任务永久停在重试等待且没有消息可投递。
+            transactionTemplate.executeWithoutResult(status -> {
+                StaleTaskRecovery recovery = taskRecordService.recoverStaleTask(
+                        taskId,
+                        taskType,
+                        cutoff,
+                        Instant.now(),
+                        "WORKER_HEARTBEAT_TIMEOUT"
+                );
+                if (!recovery.recovered() || recovery.deadLetter()) {
+                    return;
+                }
+                republishOriginalMessage(taskId, taskType, recovery.nextRetryAt());
+            });
         } catch (RuntimeException exception) {
             log.error("通用任务心跳超时恢复失败: taskType={}, taskId={}", taskType, taskId, exception);
         }
@@ -156,8 +178,9 @@ public class GenericTaskRecoveryScheduler {
     /**
      * 将任务 Outbox 最近一次投递的原始消息按 nextRetryAt 经 Outbox 延迟重投。
      *
-     * <p>重试状态与退避由 {@code recoverStaleTask} 单点完成，这里只负责投递；
-     * 重投失败时转入死信，避免任务永久停留在 RETRY_WAIT。</p>
+     * <p>重试状态与退避由 {@code recoverStaleTask} 单点完成，这里只负责投递。
+     * 投递异常会让整笔恢复事务回滚，任务保持 RUNNING 并在下一轮重新裁决，
+     * 不得在此处直接判死信——那只会在数据库瞬断时把本可恢复的任务永久终结。</p>
      */
     private void republishOriginalMessage(UUID taskId, String taskType, Instant nextRetryAt) {
         TaskDispatch dispatch = taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
@@ -167,20 +190,15 @@ public class GenericTaskRecoveryScheduler {
             log.warn("通用任务无 Outbox 记录可重投，转入死信: taskType={}, taskId={}", taskType, taskId);
             return;
         }
-        try {
-            taskDispatchService.enqueueAt(
-                    taskId,
-                    QueueNames.TASK_EXCHANGE,
-                    dispatch.getRoutingKey(),
-                    JsonSupport.fromJson(dispatch.getPayload(), Object.class),
-                    nextRetryAt
-            );
-            log.warn("通用任务心跳超时已恢复重投: taskType={}, taskId={}, routingKey={}, nextRetryAt={}",
-                    taskType, taskId, dispatch.getRoutingKey(), nextRetryAt);
-        } catch (RuntimeException exception) {
-            taskRecordService.markDeadLetter(taskId, "WORKER_HEARTBEAT_TIMEOUT:REDISPATCH_FAILED");
-            log.error("通用任务恢复重投失败，转入死信: taskType={}, taskId={}", taskType, taskId, exception);
-        }
+        taskDispatchService.enqueueAt(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                dispatch.getRoutingKey(),
+                JsonSupport.fromJson(dispatch.getPayload(), Object.class),
+                nextRetryAt
+        );
+        log.warn("通用任务心跳超时已恢复重投: taskType={}, taskId={}, routingKey={}, nextRetryAt={}",
+                taskType, taskId, dispatch.getRoutingKey(), nextRetryAt);
     }
 
     /**

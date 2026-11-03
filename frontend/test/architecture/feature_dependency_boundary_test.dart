@@ -16,6 +16,14 @@ const _allowedViolations = <String>{
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_two_factor_card.dart',
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/reader/presentation/pages/pdf_reader_page.dart',
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/redesign/movie_metadata_edit_drawer.dart',
+  // presentation 直连 Data 层 API/本地存储的存量债（缺陷报告 FUNC-M04）：
+  // 只能随各页接入 application controller 逐条消除，修复后必须从本清单移除。
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/music/presentation/pages/music_history_page.dart',
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_mobile_content.dart',
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_support_panels.dart',
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/search/presentation/widgets/global_search_overlay.dart',
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/movie_shell.dart',
+  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/movie_shell_mobile.dart',
 };
 const _maxProductionSourceLines = 1200;
 
@@ -89,7 +97,12 @@ Set<String> _scanViolations() {
 
     if (sourceLayer == 'presentation' &&
         RegExp(
-          r'\b(?:apiClientProvider|meApiProvider|movieApiProvider|readerApiProvider|AuthClient\s*\()',
+          // 覆盖全部 Data 层 API provider 与本地存储直连，不再逐个点名：
+          // 只列已知名字时每新增一个 *ApiProvider 都会悄悄绕过闸门。
+          r'\b[A-Za-z][A-Za-z0-9]*ApiProvider\b'
+          r'|\bapiClientProvider\b'
+          r'|\bAuthClient\s*\('
+          r'|SharedPreferences\.getInstance\(',
         ).hasMatch(content)) {
       violations.add('PRESENTATION_IMPLEMENTATION_PROVIDER $path');
     }

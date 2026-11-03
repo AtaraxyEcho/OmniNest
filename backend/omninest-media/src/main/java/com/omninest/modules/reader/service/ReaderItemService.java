@@ -768,7 +768,8 @@ public class ReaderItemService {
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
         if (!ownerUserId.equals(item.getOwnerUserId())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改此阅读条目");
+            // 他人条目按不存在处理，避免通过 403/404 差异枚举私有资源 UUID。
+            throw new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在");
         }
         if (item.getFileNodeId() == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "阅读条目未关联源文件");

@@ -69,6 +69,15 @@ public class AuthUser {
     private Instant lastLoginAt;
 
     /**
+     * 权限变更后拒绝早于或等于该时间签发的访问令牌。
+     *
+     * <p>Redis 是快速判定通道，本列是数据库兜底：缓存被驱逐或 Redis 故障时，
+     * 旧权限令牌仍会在这里被识别为过期。</p>
+     */
+    @Column(name = "access_cutoff_at")
+    private Instant accessCutoffAt;
+
+    /**
      * 创建时间由数据库默认值填充；实体侧只读映射，供管理列表展示与排序。
      */
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)

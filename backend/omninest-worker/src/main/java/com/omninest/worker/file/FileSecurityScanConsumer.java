@@ -47,7 +47,8 @@ public class FileSecurityScanConsumer {
                 channel.basicAck(deliveryTag, false);
                 return;
             }
-            taskRecordService.markRunning(event.taskId(), "SCANNING");
+            // claimForExecution 已置 RUNNING、写入阶段并补发过一次同步事件，
+            // 再调 markRunning 只会产生第二条事务与重复事件。
             FileIngressPromotionService.PromotionOutcome outcome = promotionService.process(event);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("ingressItemId", event.ingressItemId().toString());

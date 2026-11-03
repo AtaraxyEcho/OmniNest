@@ -47,14 +47,15 @@ public class PhotoMotionConsumer {
     @RabbitListener(queues = QueueNames.PHOTO_MOTION_QUEUE)
     public void handle(FileUploadedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        FilePostProcessingTaskTracker.TrackedTask tracked =
-                taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "PROCESSING");
-        if (tracked.shouldSkip()) {
-            log.info("动态视频提取任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
-            channel.basicAck(deliveryTag, false);
-            return;
-        }
+        FilePostProcessingTaskTracker.TrackedTask tracked = null;
         try {
+            // 领取也在 try 内：手动 ACK 模式没有容器兜底，领取异常逃逸会让消息永久 Unacked。
+            tracked = taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "PROCESSING");
+            if (tracked.shouldSkip()) {
+                log.info("动态视频提取任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
             if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
                 log.info("源文件已删除或正在永久删除，跳过动态视频提取任务: fileNodeId={}", event.fileNodeId());
                 taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
@@ -76,14 +77,34 @@ public class PhotoMotionConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("动态视频提取失败: fileNodeId={}", event.fileNodeId(), e);
+            failAndAck(channel, deliveryTag, tracked, event, e);
+        }
+    }
+
+    /**
+     * 回写失败状态并确认消息；状态本身写不进去时转死信，避免留下永远未确认的消息。
+     */
+    private void failAndAck(
+            Channel channel,
+            long deliveryTag,
+            FilePostProcessingTaskTracker.TrackedTask tracked,
+            FileUploadedEvent event,
+            Throwable error
+    ) throws IOException {
+        if (tracked == null) {
+            log.error("动态视频提取任务领取失败，消息转入死信: fileNodeId={}, errorType={}",
+                    event.fileNodeId(), error.getClass().getSimpleName());
+            channel.basicNack(deliveryTag, false, false);
+            return;
+        }
+        try {
             taskTracker.handleFailure(
-                    TASK_TYPE,
-                    QueueNames.PHOTO_MOTION_ROUTING_KEY,
-                    tracked.taskId(),
-                    event,
-                    e
-            );
+                    TASK_TYPE, QueueNames.PHOTO_MOTION_ROUTING_KEY, tracked.taskId(), event, error);
             channel.basicAck(deliveryTag, false);
+        } catch (RuntimeException stateException) {
+            log.error("动态视频提取失败状态写入失败，转入死信队列: taskId={}, errorType={}",
+                    tracked.taskId(), stateException.getClass().getSimpleName(), stateException);
+            channel.basicNack(deliveryTag, false, false);
         }
     }
 }

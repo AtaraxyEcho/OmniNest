@@ -40,10 +40,15 @@ public class StorageQuotaReservationService {
     /**
      * 为一个持久业务来源原子预留配额。
      *
+     * <p>同一来源可重入：目录导入中断后重试会再次申报整个任务大小，已结算部分
+     * （{@code committedBytes}）不得重复预留，只补差额；若上一轮已完整结算或
+     * 预留已过期，则重新激活原行并补齐未记账字节。否则唯一键会让该来源永远
+     * 无法再次预留，或重试期间新入库的字节完全漏记。</p>
+     *
      * @param userId 用户 ID
      * @param sourceType 来源类型
      * @param sourceId 来源业务 ID
-     * @param bytes 预留字节数
+     * @param bytes 本次来源需要覆盖的总字节数
      * @param expiresAt 预留过期时间
      * @return 预留记录 ID
      */
@@ -59,32 +64,38 @@ public class StorageQuotaReservationService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "配额预留字节数不能小于零");
         }
         String normalizedSourceType = normalizeSourceType(sourceType);
+        Instant effectiveExpiry = expiresAt == null ? Instant.now().plusSeconds(86_400L) : expiresAt;
         StorageQuotaReservation existing = reservationRepository
                 .findBySourceTypeAndSourceId(normalizedSourceType, sourceId)
                 .orElse(null);
         if (existing != null) {
-            boolean reusableFinishedRow = (RELEASED.equals(existing.getStatus())
-                    || EXPIRED.equals(existing.getStatus()))
-                    && existing.getCommittedBytes() == 0L;
-            if (!reusableFinishedRow) {
-                if (existing.getReservedBytes() != bytes) {
-                    throw new BusinessException(ErrorCode.CONFLICT, "同一来源的配额预留大小不一致");
+            long committedBytes = existing.getCommittedBytes();
+            long heldBytes = RESERVED.equals(existing.getStatus()) ? existing.getReservedBytes() : 0L;
+            long coveredBytes = committedBytes + heldBytes;
+            if (bytes <= coveredBytes) {
+                if (RESERVED.equals(existing.getStatus())) {
+                    existing.setExpiresAt(effectiveExpiry);
+                    reservationRepository.save(existing);
                 }
-                if (RESERVED.equals(existing.getStatus()) || COMMITTED.equals(existing.getStatus())) {
-                    return existing.getId();
-                }
-                throw new BusinessException(ErrorCode.CONFLICT, "该来源的配额预留已经结束");
+                return existing.getId();
             }
-            // 失败重试会复用同一业务来源（如背景素材去重复活原行）。RELEASED/EXPIRED 且
-            // 未结算任何用量表示上一次预留已完整退回，必须重新激活原记录，否则受
-            // (source_type, source_id) 唯一约束限制，该来源永远无法再次预留。
-            UserAccountSummary owner = requireAccount(userId);
-            boolean quotaApplied = reserveAgainstAccount(owner, bytes);
-            existing.setReservedBytes(bytes);
-            existing.setCommittedBytes(0L);
+            long additionalBytes = bytes - coveredBytes;
+            boolean quotaApplied;
+            if (heldBytes > 0L && existing.isQuotaApplied()) {
+                // 续用中的预留必须同样占用额度，否则结算时扣减的 reserved_bytes 大于实际占用。
+                reserveAgainstAccount(requireAccount(userId), additionalBytes);
+                quotaApplied = true;
+            } else if (heldBytes > 0L) {
+                // 不受配额约束的来源始终按实际用量记账，扩容时保持同一口径。
+                quotaApplied = false;
+            } else {
+                quotaApplied = reserveAgainstAccount(requireAccount(userId), additionalBytes);
+            }
+            existing.setReservedBytes(heldBytes + additionalBytes);
+            existing.setCommittedBytes(committedBytes);
             existing.setQuotaApplied(quotaApplied);
             existing.setStatus(RESERVED);
-            existing.setExpiresAt(expiresAt == null ? Instant.now().plusSeconds(86_400L) : expiresAt);
+            existing.setExpiresAt(effectiveExpiry);
             return reservationRepository.save(existing).getId();
         }
 
@@ -99,7 +110,7 @@ public class StorageQuotaReservationService {
         reservation.setCommittedBytes(0L);
         reservation.setQuotaApplied(quotaApplied);
         reservation.setStatus(RESERVED);
-        reservation.setExpiresAt(expiresAt == null ? Instant.now().plusSeconds(86_400L) : expiresAt);
+        reservation.setExpiresAt(effectiveExpiry);
         return reservationRepository.save(reservation).getId();
     }
 
@@ -157,38 +168,59 @@ public class StorageQuotaReservationService {
     /**
      * 将来源预留结算为实际落库用量，未使用部分自动释放。
      *
+     * <p>结算按增量入账：{@code committedBytes} 记录来源累计已记账字节数，
+     * 同一来源重试完成、过期后才补记或重复调用都只处理差额，不会重复计入用量。
+     * 预留已结束（COMMITTED / RELEASED / EXPIRED）时若仍报告了新的实际用量，
+     * 直接补记差额——过期释放只退回了预留，并不代表字节没有落库。</p>
+     *
      * @param sourceType 来源类型
      * @param sourceId 来源业务 ID
-     * @param committedBytes 实际写入字节数
+     * @param committedBytes 该来源累计实际写入字节数
      */
     @Transactional(rollbackFor = Exception.class)
     public void settle(String sourceType, UUID sourceId, long committedBytes) {
         StorageQuotaReservation reservation = reservationRepository
                 .findBySourceTypeAndSourceId(normalizeSourceType(sourceType), sourceId)
                 .orElse(null);
-        if (reservation == null || COMMITTED.equals(reservation.getStatus())
-                || RELEASED.equals(reservation.getStatus()) || EXPIRED.equals(reservation.getStatus())) {
+        if (reservation == null) {
             return;
         }
-        long safeCommittedBytes = Math.clamp(committedBytes, 0L, reservation.getReservedBytes());
-        boolean updated;
-        if (reservation.isQuotaApplied()) {
-            updated = userStorageCommand.settleStorageReservation(
-                    reservation.getOwnerUserId(),
-                    reservation.getReservedBytes(),
-                    safeCommittedBytes
-            );
-        } else {
-            if (safeCommittedBytes > 0L) {
-                userStorageCommand.incrementUsage(reservation.getOwnerUserId(), safeCommittedBytes);
+        long alreadyCommitted = reservation.getCommittedBytes();
+        long requestedCommitted = Math.max(0L, committedBytes);
+        if (RESERVED.equals(reservation.getStatus())) {
+            long additionalNeeded = Math.max(0L, requestedCommitted - alreadyCommitted);
+            long safeAdditional = Math.min(additionalNeeded, reservation.getReservedBytes());
+            boolean updated;
+            if (reservation.isQuotaApplied()) {
+                updated = userStorageCommand.settleStorageReservation(
+                        reservation.getOwnerUserId(),
+                        reservation.getReservedBytes(),
+                        safeAdditional
+                );
+            } else {
+                if (safeAdditional > 0L) {
+                    userStorageCommand.incrementUsage(reservation.getOwnerUserId(), safeAdditional);
+                }
+                updated = true;
             }
-            updated = true;
+            if (!updated) {
+                throw new IllegalStateException("存储配额预留结算失败");
+            }
+            long totalCommitted = alreadyCommitted + safeAdditional;
+            reservation.setReservedBytes(0L);
+            reservation.setCommittedBytes(totalCommitted);
+            reservation.setStatus(totalCommitted == 0L ? RELEASED : COMMITTED);
+            reservationRepository.save(reservation);
+            return;
         }
-        if (!updated) {
-            throw new IllegalStateException("存储配额预留结算失败");
+        if (requestedCommitted <= alreadyCommitted) {
+            return;
         }
-        reservation.setCommittedBytes(safeCommittedBytes);
-        reservation.setStatus(safeCommittedBytes == 0L ? RELEASED : COMMITTED);
+        long delta = requestedCommitted - alreadyCommitted;
+        userStorageCommand.incrementUsage(reservation.getOwnerUserId(), delta);
+        reservation.setReservedBytes(0L);
+        reservation.setCommittedBytes(requestedCommitted);
+        reservation.setStatus(COMMITTED);
         reservationRepository.save(reservation);
     }
 

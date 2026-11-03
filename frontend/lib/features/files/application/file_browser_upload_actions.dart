@@ -860,9 +860,9 @@ extension FileBrowserUploadActions on FileBrowserController {
     final elapsed = now.difference(runtime.lastProgressAt);
     final byteDelta = (uploadedBytes - runtime.lastReportedBytes).abs();
     final isComplete = uploadedBytes >= runtime.session.sizeBytes;
+    // 时间下限必须独立成立：旧写法让高速链路每满一个字节阈值就上报一次，整页高频重建。
     if (!isComplete &&
-        elapsed < const Duration(milliseconds: 80) &&
-        byteDelta < 256 * 1024) {
+        (elapsed < const Duration(milliseconds: 80) || byteDelta == 0)) {
       return;
     }
     final task = _findLocalUploadTask(taskId);

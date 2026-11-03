@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 通用恢复调度器测试：心跳重投经 Outbox 退避、死信裁决与停滞任务清扫。 */
 class GenericTaskRecoverySchedulerTest {
@@ -51,9 +53,41 @@ class GenericTaskRecoverySchedulerTest {
         Mockito.when(distributedLock.tryLock(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(true);
         scheduler = new GenericTaskRecoveryScheduler(
                 taskRecordService, distributedLock, taskDispatchRepository,
-                taskDispatchService, taskRedispatchService);
+                taskDispatchService, taskRedispatchService,
+                new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class)));
         ReflectionTestUtils.setField(scheduler, "staleHeartbeatSeconds", 600L);
         ReflectionTestUtils.setField(scheduler, "stuckDispatchSeconds", 1800L);
+    }
+
+    @Test
+    void recoverSkipsWhenAnotherInstanceHoldsTheLock() {
+        Mockito.when(distributedLock.tryLock(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(false);
+
+        scheduler.recoverStaleTasks();
+
+        // 并发恢复会重复重投同一任务，重投不改 retryCount，等于绕开重试上限。
+        Mockito.verify(taskRecordService, Mockito.never())
+                .listStaleRunningTaskIds(Mockito.any(), Mockito.any(), Mockito.anyInt());
+    }
+
+    @Test
+    void transientRedispatchFailureKeepsTaskRecoverableInsteadOfDeadLetteringIt() {
+        Mockito.when(taskRecordService.listStaleRunningTaskIds(Mockito.any(), Mockito.any(), Mockito.anyInt()))
+                .thenReturn(List.of(TASK));
+        Mockito.when(taskRecordService.recoverStaleTask(
+                Mockito.eq(TASK), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyString()))
+                .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
+        Mockito.when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
+                .thenReturn(Optional.of(dispatch()));
+        Mockito.doThrow(new RuntimeException("broker down")).when(taskDispatchService).enqueueAt(
+                Mockito.eq(TASK), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        scheduler.recoverStaleTasks();
+
+        // 重投失败必须整体回滚，任务留在 RUNNING 等下一轮；当场判死信会把
+        // 一次数据库或 Broker 瞬断放大成永久失败。
+        Mockito.verify(taskRecordService, Mockito.never())
+                .markDeadLetter(Mockito.eq(TASK), Mockito.contains("REDISPATCH_FAILED"));
     }
 
     @Test
@@ -116,25 +150,6 @@ class GenericTaskRecoverySchedulerTest {
         verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
         verify(taskDispatchService).enqueueAt(
                 eq(TASK), eq("omni.task"), eq("thumbnail.generate"), any(), eq(NEXT_RETRY));
-    }
-
-    @Test
-    void deadLettersTaskWhenRepublishFails() {
-        when(taskRecordService.listStaleRunningTaskIds(eq("THUMBNAIL"), any(), org.mockito.ArgumentMatchers.anyInt()))
-                .thenReturn(List.of(TASK));
-        when(taskRecordService.recoverStaleTask(
-                eq(TASK), eq("THUMBNAIL"), any(), any(), anyString()))
-                .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
-        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
-                .thenReturn(Optional.of(dispatch()));
-        Mockito.doThrow(new IllegalStateException("broker down"))
-                .when(taskDispatchService)
-                .enqueueAt(eq(TASK), anyString(), anyString(), any(), eq(NEXT_RETRY));
-
-        scheduler.recoverStaleTasks();
-
-        verify(taskRecordService).markDeadLetter(
-                eq(TASK), eq("WORKER_HEARTBEAT_TIMEOUT:REDISPATCH_FAILED"));
     }
 
     @Test

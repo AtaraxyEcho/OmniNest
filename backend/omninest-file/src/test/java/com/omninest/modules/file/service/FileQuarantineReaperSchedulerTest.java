@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,12 +17,14 @@ import com.omninest.modules.file.domain.FileIngressStatus;
 import com.omninest.modules.file.domain.FileUploadSession;
 import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
 
 /**
  * 隔离滞留对象回收调度测试。
@@ -31,11 +34,13 @@ import org.junit.jupiter.api.Test;
 class FileQuarantineReaperSchedulerTest {
     private static final UUID OWNER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID SESSION_ID = UUID.fromString("22222222-2222-2222-2222-222222222223");
+    private static final UUID ASSET_ID = UUID.fromString("22222222-2222-2222-2222-222222222224");
 
     private FileIngressItemRepository ingressItemRepository;
     private ObjectStorageClient objectStorageClient;
     private FileUploadSessionService fileUploadSessionService;
     private FileUploadSessionRepository uploadSessionRepository;
+    private StorageQuotaService storageQuotaService;
     private FileQuarantineReaperScheduler scheduler;
 
     @BeforeEach
@@ -44,6 +49,7 @@ class FileQuarantineReaperSchedulerTest {
         objectStorageClient = mock(ObjectStorageClient.class);
         fileUploadSessionService = mock(FileUploadSessionService.class);
         uploadSessionRepository = mock(FileUploadSessionRepository.class);
+        storageQuotaService = mock(StorageQuotaService.class);
         ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
         when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
@@ -53,6 +59,7 @@ class FileQuarantineReaperSchedulerTest {
                 objectStorageClient,
                 fileUploadSessionService,
                 uploadSessionRepository,
+                storageQuotaService,
                 configValueProvider,
                 runtimeConfigCache
         );
@@ -66,15 +73,17 @@ class FileQuarantineReaperSchedulerTest {
         session.setOwnerUserId(OWNER_ID);
         session.setUploadId("upload-123");
         session.setStatus("SCANNING");
-        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class)))
-                .thenReturn(List.of(item));
+        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(ingressItemRepository.deleteByIdAndStatusIn(any(), any())).thenReturn(1);
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
 
         scheduler.reapExpiredQuarantineItems();
 
         verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
-        verify(ingressItemRepository).delete(item);
+        verify(ingressItemRepository).deleteByIdAndStatusIn(eq(item.getId()), any());
         verify(fileUploadSessionService).cancelSession(OWNER_ID, "upload-123");
+        verify(storageQuotaService, never()).releaseReservation(anyString(), any());
     }
 
     @Test
@@ -85,32 +94,63 @@ class FileQuarantineReaperSchedulerTest {
         session.setOwnerUserId(OWNER_ID);
         session.setUploadId("upload-123");
         session.setStatus("COMPLETED");
-        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class)))
-                .thenReturn(List.of(item));
+        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(ingressItemRepository.deleteByIdAndStatusIn(any(), any())).thenReturn(1);
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
 
         scheduler.reapExpiredQuarantineItems();
 
         verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
-        verify(ingressItemRepository).delete(item);
         verify(fileUploadSessionService, never()).cancelSession(any(), anyString());
+    }
+
+    @Test
+    void skipsObjectsWhenRecordWasPromotedBetweenQueryAndDelete() {
+        FileIngressItem item = item(FileIngressStatus.SCANNING);
+        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(ingressItemRepository.deleteByIdAndStatusIn(any(), any())).thenReturn(0);
+
+        scheduler.reapExpiredQuarantineItems();
+
+        verify(objectStorageClient, never()).removeObject(any(ObjectStorageKey.class));
+        verify(fileUploadSessionService, never()).cancelSession(any(), anyString());
+        verify(storageQuotaService, never()).releaseReservation(anyString(), any());
+    }
+
+    @Test
+    void releasesBackdropReservationForReapedIngress() {
+        FileIngressItem item = item(FileIngressStatus.FAILED);
+        item.setSourceType("BACKDROP");
+        item.setSourceTaskId(ASSET_ID);
+        item.setUploadSessionId(null);
+        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(ingressItemRepository.deleteByIdAndStatusIn(any(), any())).thenReturn(1);
+
+        scheduler.reapExpiredQuarantineItems();
+
+        verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", ASSET_ID);
     }
 
     @Test
     void continuesWhenSingleItemReapFails() {
         FileIngressItem failed = item(FileIngressStatus.FAILED);
         FileIngressItem rejected = item(FileIngressStatus.REJECTED);
+        rejected.setId(UUID.randomUUID());
         rejected.setUploadSessionId(null);
-        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class)))
-                .thenReturn(List.of(failed, rejected));
-        org.mockito.Mockito.doThrow(new RuntimeException("minio down"))
-                .doNothing()
-                .when(objectStorageClient).removeObject(any(ObjectStorageKey.class));
+        rejected.setSourceType("UPLOAD");
+        when(ingressItemRepository.findByStatusInAndUpdatedAtBefore(any(), any(Instant.class), any()))
+                .thenReturn(new PageImpl<>(List.of(failed, rejected)));
+        when(ingressItemRepository.deleteByIdAndStatusIn(eq(failed.getId()), any()))
+                .thenThrow(new RuntimeException("database down"));
+        when(ingressItemRepository.deleteByIdAndStatusIn(eq(rejected.getId()), any())).thenReturn(1);
 
         scheduler.reapExpiredQuarantineItems();
 
-        verify(ingressItemRepository).delete(rejected);
-        verify(ingressItemRepository, never()).delete(failed);
+        verify(ingressItemRepository).deleteByIdAndStatusIn(eq(rejected.getId()), any());
+        verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
     }
 
     private FileIngressItem item(FileIngressStatus status) {

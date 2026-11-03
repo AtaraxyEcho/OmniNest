@@ -46,7 +46,8 @@ public class BackdropSecurityScanConsumer {
                 channel.basicAck(deliveryTag, false);
                 return;
             }
-            taskRecordService.markRunning(event.taskId(), "SCANNING");
+            // claimForExecution 已置 RUNNING、写入阶段并补发过一次同步事件，
+            // 再调 markRunning 只会产生第二条事务与重复事件。
             executionService.process(event);
             taskRecordService.markCompleted(
                     event.taskId(),

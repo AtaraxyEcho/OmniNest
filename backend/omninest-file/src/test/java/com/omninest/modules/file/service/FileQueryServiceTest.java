@@ -936,16 +936,18 @@ class FileQueryServiceTest {
     }
 
     @Test
-    void openReadableFileContentRejectsSharedFileWithoutViewPermission() {
+    void openReadableFileContentHidesOtherUsersPersonalFile() {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000010");
         FileNode file = node(OTHER_OWNER_ID, null, "FILE", "private.jpg", "/private.jpg");
         file.setId(fileId);
         when(fileNodeRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(file));
         when(shareRecipientAccessService.canAccessRecipientNode(OWNER_ID, file)).thenReturn(false);
 
+        // 个人空间他人文件按不存在返回：403 与 404 的差异会让 UUID 是否存在的枚举成为可能。
         assertThatThrownBy(() -> fileQueryService.openReadableFileContent(OWNER_ID, fileId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("无权查看文件");
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_NOT_FOUND)
+                .hasMessage("文件不存在");
     }
 
     // ==================== 批量操作测试 ====================

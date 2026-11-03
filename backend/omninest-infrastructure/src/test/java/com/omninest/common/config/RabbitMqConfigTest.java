@@ -1,8 +1,12 @@
 package com.omninest.common.config;
 
 import com.omninest.common.messaging.QueueNames;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -104,5 +108,35 @@ class RabbitMqConfigTest {
         Assertions.assertThat(queue.isExclusive()).isTrue();
         Assertions.assertThat(queue.isAutoDelete()).isTrue();
         Assertions.assertThat(queue.getArguments()).doesNotContainKey("x-queue-master-locator");
+    }
+
+    /**
+     * 架构棘轮：QueueNames 里每个任务队列常量都必须有对应的 Queue bean。
+     *
+     * <p>漏声明 bean 时 Broker 上不会建队列，消息进交换机后直接丢弃，
+     * 而且只有跑到那条链路才暴露。新增队列必须同时补 bean 与 Binding。</p>
+     */
+    @Test
+    void everyTaskQueueConstantIsDeclaredAsQueueBean() throws Exception {
+        Set<String> constants = new LinkedHashSet<>();
+        for (Field field : QueueNames.class.getFields()) {
+            if (field.getName().endsWith("_QUEUE") && field.getType() == String.class) {
+                String value = (String) field.get(null);
+                if (value.startsWith("omni.task.")) {
+                    constants.add(value);
+                }
+            }
+        }
+
+        Set<String> declared = new LinkedHashSet<>();
+        for (Method method : RabbitMqConfig.class.getDeclaredMethods()) {
+            if (method.getReturnType() == Queue.class && method.getParameterCount() == 0) {
+                declared.add(((Queue) method.invoke(config)).getName());
+            }
+        }
+
+        Assertions.assertThat(declared)
+                .as("任务队列常量必须逐个声明为 durableQueue bean")
+                .containsAll(constants);
     }
 }

@@ -31,6 +31,11 @@ Future<EpubChapterPayload?> loadChapterContent(
     return _inlineChapterPayload(chapter.xhtmlContent);
   }
   final detail = await ref.read(readerItemDetailProvider(itemId).future);
+  if (!ref.context.mounted) {
+    // 章节加载途中退出阅读器：ref 随元素释放，继续读会抛
+    // "Cannot use "ref" after the widget was disposed"。
+    return null;
+  }
   if (detail.item.itemType == 'TXT') {
     final start = chapter.sourceStartOffset;
     final end = chapter.sourceEndOffset;
@@ -42,6 +47,9 @@ Future<EpubChapterPayload?> loadChapterContent(
       chapterIndex,
       chapter,
     );
+    if (!ref.context.mounted) {
+      return null;
+    }
     if (serverText != null) {
       // 整章只有标题行时服务端正文为空：用章名补一段，避免出现空白页
       return _inlineChapterPayload(
@@ -70,6 +78,9 @@ Future<EpubChapterPayload?> loadChapterContent(
       );
     }
     final text = await parser.ensureDecodedText(itemId: itemId, bytes: bytes);
+    if (!ref.context.mounted) {
+      return null;
+    }
     final rawSlice = parser.rawChapterSlice(text, start, end);
     // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
     // 整体错位，切出来的其实是别章正文。此时宁可显式失败，也不静默渲染错章内容。

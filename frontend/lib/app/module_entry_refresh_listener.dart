@@ -39,15 +39,25 @@ class _ModuleEntryRefreshListenerState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_router != null) {
+    // 切换服务器或会话状态变化会重建 GoRouter：只按“已绑过就不再绑”判断，
+    // 会把监听留在旧实例上，新路由的进入事件再也触发不了刷新。
+    final nextRouter = GoRouter.maybeOf(context);
+    if (identical(nextRouter, _router)) {
       return;
     }
-    _router = GoRouter.of(context);
+    _detachListener();
+    if (nextRouter == null) {
+      return;
+    }
     void listener() {
       if (!mounted) {
         return;
       }
-      final path = _router!.routeInformationProvider.value.uri.path;
+      final router = _router;
+      if (router == null) {
+        return;
+      }
+      final path = router.routeInformationProvider.value.uri.path;
       if (path != widget.modulePath) {
         return;
       }
@@ -59,17 +69,24 @@ class _ModuleEntryRefreshListenerState
       widget.onRefresh();
     }
 
+    _router = nextRouter;
     _routeListener = listener;
-    _router!.routeInformationProvider.addListener(listener);
+    nextRouter.routeInformationProvider.addListener(listener);
   }
 
-  @override
-  void dispose() {
+  void _detachListener() {
     final router = _router;
     final listener = _routeListener;
     if (router != null && listener != null) {
       router.routeInformationProvider.removeListener(listener);
     }
+    _router = null;
+    _routeListener = null;
+  }
+
+  @override
+  void dispose() {
+    _detachListener();
     super.dispose();
   }
 

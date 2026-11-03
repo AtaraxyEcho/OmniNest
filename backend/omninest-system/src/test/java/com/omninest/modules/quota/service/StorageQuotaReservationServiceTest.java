@@ -222,21 +222,83 @@ class StorageQuotaReservationServiceTest {
     }
 
     @Test
-    void rejectsFinishedSourceThatAlreadySettledUsage() {
+    void reentrantReservationReservesOnlyOutstandingDifference() {
         StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, true);
         reservation.setStatus("RELEASED");
         reservation.setCommittedBytes(300L);
         when(reservationRepository.findBySourceTypeAndSourceId("UPLOAD", SOURCE_ID))
                 .thenReturn(Optional.of(reservation));
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user(false)));
+        when(userStorageCommand.tryReserveStorage(USER_ID, 212L)).thenReturn(true);
+        when(reservationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThatThrownBy(() -> service.reserve(
+        UUID result = service.reserve(
                 USER_ID,
                 "UPLOAD",
                 SOURCE_ID,
                 512L,
                 Instant.now().plusSeconds(600L)
-        )).isInstanceOfSatisfying(BusinessException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.CONFLICT));
+        );
+
+        assertThat(result).isEqualTo(reservation.getId());
+        assertThat(reservation.getStatus()).isEqualTo("RESERVED");
+        assertThat(reservation.getCommittedBytes()).isEqualTo(300L);
+        assertThat(reservation.getReservedBytes()).isEqualTo(212L);
+        verify(userStorageCommand).tryReserveStorage(USER_ID, 212L);
+    }
+
+    @Test
+    void retriedImportReservesRemainderAndSettlesFullSize() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 1000L, true);
+        reservation.setStatus("COMMITTED");
+        reservation.setCommittedBytes(500L);
+        when(reservationRepository.findBySourceTypeAndSourceId("EXTERNAL_IMPORT", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user(false)));
+        when(userStorageCommand.tryReserveStorage(USER_ID, 500L)).thenReturn(true);
+        when(userStorageCommand.settleStorageReservation(USER_ID, 500L, 500L)).thenReturn(true);
+        when(reservationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.reserve(USER_ID, "EXTERNAL_IMPORT", SOURCE_ID, 1000L, Instant.now().plusSeconds(600L));
+        service.settle("EXTERNAL_IMPORT", SOURCE_ID, 1000L);
+
+        // 上一轮已结算的 500 不重复预留，重试只补差额；最终累计记账 1000。
+        verify(userStorageCommand).tryReserveStorage(USER_ID, 500L);
+        verify(userStorageCommand).settleStorageReservation(USER_ID, 500L, 500L);
+        assertThat(reservation.getCommittedBytes()).isEqualTo(1000L);
+        assertThat(reservation.getStatus()).isEqualTo("COMMITTED");
+    }
+
+    @Test
+    void settlesBytesThatLandedAfterReservationExpired() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, true);
+        reservation.setStatus("EXPIRED");
+        reservation.setReservedBytes(0L);
+        when(reservationRepository.findBySourceTypeAndSourceId("EXTERNAL_IMPORT", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.settle("EXTERNAL_IMPORT", SOURCE_ID, 300L);
+
+        // 过期回收只退回了预留，落库字节仍必须记入已用配额。
+        verify(userStorageCommand).incrementUsage(USER_ID, 300L);
+        assertThat(reservation.getCommittedBytes()).isEqualTo(300L);
+        assertThat(reservation.getStatus()).isEqualTo("COMMITTED");
+    }
+
+    @Test
+    void repeatedSettlementOfCommittedSourceDoesNotDoubleCount() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, true);
+        reservation.setStatus("COMMITTED");
+        reservation.setCommittedBytes(512L);
+        reservation.setReservedBytes(0L);
+        when(reservationRepository.findBySourceTypeAndSourceId("UPLOAD", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+
+        service.settle("UPLOAD", SOURCE_ID, 512L);
+
+        verify(userStorageCommand, never()).incrementUsage(any(), anyLong());
+        verify(userStorageCommand, never()).settleStorageReservation(any(), anyLong(), anyLong());
     }
 
     private UserAccountSummary user(boolean superAdmin) {

@@ -41,6 +41,10 @@ public final class InlineContentPolicy {
     /**
      * 判断 MIME 类型是否可被浏览器当作脚本或标记执行。
      *
+     * <p>判定必须按"主类型"而不是原始头：{@code text/html; charset=utf-8} 与
+     * {@code application/xhtml+xml;charset=UTF-8} 都是可直接执行的类型。任何
+     * {@code +xml} 衍生类型都按 XML 处理，避免遗漏可内嵌脚本的新注册类型。</p>
+     *
      * @param mimeType 节点登记的 MIME 类型，可为空
      * @return 可执行时返回 true
      */
@@ -48,6 +52,11 @@ public final class InlineContentPolicy {
         if (mimeType == null || mimeType.isBlank()) {
             return false;
         }
-        return INLINE_EXECUTABLE_TYPES.contains(mimeType.trim().toLowerCase(Locale.ROOT));
+        String essence = mimeType.trim().toLowerCase(Locale.ROOT);
+        int parameterIndex = essence.indexOf(';');
+        if (parameterIndex >= 0) {
+            essence = essence.substring(0, parameterIndex).trim();
+        }
+        return INLINE_EXECUTABLE_TYPES.contains(essence) || essence.endsWith("+xml");
     }
 }

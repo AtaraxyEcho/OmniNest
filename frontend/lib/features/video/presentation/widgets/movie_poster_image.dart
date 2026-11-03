@@ -68,6 +68,11 @@ class MoviePosterImage extends ConsumerWidget {
       errorListener: (_) {
         // post-frame 上报，避免图片流回调（可发生于 build 期）中改状态。
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          // post-frame 也是异步边界：这一帧之后组件可能已卸载，
+          // 再用随元素销毁的 WidgetRef 会直接抛异常。
+          if (!context.mounted) {
+            return;
+          }
           ref.read(videoCoverRecoveryProvider.notifier).reportFailure();
         });
       },

@@ -184,6 +184,32 @@ public class PhotoSearchIndexService implements Closeable {
     }
 
     /**
+     * 删除指定用户的全部照片索引文档。
+     *
+     * <p>照片索引是跨用户共享卷，文档里含标题、位置、AI 标签与 OCR 正文；
+     * 用户被删除后这些内容不得继续被检索到。仅由持有索引卷写锁的 Worker 调用。</p>
+     *
+     * @param ownerUserId 被删除的用户 ID
+     */
+    public void deleteByOwnerUserId(UUID ownerUserId) {
+        if (ownerUserId == null) {
+            return;
+        }
+        try {
+            IndexWriter w = getWriter();
+            w.deleteDocuments(new Term(FIELD_OWNER_USER_ID, ownerUserId.toString()));
+            w.commit();
+            refreshSearcher();
+            log.info("删除用户照片索引: userId={}", ownerUserId);
+        } catch (Exception exception) {
+            log.error("Lucene 用户照片索引删除失败: userId={}", ownerUserId, exception);
+            throw exception instanceof RuntimeException runtimeException
+                    ? runtimeException
+                    : new IllegalStateException("照片索引按用户删除失败", exception);
+        }
+    }
+
+    /**
      * 索引写入失败必须可见：单写进程假设被打破时（卷被其他进程持有 {@code write.lock}）
      * 或磁盘异常时，只留一条 warn 会让搜索静默停留在旧数据，交由消费侧重试并进 DLQ。
      */

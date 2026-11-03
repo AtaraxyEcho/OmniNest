@@ -111,7 +111,7 @@ public class FileIngressStagingService {
                     ingressItemId, true, ErrorCode.FILE_SECURITY_REJECTED.name(), inspection.message());
             throw new FileIngressRejectedException(inspection.message());
         }
-        ingressLifecycleService.markClean(ingressItemId, inspection.sha256());
+        ingressLifecycleService.markClean(ingressItemId, inspection.sha256(), -1L, null);
         return inspection;
     }
 

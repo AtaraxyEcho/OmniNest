@@ -1,5 +1,8 @@
 package com.omninest.common.ratelimit;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -24,7 +27,9 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
      * KEYS[1] = 令牌桶 key
      * ARGV[1] = 桶容量
      * ARGV[2] = 每秒补充速率（乘以 1000 传入，避免浮点）
-     * ARGV[3] = 当前时间戳毫秒
+     * <p>
+     * 时间必须取 Redis 服务端时钟：客户端时间在多实例时钟漂移下会让同一桶
+     * 出现"时间倒流"或提前补充。
      * <p>
      * 返回：0 = 允许（无需等待）；正整数 = 拒绝且表示建议等待的毫秒数。
      * 放行与拒绝必须共用一个返回值域，否则 wait_ms 恰好为 1 的拒绝会被读成放行。
@@ -33,7 +38,8 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
             local key = KEYS[1]
             local capacity = tonumber(ARGV[1])
             local refill_rate_x1000 = tonumber(ARGV[2])
-            local now_ms = tonumber(ARGV[3])
+            local redis_time = redis.call('TIME')
+            local now_ms = tonumber(redis_time[1]) * 1000 + math.floor(tonumber(redis_time[2]) / 1000)
 
             local tokens = tonumber(redis.call('HGET', key, 'tokens'))
             local last_refill = tonumber(redis.call('HGET', key, 'last_refill'))
@@ -92,27 +98,46 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
             double refillRatePerSecond
     ) {
         if (!properties.enabled()) {
-            return new TokenBucketResult(true, 0);
+            // 总开关关闭时仍保留极小本地限额，避免高风险路径完全 fail-open。
+            return localFallback(key, bucketCapacity);
         }
         if (bucketCapacity <= 0 || refillRatePerSecond <= 0) {
             return new TokenBucketResult(false, 1000);
         }
         String redisKey = properties.keyPrefix() + ":token-bucket:" + key;
         long refillRateX1000 = (long) (refillRatePerSecond * 1000);
-        long nowMs = System.currentTimeMillis();
 
-        Long result = RedisRateLimitExecutor.execute(
-                "token-bucket",
-                () -> redisTemplate.execute(
-                        script,
-                        List.of(redisKey),
-                        Integer.toString(bucketCapacity),
-                        Long.toString(refillRateX1000),
-                        Long.toString(nowMs)
-                )
-        );
+        Long result;
+        try {
+            result = RedisRateLimitExecutor.execute(
+                    "token-bucket",
+                    () -> redisTemplate.execute(
+                            script,
+                            List.of(redisKey),
+                            Integer.toString(bucketCapacity),
+                            Long.toString(refillRateX1000)
+                    )
+            );
+        } catch (BusinessException exception) {
+            if (exception.errorCode() != ErrorCode.DEPENDENCY_UNAVAILABLE) {
+                throw exception;
+            }
+            // Redis 故障时退化为 1 秒窗口的极小本地令牌数，而不是让整条链路 503。
+            return localFallback(key, bucketCapacity);
+        }
 
         return toTokenBucketResult(result);
+    }
+
+    /**
+     * Redis 总开关关闭或不可用时的本地兜底：每秒最多 min(容量, 3) 次。
+     *
+     * <p>本地限额不跨实例，只承担"故障窗口内不产生无限尝试"这一档风险。</p>
+     */
+    private TokenBucketResult localFallback(String key, int bucketCapacity) {
+        int limit = Math.min(Math.max(bucketCapacity, 1), 3);
+        boolean allowed = LocalFallbackRateLimiter.tryAcquire(key, limit, Duration.ofSeconds(1));
+        return allowed ? new TokenBucketResult(true, 0) : new TokenBucketResult(false, 1000);
     }
 
     /**

@@ -1,12 +1,13 @@
 package com.omninest.modules.file.service;
 
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileRestoredEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.task.service.TaskDispatchItem;
+import com.omninest.modules.task.service.TaskDispatchService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,15 +31,19 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class FileRestoreTaskPublisher {
     private final FileNodeRepository fileNodeRepository;
-    private final DomainEventPublisher domainEventPublisher;
+    private final TaskDispatchService taskDispatchService;
 
     /**
-     * 在文件恢复事务提交后按文件投递派生资产修复消息。
+     * 在文件恢复事务提交后按文件写入派生资产修复投递记录。
+     *
+     * <p>千级文件恢复不能逐条同步发 Broker：网络 I/O 会占满整段事务，且中途断连后
+     * 后半批消息永久丢失。投递记录随恢复事务之后的 Outbox 事务批量落库，由
+     * {@code TaskOutboxDispatcher} 统一发布与重试。</p>
      *
      * @param event 文件节点恢复事件
-    */
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void publishRestoredFiles(FileNodesRestoredEvent event) {
         List<FileNode> files = fileNodeRepository.findAllById(event.fileNodeIds()).stream()
                 .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
@@ -48,12 +53,17 @@ public class FileRestoreTaskPublisher {
         if (files.isEmpty()) {
             return;
         }
-        for (FileNode file : files) {
-            domainEventPublisher.publishTask(
-                    QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY,
-                    toFileRestoredEvent(event.ownerUserId(), file)
-            );
-        }
+        List<TaskDispatchItem> dispatches = files.stream()
+                .map(file -> new TaskDispatchItem(
+                        file.getId(),
+                        toFileRestoredEvent(event.ownerUserId(), file)))
+                .toList();
+        // 恢复队列没有任务台账，投递行的 task_id 以文件节点 ID 作为关联键，
+        // 与 PHOTO_INDEX 全站重建的既有口径一致。
+        taskDispatchService.enqueueAll(
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY,
+                dispatches);
     }
 
     private FileRestoredEvent toFileRestoredEvent(UUID ownerUserId, FileNode file) {

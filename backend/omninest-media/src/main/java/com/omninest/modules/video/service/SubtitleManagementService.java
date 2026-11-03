@@ -122,7 +122,8 @@ public class SubtitleManagementService {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         if (!track.getOwnerUserId().equals(ownerUserId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作此字幕轨道");
+            // 他人轨道按不存在处理，避免通过 403/404 差异枚举私有资源 UUID。
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在");
         }
         return track;
     }

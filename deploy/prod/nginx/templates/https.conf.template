@@ -6,6 +6,9 @@ map $http_upgrade $connection_upgrade {
 # 批量下载是同步长连接流；后端只能限制单实例并发，而生产后端端口仅绑定回环地址，
 # 外部请求全部经过这个单入口。按凭据做跨 API 副本的全局并发上限，超出返回 429。
 limit_conn_zone $http_authorization zone=omninest_batch_download:10m;
+# 凭据可刷新：同一用户换一枚 Token 就能再占一份额度。再按来源 IP 设一档，
+# 单个主机无法靠多开会话/刷新令牌把后端全局并发槽全部占满（NAT 下留 3 份余量）。
+limit_conn_zone $binary_remote_addr zone=omninest_batch_download_ip:10m;
 
 server {
     listen 80;
@@ -61,6 +64,7 @@ server {
     location = ${OMNINEST_WEB_BASE_PATH}api/v1/files/batch/download {
         client_max_body_size 64k;
         limit_conn omninest_batch_download 2;
+        limit_conn omninest_batch_download_ip 3;
         limit_conn_status 429;
         limit_conn_log_level warn;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;

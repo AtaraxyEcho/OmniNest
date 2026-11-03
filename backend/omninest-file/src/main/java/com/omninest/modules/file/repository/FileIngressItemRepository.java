@@ -7,9 +7,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文件安全入库状态仓储。
@@ -27,13 +31,37 @@ public interface FileIngressItemRepository extends JpaRepository<FileIngressItem
     Optional<FileIngressItem> findByUploadSessionId(UUID uploadSessionId);
 
     /**
-     * 查询指定状态下、更新时间早于截止时间的入库记录，供保留期回收使用。
+     * 分页查询指定状态下、更新时间早于截止时间的入库记录，供保留期回收使用。
+     *
+     * <p>必须分页：滞留记录可能一次积累数千条，全量载入再逐条删隔离对象会让
+     * 调度线程长时间占用大对象堆。状态条件在执行删除时还会再校验一次。</p>
      *
      * @param statuses 状态集合
      * @param cutoff 截止时间
-     * @return 入库记录列表
+     * @param pageable 分页参数
+     * @return 入库记录分页
      */
-    List<FileIngressItem> findByStatusInAndUpdatedAtBefore(List<FileIngressStatus> statuses, Instant cutoff);
+    Page<FileIngressItem> findByStatusInAndUpdatedAtBefore(
+            Collection<FileIngressStatus> statuses,
+            Instant cutoff,
+            Pageable pageable);
+
+    /**
+     * 仅当记录仍处于可回收状态时删除，返回受影响行数。
+     *
+     * <p>查询与删除之间 Worker 可能已完成扫描晋升为 {@code AVAILABLE}；
+     * 无状态条件的删除会抹掉已发布文件的结果节点引用。</p>
+     *
+     * @param id 入库记录标识
+     * @param statuses 可回收状态集合
+     * @return 删除行数
+     */
+    @Transactional
+    @Modifying
+    @Query("delete from FileIngressItem item where item.id = :id and item.status in :statuses")
+    int deleteByIdAndStatusIn(
+            @Param("id") UUID id,
+            @Param("statuses") Collection<FileIngressStatus> statuses);
 
     /**
      * 查询候选对象键中由处于指定状态的入库记录持有的目标键。

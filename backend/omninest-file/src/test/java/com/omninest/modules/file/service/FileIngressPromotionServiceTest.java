@@ -113,6 +113,7 @@ class FileIngressPromotionServiceTest {
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        stubMarkClean(item);
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(UUID.randomUUID());
@@ -129,7 +130,7 @@ class FileIngressPromotionServiceTest {
 
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
         verify(ingressLifecycleService).markScanning(INGRESS_ID);
-        verify(ingressLifecycleService).markClean(INGRESS_ID, SHA256);
+        verify(ingressLifecycleService).markClean(INGRESS_ID, SHA256, -1L, null);
         verify(ingressLifecycleService).markAvailable(eq(INGRESS_ID), any(UUID.class));
         // 晋升复制携带服务端核实的 MIME（REPLACE 元数据）
         verify(objectStorageClient).copyObject(any(), any(), eq("application/pdf"));
@@ -226,7 +227,7 @@ class FileIngressPromotionServiceTest {
 
         verify(ingressLifecycleService).markScanning(INGRESS_ID);
         verify(ingressLifecycleService, never()).markFailed(any(), anyBoolean(), anyString(), anyString());
-        verify(ingressLifecycleService, never()).markClean(any(), anyString());
+        verify(ingressLifecycleService, never()).markClean(any(), anyString(), anyLong(), any());
         verify(notificationPublisher, never()).notifyOrLog(any(), anyString(), anyString(), anyString(), any());
     }
 
@@ -288,6 +289,7 @@ class FileIngressPromotionServiceTest {
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        stubMarkClean(item);
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(UUID.randomUUID());
@@ -326,6 +328,7 @@ class FileIngressPromotionServiceTest {
                 .thenReturn(Optional.of(target));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        stubMarkClean(item);
         FileObject[] savedObject = new FileObject[1];
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
@@ -375,6 +378,7 @@ class FileIngressPromotionServiceTest {
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256, 256L, "image/jpeg"));
+        stubMarkClean(item);
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
             object.setId(UUID.randomUUID());
@@ -389,9 +393,58 @@ class FileIngressPromotionServiceTest {
 
         service.process(event(null));
 
+        // 修正随 markClean 的独立事务一起提交，不得再对脱管实体 save。
+        verify(ingressItemRepository, never()).save(item);
         assertThat(item.getSizeBytes()).isEqualTo(256L);
         assertThat(item.getMimeType()).isEqualTo("image/jpeg");
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
         verify(storageQuotaService).settleReservation("UPLOAD", SESSION_ID, 256L);
+    }
+
+    @Test
+    void processSettlesSessionWhenPromotionHitsSameNameConflict() {
+        FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
+        FileUploadSession session = session();
+        when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
+        when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        stubMarkClean(item);
+        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.randomUUID());
+            return object;
+        });
+        when(fileNodeRepository
+                .existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(any(), any(), anyString()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.process(event(null)))
+                .isInstanceOf(FileIngressRejectedException.class);
+
+        // 终态与配额释放必须在晋升事务回滚后独立提交，否则会话永久停在 SCANNING。
+        verify(ingressLifecycleService).markFailed(
+                eq(INGRESS_ID), eq(false), eq(ErrorCode.CONFLICT.name()), anyString());
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.REJECTED.getValue());
+        assertThat(session.getQuotaReservationId()).isNull();
+        verify(storageQuotaService).releaseReservation("UPLOAD", SESSION_ID);
+        verify(fileNodeRepository, never()).save(any());
+    }
+
+    private void stubMarkClean(FileIngressItem item) {
+        when(ingressLifecycleService.markClean(any(), anyString(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    long actualSize = invocation.getArgument(2, Long.class);
+                    String detectedMime = invocation.getArgument(3);
+                    if (actualSize >= 0) {
+                        item.setSizeBytes(actualSize);
+                    }
+                    if (detectedMime != null) {
+                        item.setMimeType(detectedMime);
+                    }
+                    item.setStatus(FileIngressStatus.CLEAN);
+                    item.setSha256(invocation.getArgument(1));
+                    return item;
+                });
     }
 }

@@ -16,7 +16,6 @@ import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
@@ -65,7 +64,6 @@ class BackdropAssetServiceTest {
     private DerivedAssetStorageService derivedAssetStorageService;
     private FileQueryService fileQueryService;
     private StorageQuotaService storageQuotaService;
-    private UserStorageCommand userStorageCommand;
     private FileIngressStagingService ingressStagingService;
     private BackdropScanTaskService backdropScanTaskService;
     private RateLimitService rateLimitService;
@@ -80,7 +78,6 @@ class BackdropAssetServiceTest {
         derivedAssetStorageService = mock(DerivedAssetStorageService.class);
         fileQueryService = mock(FileQueryService.class);
         storageQuotaService = mock(StorageQuotaService.class);
-        userStorageCommand = mock(UserStorageCommand.class);
         ingressStagingService = mock(FileIngressStagingService.class);
         backdropScanTaskService = mock(BackdropScanTaskService.class);
         rateLimitService = mock(RateLimitService.class);
@@ -115,7 +112,6 @@ class BackdropAssetServiceTest {
                 derivedAssetStorageService,
                 fileQueryService,
                 storageQuotaService,
-                userStorageCommand,
                 ingressStagingService,
                 backdropScanTaskService,
                 rateLimitService,
@@ -317,7 +313,7 @@ class BackdropAssetServiceTest {
         service.deleteAsset(OWNER_ID, asset.getId());
 
         verify(backdropAssetRepository).delete(asset);
-        verify(userStorageCommand).decrementUsage(OWNER_ID, asset.getFileSize());
+        verify(storageQuotaService).decrementUsage(OWNER_ID, asset.getFileSize());
         verify(storageQuotaService, never()).releaseReservation(anyString(), any());
         verify(derivedAssetStorageService).deleteOwned(OWNER_ID, asset.getFileNodeId());
         verify(derivedAssetStorageService).deleteOwned(OWNER_ID, asset.getThumbFileId());
@@ -334,7 +330,7 @@ class BackdropAssetServiceTest {
 
         service.deleteAsset(OWNER_ID, asset.getId());
 
-        verify(userStorageCommand, never()).decrementUsage(any(), anyLong());
+        verify(storageQuotaService, never()).decrementUsage(any(), anyLong());
         verify(storageQuotaService, never()).releaseReservation(anyString(), any());
     }
 
@@ -348,7 +344,7 @@ class BackdropAssetServiceTest {
         service.deleteAsset(OWNER_ID, asset.getId());
 
         verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", asset.getId());
-        verify(userStorageCommand, never()).decrementUsage(any(), anyLong());
+        verify(storageQuotaService, never()).decrementUsage(any(), anyLong());
     }
 
     @Test
@@ -378,7 +374,7 @@ class BackdropAssetServiceTest {
         assertThat(result.failed()).isZero();
         verify(backdropAssetRepository).delete(first);
         verify(backdropAssetRepository).delete(second);
-        verify(userStorageCommand, org.mockito.Mockito.times(2))
+        verify(storageQuotaService, org.mockito.Mockito.times(2))
                 .decrementUsage(eq(OWNER_ID), anyLong());
     }
 

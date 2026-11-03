@@ -512,9 +512,13 @@ public class ResourceShareLinkService {
 
     /**
      * 校验访问密码。调用方必须位于事务之外，BCrypt 计算不得占用连接。
+     *
+     * <p>失败额度必须在 BCrypt 之前扣减：先比对后扣减会让锁定期的正确密码直接
+     * 返回成功，5 次失败上限被放大到总额度；同时用"锁定期一律 429"取代
+     * "密码错 403 / 密码对 200"的差异，避免把锁定状态变成密码正确性神谕。</p>
      */
     private void verifyPassword(ShareLink link, String password, String clientAddress) {
-        if (link.getPasswordHash() == null) {
+        if (link.getPasswordHash() == null || link.getPasswordHash().isBlank()) {
             return;
         }
         // 未提交口令只是"页面首次探测"，不属于错误尝试；必须先返回密码要求，
@@ -523,7 +527,6 @@ public class ResourceShareLinkService {
             throw new BusinessException(ErrorCode.SHARE_PASSWORD_REQUIRED, "需要访问密码");
         }
         String address = sha256(clientAddress == null || clientAddress.isBlank() ? "unknown" : clientAddress);
-        String attemptKey = "share-pwd-attempt:" + link.getTokenHash() + ":" + address;
         // 总额度只防止无限次 BCrypt 计算；成功解锁不消耗失败额度。
         if (!rateLimitService.tryAcquire(
                 "share-pwd-total:" + link.getTokenHash() + ":" + address,
@@ -531,20 +534,31 @@ public class ResourceShareLinkService {
                 Duration.ofMinutes(15))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
         }
-        if (passwordEncoder.matches(password, link.getPasswordHash())) {
-            return;
-        }
+        String attemptKey = "share-pwd-attempt:" + link.getTokenHash() + ":" + address;
         if (!rateLimitService.tryAcquire(attemptKey, 5, Duration.ofMinutes(15))) {
-            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "密码尝试次数过多，请稍后再试");
+        }
+        if (passwordEncoder.matches(password, link.getPasswordHash())) {
+            rateLimitService.release(attemptKey);
+            return;
         }
         throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
     }
 
+    /**
+     * 公开访问鉴权限流：先判单 IP，再判单链接全局。
+     *
+     * <p>顺序不能反：全局桶先扣减时，任意匿名者每分钟 10 次错误请求就能把
+     * 该链接对所有正常访客锁死。全局阈值同时保持在单 IP 阈值的 4 倍以上，
+     * 且单 IP 先被自身额度拦截，单个来源无法打满全局桶。</p>
+     */
     private void requireAuthenticationRateLimit(String tokenHash, String clientAddress) {
-        if (!rateLimitService.tryAcquire("share-auth:token:" + tokenHash, 10, Duration.ofMinutes(1))
-                || (clientAddress != null
+        if (clientAddress != null
                 && !rateLimitService.tryAcquire(
-                "share-auth:ip:" + sha256(clientAddress), 30, Duration.ofMinutes(1)))) {
+                "share-auth:ip:" + sha256(clientAddress), 30, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+        if (!rateLimitService.tryAcquire("share-auth:token:" + tokenHash, 120, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
         }
     }

@@ -3,16 +3,18 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileRestoredEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.task.service.TaskDispatchItem;
+import com.omninest.modules.task.service.TaskDispatchService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +35,7 @@ class FileRestoreTaskPublisherTest {
     @Mock
     private FileNodeRepository fileNodeRepository;
     @Mock
-    private DomainEventPublisher domainEventPublisher;
+    private TaskDispatchService taskDispatchService;
     @InjectMocks
     private FileRestoreTaskPublisher publisher;
 
@@ -41,7 +43,7 @@ class FileRestoreTaskPublisherTest {
     void transactionalEventListenerIsAcceptedDuringContextInitialization() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(FileNodeRepository.class, () -> fileNodeRepository);
-            context.registerBean(DomainEventPublisher.class, () -> domainEventPublisher);
+            context.registerBean(TaskDispatchService.class, () -> taskDispatchService);
             context.register(FileRestoreTaskPublisher.class);
 
             context.refresh();
@@ -51,33 +53,39 @@ class FileRestoreTaskPublisherTest {
     }
 
     @Test
-    void restoredImagePublishesOnlyRestoreIndexTask() {
+    void restoredFilesAreWrittenToOutboxInOneBatch() {
         UUID ownerUserId = UUID.randomUUID();
-        UUID fileNodeId = UUID.randomUUID();
-        UUID fileObjectId = UUID.randomUUID();
-        FileNode node = new FileNode();
-        node.setId(fileNodeId);
-        node.setOwnerUserId(ownerUserId);
-        node.setNodeType(NodeType.FILE.getValue());
-        node.setName("photo.jpg");
-        node.setMimeType("image/jpeg");
-        node.setSizeBytes(2048);
-        node.setCurrentObjectId(fileObjectId);
-        when(fileNodeRepository.findAllById(List.of(fileNodeId))).thenReturn(List.of(node));
+        FileNode first = fileNode(ownerUserId, "photo.jpg");
+        FileNode second = fileNode(ownerUserId, "clip.mp4");
+        when(fileNodeRepository.findAllById(List.of(first.getId(), second.getId())))
+                .thenReturn(List.of(first, second));
 
         publisher.publishRestoredFiles(
-                new FileNodesRestoredEvent(ownerUserId, List.of(fileNodeId), Instant.now())
+                new FileNodesRestoredEvent(ownerUserId, List.of(first.getId(), second.getId()), Instant.now())
         );
 
-        verify(domainEventPublisher).publishTask(
+        verify(taskDispatchService, times(1)).enqueueAll(
+                eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY),
-                argThat(event -> matchesFileEvent(event, fileNodeId, ownerUserId))
+                argThat(items -> items.size() == 2 && matches(items.get(0), first, ownerUserId)
+                        && matches(items.get(1), second, ownerUserId))
         );
     }
 
-    private boolean matchesFileEvent(Object event, UUID fileNodeId, UUID ownerUserId) {
-        return event instanceof FileRestoredEvent restoredEvent
-                && fileNodeId.equals(restoredEvent.fileNodeId())
+    private boolean matches(TaskDispatchItem item, FileNode file, UUID ownerUserId) {
+        return file.getId().equals(item.taskId())
+                && item.payload() instanceof FileRestoredEvent restoredEvent
+                && file.getId().equals(restoredEvent.fileNodeId())
                 && ownerUserId.equals(restoredEvent.ownerUserId());
+    }
+
+    private FileNode fileNode(UUID ownerUserId, String name) {
+        FileNode node = new FileNode();
+        node.setId(UUID.randomUUID());
+        node.setOwnerUserId(ownerUserId);
+        node.setNodeType(NodeType.FILE.getValue());
+        node.setName(name);
+        node.setCurrentObjectId(UUID.randomUUID());
+        return node;
     }
 }

@@ -4,7 +4,6 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
@@ -112,7 +111,6 @@ public class BackdropAssetService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final StorageQuotaService storageQuotaService;
-    private final UserStorageCommand userStorageCommand;
     private final FileIngressStagingService ingressStagingService;
     private final BackdropScanTaskService backdropScanTaskService;
     private final RateLimitService rateLimitService;
@@ -128,7 +126,6 @@ public class BackdropAssetService {
      * @param derivedAssetStorageService 派生资产存储服务
      * @param fileQueryService 文件查询服务
      * @param storageQuotaService 存储配额服务
-     * @param userStorageCommand 用户存储命令端口
      * @param ingressStagingService 隔离暂存与扫描服务
      * @param backdropScanTaskService 扫描任务服务
      * @param rateLimitService 限流服务
@@ -140,7 +137,6 @@ public class BackdropAssetService {
             DerivedAssetStorageService derivedAssetStorageService,
             FileQueryService fileQueryService,
             StorageQuotaService storageQuotaService,
-            UserStorageCommand userStorageCommand,
             FileIngressStagingService ingressStagingService,
             BackdropScanTaskService backdropScanTaskService,
             RateLimitService rateLimitService,
@@ -153,7 +149,6 @@ public class BackdropAssetService {
         this.derivedAssetStorageService = derivedAssetStorageService;
         this.fileQueryService = fileQueryService;
         this.storageQuotaService = storageQuotaService;
-        this.userStorageCommand = userStorageCommand;
         this.ingressStagingService = ingressStagingService;
         this.backdropScanTaskService = backdropScanTaskService;
         this.rateLimitService = rateLimitService;
@@ -284,7 +279,9 @@ public class BackdropAssetService {
                 // 按 fileSize 扣减会凭空减少用户已用配额。
                 long settledBytes = storageQuotaService.settledBytes(RESERVATION_SOURCE_TYPE, assetId);
                 if (settledBytes > 0) {
-                    userStorageCommand.decrementUsage(ownerUserId, settledBytes);
+                    // 必须走配额服务而不是命令端口：直接改库会漏掉用户资料缓存失效，
+                    // 用户在配额恢复前仍看到旧的已用容量。
+                    storageQuotaService.decrementUsage(ownerUserId, settledBytes);
                 }
             }
             registerAfterCommitCleanup(() -> {

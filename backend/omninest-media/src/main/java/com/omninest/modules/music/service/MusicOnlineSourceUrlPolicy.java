@@ -145,7 +145,8 @@ public class MusicOnlineSourceUrlPolicy {
                 return false;
             }
             for (InetAddress address : addresses) {
-                if (isBenchmarkFakeIpv4(address) || isUniqueLocalIpv6(address)) {
+                // 只有 Fake-IP 段可以被跳过；IPv6 ULA 与其余内网段必须走拦截判定。
+                if (isBenchmarkFakeIpv4(address)) {
                     continue;
                 }
                 if (isBlockedAddress(address)) {

@@ -136,9 +136,11 @@ public class PhotoEditService {
     public PhotoEditVersionDto applyEdit(UUID ownerUserId, UUID photoId, EditRequest request) {
         // 读取与校验不占用事务
         PhotoItem photo = photoItemRepository.findById(photoId)
+                .filter(candidate -> candidate.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         if (!photo.getOwnerUserId().equals(ownerUserId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权编辑此照片");
+            // 他人照片按不存在处理，避免通过 403/404 差异枚举私有资源 UUID。
+            throw new BusinessException(ErrorCode.NOT_FOUND, "照片不存在");
         }
 
         // 二次编辑必须从当前活动的全分辨率文件起步：从 coverFileId 起步会把已经编辑过的照片
@@ -186,9 +188,10 @@ public class PhotoEditService {
             InputStream imageStream
     ) {
         PhotoItem photo = photoItemRepository.findById(photoId)
+                .filter(candidate -> candidate.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         if (!photo.getOwnerUserId().equals(ownerUserId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权编辑此照片");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "照片不存在");
         }
         if (declaredBytes == 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑结果为空");

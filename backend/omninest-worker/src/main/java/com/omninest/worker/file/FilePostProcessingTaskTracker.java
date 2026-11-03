@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文件后处理任务（THUMBNAIL / FILE_INDEX / TEXT_EXTRACTION）状态跟踪器。
@@ -129,12 +130,16 @@ public class FilePostProcessingTaskTracker {
     /**
      * 处理执行失败：重试期内经任务 Outbox 延迟重投，超过上限或不可重试错误进入死信。
      *
+     * <p>状态与 Outbox 必须在同一事务内提交：先落 {@code RETRY_WAIT} 再插投递记录，
+     * 中断在两步之间会让任务永久停在重试等待且没有任何消息会被投递。</p>
+     *
      * @param taskType 任务类型
      * @param routingKey 重投路由键
      * @param taskId 任务 ID，为 null 时仅记录日志（无任务记录的历史消息）
      * @param event 原始事件（用于延迟重投）
      * @param exception 执行异常
      */
+    @Transactional(rollbackFor = Exception.class)
     public void handleFailure(
             String taskType,
             String routingKey,

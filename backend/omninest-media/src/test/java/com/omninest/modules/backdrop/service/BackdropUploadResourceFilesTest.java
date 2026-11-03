@@ -16,7 +16,6 @@ import com.omninest.modules.media.support.TestTempStagingPort;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
@@ -73,7 +72,6 @@ class BackdropUploadResourceFilesTest {
     DerivedAssetStorageService derivedAssetStorageService;
     FileQueryService fileQueryService;
     StorageQuotaService storageQuotaService;
-    UserStorageCommand userStorageCommand;
     FileIngressStagingService ingressStagingService;
     BackdropScanTaskService backdropScanTaskService;
     RateLimitService rateLimitService;
@@ -103,7 +101,6 @@ class BackdropUploadResourceFilesTest {
         derivedAssetStorageService = mock(DerivedAssetStorageService.class);
         fileQueryService = mock(FileQueryService.class);
         storageQuotaService = mock(StorageQuotaService.class);
-        userStorageCommand = mock(UserStorageCommand.class);
         ingressStagingService = mock(FileIngressStagingService.class);
         backdropScanTaskService = mock(BackdropScanTaskService.class);
         rateLimitService = mock(RateLimitService.class);
@@ -147,7 +144,6 @@ class BackdropUploadResourceFilesTest {
                 derivedAssetStorageService,
                 fileQueryService,
                 storageQuotaService,
-                userStorageCommand,
                 ingressStagingService,
                 backdropScanTaskService,
                 rateLimitService,

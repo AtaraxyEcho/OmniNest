@@ -267,9 +267,12 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 || (first == 100 && second >= 64 && second <= 127)
                 || (first == 169 && second == 254)
                 || (first == 192 && second == 0 && third == 0)
+                || (first == 192 && second == 0 && third == 2)
                 || (first == 192 && second == 88 && third == 99)
                 || (first == 198 && (second == 18 || second == 19))
                 || (first == 198 && second == 51 && third == 100)
-                || (first == 203 && second == 0 && third == 113);
+                || (first == 203 && second == 0 && third == 113)
+                // Class E 保留段（含受限广播 255.255.255.255）不属于可路由公网地址。
+                || first >= 240;
     }
 }

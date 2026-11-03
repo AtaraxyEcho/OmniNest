@@ -9,6 +9,8 @@ import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 
+part 'reader_sync_queue_replacements.dart';
+
 /// 阅读器离线同步队列
 ///
 /// 统一处理进度、书签、标注、笔记的离线写入和在线同步。
@@ -411,10 +413,14 @@ class ReaderSyncQueue {
   }
 
   /// 派发前重读一次队列行：创建回包可能已把后续操作的 localId 改写成服务端 ID。
+  ///
+  /// 必须带账号条件：`_userId` 是静态可变值，刷写途中退出登录或换号时，
+  /// 只按 id 重读会把上一个账号的行读进当前账号的上下文并回写其本地缓存。
   static Future<SyncOperation?> _reloadPendingOperation(int id) async {
     final rows =
-        await (_database.select(_database.syncOperations)
-          ..where((table) => table.id.equals(id))).get();
+        await (_database.select(_database.syncOperations)..where(
+          (table) => table.id.equals(id) & _ownedByCurrentUser(table.userId),
+        )).get();
     if (rows.isEmpty || rows.first.status != 'pending') {
       return null;
     }
@@ -552,12 +558,20 @@ class ReaderSyncQueue {
   }) async {
     final types = <String>[if (updateType != null) updateType, deleteType];
     final operations =
-        await (_database.select(_database.syncOperations)..where(
-          (table) =>
-              table.type.isIn(types) &
-              table.status.isIn(const ['pending', 'failed']) &
-              _ownedByCurrentUser(table.userId),
-        )).get();
+        await (_database.select(_database.syncOperations)
+              ..where(
+                (table) =>
+                    table.type.isIn(types) &
+                    table.status.isIn(const ['pending', 'failed']) &
+                    _ownedByCurrentUser(table.userId),
+              )
+              // 合并是「后写覆盖先写」：SQLite 不保证按插入顺序返回，
+              // 页复用后早期离线修改可能覆盖最新一次，必须显式定序。
+              ..orderBy([
+                (table) => OrderingTerm.asc(table.createdAt),
+                (table) => OrderingTerm.asc(table.id),
+              ]))
+            .get();
     final deletingIds = <String>{};
     final updatingPayloads = <String, Map<String, dynamic>>{};
     for (final operation in operations) {
@@ -719,7 +733,10 @@ class ReaderSyncQueue {
           note: payload['note'] as String?,
           clientOperationId: payload['localId'] as String?,
         );
-        await _replaceBookmark(payload['localId'] as String?, bookmark);
+        await ReaderSyncReplacements.replaceBookmark(
+          payload['localId'] as String?,
+          bookmark,
+        );
 
       case opBookmarkDelete:
         await api.deleteBookmark(payload['bookmarkId'] as String);
@@ -735,7 +752,10 @@ class ReaderSyncQueue {
           color: payload['color'] as String? ?? '#FFEB3B',
           clientOperationId: payload['localId'] as String?,
         );
-        await _replaceAnnotation(payload['localId'] as String?, annotation);
+        await ReaderSyncReplacements.replaceAnnotation(
+          payload['localId'] as String?,
+          annotation,
+        );
 
       case opAnnotationUpdate:
         await api.updateAnnotation(
@@ -755,7 +775,10 @@ class ReaderSyncQueue {
           content: payload['content'] as String,
           clientOperationId: payload['localId'] as String?,
         );
-        await _replaceNote(payload['localId'] as String?, note);
+        await ReaderSyncReplacements.replaceNote(
+          payload['localId'] as String?,
+          note,
+        );
 
       case opNoteUpdate:
         await api.updateNote(
@@ -806,133 +829,6 @@ class ReaderSyncQueue {
           );
     final result = await query.getSingle();
     return result.read(count) ?? 0;
-  }
-
-  /// 创建请求在途期间用户可能已经删除或改写了这条本地记录：回包后既不能把已删的
-  /// 记录写回本地（服务端刚创建的那份也得跟着清），也不能让服务端返回值覆盖用户
-  /// 刚写的内容（那才是最新意图，需要补一条更新把服务端对齐过来）。
-  static ReaderLocalStorage get _localStorage =>
-      ReaderLocalStorage(_database, textCipher: _textCipher, userId: _userId);
-
-  static Future<void> _replaceBookmark(
-    String? localId,
-    ReaderBookmark bookmark,
-  ) async {
-    if (localId == null || localId.isEmpty || localId == bookmark.id) {
-      return;
-    }
-    final rewritten = await _rewritePendingReference(
-      localId: localId,
-      serverId: bookmark.id,
-      types: const {opBookmarkDelete},
-      field: 'bookmarkId',
-    );
-    final replaced = await _localStorage.replaceBookmarkId(
-      localId: localId,
-      serverBookmark: bookmark,
-    );
-    if (!replaced && !rewritten.contains(opBookmarkDelete)) {
-      await enqueueBookmarkDelete(bookmarkId: bookmark.id);
-    }
-  }
-
-  static Future<void> _replaceAnnotation(
-    String? localId,
-    ReaderAnnotation annotation,
-  ) async {
-    if (localId == null || localId.isEmpty || localId == annotation.id) {
-      return;
-    }
-    // 创建在途期间用户已排队的更新/删除仍指向 localId；服务端真 ID 回来后
-    // 必须先改写这些操作，否则它们会带着临时 ID 必定失败。
-    final rewritten = await _rewritePendingReference(
-      localId: localId,
-      serverId: annotation.id,
-      types: const {opAnnotationUpdate, opAnnotationDelete},
-      field: 'annotationId',
-    );
-    // 旧行由替换事务自己读出：本地行在 HTTP 在途期间被删时返回 null，
-    // 此时服务端刚创建的记录要补发删除，也不能再为一条已删记录排更新。
-    final local = await _localStorage.replaceAnnotationId(
-      localId: localId,
-      serverAnnotation: annotation,
-    );
-    if (local == null) {
-      if (!rewritten.contains(opAnnotationDelete)) {
-        await enqueueAnnotationDelete(annotationId: annotation.id);
-      }
-      return;
-    }
-    final note = local.note ?? annotation.note;
-    final color = local.color;
-    if (note != annotation.note || color != annotation.color) {
-      await enqueueAnnotationUpdate(
-        annotationId: annotation.id,
-        note: note,
-        color: color,
-      );
-    }
-  }
-
-  static Future<void> _replaceNote(String? localId, ReaderNote note) async {
-    if (localId == null || localId.isEmpty || localId == note.id) {
-      return;
-    }
-    final rewritten = await _rewritePendingReference(
-      localId: localId,
-      serverId: note.id,
-      types: const {opNoteUpdate, opNoteDelete},
-      field: 'noteId',
-    );
-    final local = await _localStorage.replaceNoteId(
-      localId: localId,
-      serverNote: note,
-    );
-    if (local == null) {
-      if (!rewritten.contains(opNoteDelete)) {
-        await enqueueNoteDelete(noteId: note.id);
-      }
-      return;
-    }
-    if (local.title != note.title || local.content != note.content) {
-      await enqueueNoteUpdate(
-        noteId: note.id,
-        title: local.title,
-        content: local.content,
-      );
-    }
-  }
-
-  /// 把队列中指向客户端临时 ID 的更新/删除操作改写到服务端真实 ID。
-  ///
-  /// 只处理当前账号的 pending/failed 行；已完成行会在 flush 末尾清理。
-  static Future<Set<String>> _rewritePendingReference({
-    required String localId,
-    required String serverId,
-    required Set<String> types,
-    required String field,
-  }) async {
-    final operations =
-        await (_database.select(_database.syncOperations)..where(
-          (table) =>
-              table.type.isIn(types) &
-              table.status.isIn(const ['pending', 'failed']) &
-              _ownedByCurrentUser(table.userId),
-        )).get();
-    final rewritten = <String>{};
-    for (final operation in operations) {
-      final payload = await _decodePayload(operation);
-      if (payload == null || payload[field] != localId) {
-        continue;
-      }
-      payload[field] = serverId;
-      await (_database.update(_database.syncOperations)
-        ..where((table) => table.id.equals(operation.id))).write(
-        SyncOperationsCompanion(payload: Value(await _serializePayload(payload))),
-      );
-      rewritten.add(operation.type);
-    }
-    return rewritten;
   }
 
   static Future<void> _markCompleted(int id) {

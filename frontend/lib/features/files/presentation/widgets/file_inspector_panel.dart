@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +5,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
-import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/application/file_media_info_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
@@ -273,8 +269,10 @@ class _InspectorPreview extends ConsumerWidget {
   }
 }
 
-/// 图片分辨率行：仅在图片文件且有可用下载地址时解析，异步解码取宽高；
-/// 其余类型不渲染该行。
+/// 图片分辨率行：宽高取后端媒体元数据（与视频行同一口径）。
+///
+/// 属性面板曾为读一对数字而下载并解码原图：50MP 原图会在主 isolate 上
+/// 留下上百 MB 位图，选中即卡顿；后端 ffprobe 已对图片缓存宽高。
 class _InspectorResolutionRow extends ConsumerWidget {
   const _InspectorResolutionRow({required this.file, required this.labelColor});
 
@@ -288,49 +286,26 @@ class _InspectorResolutionRow extends ConsumerWidget {
     if (!isImage) {
       return const SizedBox.shrink();
     }
-    final url = ref.watch(fileDownloadUrlProvider(file.id)).asData?.value;
-    if (url == null || url.isEmpty) {
-      return const SizedBox.shrink();
+    final mediaInfo = ref.watch(fileMediaInfoProvider(file.id));
+    final info = mediaInfo.asData?.value;
+    if (info != null && info.width != null && info.height != null) {
+      return _InspectorKVRow(
+        label: AppLocalizations.of(context).filesInspectorResolution,
+        value: '${info.width} × ${info.height}',
+        labelColor: labelColor,
+      );
     }
-    final resolution = ref.watch(_imageResolutionProvider(url));
-    return _InspectorKVRow(
-      label: AppLocalizations.of(context).filesInspectorResolution,
-      value: resolution.asData?.value ?? '…',
-      labelColor: labelColor,
-    );
+    if (mediaInfo.isLoading) {
+      return _InspectorKVRow(
+        label: AppLocalizations.of(context).filesInspectorResolution,
+        value: '…',
+        labelColor: labelColor,
+      );
+    }
+    // 探测失败或该来源不支持探测：没有可靠宽高就不编一个数字出来。
+    return const SizedBox.shrink();
   }
 }
-
-/// 以图片流首帧尺寸推导分辨率；解码失败返回 null 由调用方隐藏。
-final _imageResolutionProvider = FutureProvider.autoDispose
-    .family<String?, String>((ref, url) async {
-      final completer = Completer<ui.Image>();
-      final stream = NetworkImage(url).resolve(const ImageConfiguration());
-      late final ImageStreamListener listener;
-      listener = ImageStreamListener(
-        (info, _) {
-          if (!completer.isCompleted) {
-            completer.complete(info.image);
-          }
-        },
-        onError: (error, stackTrace) {
-          if (!completer.isCompleted) {
-            completer.completeError(error, stackTrace);
-          }
-        },
-      );
-      stream.addListener(listener);
-      try {
-        final image = await completer.future;
-        return '${image.width} × ${image.height}';
-      } on Object {
-        return null;
-      } finally {
-        // 首帧取到即摘掉监听：不摘会把整张全尺寸图钉在 ImageCache 里，
-        // 属性面板每看一张图片就多留一份无法回收的 ui.Image。
-        stream.removeListener(listener);
-      }
-    });
 
 /// 视频媒体行：时长 + 分辨率，来自后端 ffprobe 探测（内容缓存）；
 /// 非视频或探测失败不渲染。

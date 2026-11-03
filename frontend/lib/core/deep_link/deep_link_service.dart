@@ -18,22 +18,37 @@ const List<String> deepLinkAllowedPrefixes = <String>[
   '/video/',
 ];
 
+/// 路径段里不允许出现的控制字符。
+final RegExp _deepLinkControlChars = RegExp(r'[\x00-\x1f\x7f]');
+
 /// 将 omninest:// 链接解析为应用内路由路径。
 ///
 /// 返回 null 表示链接不在白名单内或格式不合法。
+///
+/// 判定必须基于已解码的 [Uri.pathSegments]：`Uri.path` 保留百分号编码，
+/// `omninest://video/%2e%2e/admin` 用字面量 `..` 检查拦不住，而交给
+/// [GoRouter.go] 时会被解码并归一化，等于越过白名单直达受保护路由。
+/// 重新按段编码后再比对前缀，保证「校验的形状」就是「交给路由的形状」。
 String? resolveDeepLinkPath(Uri uri) {
   if (uri.scheme.toLowerCase() != 'omninest') {
     return null;
   }
   final host = uri.host.trim();
-  final path = uri.path;
-  if (host.isEmpty || path.isEmpty || path == '/') {
+  if (host.isEmpty || uri.pathSegments.isEmpty) {
     return null;
   }
-  final route = '/$host$path';
-  if (route.contains('..') || route.contains('//')) {
-    return null;
+  final segments = <String>[host, ...uri.pathSegments];
+  for (final segment in segments) {
+    if (segment.isEmpty ||
+        segment == '.' ||
+        segment == '..' ||
+        segment.contains('/') ||
+        segment.contains(r'\') ||
+        _deepLinkControlChars.hasMatch(segment)) {
+      return null;
+    }
   }
+  final route = '/${segments.map(Uri.encodeComponent).join('/')}';
   for (final prefix in deepLinkAllowedPrefixes) {
     if (route.startsWith(prefix) ||
         route == prefix.substring(0, prefix.length - 1)) {

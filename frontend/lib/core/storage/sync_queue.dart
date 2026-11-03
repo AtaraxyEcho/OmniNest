@@ -47,14 +47,21 @@ class SyncQueue {
   }
 
   /// 判断指定操作类型是否存在待同步记录。
+  ///
+  /// 同一类型允许多条待同步记录，必须 limit(1) 后再取单值，
+  /// 否则 Drift 的 getSingleOrNull 会在两行以上时抛 StateError。
   Future<bool> hasPending(String type) async {
     final row =
-        await (_db.select(_db.syncOperations)..where(
-          (table) =>
-              _owned(table.userId) &
-              table.type.equals(type) &
-              (table.status.equals('pending') | table.status.equals('failed')),
-        )).getSingleOrNull();
+        await (_db.select(_db.syncOperations)
+              ..where(
+                (table) =>
+                    _owned(table.userId) &
+                    table.type.equals(type) &
+                    (table.status.equals('pending') |
+                        table.status.equals('failed')),
+              )
+              ..limit(1))
+            .getSingleOrNull();
     return row != null;
   }
 

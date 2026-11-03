@@ -176,7 +176,8 @@ class FileDownloadContentService {
             return node;
         }
         if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
+            // 个人空间他人文件按不存在处理，避免通过 403/404 差异枚举私有资源 UUID。
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
         }
         return node;
     }

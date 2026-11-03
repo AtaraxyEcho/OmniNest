@@ -171,6 +171,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue photoIndexUserPurgeQueue() {
+        return durableQueue(QueueNames.PHOTO_INDEX_USER_PURGE_QUEUE);
+    }
+
+    @Bean
     Queue photoBatchQueue() {
         return durableQueue(QueueNames.PHOTO_BATCH_QUEUE);
     }
@@ -342,6 +347,13 @@ public class RabbitMqConfig {
     @Bean
     Binding photoIndexBinding(Queue photoIndexQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(photoIndexQueue).to(taskExchange).with(QueueNames.PHOTO_INDEX_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding photoIndexUserPurgeBinding(Queue photoIndexUserPurgeQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(photoIndexUserPurgeQueue)
+                .to(taskExchange)
+                .with(QueueNames.PHOTO_INDEX_USER_PURGE_ROUTING_KEY);
     }
 
     @Bean

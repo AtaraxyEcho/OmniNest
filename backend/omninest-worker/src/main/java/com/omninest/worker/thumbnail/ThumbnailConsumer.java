@@ -45,14 +45,15 @@ public class ThumbnailConsumer {
     @RabbitListener(queues = QueueNames.THUMBNAIL_QUEUE)
     public void handle(FileUploadedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        FilePostProcessingTaskTracker.TrackedTask tracked =
-                taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "PROCESSING");
-        if (tracked.shouldSkip()) {
-            log.info("缩略图任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
-            channel.basicAck(deliveryTag, false);
-            return;
-        }
+        FilePostProcessingTaskTracker.TrackedTask tracked = null;
         try {
+            // 领取也在 try 内：手动 ACK 模式没有容器兜底，领取异常逃逸会让消息永久 Unacked。
+            tracked = taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "PROCESSING");
+            if (tracked.shouldSkip()) {
+                log.info("缩略图任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
             if (!isSupportedImage(event.mimeType())) {
                 log.debug("跳过非图片文件缩略图生成: fileNodeId={}, mimeType={}", event.fileNodeId(), event.mimeType());
                 taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "UNSUPPORTED_MIME"));
@@ -98,6 +99,12 @@ public class ThumbnailConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("缩略图生成失败: fileNodeId={}", event.fileNodeId(), e);
+            if (tracked == null) {
+                log.error("缩略图任务领取失败，转入死信队列: fileNodeId={}, errorType={}",
+                        event.fileNodeId(), e.getClass().getSimpleName());
+                channel.basicNack(deliveryTag, false, false);
+                return;
+            }
             try {
                 taskTracker.handleFailure(TASK_TYPE, QueueNames.THUMBNAIL_ROUTING_KEY, tracked.taskId(), event, e);
                 channel.basicAck(deliveryTag, false);

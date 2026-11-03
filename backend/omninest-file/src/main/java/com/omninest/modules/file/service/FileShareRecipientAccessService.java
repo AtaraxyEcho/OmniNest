@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.ShareLink;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -94,7 +95,8 @@ public class FileShareRecipientAccessService {
             Map<UUID, FileNode> candidatesById,
             Set<UUID> accessible
     ) {
-        List<Object[]> roots = shareRecipientRepository.findActiveFolderShareRoots(userId);
+        List<Object[]> roots = shareRecipientRepository.findActiveFolderShareRoots(
+                userId, SpaceType.PERSONAL);
         Instant now = Instant.now();
         for (Object[] row : roots) {
             ShareLink link = (ShareLink) row[0];
@@ -104,7 +106,10 @@ public class FileShareRecipientAccessService {
             }
             for (Map.Entry<UUID, FileNode> entry : candidatesById.entrySet()) {
                 FileNode node = entry.getValue();
-                if (!Objects.equals(link.getOwnerUserId(), node.getOwnerUserId())
+                // 个人空间目录分享只授权个人空间后代：共享空间可能由同一用户上传
+                // 同名路径，前缀命中会把共享空间子树一并放行。
+                if (node.getSpaceType() != SpaceType.PERSONAL
+                        || !Objects.equals(link.getOwnerUserId(), node.getOwnerUserId())
                         || node.getNormalizedPath() == null) {
                     continue;
                 }

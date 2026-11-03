@@ -234,6 +234,32 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     );
 
     /**
+     * 推进用户访问令牌截止时间，只允许向前移动。
+     *
+     * @param userId 用户 ID
+     * @param cutoff 新的截止时间
+     * @return 成功更新时为 1，否则为 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE AuthUser user
+            SET user.accessCutoffAt = :cutoff,
+                user.version = user.version + 1
+            WHERE user.id = :userId
+              AND (user.accessCutoffAt IS NULL OR user.accessCutoffAt < :cutoff)
+            """)
+    int advanceAccessCutoff(@Param("userId") UUID userId, @Param("cutoff") Instant cutoff);
+
+    /**
+     * 读取数据库中的访问令牌截止时间，供 Redis 缓存缺失时兜底。
+     *
+     * @param userId 用户 ID
+     * @return 截止时间；从未发生权限变更时为空
+     */
+    @Query("select user.accessCutoffAt from AuthUser user where user.id = :userId")
+    Optional<Instant> findAccessCutoffAt(@Param("userId") UUID userId);
+
+    /**
      * 为不受配额限制的账户原子增加实际用量。
      *
      * @param userId 用户 ID

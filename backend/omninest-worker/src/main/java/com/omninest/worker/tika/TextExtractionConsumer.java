@@ -42,16 +42,17 @@ public class TextExtractionConsumer {
     )
     public void handle(FileUploadedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        FilePostProcessingTaskTracker.TrackedTask tracked =
-                taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "EXTRACTING");
-        if (tracked.shouldSkip()) {
-            log.info("文本提取任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
-            channel.basicAck(deliveryTag, false);
-            return;
-        }
+        FilePostProcessingTaskTracker.TrackedTask tracked = null;
         FileSearchIndexService.ChunkIndexSession indexSession = null;
         boolean indexCommitted = false;
         try {
+            // 领取也在 try 内：手动 ACK 模式没有容器兜底，领取异常逃逸会让消息永久 Unacked。
+            tracked = taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "EXTRACTING");
+            if (tracked.shouldSkip()) {
+                log.info("文本提取任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
             if (fileLifecycleGuard.findOwnedProcessable(event.ownerUserId(), event.fileNodeId()).isEmpty()) {
                 log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
                 taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
@@ -121,6 +122,12 @@ public class TextExtractionConsumer {
                 }
             }
             try {
+                if (tracked == null) {
+                    log.error("文本提取任务领取失败，转入死信队列: fileNodeId={}, errorType={}",
+                            event.fileNodeId(), e.getClass().getSimpleName());
+                    channel.basicNack(deliveryTag, false, false);
+                    return;
+                }
                 taskTracker.handleFailure(
                         TASK_TYPE, QueueNames.TEXT_EXTRACTION_ROUTING_KEY, tracked.taskId(), event, e);
                 channel.basicAck(deliveryTag, false);

@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -34,22 +36,33 @@ public class RedisLuaRateLimiter implements RateLimitService {
             return LocalFallbackRateLimiter.tryAcquire(key, Math.min(limit, 3), window);
         }
         String redisKey = properties.keyPrefix() + ":" + key;
-        Long allowed = RedisRateLimitExecutor.execute(
-                "fixed-window",
-                () -> redisTemplate.execute(
-                        script,
-                        List.of(redisKey),
-                        Integer.toString(limit),
-                        Long.toString(window.toMillis())
-                )
-        );
+        Long allowed;
+        try {
+            allowed = RedisRateLimitExecutor.execute(
+                    "fixed-window",
+                    () -> redisTemplate.execute(
+                            script,
+                            List.of(redisKey),
+                            Integer.toString(limit),
+                            Long.toString(window.toMillis())
+                    )
+            );
+        } catch (BusinessException exception) {
+            if (exception.errorCode() != ErrorCode.DEPENDENCY_UNAVAILABLE) {
+                throw exception;
+            }
+            // Redis 瞬断时不能让登录、刷新等核心入口整体不可用：退化为极小本地限额。
+            // 本地限额不跨实例，只承担"Redis 故障期间不产生无限尝试"这一档风险。
+            return LocalFallbackRateLimiter.tryAcquire(key, Math.min(limit, 3), window);
+        }
         return Long.valueOf(1L).equals(allowed);
     }
 
     @Override
     public void release(String key) {
+        // 无论当前走 Redis 还是本地兜底，都归还同一把一次性凭证的占位。
+        LocalFallbackRateLimiter.release(key);
         if (!properties.enabled()) {
-            LocalFallbackRateLimiter.release(key);
             return;
         }
         try {

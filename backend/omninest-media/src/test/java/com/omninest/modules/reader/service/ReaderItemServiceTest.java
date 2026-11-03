@@ -378,10 +378,11 @@ class ReaderItemServiceTest {
                 null
         );
 
+        // 他人条目按不存在返回：403 与 404 的差异会让 itemId 是否存在的枚举成为可能。
         assertThatThrownBy(() -> itemService.updateMetadata(OWNER_ID, SHARED_ITEM_ID, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).errorCode())
-                        .isEqualTo(ErrorCode.FORBIDDEN));
+                        .isEqualTo(ErrorCode.BOOK_NOT_FOUND));
 
         verify(itemRepository, never()).save(any());
         verify(fileLifecycleGuard, never()).requireOwnedWritable(OWNER_ID, SHARED_FILE_NODE_ID);

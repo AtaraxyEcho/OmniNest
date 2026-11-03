@@ -39,7 +39,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/application/reader_book_provider.dart': 911,
   'lib/features/reader/data/epub_parser_service.dart': 833,
   'lib/features/reader/data/reader_api.dart': 844,
-  'lib/features/reader/data/reader_sync_queue.dart': 964,
+  'lib/features/reader/data/reader_sync_queue.dart': 860,
   'lib/features/reader/presentation/pages/comic_detail_page.dart': 834,
   'lib/features/reader/presentation/pages/reader_view_page.dart': 818,
   'lib/features/reader/presentation/widgets/book_detail_space.dart': 839,

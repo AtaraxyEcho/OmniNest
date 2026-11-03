@@ -378,6 +378,9 @@ public class FileShareAccessService {
 
     private FileNode requireShareOwnerNode(ShareLink link, UUID nodeId, String message) {
         return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(nodeId, link.getOwnerUserId())
+                // 文件夹分享只从个人空间创建：共享空间子树可能混有其他成员的内容，
+                // 不能凭同名前缀被目录分享带出。
+                .filter(node -> node.getSpaceType() == SpaceType.PERSONAL)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, message));
     }
 

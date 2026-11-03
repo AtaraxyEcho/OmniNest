@@ -241,6 +241,11 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
         if (data.section != target) {
           _deepLinkedSubpage = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            // post-frame 也是异步边界：这一帧之后页面可能已被销毁，
+            // 再用 ref 读控制器会命中已释放的 Element。
+            if (!mounted) {
+              return;
+            }
             final controller = ref.read(fileBrowserControllerProvider.notifier);
             controller.setMobileSubpage(true);
             controller.loadSection(target);
@@ -248,6 +253,9 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
         } else if (!data.mobileSubpage) {
           // 已是目标分区但停在模块首页（回首页后再点同一入口）：直接进子页。
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
             ref
                 .read(fileBrowserControllerProvider.notifier)
                 .setMobileSubpage(true);

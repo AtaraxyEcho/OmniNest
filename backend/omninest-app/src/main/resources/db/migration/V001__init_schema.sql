@@ -226,6 +226,7 @@ CREATE TABLE "omni"."auth_users" (
   "used_bytes" int8 NOT NULL DEFAULT 0,
   "reserved_bytes" int8 NOT NULL DEFAULT 0,
   "last_login_at" timestamptz(6),
+  "access_cutoff_at" timestamptz(6),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0
@@ -242,6 +243,7 @@ COMMENT ON COLUMN "omni"."auth_users"."quota_bytes" IS '存储配额字节数，
 COMMENT ON COLUMN "omni"."auth_users"."used_bytes" IS '已使用存储字节数';
 COMMENT ON COLUMN "omni"."auth_users"."reserved_bytes" IS '写入任务已预留但尚未结算的存储字节数';
 COMMENT ON COLUMN "omni"."auth_users"."last_login_at" IS '最后登录时间';
+COMMENT ON COLUMN "omni"."auth_users"."access_cutoff_at" IS '访问令牌截止时间：早于或等于该时间签发的令牌立即失效，Redis 不可用时的数据库兜底';
 COMMENT ON COLUMN "omni"."auth_users"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."auth_users"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."auth_users"."version" IS '乐观锁版本号';
@@ -4347,3 +4349,17 @@ CREATE INDEX "idx_media_tv_series_title_trgm" ON "omni"."media_tv_series"
   USING gin (lower("title") "public"."gin_trgm_ops");
 CREATE INDEX "idx_auth_users_username_trgm" ON "omni"."auth_users"
   USING gin (lower("username") "public"."gin_trgm_ops");
+
+-- ── 非 owner 前导的批量查询索引 ─────────────────────────────────────────
+-- 下列仓储方法按业务外键或「状态 + 时间」过滤而不带 owner_user_id，
+-- 既有复合索引以 owner_user_id 为前导列，无法提供可命中的前缀。
+CREATE INDEX "idx_reader_item_sources_content_hash" ON "omni"."reader_item_sources" ("content_hash")
+  WHERE "content_hash" IS NOT NULL;
+CREATE INDEX "idx_file_ingress_items_source_task" ON "omni"."file_ingress_items" ("source_task_id")
+  WHERE "source_task_id" IS NOT NULL;
+CREATE INDEX "idx_file_ingress_items_status_updated" ON "omni"."file_ingress_items" ("status", "updated_at");
+CREATE INDEX "idx_photo_batch_tasks_status_updated" ON "omni"."photo_batch_tasks" ("status", "updated_at");
+CREATE INDEX "idx_content_assets_file_node" ON "omni"."content_assets" ("file_node_id")
+  WHERE "file_node_id" IS NOT NULL;
+CREATE INDEX "idx_reader_progress_item" ON "omni"."reader_progress" ("reader_item_id");
+CREATE INDEX "idx_media_series_favorites_series" ON "omni"."media_series_favorites" ("series_id");

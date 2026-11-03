@@ -98,6 +98,14 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
   bool _isLoadingMore = false;
   Object? _loadMoreError;
 
+  /// 分页世代号：请求在途时相册被切换或详情被刷新，旧响应必须整份丢弃，
+  /// 否则它会把旧页数据拼进新列表并把 _page 覆写回旧值。
+  int _loadGeneration = 0;
+
+  /// 服务端已无更多数据：photoCount 是统计值，去重或口径差异都可能让
+  /// 「列表长度 < 统计值」恒成立，只靠它判断会触底死循环请求。
+  bool _reachedEnd = false;
+
   @override
   void initState() {
     super.initState();
@@ -110,6 +118,8 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
     // 详情 Provider 刷新（增删照片后）以服务端首页为准并重置分页。
     if (oldWidget.albumId != widget.albumId ||
         !identical(oldWidget.photos, widget.photos)) {
+      _loadGeneration++;
+      _reachedEnd = false;
       _photos = List<PhotoItem>.of(widget.photos);
       _page = 0;
       _isLoadingMore = false;
@@ -117,12 +127,13 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
     }
   }
 
-  bool get _hasMore => _photos.length < widget.album.photoCount;
+  bool get _hasMore => !_reachedEnd && _photos.length < widget.album.photoCount;
 
   Future<void> _loadMorePhotos() async {
     if (_isLoadingMore || !_hasMore) {
       return;
     }
+    final generation = _loadGeneration;
     setState(() {
       _isLoadingMore = true;
       _loadMoreError = null;
@@ -132,17 +143,19 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
       final result = await ref
           .read(photoCenterControllerProvider.notifier)
           .listAlbumPhotos(albumId: widget.albumId, page: nextPage);
-      if (!mounted) {
+      if (!mounted || generation != _loadGeneration) {
         return;
       }
       final existingIds = _photos.map((photo) => photo.id).toSet();
       setState(() {
         _page = result.page;
-        _photos = [
-          ..._photos,
+        final added = [
           for (final photo in result.items)
             if (existingIds.add(photo.id)) photo,
         ];
+        _photos = [..._photos, ...added];
+        // 空页或整页都是已见过的 ID 都说明再翻也不会前进，停止触底请求。
+        _reachedEnd = result.items.isEmpty || added.isEmpty;
         _isLoadingMore = false;
       });
     } on Exception catch (error) {

@@ -4,6 +4,7 @@ import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.SessionRevocationCache;
 import com.omninest.common.security.SessionRevocationChecker;
 import com.omninest.modules.user.domain.SessionRevocationEntity;
+import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +43,7 @@ public class SessionRevocationService implements SessionRevocationChecker {
     private final SessionRevocationCache cache;
     private final SessionRevocationWriter writer;
     private final AuthenticationTokenPolicy authenticationTokenPolicy;
+    private final AuthUserRepository authUserRepository;
 
     /**
      * 撤销单个会话，并将撤销结果写入持久层和缓存。
@@ -107,22 +109,22 @@ public class SessionRevocationService implements SessionRevocationChecker {
     }
 
     /**
-     * 记录访问令牌截止时间：早于该时间签发的访问令牌立即失效。
+     * 记录访问令牌截止时间：早于或等于该时间签发的访问令牌立即失效。
      *
      * <p>用于权限变更保留当前会话的场景，避免旧 JWT 中的高权限声明在剩余
-     * 有效期内继续生效。记录保留时长跟随访问令牌有效期。</p>
+     * 有效期内继续生效。数据库列是权威兜底，Redis 只是快速通道；两步都写，
+     * 缓存丢失时仍能拦截旧权限令牌。</p>
      *
      * @param userId 用户标识
      * @param cutoff 截止时间
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void invalidateAccessTokensBefore(UUID userId, Instant cutoff) {
         if (userId == null || cutoff == null) {
             return;
         }
-        Duration ttl = authenticationTokenPolicy.accessTokenTtl();
-        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
-            ttl = DEFAULT_ACCESS_TOKEN_TTL;
-        }
+        Duration ttl = accessTokenTtl();
+        authUserRepository.advanceAccessCutoff(userId, cutoff);
         cache.markAccessTokenCutoff(userId, cutoff, ttl);
     }
 
@@ -134,9 +136,36 @@ public class SessionRevocationService implements SessionRevocationChecker {
         if (issuedAt == null) {
             return true;
         }
-        return cache.accessTokenCutoff(userId)
-                .map(cutoff -> issuedAt.getEpochSecond() < cutoff.getEpochSecond())
+        Optional<Instant> cutoff = cache.accessTokenCutoff(userId);
+        if (cutoff.isEmpty()) {
+            cutoff = loadDatabaseCutoff(userId);
+        }
+        // 同一秒内签发的令牌必须被视为过期：秒级精度下严格小于会让撤权同秒
+        // 签发的旧权限令牌继续有效到自然过期。
+        return cutoff
+                .map(value -> issuedAt.getEpochSecond() <= value.getEpochSecond())
                 .orElse(false);
+    }
+
+    private Optional<Instant> loadDatabaseCutoff(UUID userId) {
+        try {
+            Optional<Instant> cutoff = authUserRepository.findAccessCutoffAt(userId);
+            cutoff.ifPresent(value -> cache.markAccessTokenCutoff(userId, value, accessTokenTtl()));
+            return cutoff;
+        } catch (RuntimeException exception) {
+            // 缓存与数据库同时不可用属于极端故障：放行会让旧权限令牌继续生效，
+            // 因此这里与 isRevoked 一致按已过期处理。
+            log.error("访问令牌截止时间查询失败，拒绝当前令牌: userId={}", userId, exception);
+            return Optional.of(Instant.MAX);
+        }
+    }
+
+    private Duration accessTokenTtl() {
+        Duration ttl = authenticationTokenPolicy.accessTokenTtl();
+        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            return DEFAULT_ACCESS_TOKEN_TTL;
+        }
+        return ttl;
     }
 
     /**

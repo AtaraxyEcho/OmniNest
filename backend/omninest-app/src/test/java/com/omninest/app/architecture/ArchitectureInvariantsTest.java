@@ -259,6 +259,87 @@ class ArchitectureInvariantsTest {
                 .contains("evictProfileCacheAfterCommit");
     }
 
+    /**
+     * 任务消息只能先写 Outbox，再由派发器发 Broker。
+     *
+     * <p>在事务里直发 RabbitMQ 有两个后果：网络 I/O 被圈进数据库事务，
+     * 以及 Broker 瞬断时那批消息永久丢失、无法重试。批量入口尤其危险，
+     * 因为它把丢失放大成"后半批全没"。</p>
+     */
+    @Test
+    @DisplayName("业务代码不得直发任务消息，必须落 task_dispatches")
+    void taskMessagesMustBeWrittenToOutboxBeforePublishing() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            String relativePath = relative(file);
+            if (relativePath.endsWith("RabbitDomainEventPublisher.java")
+                    || relativePath.endsWith("DomainEventPublisher.java")) {
+                continue;
+            }
+            if (Files.readString(file).contains(".publishTask(")) {
+                violations.add(relativePath);
+            }
+        }
+        assertThat(violations)
+                .as("任务消息必须经 TaskDispatchService 落 Outbox，禁止直连 Broker")
+                .isEmpty();
+    }
+
+    /**
+     * 手动 ACK 消费者的领取与失败回写都必须有兜底。
+     *
+     * <p>{@code AcknowledgeMode.MANUAL} 下容器不会替监听器补发 ACK/NACK：
+     * {@code begin()} 写在 try 外、或 {@code handleFailure} 自身抛错时没有
+     * {@code basicNack}，消息就永久停在 Unacked，攒满预取额度后整条队列停工。</p>
+     */
+    @Test
+    @DisplayName("手动 ACK 消费者必须把任务领取放进 try 并为失败回写留 nack 兜底")
+    void manualAckTaskConsumersMustNackOnStateFailure() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            String content = Files.readString(file);
+            if (!content.contains("taskTracker.begin(")) {
+                continue;
+            }
+            if (!content.contains("TrackedTask tracked = null;") || !content.contains("basicNack")) {
+                violations.add(relative(file));
+            }
+        }
+        assertThat(violations)
+                .as("领取必须在 try 内（tracked 先置 null），且失败回写异常时必须 basicNack 转死信")
+                .isEmpty();
+    }
+
+    /**
+     * 配额写操作只能通过配额服务。
+     *
+     * <p>直接调 {@code UserStorageCommand} 会绕过用户资料缓存失效，
+     * 用户在缓存恢复前看到的仍是旧用量；同一条链路的加减口径也会分叉。</p>
+     */
+    @Test
+    @DisplayName("配额加减必须经 StorageQuotaService，不得直接改账户用量")
+    void quotaWritesMustGoThroughQuotaService() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            String relativePath = relative(file);
+            if (relativePath.endsWith("StorageQuotaService.java")
+                    || relativePath.endsWith("StorageQuotaReservationService.java")) {
+                continue;
+            }
+            String content = Files.readString(file);
+            if (content.contains("userStorageCommand.incrementUsage(")
+                    || content.contains("userStorageCommand.decrementUsage(")
+                    || content.contains("userStorageCommand.tryReserveStorage(")
+                    || content.contains("userStorageCommand.settleStorageReservation(")
+                    || content.contains("userStorageCommand.reconcileUsage(")) {
+                violations.add(relativePath);
+            }
+        }
+        assertThat(violations)
+                .as("绕过配额服务的用量写入不会淘汰资料缓存，前端配额显示会长期失真")
+                .isEmpty();
+    }
+
     private static Path backendRoot() {
         Path current = Path.of("").toAbsolutePath().normalize();
         for (int depth = 0; depth < 5 && current != null; depth++) {

@@ -5,6 +5,7 @@ import com.omninest.modules.file.domain.FileIngressStatus;
 import com.omninest.modules.file.repository.FileIngressItemRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileIngressLifecycleService {
@@ -66,18 +68,40 @@ public class FileIngressLifecycleService {
     }
 
     /**
-     * 标记扫描通过。
+     * 标记扫描通过，并在同一独立事务内以服务端事实修正实际字节数与魔数探测的 MIME。
+     *
+     * <p>状态与修正必须一次提交：调用方在扫描前持有的入库记录会在本方法两次
+     * {@code REQUIRES_NEW} 提交后变成脱管实体（{@code @Version} 已过期），
+     * 再由调用方 {@code save} 修正值必然触发乐观锁冲突；冲突后重试又因状态已是
+     * {@code CLEAN} 跳过扫描分支，修正值被永久丢弃。返回本次提交后的实体供晋升使用。</p>
      *
      * @param ingressId 入库记录标识
      * @param sha256 服务端摘要
+     * @param actualSizeBytes 服务端核实字节数，负数表示未知
+     * @param detectedMimeType 魔数探测类型，空表示无结论
+     * @return 已提交的入库记录
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markClean(UUID ingressId, String sha256) {
+    public FileIngressItem markClean(
+            UUID ingressId,
+            String sha256,
+            long actualSizeBytes,
+            String detectedMimeType
+    ) {
         FileIngressItem item = requireItem(ingressId);
         item.setStatus(FileIngressStatus.CLEAN);
         item.setSha256(sha256);
         item.setErrorCode(null);
-        ingressItemRepository.save(item);
+        if (actualSizeBytes >= 0 && actualSizeBytes != item.getSizeBytes()) {
+            item.setSizeBytes(actualSizeBytes);
+        }
+        if (detectedMimeType != null && !detectedMimeType.isBlank()
+                && !detectedMimeType.equals(item.getMimeType())) {
+            log.info("入库 MIME 按魔数修正: ingressItemId={}, declared={}, detected={}",
+                    ingressId, item.getMimeType(), detectedMimeType);
+            item.setMimeType(detectedMimeType);
+        }
+        return ingressItemRepository.save(item);
     }
 
     /**

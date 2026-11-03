@@ -85,8 +85,11 @@ public class FileIngressPromotionService {
             InspectionResult inspection = scanQuietly(item);
             ensureShaMatches(item, event, inspection);
             requireActualSizeWithinDeclaration(item, inspection);
-            ingressLifecycleService.markClean(item.getId(), inspection.sha256());
-            applyInspectionCorrections(item, inspection);
+            item = ingressLifecycleService.markClean(
+                    item.getId(),
+                    inspection.sha256(),
+                    inspection.actualSizeBytes(),
+                    inspection.detectedMimeType());
             sha256 = inspection.sha256();
         }
         return promote(item, sha256, event);
@@ -163,43 +166,43 @@ public class FileIngressPromotionService {
         throw new FileIngressRejectedException("实际大小超过申报大小");
     }
 
-    /**
-     * 以服务端事实修正入库记录：实际字节数与魔数探测的 MIME。
-     * 实际小于申报时按实际值结算配额；探测无结论（null）时保留客户端声明。
-     */
-    private void applyInspectionCorrections(FileIngressItem item, InspectionResult inspection) {
-        boolean changed = false;
-        if (inspection.actualSizeBytes() >= 0 && inspection.actualSizeBytes() != item.getSizeBytes()) {
-            item.setSizeBytes(inspection.actualSizeBytes());
-            changed = true;
-        }
-        String detected = inspection.detectedMimeType();
-        if (detected != null && !detected.equals(item.getMimeType())) {
-            log.info("入库 MIME 按魔数修正: ingressItemId={}, declared={}, detected={}",
-                    item.getId(), item.getMimeType(), detected);
-            item.setMimeType(detected);
-            changed = true;
-        }
-        if (changed) {
-            ingressItemRepository.save(item);
-        }
-    }
-
     private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
         try {
             return copyAndPromote(item, sha256, event);
         } catch (BusinessException exception) {
-            if (exception.errorCode() != ErrorCode.FILE_QUOTA_EXCEEDED) {
-                throw exception;
+            if (exception.errorCode() == ErrorCode.FILE_QUOTA_EXCEEDED) {
+                // 容量在晋升阶段才失败时，事务已回滚；上传会话必须落到明确终态，
+                // 否则会停在 SCANNING 并触发 Worker 的无效重试。
+                settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
+                        "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成",
+                        "QUOTA_WARNING");
+                removeObjectQuietly(quarantineKey(item), "清理文件晋升配额失败对象失败");
+                throw new FileIngressRejectedException("存储配额不足", exception);
             }
-            // 容量在晋升阶段才失败时，事务已回滚；上传会话必须落到明确终态，
-            // 否则会停在 SCANNING 并触发 Worker 的无效重试。
-            settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
-                    "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成",
-                    "QUOTA_WARNING");
-            removeObjectQuietly(quarantineKey(item), "清理文件晋升配额失败对象失败");
-            throw new FileIngressRejectedException("存储配额不足", exception);
+            if (isTerminalPromotionFailure(exception.errorCode())) {
+                // 目标目录冲突、目标被删除或路径失效都是确定性终态：重试不会改变结果。
+                // 结算必须发生在晋升事务回滚之后，否则终态与配额释放会随事务一起回滚，
+                // 会话永久停在 SCANNING。
+                settleTerminalFailure(item, false, exception.errorCode().name(), exception.getMessage(),
+                        "文件入库失败", terminalFailureMessage(item, exception.errorCode()), "TASK_FAILED");
+                throw new FileIngressRejectedException(exception.getMessage(), exception);
+            }
+            throw exception;
         }
+    }
+
+    private boolean isTerminalPromotionFailure(ErrorCode errorCode) {
+        return errorCode == ErrorCode.CONFLICT
+                || errorCode == ErrorCode.FILE_NOT_FOUND
+                || errorCode == ErrorCode.FILE_PATH_INVALID;
+    }
+
+    private String terminalFailureMessage(FileIngressItem item, ErrorCode errorCode) {
+        return switch (errorCode) {
+            case CONFLICT -> "文件「" + item.getTargetName() + "」所在目录已存在同名文件，上传未完成";
+            case FILE_NOT_FOUND -> "文件「" + item.getTargetName() + "」的目标目录已不存在，上传未完成";
+            default -> "文件「" + item.getTargetName() + "」的目标路径无效，上传未完成";
+        };
     }
 
     private PromotionOutcome copyAndPromote(
@@ -287,10 +290,9 @@ public class FileIngressPromotionService {
         SpaceType spaceType = resolveSpaceType(item);
         FileNode parent = resolveParent(item.getOwnerUserId(), item.getTargetParentId(), spaceType);
         if (sameNameExists(item.getOwnerUserId(), spaceType, item.getTargetParentId(), item.getTargetName())) {
-            settleTerminalFailure(item, false, ErrorCode.CONFLICT.name(), "晋升时目标目录已存在同名文件",
-                    "文件入库冲突", "文件「" + item.getTargetName() + "」所在目录已存在同名文件，上传未完成",
-                    "TASK_FAILED");
-            throw new FileIngressRejectedException("晋升时目标目录已存在同名文件");
+            // 终态结算不能在这里执行：本方法运行在晋升事务内，随后的异常会回滚
+            // 状态更新与配额释放。由 promote 在事务回滚后统一结算。
+            throw new BusinessException(ErrorCode.CONFLICT, "晋升时目标目录已存在同名文件");
         }
         return fileNodeRepository.save(toFileNode(item, savedObject, parent, spaceType));
     }

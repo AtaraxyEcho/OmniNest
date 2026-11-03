@@ -69,8 +69,21 @@ class _PageEntranceState extends State<_PageEntrance>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(duration: MotionToken.stagger, vsync: this)
-      ..forward();
+    _ctrl = AnimationController(duration: MotionToken.stagger, vsync: this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 与 AdminSectionEntrance 同一口径：减少动效时直接落到终态，
+    // 只跳过动画会让入场后的透明度停在起点。
+    if (MotionToken.prefersReduced(context)) {
+      _ctrl.value = 1.0;
+      return;
+    }
+    if (!_ctrl.isCompleted && !_ctrl.isAnimating) {
+      _ctrl.forward();
+    }
   }
 
   @override

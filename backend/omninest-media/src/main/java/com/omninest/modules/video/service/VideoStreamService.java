@@ -324,6 +324,7 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
+            closeStdinPipe(process);
             registerActiveStream(streamKey, process);
             log.info("ffmpeg 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -426,6 +427,7 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
+            closeStdinPipe(process);
             registerActiveStream(streamKey, process);
             log.info("ffmpeg mux 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -559,6 +561,9 @@ public class VideoStreamService {
         List<String> command = new ArrayList<>();
         command.add("ffmpeg");
         command.add("-y");
+        // -nostdin：默认 stdin 可用时 ffmpeg 会等待交互按键（如 'q'），
+        // 管道流式转码场景下这既挂住进程又白占一个文件描述符。
+        command.add("-nostdin");
         command.addAll(ffmpegArgs);
         return new StreamCommand(command);
     }
@@ -629,6 +634,20 @@ public class VideoStreamService {
                         process.destroyForcibly();
                     }
                 });
+    }
+
+    /**
+     * 关闭交给子进程的标准输入管道。
+     *
+     * <p>{@code -nostdin} 只让 ffmpeg 不去读输入，父进程这一侧的管道仍然开着；
+     * 不关闭会在长连接流式转码期间累积空闲文件描述符。</p>
+     */
+    private void closeStdinPipe(Process process) {
+        try {
+            process.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("ffmpeg stdin 管道关闭失败: pid={}", process.pid());
+        }
     }
 
     private void drainStderr(Process process) {

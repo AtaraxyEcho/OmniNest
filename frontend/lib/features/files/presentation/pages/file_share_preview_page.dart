@@ -62,6 +62,10 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   bool _childrenLoadingMore = false;
   String? _childrenError;
 
+  /// 目录切换世代号：快速「进入子目录再立刻返回上级」时两个请求并发在途，
+  /// 慢返回的旧目录结果必须按世代号丢弃，否则会用旧列表覆盖当前目录。
+  int _childrenGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +77,8 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   }
 
   Future<void> _loadPreview() async {
+    // 重新预览（例如换口令）会重建整棵子树，在途的子项结果必须作废。
+    _childrenGeneration++;
     setState(() {
       _loading = true;
       _error = null;
@@ -131,6 +137,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
 
   /// 逐级读取分享子树；服务端只放行根目录之下的节点，越界一律按不存在处理。
   Future<void> _loadChildren(String? parentId) async {
+    final generation = ++_childrenGeneration;
     setState(() {
       _childrenLoading = true;
       _childrenError = null;
@@ -145,7 +152,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       page: _childPage,
     );
 
-    if (!mounted) return;
+    if (!mounted || generation != _childrenGeneration) return;
     setState(() {
       _childrenLoading = false;
       switch (result) {
@@ -167,6 +174,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     if (_childrenLoading || _childrenLoadingMore || !_childHasMore) {
       return;
     }
+    final generation = _childrenGeneration;
     setState(() => _childrenLoadingMore = true);
     final nextPage = _childPage + 1;
     final result = await _service.listChildren(
@@ -174,7 +182,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       parentId: parentId,
       page: nextPage,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _childrenGeneration) return;
     setState(() {
       _childrenLoadingMore = false;
       switch (result) {
@@ -186,7 +194,8 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
           ];
           _childTotal = total;
           _childPage = nextPage;
-          _childHasMore = _children.length < total;
+          // 空页必须终止：只按 total 比较时，服务端提前返空会让触底无限重投。
+          _childHasMore = items.isNotEmpty && _children.length < total;
         case ShareChildrenFailure(:final message):
           _childrenError = message;
           _childHasMore = false;

@@ -390,6 +390,7 @@ public class TaskRecordService {
      *
      * @param taskId 任务 ID
      */
+    @Transactional(rollbackFor = Exception.class)
     public void publishSyncEvent(UUID taskId) {
         taskRecordRepository.findById(taskId)
                 .ifPresent(record -> recordEvent(record, SyncAction.UPDATED));

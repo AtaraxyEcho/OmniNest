@@ -53,6 +53,9 @@ public class VideoProcessExecutor {
         }
 
         Process process = processStarter.start(List.copyOf(command));
+        // 执行器只读输出，从不写输入：立刻关闭父进程侧管道，
+        // 避免长时间转码任务累积空闲文件描述符。
+        process.getOutputStream().close();
         BoundedOutputCollector collector = new BoundedOutputCollector(process.getInputStream());
         Thread outputThread = Thread.ofVirtual()
                 .name("video-process-output")

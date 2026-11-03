@@ -37,7 +37,7 @@ class FileShareRecipientAccessServiceTest {
         FileNode file = file(UUID.randomUUID(), OWNER_ID, "/docs/report.pdf");
         when(recipientRepository.findActiveFileSharePairs(RECIPIENT_ID, List.of(file.getId())))
                 .thenReturn(List.<Object[]>of(new Object[]{file.getId(), OWNER_ID}));
-        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID)).thenReturn(List.of());
+        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID, SpaceType.PERSONAL)).thenReturn(List.of());
 
         assertThat(service.canAccessRecipientNode(RECIPIENT_ID, file)).isTrue();
     }
@@ -48,7 +48,7 @@ class FileShareRecipientAccessServiceTest {
         FileNode file = file(UUID.randomUUID(), OWNER_ID, "/project/docs/report.pdf");
         ShareLink folderShare = activeFolderShare();
         when(recipientRepository.findActiveFileSharePairs(any(), any())).thenReturn(List.of());
-        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID))
+        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID, SpaceType.PERSONAL))
                 .thenReturn(List.<Object[]>of(new Object[]{folderShare, "/project"}));
 
         assertThat(service.canAccessRecipientNode(RECIPIENT_ID, file)).isTrue();
@@ -60,7 +60,7 @@ class FileShareRecipientAccessServiceTest {
         FileNode file = file(UUID.randomUUID(), OWNER_ID, "/projectX/report.pdf");
         ShareLink folderShare = activeFolderShare();
         when(recipientRepository.findActiveFileSharePairs(any(), any())).thenReturn(List.of());
-        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID))
+        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID, SpaceType.PERSONAL))
                 .thenReturn(List.<Object[]>of(new Object[]{folderShare, "/project"}));
 
         assertThat(service.canAccessRecipientNode(RECIPIENT_ID, file)).isFalse();
@@ -72,8 +72,21 @@ class FileShareRecipientAccessServiceTest {
         UUID newOwner = UUID.randomUUID();
         FileNode file = file(UUID.randomUUID(), newOwner, "/project/report.pdf");
         when(recipientRepository.findActiveFileSharePairs(any(), any())).thenReturn(List.of());
-        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID))
+        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID, SpaceType.PERSONAL))
                 .thenReturn(List.<Object[]>of(new Object[]{activeFolderShare(), "/project"}));
+
+        assertThat(service.canAccessRecipientNode(RECIPIENT_ID, file)).isFalse();
+    }
+
+    @Test
+    @DisplayName("共享空间同路径节点不得被个人空间目录分享带出")
+    void sharedSpaceNodeIsNotCoveredByPersonalFolderShare() {
+        FileNode file = file(UUID.randomUUID(), OWNER_ID, "/project/report.pdf");
+        file.setSpaceType(SpaceType.SHARED);
+        ShareLink folderShare = activeFolderShare();
+        when(recipientRepository.findActiveFileSharePairs(any(), any())).thenReturn(List.of());
+        when(recipientRepository.findActiveFolderShareRoots(RECIPIENT_ID, SpaceType.PERSONAL))
+                .thenReturn(List.<Object[]>of(new Object[]{folderShare, "/project"}));
 
         assertThat(service.canAccessRecipientNode(RECIPIENT_ID, file)).isFalse();
     }

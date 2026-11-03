@@ -86,13 +86,17 @@ class MusicOnlineSourceUrlPolicyTest {
     }
 
     @Test
-    void allowsOfficialNeteaseCdnWhenProxyReturnsFakeIpv4AndUla() throws UnknownHostException {
+    void rejectsOfficialNeteaseCdnWhenProxyAlsoReturnsUniqueLocalIpv6() throws UnknownHostException {
         URI source = URI.create("http://m701.music.126.net/audio/song.mp3");
         rejectAsPrivate(source);
         Mockito.when(hostAddressResolver.resolve("m701.music.126.net"))
                 .thenReturn(addresses("198.18.0.122", "fdfe:dcba:9876::69"));
 
-        assertDoesNotThrow(() -> policy.requireAllowed("netease", source));
+        // Fake-IP 放行只覆盖 198.18/19 基准测试段：同一次解析里混进 fc00::/7
+        // 内网地址时必须按内网拒绝，否则代理 Fake-IP 白名单成了 IPv6 内网通道。
+        assertThatThrownBy(() -> policy.requireAllowed("netease", source))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("内网地址");
     }
 
     @Test

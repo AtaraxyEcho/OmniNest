@@ -1,6 +1,7 @@
 package com.omninest.modules.file.repository;
 
 import com.omninest.modules.file.domain.FileShareRecipient;
+import com.omninest.modules.file.domain.SpaceType;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -117,7 +118,11 @@ public interface FileShareRecipientRepository extends JpaRepository<FileShareRec
     /**
      * 查询接收人仍有效的文件夹分享根路径，供祖先目录授权判定。
      *
+     * <p>分享只允许从个人空间创建：共享空间文件夹在创建入口已被拒绝，
+     * 这里再按空间类型收口，避免历史异常数据或同名路径把共享空间子树并入授权范围。</p>
+     *
      * @param recipientUserId 接收人用户 ID
+     * @param spaceType 允许的根目录空间类型
      * @return 每行二元组：分享链路、根目录规范化路径
      */
     @Query("""
@@ -130,8 +135,11 @@ public interface FileShareRecipientRepository extends JpaRepository<FileShareRec
               AND root.id = s.resourceId
               AND root.deleted = false
               AND root.ownerUserId = s.ownerUserId
+              AND root.spaceType = :spaceType
             """)
-    List<Object[]> findActiveFolderShareRoots(@Param("recipientUserId") UUID recipientUserId);
+    List<Object[]> findActiveFolderShareRoots(
+            @Param("recipientUserId") UUID recipientUserId,
+            @Param("spaceType") SpaceType spaceType);
 
     void deleteByShareLink_Id(UUID shareLinkId);
 

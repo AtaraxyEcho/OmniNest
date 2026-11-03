@@ -26,6 +26,38 @@ class _CoverPanel extends StatefulWidget {
 
 class _CoverPanelState extends State<_CoverPanel> {
   bool _hovering = false;
+  List<int>? _previewSource;
+  Uint8List? _previewBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPreviewBytes();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CoverPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.previewBytes, widget.previewBytes)) {
+      _syncPreviewBytes();
+    }
+  }
+
+  /// 封面字节按来源实例转换一次：每次 build 都 `Uint8List.fromList`
+  /// 会把整张封面再深拷贝一份，而弹窗里任意状态变化都会重建子树。
+  void _syncPreviewBytes() {
+    final source = widget.previewBytes;
+    if (source == null) {
+      _previewSource = null;
+      _previewBytes = null;
+      return;
+    }
+    if (identical(source, _previewSource)) {
+      return;
+    }
+    _previewSource = source;
+    _previewBytes = source is Uint8List ? source : Uint8List.fromList(source);
+  }
 
   bool get _hasPendingSelection => widget.previewBytes != null;
 
@@ -39,6 +71,7 @@ class _CoverPanelState extends State<_CoverPanel> {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final showRemoteCover = widget.previewBytes == null && !widget.clearCover;
+    final preview = _previewBytes;
     return Column(
       children: [
         Semantics(
@@ -70,10 +103,18 @@ class _CoverPanelState extends State<_CoverPanel> {
                       child: SizedBox.square(
                         dimension: 220,
                         child:
-                            widget.previewBytes != null
+                            preview != null
                                 ? Image.memory(
-                                  Uint8List.fromList(widget.previewBytes!),
+                                  preview,
                                   fit: BoxFit.cover,
+                                  // 220dp 显示位按设备像素比解码：不传 cacheWidth
+                                  // 会把原图（常见 3000px+）整张解成位图常驻缓存。
+                                  cacheWidth:
+                                      (220 *
+                                              MediaQuery.devicePixelRatioOf(
+                                                context,
+                                              ))
+                                          .ceil(),
                                 )
                                 : MusicDeckArtwork(
                                   title: widget.track.title,
