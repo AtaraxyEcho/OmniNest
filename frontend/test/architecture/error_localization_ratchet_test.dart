@@ -17,8 +17,10 @@ import 'package:flutter_test/flutter_test.dart';
 /// 余下 4 处受文件大小棘轮阻塞，随文件拆分清零；在那之前任何新增不传 `l10n:`
 /// 的展示层调用都会直接判失败。
 void main() {
-  // 2026-11-03 实测：展示层未本地化且属用户可见路径的调用点 49 处；49 处已补全 45 处（profile 4、admin 8、photos 9、music 9、reader 8、files 2、portal 1、video 2、setup 0）。剩 4 处卡在文件大小棘轮上：photo_shared_album_page 3 处与 initial_setup_page 1 处，任何补法都会让这两个已登记长文件超过基线，因此与它们的职责拆分同批做（见 FUNC-L03），拆完立刻归零。
-  const unlocalizedDisplayCeiling = 4;
+  // 2026-11-03 实测起点 49 处，已补全 48 处（profile 4、admin 8、photos 12、music 9、reader 8、files 2、portal 1、video 2）。
+  // 剩 1 处卡在文件大小棘轮上：initial_setup_page 的 116 行——任何补法都会让该已登记
+  // 长文件超过基线，因此与它的职责拆分同批做（见 FUNC-L03），拆完立刻归零。
+  const unlocalizedDisplayCeiling = 1;
 
   String normalize(String path) => path.replaceAll(r'\', '/');
 

@@ -30,7 +30,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/notifications/presentation/pages/notification_page.dart': 969,
   'lib/features/photos/application/photo_controller_commands.dart': 925,
   'lib/features/photos/presentation/pages/photo_detail_page.dart': 993,
-  'lib/features/photos/presentation/pages/photo_shared_album_page.dart': 816,
+  'lib/features/photos/presentation/pages/photo_shared_album_page.dart': 597,
   'lib/features/photos/presentation/pages/photo_slideshow_page.dart': 985,
   'lib/features/portal/presentation/widgets/portal_desktop_quick_actions.dart':
       850,
