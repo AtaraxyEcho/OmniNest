@@ -18,9 +18,10 @@ String resolveApiSiteRoot(String apiBaseUrl) {
     return normalizedBase;
   }
   const apiSuffix = '/api/v1';
-  final path = baseUri.path.endsWith(apiSuffix)
-      ? baseUri.path.substring(0, baseUri.path.length - apiSuffix.length)
-      : baseUri.path;
+  final path =
+      baseUri.path.endsWith(apiSuffix)
+          ? baseUri.path.substring(0, baseUri.path.length - apiSuffix.length)
+          : baseUri.path;
   return '${baseUri.scheme}://${baseUri.authority}$path';
 }
 

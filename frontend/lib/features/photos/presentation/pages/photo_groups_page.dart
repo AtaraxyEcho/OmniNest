@@ -127,8 +127,7 @@ class _YearList extends StatelessWidget {
                       '${year.year}',
                       style: TextStyle(
                         fontFamily: AppTypography.serifFamily,
-                        fontFamilyFallback:
-                            AppTypography.serifFamilyFallback,
+                        fontFamilyFallback: AppTypography.serifFamilyFallback,
                         fontSize: AppTypography.displayMedium,
                         height: 1.0,
                         fontWeight: FontWeight.w400,
@@ -156,12 +155,11 @@ class _YearList extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverGrid(
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 5,
-                    crossAxisSpacing: 5,
-                  ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 5,
+                crossAxisSpacing: 5,
+              ),
               delegate: SliverChildBuilderDelegate((context, index) {
                 final month = year.months[index];
                 return _MonthTile(

@@ -56,13 +56,15 @@ class MobileAccountAvatar extends ConsumerWidget {
                             fit: BoxFit.cover,
                             cacheWidth: quantizedDecodeWidth(
                               logicalWidth: 43,
-                              devicePixelRatio:
-                                  MediaQuery.devicePixelRatioOf(context),
+                              devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                context,
+                              ),
                             ),
                             cacheHeight: quantizedDecodeWidth(
                               logicalWidth: 43,
-                              devicePixelRatio:
-                                  MediaQuery.devicePixelRatioOf(context),
+                              devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                context,
+                              ),
                             ),
                             errorBuilder:
                                 (_, _, _) => _initials(context, initials, 13),
@@ -226,13 +228,15 @@ class _AccountProfileRow extends ConsumerWidget {
                         fit: BoxFit.cover,
                         cacheWidth: quantizedDecodeWidth(
                           logicalWidth: 50,
-                          devicePixelRatio:
-                              MediaQuery.devicePixelRatioOf(context),
+                          devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                            context,
+                          ),
                         ),
                         cacheHeight: quantizedDecodeWidth(
                           logicalWidth: 50,
-                          devicePixelRatio:
-                              MediaQuery.devicePixelRatioOf(context),
+                          devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                            context,
+                          ),
                         ),
                         errorBuilder:
                             (_, _, _) => _initials(context, initials, 15),

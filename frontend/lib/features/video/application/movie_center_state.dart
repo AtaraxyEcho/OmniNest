@@ -454,7 +454,12 @@ class ListPaging {
   /// 否则超过首屏后计数会永远停在页大小上。
   final int total;
 
-  ListPaging copyWith({int? page, bool? hasMore, bool? isLoadingMore, int? total}) {
+  ListPaging copyWith({
+    int? page,
+    bool? hasMore,
+    bool? isLoadingMore,
+    int? total,
+  }) {
     return ListPaging(
       page: page ?? this.page,
       hasMore: hasMore ?? this.hasMore,

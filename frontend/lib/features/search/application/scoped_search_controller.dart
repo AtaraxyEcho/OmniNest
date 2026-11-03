@@ -248,7 +248,9 @@ class ScopedSearchController extends AsyncNotifier<ScopedSearchBatch> {
       for (final group in previous)
         if (!group.hasMore) group.scope,
     };
-    return targets.where((source) => !exhausted.contains(source.scope)).toList();
+    return targets
+        .where((source) => !exhausted.contains(source.scope))
+        .toList();
   }
 
   List<ScopedSearchGroup> _merge(

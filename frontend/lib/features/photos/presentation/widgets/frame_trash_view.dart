@@ -18,6 +18,7 @@ import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 class FrameTrashView extends StatefulWidget {
   const FrameTrashView({
     required this.photos,
+
     /// 回收站总条数（服务端），未传时退回已加载长度。
     this.totalCount,
     required this.isLoading,
@@ -185,7 +186,9 @@ class _FrameTrashViewState extends State<FrameTrashView> {
               ),
               const SizedBox(height: 4),
               Text(
-                l10n.photosTrashSubtitle(widget.totalCount ?? widget.photos.length),
+                l10n.photosTrashSubtitle(
+                  widget.totalCount ?? widget.photos.length,
+                ),
                 style: TextStyle(
                   color: colors.muted,
                   fontSize: AppTypography.bodySmall,
