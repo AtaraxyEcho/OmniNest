@@ -531,13 +531,13 @@ class _NotificationSettingsPageState
     final l10n = AppLocalizations.of(context);
     try {
       await ref.read(notificationPreferencesProvider.notifier).save(newPrefs);
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) {
         return;
       }
       showOmniFeedback(
         context,
-        l10n.profileNotificationSaveFailed,
+        failureToast(l10n, l10n.profileNotificationSaveFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     }

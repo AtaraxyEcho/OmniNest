@@ -208,11 +208,15 @@ class _BatchActionBar extends StatelessWidget {
         if (context.mounted) {
           _showProgressDialog(context, task.id);
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosTaskCreateFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosTaskCreateFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -247,11 +251,15 @@ class _BatchActionBar extends StatelessWidget {
         if (context.mounted) {
           _showProgressDialog(context, task.id);
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosTaskCreateFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosTaskCreateFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -282,11 +290,15 @@ class _BatchActionBar extends StatelessWidget {
             severity: OmniFeedbackSeverity.success,
           );
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosDeleteFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosDeleteFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -302,11 +314,15 @@ class _BatchActionBar extends StatelessWidget {
       if (context.mounted) {
         _showProgressDialog(context, task.id);
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          AppLocalizations.of(context).photosTaskCreateFailed,
+          failureToast(
+            AppLocalizations.of(context),
+            AppLocalizations.of(context).photosTaskCreateFailed,
+            error,
+          ),
           severity: OmniFeedbackSeverity.error,
         );
       }

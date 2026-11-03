@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
@@ -177,11 +178,11 @@ class PhotoInfoPanel extends ConsumerWidget {
         l10n.photosRevertOriginalDone,
         severity: OmniFeedbackSeverity.success,
       );
-    } on Exception {
+    } on Exception catch (error) {
       if (!context.mounted) return;
       showOmniFeedback(
         context,
-        l10n.photosOperationFailed,
+        failureToast(l10n, l10n.photosOperationFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -218,11 +219,15 @@ class PhotoInfoPanel extends ConsumerWidget {
         severity: OmniFeedbackSeverity.success,
       );
       ref.invalidate(photoDetailProvider(fresh.id));
-    } on Exception {
+    } on Exception catch (error) {
       if (!context.mounted) return;
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).photosOperationFailed,
+        failureToast(
+          AppLocalizations.of(context),
+          AppLocalizations.of(context).photosOperationFailed,
+          error,
+        ),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -378,11 +383,15 @@ class PhotoInfoPanel extends ConsumerWidget {
                         .removeTag(fresh.id, tag);
                     if (!context.mounted) return;
                     ref.invalidate(photoDetailProvider(fresh.id));
-                  } on Exception {
+                  } on Exception catch (error) {
                     if (!context.mounted) return;
                     showOmniFeedback(
                       context,
-                      AppLocalizations.of(context).photosDeleteTagFailed,
+                      failureToast(
+                        AppLocalizations.of(context),
+                        AppLocalizations.of(context).photosDeleteTagFailed,
+                        error,
+                      ),
                       severity: OmniFeedbackSeverity.error,
                     );
                   }
@@ -420,11 +429,11 @@ class PhotoInfoPanel extends ConsumerWidget {
             .addTag(photoId, tag);
         if (!context.mounted) return;
         ref.invalidate(photoDetailProvider(photoId));
-      } on Exception {
+      } on Exception catch (error) {
         if (!context.mounted) return;
         showOmniFeedback(
           context,
-          l10n.photosAddTagFailed,
+          failureToast(l10n, l10n.photosAddTagFailed, error),
           severity: OmniFeedbackSeverity.error,
         );
       }

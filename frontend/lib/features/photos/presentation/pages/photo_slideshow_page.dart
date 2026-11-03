@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
@@ -640,81 +641,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _progressController.forward(from: 0);
       }
     }
-  }
-
-  void _goNext() => unawaited(_goTo(_current + 1));
-
-  void _goPrev() => unawaited(_goTo(_current - 1));
-
-  /// 横向滑动切换：负速度为左滑（下一张），正速度为右滑（上一张）。
-  void _onHorizontalDragEnd(DragEndDetails details) {
-    _resetIdle();
-    if (_photos.length < 2) return;
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity.abs() < 280) return;
-    if (velocity < 0) {
-      _goNext();
-    } else {
-      _goPrev();
-    }
-  }
-
-  void _togglePlay() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-      if (_isPlaying) {
-        if (_presentationVisible.isCompleted) {
-          _progressController.forward(from: 0);
-        }
-      } else {
-        _progressController.reset();
-        _idleTimer?.cancel();
-      }
-      _controlsVisible = true;
-    });
-    if (_isPlaying) {
-      _scheduleIdleHide();
-    }
-  }
-
-  void _resetIdle() {
-    if (!mounted) return;
-    // MouseRegion.onHover fires on every pointer move (Web/desktop). Only
-    // rebuild when chrome was hidden; always setState would repaint the
-    // whole page and stall the segmented progress bar.
-    if (!_controlsVisible) {
-      setState(() => _controlsVisible = true);
-    }
-    _scheduleIdleHide();
-  }
-
-  /// Toggle chrome on canvas tap: hide when shown, show + resume idle timer when hidden.
-  ///
-  /// Allowed while paused so the user can stay immersive; tap again to restore.
-  void _toggleControls() {
-    if (!mounted) return;
-    _idleTimer?.cancel();
-    if (_controlsVisible) {
-      setState(() => _controlsVisible = false);
-      return;
-    }
-    _resetIdle();
-  }
-
-  void _scheduleIdleHide() {
-    _idleTimer?.cancel();
-    _idleTimer = Timer(_idleHideDuration, () {
-      if (!mounted) return;
-      if (_isPlaying) setState(() => _controlsVisible = false);
-    });
-  }
-
-  void _toggleFullscreen() {
-    if (kIsWeb) {
-      fs.toggleFullscreen();
-      return;
-    }
-    ref.read(windowChromeControllerProvider.notifier).toggleFullscreen();
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {

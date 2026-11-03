@@ -11183,6 +11183,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorOperationFailed => '操作失败';
 
   @override
+  String commonFailureWithReason(String label, String reason) {
+    return '$label：$reason';
+  }
+
+  @override
   String get errorNetworkTimeout => '请求超时，请检查网络后重试';
 
   @override

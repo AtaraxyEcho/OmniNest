@@ -387,11 +387,15 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
             severity: OmniFeedbackSeverity.success,
           );
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosDeleteFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosDeleteFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -466,11 +470,15 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           severity: OmniFeedbackSeverity.success,
         );
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          AppLocalizations.of(context).photosShareLinkFailed,
+          failureToast(
+            AppLocalizations.of(context),
+            AppLocalizations.of(context).photosShareLinkFailed,
+            error,
+          ),
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -505,11 +513,15 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
             severity: OmniFeedbackSeverity.success,
           );
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosOperationFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosOperationFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }

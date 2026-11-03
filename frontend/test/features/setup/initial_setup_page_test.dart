@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
@@ -71,6 +72,38 @@ void main() {
     expect(find.text('创建超级管理员'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('改用户名后作废已生成的两步验证二维码', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await pinChineseLocale(tester);
+    await tester.binding.setSurfaceSize(const Size(1280, 960));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          initialSetupProvider.overrideWith(_TwoFactorSetupNotifier.new),
+        ],
+        child: const _LocaleHost(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('setupTwoFactorGenerateButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('setupTwoFactorQr')), findsOneWidget);
+
+    // 二维码里编码的是 otpauth URI 的用户名，口令与账户名一改，
+    // 先前那张码就永远不会被用到，必须退回"重新生成"而不是静默提交旧秘钥。
+    await tester.enterText(find.widgetWithText(TextFormField, '用户名'), 'root2');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('setupTwoFactorQr')), findsNothing);
+    expect(
+      find.byKey(const Key('setupTwoFactorGenerateButton')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// MaterialApp 语言跟随 localeControllerProvider，与真实 App 行为一致。
@@ -94,5 +127,29 @@ class _AvailableSetupNotifier extends InitialSetupController {
   @override
   Future<InitialSetupStatus> build() async {
     return const InitialSetupStatus(setupRequired: true, setupAvailable: true);
+  }
+}
+
+class _TwoFactorSetupNotifier extends InitialSetupController {
+  @override
+  Future<InitialSetupStatus> build() async {
+    return const InitialSetupStatus(
+      setupRequired: true,
+      setupAvailable: true,
+      twoFactorRequired: true,
+    );
+  }
+
+  @override
+  Future<TwoFactorSetupData> newTwoFactorSecret({
+    required String setupToken,
+    String? username,
+  }) async {
+    return TwoFactorSetupData(
+      secret: 'JBSWY3DPEHPK3PXP',
+      otpauthUri:
+          'otpauth://totp/OmniNest:$username'
+          '?secret=JBSWY3DPEHPK3PXP&issuer=OmniNest',
+    );
   }
 }

@@ -16,11 +16,11 @@ extension _PhotoDetailViewerActions on _PhotoDetailBodyState {
     try {
       ref.invalidate(photoDetailProvider(photoId));
       photo = await ref.read(photoDetailProvider(photoId).future);
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.photosDownloadFailed,
+        failureToast(l10n, l10n.photosDownloadFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
       return;
@@ -61,11 +61,11 @@ extension _PhotoDetailViewerActions on _PhotoDetailBodyState {
       if (message != null) {
         showOmniFeedback(context, message);
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.photosDownloadFailed,
+        failureToast(l10n, l10n.photosDownloadFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -121,11 +121,15 @@ extension _PhotoDetailViewerActions on _PhotoDetailBodyState {
         severity: OmniFeedbackSeverity.success,
       );
       _closeViewer();
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) return;
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).photosDeleteFailed,
+        failureToast(
+          AppLocalizations.of(context),
+          AppLocalizations.of(context).photosDeleteFailed,
+          error,
+        ),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -167,11 +171,15 @@ extension _PhotoDetailViewerActions on _PhotoDetailBodyState {
             severity: OmniFeedbackSeverity.success,
           );
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosAddFailed,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosAddFailed,
+              error,
+            ),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -206,11 +214,15 @@ extension _PhotoDetailViewerActions on _PhotoDetailBodyState {
         severity: OmniFeedbackSeverity.success,
       );
       ref.invalidate(photoDetailProvider(photo.id));
-    } on Exception {
+    } on Exception catch (error) {
       if (mounted) {
         showOmniFeedback(
           context,
-          AppLocalizations.of(context).photosOperationFailed,
+          failureToast(
+            AppLocalizations.of(context),
+            AppLocalizations.of(context).photosOperationFailed,
+            error,
+          ),
           severity: OmniFeedbackSeverity.error,
         );
       }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/platform/android/pip_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -771,11 +772,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       if (mounted) {
         showMovieFeedback(context, l10n.videoSubtitleImportSuccess);
       }
-    } on Object {
+    } on Object catch (error) {
       if (mounted) {
         showMovieFeedback(
           context,
-          l10n.videoSubtitleImportFailed,
+          failureToast(l10n, l10n.videoSubtitleImportFailed, error),
           isError: true,
         );
       }

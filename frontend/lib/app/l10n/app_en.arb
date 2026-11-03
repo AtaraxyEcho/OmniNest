@@ -5179,6 +5179,17 @@
   "errorInvalidResponse": "Invalid response from server",
   "errorEmptyResponse": "Server returned no result",
   "errorOperationFailed": "Operation failed",
+  "commonFailureWithReason": "{label}: {reason}",
+  "@commonFailureWithReason": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "errorNetworkTimeout": "Request timed out. Check your network and try again",
   "errorNetworkError": "Network error. Please try again later",
   "errorUnknown": "Unknown error",

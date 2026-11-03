@@ -546,13 +546,13 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
         return;
       }
       showOmniFeedback(context, l10n.profileAvatarSuccess);
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) {
         return;
       }
       showOmniFeedback(
         context,
-        l10n.profileAvatarFailed,
+        failureToast(l10n, l10n.profileAvatarFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -580,13 +580,13 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
         return;
       }
       showOmniFeedback(context, l10n.profileUpdateSuccess);
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) {
         return;
       }
       showOmniFeedback(
         context,
-        l10n.profileUpdateFailed,
+        failureToast(l10n, l10n.profileUpdateFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     } finally {

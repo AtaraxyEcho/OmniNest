@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
@@ -554,11 +555,11 @@ class _SessionRevokeButtonState extends ConsumerState<_SessionRevokeButton> {
       }
       ref.invalidate(userSessionsProvider);
       showOmniFeedback(context, l10n.profileSessionRevoked);
-    } on Exception {
+    } on Exception catch (error) {
       if (mounted) {
         showOmniFeedback(
           context,
-          l10n.profileSessionRevokeFailed,
+          failureToast(l10n, l10n.profileSessionRevokeFailed, error),
           severity: OmniFeedbackSeverity.error,
         );
       }

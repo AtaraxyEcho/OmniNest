@@ -36,6 +36,20 @@ class UserFacingError {
 String errorReason(Object error, AppLocalizations l10n) =>
     describeUserFacingError(error, l10n: l10n).message;
 
+/// 动作失败提示：既有动作文案 + 能映射出含义的原因。
+///
+/// 只拼「有稳定错误码」的原因（业务码或网络分类），未映射的意外异常保留原文案
+/// 而不追加 `error.toString()`——那会把 Dart 内部类型、甚至异常里带的路径与
+/// URL 直接抛到界面上，用户读不懂，也违反日志与展示的边界。
+String failureToast(AppLocalizations l10n, String actionLabel, Object error) {
+  final described = describeUserFacingError(error, l10n: l10n);
+  final code = described.code;
+  if (code == null || code.isEmpty) {
+    return actionLabel;
+  }
+  return l10n.commonFailureWithReason(actionLabel, described.message);
+}
+
 /// 将异常映射为用户可见错误。
 ///
 /// 提供 [l10n] 时优先使用本地化文案；未提供时返回稳定错误码，

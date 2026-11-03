@@ -20980,6 +20980,12 @@ abstract class AppLocalizations {
   /// **'Operation failed'**
   String get errorOperationFailed;
 
+  /// No description provided for @commonFailureWithReason.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {reason}'**
+  String commonFailureWithReason(String label, String reason);
+
   /// No description provided for @errorNetworkTimeout.
   ///
   /// In en, this message translates to:

@@ -11544,6 +11544,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorOperationFailed => 'Operation failed';
 
   @override
+  String commonFailureWithReason(String label, String reason) {
+    return '$label: $reason';
+  }
+
+  @override
   String get errorNetworkTimeout =>
       'Request timed out. Check your network and try again';
 

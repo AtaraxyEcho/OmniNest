@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
@@ -417,14 +418,18 @@ class MovieTopBar extends StatelessWidget {
                         timeout: const Duration(minutes: 2),
                         interval: const Duration(seconds: 2),
                       );
-                    } on Object {
+                    } on Object catch (error) {
                       // 轮询异常不阻断上传结果，但结果未确认需要用户可感知。
                       if (context.mounted) {
                         showOmniFeedback(
                           context,
-                          AppLocalizations.of(
-                            context,
-                          ).videoAutoImportStatusUnknown,
+                          failureToast(
+                            AppLocalizations.of(context),
+                            AppLocalizations.of(
+                              context,
+                            ).videoAutoImportStatusUnknown,
+                            error,
+                          ),
                           severity: OmniFeedbackSeverity.warning,
                         );
                       }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
@@ -19,6 +20,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page_mobile.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_time_format.dart';
 part 'notification_page_cards.dart';
+part 'notification_page_actions.dart';
 
 /// 通知中心：建筑极简主义工位形态。
 ///
@@ -147,80 +149,6 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
         },
       ),
     );
-  }
-
-  void _markRead(NotificationDto notification) {
-    if (!notification.read) {
-      ref
-          .read(notificationControllerProvider.notifier)
-          .markRead(notification.id);
-    }
-  }
-
-  Future<void> _goToPage(int page) async {
-    await ref
-        .read(notificationControllerProvider.notifier)
-        .goToPage(page, size: _pageSize);
-    if (mounted && _scrollController.hasClients) {
-      _scrollController.jumpTo(0);
-    }
-  }
-
-  Future<void> _markAllRead() async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref.read(notificationControllerProvider.notifier).markAllRead();
-    } catch (_) {
-      if (mounted) {
-        showOmniFeedback(
-          context,
-          l10n.notificationMarkAllReadFailed,
-          severity: OmniFeedbackSeverity.error,
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteNotification(NotificationDto notification) async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref
-          .read(notificationControllerProvider.notifier)
-          .deleteNotification(notification.id);
-    } catch (_) {
-      if (mounted) {
-        showOmniFeedback(
-          context,
-          l10n.notificationDeleteFailed,
-          severity: OmniFeedbackSeverity.error,
-        );
-      }
-    }
-  }
-
-  Future<void> _clearAll() async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showWorkstationConfirmDialog(
-      context,
-      title: l10n.notificationClearConfirmTitle,
-      message: l10n.notificationClearConfirmMessage,
-      confirmLabel: l10n.notificationClearAll,
-      destructive: true,
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
-    try {
-      await ref.read(notificationControllerProvider.notifier).clearAll();
-    } catch (_) {
-      if (mounted) {
-        showOmniFeedback(
-          context,
-          l10n.notificationClearFailed,
-          severity: OmniFeedbackSeverity.error,
-        );
-      }
-    }
   }
 }
 
