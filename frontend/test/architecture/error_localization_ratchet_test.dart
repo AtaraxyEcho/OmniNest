@@ -13,14 +13,10 @@ import 'package:flutter_test/flutter_test.dart';
 /// 2. 取 `.code` 做分支的稳定错误码；
 /// 3. 已交给 `localizeUserFacing(...)` 按 code 再映射的。
 ///
-/// 其余展示层调用点必须传 `l10n:`。基线从 2026-11-03 实测的 49 处降到 4，
-/// 余下 4 处受文件大小棘轮阻塞，随文件拆分清零；在那之前任何新增不传 `l10n:`
-/// 的展示层调用都会直接判失败。
+/// 其余展示层调用点必须传 `l10n:`。2026-11-03 实测 49 处已全部补完，计数归零，
+/// 因此这是硬约束而不是棘轮：新增一处不传 `l10n:` 的展示层调用就直接判失败。
 void main() {
-  // 2026-11-03 实测起点 49 处，已补全 48 处（profile 4、admin 8、photos 12、music 9、reader 8、files 2、portal 1、video 2）。
-  // 剩 1 处卡在文件大小棘轮上：initial_setup_page 的 116 行——任何补法都会让该已登记
-  // 长文件超过基线，因此与它的职责拆分同批做（见 FUNC-L03），拆完立刻归零。
-  const unlocalizedDisplayCeiling = 1;
+  const unlocalizedDisplayCeiling = 0;
 
   String normalize(String path) => path.replaceAll(r'\', '/');
 
@@ -98,8 +94,9 @@ void main() {
       offenders.length,
       lessThanOrEqualTo(unlocalizedDisplayCeiling),
       reason:
-          '展示层未本地化的用户可见错误从 $unlocalizedDisplayCeiling 处上升了，'
-          '英文用户会看到服务端中文。新增请传 l10n:，修完一处就下调基线。\n'
+          '展示层出现未本地化的用户可见错误（基线 $unlocalizedDisplayCeiling 处），'
+          '英文用户会看到服务端中文。新增调用请传 l10n:，'
+          '或改用签名强制传入本地化实例的 errorReason。\n'
           '${offenders.join('\n')}',
     );
   });
