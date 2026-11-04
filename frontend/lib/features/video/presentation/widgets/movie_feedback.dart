@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 String movieErrorMessage(Object error, AppLocalizations l10n) {
   final userFacingError = describeUserFacingError(error, l10n: l10n);
@@ -142,11 +143,17 @@ class _MovieAsyncButtonState extends State<MovieAsyncButton> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AnimatedScale(
-            duration: const Duration(milliseconds: 160),
+            duration: MotionToken.reduced(
+              context,
+              const Duration(milliseconds: 160),
+            ),
             curve: Curves.easeOutCubic,
             scale: widget.enabled && !_running && _hovered ? 1.015 : 1.0,
             child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 160),
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 160),
+              ),
               opacity: widget.enabled ? 1.0 : 0.68,
               child: SizedBox(height: 44, child: button),
             ),
@@ -251,7 +258,7 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 180),
+        duration: MotionToken.reduced(context, Duration(milliseconds: 180)),
         curve: Curves.easeOutCubic,
         margin: EdgeInsets.only(bottom: 10),
         padding: EdgeInsets.all(16),
@@ -282,7 +289,10 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
         child: Row(
           children: [
             AnimatedScale(
-              duration: Duration(milliseconds: 160),
+              duration: MotionToken.reduced(
+                context,
+                Duration(milliseconds: 160),
+              ),
               curve: Curves.easeOutCubic,
               scale: _hovered ? 1.05 : 1.0,
               child: Icon(widget.icon, color: context.videoColors.primary),

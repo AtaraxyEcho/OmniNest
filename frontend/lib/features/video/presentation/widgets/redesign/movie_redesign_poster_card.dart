@@ -187,13 +187,19 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                     if (onPlay != null)
                       if (hoverCapable)
                         AnimatedOpacity(
-                          duration: const Duration(milliseconds: 300),
+                          duration: MotionToken.reduced(
+                            context,
+                            const Duration(milliseconds: 300),
+                          ),
                           opacity: _hovered ? 1 : 0,
                           child: Container(
                             color: Colors.black.withValues(alpha: 0.55),
                             child: Center(
                               child: AnimatedScale(
-                                duration: const Duration(milliseconds: 200),
+                                duration: MotionToken.reduced(
+                                  context,
+                                  const Duration(milliseconds: 200),
+                                ),
                                 curve: Curves.easeOut,
                                 scale: _hovered ? 1.0 : 0.75,
                                 child: _PlayButton(onPlay: onPlay),

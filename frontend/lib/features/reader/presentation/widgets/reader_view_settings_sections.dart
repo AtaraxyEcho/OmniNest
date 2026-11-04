@@ -153,7 +153,10 @@ class _SegmentOption extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 180),
+          ),
           constraints: const BoxConstraints(minHeight: 38),
           alignment: Alignment.center,
           padding: EdgeInsets.symmetric(horizontal: dense ? 5 : 8),
@@ -411,7 +414,10 @@ class _ThemeOption extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 180),
+              ),
               height: 48,
               decoration: BoxDecoration(
                 color: theme.surface,

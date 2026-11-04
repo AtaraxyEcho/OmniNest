@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/theme/workstation_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
@@ -340,7 +341,10 @@ class _FilterButtonState extends State<_FilterButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 120),
+          ),
           height: AppControlTokens.isDesktopDensity ? 30.0 : 44.0,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,

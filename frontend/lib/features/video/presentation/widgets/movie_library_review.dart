@@ -570,7 +570,10 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                       node.hasChildren
                           ? AnimatedRotation(
                             turns: _expanded ? 0.25 : 0,
-                            duration: const Duration(milliseconds: 150),
+                            duration: MotionToken.reduced(
+                              context,
+                              const Duration(milliseconds: 150),
+                            ),
                             child: Icon(
                               Icons.chevron_right_rounded,
                               size: 20,

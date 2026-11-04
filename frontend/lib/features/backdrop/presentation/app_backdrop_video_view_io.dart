@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -128,7 +129,10 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
         return RepaintBoundary(
           child: AnimatedOpacity(
             opacity: keepMountedOpacity ? 1 : 0,
-            duration: const Duration(milliseconds: 80),
+            duration: MotionToken.reduced(
+              context,
+              const Duration(milliseconds: 80),
+            ),
             curve: Curves.easeOut,
             child: Video(
               key: ValueKey(session.controller),

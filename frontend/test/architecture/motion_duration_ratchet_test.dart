@@ -30,10 +30,6 @@ void main() {
     // 状态灯控制器原在 admin_shell.dart，随键盘无障碍整改拆到独立文件。
     'lib/features/admin/presentation/widgets/admin_status_dot.dart 1600':
         '工作区指示动画',
-    'lib/features/portal/presentation/widgets/portal_mobile_system_widgets.dart 600':
-        '进度条填充动画',
-    'lib/features/portal/presentation/widgets/storage_overview_widget.dart 800':
-        '存储环数据动画',
   };
 
   test('动画时长不得新增硬编码超预算值', () {

@@ -96,7 +96,10 @@ class _HoverTileState extends State<_HoverTile> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: MotionToken.reduced(
+          context,
+          const Duration(milliseconds: 160),
+        ),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
           color:

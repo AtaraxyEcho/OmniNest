@@ -13,6 +13,7 @@ import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/version/app_version_api.dart';
@@ -107,7 +108,10 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
         Scrollable.ensureVisible(
           target,
           alignment: 0.06,
-          duration: const Duration(milliseconds: 280),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 280),
+          ),
         );
       }
     });

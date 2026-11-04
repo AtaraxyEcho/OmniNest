@@ -12,6 +12,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/core/widgets/animated_card.dart';

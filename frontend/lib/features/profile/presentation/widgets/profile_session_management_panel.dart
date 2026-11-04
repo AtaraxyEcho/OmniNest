@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
@@ -424,7 +425,10 @@ class _HoverRowState extends State<_HoverRow> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+        duration: MotionToken.reduced(
+          context,
+          const Duration(milliseconds: 120),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 8),
         color:
             _hovering

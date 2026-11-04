@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/domain/reader_chapter_hierarchy.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
@@ -244,7 +245,10 @@ class ChapterPanelState extends State<ChapterPanel> {
                         visualDensity: VisualDensity.compact,
                         icon: AnimatedRotation(
                           turns: isExpanded ? 0.25 : 0,
-                          duration: const Duration(milliseconds: 200),
+                          duration: MotionToken.reduced(
+                            context,
+                            const Duration(milliseconds: 200),
+                          ),
                           child: Icon(
                             Icons.chevron_right_rounded,
                             size: 20,

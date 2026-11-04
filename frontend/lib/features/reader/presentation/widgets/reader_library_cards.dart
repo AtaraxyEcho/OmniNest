@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -40,7 +41,10 @@ class _ReaderContinueCardState extends State<ReaderContinueCard> {
         child: InkWell(
           onTap: widget.onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+            duration: MotionToken.reduced(
+              context,
+              const Duration(milliseconds: 150),
+            ),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               border: Border.all(
@@ -393,7 +397,10 @@ class _HoverDimState extends State<_HoverDim> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
+        duration: MotionToken.reduced(
+          context,
+          const Duration(milliseconds: 150),
+        ),
         opacity: _hovered ? 0.72 : 1,
         child: widget.child,
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 
 class StorageOverviewWidget extends StatefulWidget {
@@ -21,7 +22,7 @@ class _StorageOverviewWidgetState extends State<StorageOverviewWidget>
   void initState() {
     super.initState();
     _progressController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: MotionToken.resolveForPlatform(MotionToken.chart),
       vsync: this,
     );
     _progressAnim = CurvedAnimation(
@@ -114,7 +115,7 @@ class _StorageOverviewWidgetState extends State<StorageOverviewWidget>
                   begin: 0,
                   end: widget.stats.isQuotaUnlimited ? 0.0 : ratio * 100,
                 ),
-                duration: const Duration(milliseconds: 800),
+                duration: MotionToken.reduced(context, MotionToken.chart),
                 curve: Curves.easeOutCubic,
                 builder: (context, percent, _) {
                   return Text(

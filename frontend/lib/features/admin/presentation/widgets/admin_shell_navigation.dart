@@ -49,7 +49,10 @@ class _AdminNavItemState extends State<_AdminNavItem> {
             }
           },
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
+            duration: MotionToken.reduced(
+              context,
+              const Duration(milliseconds: 120),
+            ),
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(

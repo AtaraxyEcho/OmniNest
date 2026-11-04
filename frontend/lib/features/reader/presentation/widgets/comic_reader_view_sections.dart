@@ -178,7 +178,10 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
       if (_pageController.hasClients) {
         _pageController.animateToPage(
           targetIndex,
-          duration: const Duration(milliseconds: 240),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 240),
+          ),
           curve: Curves.easeOutCubic,
         );
       }
@@ -378,7 +381,7 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
         position.viewportDimension * viewportFactor * direction;
     _scrollController.animateTo(
       target.clamp(0.0, position.maxScrollExtent),
-      duration: const Duration(milliseconds: 220),
+      duration: MotionToken.reduced(context, const Duration(milliseconds: 220)),
       curve: Curves.easeOut,
     );
   }

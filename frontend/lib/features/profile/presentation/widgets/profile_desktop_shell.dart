@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/theme/workstation_scope.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -476,7 +477,10 @@ class _NavigationItemState extends State<_NavigationItem> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 120),
+          ),
           height: 34,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -539,7 +543,10 @@ class _SignOutButtonState extends State<_SignOutButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onSignOut,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 120),
+          ),
           height: 32,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(

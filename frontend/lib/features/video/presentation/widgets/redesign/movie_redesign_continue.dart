@@ -189,7 +189,10 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                       ),
                     ),
                     AnimatedOpacity(
-                      duration: const Duration(milliseconds: 300),
+                      duration: MotionToken.reduced(
+                        context,
+                        const Duration(milliseconds: 300),
+                      ),
                       opacity: _hovered ? 1 : 0,
                       child: Container(
                         color: Colors.black.withValues(alpha: 0.40),

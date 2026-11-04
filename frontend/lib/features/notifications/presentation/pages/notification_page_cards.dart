@@ -400,7 +400,10 @@ class _PageButtonState extends State<_PageButton> {
         behavior: HitTestBehavior.opaque,
         onTap: enabled ? widget.onPressed : null,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 120),
+          ),
           height: AppControlTokens.isDesktopDensity ? 28.0 : 44.0,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,

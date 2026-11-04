@@ -12,6 +12,7 @@ import 'package:omninest/features/portal/presentation/widgets/portal_weather_pro
 import 'package:omninest/features/portal/presentation/widgets/weather_degraded_notice.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_layout.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 part 'weather_detail_painters.dart';
 part 'weather_detail_widgets.dart';

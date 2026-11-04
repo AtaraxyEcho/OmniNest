@@ -82,7 +82,7 @@ class _StatItem extends StatelessWidget {
         TweenAnimationBuilder<int>(
           key: ValueKey(value),
           tween: IntTween(begin: 0, end: value),
-          duration: const Duration(milliseconds: 600),
+          duration: MotionToken.reduced(context, MotionToken.counter),
           curve: Curves.easeOutCubic,
           builder:
               (context, animatedValue, _) => Text(

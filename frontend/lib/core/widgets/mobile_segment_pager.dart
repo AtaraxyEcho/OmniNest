@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 /// 分段区跟手横滑：内容随手指平移，松手按位移与速度落页。
 ///
@@ -91,7 +92,7 @@ class _MobileSegmentPagerState<T> extends State<MobileSegmentPager<T>> {
     }
     _controller.animateToPage(
       target,
-      duration: const Duration(milliseconds: 280),
+      duration: MotionToken.reduced(context, const Duration(milliseconds: 280)),
       curve: Curves.easeOutCubic,
     );
   }

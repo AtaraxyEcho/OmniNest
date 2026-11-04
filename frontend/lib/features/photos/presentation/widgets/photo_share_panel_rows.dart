@@ -172,7 +172,10 @@ class _ShareToggleRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
+                  duration: MotionToken.reduced(
+                    context,
+                    const Duration(milliseconds: 250),
+                  ),
                   width: 36,
                   height: 22,
                   decoration: BoxDecoration(
@@ -183,7 +186,10 @@ class _ShareToggleRow extends StatelessWidget {
                             : Colors.white.withValues(alpha: 0.15),
                   ),
                   child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 250),
+                    duration: MotionToken.reduced(
+                      context,
+                      const Duration(milliseconds: 250),
+                    ),
                     curve: Curves.easeOutCubic,
                     alignment:
                         value ? Alignment.centerRight : Alignment.centerLeft,

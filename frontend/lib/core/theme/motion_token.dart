@@ -25,6 +25,9 @@ class MotionToken {
   /// 图表数据动画
   static const chart = Duration(milliseconds: 800);
 
+  /// 数值计数的滚动动画
+  static const counter = Duration(milliseconds: 600);
+
   /// 根据当前无障碍设置解析动画时长。
   static Duration resolve(BuildContext context, Duration duration) {
     // 只订阅 disableAnimations 的精细节点，避免窗口缩放/软键盘变化触发重建。

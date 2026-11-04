@@ -20,9 +20,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// lib/features/reader/presentation/widgets/reader_view_page_builders_return.dart、
 /// lib/features/reader/presentation/pages/reader_view_page_commands.dart。
 void main() {
-  // 2026-11-04 实测：再接入 mobile_env_widgets/app_dropdown/file_browser_page_external 后，
-  // 全仓剩余 83 处字面量动画时长。
-  const hardcodedMotionCeiling = 83;
+  // 2026-11-04 实测剩余 41 处；按区域与性质归类（重跑本闸门的扫描即可核对）：
+  //   music 22 —— 并行会话持有的文件，本轮不越界；
+  //   photos 9 —— 幻灯转场与 chrome 7 处的时长本身待拍板，另有 2 处（详情页与灯箱翻页）
+  //     受各自行数棘轮限制，接 token 需要先把页面按职责拆分；
+  //   portal 4 —— 天气与环境类循环动画 3 处（归零会变成逐帧空转）+ 1 处 snackbar 停留时长；
+  //   files 2 / reader 2 / video 1 / admin 1 —— snackbar 停留时长（非动画，按行匹配的误报），
+  //     以及与动画时序耦合的阅读器翻页控制器、admin 状态灯脉冲。
+  const hardcodedMotionCeiling = 41;
 
   test('未接入减动效判定的动画时长不得新增', () {
     final offenders = <String>[];

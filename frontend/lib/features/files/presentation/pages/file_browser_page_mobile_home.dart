@@ -248,7 +248,10 @@ class _HomeToolbarTab extends StatelessWidget {
               ),
             ),
             AnimatedContainer(
-              duration: const Duration(milliseconds: 190),
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 190),
+              ),
               width: active ? 28 : 0,
               height: 2,
               color: active ? context.env.accentInk : Colors.transparent,

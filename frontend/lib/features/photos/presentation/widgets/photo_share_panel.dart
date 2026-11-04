@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';

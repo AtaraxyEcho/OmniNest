@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
@@ -155,7 +156,10 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                   ),
                 if (entry.onDelete != null)
                   AnimatedOpacity(
-                    duration: const Duration(milliseconds: 200),
+                    duration: MotionToken.reduced(
+                      context,
+                      const Duration(milliseconds: 200),
+                    ),
                     opacity: _hovered ? 1 : 0,
                     child: IconButton(
                       visualDensity: VisualDensity.compact,

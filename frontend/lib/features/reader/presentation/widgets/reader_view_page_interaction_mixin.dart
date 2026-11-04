@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
@@ -231,7 +232,7 @@ mixin ReaderViewPageInteractionMixin
     );
     await scrollController.animateTo(
       target,
-      duration: const Duration(milliseconds: 250),
+      duration: MotionToken.reduced(context, const Duration(milliseconds: 250)),
       curve: Curves.easeOutCubic,
     );
     if (!mounted || !scrollController.hasClients) return true;

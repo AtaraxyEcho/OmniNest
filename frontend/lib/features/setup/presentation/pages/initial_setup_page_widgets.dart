@@ -128,7 +128,10 @@ class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
               ),
               AnimatedRotation(
                 turns: controller.isOpen ? 0.5 : 0,
-                duration: const Duration(milliseconds: 150),
+                duration: MotionToken.reduced(
+                  context,
+                  const Duration(milliseconds: 150),
+                ),
                 child: Icon(
                   Icons.keyboard_arrow_down_rounded,
                   size: 18,

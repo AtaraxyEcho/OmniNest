@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/features/files/application/space_migration_service.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -365,7 +366,7 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 160),
+        duration: MotionToken.reduced(context, Duration(milliseconds: 160)),
         curve: Curves.easeOutCubic,
         margin: EdgeInsets.only(bottom: 10),
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),

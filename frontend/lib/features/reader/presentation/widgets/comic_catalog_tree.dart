@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 
 /// 扁平化后的目录可见行：节点与其在树中的深度。
@@ -463,7 +464,10 @@ Widget buildComicCatalogRow(
           if (hasKids)
             AnimatedRotation(
               turns: isExpanded ? 0.25 : 0,
-              duration: const Duration(milliseconds: 200),
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 200),
+              ),
               child: Icon(
                 Icons.chevron_right_rounded,
                 size: 20,

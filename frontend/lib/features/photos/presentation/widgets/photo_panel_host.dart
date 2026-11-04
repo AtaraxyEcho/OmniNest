@@ -34,7 +34,10 @@ class PhotoPanelHost extends StatelessWidget {
         bottom: 0,
         child: AnimatedSlide(
           offset: visible ? Offset.zero : const Offset(0, 1),
-          duration: const Duration(milliseconds: 320),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 320),
+          ),
           curve: Curves.easeOutCubic,
           child: GestureDetector(
             onVerticalDragEnd: (details) {

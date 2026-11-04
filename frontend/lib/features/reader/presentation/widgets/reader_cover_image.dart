@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 
@@ -61,7 +62,10 @@ class AuthCoverImage extends ConsumerWidget {
                 }
                 return AnimatedOpacity(
                   opacity: frame == null ? 0 : 1,
-                  duration: const Duration(milliseconds: 300),
+                  duration: MotionToken.reduced(
+                    context,
+                    const Duration(milliseconds: 300),
+                  ),
                   child: child,
                 );
               },

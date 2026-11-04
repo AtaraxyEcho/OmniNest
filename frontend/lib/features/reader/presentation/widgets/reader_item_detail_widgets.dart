@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
@@ -366,7 +367,10 @@ class MinimalChapterTile extends StatelessWidget {
                   color: context.readerColors.onSurface.withValues(alpha: 0.5),
                   icon: AnimatedRotation(
                     turns: isExpanded ? 0.25 : 0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: MotionToken.reduced(
+                      context,
+                      const Duration(milliseconds: 200),
+                    ),
                     child: const Icon(Icons.chevron_right_rounded),
                   ),
                 )
