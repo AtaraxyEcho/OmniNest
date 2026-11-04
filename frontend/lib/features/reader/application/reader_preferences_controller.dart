@@ -27,8 +27,9 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
 
   @override
   Future<Map<String, dynamic>> build() async {
+    final sessionFuture = ref.watch(authSessionProvider.future);
     final legacy = await _readLegacyLocal();
-    final session = await ref.watch(authSessionProvider.future);
+    final session = await sessionFuture;
     _userId = session.user?.id;
     final userId = _userId;
     if (userId == null) {

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
@@ -23,6 +24,8 @@ export 'package:omninest/features/files/application/file_browser_models.dart';
 
 part 'file_browser_selection_actions.dart';
 part 'file_browser_upload_actions.dart';
+part 'file_browser_upload_runtime.dart';
+part 'file_browser_upload_state.dart';
 part 'file_browser_integration_actions.dart';
 part 'file_browser_page_mappers.dart';
 part 'file_browser_section_actions.dart';
@@ -38,7 +41,8 @@ final fileStorageStatsProvider = FutureProvider<FileStorageStats>((ref) {
   return ref.watch(fileApiProvider).storageStats();
 });
 
-class FileBrowserController extends AsyncNotifier<FileBrowserState> {
+class FileBrowserController extends AsyncNotifier<FileBrowserState>
+    with _UploadQueueGuards {
   FileRepository get _repository => ref.read(fileRepositoryProvider);
 
   /// 上传动作扩展访问任务轮询接口的出口；扩展不是 Notifier 子类，不能直接用 ref。
@@ -94,18 +98,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   int _navigationGeneration = 0;
 
   final Map<String, _UploadRuntime> _uploadRuntimes = {};
-  final Map<
-    String,
-    ({
-      SoftDeleteConflict conflict,
-      XFile file,
-      String fileName,
-      int sizeBytes,
-      String mimeType,
-      UploadTarget target,
-    })
-  >
-  _pendingConflicts = {};
+  final Map<String, _PendingConflict> _pendingConflicts = {};
   Timer? _uploadQueuePollTimer;
   Timer? _importTaskPollTimer;
   int _externalBrowseRequestGeneration = 0;

@@ -305,8 +305,7 @@ class FileIngressPromotionServiceTest {
         service.process(event(null));
 
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
-        verify(sharedSpaceQuotaService).checkQuota(512L);
-        verify(sharedSpaceQuotaService).increaseUsage(512L, 1L);
+        verify(sharedSpaceQuotaService).settleReservation(512L, 512L, 1L);
         verify(storageQuotaService, never()).settleReservation(anyString(), any(UUID.class), anyLong());
         verify(storageQuotaService, never()).incrementUsage(any(UUID.class), anyLong());
     }
@@ -348,7 +347,7 @@ class FileIngressPromotionServiceTest {
 
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
         // 版本上传只增加新对象字节，fileCount 不得增加，否则每次版本都会虚增一。
-        verify(sharedSpaceQuotaService).increaseUsage(512L, 0L);
+        verify(sharedSpaceQuotaService).settleReservation(512L, 512L, 0L);
         // 内容变更只由 saveNewVersion 发布一次，会话结果不得再次发布。
         verify(postProcessingTaskService, times(1)).enqueueMediaAutoImport(any());
     }
@@ -370,7 +369,7 @@ class FileIngressPromotionServiceTest {
     }
 
     @Test
-    void processAdjustsUndersizedUploadAndOverridesDeclaredMime() {
+    void processRejectsUndersizedUploadAsIncomplete() {
         FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
         item.setMimeType("image/png");
         FileUploadSession session = session();
@@ -378,27 +377,18 @@ class FileIngressPromotionServiceTest {
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256, 256L, "image/jpeg"));
-        stubMarkClean(item);
-        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
-            FileObject object = invocation.getArgument(0);
-            object.setId(UUID.randomUUID());
-            return object;
-        });
-        when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
-            FileNode node = invocation.getArgument(0);
-            node.setId(UUID.randomUUID());
-            return node;
-        });
-        when(postProcessingTaskService.enqueueMediaAutoImport(any())).thenReturn(UUID.randomUUID());
 
-        service.process(event(null));
+        assertThatThrownBy(() -> service.process(event(null)))
+                .isInstanceOf(FileIngressRejectedException.class)
+                .hasMessageContaining("上传内容不完整");
 
-        // 修正随 markClean 的独立事务一起提交，不得再对脱管实体 save。
-        verify(ingressItemRepository, never()).save(item);
-        assertThat(item.getSizeBytes()).isEqualTo(256L);
-        assertThat(item.getMimeType()).isEqualTo("image/jpeg");
-        assertThat(session.getStatus()).isEqualTo("COMPLETED");
-        verify(storageQuotaService).settleReservation("UPLOAD", SESSION_ID, 256L);
+        // 截断文件不得被改写为实际小尺寸后晋升；会话与预留必须落到失败终态。
+        assertThat(item.getSizeBytes()).isEqualTo(512L);
+        assertThat(item.getMimeType()).isEqualTo("image/png");
+        verify(ingressLifecycleService, never()).markClean(any(), anyString(), anyLong(), any());
+        verify(fileNodeRepository, never()).save(any());
+        verify(storageQuotaService).releaseReservation("UPLOAD", SESSION_ID);
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.REJECTED.getValue());
     }
 
     @Test

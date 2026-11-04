@@ -13,7 +13,7 @@ class _UploadRuntime {
   });
 
   final XFile file;
-  final FileUploadSession session;
+  FileUploadSession session;
 
   /// 非空时完成上传后保存为目标文件的新版本，不新建文件节点。
   final String? asVersionOfFileId;
@@ -172,15 +172,29 @@ extension FileBrowserUploadActions on FileBrowserController {
   }
 
   void pauseLocalUploadTask(String taskId) {
+    final task = _findLocalUploadTask(taskId);
     final runtime = _uploadRuntimes[taskId];
-    if (runtime == null || runtime.removed || runtime.completed) {
+    if (runtime == null) {
+      // 任务还在排队或创建会话：没有运行时句柄，先登记墓碑，Worker 轮到时不得开始上传。
+      _prePausedLocalTaskIds.add(taskId);
+      if (task != null &&
+          (task.status == 'QUEUED' || task.status == 'UPLOADING')) {
+        _upsertLocalUploadTask(
+          task.copyWith(
+            status: 'PAUSED',
+            messageCode: FileUploadTaskMessageCode.paused,
+          ),
+        );
+      }
+      return;
+    }
+    if (runtime.removed || runtime.completed) {
       return;
     }
     runtime.pauseRequested = true;
     for (final cancellation in runtime.activeCancellations.toList()) {
       cancellation.cancel();
     }
-    final task = _findLocalUploadTask(taskId);
     if (task != null && task.status != 'PAUSED') {
       _upsertLocalUploadTask(
         task.copyWith(
@@ -193,12 +207,45 @@ extension FileBrowserUploadActions on FileBrowserController {
 
   Future<void> resumeLocalUploadTask(String taskId) async {
     await _runAction(FileOperation.resumeUpload, () async {
-      final runtime = _uploadRuntimes[taskId];
       final task = _findLocalUploadTask(taskId);
-      if (runtime == null || task == null || runtime.removed) {
+      if (task == null || _cancelledLocalTaskIds.contains(taskId)) {
         return;
       }
-      if (runtime.running || runtime.completed) {
+      _prePausedLocalTaskIds.remove(taskId);
+      final runtime = _uploadRuntimes[taskId];
+      final ticket = _resumeTickets[taskId];
+      if (runtime == null) {
+        if (ticket == null) {
+          // Worker 尚未轮转到该文件：先恢复排队态，轮到时自然会开始上传。
+          _upsertLocalUploadTask(
+            task.copyWith(
+              status: 'UPLOADING',
+              messageCode: FileUploadTaskMessageCode.resuming,
+            ),
+          );
+          return;
+        }
+        _upsertLocalUploadTask(
+          task.copyWith(
+            status: 'UPLOADING',
+            messageCode: FileUploadTaskMessageCode.resuming,
+          ),
+        );
+        final result = await _uploadSingleFile(
+          ticket.file,
+          taskId: taskId,
+          fileName: ticket.fileName,
+          sizeBytes: ticket.sizeBytes,
+          mimeType: ticket.mimeType,
+          asVersionOfFileId: ticket.asVersionOfFileId,
+          target: ticket.target,
+        );
+        if (result == _UploadFileResult.completed) {
+          await _refreshAfterLocalUploadSettled();
+        }
+        return;
+      }
+      if (runtime.removed || runtime.running || runtime.completed) {
         return;
       }
       runtime.pauseRequested = false;
@@ -208,16 +255,23 @@ extension FileBrowserUploadActions on FileBrowserController {
           messageCode: FileUploadTaskMessageCode.resuming,
         ),
       );
-      await _runUploadRuntime(taskId);
-      final settled = _findLocalUploadTask(taskId);
-      if (settled?.status.toUpperCase() == 'COMPLETED') {
-        await _refreshAfterLocalUploadSettled();
+      try {
+        await _runUploadRuntime(taskId);
+        if (_findLocalUploadTask(taskId)?.status.toUpperCase() == 'COMPLETED') {
+          await _refreshAfterLocalUploadSettled();
+        }
+      } catch (error) {
+        _settleUploadRuntimeFailure(taskId, runtime, error);
       }
     });
   }
 
   Future<void> removeLocalUploadTask(String taskId) async {
     await _runAction(FileOperation.deleteUploadTask, () async {
+      // 墓碑必须先于状态移除登记：Worker 的 prepared 列表不感知 UI 删除。
+      _cancelledLocalTaskIds.add(taskId);
+      _prePausedLocalTaskIds.remove(taskId);
+      _resumeTickets.remove(taskId);
       final runtime = _uploadRuntimes.remove(taskId);
       runtime?.removed = true;
       if (runtime != null) {
@@ -341,112 +395,6 @@ extension FileBrowserUploadActions on FileBrowserController {
     _removeLocalUploadTask(taskId);
   }
 
-  Future<FileUploadBatchResult> uploadFiles(List<XFile> files) async {
-    if (files.isEmpty) {
-      return const FileUploadBatchResult(
-        total: 0,
-        completed: 0,
-        conflicts: 0,
-        failed: 0,
-        paused: 0,
-      );
-    }
-    clearActionError();
-    // 整批共用一个目标快照：上传进行中切换目录/空间不能改动排队文件的落点。
-    final target = UploadTarget.of(_currentState);
-    var completed = 0;
-    var conflicts = 0;
-    var failed = 0;
-    var paused = 0;
-    try {
-      final policy = await _repository.uploadPolicy();
-      // 先把整批文件登记进上传队列，用户能看到所有待传文件而不是只看到当前一个。
-      final prepared = <_PreparedUpload>[];
-      final baseId = DateTime.now().microsecondsSinceEpoch;
-      for (var index = 0; index < files.length; index++) {
-        final file = files[index];
-        final sizeBytes = await file.length();
-        final fileName = _uploadFileName(file);
-        final taskId = '$baseId-$index';
-        prepared.add(
-          _PreparedUpload(
-            taskId: taskId,
-            file: file,
-            fileName: fileName,
-            sizeBytes: sizeBytes,
-            target: target,
-          ),
-        );
-        _upsertLocalUploadTask(
-          FileUploadClientTask(
-            id: taskId,
-            fileName: fileName,
-            sizeBytes: sizeBytes,
-            uploadedBytes: 0,
-            status: 'QUEUED',
-            messageCode: FileUploadTaskMessageCode.waiting,
-          ),
-        );
-      }
-
-      var cursor = 0;
-      Future<void> runWorker() async {
-        while (true) {
-          if (cursor >= prepared.length) {
-            return;
-          }
-          final item = prepared[cursor++];
-          try {
-            final result = await _uploadSingleFile(
-              item.file,
-              policy: policy,
-              taskId: item.taskId,
-              fileName: item.fileName,
-              sizeBytes: item.sizeBytes,
-              target: item.target,
-            );
-            switch (result) {
-              case _UploadFileResult.completed:
-                completed += 1;
-                break;
-              case _UploadFileResult.conflict:
-                conflicts += 1;
-                break;
-              case _UploadFileResult.failed:
-                failed += 1;
-                break;
-              case _UploadFileResult.paused:
-                paused += 1;
-                break;
-              case _UploadFileResult.cancelled:
-                break;
-            }
-          } catch (error) {
-            failed += 1;
-            _recordActionError(FileOperation.upload, error);
-          }
-        }
-      }
-
-      final workerCount = math.min(_uploadBatchConcurrency, prepared.length);
-      await Future.wait(
-        List<Future<void>>.generate(workerCount, (_) => runWorker()),
-      );
-      await _refreshAfterLocalUploadSettled();
-      return FileUploadBatchResult(
-        total: files.length,
-        completed: completed,
-        conflicts: conflicts,
-        failed: failed,
-        paused: paused,
-      );
-    } catch (error) {
-      _recordActionError(FileOperation.upload, error);
-      rethrow;
-    }
-  }
-
-  /// 本地上传任务完成后的列表收尾，与批量上传路径保持一致。
   Future<void> _refreshAfterLocalUploadSettled() async {
     final currentSection = _currentState?.section;
     if (currentSection == FileManagerSection.uploadQueue) {
@@ -473,471 +421,5 @@ extension FileBrowserUploadActions on FileBrowserController {
     return fallback.isEmpty
         ? 'file-${DateTime.now().microsecondsSinceEpoch}'
         : fallback;
-  }
-
-  Future<_UploadFileResult> _uploadSingleFile(
-    XFile file, {
-    FileUploadPolicy? policy,
-    String? taskId,
-    String? fileName,
-    int? sizeBytes,
-    String? mimeType,
-    String? asVersionOfFileId,
-    UploadTarget? target,
-  }) async {
-    sizeBytes ??= await file.length();
-    fileName ??= _uploadFileName(file);
-    final task = FileUploadClientTask(
-      id: taskId ?? DateTime.now().microsecondsSinceEpoch.toString(),
-      fileName: fileName,
-      sizeBytes: sizeBytes,
-      uploadedBytes: 0,
-      status: 'QUEUED',
-      messageCode: FileUploadTaskMessageCode.waiting,
-    );
-    _upsertLocalUploadTask(task);
-    _UploadRuntime? uploadRuntime;
-    try {
-      final effectivePolicy = policy ?? await _repository.uploadPolicy();
-      final needsMultipart = sizeBytes > effectivePolicy.directUploadMaxBytes;
-      final partSizeBytes =
-          needsMultipart
-              ? calculatePartSizeBytes(
-                fileSizeBytes: sizeBytes,
-                defaultPartSizeBytes: effectivePolicy.defaultPartSizeBytes,
-                maxPartSizeBytes: effectivePolicy.maxPartSizeBytes,
-                maxTotalParts: effectivePolicy.maxTotalParts,
-              )
-              : null;
-      final session = await createUploadSession(
-        fileName: fileName,
-        sizeBytes: sizeBytes,
-        mimeType: mimeType ?? file.mimeType ?? 'application/octet-stream',
-        partSizeBytes: partSizeBytes,
-        asVersionOfFileId: asVersionOfFileId,
-        target: target,
-      );
-      _upsertLocalUploadTask(
-        task.copyWith(
-          status: 'UPLOADING',
-          messageCode:
-              session.isDirectUpload
-                  ? FileUploadTaskMessageCode.directUploading
-                  : FileUploadTaskMessageCode.multipartUploading,
-          uploadId: session.uploadId,
-        ),
-      );
-      uploadRuntime = _UploadRuntime(
-        file: file,
-        session: session,
-        asVersionOfFileId: asVersionOfFileId,
-      );
-      _uploadRuntimes[task.id] = uploadRuntime;
-      await _runUploadRuntime(task.id);
-      final finalTask = _findLocalUploadTask(task.id);
-      return switch (finalTask?.status.toUpperCase()) {
-        'COMPLETED' => _UploadFileResult.completed,
-        'PAUSED' => _UploadFileResult.paused,
-        _ => _UploadFileResult.cancelled,
-      };
-    } catch (error) {
-      final runtime = uploadRuntime ?? _uploadRuntimes[task.id];
-      if (runtime?.pauseRequested == true) {
-        final currentTask = _findLocalUploadTask(task.id) ?? task;
-        _upsertLocalUploadTask(
-          currentTask.copyWith(
-            status: 'PAUSED',
-            messageCode: FileUploadTaskMessageCode.paused,
-          ),
-        );
-        return _UploadFileResult.paused;
-      }
-      if (runtime?.removed == true) {
-        return _UploadFileResult.cancelled;
-      }
-      // 检测软删除同名文件冲突：409 在 validateStatus < 500 下由信封解析抛
-      // AppException，只有旧路径才会是 DioException。
-      final conflict =
-          error is DioException
-              ? SoftDeleteConflict.fromDioException(error)
-              : error is AppException
-              ? SoftDeleteConflict.fromAppException(error)
-              : null;
-      if (conflict != null) {
-        final currentTask = _findLocalUploadTask(task.id) ?? task;
-        _upsertLocalUploadTask(
-          currentTask.copyWith(
-            status: 'CONFLICT',
-            messageCode: FileUploadTaskMessageCode.conflict,
-            messageArgument: conflict.fileName,
-          ),
-        );
-        _pendingConflicts[task.id] = (
-          conflict: conflict,
-          file: file,
-          fileName: fileName,
-          sizeBytes: sizeBytes,
-          mimeType: file.mimeType ?? 'application/octet-stream',
-          target: target ?? UploadTarget.of(_currentState),
-        );
-        return _UploadFileResult.conflict;
-      }
-      final currentTask = _findLocalUploadTask(task.id) ?? task;
-      _upsertLocalUploadTask(
-        currentTask.copyWith(
-          status: 'FAILED',
-          messageCode: FileUploadTaskMessageCode.failed,
-          message: describeUserFacingError(error).displayMessage,
-        ),
-      );
-      return _UploadFileResult.failed;
-    }
-  }
-
-  Future<void> _runUploadRuntime(String taskId) async {
-    final runtime = _uploadRuntimes[taskId];
-    final task = _findLocalUploadTask(taskId);
-    if (runtime == null || task == null || runtime.running) {
-      return;
-    }
-    runtime.running = true;
-    try {
-      if (runtime.session.isDirectUpload) {
-        await _runDirectUpload(taskId, runtime);
-      } else {
-        await _runMultipartUpload(taskId, runtime);
-      }
-    } finally {
-      runtime.running = false;
-    }
-  }
-
-  Future<void> _runDirectUpload(String taskId, _UploadRuntime runtime) async {
-    if (_shouldPause(taskId, runtime)) {
-      return;
-    }
-    final task = _findLocalUploadTask(taskId);
-    if (task == null) {
-      return;
-    }
-    final uploadUrl = runtime.session.uploadUrl;
-    if (uploadUrl == null || uploadUrl.isEmpty) {
-      throw const AppException(
-        code: AppErrorCodes.uploadUrlMissing,
-        message: AppErrorCodes.uploadUrlMissing,
-      );
-    }
-    final cancellation = FileUploadCancellationToken();
-    runtime.activeCancellations.add(cancellation);
-    try {
-      await _repository.putUploadUrl(
-        uploadUrl: uploadUrl,
-        data: runtime.file.openRead(),
-        contentLength: runtime.session.sizeBytes,
-        cancellationToken: cancellation,
-        onProgress:
-            (sent, total) => _reportUploadProgress(
-              taskId,
-              runtime,
-              sent.clamp(0, runtime.session.sizeBytes),
-            ),
-      );
-    } finally {
-      runtime.activeCancellations.remove(cancellation);
-    }
-    if (runtime.removed) {
-      return;
-    }
-    if (runtime.pauseRequested) {
-      _markUploadPaused(taskId, runtime);
-      return;
-    }
-    await _repository.completeUploadSession(
-      sessionId: runtime.session.uploadId,
-      asVersionOfFileId: runtime.asVersionOfFileId,
-    );
-    runtime.completed = true;
-    _uploadRuntimes.remove(taskId);
-    _discardUploadSession(runtime.session.uploadId);
-    _upsertLocalUploadTask(
-      task.copyWith(
-        uploadedBytes: runtime.session.sizeBytes,
-        status: 'COMPLETED',
-        messageCode: FileUploadTaskMessageCode.scanPending,
-        uploadId: runtime.session.uploadId,
-      ),
-    );
-  }
-
-  /// 分片上传并发度：3 个在途分片足以吃满常见上行带宽，又不会让
-  /// 单个大文件占满连接池。
-  static const int _multipartConcurrency = 3;
-
-  /// 批量上传并发文件数：小文件不必排在大文件后面，同时限制连接总量。
-  static const int _uploadBatchConcurrency = 3;
-
-  Future<void> _runMultipartUpload(
-    String taskId,
-    _UploadRuntime runtime,
-  ) async {
-    final pendingParts =
-        runtime.session.parts
-            .where(
-              (part) => !runtime.completedPartNumbers.contains(part.partNumber),
-            )
-            .toList();
-    var cursor = 0;
-    var stopped = false;
-
-    Future<void> runWorker() async {
-      while (true) {
-        if (stopped || runtime.removed || runtime.pauseRequested) {
-          return;
-        }
-        if (cursor >= pendingParts.length) {
-          return;
-        }
-        final part = pendingParts[cursor++];
-        try {
-          await _uploadAndCompletePart(taskId, runtime, part);
-        } catch (error) {
-          stopped = true;
-          for (final cancellation in runtime.activeCancellations.toList()) {
-            cancellation.cancel();
-          }
-          rethrow;
-        }
-      }
-    }
-
-    final workerCount = math.min(_multipartConcurrency, pendingParts.length);
-    await Future.wait(
-      List<Future<void>>.generate(workerCount, (_) => runWorker()),
-    );
-
-    if (stopped || _shouldPause(taskId, runtime)) {
-      return;
-    }
-    await _repository.completeUploadSession(
-      sessionId: runtime.session.uploadId,
-      asVersionOfFileId: runtime.asVersionOfFileId,
-    );
-    runtime.completed = true;
-    _uploadRuntimes.remove(taskId);
-    _discardUploadSession(runtime.session.uploadId);
-    final completedTask = _findLocalUploadTask(taskId);
-    if (runtime.removed || completedTask == null) {
-      return;
-    }
-    _upsertLocalUploadTask(
-      completedTask.copyWith(
-        uploadedBytes: runtime.session.sizeBytes,
-        status: 'COMPLETED',
-        messageCode: FileUploadTaskMessageCode.scanPending,
-        uploadId: runtime.session.uploadId,
-      ),
-    );
-  }
-
-  /// 上传并确认单个分片；失败时由工作池统一收敛为任务失败。
-  Future<void> _uploadAndCompletePart(
-    String taskId,
-    _UploadRuntime runtime,
-    FileUploadPart part,
-  ) async {
-    var uploadUrl = part.uploadUrl;
-    final expiresAt = part.uploadUrlExpiresAt;
-    final urlUsable =
-        uploadUrl != null &&
-        uploadUrl.isNotEmpty &&
-        (expiresAt == null ||
-            DateTime.now().isBefore(
-              expiresAt.subtract(const Duration(minutes: 1)),
-            ));
-    if (!urlUsable) {
-      // 创建会话只预签名首批分片，其余分片在上传前逐个按需获取；
-      // 暂停超过预签名有效期后也必须重新签发，不能复用已过期 URL。
-      uploadUrl = await _repository.getUploadPartUrl(
-        uploadId: runtime.session.uploadId,
-        partNumber: part.partNumber,
-      );
-      // 请求在途期间任务可能已被暂停或删除：此时还没有登记取消令牌，
-      // 不在这里拦截会继续上传整个分片（最大 64 MB）。
-      if (runtime.removed || runtime.pauseRequested) {
-        return;
-      }
-    }
-    if (uploadUrl.isEmpty) {
-      throw const AppException(
-        code: AppErrorCodes.uploadUrlMissing,
-        message: '上传地址不可用',
-      );
-    }
-    final start = (part.partNumber - 1) * runtime.session.partSizeBytes;
-    final end = math.min(start + part.sizeBytes, runtime.session.sizeBytes);
-    final cancellation = FileUploadCancellationToken();
-    runtime.activeCancellations.add(cancellation);
-    try {
-      final eTag = await _repository.putUploadUrl(
-        uploadUrl: uploadUrl,
-        data: runtime.file.openRead(start, end),
-        contentLength: part.sizeBytes,
-        cancellationToken: cancellation,
-        onProgress: (sent, total) {
-          runtime.inFlightBytes[part.partNumber] = sent.clamp(
-            0,
-            part.sizeBytes,
-          );
-          _reportUploadProgress(
-            taskId,
-            runtime,
-            runtime.uploadedBytes + runtime.inFlightBytesTotal,
-          );
-        },
-      );
-      if (runtime.removed || runtime.pauseRequested) {
-        return;
-      }
-      await _repository.completeUploadPart(
-        uploadId: runtime.session.uploadId,
-        partNumber: part.partNumber,
-        eTag: eTag,
-      );
-      runtime.completedPartNumbers.add(part.partNumber);
-      // 先移除当前分片的在途字节，避免把已完成字节与同一分片重复相加。
-      runtime.inFlightBytes.remove(part.partNumber);
-      final afterPartTask = _findLocalUploadTask(taskId);
-      // 暂停标记必须在确认分片后重查：确认请求在途时用户可能已经点了暂停，
-      // 不拦住会把刚置为 PAUSED 的任务覆写回 UPLOADING。
-      if (runtime.removed || runtime.pauseRequested || afterPartTask == null) {
-        return;
-      }
-      _upsertLocalUploadTask(
-        afterPartTask.copyWith(
-          uploadedBytes: runtime.uploadedBytes + runtime.inFlightBytesTotal,
-          status: 'UPLOADING',
-          messageCode: FileUploadTaskMessageCode.partCompleted,
-          messageCurrent: part.partNumber,
-          messageTotal: runtime.session.totalParts,
-          uploadId: runtime.session.uploadId,
-        ),
-      );
-    } finally {
-      runtime.activeCancellations.remove(cancellation);
-      runtime.inFlightBytes.remove(part.partNumber);
-    }
-  }
-
-  bool _shouldPause(String taskId, _UploadRuntime runtime) {
-    if (!runtime.pauseRequested) {
-      return false;
-    }
-    _markUploadPaused(taskId, runtime);
-    return true;
-  }
-
-  void _markUploadPaused(String taskId, _UploadRuntime runtime) {
-    final task = _findLocalUploadTask(taskId);
-    if (task == null) {
-      return;
-    }
-    _upsertLocalUploadTask(
-      task.copyWith(
-        uploadedBytes: runtime.uploadedBytes,
-        status: 'PAUSED',
-        messageCode: FileUploadTaskMessageCode.paused,
-        uploadId: runtime.session.uploadId,
-      ),
-    );
-  }
-
-  void _reportUploadProgress(
-    String taskId,
-    _UploadRuntime runtime,
-    int uploadedBytes,
-  ) {
-    final now = DateTime.now();
-    final elapsed = now.difference(runtime.lastProgressAt);
-    final byteDelta = (uploadedBytes - runtime.lastReportedBytes).abs();
-    final isComplete = uploadedBytes >= runtime.session.sizeBytes;
-    // 时间下限必须独立成立：旧写法让高速链路每满一个字节阈值就上报一次，整页高频重建。
-    if (!isComplete &&
-        (elapsed < const Duration(milliseconds: 80) || byteDelta == 0)) {
-      return;
-    }
-    final task = _findLocalUploadTask(taskId);
-    if (task == null || runtime.pauseRequested || runtime.removed) {
-      return;
-    }
-    runtime.lastProgressAt = now;
-    runtime.lastReportedBytes = uploadedBytes;
-    _upsertLocalUploadTask(task.copyWith(uploadedBytes: uploadedBytes));
-  }
-
-  FileUploadClientTask? _findLocalUploadTask(String taskId) {
-    final current = _currentState;
-    if (current == null) {
-      return null;
-    }
-    for (final task in current.localUploadTasks) {
-      if (task.id == taskId) {
-        return task;
-      }
-    }
-    return null;
-  }
-
-  void _upsertLocalUploadTask(FileUploadClientTask task) {
-    final current = _currentState;
-    if (current == null) {
-      return;
-    }
-    final existingIndex = current.localUploadTasks.indexWhere(
-      (item) => item.id == task.id,
-    );
-    final previous =
-        existingIndex < 0 ? null : current.localUploadTasks[existingIndex];
-    // 进度回调每 80ms 一次：已有任务必须原地替换，头插会让队列行随并发进度跳动。
-    // 新任务追加到队尾，保持用户选择文件的顺序。
-    final tasks =
-        existingIndex < 0
-            ? [...current.localUploadTasks, task]
-            : [
-              for (final item in current.localUploadTasks)
-                if (item.id == task.id) task else item,
-            ];
-    // 只裁剪已完成/已失败的历史记录；活跃任务与待用户处理的冲突任务不能被挤出。
-    // 保留最近 20 条终态记录：新任务追加在队尾，从队首正向计数会把刚完成的任务
-    // 立刻丢弃，因此先算出需要跳过的最旧条数。
-    final totalTerminal = tasks.where((item) => item.isTerminal).length;
-    var toDrop = math.max(0, totalTerminal - 20);
-    final kept = <FileUploadClientTask>[];
-    for (final item in tasks) {
-      if (item.isTerminal && toDrop > 0) {
-        toDrop--;
-        continue;
-      }
-      kept.add(item);
-    }
-    _emitState(current.copyWith(localUploadTasks: kept));
-    if (previous == null || previous.status != task.status) {
-      _startUploadQueuePolling();
-    }
-  }
-
-  void _removeLocalUploadTask(String taskId) {
-    final current = _currentState;
-    if (current == null) {
-      return;
-    }
-    _emitState(
-      current.copyWith(
-        localUploadTasks:
-            current.localUploadTasks
-                .where((item) => item.id != taskId)
-                .toList(),
-      ),
-    );
-    _startUploadQueuePolling();
   }
 }

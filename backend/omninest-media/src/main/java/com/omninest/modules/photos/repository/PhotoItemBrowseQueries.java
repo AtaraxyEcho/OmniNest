@@ -99,7 +99,7 @@ public interface PhotoItemBrowseQueries {
                AND file.deleted = false
                AND p.deletedAt IS NULL
                AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
-                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR EXISTS (SELECT 1 FROM PhotoTag tag
                                 WHERE tag.photoId = p.id
                                   AND tag.ownerUserId = :ownerUserId
@@ -113,7 +113,7 @@ public interface PhotoItemBrowseQueries {
                        AND file.deleted = false
                        AND p.deletedAt IS NULL
                        AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
-                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR EXISTS (SELECT 1 FROM PhotoTag tag
                                         WHERE tag.photoId = p.id
                                           AND tag.ownerUserId = :ownerUserId
@@ -244,7 +244,7 @@ public interface PhotoItemBrowseQueries {
                AND file.deleted = false
                AND p.deletedAt IS NULL
                AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
-                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR EXISTS (SELECT 1 FROM PhotoTag tag
                                 WHERE tag.photoId = p.id
                                   AND tag.ownerUserId = :ownerUserId
@@ -260,7 +260,7 @@ public interface PhotoItemBrowseQueries {
                        AND file.deleted = false
                        AND p.deletedAt IS NULL
                        AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
-                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR EXISTS (SELECT 1 FROM PhotoTag tag
                                         WHERE tag.photoId = p.id
                                           AND tag.ownerUserId = :ownerUserId

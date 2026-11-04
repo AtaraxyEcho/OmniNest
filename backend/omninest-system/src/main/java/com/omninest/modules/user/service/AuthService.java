@@ -119,7 +119,7 @@ public class AuthService {
                     ipAddress
             ));
         });
-        if (outcome == null || outcome.sessionId() == null) {
+        if (outcome == null || outcome.session() == null) {
             UUID userId = outcome == null ? prepared.getId() : outcome.profile().getId();
             log.info("注册命中强制两步验证，返回注册引导挑战: userId={}", userId);
             return buildChallengeResponse(userId, CHALLENGE_TYPE_ENROLL);
@@ -132,7 +132,12 @@ public class AuthService {
         // 重新按完整图层读取一次用于签发 JWT。
         AuthUser issued = authUserRepository.findWithRolesAndPermissionsById(profile.getId())
                 .orElse(profile);
-        return issueToken(toDto(issued), outcome.sessionId());
+        SessionRegistration registration = outcome.session();
+        return issueToken(
+                toDto(issued),
+                registration.sessionId(),
+                registration.expiresAt(),
+                registration.refreshJti());
     }
 
     /**
@@ -228,7 +233,16 @@ public class AuthService {
      * @return 秘钥与 otpauth URI
      */
     public TwoFactorSetupResponse bootstrapTwoFactorSetup(String challengeToken, String password) {
-        UUID userId = verifyChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        Jwt challengeJwt = decodeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        String jti = challengeJwt.getClaimAsString("jti");
+        // 占位后立即归还：既允许 setup → enable 期间重复取秘钥，又能挡住绑定完成后
+        // 重放同一挑战令牌再次重置待绑定密钥。
+        reserveChallengeToken(jti);
+        releaseChallengeToken(jti);
+        UUID userId = parseUserId(challengeJwt.getSubject());
+        if (twoFactorService.isEnabled(userId)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证已完成绑定，引导令牌已失效");
+        }
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-setup", 3, Duration.ofHours(1));
         return twoFactorService.startSetup(userId, password);
     }
@@ -242,15 +256,23 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TwoFactorBootstrapEnableResponse bootstrapTwoFactorEnable(String challengeToken, String code) {
-        UUID userId = verifyChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        Jwt challengeJwt = decodeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        UUID userId = parseUserId(challengeJwt.getSubject());
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-enable", 5, Duration.ofMinutes(1));
-        List<String> backupCodes = twoFactorService.enable(userId, code);
-        // 注册引导的两个中间步共用同一挑战令牌，jti 只在绑定成功后核销
-        consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
-        Instant now = Instant.now();
-        String finalizeToken = encodeChallengeToken(
-                userId, TOKEN_USE_TWO_FACTOR_FINALIZE, now, now.plus(TWO_FACTOR_CHALLENGE_TTL));
-        return new TwoFactorBootstrapEnableResponse(backupCodes, finalizeToken);
+        String jti = challengeJwt.getClaimAsString("jti");
+        // 与登录第二步同构：先占位再执行一次性写操作，失败时归还，
+        // 并发重放不能同时穿透进入 twoFactorService.enable。
+        reserveChallengeToken(jti);
+        try {
+            List<String> backupCodes = twoFactorService.enable(userId, code);
+            Instant now = Instant.now();
+            String finalizeToken = encodeChallengeToken(
+                    userId, TOKEN_USE_TWO_FACTOR_FINALIZE, now, now.plus(TWO_FACTOR_CHALLENGE_TTL));
+            return new TwoFactorBootstrapEnableResponse(backupCodes, finalizeToken);
+        } catch (RuntimeException exception) {
+            releaseChallengeToken(jti);
+            throw exception;
+        }
     }
 
     /**
@@ -451,11 +473,12 @@ public class AuthService {
         // 放在会话登记事务之外：吊销内部是 REQUIRES_NEW，嵌在外层事务里会同时占两个连接。
         enforceSamePlatformMutex(profile.getId(), platform, sessionId);
         Instant loginAt = Instant.now();
-        transactionTemplate.execute(status -> {
-            registerSession(profile, sessionId, platform, deviceId, deviceName, ipAddress);
+        SessionRegistration registration = transactionTemplate.execute(status -> {
+            SessionRegistration registered =
+                    registerSession(profile, sessionId, platform, deviceId, deviceName, ipAddress);
             // 定向更新而不是整实体 merge：避免把游离快照里的旧字段（如禁用状态）覆盖回数据库。
             authUserRepository.updateLastLoginAt(profile.getId(), loginAt);
-            return sessionId;
+            return registered;
         });
         profile.setLastLoginAt(loginAt);
 
@@ -466,13 +489,19 @@ public class AuthService {
         if (newDevice) {
             notifyNewDevice(profile, clientPlatform, deviceName, ipAddress);
         }
-        return issueToken(toDto(profile), sessionId);
+        return issueToken(
+                toDto(profile),
+                registration.sessionId(),
+                registration.expiresAt(),
+                registration.refreshJti());
     }
 
     /**
      * 登记新会话：写入 Redis 注册表并持久化会话行。调用方负责事务边界。
+     *
+     * <p>刷新令牌 jti 在首次 INSERT 时就写入，避免签发阶段再 findById + save 一次。</p>
      */
-    private UUID registerSession(
+    private SessionRegistration registerSession(
             AuthUser profile,
             UUID sessionId,
             String platform,
@@ -488,6 +517,8 @@ public class AuthService {
         );
 
         Instant issuedAt = Instant.now();
+        Instant expiresAt = issuedAt.plus(authenticationTokenPolicy.refreshTokenTtl());
+        String refreshJti = UUID.randomUUID().toString();
         AuthActiveSession session = new AuthActiveSession();
         session.setId(sessionId);
         session.setUserId(profile.getId());
@@ -496,9 +527,10 @@ public class AuthService {
         session.setDeviceName(LoginAuditService.clamped(deviceName, LoginAuditService.DEVICE_NAME_MAX));
         session.setIpAddress(LoginAuditService.clamped(ipAddress, LoginAuditService.IP_ADDRESS_MAX));
         session.setIssuedAt(issuedAt);
-        session.setExpiresAt(issuedAt.plus(authenticationTokenPolicy.refreshTokenTtl()));
+        session.setExpiresAt(expiresAt);
+        session.setCurrentRefreshJti(refreshJti);
         activeSessionRepository.save(session);
-        return sessionId;
+        return new SessionRegistration(sessionId, expiresAt, refreshJti);
     }
 
     @Transactional(rollbackFor = Exception.class, noRollbackFor = RefreshTokenReplayException.class)
@@ -670,17 +702,6 @@ public class AuthService {
                     authenticationTokenPolicy.refreshTokenTtl()
             );
         }
-    }
-
-    private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {
-        AuthActiveSession session = activeSessionRepository.findById(sessionId).orElse(null);
-        if (session == null) {
-            return issueToken(user, sessionId, Instant.now().plus(authenticationTokenPolicy.refreshTokenTtl()), null);
-        }
-        String refreshJti = UUID.randomUUID().toString();
-        session.setCurrentRefreshJti(refreshJti);
-        activeSessionRepository.save(session);
-        return issueToken(user, sessionId, session.getExpiresAt(), refreshJti);
     }
 
     /**
@@ -900,8 +921,18 @@ public class AuthService {
      * 注册写库结果：命中强制 2FA 时没有会话。
      *
      * @param profile 已写入的用户
-     * @param sessionId 新会话标识，未签发时为 null
+     * @param session 新会话签发信息，未签发时为 null
      */
-    private record RegistrationOutcome(AuthUser profile, UUID sessionId) {
+    private record RegistrationOutcome(AuthUser profile, SessionRegistration session) {
+    }
+
+    /**
+     * 新会话签发所需的不可变信息；refreshJti 在首次 INSERT 时已落库。
+     *
+     * @param sessionId 会话标识
+     * @param expiresAt 会话截止时间
+     * @param refreshJti 当前刷新令牌 jti
+     */
+    private record SessionRegistration(UUID sessionId, Instant expiresAt, String refreshJti) {
     }
 }

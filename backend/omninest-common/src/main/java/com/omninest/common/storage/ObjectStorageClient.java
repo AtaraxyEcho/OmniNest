@@ -195,6 +195,14 @@ public interface ObjectStorageClient {
     boolean objectExists(ObjectStorageKey key);
 
     /**
+     * 读取对象字节数。
+     *
+     * @param key 对象存储键
+     * @return 对象存在时返回字节数；对象不存在时返回 -1
+     */
+    long objectSize(ObjectStorageKey key);
+
+    /**
      * 删除对象。
      *
      * @param key 对象存储键

@@ -62,7 +62,7 @@ class FileIngressSafetyServiceTest {
     }
 
     @Test
-    void inspectCountsActualBytesBeyondSniffPrefix() {
+    void inspectStopsReadingAtDeclaredSizePlusOne() {
         byte[] large = new byte[128 * 1024 + 7];
         ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/file.bin");
         when(objectStorageClient.getObject(key)).thenReturn(new ByteArrayInputStream(large));
@@ -72,7 +72,8 @@ class FileIngressSafetyServiceTest {
         FileIngressSafetyService.InspectionResult result =
                 service.inspect(key, 1L, "file.bin", "UPLOAD", CORRELATION_ID);
 
-        assertThat(result.actualSizeBytes()).isEqualTo(large.length);
+        // 低报尺寸的恶意对象不能被完整读取；多读 1 字节作为超限证据即可。
+        assertThat(result.actualSizeBytes()).isEqualTo(2L);
     }
 
     @Test

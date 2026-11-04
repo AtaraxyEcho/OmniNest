@@ -166,15 +166,15 @@ void main() {
 }
 
 double _fadeOpacity(WidgetTester tester, String cardKey) {
-  return tester
-      .widget<FadeTransition>(
-        find.descendant(
-          of: find.byKey(ValueKey(cardKey)),
-          matching: find.byType(FadeTransition),
-        ),
-      )
-      .opacity
-      .value;
+  final fade = find.descendant(
+    of: find.byKey(ValueKey(cardKey)),
+    matching: find.byType(FadeTransition),
+  );
+  // 入场结束后 AnimatedCard 直接返回子树，不再常驻 FadeTransition。
+  if (fade.evaluate().isEmpty) {
+    return 1;
+  }
+  return tester.widget<FadeTransition>(fade).opacity.value;
 }
 
 double _topBarOpacity(WidgetTester tester) {

@@ -9,6 +9,7 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -154,12 +155,11 @@ public class PhotoGeoBackfillService {
         if (rows.isEmpty()) {
             return new BackfillBatchOutcome(0, 0, 0, 0, 0, cursorCreatedAt, cursorId);
         }
-        long updated = 0;
-        long skippedExisting = 0;
         long skippedDistance = 0;
         long failed = 0;
         Instant lastCreatedAt = cursorCreatedAt;
         UUID lastId = cursorId;
+        Map<String, List<UUID>> idsByLocation = new LinkedHashMap<>();
         for (GeocodeBackfillRow row : rows) {
             lastCreatedAt = row.getCreatedAt();
             lastId = row.getId();
@@ -171,21 +171,24 @@ public class PhotoGeoBackfillService {
                     skippedDistance++;
                     continue;
                 }
-                int affected = photoItemRepository.updateGeocodeLocationIfAbsent(
-                        row.getId(),
-                        JsonSupport.toJson(geoInfo),
-                        Instant.now());
-                if (affected > 0) {
-                    updated++;
-                } else {
-                    // 查询与写入之间照片已被其他写入填充或删除，保持不覆盖原则。
-                    skippedExisting++;
-                }
+                idsByLocation.computeIfAbsent(JsonSupport.toJson(geoInfo), key -> new ArrayList<>())
+                        .add(row.getId());
             } catch (RuntimeException rowEx) {
                 // 单张失败不阻塞整批，仅计数。
                 failed++;
                 log.warn("单张照片位置回填失败: photoId={}, error={}", row.getId(), rowEx.getMessage());
             }
+        }
+        long updated = 0;
+        long skippedExisting = 0;
+        Instant now = Instant.now();
+        for (Map.Entry<String, List<UUID>> entry : idsByLocation.entrySet()) {
+            List<UUID> ids = entry.getValue();
+            int affected = photoItemRepository.updateGeocodeLocationBatchIfAbsent(
+                    ids, entry.getKey(), now);
+            updated += affected;
+            // 查询与写入之间照片已被其他写入填充或删除，保持不覆盖原则。
+            skippedExisting += ids.size() - affected;
         }
         state.put(KEY_UPDATED, longValue(state.get(KEY_UPDATED)) + updated);
         state.put(KEY_SKIPPED_EXISTING, longValue(state.get(KEY_SKIPPED_EXISTING)) + skippedExisting);

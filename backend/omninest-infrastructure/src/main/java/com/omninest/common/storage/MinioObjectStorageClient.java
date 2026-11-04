@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListPartsRequest;
 import software.amazon.awssdk.services.s3.model.MetadataDirective;
@@ -351,17 +352,23 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      */
     @Override
     public boolean objectExists(ObjectStorageKey key) {
+        return objectSize(key) >= 0;
+    }
+
+    @Override
+    public long objectSize(ObjectStorageKey key) {
         try {
-            s3Client.headObject(HeadObjectRequest.builder()
+            HeadObjectResponse response = s3Client.headObject(HeadObjectRequest.builder()
                     .bucket(key.bucket())
                     .key(key.objectKey())
                     .build());
-            return true;
+            Long length = response.contentLength();
+            return length == null ? -1L : length;
         } catch (NoSuchKeyException exception) {
-            return false;
+            return -1L;
         } catch (S3Exception exception) {
             if (exception.statusCode() == 404) {
-                return false;
+                return -1L;
             }
             throw exception;
         }

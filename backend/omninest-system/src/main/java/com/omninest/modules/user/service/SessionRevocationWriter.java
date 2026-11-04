@@ -2,7 +2,9 @@ package com.omninest.modules.user.service;
 
 import com.omninest.modules.user.domain.SessionRevocationEntity;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
+import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class SessionRevocationWriter {
 
     private final SessionRevocationJpaRepository revocationRepository;
     private final ActiveSessionRepository activeSessionRepository;
+    private final AuthUserRepository authUserRepository;
 
     /**
      * 在独立事务中写入撤销记录。
@@ -49,5 +52,16 @@ public class SessionRevocationWriter {
     public void persistRevocationAndDeactivate(UUID userId, UUID sessionId, String reason) {
         revocationRepository.save(new SessionRevocationEntity(null, userId, sessionId, null));
         activeSessionRepository.revokeBySessionId(sessionId, reason);
+    }
+
+    /**
+     * 在独立事务中推进访问令牌截止时间，避免后续缓存写入失败回滚数据库权威列。
+     *
+     * @param userId 用户标识
+     * @param cutoff 截止时间
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void persistAccessCutoff(UUID userId, Instant cutoff) {
+        authUserRepository.advanceAccessCutoff(userId, cutoff);
     }
 }

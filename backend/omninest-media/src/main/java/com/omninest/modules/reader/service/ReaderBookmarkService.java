@@ -45,6 +45,7 @@ public class ReaderBookmarkService {
      */
     @Transactional(readOnly = true)
     public List<ReaderBookmarkDto> listBookmarks(UUID ownerUserId, UUID readerItemId) {
+        readerItemService.requireItem(ownerUserId, readerItemId);
         return bookmarkRepository.findByOwnerUserIdAndReaderItemIdOrderByCreatedAtDesc(ownerUserId, readerItemId)
                 .stream()
                 .map(this::toDto)
@@ -85,8 +86,7 @@ public class ReaderBookmarkService {
         bookmark.setProgressPercent(clampedPercent);
         bookmark.setNote(request.note());
         try {
-            ReaderBookmark saved = saveInNewTransaction(bookmark);
-            recordBookmarkEvent(ownerUserId, saved, SyncAction.CREATED);
+            ReaderBookmark saved = saveInNewTransaction(ownerUserId, bookmark);
             log.info("创建书签: userId={}, itemId={}, offset={}", ownerUserId, readerItemId, request.charOffset());
             return toDto(saved);
         } catch (DataIntegrityViolationException exception) {
@@ -95,17 +95,22 @@ public class ReaderBookmarkService {
     }
 
     /**
-     * 在独立新事务里落这一行。
+     * 在独立新事务里原子落库实体与同步事件。
      *
      * <p>PostgreSQL 命中唯一约束后会把当前事务置为 aborted 态，同一事务里的后续语句一律报
      * "current transaction is aborted"；冲突回查必须换一个事务，否则离线队列重放并发撞上同一
-     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。
+     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。同步事件与实体处于
+     * 同一独立事务，防止外层回滚丢失多端同步记录。</p>
      */
-    private ReaderBookmark saveInNewTransaction(ReaderBookmark bookmark) {
+    private ReaderBookmark saveInNewTransaction(UUID ownerUserId, ReaderBookmark bookmark) {
         TransactionTemplate template = new TransactionTemplate(
                 transactionTemplate.getTransactionManager());
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return template.execute(status -> bookmarkRepository.saveAndFlush(bookmark));
+        return template.execute(status -> {
+            ReaderBookmark saved = bookmarkRepository.saveAndFlush(bookmark);
+            recordBookmarkEvent(ownerUserId, saved, SyncAction.CREATED);
+            return saved;
+        });
     }
 
     /**

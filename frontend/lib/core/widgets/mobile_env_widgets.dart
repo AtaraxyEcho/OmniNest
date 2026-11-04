@@ -358,7 +358,10 @@ class MobilePillSwitch extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onChanged == null ? null : () => onChanged!(!value),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 200),
+          ),
           curve: Curves.ease,
           width: 34,
           height: 20,
@@ -367,13 +370,19 @@ class MobilePillSwitch extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           child: AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
+            duration: MotionToken.reduced(
+              context,
+              const Duration(milliseconds: 200),
+            ),
             curve: Curves.ease,
             alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: MotionToken.reduced(
+                  context,
+                  const Duration(milliseconds: 200),
+                ),
                 width: 14,
                 height: 14,
                 decoration: BoxDecoration(

@@ -1984,7 +1984,7 @@ CREATE TABLE "omni"."reader_bookmarks" (
   "reader_item_id" uuid NOT NULL,
   "char_offset" int8 NOT NULL DEFAULT 0,
   "progress_percent" numeric(8,5) NOT NULL DEFAULT 0,
-  "note" varchar(1024),
+  "note" varchar(2000),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "client_operation_id" varchar(120),
   "chapter_id" varchar(128)
@@ -2056,7 +2056,7 @@ CREATE TABLE "omni"."reader_items" (
   "description" text,
   "cover_file_id" uuid,
   "publisher" varchar(300),
-  "language" varchar(32),
+  "language" varchar(50),
   "release_date" date,
   "rating" numeric(4,2),
   "genres" jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -2170,7 +2170,7 @@ CREATE TABLE "omni"."reader_progress" (
   "reader_item_id" uuid NOT NULL,
   "char_offset" int8 NOT NULL DEFAULT 0,
   "progress_percent" numeric(8,5) NOT NULL DEFAULT 0,
-  "reading_mode" varchar(16) NOT NULL DEFAULT 'scroll'::character varying,
+  "reading_mode" varchar(50) NOT NULL DEFAULT 'scroll'::character varying,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0,
@@ -2307,12 +2307,14 @@ COMMENT ON TABLE "omni"."shared_space_permissions" IS '共享空间权限表，�
 CREATE TABLE "omni"."shared_space_usage" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "used_bytes" int8 NOT NULL DEFAULT 0,
+  "reserved_bytes" int8 NOT NULL DEFAULT 0,
   "file_count" int8 NOT NULL DEFAULT 0,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0
 )
 ;
+COMMENT ON COLUMN "omni"."shared_space_usage"."reserved_bytes" IS '共享空间上传会话已预留但尚未结算的字节数';
 COMMENT ON TABLE "omni"."shared_space_usage" IS '共享空间用量表，记录共享空间的总使用量';
 
 CREATE TABLE "omni"."storage_quota_reservations" (
@@ -3763,6 +3765,10 @@ ALTER TABLE "omni"."shared_space_permissions" ADD CONSTRAINT "pk_shared_space_pe
 
 ALTER TABLE "omni"."shared_space_usage" ADD CONSTRAINT "pk_shared_space_usage" PRIMARY KEY ("id");
 
+ALTER TABLE "omni"."shared_space_usage" ADD CONSTRAINT "chk_shared_space_usage_bytes" CHECK (
+  used_bytes >= 0 AND reserved_bytes >= 0 AND file_count >= 0
+);
+
 CREATE INDEX "idx_storage_external_accounts_owner" ON "omni"."storage_external_accounts" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
@@ -4350,6 +4356,18 @@ CREATE INDEX "idx_media_tv_series_title_trgm" ON "omni"."media_tv_series"
   USING gin (lower("title") "public"."gin_trgm_ops");
 CREATE INDEX "idx_auth_users_username_trgm" ON "omni"."auth_users"
   USING gin (lower("username") "public"."gin_trgm_ops");
+CREATE INDEX "idx_auth_users_display_name_trgm" ON "omni"."auth_users"
+  USING gin (lower("display_name") "public"."gin_trgm_ops");
+CREATE INDEX "idx_music_tracks_album_trgm" ON "omni"."music_tracks"
+  USING gin (lower("album_title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_music_albums_title_trgm" ON "omni"."music_albums"
+  USING gin (lower("title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_music_artists_name_trgm" ON "omni"."music_artists"
+  USING gin (lower("name") "public"."gin_trgm_ops");
+CREATE INDEX "idx_reader_items_title_trgm" ON "omni"."reader_items"
+  USING gin (lower("title") "public"."gin_trgm_ops");
+CREATE INDEX "idx_reader_items_author_trgm" ON "omni"."reader_items"
+  USING gin (lower("author_name") "public"."gin_trgm_ops");
 
 -- ── 非 owner 前导的批量查询索引 ─────────────────────────────────────────
 -- 下列仓储方法按业务外键或「状态 + 时间」过滤而不带 owner_user_id，

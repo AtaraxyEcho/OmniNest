@@ -45,6 +45,7 @@ public class ReaderAnnotationService {
      */
     @Transactional(readOnly = true)
     public List<ReaderAnnotationDto> listAnnotations(UUID ownerUserId, UUID readerItemId) {
+        readerItemService.requireItem(ownerUserId, readerItemId);
         return annotationRepository.findByOwnerUserIdAndReaderItemIdOrderByCreatedAtDesc(ownerUserId, readerItemId)
                 .stream()
                 .map(this::toDto)
@@ -88,8 +89,7 @@ public class ReaderAnnotationService {
             annotation.setColor(request.color());
         }
         try {
-            ReaderAnnotation saved = saveInNewTransaction(annotation);
-            recordAnnotationEvent(ownerUserId, saved, SyncAction.CREATED);
+            ReaderAnnotation saved = saveInNewTransaction(ownerUserId, annotation);
             log.info(
                     "创建批注: userId={}, itemId={}, startOffset={}, endOffset={}",
                     ownerUserId,
@@ -104,17 +104,22 @@ public class ReaderAnnotationService {
     }
 
     /**
-     * 在独立新事务里落这一行。
+     * 在独立新事务里原子落库实体与同步事件。
      *
      * <p>PostgreSQL 命中唯一约束后会把当前事务置为 aborted 态，同一事务里的后续语句一律报
      * "current transaction is aborted"；冲突回查必须换一个事务，否则离线队列重放并发撞上同一
-     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。
+     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。同步事件与实体处于
+     * 同一独立事务，防止外层回滚丢失多端同步记录。</p>
      */
-    private ReaderAnnotation saveInNewTransaction(ReaderAnnotation annotation) {
+    private ReaderAnnotation saveInNewTransaction(UUID ownerUserId, ReaderAnnotation annotation) {
         TransactionTemplate template = new TransactionTemplate(
                 transactionTemplate.getTransactionManager());
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return template.execute(status -> annotationRepository.saveAndFlush(annotation));
+        return template.execute(status -> {
+            ReaderAnnotation saved = annotationRepository.saveAndFlush(annotation);
+            recordAnnotationEvent(ownerUserId, saved, SyncAction.CREATED);
+            return saved;
+        });
     }
 
     /**

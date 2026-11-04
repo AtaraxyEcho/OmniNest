@@ -34,7 +34,7 @@ public interface SharedSpaceUsageRepository extends JpaRepository<SharedSpaceUsa
                 usage.updatedAt = :now,
                 usage.version = usage.version + 1
             where usage.id = :id
-              and usage.usedBytes + :deltaBytes <= :maxBytes
+              and usage.usedBytes + usage.reservedBytes + :deltaBytes <= :maxBytes
             """)
     int tryIncreaseUsage(
             @Param("id") UUID id,
@@ -53,6 +53,83 @@ public interface SharedSpaceUsageRepository extends JpaRepository<SharedSpaceUsa
      * @param now 更新时间
      * @return 更新行数
      */
+    /**
+     * 为共享空间上传会话原子预留容量。
+     *
+     * @param id 用量记录 ID
+     * @param deltaBytes 预留字节数
+     * @param maxBytes 容量上限，不限时传足够大的值
+     * @param now 更新时间
+     * @return 更新行数，0 表示剩余容量不足
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update SharedSpaceUsage usage
+            set usage.reservedBytes = usage.reservedBytes + :deltaBytes,
+                usage.updatedAt = :now,
+                usage.version = usage.version + 1
+            where usage.id = :id
+              and usage.usedBytes + usage.reservedBytes + :deltaBytes <= :maxBytes
+            """)
+    int tryReserve(
+            @Param("id") UUID id,
+            @Param("deltaBytes") long deltaBytes,
+            @Param("maxBytes") long maxBytes,
+            @Param("now") Instant now
+    );
+
+    /**
+     * 释放未结算的共享空间预留。
+     *
+     * @param id 用量记录 ID
+     * @param deltaBytes 释放字节数
+     * @param now 更新时间
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update SharedSpaceUsage usage
+            set usage.reservedBytes = case when usage.reservedBytes > :deltaBytes
+                                           then usage.reservedBytes - :deltaBytes else 0 end,
+                usage.updatedAt = :now,
+                usage.version = usage.version + 1
+            where usage.id = :id
+            """)
+    int releaseReservation(
+            @Param("id") UUID id,
+            @Param("deltaBytes") long deltaBytes,
+            @Param("now") Instant now
+    );
+
+    /**
+     * 将共享空间预留结算为实际用量，并释放同一笔预留。
+     *
+     * @param id 用量记录 ID
+     * @param reservedBytes 原预留字节数
+     * @param committedBytes 实际写入字节数
+     * @param deltaFiles 新增文件数
+     * @param now 更新时间
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update SharedSpaceUsage usage
+            set usage.usedBytes = usage.usedBytes + :committedBytes,
+                usage.reservedBytes = case when usage.reservedBytes > :reservedBytes
+                                           then usage.reservedBytes - :reservedBytes else 0 end,
+                usage.fileCount = usage.fileCount + :deltaFiles,
+                usage.updatedAt = :now,
+                usage.version = usage.version + 1
+            where usage.id = :id
+            """)
+    int settleReservation(
+            @Param("id") UUID id,
+            @Param("reservedBytes") long reservedBytes,
+            @Param("committedBytes") long committedBytes,
+            @Param("deltaFiles") long deltaFiles,
+            @Param("now") Instant now
+    );
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update SharedSpaceUsage usage

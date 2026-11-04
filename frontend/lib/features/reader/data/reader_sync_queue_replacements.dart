@@ -128,7 +128,7 @@ class ReaderSyncReplacements {
         )).get();
     final rewritten = <String>{};
     for (final operation in operations) {
-      final payload = await ReaderSyncQueue._decodePayload(operation);
+      final payload = await _decodePayload(operation);
       if (payload == null || payload[field] != localId) {
         continue;
       }
@@ -136,7 +136,7 @@ class ReaderSyncReplacements {
       await (database.update(database.syncOperations)
         ..where((table) => table.id.equals(operation.id))).write(
         SyncOperationsCompanion(
-          payload: Value(await ReaderSyncQueue._serializePayload(payload)),
+          payload: Value(await _serializePayload(payload)),
         ),
       );
       rewritten.add(operation.type);

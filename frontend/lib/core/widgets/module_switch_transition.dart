@@ -65,6 +65,10 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
       animation: _controller,
       child: widget.child,
       builder: (context, child) {
+        // 静止态直接返回子树，避免常驻 Opacity + Transform 合成层。
+        if (_controller.isCompleted) {
+          return child!;
+        }
         final progress = Curves.easeOutQuart.transform(_controller.value);
         final offset = (1 - progress) * (_forward ? 10 : -10);
         return Opacity(

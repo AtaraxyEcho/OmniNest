@@ -4,8 +4,6 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
-import 'package:omninest/core/auth/user_capabilities.dart';
-
 final taskApiProvider = Provider<TaskApi>((ref) {
   return TaskApi(ref.watch(apiClientProvider));
 });
@@ -20,12 +18,8 @@ final activeTaskSummaryProvider = FutureProvider<ActiveTaskSummary>((
   ref,
 ) async {
   ref.watch(sessionEpochProvider);
-  final canViewTasks = ref.watch(userCapabilitiesProvider).canViewOwnTasks;
-  if (!canViewTasks) {
-    return ref.watch(taskApiProvider).summary();
-  }
-  final tasks = await ref.watch(taskApiProvider).list(page: 0, size: 100);
-  return ActiveTaskSummary.fromRecords(tasks);
+  // 始终使用后端轻量汇总：拉前 100 条完整任务既浪费带宽，任务超过 100 条时角标也会失真。
+  return ref.watch(taskApiProvider).summary();
 });
 
 class TaskListNotifier extends Notifier<List<TaskRecord>> {

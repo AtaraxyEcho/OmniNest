@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -46,6 +47,48 @@ public interface FileUploadSessionRepository extends JpaRepository<FileUploadSes
     Optional<FileUploadSession> findForUpdateByUploadIdAndOwnerUserId(
             @Param("uploadId") String uploadId,
             @Param("ownerUserId") UUID ownerUserId);
+
+    /**
+     * 原子累加已完成分片数并推进状态，避免分片确认路径对会话行加悲观锁。
+     *
+     * @param id 会话 ID
+     * @param now 更新时间
+     * @return 更新行数，0 表示会话已被取消或进入终态
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update FileUploadSession session
+               set session.uploadedParts = session.uploadedParts + 1,
+                   session.status = case when session.status = 'CREATED'
+                                         then 'UPLOADING' else session.status end,
+                   session.updatedAt = :now
+             where session.id = :id
+               and session.status in ('CREATED', 'UPLOADING')
+            """)
+    int incrementUploadedParts(@Param("id") UUID id, @Param("now") Instant now);
+
+    /**
+     * 会话剩余有效期不足阈值时原子延期，避免并发分片确认互相覆盖过期时间。
+     *
+     * @param id 会话 ID
+     * @param threshold 需要延期的截止时间阈值
+     * @param newExpiresAt 新过期时间
+     * @param now 更新时间
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update FileUploadSession session
+               set session.expiresAt = :newExpiresAt,
+                   session.updatedAt = :now
+             where session.id = :id
+               and session.expiresAt < :threshold
+            """)
+    int extendExpiresAtIfNeeded(
+            @Param("id") UUID id,
+            @Param("threshold") Instant threshold,
+            @Param("newExpiresAt") Instant newExpiresAt,
+            @Param("now") Instant now);
 
     List<FileUploadSession> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 

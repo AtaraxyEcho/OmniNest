@@ -272,7 +272,7 @@ class _PhotoGeoPanelState extends ConsumerState<_PhotoGeoPanel> {
       () => ref
           .read(adminOperationsActionsProvider)
           .reanalyzeMotionPhotos()
-          .then((taskId) => l10n.adminMaintenanceGeoTaskCreated(taskId)),
+          .then((taskId) => l10n.adminMaintenanceMotionTaskCreated(taskId)),
     );
   }
 

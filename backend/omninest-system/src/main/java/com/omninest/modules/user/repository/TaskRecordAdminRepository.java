@@ -109,11 +109,11 @@ public class TaskRecordAdminRepository {
                   and (
                     :searchPattern = ''
                     or lower(t.task_type) like :searchPattern
-                    or lower(coalesce(t.routing_key, '')) like :searchPattern
-                    or lower(coalesce(t.error_summary, '')) like :searchPattern
+                    or lower(t.routing_key) like :searchPattern
+                    or lower(t.error_summary) like :searchPattern
                     or cast(t.id as text) like :searchPattern
-                    or lower(coalesce(a.username, '')) like :searchPattern
-                    or lower(coalesce(a.display_name, '')) like :searchPattern
+                    or lower(a.username) like :searchPattern
+                    or lower(a.display_name) like :searchPattern
                   )
                 """;
         Query contentQuery = entityManager.createNativeQuery(

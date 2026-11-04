@@ -88,6 +88,137 @@ void main() {
     expect(repository.completedSessions, ['upload-123']);
   });
 
+  test('创建会话期间暂停：不开始上传，恢复后继续原运行时', () async {
+    final repository =
+        _FakeFileRepository()
+          ..createSessionGate = Completer<void>()
+          ..createSessionRequested = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'large.bin',
+        name: 'large.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+    await repository.createSessionRequested!.future;
+    final task =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(task.status, 'QUEUED');
+
+    controller.pauseLocalUploadTask(task.id);
+    repository.createSessionGate!.complete();
+    await uploadFuture;
+
+    var pausedTask =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(pausedTask.status, 'PAUSED');
+    expect(repository.uploadedPartUrls, isEmpty);
+
+    final resumeFuture = controller.resumeLocalUploadTask(pausedTask.id);
+    await repository.waitForUploadCount(2);
+    repository.completeUploadAt(0, 'etag-1');
+    repository.completeUploadAt(1, 'etag-2');
+    await resumeFuture;
+
+    pausedTask =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(pausedTask.status, 'COMPLETED');
+    expect(repository.completedSessions, ['upload-123']);
+  });
+
+  test('创建会话期间删除：不诈尸重传，并取消已创建的服务端会话', () async {
+    final repository =
+        _FakeFileRepository()
+          ..createSessionGate = Completer<void>()
+          ..createSessionRequested = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'large.bin',
+        name: 'large.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+    await repository.createSessionRequested!.future;
+    final task =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+
+    await controller.removeLocalUploadTask(task.id);
+    repository.createSessionGate!.complete();
+    await uploadFuture;
+
+    expect(
+      container.read(fileBrowserControllerProvider).value!.localUploadTasks,
+      isEmpty,
+    );
+    expect(repository.uploadedPartUrls, isEmpty);
+    expect(repository.cancelledUploadSessions, ['upload-123']);
+  });
+
+  test('直传恢复时预签名 URL 已过期会重新签发', () async {
+    final repository =
+        _FakeFileRepository()
+          ..directSession = true
+          ..directUploadUrlExpiresAt = DateTime.now().subtract(
+            const Duration(minutes: 1),
+          );
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final uploadFuture = controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'small.bin',
+        name: 'small.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+    await repository.firstUploadStarted.future;
+    repository.firstUploadResult.complete('etag-direct');
+    await uploadFuture;
+
+    // 放弃过期的 direct-stale，改用 /parts/1/url 重签后的地址。
+    expect(repository.uploadedPartUrls, [
+      'https://storage.test/upload-123/part-1',
+    ]);
+    expect(repository.completedSessions, ['upload-123']);
+  });
+
   test('分片 URL 在途时暂停：不再发起该分片上传且任务保持 PAUSED', () async {
     // 取分片 URL 的请求在途时还没有登记取消令牌，暂停必须由状态守卫拦住，
     // 否则响应回来后会继续上传整个分片（最大 64 MB）。

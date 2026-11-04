@@ -5754,6 +5754,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String adminMaintenanceMotionTaskCreated(String taskId) {
+    return '动态照片重扫任务已创建：$taskId';
+  }
+
+  @override
   String adminMaintenanceGeoTaskReused(String taskId) {
     return '已复用现有回填任务：$taskId';
   }

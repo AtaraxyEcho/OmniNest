@@ -83,9 +83,9 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
               and (
                 :searchPattern = ''
                 or lower(user.username) like :searchPattern
-                or lower(coalesce(session.deviceName, '')) like :searchPattern
-                or lower(coalesce(session.deviceId, '')) like :searchPattern
-                or lower(coalesce(session.ipAddress, '')) like :searchPattern
+                or lower(session.deviceName) like :searchPattern
+                or lower(session.deviceId) like :searchPattern
+                or lower(session.ipAddress) like :searchPattern
               )
             """,
             countQuery = """
@@ -101,9 +101,9 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
                       and (
                         :searchPattern = ''
                         or lower(user.username) like :searchPattern
-                        or lower(coalesce(session.deviceName, '')) like :searchPattern
-                        or lower(coalesce(session.deviceId, '')) like :searchPattern
-                        or lower(coalesce(session.ipAddress, '')) like :searchPattern
+                        or lower(session.deviceName) like :searchPattern
+                        or lower(session.deviceId) like :searchPattern
+                        or lower(session.ipAddress) like :searchPattern
                       )
                     """)
     Page<AuthActiveSession> searchAdminSessions(

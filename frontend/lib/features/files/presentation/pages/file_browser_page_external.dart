@@ -420,7 +420,7 @@ class _InfoRowState extends State<_InfoRow> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
-        duration: MotionToken.fast,
+        duration: MotionToken.reduced(context, MotionToken.fast),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color:

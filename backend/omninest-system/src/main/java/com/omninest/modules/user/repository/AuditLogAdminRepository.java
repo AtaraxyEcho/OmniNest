@@ -65,7 +65,7 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
                 :searchPattern = ''
                 or lower(audit.action) like :searchPattern
                 or lower(audit.resourceType) like :searchPattern
-                or lower(coalesce(audit.ipAddress, '')) like :searchPattern
+                or lower(audit.ipAddress) like :searchPattern
               )
             """,
             countQuery = """
@@ -75,7 +75,7 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
                         :searchPattern = ''
                         or lower(audit.action) like :searchPattern
                         or lower(audit.resourceType) like :searchPattern
-                        or lower(coalesce(audit.ipAddress, '')) like :searchPattern
+                        or lower(audit.ipAddress) like :searchPattern
                       )
                     """)
     Page<AuditLog> searchAdminLogs(

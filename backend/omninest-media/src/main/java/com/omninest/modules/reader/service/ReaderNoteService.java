@@ -45,6 +45,7 @@ public class ReaderNoteService {
      */
     @Transactional(readOnly = true)
     public List<ReaderNoteDto> listNotes(UUID ownerUserId, UUID readerItemId) {
+        readerItemService.requireItem(ownerUserId, readerItemId);
         return noteRepository.findByOwnerUserIdAndReaderItemIdOrderByCreatedAtDesc(ownerUserId, readerItemId)
                 .stream()
                 .map(this::toDto)
@@ -79,8 +80,7 @@ public class ReaderNoteService {
         note.setTitle(request.title());
         note.setContent(request.content());
         try {
-            ReaderNote saved = saveInNewTransaction(note);
-            recordNoteEvent(ownerUserId, saved, SyncAction.CREATED);
+            ReaderNote saved = saveInNewTransaction(ownerUserId, note);
             log.info("创建笔记: userId={}, itemId={}", ownerUserId, readerItemId);
             return toDto(saved);
         } catch (DataIntegrityViolationException exception) {
@@ -89,17 +89,22 @@ public class ReaderNoteService {
     }
 
     /**
-     * 在独立新事务里落这一行。
+     * 在独立新事务里原子落库实体与同步事件。
      *
      * <p>PostgreSQL 命中唯一约束后会把当前事务置为 aborted 态，同一事务里的后续语句一律报
      * "current transaction is aborted"；冲突回查必须换一个事务，否则离线队列重放并发撞上同一
-     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。
+     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。同步事件与实体处于
+     * 同一独立事务，防止外层回滚丢失多端同步记录。</p>
      */
-    private ReaderNote saveInNewTransaction(ReaderNote note) {
+    private ReaderNote saveInNewTransaction(UUID ownerUserId, ReaderNote note) {
         TransactionTemplate template = new TransactionTemplate(
                 transactionTemplate.getTransactionManager());
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return template.execute(status -> noteRepository.saveAndFlush(note));
+        return template.execute(status -> {
+            ReaderNote saved = noteRepository.saveAndFlush(note);
+            recordNoteEvent(ownerUserId, saved, SyncAction.CREATED);
+            return saved;
+        });
     }
 
     /**

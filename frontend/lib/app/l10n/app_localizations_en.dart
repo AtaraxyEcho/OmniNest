@@ -5942,6 +5942,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String adminMaintenanceMotionTaskCreated(String taskId) {
+    return 'Motion photo rescan task created: $taskId';
+  }
+
+  @override
   String adminMaintenanceGeoTaskReused(String taskId) {
     return 'Reused the active backfill task: $taskId';
   }

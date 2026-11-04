@@ -109,15 +109,15 @@ class PhotoGeoBackfillServiceTest {
                 .thenReturn(List.of());
         Map<String, Object> geoInfo = Map.of("city", "Guangzhou", "cityZh", "广州市");
         when(photoGeoService.reverseGeocode(any(), any(), any())).thenReturn(geoInfo);
-        when(photoItemRepository.updateGeocodeLocationIfAbsent(any(), anyString(), any()))
-                .thenReturn(1);
+        when(photoItemRepository.updateGeocodeLocationBatchIfAbsent(any(), anyString(), any()))
+                .thenAnswer(invocation -> ((List<?>) invocation.getArgument(0)).size());
 
         service.executeBackfillTask(UUID.randomUUID());
 
-        verify(photoItemRepository).updateGeocodeLocationIfAbsent(
-                eq(firstId), anyString(), any());
-        verify(photoItemRepository).updateGeocodeLocationIfAbsent(
-                eq(thirdId), anyString(), any());
+        verify(photoItemRepository).updateGeocodeLocationBatchIfAbsent(
+                eq(List.of(firstId, secondId)), anyString(), any());
+        verify(photoItemRepository).updateGeocodeLocationBatchIfAbsent(
+                eq(List.of(thirdId)), anyString(), any());
         ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.captor();
         verify(taskRecordService, Mockito.atLeastOnce()).updateResult(any(), resultCaptor.capture());
         Map<String, Object> lastResult = resultCaptor.getValue();
@@ -145,7 +145,7 @@ class PhotoGeoBackfillServiceTest {
         service.executeBackfillTask(UUID.randomUUID());
 
         verify(photoItemRepository, never())
-                .updateGeocodeLocationIfAbsent(any(), anyString(), any());
+                .updateGeocodeLocationBatchIfAbsent(any(), anyString(), any());
         ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), completedCaptor.capture());
         assertEquals(0L, completedCaptor.getValue().get("updated"));
@@ -162,7 +162,7 @@ class PhotoGeoBackfillServiceTest {
         when(photoGeoService.reverseGeocode(any(), any(), any()))
                 .thenReturn(Map.of("city", "Guangzhou"));
         // 查询与写入之间照片已被其他写入填充：条件更新命中 0 行。
-        when(photoItemRepository.updateGeocodeLocationIfAbsent(any(), anyString(), any()))
+        when(photoItemRepository.updateGeocodeLocationBatchIfAbsent(any(), anyString(), any()))
                 .thenReturn(0);
 
         service.executeBackfillTask(UUID.randomUUID());
@@ -191,7 +191,7 @@ class PhotoGeoBackfillServiceTest {
 
         verify(taskRecordService).markCancelled(any());
         verify(photoItemRepository, never())
-                .updateGeocodeLocationIfAbsent(any(), anyString(), any());
+                .updateGeocodeLocationBatchIfAbsent(any(), anyString(), any());
         verify(taskRecordService, never()).markCompleted(any(), any());
     }
 
@@ -206,7 +206,7 @@ class PhotoGeoBackfillServiceTest {
         when(photoGeoService.reverseGeocode(any(), any(), any()))
                 .thenThrow(new RuntimeException("boom"))
                 .thenReturn(Map.of("city", "Guangzhou"));
-        when(photoItemRepository.updateGeocodeLocationIfAbsent(any(), anyString(), any()))
+        when(photoItemRepository.updateGeocodeLocationBatchIfAbsent(any(), anyString(), any()))
                 .thenReturn(1);
 
         service.executeBackfillTask(UUID.randomUUID());

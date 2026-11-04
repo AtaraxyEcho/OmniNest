@@ -5,6 +5,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.domain.FileUploadSession;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.UploadStatus;
 import com.omninest.modules.file.repository.FileUploadPartRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
@@ -28,6 +29,7 @@ public class FileUploadCancellationService {
     private final FileUploadSessionRepository sessionRepository;
     private final FileUploadPartRepository partRepository;
     private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final ObjectStorageClient objectStorageClient;
     private final TransactionTemplate transactionTemplate;
 
@@ -35,12 +37,14 @@ public class FileUploadCancellationService {
             FileUploadSessionRepository sessionRepository,
             FileUploadPartRepository partRepository,
             StorageQuotaService storageQuotaService,
+            SharedSpaceQuotaService sharedSpaceQuotaService,
             ObjectStorageClient objectStorageClient,
             TransactionTemplate transactionTemplate
     ) {
         this.sessionRepository = sessionRepository;
         this.partRepository = partRepository;
         this.storageQuotaService = storageQuotaService;
+        this.sharedSpaceQuotaService = sharedSpaceQuotaService;
         this.objectStorageClient = objectStorageClient;
         this.transactionTemplate = transactionTemplate;
     }
@@ -60,7 +64,8 @@ public class FileUploadCancellationService {
         } else {
             objectStorageClient.abortMultipartUpload(key, target.uploadId());
         }
-        transactionTemplate.executeWithoutResult(status -> finish(ownerUserId, uploadId));
+        transactionTemplate.executeWithoutResult(
+                status -> finish(ownerUserId, uploadId, target.quotaAlreadyReleased()));
     }
 
     private CancelTarget prepare(UUID ownerUserId, String uploadId) {
@@ -86,11 +91,13 @@ public class FileUploadCancellationService {
                 session.getTargetBucket(),
                 session.getTargetObjectKey(),
                 session.getUploadId(),
-                isDirectUpload(session)
+                isDirectUpload(session),
+                // REJECTED 会话的共享预留已在终态失败结算中释放，清理任务再次取消时不得重扣。
+                UploadStatus.REJECTED.getValue().equals(status)
         );
     }
 
-    private void finish(UUID ownerUserId, String uploadId) {
+    private void finish(UUID ownerUserId, String uploadId, boolean quotaAlreadyReleased) {
         FileUploadSession current = sessionRepository
                 .findForUpdateByUploadIdAndOwnerUserId(uploadId, ownerUserId)
                 .orElse(null);
@@ -104,6 +111,10 @@ public class FileUploadCancellationService {
         if (current.getQuotaReservationId() != null) {
             storageQuotaService.releaseReservation("UPLOAD", current.getId());
         }
+        if (current.getSpaceType() == SpaceType.SHARED && !quotaAlreadyReleased) {
+            // 预留释放与会话删除同事务提交：重试取消时若会话已删，不会再重复扣减。
+            sharedSpaceQuotaService.releaseReservation(current.getTotalSizeBytes());
+        }
         sessionRepository.delete(current);
     }
 
@@ -115,7 +126,8 @@ public class FileUploadCancellationService {
             String targetBucket,
             String targetObjectKey,
             String uploadId,
-            boolean direct
+            boolean direct,
+            boolean quotaAlreadyReleased
     ) {
     }
 }

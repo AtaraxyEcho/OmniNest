@@ -200,6 +200,61 @@ void main() {
     );
   });
 
+  test('无法解密的载荷在重试耗尽后清理，避免队列永久死锁', () async {
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
+            type: ReaderSyncQueue.opNoteUpdate,
+            payload: 'enc:v1:AAAA',
+            createdAt: createdAt,
+          ),
+        );
+
+    for (
+      var attempt = 0;
+      attempt < ReaderSyncQueue.maxOperationRetries;
+      attempt++
+    ) {
+      await ReaderSyncQueue.retryFailed();
+      await ReaderSyncQueue.flush(api: api);
+    }
+
+    expect(await db.select(db.syncOperations).get(), isEmpty);
+    verifyNever(
+      () => api.updateNote(
+        any(),
+        title: any(named: 'title'),
+        content: any(named: 'content'),
+      ),
+    );
+  });
+
+  test('可解密的网络失败行重试耗尽后仍保留，不能误删本地唯一副本', () async {
+    await ReaderSyncQueue.enqueueNoteUpdate(
+      noteId: 'note-1',
+      title: '标题',
+      content: '正文内容',
+    );
+    when(
+      () => api.updateNote('note-1', title: '标题', content: '正文内容'),
+    ).thenThrow(Exception('network down'));
+
+    for (
+      var attempt = 0;
+      attempt < ReaderSyncQueue.maxOperationRetries + 1;
+      attempt++
+    ) {
+      await ReaderSyncQueue.retryFailed();
+      await ReaderSyncQueue.flush(api: api);
+    }
+
+    final operation = (await db.select(db.syncOperations).get()).single;
+    expect(operation.status, 'failed');
+    expect(operation.retryCount, ReaderSyncQueue.maxOperationRetries);
+  });
+
   test('未注入加密器时拒绝明文写入敏感同步项', () async {
     ReaderSyncQueue.init(db, userId: 'user-1');
 

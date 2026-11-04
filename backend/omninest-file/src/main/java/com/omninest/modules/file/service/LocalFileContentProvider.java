@@ -15,8 +15,11 @@ import com.omninest.modules.file.repository.StorageLocationRepository;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
@@ -46,17 +49,22 @@ public class LocalFileContentProvider implements FileContentProvider {
 
     @Override
     public boolean supports(FileNode node) {
-        return node.getCurrentObjectId() == null && contentRefRepository.findByFileNodeId(node.getId()).isPresent();
+        // 内容引用查询推迟到 resolve：supports 与 open 在同一个请求里连续调用，
+        // 在这里查一次再在 open 里查一次会让本地媒体每次读取都翻倍查库。
+        return node.getCurrentObjectId() == null;
     }
 
     @Override
     public FileContentStream open(FileNode node) {
         ResolvedContent content = resolve(node);
         try {
+            // 先取大小再开流：Files.size 失败时不会留下无人持有的文件句柄。
+            long size = Files.size(content.path());
+            InputStream stream = Files.newInputStream(content.path());
             return new FileContentStream(
-                    Files.newInputStream(content.path()),
+                    stream,
                     node.getName(),
-                    Files.size(content.path()),
+                    size,
                     node.getMimeType()
             );
         } catch (IOException e) {
@@ -106,18 +114,27 @@ public class LocalFileContentProvider implements FileContentProvider {
             if (offset < 0 || offset >= total || length <= 0) {
                 return Optional.empty();
             }
-            InputStream input = Files.newInputStream(content.path());
-            try {
-                input.skipNBytes(offset);
-            } catch (IOException exception) {
-                input.close();
-                throw exception;
-            }
+            // SeekableByteChannel.position 是 O(1) 随机定位；skipNBytes 对 4K 视频
+            // 拖到后半段要线性跳过数 GB 字节。
             long boundedLength = Math.min(length, total - offset);
-            return Optional.of(new FileContentRange(
-                    new BoundedInputStream(input, boundedLength),
-                    total
-            ));
+            SeekableByteChannel channel = Files.newByteChannel(content.path(), StandardOpenOption.READ);
+            try {
+                channel.position(offset);
+                return Optional.of(new FileContentRange(
+                        new BoundedInputStream(Channels.newInputStream(channel), boundedLength),
+                        total
+                ));
+            } catch (Throwable throwable) {
+                try {
+                    channel.close();
+                } catch (IOException closeException) {
+                    throwable.addSuppressed(closeException);
+                }
+                if (throwable instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw new IOException(throwable);
+            }
         } catch (IOException e) {
             throw unavailable();
         }

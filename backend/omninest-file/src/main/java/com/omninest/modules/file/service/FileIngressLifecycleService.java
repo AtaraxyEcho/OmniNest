@@ -29,6 +29,21 @@ public class FileIngressLifecycleService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID open(IngressCommand command) {
+        return applyOpen(command);
+    }
+
+    /**
+     * 在调用方现有事务内创建或复用上传会话的入库记录，避免外层完成事务回滚后残留孤儿入库项。
+     *
+     * @param command 入库命令
+     * @return 入库记录标识
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID openWithinTransaction(IngressCommand command) {
+        return applyOpen(command);
+    }
+
+    private UUID applyOpen(IngressCommand command) {
         FileIngressItem item = command.uploadSessionId() == null
                 ? new FileIngressItem()
                 : ingressItemRepository.findByUploadSessionId(command.uploadSessionId())

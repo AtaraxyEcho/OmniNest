@@ -56,7 +56,7 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             where user.status = :status
               and (:query = ''
                    or lower(user.username) like concat('%', :query, '%') escape '\\'
-                   or lower(coalesce(user.displayName, '')) like concat('%', :query, '%') escape '\\')
+                   or lower(user.displayName) like concat('%', :query, '%') escape '\\')
             """)
     Page<AuthUser> searchByStatus(
             @Param("status") String status,
@@ -81,8 +81,8 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             select user from AuthUser user
             where (:searchPattern = ''
                    or lower(user.username) like :searchPattern
-                   or lower(coalesce(user.displayName, '')) like :searchPattern
-                   or lower(coalesce(user.email, '')) like :searchPattern)
+                   or lower(user.displayName) like :searchPattern
+                   or lower(user.email) like :searchPattern)
               and (:roleCode = ''
                    or exists (select role.id from user.roles role where role.code = :roleCode))
             """,
@@ -90,8 +90,8 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
                     select count(user) from AuthUser user
                     where (:searchPattern = ''
                            or lower(user.username) like :searchPattern
-                           or lower(coalesce(user.displayName, '')) like :searchPattern
-                           or lower(coalesce(user.email, '')) like :searchPattern)
+                           or lower(user.displayName) like :searchPattern
+                           or lower(user.email) like :searchPattern)
                       and (:roleCode = ''
                            or exists (select role.id from user.roles role where role.code = :roleCode))
                     """)

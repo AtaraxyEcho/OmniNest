@@ -57,6 +57,7 @@ class FileUploadSessionDto {
     required this.uploadUrl,
     required this.parts,
     required this.expiresAt,
+    this.uploadUrlExpiresAt,
   });
 
   factory FileUploadSessionDto.fromJson(Map<String, dynamic> json) {
@@ -72,6 +73,10 @@ class FileUploadSessionDto {
       mimeType: json['mimeType']?.toString() ?? 'application/octet-stream',
       status: json['status']?.toString() ?? 'CREATED',
       uploadUrl: json['uploadUrl']?.toString(),
+      uploadUrlExpiresAt:
+          DateTime.tryParse(
+            json['uploadUrlExpiresAt']?.toString() ?? '',
+          )?.toLocal(),
       parts:
           rawParts is List
               ? rawParts
@@ -95,6 +100,7 @@ class FileUploadSessionDto {
   final String mimeType;
   final String status;
   final String? uploadUrl;
+  final DateTime? uploadUrlExpiresAt;
   final List<FileUploadPart> parts;
   final DateTime? expiresAt;
 
@@ -110,6 +116,7 @@ class FileUploadSessionDto {
       mimeType: mimeType,
       status: status,
       uploadUrl: uploadUrl,
+      uploadUrlExpiresAt: uploadUrlExpiresAt,
       parts: parts,
       expiresAt: expiresAt,
     );

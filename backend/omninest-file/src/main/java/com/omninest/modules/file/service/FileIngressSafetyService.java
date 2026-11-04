@@ -103,12 +103,25 @@ public class FileIngressSafetyService {
             String sourceType,
             UUID correlationId
     ) throws IOException {
-        byte[] prefix = inputStream.readNBytes(MAGIC_SNIFF_LIMIT_BYTES);
+        // 申报值小于魔数窗口时只嗅探“申报大小 + 1”：多出的 1 字节足以证明超限，
+        // 同时让 actualSizeBytes 对超限对象稳定落在 declared + 1。
+        int sniffLimit = declaredSizeBytes >= 0
+                        && declaredSizeBytes < MAGIC_SNIFF_LIMIT_BYTES - 1L
+                ? (int) (declaredSizeBytes + 1L)
+                : MAGIC_SNIFF_LIMIT_BYTES;
+        byte[] prefix = inputStream.readNBytes(sniffLimit);
         CountingInputStream remaining = new CountingInputStream(inputStream);
         MessageDigest digest = sha256Digest();
+        // 直传预签名不限制请求体大小：低报尺寸的客户端可能把数十 GB 对象写进隔离桶。
+        // 扫描与摘要最多读取“申报大小 + 1”字节；多出的 1 字节作为超限证据，
+        // 由晋升阶段按实际大小不一致拒绝，避免 Worker 被恶意对象耗尽 I/O。
+        long readLimit = declaredSizeBytes < 0 || declaredSizeBytes == Long.MAX_VALUE
+                ? Long.MAX_VALUE
+                : declaredSizeBytes + 1L;
         ScanResult result;
-        try (DigestInputStream digestInputStream = new DigestInputStream(
-                new SequenceInputStream(new ByteArrayInputStream(prefix), remaining), digest)) {
+        try (InputStream bounded = new BoundedInputStream(
+                new SequenceInputStream(new ByteArrayInputStream(prefix), remaining), readLimit);
+                DigestInputStream digestInputStream = new DigestInputStream(bounded, digest)) {
             result = malwareScanGateway.scan(digestInputStream, declaredSizeBytes);
             digestInputStream.transferTo(OutputStream.nullOutputStream());
         }
@@ -199,6 +212,48 @@ public class FileIngressSafetyService {
 
         long getCount() {
             return count;
+        }
+    }
+
+    /**
+     * 只允许读取指定上限字节的包装流，超限部分不再读取。
+     */
+    private static final class BoundedInputStream extends InputStream {
+        private final InputStream delegate;
+        private long remaining;
+
+        private BoundedInputStream(InputStream delegate, long remaining) {
+            this.delegate = delegate;
+            this.remaining = remaining;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int value = delegate.read();
+            if (value >= 0) {
+                remaining--;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int read = delegate.read(buffer, offset, (int) Math.min(length, remaining));
+            if (read > 0) {
+                remaining -= read;
+            }
+            return read;
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
         }
     }
 

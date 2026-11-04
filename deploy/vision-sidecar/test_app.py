@@ -422,6 +422,16 @@ class SidecarTokenTest(unittest.TestCase):
                 app._require_sidecar_auth(self._request())
         self.assertEqual(503, context.exception.status_code)
 
+    async def _enter_lifespan(self):
+        async with app.lifespan(app.app):
+            pass
+
+    def test_lifespan_fails_fast_when_secret_is_missing_or_short(self):
+        for secret in ("", "x" * 31):
+            with patch.object(app, "SIDECAR_SECRET", secret):
+                with self.assertRaises(RuntimeError):
+                    asyncio.run(self._enter_lifespan())
+
     def test_unauthenticated_analysis_is_rejected_before_taking_the_slot(self):
         """未签名请求不得先占推理槽：否则慢速 Multipart 能把合法分析饿死。"""
         events: list[str] = []

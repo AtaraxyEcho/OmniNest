@@ -31,6 +31,9 @@ public class SharedSpaceUsage {
     @Column(name = "used_bytes", nullable = false)
     private Long usedBytes = 0L;
 
+    @Column(name = "reserved_bytes", nullable = false)
+    private Long reservedBytes = 0L;
+
     @Column(name = "file_count", nullable = false)
     private Long fileCount = 0L;
 
@@ -82,6 +85,6 @@ public class SharedSpaceUsage {
     @Override
     public String toString() {
         return "SharedSpaceUsage{id=" + id + ", usedBytes=" + usedBytes
-                + ", fileCount=" + fileCount + "}";
+                + ", reservedBytes=" + reservedBytes + ", fileCount=" + fileCount + "}";
     }
 }

@@ -231,20 +231,38 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         }
         try {
             String cookie = cookie(ownerUserId);
-            String path = "/lyric?id=" + encode(songId)
-                    + "&timestamp=" + System.currentTimeMillis();
-            JsonNode json = requestJson(path, cookie);
+            long nowMs = System.currentTimeMillis();
+            // /lyric/new 是 /lyric 的超集（含原词、翻译与逐字 yrc），优先只发一次；
+            // 仅当它没有返回行级歌词时才降级补调旧接口。
+            boolean usedLegacyEndpoint = false;
+            JsonNode json;
+            try {
+                json = requestJson("/lyric/new?id=" + encode(songId) + "&timestamp=" + nowMs, cookie);
+            } catch (InterruptedException exception) {
+                throw exception;
+            } catch (IOException | RuntimeException exception) {
+                // 超集接口异常时降级到旧接口，不能把全部歌词一起判为不可用。
+                log.debug("网易云 /lyric/new 请求失败，降级 /lyric: songId={}, errorType={}",
+                        songId, exception.getClass().getSimpleName());
+                json = null;
+            }
+            if (json == null || !json.path("lrc").isObject()) {
+                json = requestJson("/lyric?id=" + encode(songId) + "&timestamp=" + nowMs, cookie);
+                usedLegacyEndpoint = true;
+            }
             if (json == null) {
                 return new LyricsResult(null, null);
             }
-            // 同步歌词（LRC 格式，带时间戳）
             JsonNode lrcObj = json.path("lrc");
             String syncedLyrics = lrcObj.isObject() ? lrcObj.path("lyric").asString(null) : null;
-            // 翻译歌词（LRC 格式带时间戳，与同步歌词行对齐）
             JsonNode tlyricObj = json.path("tlyric");
             String translatedLyrics = tlyricObj.isObject() ? tlyricObj.path("lyric").asString(null) : null;
-            // 逐字歌词来自附加接口，失败时降级为不可用，不影响行级歌词
-            String wordLyrics = fetchWordLyrics(songId, cookie);
+            JsonNode yrcObj = json.path("yrc");
+            String wordLyrics = blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asString(null) : null);
+            if (wordLyrics == null && usedLegacyEndpoint) {
+                // 旧接口不返回 yrc；逐字歌词属附加能力，失败时降级为不可用。
+                wordLyrics = fetchWordLyrics(songId, cookie);
+            }
             log.info(
                     "网易云歌词获取完成: songId={}, hasLyrics={}, hasWordLyrics={}",
                     songId,

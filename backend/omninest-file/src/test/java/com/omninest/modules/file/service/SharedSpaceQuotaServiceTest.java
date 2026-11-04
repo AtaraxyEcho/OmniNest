@@ -111,6 +111,79 @@ class SharedSpaceQuotaServiceTest {
         }
     }
 
+    // ── 上传会话预留 ───────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("reserve()/releaseReservation()/settleReservation()")
+    class ReservationTests {
+
+        @Test
+        @DisplayName("预留成功走原子条件更新")
+        void reserve_updatesLedgerAtomically() {
+            SharedSpaceUsage usage = usage(1000L, 2);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+            stubConfig("10000");
+            when(usageRepository.tryReserve(eq(usage.getId()), eq(3000L), eq(10000L), any()))
+                    .thenReturn(1);
+
+            service.reserve(3000L);
+
+            verify(usageRepository).tryReserve(eq(usage.getId()), eq(3000L), eq(10000L), any());
+        }
+
+        @Test
+        @DisplayName("剩余容量不足时拒绝预留")
+        void reserve_exceedsRemainingCapacity_throws() {
+            SharedSpaceUsage usage = usage(9000L, 2);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+            stubConfig("10000");
+            when(usageRepository.tryReserve(eq(usage.getId()), eq(3000L), eq(10000L), any()))
+                    .thenReturn(0);
+
+            assertThatThrownBy(() -> service.reserve(3000L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FILE_QUOTA_EXCEEDED);
+        }
+
+        @Test
+        @DisplayName("释放未结算预留")
+        void release_decrementsReservedBytes() {
+            SharedSpaceUsage usage = usage(1000L, 2);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+
+            service.releaseReservation(3000L);
+
+            verify(usageRepository).releaseReservation(eq(usage.getId()), eq(3000L), any());
+        }
+
+        @Test
+        @DisplayName("结算把预留转为实际用量并增加文件数")
+        void settle_movesReservationToUsedBytes() {
+            SharedSpaceUsage usage = usage(1000L, 2);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+
+            service.settleReservation(3000L, 3000L, 1L);
+
+            verify(usageRepository).settleReservation(
+                    eq(usage.getId()), eq(3000L), eq(3000L), eq(1L), any());
+        }
+
+        @Test
+        @DisplayName("只读预检同样要计入已预留字节")
+        void checkQuota_accountsReservedBytes() {
+            SharedSpaceUsage usage = usage(5000L, 2);
+            usage.setReservedBytes(4000L);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+            stubConfig("10000");
+
+            assertThatThrownBy(() -> service.checkQuota(2000L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FILE_QUOTA_EXCEEDED);
+        }
+    }
+
     // ── increaseUsage ──────────────────────────────────────────────────
 
     @Nested

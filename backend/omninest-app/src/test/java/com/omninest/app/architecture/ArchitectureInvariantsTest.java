@@ -400,7 +400,8 @@ class ArchitectureInvariantsTest {
      */
     private static final Map<String, List<String>> REMOTE_IO_METHODS_BY_RECEIVER_TYPE = Map.of(
             "ObjectStorageClient", List.of(
-                    "getObject", "putObject", "copyObject", "removeObject", "objectExists", "listObjects"),
+                    "getObject", "putObject", "copyObject", "removeObject", "objectExists", "listObjects",
+                    "objectSize", "abortMultipartUpload", "completeMultipartUpload"),
             "DerivedAssetStorageService", List.of(
                     "store", "storeRemote", "deleteOwned", "deleteOwnedBatch", "deleteDerivedFileNode"),
             "FileContentAccessService", List.of(
@@ -526,6 +527,138 @@ class ArchitectureInvariantsTest {
     /**
      * 从方法声明行按大括号配对取出方法体。
      */
+    private static final Pattern COALESCE_EMPTY_STRING_INSIDE_LOWER_LIKE = Pattern.compile(
+            "lower\\s*\\(\\s*coalesce\\s*\\(\\s*[a-zA-Z0-9_.]+\\s*,\\s*''\\s*\\)\\s*\\)\\s*like",
+            Pattern.CASE_INSENSITIVE);
+
+    @Test
+    @DisplayName("JPQL 模糊搜索不得用 coalesce(col, '') 包裹单列以免破坏 pg_trgm GIN 索引")
+    void trgmLikeQueriesMustNotWrapColumnInEmptyStringCoalesce() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : mainJavaFiles()) {
+            String name = file.getFileName().toString();
+            if (!name.endsWith("Repository.java") && !name.endsWith("Queries.java")) {
+                continue;
+            }
+            if (COALESCE_EMPTY_STRING_INSIDE_LOWER_LIKE.matcher(Files.readString(file)).find()) {
+                violations.add(relative(file));
+            }
+        }
+        assertThat(violations)
+                .as("lower(coalesce(col, '')) 与 lower(col) gin_trgm_ops 索引表达式不匹配，会导致全表扫描")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("阅读器离线幂等创建的 REQUIRES_NEW 子事务必须同时包含同步事件写入")
+    void readerIdempotentCreateMustRecordSyncEventInsideNewTransaction() throws IOException {
+        Map<String, String> requiredCallByService = Map.of(
+                "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderAnnotationService.java",
+                "recordAnnotationEvent(",
+                "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderBookmarkService.java",
+                "recordBookmarkEvent(",
+                "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderNoteService.java",
+                "recordNoteEvent(");
+        List<String> violations = new ArrayList<>();
+        for (var entry : requiredCallByService.entrySet()) {
+            List<String> lines = Files.readAllLines(backendRoot().resolve(entry.getKey()));
+            for (int index = 0; index < lines.size(); index++) {
+                if (lines.get(index).contains("saveInNewTransaction(")
+                        && lines.get(index).contains("private ")) {
+                    if (!methodBody(lines, index).contains(entry.getValue())) {
+                        violations.add(entry.getKey() + "#saveInNewTransaction 缺少 " + entry.getValue());
+                    }
+                }
+            }
+        }
+        assertThat(violations)
+                .as("实体落库与同步事件必须处于同一 REQUIRES_NEW 事务，防止外层回滚丢同步事件")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("入库终态失败结算必须清理隔离桶物理对象")
+    void settleTerminalFailureMustRemoveQuarantineObject() throws IOException {
+        Path promotionService = backendRoot().resolve(
+                "omninest-file/src/main/java/com/omninest/modules/file/service/FileIngressPromotionService.java");
+        List<String> lines = Files.readAllLines(promotionService);
+        for (int index = 0; index < lines.size(); index++) {
+            if (lines.get(index).contains("private void settleTerminalFailure(")) {
+                assertThat(methodBody(lines, index))
+                        .as("settleTerminalFailure 必须统一清理隔离桶物理对象，防止恶意或失败文件永久滞留磁盘")
+                        .contains("removeObjectQuietly(quarantineKey(item)");
+                return;
+            }
+        }
+        throw new AssertionError("未找到 FileIngressPromotionService#settleTerminalFailure");
+    }
+
+    @Test
+    @DisplayName("会话吊销的数据库权威列不得被 Redis 异常回滚")
+    void sessionRevocationMustCommitDatabaseBeforeCache() throws IOException {
+        Path service = backendRoot().resolve(
+                "omninest-system/src/main/java/com/omninest/modules/user/service/SessionRevocationService.java");
+        List<String> lines = Files.readAllLines(service);
+        for (int index = 0; index < lines.size(); index++) {
+            if (!lines.get(index).contains("public void invalidateAccessTokensBefore(")) {
+                continue;
+            }
+            String previous = index > 0 ? lines.get(index - 1) : "";
+            assertThat(previous)
+                    .as("数据库截止时间必须由 REQUIRES_NEW writer 独立提交，方法本身不得包事务")
+                    .doesNotContain("@Transactional");
+            String body = methodBody(lines, index);
+            assertThat(body)
+                    .as("必须先提交数据库权威列，再在 try/catch 中写 Redis")
+                    .contains("persistAccessCutoff")
+                    .contains("catch (RuntimeException");
+            return;
+        }
+        throw new AssertionError("未找到 SessionRevocationService#invalidateAccessTokensBefore");
+    }
+
+    @Test
+    @DisplayName("分片确认不得重新引入会话悲观锁与全量分片查询")
+    void completePartMustUseAtomicUpdates() throws IOException {
+        Path service = backendRoot().resolve(
+                "omninest-file/src/main/java/com/omninest/modules/file/service/FileUploadSessionService.java");
+        List<String> lines = Files.readAllLines(service);
+        for (int index = 0; index < lines.size(); index++) {
+            if (!lines.get(index).contains("public FileUploadPartsDto completePart(")) {
+                continue;
+            }
+            String body = methodBody(lines, index);
+            assertThat(body)
+                    .as("3 路并发分片确认不得对会话行加悲观锁或全量读取分片")
+                    .contains("markPartCompleted")
+                    .contains("incrementUploadedParts")
+                    .doesNotContain("findForUpdateByUploadIdAndOwnerUserId")
+                    .doesNotContain("findByUploadSessionIdOrderByPartNumber");
+            return;
+        }
+        throw new AssertionError("未找到 FileUploadSessionService#completePart");
+    }
+
+    @Test
+    @DisplayName("上传完成派发扫描必须在调用方事务内创建入库记录")
+    void dispatchSecurityScanMustUseMandatoryTransaction() throws IOException {
+        Path service = backendRoot().resolve(
+                "omninest-file/src/main/java/com/omninest/modules/file/service/FileUploadSessionService.java");
+        List<String> lines = Files.readAllLines(service);
+        for (int index = 0; index < lines.size(); index++) {
+            if (!lines.get(index).contains("private FileUploadCompleteResultDto dispatchSecurityScan(")) {
+                continue;
+            }
+            String body = methodBody(lines, index);
+            assertThat(body)
+                    .as("入库记录必须与扫描任务、会话状态同事务提交，不能先独立提交再回滚外层")
+                    .contains("openWithinTransaction(")
+                    .doesNotContain("ingressLifecycleService.open(");
+            return;
+        }
+        throw new AssertionError("未找到 FileUploadSessionService#dispatchSecurityScan");
+    }
+
     private static String methodBody(List<String> lines, int declarationIndex) {
         int depth = 0;
         boolean opened = false;

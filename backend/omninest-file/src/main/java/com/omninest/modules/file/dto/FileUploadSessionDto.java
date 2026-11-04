@@ -17,6 +17,7 @@ public record FileUploadSessionDto(
         @Schema(description = "MIME 类型", example = "application/pdf") String mimeType,
         @Schema(description = "会话状态", example = "PENDING") String status,
         @Schema(description = "上传 URL") String uploadUrl,
+        @Schema(description = "上传 URL 过期时间") Instant uploadUrlExpiresAt,
         @Schema(description = "分片信息列表") List<FileUploadPartDto> parts,
         @Schema(description = "会话过期时间") Instant expiresAt
 ) {

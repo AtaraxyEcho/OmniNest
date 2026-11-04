@@ -20,8 +20,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// lib/features/reader/presentation/widgets/reader_view_page_builders_return.dart、
 /// lib/features/reader/presentation/pages/reader_view_page_commands.dart。
 void main() {
-  // 2026-11-03 实测：§7.1 点名的六处接入后，全仓剩余 87 处字面量动画时长。
-  const hardcodedMotionCeiling = 87;
+  // 2026-11-04 实测：再接入 mobile_env_widgets/app_dropdown/file_browser_page_external 后，
+  // 全仓剩余 83 处字面量动画时长。
+  const hardcodedMotionCeiling = 83;
 
   test('未接入减动效判定的动画时长不得新增', () {
     final offenders = <String>[];

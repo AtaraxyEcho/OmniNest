@@ -620,6 +620,9 @@ public class FileQueryService {
                         .anyMatch(other -> candidate.isPathInside(other)))
                 .map(FileNode::getId).collect(Collectors.toSet());
         List<UUID> affectedFileIds = new ArrayList<>();
+        // 同一批次可能包含来自不同源目录的同名文件：数据库查询看不到尚未 flush 的前序
+        // 节点，必须在本批内先占名，否则第二条会撞唯一索引导致整批回滚。
+        Set<String> reservedNamesInBatch = new HashSet<>();
         int movedCount = 0;
         for (UUID fileId : fileIds) {
             FileNode node = nodesById.get(fileId);
@@ -639,7 +642,8 @@ public class FileQueryService {
                     if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
                         throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录: " + node.getName());
                     }
-                    if (sameNameExists(ownerUserId, node.getSpaceType(), targetParentId, node.getName())) {
+                    if (!reservedNamesInBatch.add(node.getName())
+                            || sameNameExists(ownerUserId, node.getSpaceType(), targetParentId, node.getName())) {
                         throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件: " + node.getName());
                     }
                     String oldPath = node.getNormalizedPath();

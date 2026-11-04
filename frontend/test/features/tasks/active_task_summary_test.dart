@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
-import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 void main() {
@@ -21,41 +20,18 @@ void main() {
     expect(summary.hasActivity, isTrue);
   });
 
-  test('活动任务 Provider 不依赖任务页面列表状态', () async {
+  test('活动任务 Provider 始终使用轻量汇总接口', () async {
     final api = _MockTaskApi();
-    when(
-      () => api.list(page: 0, size: 100),
-    ).thenAnswer((_) async => [_task('running', 'RUNNING')]);
+    final running = _task('running', 'RUNNING');
+    when(() => api.summary()).thenAnswer(
+      (_) async => ActiveTaskSummary(
+        activeCount: 1,
+        failedCount: 0,
+        priorityTask: running,
+      ),
+    );
     final container = ProviderContainer(
-      overrides: [
-        taskApiProvider.overrideWithValue(api),
-        // 摘要接口分支按能力门控；本用例验证 task:read 用户走列表推导。
-        userCapabilitiesProvider.overrideWithValue(
-          const UserCapabilities(
-            canBrowseContent: true,
-            canContributeContent: true,
-            canManageOwnActivity: true,
-            canManagePreferences: true,
-            canManageAccount: true,
-            canUseBackdropLibrary: true,
-            canUploadBackdrop: true,
-            canViewOwnTasks: true,
-            canAdminTasks: true,
-            canManageMediaLibrary: true,
-            canManagePhotos: true,
-            canAdminUsers: true,
-            canReadSystemConfig: true,
-            canManageSystemConfig: true,
-            canAccessAdminConsole: true,
-            canSharedBrowse: true,
-            canSharedUpload: true,
-            canReadWeather: true,
-            canReportLocation: true,
-            canManageTwoFactor: true,
-            canReadActivity: true,
-          ),
-        ),
-      ],
+      overrides: [taskApiProvider.overrideWithValue(api)],
     );
     addTearDown(container.dispose);
 
@@ -64,7 +40,8 @@ void main() {
 
     expect(summary.activeCount, 1);
     expect(summary.priorityTask?.id, 'running');
-    verify(() => api.list(page: 0, size: 100)).called(1);
+    verify(() => api.summary()).called(1);
+    verifyNever(() => api.list(page: 0, size: 100));
   });
 }
 

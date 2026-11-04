@@ -36,11 +36,11 @@ class _AnimatedCardState extends State<AnimatedCard>
     _opacity = Tween<double>(
       begin: 0,
       end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _controller, curve: MotionToken.curve));
     _offset = Tween<Offset>(
       begin: const Offset(0, 0.1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _controller, curve: MotionToken.curve));
     // 减少动态效果下直接落终态：入场淡入与上滑只是装饰，跳过它不改变内容。
     if (!widget.enabled || MotionToken.prefersReducedOnPlatform()) {
       _controller.value = 1;
@@ -67,6 +67,10 @@ class _AnimatedCardState extends State<AnimatedCard>
 
   @override
   Widget build(BuildContext context) {
+    // 入场结束后直接返回子树，避免常驻 Fade/Slide 监听与合成层。
+    if (_controller.isCompleted) {
+      return widget.child;
+    }
     return FadeTransition(
       opacity: _opacity,
       child: SlideTransition(position: _offset, child: widget.child),

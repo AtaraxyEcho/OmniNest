@@ -51,8 +51,11 @@ Lucene 索引本就是可重建数据，不随库清理。生产环境在未发�
 已发布且环境执行过迁移的阶段，基线不可改写，必须改用递增迁移（见根目录 `AGENTS.md`）。
 
 若必须保留已有开发数据，可先备份，再依次执行 `deploy/db/upgrade-baseline-20261024.sql`
-（补齐上一版基线新增的列、时间戳类型与默认值）与 `deploy/db/upgrade-baseline-20261028.sql`
-（补齐本次基线新增的四个高频索引），最后用 Flyway `repair` 对齐校验和。
+（补齐上一版基线新增的列、时间戳类型与默认值）、`deploy/db/upgrade-baseline-20261028.sql`
+（补齐本次基线新增的四个高频索引）、`deploy/db/upgrade-baseline-20261029.sql`
+（删除已无读取方的配置行）与 `deploy/db/upgrade-baseline-20261104.sql`
+（对齐阅读器列宽、补齐模糊搜索 trigram 索引、新增共享空间预留列），最后用 Flyway
+`repair` 对齐校验和。
 **repair 不能单独使用**：它只改历史表校验和，不补结构；只在结构已经补齐后执行。
 
 重建只清数据库，MinIO 卷里的对象字节仍在：新库没有任何 `file_objects` 行，桶内**全部**对象

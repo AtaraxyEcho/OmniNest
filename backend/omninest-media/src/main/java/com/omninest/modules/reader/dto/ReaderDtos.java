@@ -230,9 +230,9 @@ public final class ReaderDtos {
             long startOffset,
             @Min(value = 0, message = "endOffset 不能为负数")
             long endOffset,
-            @Size(max = 5000, message = "highlightText 长度不能超过 5000")
+            @Size(max = 4096, message = "highlightText 长度不能超过 4096")
             String highlightText,
-            @Size(max = 2000, message = "note 长度不能超过 2000")
+            @Size(max = 4096, message = "note 长度不能超过 4096")
             String note,
             @Size(max = 16, message = "color 长度不能超过 16")
             @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
@@ -244,7 +244,7 @@ public final class ReaderDtos {
 
     /** 更新批注请求。 */
     public record UpdateAnnotationRequest(
-            @Size(max = 2000, message = "note 长度不能超过 2000")
+            @Size(max = 4096, message = "note 长度不能超过 4096")
             String note,
             @Size(max = 16, message = "color 长度不能超过 16")
             @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")

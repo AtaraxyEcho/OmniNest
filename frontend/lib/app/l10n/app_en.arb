@@ -2506,6 +2506,12 @@
       "taskId": { "type": "String" }
     }
   },
+  "adminMaintenanceMotionTaskCreated": "Motion photo rescan task created: {taskId}",
+  "@adminMaintenanceMotionTaskCreated": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
   "adminMaintenanceGeoTaskReused": "Reused the active backfill task: {taskId}",
   "@adminMaintenanceGeoTaskReused": {
     "placeholders": {

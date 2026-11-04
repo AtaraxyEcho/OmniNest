@@ -2380,6 +2380,12 @@
       "taskId": { "type": "String" }
     }
   },
+  "adminMaintenanceMotionTaskCreated": "动态照片重扫任务已创建：{taskId}",
+  "@adminMaintenanceMotionTaskCreated": {
+    "placeholders": {
+      "taskId": { "type": "String" }
+    }
+  },
   "adminMaintenanceGeoTaskReused": "已复用现有回填任务：{taskId}",
   "@adminMaintenanceGeoTaskReused": {
     "placeholders": {

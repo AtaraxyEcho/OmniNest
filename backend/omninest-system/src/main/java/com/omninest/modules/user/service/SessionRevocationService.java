@@ -118,14 +118,18 @@ public class SessionRevocationService implements SessionRevocationChecker {
      * @param userId 用户标识
      * @param cutoff 截止时间
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void invalidateAccessTokensBefore(UUID userId, Instant cutoff) {
         if (userId == null || cutoff == null) {
             return;
         }
         Duration ttl = accessTokenTtl();
-        authUserRepository.advanceAccessCutoff(userId, cutoff);
-        cache.markAccessTokenCutoff(userId, cutoff, ttl);
+        // 数据库列是权威兜底，必须先在独立事务中提交；Redis 异常不得回滚它。
+        writer.persistAccessCutoff(userId, cutoff);
+        try {
+            cache.markAccessTokenCutoff(userId, cutoff, ttl);
+        } catch (RuntimeException exception) {
+            log.warn("Redis 访问令牌截止时间缓存写入失败，由数据库权威列兜底: userId={}", userId, exception);
+        }
     }
 
     /**

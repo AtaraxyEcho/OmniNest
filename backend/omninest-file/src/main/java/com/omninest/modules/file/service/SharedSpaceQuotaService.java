@@ -44,9 +44,65 @@ public class SharedSpaceQuotaService implements SharedSpaceUsageReconcile {
             return;
         }
         SharedSpaceUsage usage = getUsage();
-        if (usage.getUsedBytes() + additionalBytes > maxBytes) {
+        long projected = usage.getUsedBytes() + usage.getReservedBytes() + Math.max(additionalBytes, 0L);
+        if (projected > maxBytes) {
             throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足");
         }
+    }
+
+    /**
+     * 为共享空间上传会话原子预留容量。
+     *
+     * <p>共享空间没有个人配额预留表可复用：这里在单行账本上同时守卫已用与已预留字节，
+     * 多个成员并发创建上传会话时只有一个条件更新能成功，避免“并发会话都通过只读预检、
+     * 超额数据全部写进隔离桶后才在晋升阶段一起失败”。</p>
+     *
+     * @param bytes 预留字节数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reserve(long bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        SharedSpaceUsage usage = getUsage();
+        int updated = usageRepository.tryReserve(
+                usage.getId(), bytes, capacityCeiling(), Instant.now());
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足");
+        }
+    }
+
+    /**
+     * 释放未结算的共享空间预留。
+     *
+     * @param bytes 释放字节数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void releaseReservation(long bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        SharedSpaceUsage usage = getUsage();
+        usageRepository.releaseReservation(usage.getId(), bytes, Instant.now());
+    }
+
+    /**
+     * 将共享空间上传预留结算为实际用量。
+     *
+     * @param reservedBytes 原预留字节数
+     * @param committedBytes 实际写入字节数
+     * @param files 新增文件数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void settleReservation(long reservedBytes, long committedBytes, long files) {
+        SharedSpaceUsage usage = getUsage();
+        usageRepository.settleReservation(
+                usage.getId(),
+                Math.max(reservedBytes, 0L),
+                Math.max(committedBytes, 0L),
+                Math.max(files, 0L),
+                Instant.now()
+        );
     }
 
     /**

@@ -334,15 +334,18 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
 /// 不在前端读取管理端配置：和风凭据与 weather.enabled 均由后端配置中心处理。
 /// 仅在有 GPS 数据时传 location 参数，否则由后端走 fallback 链。
 final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
-  final location = await ref.watch(userLocationProvider.future);
+  // 所有依赖在首个 await 前同步订阅；并等待偏好城市从本地加载完成，
+  // 否则冷启动会用空字符串覆盖用户设置的城市而退回 IP 定位。
+  final locationFuture = ref.watch(userLocationProvider.future);
+  final preferredCityFuture = ref.watch(weatherLocationProvider.future);
+  final apiClient = ref.watch(apiClientProvider);
+  final location = await locationFuture;
+  final preferredCity = (await preferredCityFuture)?.trim() ?? '';
   if (!ref.mounted) {
     return WeatherData.empty();
   }
-  // 后端可能因 GPS 优先而未回填地区名，这里用用户偏好城市兜底。
-  final preferredCity = ref.watch(weatherLocationProvider).asData?.value ?? '';
 
   try {
-    final apiClient = ref.watch(apiClientProvider);
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/weather/realtime',
       queryParameters: {if (location != null) 'location': location},

@@ -87,40 +87,67 @@ class ReaderAnnotationHandler {
     }
   }
 
-  /// 删除与指定范围重叠的已有批注（用于替换高亮/批注）。
+  /// 查找与指定范围重叠的已有批注（用于替换高亮/批注）。
   ///
   /// chapterId 由调用方在入口原子捕获：await 窗口内连续滚动的锚点
   /// 收养会改写字段，旧章偏移的删除/写入不得漂移到新章。
-  Future<void> _deleteOverlapping(
+  List<ReaderAnnotation> _findOverlapping(
     String chapterId,
     int startOffset,
     int endOffset,
+  ) {
+    return _annotations
+        .where(
+          (a) =>
+              a.chapterId == chapterId &&
+              a.startOffset < endOffset &&
+              a.endOffset > startOffset,
+        )
+        .toList();
+  }
+
+  /// 合并被覆盖批注的备注，合并高亮时绝不静默抹除用户长笔记。
+  String? _mergedNote(
+    Iterable<ReaderAnnotation> overlapping, {
+    String? primary,
+  }) {
+    final notes = <String>[
+      if (primary != null && primary.trim().isNotEmpty) primary.trim(),
+      ...overlapping
+          .map((a) => a.note?.trim())
+          .whereType<String>()
+          .where((note) => note.isNotEmpty),
+    ];
+    return notes.isEmpty ? null : notes.join('\n\n');
+  }
+
+  /// 先建后删：创建失败时旧批注保持原样，成功后才清理被合并的旧记录。
+  Future<Set<String>> _deleteAnnotations(
+    Iterable<ReaderAnnotation> targets,
   ) async {
-    final overlapping =
-        _annotations
-            .where(
-              (a) =>
-                  a.chapterId == chapterId &&
-                  a.startOffset < endOffset &&
-                  a.endOffset > startOffset,
-            )
-            .toList();
-    for (final a in overlapping) {
+    final removed = <String>{};
+    for (final annotation in targets) {
       try {
-        await dataManager.deleteAnnotation(a.id);
+        await dataManager.deleteAnnotation(annotation.id);
+        removed.add(annotation.id);
       } on Exception catch (e) {
         if (kDebugMode) {
           readerDebugLog(
             'ReaderAnnotationHandler: overlapping delete failed: $e',
           );
         }
-        // 删除失败上抛：替换语义下旧批注未清除不能继续写入新批注。
-        rethrow;
       }
     }
+    return removed;
   }
 
-  /// 创建高亮（无备注），替换范围内已有的高亮/批注。
+  /// 用内存结果立即驱动 UI；完整远端刷新仍由 load() 在适当入口执行。
+  void _publish(List<ReaderAnnotation> annotations) {
+    _annotations = annotations;
+    onAnnotationsChanged();
+  }
+
+  /// 创建高亮（保留被覆盖批注的已有备注，且先建后删防止异常丢数据）。
   Future<void> highlight(
     String selectedText,
     int startOffset,
@@ -128,17 +155,25 @@ class ReaderAnnotationHandler {
     BuildContext context,
   ) async {
     final chapter = chapterId;
+    final overlapping = _findOverlapping(chapter, startOffset, endOffset);
+    final preservedNote = _mergedNote(overlapping);
     try {
-      await _deleteOverlapping(chapter, startOffset, endOffset);
-      await dataManager.createAnnotation(
+      final created = await dataManager.createAnnotation(
         itemId: itemId,
         chapterId: chapter,
         startOffset: startOffset,
         endOffset: endOffset,
         highlightText: selectedText,
+        note: preservedNote,
         color: '#FFEB3B',
       );
-      await load();
+      final replacedIds = await _deleteAnnotations(overlapping);
+      _publish([
+        ..._annotations.where(
+          (a) => a.id != created.id && !replacedIds.contains(a.id),
+        ),
+        created,
+      ]);
       if (context.mounted) {
         showReaderSnackBar(
           context,
@@ -210,18 +245,24 @@ class ReaderAnnotationHandler {
     );
 
     if (result != null) {
+      final overlapping = _findOverlapping(chapter, startOffset, endOffset);
       try {
-        await _deleteOverlapping(chapter, startOffset, endOffset);
-        await dataManager.createAnnotation(
+        final created = await dataManager.createAnnotation(
           itemId: itemId,
           chapterId: chapter,
           startOffset: startOffset,
           endOffset: endOffset,
           highlightText: selectedText,
-          note: result.note,
+          note: _mergedNote(overlapping, primary: result.note),
           color: result.color,
         );
-        await load();
+        final replacedIds = await _deleteAnnotations(overlapping);
+        _publish([
+          ..._annotations.where(
+            (a) => a.id != created.id && !replacedIds.contains(a.id),
+          ),
+          created,
+        ]);
       } on Exception catch (e) {
         // 批注是用户显式动作，失败必须可感知，否则用户误以为已保存。
         if (kDebugMode) {
@@ -243,7 +284,7 @@ class ReaderAnnotationHandler {
   Future<void> delete(ReaderAnnotation annotation, BuildContext context) async {
     try {
       await dataManager.deleteAnnotation(annotation.id);
-      await load();
+      _publish(_annotations.where((a) => a.id != annotation.id).toList());
     } on Exception catch (e) {
       // 与新增/编辑同口径：删除失败必须可感知，否则批注原地留着，
       // 用户以为已经删掉，下次进来还在。
@@ -280,7 +321,23 @@ class ReaderAnnotationHandler {
           note: result.note,
           color: result.color,
         );
-        await load();
+        _publish([
+          for (final item in _annotations)
+            if (item.id == annotation.id)
+              ReaderAnnotation(
+                id: item.id,
+                readerItemId: item.readerItemId,
+                startOffset: item.startOffset,
+                endOffset: item.endOffset,
+                chapterId: item.chapterId,
+                highlightText: item.highlightText,
+                note: result.note,
+                color: result.color,
+                createdAt: item.createdAt,
+              )
+            else
+              item,
+        ]);
       } on Exception catch (e) {
         // 编辑是用户显式动作，失败必须可感知，否则用户以为清空已生效。
         if (kDebugMode) {

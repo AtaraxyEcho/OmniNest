@@ -153,9 +153,9 @@ class ApiClient {
     // 登录、注册、刷新、登出：登出本身幂等，过期令牌也必须能调通。
     RegExp(r'^/auth/(login|register|refresh|logout)(/|$)'),
     RegExp(r'^/setup(/|$)'),
-    // 分享链接：/s/{token} 与 authorize/preview/children 匿名可达；
-    // accept 需要登录身份，交给服务端按 Bearer 鉴权。
-    RegExp(r'^/s/[^/]+(/|$)'),
+    // 分享链接：仅 /s/{token} 与 authorize/preview/children 匿名可达；
+    // accept 需要登录身份，必须精确排除，否则令牌过期时不会触发刷新拦截器。
+    RegExp(r'^/s/[^/]+(/(authorize|preview|children))?/?$'),
     RegExp(r'^/public(/|$)'),
     RegExp(r'^/share(/|$)'),
     // 外部存储 OAuth 回调由浏览器从三方站点匿名回跳。

@@ -10895,6 +10895,12 @@ abstract class AppLocalizations {
   /// **'Task created: {taskId}'**
   String adminMaintenanceGeoTaskCreated(String taskId);
 
+  /// No description provided for @adminMaintenanceMotionTaskCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Motion photo rescan task created: {taskId}'**
+  String adminMaintenanceMotionTaskCreated(String taskId);
+
   /// No description provided for @adminMaintenanceGeoTaskReused.
   ///
   /// In en, this message translates to:

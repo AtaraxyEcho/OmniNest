@@ -31,6 +31,8 @@ class MusicVisualizerPreferencesNotifier
 
   @override
   Future<PortalMusicVisualizerPreferences> build() async {
+    // 依赖必须在首个 await 之前同步订阅，否则冷启动重建会漏掉会话变化。
+    final sessionFuture = ref.watch(authSessionProvider.future);
     final cached = await _loadCached();
     final local = await _loadLegacyLocal();
     if (cached != null) {
@@ -40,7 +42,7 @@ class MusicVisualizerPreferencesNotifier
       _publishedVersion = cached.version;
       state = AsyncData(cached.preferences);
     }
-    final session = await ref.watch(authSessionProvider.future);
+    final session = await sessionFuture;
     final userId = session.user?.id;
     _userId = userId;
     if (userId == null) {

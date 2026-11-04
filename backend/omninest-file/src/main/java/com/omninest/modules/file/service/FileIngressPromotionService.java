@@ -157,13 +157,16 @@ public class FileIngressPromotionService {
      * 低报大小是绕过配额预留的唯一路径，必须在晋升前核对。
      */
     private void requireActualSizeWithinDeclaration(FileIngressItem item, InspectionResult inspection) {
-        if (inspection.actualSizeBytes() < 0 || inspection.actualSizeBytes() <= item.getSizeBytes()) {
+        if (inspection.actualSizeBytes() < 0 || inspection.actualSizeBytes() == item.getSizeBytes()) {
             return;
         }
-        settleTerminalFailure(item, false, ErrorCode.FILE_UPLOAD_FAILED.name(), "实际大小超过申报大小",
-                "文件大小校验失败", "文件「" + item.getTargetName() + "」实际大小超过申报大小，已拒绝入库",
+        String reason = inspection.actualSizeBytes() > item.getSizeBytes()
+                ? "实际大小超过申报大小"
+                : "实际大小小于申报大小，上传内容不完整";
+        settleTerminalFailure(item, false, ErrorCode.FILE_UPLOAD_FAILED.name(), reason,
+                "文件大小校验失败", "文件「" + item.getTargetName() + "」" + reason + "，已拒绝入库",
                 "SECURITY_SCAN_FAILED");
-        throw new FileIngressRejectedException("实际大小超过申报大小");
+        throw new FileIngressRejectedException(reason);
     }
 
     private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
@@ -176,7 +179,6 @@ public class FileIngressPromotionService {
                 settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
                         "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成",
                         "QUOTA_WARNING");
-                removeObjectQuietly(quarantineKey(item), "清理文件晋升配额失败对象失败");
                 throw new FileIngressRejectedException("存储配额不足", exception);
             }
             if (isTerminalPromotionFailure(exception.errorCode())) {
@@ -207,14 +209,6 @@ public class FileIngressPromotionService {
 
     private PromotionOutcome copyAndPromote(
             FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
-        FileUploadSession session = item.getUploadSessionId() == null
-                ? null
-                : uploadSessionRepository.findById(item.getUploadSessionId()).orElse(null);
-        if (session != null && session.getSpaceType() == SpaceType.SHARED) {
-            // 复制对象前先做一次容量预检，避免超限时在对象存储留下无主副本；
-            // 真正的并发上限仍由 increaseUsage 的原子条件更新兜底。
-            sharedSpaceQuotaService.checkQuota(item.getSizeBytes());
-        }
         ObjectStorageKey quarantineKey = quarantineKey(item);
         ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
         // 对象复制是外部网络 I/O，必须在数据库事务之外执行；事务只承担元数据落库。
@@ -329,6 +323,10 @@ public class FileIngressPromotionService {
             String notifyMessage,
             String notificationType
     ) {
+        // 终态失败必须在事务外清理隔离桶物理对象：病毒、摘要不符、大小不符、配额不足、
+        // 目录冲突五条分支统一走这里，避免攻击者用“低报尺寸→直传大对象→校验失败退配额”
+        // 的循环在隔离桶留下无主大文件。
+        removeObjectQuietly(quarantineKey(item), "清理入库终态失败隔离对象失败");
         ingressLifecycleService.markFailed(item.getId(), rejected, errorCode, summary);
         rejectSession(item);
         notificationPublisher.notifyOrLog(
@@ -349,6 +347,11 @@ public class FileIngressPromotionService {
                 storageQuotaService.releaseReservation("UPLOAD", session.getId());
                 session.setQuotaReservationId(null);
             }
+            if (session.getSpaceType() == SpaceType.SHARED
+                    && !UploadStatus.REJECTED.getValue().equals(session.getStatus())) {
+                // 失败任务可能被重试：REJECTED 会话的预留已经释放过，二次释放会扣掉别的会话额度。
+                sharedSpaceQuotaService.releaseReservation(session.getTotalSizeBytes());
+            }
             session.setStatus(UploadStatus.REJECTED.getValue());
             uploadSessionRepository.save(session);
         });
@@ -356,10 +359,12 @@ public class FileIngressPromotionService {
 
     private void settleUploadQuota(FileUploadSession session, boolean versionUpload) {
         if (session.getSpaceType() != SpaceType.PERSONAL) {
-            // 共享空间按实际字节结算：版本上传只增加新对象字节，文件数不增加，
-            // 否则每传一个历史版本都会让 fileCount 虚增一。容量预检已在上游完成，
-            // 并发上限由 increaseUsage 的原子条件更新兜底。
-            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes(), versionUpload ? 0 : 1);
+            // 共享空间按实际字节结算：创建会话时已原子预留配额，这里把预留转为已用。
+            // 版本上传只增加新对象字节，文件数不增加，否则每传一个历史版本都会让 fileCount 虚增一。
+            sharedSpaceQuotaService.settleReservation(
+                    session.getTotalSizeBytes(),
+                    session.getTotalSizeBytes(),
+                    versionUpload ? 0 : 1);
             return;
         }
         if (session.getQuotaReservationId() == null) {

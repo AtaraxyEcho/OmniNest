@@ -52,9 +52,9 @@ public interface AuthLoginAuditRepository extends JpaRepository<AuthLoginAudit, 
               and (
                 :searchPattern = ''
                 or lower(audit.username) like :searchPattern
-                or lower(coalesce(audit.ipAddress, '')) like :searchPattern
-                or lower(coalesce(audit.deviceName, '')) like :searchPattern
-                or lower(coalesce(audit.userAgent, '')) like :searchPattern
+                or lower(audit.ipAddress) like :searchPattern
+                or lower(audit.deviceName) like :searchPattern
+                or lower(audit.userAgent) like :searchPattern
               )
             """,
             countQuery = """
@@ -64,9 +64,9 @@ public interface AuthLoginAuditRepository extends JpaRepository<AuthLoginAudit, 
                       and (
                         :searchPattern = ''
                         or lower(audit.username) like :searchPattern
-                        or lower(coalesce(audit.ipAddress, '')) like :searchPattern
-                        or lower(coalesce(audit.deviceName, '')) like :searchPattern
-                        or lower(coalesce(audit.userAgent, '')) like :searchPattern
+                        or lower(audit.ipAddress) like :searchPattern
+                        or lower(audit.deviceName) like :searchPattern
+                        or lower(audit.userAgent) like :searchPattern
                       )
                     """)
     Page<AuthLoginAudit> searchAdminAudits(

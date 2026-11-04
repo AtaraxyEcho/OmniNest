@@ -27,7 +27,8 @@ class MotionToken {
 
   /// 根据当前无障碍设置解析动画时长。
   static Duration resolve(BuildContext context, Duration duration) {
-    return MediaQuery.maybeOf(context)?.disableAnimations ?? false
+    // 只订阅 disableAnimations 的精细节点，避免窗口缩放/软键盘变化触发重建。
+    return (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
         ? Duration.zero
         : duration;
   }

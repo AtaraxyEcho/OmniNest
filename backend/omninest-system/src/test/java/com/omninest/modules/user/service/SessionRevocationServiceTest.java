@@ -74,9 +74,22 @@ class SessionRevocationServiceTest {
 
         service.invalidateAccessTokensBefore(userId, cutoff);
 
-        Mockito.verify(authUserRepository).advanceAccessCutoff(userId, cutoff);
+        Mockito.verify(writer).persistAccessCutoff(userId, cutoff);
         Mockito.verify(cache).markAccessTokenCutoff(
                 userId, cutoff, Duration.ofMinutes(30));
+    }
+
+    @Test
+    void redisFailureDoesNotRollbackDatabaseCutoff() {
+        UUID userId = UUID.randomUUID();
+        Instant cutoff = Instant.now();
+        Mockito.doThrow(new IllegalStateException("Redis down"))
+                .when(cache).markAccessTokenCutoff(userId, cutoff, Duration.ofMinutes(30));
+
+        service.invalidateAccessTokensBefore(userId, cutoff);
+
+        // 数据库列是权威兜底：Redis 写失败只能降级告警，不能让事务回滚已提交的截止时间。
+        Mockito.verify(writer).persistAccessCutoff(userId, cutoff);
     }
 
     @Test

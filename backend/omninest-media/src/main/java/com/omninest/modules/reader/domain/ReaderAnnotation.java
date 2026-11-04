@@ -42,10 +42,10 @@ public class ReaderAnnotation {
     @Column(name = "end_offset", nullable = false)
     private long endOffset;
 
-    @Column(name = "highlight_text", columnDefinition = "text")
+    @Column(name = "highlight_text", length = 4096)
     private String highlightText;
 
-    @Column(columnDefinition = "text")
+    @Column(length = 4096)
     private String note;
 
     @Column(nullable = false, length = 16)

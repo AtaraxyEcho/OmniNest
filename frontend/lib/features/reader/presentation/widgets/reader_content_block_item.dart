@@ -382,9 +382,10 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
 
   TapGestureRecognizer _recognizerFor(int startOffset, String href) {
     final key = Object.hash(widget.chapterId, startOffset, href);
-    return _recognizers.putIfAbsent(key, () {
-      return TapGestureRecognizer()..onTap = () => widget.onLinkTap?.call(href);
-    });
+    final recognizer = _recognizers.putIfAbsent(key, TapGestureRecognizer.new);
+    // 父组件重建会替换 onLinkTap 闭包，缓存命中时也必须刷新回调。
+    recognizer.onTap = () => widget.onLinkTap?.call(href);
+    return recognizer;
   }
 
   Widget _divider() {

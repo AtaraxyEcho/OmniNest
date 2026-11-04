@@ -682,12 +682,29 @@ class AuthServiceTest {
 
             assertThat(setup.secret()).isEqualTo("SECRET");
             verify(twoFactorService, times(2)).startSetup(user.getId(), "pass");
-            verify(rateLimitService, never())
-                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), anyInt(), any(Duration.class));
+            // 每次 setup 占位后立即归还：既能挡住绑定完成后的重放，又允许 setup → enable 期间重复取秘钥。
+            verify(rateLimitService, times(2))
+                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), eq(1), any(Duration.class));
+            verify(rateLimitService, times(2))
+                    .release("omninest:2fa:challenge:setup-jti");
         }
 
         @Test
-        @DisplayName("注册引导：启用失败不核销挑战令牌，成功后才核销")
+        @DisplayName("注册引导：绑定完成后的挑战令牌不得再次取秘钥")
+        void bootstrapSetupRejectsConsumedChallenge() {
+            when(rateLimitService.tryAcquire(
+                    eq("omninest:2fa:challenge:setup-jti"), eq(1), any(Duration.class)))
+                    .thenReturn(false);
+            jtiByTokenUse.put(AuthService.TOKEN_USE_TWO_FACTOR_SETUP, "setup-jti");
+
+            assertThatThrownBy(() -> service.bootstrapTwoFactorSetup("2fa-setup-token", "pass"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("已使用");
+            verify(twoFactorService, never()).startSetup(any(), anyString());
+        }
+
+        @Test
+        @DisplayName("注册引导：启用失败归还挑战占位，成功后才核销")
         void bootstrapEnableConsumesChallengeOnlyOnSuccess() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             jtiByTokenUse.put(AuthService.TOKEN_USE_TWO_FACTOR_SETUP, "setup-jti");
@@ -697,15 +714,19 @@ class AuthServiceTest {
             assertThatThrownBy(() -> service.bootstrapTwoFactorEnable("2fa-setup-token", "000000"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("两步验证码错误");
-            verify(rateLimitService, never())
-                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), anyInt(), any(Duration.class));
+            verify(rateLimitService)
+                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), eq(1), any(Duration.class));
+            verify(rateLimitService).release("omninest:2fa:challenge:setup-jti");
 
             when(twoFactorService.enable(user.getId(), "123456")).thenReturn(List.of("ABCD-2345"));
             var enableResponse = service.bootstrapTwoFactorEnable("2fa-setup-token", "123456");
 
             assertThat(enableResponse.finalizeToken()).isEqualTo("2fa-finalize-token");
-            verify(rateLimitService)
+            // 第二次调用重新占位成功且成功后不再归还，占用到期即令牌失效。
+            verify(rateLimitService, times(2))
                     .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), eq(1), any(Duration.class));
+            verify(rateLimitService, times(1))
+                    .release("omninest:2fa:challenge:setup-jti");
         }
 
         @Test

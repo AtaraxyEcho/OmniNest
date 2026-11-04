@@ -44,7 +44,7 @@ public class ReaderBookmark {
     @Column(name = "progress_percent", nullable = false)
     private BigDecimal progressPercent = BigDecimal.ZERO;
 
-    @Column(columnDefinition = "text")
+    @Column(length = 2000)
     private String note;
 
     @Column(name = "created_at", nullable = false)

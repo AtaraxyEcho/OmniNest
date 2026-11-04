@@ -32,6 +32,16 @@ class _FakeFileRepository
   /// 为 true 时不预签名分片，强制走按需取分片 URL 的路径。
   bool omitPartUrls = false;
 
+  /// 为 true 时创建直传会话（无分片、单 PUT URL）。
+  bool directSession = false;
+
+  /// 直传会话预签名 URL 的过期时刻；用于验证暂停超时后的重签。
+  DateTime? directUploadUrlExpiresAt;
+
+  /// 卡住 createUploadSession，用于在“排队但尚未拿到运行时”的窗口暂停/删除。
+  Completer<void>? createSessionGate;
+  Completer<void>? createSessionRequested;
+
   /// 卡住按需取分片 URL 的在途响应。
   Completer<String>? partUrlCompleter;
 
@@ -109,6 +119,31 @@ class _FakeFileRepository
     String? spaceType,
     String? asVersionOfFileId,
   }) async {
+    final requested = createSessionRequested;
+    if (requested != null && !requested.isCompleted) {
+      requested.complete();
+    }
+    final gate = createSessionGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    if (directSession) {
+      return FileUploadSession(
+        id: 'session-id',
+        uploadId: 'upload-123',
+        parentId: null,
+        fileName: 'small.bin',
+        sizeBytes: 6,
+        partSizeBytes: 6,
+        totalParts: 1,
+        mimeType: 'application/octet-stream',
+        status: 'CREATED',
+        uploadUrl: 'http://minio/direct-stale',
+        uploadUrlExpiresAt: directUploadUrlExpiresAt,
+        parts: const [],
+        expiresAt: null,
+      );
+    }
     return FileUploadSession(
       id: 'session-id',
       uploadId: 'upload-123',

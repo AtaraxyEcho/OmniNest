@@ -744,6 +744,11 @@ def _analyze_content_sync(contents: bytes, hint: str, skip_ocr: bool) -> Content
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 配置遗漏必须在容器启动阶段暴露：否则健康检查通过，首批 AI 任务才逐请求 503。
+    if len(SIDECAR_SECRET.strip()) < 32:
+        raise RuntimeError(
+            "OMNINEST_AI_SIDECAR_SECRET 未配置或长度不足 32 字符，拒绝启动"
+        )
     stop_event = asyncio.Event()
 
     async def _eviction_loop():

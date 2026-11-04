@@ -22,6 +22,7 @@ class ReaderViewContent extends StatefulWidget {
     required this.htmlContent,
     required this.settings,
     this.itemId,
+    this.chapterId,
     this.annotations = const [],
     this.visibleBlocks,
     this.rawBlocks,
@@ -50,6 +51,9 @@ class ReaderViewContent extends StatefulWidget {
 
   /// 书籍 ID，用于从 SQLite 加载图片字节
   final String? itemId;
+
+  /// 当前章节标识；块内链接的 recognizer 缓存键与语义上下文必须用它，不能用书籍 ID。
+  final String? chapterId;
   final List<ReaderAnnotation> annotations;
 
   /// 当前页的 block 子集（用于分页模式下的页面切片渲染）。
@@ -448,7 +452,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       block: block,
       settings: widget.settings,
       itemId: widget.itemId ?? '',
-      chapterId: widget.itemId ?? '',
+      chapterId: widget.chapterId ?? '',
       // 仅分页模式的首块可能是段落续接，避免后续块误去缩进。
       isFirstBlockContinuation: widget.isFirstBlockContinuation && index == 0,
       // 条目高度已由高度表定死时，槽位不能再被可用高度反向钳制；

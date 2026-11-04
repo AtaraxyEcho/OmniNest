@@ -142,6 +142,7 @@ class FileUploadSessionServiceTest {
                         uploadSessionRepository,
                         uploadPartRepository,
                         storageQuotaService,
+                        sharedSpaceQuotaService,
                         objectStorageClient,
                         transactionTemplate()
                 ),
@@ -175,13 +176,13 @@ class FileUploadSessionServiceTest {
                 .hasMessageContaining("无权限执行此操作");
         verify(storageQuotaService, Mockito.never()).reserve(
                 any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
-        verify(sharedSpaceQuotaService, Mockito.never()).checkQuota(anyLong());
+        verify(sharedSpaceQuotaService, Mockito.never()).reserve(anyLong());
     }
 
     @Test
     void createSessionSharedChecksSharedQuotaInsteadOfPersonalReservation() {
         Mockito.doThrow(new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足"))
-                .when(sharedSpaceQuotaService).checkQuota(20L * 1024 * 1024);
+                .when(sharedSpaceQuotaService).reserve(20L * 1024 * 1024);
 
         assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
                 null, "video.mp4", 20L * 1024 * 1024, "video/mp4", null, null, "SHARED", null
@@ -217,7 +218,7 @@ class FileUploadSessionServiceTest {
 
         assertThat(response.uploadId()).isEqualTo("upload-123");
         verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
-        verify(sharedSpaceQuotaService).checkQuota(20L * 1024 * 1024);
+        verify(sharedSpaceQuotaService).reserve(20L * 1024 * 1024);
         verify(storageQuotaService, Mockito.never()).reserve(
                 any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
     }
@@ -517,7 +518,7 @@ class FileUploadSessionServiceTest {
     void completePartPersistsExpiredStatusBeforeThrowing() {
         FileUploadSession session = session();
         session.setExpiresAt(Instant.now().minusSeconds(1));
-        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -553,12 +554,9 @@ class FileUploadSessionServiceTest {
         FileUploadPart part = part(1, "PENDING", null);
         when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
-        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
-                .thenReturn(Optional.of(session));
         when(uploadPartRepository.findByUploadSessionIdAndPartNumber(SESSION_ID, 1)).thenReturn(Optional.of(part));
-        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
-        when(uploadPartRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(uploadPartRepository.markPartCompleted(SESSION_ID, 1, "etag-1", "COMPLETED")).thenReturn(1);
+        when(uploadSessionRepository.incrementUploadedParts(eq(SESSION_ID), any(Instant.class))).thenReturn(1);
 
         var response = service.completePart(
                 OWNER_ID,
@@ -576,23 +574,22 @@ class FileUploadSessionServiceTest {
     void completePartAutoRenewalExtendsQuotaReservation() {
         FileUploadSession session = session();
         FileUploadPart part = part(1, "PENDING", null);
-        Instant originalExpiry = session.getExpiresAt();
         when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
-        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
-                .thenReturn(Optional.of(session));
         when(uploadPartRepository.findByUploadSessionIdAndPartNumber(SESSION_ID, 1)).thenReturn(Optional.of(part));
-        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
-        when(uploadPartRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(uploadPartRepository.markPartCompleted(SESSION_ID, 1, "etag-1", "COMPLETED")).thenReturn(1);
+        when(uploadSessionRepository.incrementUploadedParts(eq(SESSION_ID), any(Instant.class))).thenReturn(1);
+        when(uploadSessionRepository.extendExpiresAtIfNeeded(
+                eq(SESSION_ID), any(Instant.class), any(Instant.class), any(Instant.class))).thenReturn(1);
 
         service.completePart(OWNER_ID, "upload-123", 1, new CompleteFileUploadPartRequest(1, "\"etag-1\""));
 
         // 会话剩余时间不足 1 小时即自动延期，配额预留必须同步推后：
         // 预留先到期会被回收成 EXPIRED 并释放额度，之后的结算直接空转，这笔上传量要等对账才回到用量。
-        assertThat(session.getExpiresAt()).isAfter(originalExpiry);
+        ArgumentCaptor<Instant> newExpiry = ArgumentCaptor.forClass(Instant.class);
         verify(storageQuotaService).extendReservation(
-                eq("UPLOAD"), eq(SESSION_ID), eq(session.getExpiresAt()));
+                eq("UPLOAD"), eq(SESSION_ID), newExpiry.capture());
+        assertThat(newExpiry.getValue()).isAfter(Instant.now());
     }
 
     @Test
@@ -617,7 +614,7 @@ class FileUploadSessionServiceTest {
         assertThat(result.fileNodeId()).isNull();
         assertThat(session.getStatus()).isEqualTo("SCANNING");
         verify(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
-        verify(ingressLifecycleService).open(any());
+        verify(ingressLifecycleService).openWithinTransaction(any());
         verify(storageQuotaService).extendReservation(eq("UPLOAD"), eq(SESSION_ID), any(Instant.class));
         verify(fileNodeRepository, Mockito.never()).save(any());
         verify(objectStorageClient, Mockito.never()).copyObject(any(), any());

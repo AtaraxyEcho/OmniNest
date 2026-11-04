@@ -129,9 +129,8 @@ public class FileUploadSessionService {
             spaceType = versionTarget.getSpaceType();
         }
         if (spaceType == SpaceType.SHARED) {
-            // 共享空间上传必须具备 CAN_UPLOAD 角色能力并受共享空间容量约束
+            // 共享空间上传必须具备 CAN_UPLOAD 角色能力；容量预占放在会话落库事务内。
             sharedSpaceService.requireSharedWrite(ownerUserId);
-            sharedSpaceQuotaService.checkQuota(request.sizeBytes());
         } else {
             // 配额预检先于 multipart 初始化，避免配额不足时仍在隔离桶创建上传。
             storageQuotaService.checkQuota(ownerUserId, request.sizeBytes());
@@ -164,7 +163,7 @@ public class FileUploadSessionService {
                     targetSpaceType,
                     sessionId,
                     expiresAt,
-                    reservePersonalQuota(ownerUserId, targetSpaceType, sessionId, request.sizeBytes(), expiresAt)
+                    reserveUploadQuota(ownerUserId, targetSpaceType, sessionId, request.sizeBytes(), expiresAt)
             ));
         }
 
@@ -177,7 +176,7 @@ public class FileUploadSessionService {
         String uploadId = objectStorageClient.initiateMultipartUpload(storageKey, mimeType);
         try {
             return transactionTemplate.execute(status -> {
-                UUID quotaReservationId = reservePersonalQuota(
+                UUID quotaReservationId = reserveUploadQuota(
                         ownerUserId, targetSpaceType, sessionId, request.sizeBytes(), expiresAt);
                 FileUploadSession session = new FileUploadSession();
                 session.setId(sessionId);
@@ -209,15 +208,18 @@ public class FileUploadSessionService {
         }
     }
 
-    private UUID reservePersonalQuota(
+    private UUID reserveUploadQuota(
             UUID ownerUserId,
             SpaceType spaceType,
             UUID sessionId,
             long sizeBytes,
             Instant expiresAt) {
-        return spaceType == SpaceType.PERSONAL
-                ? storageQuotaService.reserve(ownerUserId, "UPLOAD", sessionId, sizeBytes, expiresAt)
-                : null;
+        if (spaceType == SpaceType.SHARED) {
+            // 与会话落库同事务：会话创建失败时预留随事务回滚，不会留下无主额度。
+            sharedSpaceQuotaService.reserve(sizeBytes);
+            return null;
+        }
+        return storageQuotaService.reserve(ownerUserId, "UPLOAD", sessionId, sizeBytes, expiresAt);
     }
 
     private void abortInitiatedUpload(ObjectStorageKey storageKey, String uploadId) {
@@ -280,29 +282,45 @@ public class FileUploadSessionService {
             int partNumber,
             CompleteFileUploadPartRequest request
     ) {
-        FileUploadSession session = findCompletableSession(ownerUserId, uploadId);
+        // 不锁会话行、不读全量分片：3 路并发确认原会串行，1,000 分片产生百万行读取。
+        FileUploadSession session = findSession(ownerUserId, uploadId);
+        ensureCompletable(session);
         FileUploadPart part = fileUploadPartRepository.findByUploadSessionIdAndPartNumber(session.getId(), partNumber)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片不存在"));
-        part.setETag(normalizeETag(request == null ? null : request.eTag()));
-        part.setStatus(UploadStatus.COMPLETED.getValue());
-        fileUploadPartRepository.save(part);
-
-        List<FileUploadPart> parts = fileUploadPartRepository.findByUploadSessionIdOrderByPartNumber(session.getId());
-        long completedParts = parts.stream().filter(this::isCompletedPart).count();
-        session.setUploadedParts(Math.toIntExact(completedParts));
-        if (!UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
-            session.setStatus(UploadStatus.UPLOADING.getValue());
+        String eTag = normalizeETag(request == null ? null : request.eTag());
+        int updated = fileUploadPartRepository.markPartCompleted(
+                session.getId(), partNumber, eTag, UploadStatus.COMPLETED.getValue());
+        if (updated == 0) {
+            // 并发确认同一分片时，后到的请求读到的可能是更新前的快照，必须回查当前状态。
+            part = fileUploadPartRepository.findByUploadSessionIdAndPartNumber(session.getId(), partNumber)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片不存在"));
+            if (!UploadStatus.COMPLETED.getValue().equals(part.getStatus())) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片状态异常");
+            }
         }
-        // 自动延期：当剩余时间不足 1 小时时自动延期
+        if (updated > 0) {
+            int sessionUpdated =
+                    fileUploadSessionRepository.incrementUploadedParts(session.getId(), Instant.now());
+            if (sessionUpdated == 0) {
+                // 事务回滚会一并撤销上面的分片确认，不会留下半完成状态。
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话状态已变化");
+            }
+        }
+        // 批量更新已清空持久化上下文；保留内存值仅用于构造当前分片的轻量响应。
+        part.setETag(eTag);
+        part.setStatus(UploadStatus.COMPLETED.getValue());
         Instant now = Instant.now();
         if (session.getExpiresAt().minus(Duration.ofHours(1)).isBefore(now)) {
-            session.setExpiresAt(now.plus(uploadSettings.sessionTtl()));
-            // 配额预留必须跟着会话一起延期：预留先到期会被回收成 EXPIRED 并释放额度，
-            // 之后的结算遇 EXPIRED 直接空转，这笔上传量要等对账兜底才回到用量。
-            storageQuotaService.extendReservation("UPLOAD", session.getId(), session.getExpiresAt());
+            Instant newExpiresAt = now.plus(uploadSettings.sessionTtl());
+            int extended = fileUploadSessionRepository.extendExpiresAtIfNeeded(
+                    session.getId(), now.plus(Duration.ofHours(1)), newExpiresAt, now);
+            if (extended > 0) {
+                // 配额预留必须跟着会话一起延期：预留先到期会被回收成 EXPIRED 并释放额度，
+                // 之后的结算遇 EXPIRED 直接空转，这笔上传量要等对账兜底才回到用量。
+                storageQuotaService.extendReservation("UPLOAD", session.getId(), newExpiresAt);
+            }
         }
-        fileUploadSessionRepository.save(session);
-        return toPartsDto(session, parts, false);
+        return toPartsDto(session, List.of(part), false);
     }
 
     /**
@@ -550,13 +568,24 @@ public class FileUploadSessionService {
 
     public FileUploadPartDto getPartUrl(UUID ownerUserId, String uploadId, int partNumber) {
         FileUploadSession session = findSession(ownerUserId, uploadId);
-        if (isDirectUpload(session)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "直传模式不支持分片 URL 查询");
-        }
         ensureCompletable(session);
 
         // 带宽限速：控制 presigned URL 签发频率
         checkBandwidthLimit(ownerUserId);
+        if (isDirectUpload(session)) {
+            // 直传只有一个“分片”：复用该端点重签预签名 URL，供暂停超过有效期后恢复。
+            ObjectStorageKey directKey =
+                    new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
+            Instant directExpiresAt = Instant.now().plus(uploadSettings.presignedUrlTtl());
+            return new FileUploadPartDto(
+                    1,
+                    session.getTotalSizeBytes(),
+                    UploadStatus.PENDING.getValue(),
+                    null,
+                    objectStorageClient.createUploadUrl(directKey, uploadSettings.presignedUrlTtl()).toString(),
+                    directExpiresAt
+            );
+        }
 
         FileUploadPart part = fileUploadPartRepository
                 .findByUploadSessionIdAndPartNumber(session.getId(), partNumber)
@@ -603,7 +632,8 @@ public class FileUploadSessionService {
             storageQuotaService.extendReservation("UPLOAD", session.getId(), session.getExpiresAt());
         }
         FileUploadSession saved = fileUploadSessionRepository.save(session);
-        return toSessionDto(saved, List.of(), false);
+        // 直传恢复必须重新签发预签名 URL，只延期会话无法避免 403。
+        return toSessionDto(saved, List.of(), isDirectUpload(saved));
     }
 
     private FileUploadSession findSessionForUpdate(UUID ownerUserId, String uploadId) {
@@ -615,12 +645,6 @@ public class FileUploadSessionService {
     private FileUploadSession findSession(UUID ownerUserId, String uploadId) {
         return fileUploadSessionRepository.findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "上传会话不存在"));
-    }
-
-    private FileUploadSession findCompletableSession(UUID ownerUserId, String uploadId) {
-        FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
-        ensureCompletable(session);
-        return session;
     }
 
     private FileUploadCompleteResultDto completeDirectSession(
@@ -653,16 +677,40 @@ public class FileUploadSessionService {
 
     /**
      * 直传内容是否已在对象存储就绪；非直传会话返回 true，交给分片路径自行校验。
+     *
+     * <p>预签名 PUT 不强制 Content-Length；“申报 100 字节、实传 20GB”的对象必须在
+     * 入队扫描前用 HEAD 实际字节数拦截并删除隔离对象。</p>
      */
     private boolean directObjectReady(UUID ownerUserId, String uploadId) {
         return fileUploadSessionRepository.findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
                 .filter(this::isDirectUpload)
-                .map(session -> new ObjectStorageKey(
-                        session.getTargetBucket(),
-                        session.getTargetObjectKey()
-                ))
-                .map(objectStorageClient::objectExists)
+                .map(session -> {
+                    ObjectStorageKey key = new ObjectStorageKey(
+                            session.getTargetBucket(),
+                            session.getTargetObjectKey()
+                    );
+                    long actualSize = objectStorageClient.objectSize(key);
+                    if (actualSize < 0L) {
+                        return false;
+                    }
+                    if (actualSize != session.getTotalSizeBytes()) {
+                        removeObjectQuietly(key, "清理直传大小不一致的隔离对象失败");
+                        throw new BusinessException(
+                                ErrorCode.FILE_UPLOAD_FAILED,
+                                "上传内容大小与申报不一致"
+                        );
+                    }
+                    return true;
+                })
                 .orElse(true);
+    }
+
+    private void removeObjectQuietly(ObjectStorageKey key, String message) {
+        try {
+            objectStorageClient.removeObject(key);
+        } catch (RuntimeException exception) {
+            log.warn("{}: bucket={}, errorType={}", message, key.bucket(), exception.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -984,7 +1032,7 @@ public class FileUploadSessionService {
             FileUploadSession session,
             UUID asVersionOfFileId
     ) {
-        UUID ingressId = ingressLifecycleService.open(new IngressCommand(
+        UUID ingressId = ingressLifecycleService.openWithinTransaction(new IngressCommand(
                 ownerUserId,
                 "UPLOAD",
                 null,
@@ -1047,13 +1095,16 @@ public class FileUploadSessionService {
         List<FileUploadPartDto> partDtos = toPartDtos(
                 session, parts, includeUrls, includeUrls ? INITIAL_PRESIGNED_PARTS : 0);
         String uploadUrl = null;
+        Instant uploadUrlExpiresAt = null;
         if (includeUrls && isDirectUpload(session)) {
             uploadUrl = objectStorageClient.createUploadUrl(
                     new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey()),
                     uploadSettings.presignedUrlTtl()
             ).toString();
+            uploadUrlExpiresAt = Instant.now().plus(uploadSettings.presignedUrlTtl());
         } else if (!partDtos.isEmpty()) {
             uploadUrl = partDtos.getFirst().uploadUrl();
+            uploadUrlExpiresAt = partDtos.getFirst().uploadUrlExpiresAt();
         }
         return new FileUploadSessionDto(
                 session.getId(),
@@ -1066,6 +1117,7 @@ public class FileUploadSessionService {
                 session.getMimeType(),
                 session.getStatus(),
                 uploadUrl,
+                uploadUrlExpiresAt,
                 partDtos,
                 session.getExpiresAt()
         );

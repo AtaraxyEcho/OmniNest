@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/theme/workstation_skin.dart';
 
 /// 全局统一下拉选项描述。
@@ -199,7 +200,10 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                                 : widget.suffixText,
                         suffixIcon: AnimatedRotation(
                           turns: isOpen ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 150),
+                          duration: MotionToken.reduced(
+                            context,
+                            MotionToken.fast,
+                          ),
                           child: Icon(
                             Icons.keyboard_arrow_down_rounded,
                             size: 20,

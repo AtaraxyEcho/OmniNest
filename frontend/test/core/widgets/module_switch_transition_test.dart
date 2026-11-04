@@ -30,8 +30,9 @@ void main() {
     expect(find.text('module-content'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    final settledOpacity = tester.widget<Opacity>(find.byType(Opacity));
-    expect(settledOpacity.opacity, 1);
+    // 静止态直接返回子树，不再常驻 Opacity + Transform 合成层。
+    expect(find.byType(Opacity), findsNothing);
+    expect(find.text('module-content'), findsOneWidget);
   });
 
   testWidgets('关闭动画时模块内容直接显示', (tester) async {

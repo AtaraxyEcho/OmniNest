@@ -78,6 +78,7 @@ class FileUploadSession {
     required this.uploadUrl,
     required this.parts,
     required this.expiresAt,
+    this.uploadUrlExpiresAt,
   });
 
   final String id;
@@ -90,6 +91,9 @@ class FileUploadSession {
   final String mimeType;
   final String status;
   final String? uploadUrl;
+
+  /// 直传预签名 URL 的过期时刻；暂停超过该时刻后恢复必须重新签发。
+  final DateTime? uploadUrlExpiresAt;
   final List<FileUploadPart> parts;
   final DateTime? expiresAt;
 

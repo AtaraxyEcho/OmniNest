@@ -9,6 +9,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_saver.dart';
@@ -300,9 +301,10 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       );
     } on Exception catch (error) {
       if (!mounted) return;
+      final reason = describeUserFacingError(error, l10n: l10n).displayMessage;
       showOmniFeedback(
         context,
-        '${l10n.filesDownloadFailed}: $error',
+        '${l10n.filesDownloadFailed}: $reason',
         severity: OmniFeedbackSeverity.error,
       );
     }

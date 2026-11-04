@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 
+part 'reader_sync_queue_payload.dart';
 part 'reader_sync_queue_replacements.dart';
 
 /// 阅读器离线同步队列
@@ -505,46 +506,6 @@ class ReaderSyncQueue {
     await _supersedePendingProgress(itemId, reportedAt: reportedAt);
   }
 
-  /// 序列化队列载荷。
-  ///
-  /// 笔记/批注的标题、正文与摘录属于敏感内容，SQLite 本身不加密且失败行会长期
-  /// 保留，因此落库前用列加密器加密；敏感操作在缺少加密器或用户绑定时由
-  /// [_enqueue] 直接拒绝，不再退化为明文。
-  static Future<String> _serializePayload(Map<String, dynamic> data) async {
-    final encoded = jsonEncode(data);
-    final cipher = _textCipher;
-    final userId = _userId;
-    if (cipher == null || userId == null || userId.isEmpty) {
-      return encoded;
-    }
-    return cipher.encrypt(userId, encoded);
-  }
-
-  /// 反序列化队列载荷；密文无法解开时回退明文（兼容升级前已落库的行），
-  /// 仍无法解析则返回 null，由调用方按原语义处理。
-  static Future<Map<String, dynamic>?> _decodePayload(
-    SyncOperation operation,
-  ) async {
-    final cipher = _textCipher;
-    final userId = _userId;
-    final stored = operation.payload;
-    if (cipher != null && userId != null && userId.isNotEmpty) {
-      try {
-        final plain = await cipher.decrypt(userId, stored);
-        return jsonDecode(plain) as Map<String, dynamic>;
-      } catch (_) {
-        // 旧版本可能以明文写入；继续尝试明文解析，不能把历史行直接判坏。
-      }
-    }
-    try {
-      return jsonDecode(stored) as Map<String, dynamic>;
-    } on FormatException {
-      return null;
-    } on TypeError {
-      return null;
-    }
-  }
-
   // ── 待同步删改查询 ──
 
   /// 队列中尚未同步成功的删改目标，供远端拉取合并时兜底。
@@ -650,6 +611,14 @@ class ReaderSyncQueue {
         } else {
           await _markFailed(current);
         }
+      } on _UnrecoverableSyncPayload {
+        // 密钥轮换后的陈旧密文与网络失败不同：重试永远不会成功。保留有限次
+        // 重试供密钥暂时不可用的情况恢复，耗尽后清理，避免队列永久死锁。
+        if (current.retryCount + 1 >= maxOperationRetries) {
+          await _deleteOwnedOperations([current.id]);
+        } else {
+          await _markFailed(current);
+        }
       } on FormatException {
         await _markFailed(current);
       } on TypeError {
@@ -698,8 +667,8 @@ class ReaderSyncQueue {
   static Future<void> _dispatch(ReaderApi api, SyncOperation op) async {
     final payload = await _decodePayload(op);
     if (payload == null) {
-      // 载荷损坏或无法解密：与旧实现一致走失败分支，不做任何远端写入。
-      throw const FormatException('同步载荷不可解析');
+      // 载荷损坏或无法解密：不写远端，交由刷新循环按不可恢复项收敛。
+      throw const _UnrecoverableSyncPayload();
     }
 
     switch (op.type) {

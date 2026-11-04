@@ -86,6 +86,9 @@ server {
         # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
         # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
         client_max_body_size 2g;
+        # add_header 在 location 级不继承 server 级；这里一旦新增任何响应头，
+        # server 级 HSTS 会整体丢失，因此本 location 显式自声明。
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;

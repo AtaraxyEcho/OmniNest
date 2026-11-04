@@ -187,6 +187,32 @@ public interface PhotoItemTrashQueries {
             @Param("updatedAt") Instant updatedAt);
 
     /**
+     * 按相同地名批量写入位置，仅更新仍无 city 的照片。
+     *
+     * <p>回填批次内的照片往往集中在少数城市，逐张 UPDATE 会产生上千次数据库往返；
+     * 按地名分组后一批只需十余条语句。</p>
+     *
+     * @param photoIds 照片 ID 列表
+     * @param gpsLocation 位置地名 JSON
+     * @param updatedAt 更新时间
+     * @return 实际更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE omni.photo_items
+               SET gps_location = CAST(:gpsLocation AS jsonb),
+                   updated_at = :updatedAt,
+                   version = version + 1
+             WHERE id IN (:photoIds)
+               AND deleted_at IS NULL
+               AND (gps_location IS NULL OR NOT jsonb_exists(gps_location, 'city'))
+            """, nativeQuery = true)
+    int updateGeocodeLocationBatchIfAbsent(
+            @Param("photoIds") List<UUID> photoIds,
+            @Param("gpsLocation") String gpsLocation,
+            @Param("updatedAt") Instant updatedAt);
+
+    /**
      * 查询存在过期回收站照片的用户标识。
      *
      * @param cutoff 截止时间
