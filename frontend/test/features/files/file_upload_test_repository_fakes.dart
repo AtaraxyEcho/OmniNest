@@ -19,6 +19,8 @@ class _FakeFileRepository
   final completedPartNumbers = <int>[];
   final completedSessions = <String>[];
   final cancelledUploadSessions = <String>[];
+  final createdSessionParentIds = <String?>[];
+  final createdSessionSpaceTypes = <String?>[];
   final deletedFileIds = <String>[];
   final deletedSharedFileIds = <String>[];
   final createdSharedFolderNames = <String>[];
@@ -119,6 +121,8 @@ class _FakeFileRepository
     String? spaceType,
     String? asVersionOfFileId,
   }) async {
+    createdSessionParentIds.add(parentId);
+    createdSessionSpaceTypes.add(spaceType);
     final requested = createSessionRequested;
     if (requested != null && !requested.isCompleted) {
       requested.complete();

@@ -2231,11 +2231,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesRebindUploadRestart => '重新上传';
 
   @override
-  String get filesRebindUploadExpired => '原上传会话已过期或已失败，无法续传。所选文件会作为新上传提交到当前目录。';
+  String get filesRebindUploadExpired =>
+      '原上传会话已过期或已失败，无法续传。所选文件会按原任务的位置重新上传，旧会话同时释放。';
 
   @override
   String get filesRebindUploadRestartMismatch =>
-      '所选文件的名称或大小与原任务不一致，仍要把它作为新上传提交到当前目录？';
+      '所选文件的名称或大小与原任务不一致，仍要按原任务的位置重新上传？';
 
   @override
   String get filesDeleteTask => '删除任务';

@@ -39,7 +39,7 @@ public class ReaderItem {
     @Column(name = "content_hash", length = 64)
     private String contentHash;
 
-    @Column(name = "item_type", nullable = false, length = 50)
+    @Column(name = "item_type", nullable = false, length = 16)
     private String itemType;
 
     /** 内容类型：TEXT（书籍）或 COMIC（漫画） */

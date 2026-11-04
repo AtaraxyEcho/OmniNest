@@ -4318,13 +4318,13 @@ abstract class AppLocalizations {
   /// No description provided for @filesRebindUploadExpired.
   ///
   /// In en, this message translates to:
-  /// **'This upload session has expired or failed and can\'t be resumed. The selected file will be submitted as a new upload to the current folder.'**
+  /// **'This upload session has expired or failed and can\'t be resumed. The selected file will be uploaded again to the original location, and the old session will be released.'**
   String get filesRebindUploadExpired;
 
   /// No description provided for @filesRebindUploadRestartMismatch.
   ///
   /// In en, this message translates to:
-  /// **'The selected file\'s name or size differs from the original task. Submit it as a new upload to the current folder?'**
+  /// **'The selected file\'s name or size differs from the original task. Upload it again to the original location?'**
   String get filesRebindUploadRestartMismatch;
 
   /// No description provided for @filesDeleteTask.

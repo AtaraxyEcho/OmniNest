@@ -222,6 +222,37 @@ void main() {
     expect(repository.completedSessions, ['upload-123']);
   });
 
+  test('按原会话位置重新提交：target 覆盖当前浏览目录', () async {
+    final repository = _FakeFileRepository()..directSession = true;
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final uploadFuture = controller.uploadFiles(
+      [
+        XFile.fromData(
+          Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+          path: 'small.bin',
+          name: 'small.bin',
+          mimeType: 'application/octet-stream',
+        ),
+      ],
+      target: const UploadTarget(
+        parentId: 'folder-origin',
+        spaceType: 'SHARED',
+      ),
+    );
+    await repository.firstUploadStarted.future;
+    repository.firstUploadResult.complete('etag-direct');
+    await uploadFuture;
+
+    expect(repository.createdSessionParentIds, ['folder-origin']);
+    expect(repository.createdSessionSpaceTypes, ['SHARED']);
+  });
+
   test('服务端分片会话按原文件续传：校验通过的分片跳过', () async {
     final repository = _FakeFileRepository();
     final api = _MockFileApi();

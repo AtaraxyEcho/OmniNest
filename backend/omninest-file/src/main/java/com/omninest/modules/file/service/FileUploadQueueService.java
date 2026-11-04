@@ -57,6 +57,7 @@ public class FileUploadQueueService {
                 session.getTotalParts(),
                 session.getUploadedParts(),
                 session.getStatus(),
+                session.getSpaceType().getValue(),
                 session.getExpiresAt(),
                 session.getUpdatedAt()
         );

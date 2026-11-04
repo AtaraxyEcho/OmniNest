@@ -344,6 +344,7 @@ class FileApiResponseParser {
       totalParts: asInt(json['totalParts']),
       uploadedParts: asInt(json['uploadedParts']),
       status: json['status']?.toString() ?? 'CREATED',
+      spaceType: json['spaceType']?.toString(),
       expiresAt:
           DateTime.tryParse(json['expiresAt']?.toString() ?? '')?.toLocal(),
       updatedAt:

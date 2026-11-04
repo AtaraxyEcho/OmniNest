@@ -100,7 +100,12 @@ extension FileBrowserUploadRuntime on FileBrowserController {
     });
   }
 
-  Future<FileUploadBatchResult> uploadFiles(List<XFile> files) async {
+  /// [target] 让不在当前目录发起的入口（例如按原会话位置重新提交）指定落点；
+  /// 省略时取当前浏览快照。
+  Future<FileUploadBatchResult> uploadFiles(
+    List<XFile> files, {
+    UploadTarget? target,
+  }) async {
     if (files.isEmpty) {
       return const FileUploadBatchResult(
         total: 0,
@@ -112,7 +117,7 @@ extension FileBrowserUploadRuntime on FileBrowserController {
     }
     clearActionError();
     // 整批共用一个目标快照：上传进行中切换目录/空间不能改动排队文件的落点。
-    final target = UploadTarget.of(_currentState);
+    final uploadTarget = target ?? UploadTarget.of(_currentState);
     var completed = 0;
     var conflicts = 0;
     var failed = 0;
@@ -133,7 +138,7 @@ extension FileBrowserUploadRuntime on FileBrowserController {
             file: file,
             fileName: fileName,
             sizeBytes: sizeBytes,
-            target: target,
+            target: uploadTarget,
           ),
         );
         _upsertLocalUploadTask(

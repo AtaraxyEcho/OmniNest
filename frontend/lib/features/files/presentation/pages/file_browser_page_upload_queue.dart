@@ -379,7 +379,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
     );
   }
 
-  /// 会话已过期或已失败：无法续传，用重新选择的文件按当前目录开一次新上传。
+  /// 会话已过期或已失败：无法续传，用重新选择的文件按原任务的位置开一次新上传。
   Future<void> _pickAndRestartStaleUpload(
     BuildContext context,
     FileUploadQueueItem item,
@@ -407,8 +407,20 @@ class _UploadQueueWorkspace extends ConsumerWidget {
     if (!confirmed || !context.mounted) {
       return;
     }
-    await _uploadFiles(context, controller, [picked]);
+    final target = _uploadTargetOf(item);
+    await _uploadFiles(context, controller, [picked], target: target);
+    // 新上传已提交，原会话不必再占着队列：取消失败由控制器错误条回显，
+    // 过期回收仍是有界兜底。
+    await controller.deleteServerUploadSession(item);
   }
+}
+
+/// 重新提交的落点：沿用原会话的目录与空间，而不是用户此刻浏览的目录。
+UploadTarget _uploadTargetOf(FileUploadQueueItem item) {
+  return UploadTarget(
+    parentId: item.parentId,
+    spaceType: item.spaceType?.toUpperCase() == 'SHARED' ? 'SHARED' : null,
+  );
 }
 
 /// 服务端会话是否已无法续传：状态终局，或状态未及更新但到期时间已过。

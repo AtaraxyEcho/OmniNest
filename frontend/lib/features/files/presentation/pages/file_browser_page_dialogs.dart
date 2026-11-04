@@ -421,11 +421,12 @@ Future<void> _pickAndUploadFiles(
 Future<void> _uploadFiles(
   BuildContext context,
   FileBrowserController controller,
-  List<XFile> files,
-) async {
+  List<XFile> files, {
+  UploadTarget? target,
+}) async {
   final l10n = AppLocalizations.of(context);
   await _runFileAction(context, () async {
-    final result = await controller.uploadFiles(files);
+    final result = await controller.uploadFiles(files, target: target);
     if (!context.mounted) {
       return;
     }

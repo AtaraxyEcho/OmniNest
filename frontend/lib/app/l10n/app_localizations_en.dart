@@ -2314,11 +2314,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesRebindUploadExpired =>
-      'This upload session has expired or failed and can\'t be resumed. The selected file will be submitted as a new upload to the current folder.';
+      'This upload session has expired or failed and can\'t be resumed. The selected file will be uploaded again to the original location, and the old session will be released.';
 
   @override
   String get filesRebindUploadRestartMismatch =>
-      'The selected file\'s name or size differs from the original task. Submit it as a new upload to the current folder?';
+      'The selected file\'s name or size differs from the original task. Upload it again to the original location?';
 
   @override
   String get filesDeleteTask => 'Delete Task';

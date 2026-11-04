@@ -241,6 +241,7 @@ class FileUploadQueueItem {
     required this.uploadedParts,
     required this.status,
     this.parentId,
+    this.spaceType,
     this.expiresAt,
     this.updatedAt,
   });
@@ -254,6 +255,9 @@ class FileUploadQueueItem {
   final int totalParts;
   final int uploadedParts;
   final String status;
+
+  /// 会话所属空间：`SHARED` 为共享空间，其余按个人空间处理。
+  final String? spaceType;
   final DateTime? expiresAt;
   final DateTime? updatedAt;
 

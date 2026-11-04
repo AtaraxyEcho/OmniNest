@@ -15,6 +15,7 @@ public record FileUploadQueueItemDto(
         @Schema(description = "总分片数", example = "3") int totalParts,
         @Schema(description = "已上传分片数", example = "2") int uploadedParts,
         @Schema(description = "会话状态", example = "UPLOADING") String status,
+        @Schema(description = "空间类型", example = "SHARED") String spaceType,
         @Schema(description = "会话过期时间") Instant expiresAt,
         @Schema(description = "更新时间") Instant updatedAt
 ) {

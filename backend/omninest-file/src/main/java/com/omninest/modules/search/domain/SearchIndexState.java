@@ -40,7 +40,7 @@ public class SearchIndexState {
     @Column(name = "analyzer_name", length = 80)
     private String analyzerName;
 
-    @Column(name = "dictionary_version")
+    @Column(name = "dictionary_version", length = 80)
     private String dictionaryVersion;
 
     @Column(length = 32)
