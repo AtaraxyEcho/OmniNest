@@ -104,6 +104,48 @@ void main() {
     );
   });
 
+  test('选区占用按键时页面命令让位，数字键不与排版命令冲突', () {
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.keyN,
+        mode: ReaderShortcutMode.textScroll,
+      ),
+      ReaderCommand.openAnnotations,
+    );
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.keyN,
+        mode: ReaderShortcutMode.textScroll,
+        selectionActionsActive: true,
+      ),
+      isNull,
+      reason: 'N 已用于取消重叠高亮，不得同时打开批注面板',
+    );
+    const colorKeys = <LogicalKeyboardKey>[
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+    ];
+    for (final mode in ReaderShortcutMode.values) {
+      for (final key in colorKeys) {
+        expect(
+          resolver.resolve(key: key, mode: mode),
+          isNull,
+          reason: '${key.keyLabel} 在无选区时也必须保持未绑定',
+        );
+      }
+    }
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.digit0,
+        mode: ReaderShortcutMode.textScroll,
+      ),
+      ReaderCommand.resetTypography,
+    );
+  });
+
   test('command gate rejects repeated discrete commands', () {
     final gate = ReaderCommandGate();
     final start = DateTime(2026, 7, 30, 12);

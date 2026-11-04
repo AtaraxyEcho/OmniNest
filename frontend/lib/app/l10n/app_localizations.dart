@@ -4309,6 +4309,24 @@ abstract class AppLocalizations {
   /// **'The selected file size does not match the upload session.'**
   String get filesRebindUploadSizeMismatch;
 
+  /// No description provided for @filesRebindUploadRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload again'**
+  String get filesRebindUploadRestart;
+
+  /// No description provided for @filesRebindUploadExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This upload session has expired or failed and can\'t be resumed. The selected file will be submitted as a new upload to the current folder.'**
+  String get filesRebindUploadExpired;
+
+  /// No description provided for @filesRebindUploadRestartMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file\'s name or size differs from the original task. Submit it as a new upload to the current folder?'**
+  String get filesRebindUploadRestartMismatch;
+
   /// No description provided for @filesDeleteTask.
   ///
   /// In en, this message translates to:
@@ -11752,6 +11770,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open annotations and notes'**
   String get readerShortcutAnnotations;
+
+  /// No description provided for @readerShortcutSelectionHighlight.
+  ///
+  /// In en, this message translates to:
+  /// **'While text is selected: 1-5 sets the highlight color, N removes an overlapping highlight'**
+  String get readerShortcutSelectionHighlight;
 
   /// No description provided for @readerShortcutImmersive.
   ///

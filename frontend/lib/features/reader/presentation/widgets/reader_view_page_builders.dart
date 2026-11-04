@@ -24,6 +24,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_pagination_
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_return_to_progress_control.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
@@ -100,6 +101,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool get isSwitchingChapter;
   bool get isLoadingChapter;
   bool get selectionActive;
+  void registerReaderSelectionKeyActions(ReaderSelectionKeyActions? actions);
   ReaderChapterLoadCoordinator get chapterLoadCoordinator;
   ReaderPageLocator get pageLocator;
   dynamic get annotationHandler;

@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/features/reader/domain/reader_highlight_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
@@ -16,6 +17,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_blo
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_color_toolbar.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 class ReaderViewContent extends StatefulWidget {
@@ -44,6 +46,7 @@ class ReaderViewContent extends StatefulWidget {
     this.onRemoveHighlight,
     this.onRemoveAnnotation,
     this.onSelectionActive,
+    this.onRegisterSelectionKeyActions,
     this.onTap,
     this.onRegisterClearSelection,
     super.key,
@@ -135,6 +138,10 @@ class ReaderViewContent extends StatefulWidget {
   /// 注册清除选中函数（子组件初始化时注册，父组件可调用）
   final void Function(VoidCallback fn)? onRegisterClearSelection;
 
+  /// 注册/清除选区键盘动作（1–5 选色、N 取消高亮），由页面按键处理器分发。
+  final void Function(ReaderSelectionKeyActions? actions)?
+  onRegisterSelectionKeyActions;
+
   /// 行内代码相对正文的字号倍率。
   static const double codeFontScale = 0.9;
 
@@ -199,7 +206,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   /// 选区语料缓存：拖动选区会反复解析同一批块，块身份不变就不必重建整章文本与偏移表。
   List<ContentBlock>? _selectionCorpusBlocks;
   ChapterSearchCorpus? _selectionCorpus;
-  List<int> _paragraphIndices = [];
   int _parseGeneration = 0;
   bool _isLoading = true;
   late final FocusNode _selectionFocusNode;
@@ -243,7 +249,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     } else if (oldWidget.htmlContent != widget.htmlContent) {
       _isLoading = true;
       _blocks = [];
-      _paragraphIndices = [];
       if (widget.rawBlocks != null && widget.rawBlocks!.isNotEmpty) {
         _applyRawBlocks(notify: false);
       } else {
@@ -257,6 +262,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
 
   @override
   void dispose() {
+    _clearSelectionKeyActions();
     _selectionFocusNode.dispose();
     super.dispose();
   }
@@ -276,15 +282,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       _rawBlocks = result;
       _blocks = _applyAnnotations(result);
       _isLoading = false;
-      _paragraphIndices = [];
-      var pIndex = 0;
-      for (final block in _blocks) {
-        if (block is ParagraphBlock) {
-          _paragraphIndices.add(pIndex++);
-        } else {
-          _paragraphIndices.add(-1);
-        }
-      }
     });
   }
 
@@ -295,15 +292,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     void apply() {
       _blocks = _applyAnnotations(visible);
       _isLoading = false;
-      _paragraphIndices = [];
-      var pIndex = 0;
-      for (final block in _blocks) {
-        if (block is ParagraphBlock) {
-          _paragraphIndices.add(pIndex++);
-        } else {
-          _paragraphIndices.add(-1);
-        }
-      }
     }
 
     if (notify) {
@@ -320,15 +308,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     void apply() {
       _blocks = _applyAnnotations(raw);
       _isLoading = false;
-      _paragraphIndices = [];
-      var pIndex = 0;
-      for (final block in _blocks) {
-        if (block is ParagraphBlock) {
-          _paragraphIndices.add(pIndex++);
-        } else {
-          _paragraphIndices.add(-1);
-        }
-      }
     }
 
     if (notify) {
@@ -480,12 +459,18 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
 
   void clearSelection() {
     _selectedText = '';
+    _clearSelectionKeyActions();
     if (!_selectionFocusNode.hasFocus) {
       widget.onSelectionActive?.call(false);
       return;
     }
     _selectionFocusNode.unfocus();
     widget.onSelectionActive?.call(false);
+  }
+
+  /// 选区结束即撤下键盘动作，避免页面按键命中已失效的选区闭包。
+  void _clearSelectionKeyActions() {
+    widget.onRegisterSelectionKeyActions?.call(null);
   }
 
   void _handleSelectionChanged(SelectedContent? selection) {
@@ -498,6 +483,9 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       setState(() => _selectedText = selectedText);
     } else {
       _selectedText = selectedText;
+    }
+    if (selectedText.isEmpty) {
+      _clearSelectionKeyActions();
     }
     widget.onSelectionActive?.call(selectedText.isNotEmpty);
   }
@@ -517,6 +505,14 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                 )
                 .toList();
     final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
+    void removeOverlappingHighlights() {
+      selectableRegionState.hideToolbar();
+      selectableRegionState.clearSelection();
+      for (final annotation in overlappingHighlights) {
+        widget.onRemoveHighlight?.call(annotation);
+      }
+    }
+
     readerDebugLog(
       '[reader-selection][menu] '
       'mode=${widget.visibleBlocks != null ? 'page' : 'scroll'} '
@@ -545,13 +541,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
               overlappingHighlights.any((a) => (a.note ?? '').isNotEmpty)
                   ? AppLocalizations.of(context).readerRemoveAnnotation
                   : AppLocalizations.of(context).readerRemoveHighlight,
-          onPressed: () {
-            selectableRegionState.hideToolbar();
-            selectableRegionState.clearSelection();
-            for (final annotation in overlappingHighlights) {
-              widget.onRemoveHighlight?.call(annotation);
-            }
-          },
+          onPressed: removeOverlappingHighlights,
         ),
       if (range != null && widget.onAnnotate != null)
         ContextMenuButtonItem(
@@ -569,6 +559,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
         (widget.onHighlightColor != null ||
             (hasHighlightOverlap && widget.onUpdateAnnotationColor != null));
     if (!colorPickerEnabled) {
+      widget.onRegisterSelectionKeyActions?.call(null);
       return AdaptiveTextSelectionToolbar.buttonItems(
         anchors: selectableRegionState.contextMenuAnchors,
         buttonItems: items,
@@ -585,9 +576,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       selectableRegionState.clearSelection();
       if (hasHighlightOverlap) {
         if (colorHex.toUpperCase() == selectedColor) {
-          for (final annotation in overlappingHighlights) {
-            widget.onRemoveHighlight?.call(annotation);
-          }
+          removeOverlappingHighlights();
         } else {
           for (final annotation in overlappingHighlights) {
             widget.onUpdateAnnotationColor?.call(annotation, colorHex);
@@ -603,6 +592,16 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       );
     }
 
+    widget.onRegisterSelectionKeyActions?.call(
+      ReaderSelectionKeyActions(
+        colors: ReaderHighlightPalette.colors,
+        applyColor: selectColor,
+        removeHighlight:
+            hasHighlightOverlap && widget.onRemoveHighlight != null
+                ? removeOverlappingHighlights
+                : null,
+      ),
+    );
     return ReaderSelectionColorToolbar(
       anchors: selectableRegionState.contextMenuAnchors,
       selectedColor: selectedColor,

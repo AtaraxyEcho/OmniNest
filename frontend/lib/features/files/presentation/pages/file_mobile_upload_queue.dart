@@ -19,6 +19,7 @@ class _HostedUploadQueue extends StatelessWidget {
     this.onRemoveLocal,
     this.onCancelServer,
     this.onRebindServer,
+    this.onRestartServer,
   });
 
   final AppLocalizations l10n;
@@ -33,6 +34,7 @@ class _HostedUploadQueue extends StatelessWidget {
   final Future<void> Function(FileUploadClientTask task)? onRemoveLocal;
   final Future<void> Function(FileUploadQueueItem item)? onCancelServer;
   final Future<void> Function(FileUploadQueueItem item)? onRebindServer;
+  final Future<void> Function(FileUploadQueueItem item)? onRestartServer;
 
   static MobileStatusTone _toneOf(String status) {
     return switch (status.toUpperCase()) {
@@ -125,14 +127,22 @@ class _HostedUploadQueue extends StatelessWidget {
 
   Widget? _serverActions(BuildContext context, FileUploadQueueItem item) {
     final status = item.status.toUpperCase();
+    final isStale = _isUploadSessionStale(item);
     final actions = <Widget>[
       if (item.totalParts > 1 &&
+          !isStale &&
           (status == 'CREATED' || status == 'UPLOADING') &&
           onRebindServer != null)
         MobileTransferAction(
           icon: Icons.file_open_outlined,
           tooltip: l10n.filesRebindUpload,
           onTap: busy ? null : () => onRebindServer!(item),
+        ),
+      if (isStale && onRestartServer != null)
+        MobileTransferAction(
+          icon: Icons.upload_file_outlined,
+          tooltip: l10n.filesRebindUploadRestart,
+          onTap: busy ? null : () => onRestartServer!(item),
         ),
       if (!FileBrowserState.isTerminalUploadStatus(item.status) &&
           onCancelServer != null)

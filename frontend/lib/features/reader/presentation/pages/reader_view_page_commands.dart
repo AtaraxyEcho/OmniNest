@@ -12,6 +12,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    // 选区键盘动作优先于页面命令：正文里有有效选区时，1–5 与 N 归选区工具栏。
+    final selectionActions = _selectionKeyActions;
+    if (runReaderSelectionKeyShortcut(event.logicalKey, selectionActions)) {
+      return KeyEventResult.handled;
+    }
     final hardware = HardwareKeyboard.instance;
     final focusContext = FocusManager.instance.primaryFocus?.context;
     final inputFocused =
@@ -26,6 +31,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       shiftPressed: hardware.isShiftPressed,
       controlPressed: hardware.isControlPressed || hardware.isMetaPressed,
       textInputFocused: inputFocused,
+      selectionActionsActive: selectionActions != null,
     );
     if (command == null) {
       return KeyEventResult.ignored;

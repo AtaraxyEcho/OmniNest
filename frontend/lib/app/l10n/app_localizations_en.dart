@@ -2310,6 +2310,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'The selected file size does not match the upload session.';
 
   @override
+  String get filesRebindUploadRestart => 'Upload again';
+
+  @override
+  String get filesRebindUploadExpired =>
+      'This upload session has expired or failed and can\'t be resumed. The selected file will be submitted as a new upload to the current folder.';
+
+  @override
+  String get filesRebindUploadRestartMismatch =>
+      'The selected file\'s name or size differs from the original task. Submit it as a new upload to the current folder?';
+
+  @override
   String get filesDeleteTask => 'Delete Task';
 
   @override
@@ -6403,6 +6414,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerShortcutAnnotations => 'Open annotations and notes';
+
+  @override
+  String get readerShortcutSelectionHighlight =>
+      'While text is selected: 1-5 sets the highlight color, N removes an overlapping highlight';
 
   @override
   String get readerShortcutImmersive => 'Toggle immersive mode';

@@ -45,8 +45,9 @@ FileUploadQueueItem _item(
   String id,
   String name,
   int uploadedParts,
-  String status,
-) {
+  String status, {
+  DateTime? expiresAt,
+}) {
   return FileUploadQueueItem(
     id: id,
     uploadId: 'upload-$id',
@@ -56,6 +57,7 @@ FileUploadQueueItem _item(
     totalParts: 100,
     uploadedParts: uploadedParts,
     status: status,
+    expiresAt: expiresAt,
   );
 }
 
@@ -168,6 +170,32 @@ void main() {
 
     expect(find.byTooltip('选择原文件续传'), findsOneWidget);
     expect(find.byTooltip('取消'), findsOneWidget);
+  });
+
+  testWidgets('已过期与已失败的会话改为重新上传入口，不再提供续传', (tester) async {
+    await _pumpToQueue(tester, [
+      _item('u1', 'spring-raw.mov', 68, 'EXPIRED'),
+      _item('u2', 'golden-hour.zip', 12, 'FAILED'),
+    ]);
+
+    expect(find.byTooltip('选择原文件续传'), findsNothing);
+    expect(find.byTooltip('重新上传'), findsNWidgets(2));
+  });
+
+  testWidgets('到期时间已过的未完成会话改为重新上传入口', (tester) async {
+    await _pumpToQueue(tester, [
+      _item(
+        'u1',
+        'spring-raw.mov',
+        68,
+        'UPLOADING',
+        expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+      ),
+      _item('u2', 'golden-hour.zip', 12, 'UPLOADING'),
+    ]);
+
+    expect(find.byTooltip('选择原文件续传'), findsOneWidget);
+    expect(find.byTooltip('重新上传'), findsOneWidget);
   });
 
   testWidgets('队列页翻页动作请求下一页', (tester) async {

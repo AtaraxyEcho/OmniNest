@@ -43,6 +43,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_panel_coord
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_side_tap_zone.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_builders.dart';
@@ -208,6 +209,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _bookmarkBusy = false;
   bool _bookshelfBusy = false;
   bool _selectionActive = false;
+  // 选区键盘动作槽：正文在有有效选区时写入，_handleReaderKeyEvent 先于
+  // ReaderShortcutResolver 分发；普通字段，不参与 build 重建。
+  ReaderSelectionKeyActions? _selectionKeyActions;
   bool _exitRequested = false;
   ParsedBook? _parsedBookSnapshot;
   // 章节列表缓存：parsedBook 身份不变时复用，避免每次 build O(章节) 重分配。
@@ -543,6 +547,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   @override
   void onReaderSelectionActive(bool active) {
+    if (!active) {
+      _selectionKeyActions = null;
+    }
     if (_selectionActive == active || !mounted) {
       return;
     }
@@ -553,9 +560,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool get selectionActive => _selectionActive;
 
   @override
+  void registerReaderSelectionKeyActions(ReaderSelectionKeyActions? actions) {
+    _selectionKeyActions = actions;
+  }
+
+  @override
   void clearReaderSelection() {
     FocusManager.instance.primaryFocus?.unfocus();
     _selectionActive = false;
+    _selectionKeyActions = null;
   }
 
   late ReaderProgressSyncService _progressSync;

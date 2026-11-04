@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/features/reader/domain/reader_highlight_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -42,6 +45,10 @@ void main() {
       List<ReaderAnnotation> annotations = const [],
       void Function(String, int, int)? onHighlight,
       void Function(String, int, int)? onAnnotate,
+      void Function(String text, int start, int end, String colorHex)?
+      onHighlightColor,
+      void Function(ReaderSelectionKeyActions? actions)?
+      onRegisterSelectionKeyActions,
       void Function(VoidCallback)? onRegisterClearSelection,
       VoidCallback? onTap,
     }) {
@@ -61,6 +68,8 @@ void main() {
               annotations: annotations,
               onHighlight: onHighlight,
               onAnnotate: onAnnotate,
+              onHighlightColor: onHighlightColor,
+              onRegisterSelectionKeyActions: onRegisterSelectionKeyActions,
               onRegisterClearSelection: onRegisterClearSelection,
               onTap: onTap,
             ),
@@ -176,6 +185,36 @@ void main() {
       expect(highlightedText != null && highlightedText!.isNotEmpty, true);
       expect(highlightedStart != null, true);
       expect(highlightedEnd! > highlightedStart!, true);
+    });
+
+    testWidgets('选区存在期间注册 1–5 键盘选色动作，应用后随选区一起撤下', (tester) async {
+      ReaderSelectionKeyActions? registered;
+      final applied = <String>[];
+      await tester.pumpWidget(
+        buildTestWidget(
+          html: '<p>Keyboard highlight text</p>',
+          onHighlightColor:
+              (text, start, end, colorHex) => applied.add(colorHex),
+          onRegisterSelectionKeyActions: (actions) => registered = actions,
+        ),
+      );
+      await waitForParse(tester);
+      expect(registered, isNull, reason: '没有选区时不得占用数字键');
+
+      await tester.longPress(find.textContaining('Keyboard highlight text'));
+      await tester.pumpAndSettle();
+
+      final actions = registered;
+      expect(actions, isNotNull, reason: '选区工具栏可用时必须注册键盘动作');
+      expect(actions!.colors, ReaderHighlightPalette.colors);
+      expect(
+        runReaderSelectionKeyShortcut(LogicalKeyboardKey.digit3, actions),
+        isTrue,
+      );
+      expect(applied, [
+        ReaderHighlightPalette.colors[2],
+      ], reason: '第 3 个数字键必须与工具栏第 3 个圆点同色');
+      expect(registered, isNull, reason: '应用高亮会清选区，键盘动作必须同步撤下，不能留悬空的选区闭包');
     });
 
     testWidgets('残留选区下的单击不再被吞：清选中的同时切换工具栏', (tester) async {

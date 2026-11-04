@@ -69,6 +69,9 @@ class _UploadQueueWorkspace extends ConsumerWidget {
         onRebindServer:
             (item) =>
                 _pickAndRebindServerUpload(context, item, controller, l10n),
+        onRestartServer:
+            (item) =>
+                _pickAndRestartStaleUpload(context, item, controller, l10n),
       );
     }
     return Column(
@@ -267,6 +270,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (item.totalParts > 1 &&
+                          !_isUploadSessionStale(item) &&
                           (item.status.toUpperCase() == 'CREATED' ||
                               item.status.toUpperCase() == 'UPLOADING'))
                         _SubAction(
@@ -274,6 +278,19 @@ class _UploadQueueWorkspace extends ConsumerWidget {
                           onTap:
                               enabled
                                   ? () => _pickAndRebindServerUpload(
+                                    context,
+                                    item,
+                                    controller,
+                                    l10n,
+                                  )
+                                  : null,
+                        ),
+                      if (_isUploadSessionStale(item))
+                        _SubAction(
+                          label: l10n.filesRebindUploadRestart,
+                          onTap:
+                              enabled
+                                  ? () => _pickAndRestartStaleUpload(
                                     context,
                                     item,
                                     controller,
@@ -324,6 +341,11 @@ class _UploadQueueWorkspace extends ConsumerWidget {
     FileBrowserController controller,
     AppLocalizations l10n,
   ) async {
+    if (_isUploadSessionStale(item)) {
+      // 队列渲染后会话可能刚好到期：继续延期只会拿到后端「已过期」，改走新上传。
+      await _pickAndRestartStaleUpload(context, item, controller, l10n);
+      return;
+    }
     final picked = await openFile();
     if (picked == null || !context.mounted) {
       return;
@@ -356,4 +378,47 @@ class _UploadQueueWorkspace extends ConsumerWidget {
       () => controller.rebindServerUploadSession(item, picked),
     );
   }
+
+  /// 会话已过期或已失败：无法续传，用重新选择的文件按当前目录开一次新上传。
+  Future<void> _pickAndRestartStaleUpload(
+    BuildContext context,
+    FileUploadQueueItem item,
+    FileBrowserController controller,
+    AppLocalizations l10n,
+  ) async {
+    final picked = await openFile();
+    if (picked == null || !context.mounted) {
+      return;
+    }
+    final size = await picked.length();
+    if (!context.mounted) {
+      return;
+    }
+    final isSameFile = picked.name == item.fileName && size == item.sizeBytes;
+    final confirmed = await showFilesConfirmDialog(
+      context,
+      title: l10n.filesRebindUploadRestart,
+      message:
+          isSameFile
+              ? l10n.filesRebindUploadExpired
+              : l10n.filesRebindUploadRestartMismatch,
+      confirmLabel: l10n.filesRebindUploadRestart,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await _uploadFiles(context, controller, [picked]);
+  }
+}
+
+/// 服务端会话是否已无法续传：状态终局，或状态未及更新但到期时间已过。
+bool _isUploadSessionStale(FileUploadQueueItem item) {
+  final status = item.status.toUpperCase();
+  if (status == 'EXPIRED' || status == 'FAILED') {
+    return true;
+  }
+  final expiresAt = item.expiresAt;
+  return (status == 'CREATED' || status == 'UPLOADING') &&
+      expiresAt != null &&
+      expiresAt.isBefore(DateTime.now());
 }

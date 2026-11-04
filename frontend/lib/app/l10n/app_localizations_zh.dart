@@ -2228,6 +2228,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesRebindUploadSizeMismatch => '所选文件大小与原上传会话不一致。';
 
   @override
+  String get filesRebindUploadRestart => '重新上传';
+
+  @override
+  String get filesRebindUploadExpired => '原上传会话已过期或已失败，无法续传。所选文件会作为新上传提交到当前目录。';
+
+  @override
+  String get filesRebindUploadRestartMismatch =>
+      '所选文件的名称或大小与原任务不一致，仍要把它作为新上传提交到当前目录？';
+
+  @override
   String get filesDeleteTask => '删除任务';
 
   @override
@@ -6195,6 +6205,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerShortcutAnnotations => '打开批注与笔记';
+
+  @override
+  String get readerShortcutSelectionHighlight => '选中文本时：1–5 设置高亮色，N 取消重叠高亮';
 
   @override
   String get readerShortcutImmersive => '切换沉浸模式';

@@ -24,6 +24,7 @@ class ReaderShortcutPanel extends StatelessWidget {
       if (!isComic) ('B', l10n.readerShortcutBookmark),
       if (!isComic) ('Ctrl / Cmd + F', l10n.readerShortcutSearch),
       if (!isComic) ('N', l10n.readerShortcutAnnotations),
+      if (!isComic) ('1–5 / N', l10n.readerShortcutSelectionHighlight),
       ('F', l10n.readerShortcutImmersive),
       ('F11', l10n.readerShortcutFullscreen),
       if (!isComic) ('+ / - / 0', l10n.readerShortcutTypography),

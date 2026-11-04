@@ -41,6 +41,7 @@ class ReaderShortcutResolver {
     bool isRtl = false,
     bool textInputFocused = false,
     bool imageZoomed = false,
+    bool selectionActionsActive = false,
   }) {
     final isTextMode =
         mode == ReaderShortcutMode.textScroll ||
@@ -60,7 +61,11 @@ class ReaderShortcutResolver {
     if (isTextMode && key == LogicalKeyboardKey.keyB) {
       return ReaderCommand.toggleBookmark;
     }
-    if (isTextMode && key == LogicalKeyboardKey.keyN) {
+    // N 只在没有选区键盘动作时开放批注面板，否则同一个按键会一边取消高亮
+    // 一边打开批注列表。
+    if (isTextMode &&
+        !selectionActionsActive &&
+        key == LogicalKeyboardKey.keyN) {
       return ReaderCommand.openAnnotations;
     }
     if (key == LogicalKeyboardKey.keyF) {
