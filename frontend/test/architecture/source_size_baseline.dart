@@ -13,7 +13,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/files/application/file_browser_controller.dart': 789,
   'lib/features/files/application/file_browser_upload_actions.dart': 425,
   'lib/features/files/presentation/pages/file_browser_page_transfer_workspaces.dart':
-      942,
+      669,
   'lib/features/files/presentation/pages/file_preview_page.dart': 807,
   'lib/features/files/presentation/widgets/share_link_sheet.dart': 683,
   'lib/features/library/presentation/widgets/library_space_widgets.dart': 863,

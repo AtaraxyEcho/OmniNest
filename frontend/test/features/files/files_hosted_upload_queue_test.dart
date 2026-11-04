@@ -161,6 +161,15 @@ void main() {
     );
   });
 
+  testWidgets('服务端未完成分片会话提供续传入口', (tester) async {
+    await _pumpToQueue(tester, [
+      _item('u1', 'spring-raw.mov', 68, 'UPLOADING'),
+    ]);
+
+    expect(find.byTooltip('选择原文件续传'), findsOneWidget);
+    expect(find.byTooltip('取消'), findsOneWidget);
+  });
+
   testWidgets('队列页翻页动作请求下一页', (tester) async {
     final controller = await _pumpToQueue(tester, [
       _item('u1', 'spring-raw.mov', 68, 'UPLOADING'),

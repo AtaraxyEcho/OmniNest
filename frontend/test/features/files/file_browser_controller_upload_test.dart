@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
@@ -13,6 +15,7 @@ import 'package:omninest/features/files/domain/file_repository.dart';
 
 import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
+import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -217,6 +220,209 @@ void main() {
       'https://storage.test/upload-123/part-1',
     ]);
     expect(repository.completedSessions, ['upload-123']);
+  });
+
+  test('服务端分片会话按原文件续传：校验通过的分片跳过', () async {
+    final repository = _FakeFileRepository();
+    final api = _MockFileApi();
+    final file = XFile.fromData(
+      Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+      path: 'large.bin',
+      name: 'large.bin',
+      mimeType: 'application/octet-stream',
+    );
+    final extended = FileUploadSession(
+      id: 'session-id',
+      uploadId: 'upload-123',
+      parentId: null,
+      fileName: 'large.bin',
+      sizeBytes: 6,
+      partSizeBytes: 3,
+      totalParts: 2,
+      mimeType: 'application/octet-stream',
+      status: 'UPLOADING',
+      uploadUrl: null,
+      parts: const [],
+      expiresAt: null,
+    );
+    final verifiedETag = md5.convert([1, 2, 3]).toString();
+    when(
+      () => api.extendUploadSession('upload-123'),
+    ).thenAnswer((_) async => extended);
+    when(() => api.listUploadParts('upload-123')).thenAnswer(
+      (_) async => FileUploadPartsInfo(
+        uploadId: 'upload-123',
+        totalParts: 2,
+        completedPartNumbers: const [1],
+        parts: [
+          FileUploadPart(
+            partNumber: 1,
+            sizeBytes: 3,
+            status: 'COMPLETED',
+            uploadUrl: null,
+            eTag: verifiedETag,
+          ),
+          const FileUploadPart(
+            partNumber: 2,
+            sizeBytes: 3,
+            status: 'PENDING',
+            uploadUrl: null,
+          ),
+        ],
+      ),
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        fileRepositoryProvider.overrideWithValue(repository),
+        fileApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final future = controller.rebindServerUploadSession(
+      FileUploadQueueItem(
+        id: 'session-id',
+        uploadId: 'upload-123',
+        fileName: 'large.bin',
+        sizeBytes: 6,
+        partSizeBytes: 3,
+        totalParts: 2,
+        uploadedParts: 1,
+        status: 'UPLOADING',
+      ),
+      file,
+    );
+    await repository.firstUploadStarted.future;
+    repository.firstUploadResult.complete('etag-2');
+    await future;
+
+    expect(repository.uploadedPartUrls, [
+      'https://storage.test/upload-123/part-2',
+    ]);
+    expect(repository.completedPartNumbers, [2]);
+    expect(repository.completedSessions, ['upload-123']);
+  });
+
+  test('原文件分片哈希不一致时重传该分片', () async {
+    final repository = _FakeFileRepository();
+    final api = _MockFileApi();
+    final file = XFile.fromData(
+      Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+      path: 'large.bin',
+      name: 'large.bin',
+      mimeType: 'application/octet-stream',
+    );
+    final extended = FileUploadSession(
+      id: 'session-id',
+      uploadId: 'upload-123',
+      parentId: null,
+      fileName: 'large.bin',
+      sizeBytes: 6,
+      partSizeBytes: 3,
+      totalParts: 2,
+      mimeType: 'application/octet-stream',
+      status: 'UPLOADING',
+      uploadUrl: null,
+      parts: const [],
+      expiresAt: null,
+    );
+    when(
+      () => api.extendUploadSession('upload-123'),
+    ).thenAnswer((_) async => extended);
+    when(() => api.listUploadParts('upload-123')).thenAnswer(
+      (_) async => FileUploadPartsInfo(
+        uploadId: 'upload-123',
+        totalParts: 2,
+        completedPartNumbers: const [1],
+        parts: [
+          FileUploadPart(
+            partNumber: 1,
+            sizeBytes: 3,
+            status: 'COMPLETED',
+            uploadUrl: null,
+            eTag: md5.convert([9, 9, 9]).toString(),
+          ),
+          const FileUploadPart(
+            partNumber: 2,
+            sizeBytes: 3,
+            status: 'PENDING',
+            uploadUrl: null,
+          ),
+        ],
+      ),
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        fileRepositoryProvider.overrideWithValue(repository),
+        fileApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final future = controller.rebindServerUploadSession(
+      FileUploadQueueItem(
+        id: 'session-id',
+        uploadId: 'upload-123',
+        fileName: 'large.bin',
+        sizeBytes: 6,
+        partSizeBytes: 3,
+        totalParts: 2,
+        uploadedParts: 1,
+        status: 'UPLOADING',
+      ),
+      file,
+    );
+    await repository.waitForUploadCount(2);
+    repository.completeUploadAt(0, 'etag-1-new');
+    repository.completeUploadAt(1, 'etag-2-new');
+    await future;
+
+    expect(repository.uploadedPartUrls, [
+      'https://storage.test/upload-123/part-1',
+      'https://storage.test/upload-123/part-2',
+    ]);
+    expect(repository.completedPartNumbers, [1, 2]);
+  });
+
+  test('原文件大小不一致时拒绝续传', () async {
+    final repository = _FakeFileRepository();
+    final api = _MockFileApi();
+    final file = XFile.fromData(
+      Uint8List.fromList([1, 2, 3, 4, 5]),
+      path: 'small.bin',
+      name: 'small.bin',
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        fileRepositoryProvider.overrideWithValue(repository),
+        fileApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await expectLater(
+      controller.rebindServerUploadSession(
+        FileUploadQueueItem(
+          id: 'session-id',
+          uploadId: 'upload-123',
+          fileName: 'large.bin',
+          sizeBytes: 6,
+          partSizeBytes: 3,
+          totalParts: 2,
+          uploadedParts: 1,
+          status: 'UPLOADING',
+        ),
+        file,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    verifyNever(() => api.extendUploadSession(any()));
   });
 
   test('分片 URL 在途时暂停：不再发起该分片上传且任务保持 PAUSED', () async {
@@ -917,3 +1123,5 @@ void main() {
     expect(terminal.map((task) => task.fileName), contains('f24.bin'));
   });
 }
+
+class _MockFileApi extends Mock implements FileApi {}

@@ -134,60 +134,105 @@ void main() {
     });
 
     group('delete', () {
-      testWidgets('calls deleteAnnotation and updates memory', (tester) async {
-        final annotation = createAnnotation(id: 'ann-5');
+      testWidgets('stages delete, updates memory, and commits after TTL', (
+        tester,
+      ) async {
+        final annotation = createAnnotation(id: 'ann-5', note: '');
+        when(
+          () => mockDataManager.loadAnnotations('item-1'),
+        ).thenAnswer((_) async => [annotation]);
         when(
           () => mockDataManager.deleteAnnotation('ann-5'),
         ).thenAnswer((_) async {});
 
         final handler = createHandler();
         final context = await hostedContext(tester);
-        await handler.delete(annotation, context);
-
-        verify(() => mockDataManager.deleteAnnotation('ann-5')).called(1);
-        // 删除后直接发布内存结果，不再阻塞等待远端全量重载。
-        verifyNever(() => mockDataManager.loadAnnotations('item-1'));
-        expect(notifyCount, 1);
-      });
-
-      testWidgets('removes the deleted annotation without a remote reload', (
-        tester,
-      ) async {
-        final annotation = createAnnotation();
-        when(
-          () => mockDataManager.deleteAnnotation(any()),
-        ).thenAnswer((_) async {});
-        when(
-          () => mockDataManager.loadAnnotations('item-1'),
-        ).thenAnswer((_) async => [annotation]);
-        final handler = createHandler();
-        final context = await hostedContext(tester);
         await handler.load();
         final loadCount = notifyCount;
-
         await handler.delete(annotation, context);
 
         expect(handler.annotations, isEmpty);
         expect(notifyCount, loadCount + 1);
+        verifyNever(() => mockDataManager.deleteAnnotation('ann-5'));
+
+        await tester.pump(const Duration(seconds: 7));
+        verify(() => mockDataManager.deleteAnnotation('ann-5')).called(1);
         verify(() => mockDataManager.loadAnnotations('item-1')).called(1);
       });
 
-      testWidgets('删除失败要弹出反馈，否则批注原地留着而用户以为已删', (tester) async {
-        final annotation = createAnnotation(id: 'ann-7');
+      testWidgets('undo restores the annotation without touching storage', (
+        tester,
+      ) async {
+        final annotation = createAnnotation(note: '');
+        when(
+          () => mockDataManager.loadAnnotations('item-1'),
+        ).thenAnswer((_) async => [annotation]);
+        when(
+          () => mockDataManager.deleteAnnotation(any()),
+        ).thenAnswer((_) async {});
+        final handler = createHandler();
+        final context = await hostedContext(tester);
+        await handler.load();
+        await handler.delete(annotation, context);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.pumpAndSettle();
+        expect(handler.annotations, isEmpty);
+        expect(find.text('撤销'), findsOneWidget);
+
+        await tester.tap(find.text('撤销'));
+        await tester.pump();
+        expect(handler.annotations.single.id, annotation.id);
+
+        await tester.pump(const Duration(seconds: 7));
+        verifyNever(() => mockDataManager.deleteAnnotation(any()));
+      });
+
+      testWidgets('含笔记批注删除先确认，取消不删除', (tester) async {
+        final annotation = createAnnotation(id: 'ann-note', note: '长笔记');
+        when(
+          () => mockDataManager.loadAnnotations('item-1'),
+        ).thenAnswer((_) async => [annotation]);
+        when(
+          () => mockDataManager.deleteAnnotation(any()),
+        ).thenAnswer((_) async {});
+        final handler = createHandler();
+        final context = await hostedContext(tester);
+        await handler.load();
+
+        final future = handler.delete(annotation, context);
+        await tester.pumpAndSettle();
+        expect(find.text('该批注包含笔记，确认删除？'), findsOneWidget);
+
+        await tester.tap(find.text('取消'));
+        await tester.pumpAndSettle();
+        await future;
+
+        expect(handler.annotations.single.id, 'ann-note');
+        verifyNever(() => mockDataManager.deleteAnnotation(any()));
+      });
+
+      testWidgets('删除提交失败要恢复批注并弹出反馈', (tester) async {
+        final annotation = createAnnotation(id: 'ann-7', note: '');
+        when(
+          () => mockDataManager.loadAnnotations('item-1'),
+        ).thenAnswer((_) async => [annotation]);
         when(
           () => mockDataManager.deleteAnnotation('ann-7'),
         ).thenThrow(Exception('db down'));
         final handler = createHandler();
         final context = await hostedContext(tester);
+        await handler.load();
 
         await handler.delete(annotation, context);
-        await tester.pump();
+        expect(handler.annotations, isEmpty);
+
+        await tester.pump(const Duration(seconds: 7));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 350));
 
         expect(find.text('批注删除失败，请重试'), findsOneWidget);
-        // 删除失败不再重拉列表：不重拉才不会把未删除的批注"复活"成刷新过的样子。
-        verifyNever(() => mockDataManager.loadAnnotations('item-1'));
+        expect(handler.annotations.single.id, 'ann-7');
         await tester.pump(const Duration(seconds: 10));
         await tester.pumpAndSettle();
       });
@@ -402,6 +447,68 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
       await tester.pumpAndSettle();
     });
+  });
+
+  testWidgets('选中的高亮色作为本次与后续默认色', (tester) async {
+    final handler = createHandler();
+    final context = await hostedContext(tester);
+    when(
+      () => mockDataManager.createAnnotation(
+        itemId: 'item-1',
+        chapterId: 'ch-1',
+        startOffset: 0,
+        endOffset: 2,
+        highlightText: '甲',
+        note: null,
+        color: '#4CAF50',
+      ),
+    ).thenAnswer(
+      (_) async => createAnnotation(
+        id: 'green',
+        chapterId: 'ch-1',
+        start: 0,
+        end: 2,
+        color: '#4CAF50',
+        note: '',
+      ),
+    );
+    when(
+      () => mockDataManager.createAnnotation(
+        itemId: 'item-1',
+        chapterId: 'ch-1',
+        startOffset: 3,
+        endOffset: 4,
+        highlightText: '乙',
+        note: null,
+        color: '#4CAF50',
+      ),
+    ).thenAnswer(
+      (_) async => createAnnotation(
+        id: 'green-2',
+        chapterId: 'ch-1',
+        start: 3,
+        end: 4,
+        color: '#4CAF50',
+        note: '',
+      ),
+    );
+
+    await handler.highlight('甲', 0, 2, context, color: '#4CAF50');
+    await handler.highlight('乙', 3, 4, context);
+
+    verify(
+      () => mockDataManager.createAnnotation(
+        itemId: 'item-1',
+        chapterId: 'ch-1',
+        startOffset: 3,
+        endOffset: 4,
+        highlightText: '乙',
+        note: null,
+        color: '#4CAF50',
+      ),
+    ).called(1);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   group('批注面板', () {

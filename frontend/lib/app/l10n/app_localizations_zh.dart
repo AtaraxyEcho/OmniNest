@@ -2213,6 +2213,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesDeleteUploadTaskMessage => '该上传任务会从队列中移除，未完成的服务器会话也会被取消。';
 
   @override
+  String get filesCancelUploadSessionTitle => '取消上传会话？';
+
+  @override
+  String get filesCancelUploadSessionMessage => '服务端分片上传会被取消，未完成分片将被丢弃。';
+
+  @override
+  String get filesRebindUpload => '选择原文件续传';
+
+  @override
+  String get filesRebindUploadNameMismatch => '所选文件名与原任务不同，仍按该文件继续？';
+
+  @override
+  String get filesRebindUploadSizeMismatch => '所选文件大小与原上传会话不一致。';
+
+  @override
   String get filesDeleteTask => '删除任务';
 
   @override
@@ -7017,6 +7032,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerHighlight => '高亮';
 
   @override
+  String get readerHighlightColor => '高亮颜色';
+
+  @override
+  String get readerHighlightColorYellow => '黄色高亮';
+
+  @override
+  String get readerHighlightColorGreen => '绿色高亮';
+
+  @override
+  String get readerHighlightColorBlue => '蓝色高亮';
+
+  @override
+  String get readerHighlightColorPink => '粉色高亮';
+
+  @override
+  String get readerHighlightColorGray => '灰色高亮';
+
+  @override
   String get readerAnnotate => '批注';
 
   @override
@@ -7050,6 +7083,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerDeleteAnnotation => '删除批注';
+
+  @override
+  String get readerAnnotationDeleted => '批注已删除';
+
+  @override
+  String get readerUndo => '撤销';
+
+  @override
+  String get readerDeleteAnnotationNoteConfirm => '该批注包含笔记，确认删除？';
 
   @override
   String get readerSearchAnnotations => '搜索批注';

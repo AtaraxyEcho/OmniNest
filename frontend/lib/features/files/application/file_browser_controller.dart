@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:math' as math;
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -96,7 +97,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
 
   /// 导航世代计数，见 `_beginNavigation`。
   int _navigationGeneration = 0;
-
   final Map<String, _UploadRuntime> _uploadRuntimes = {};
   final Map<String, _PendingConflict> _pendingConflicts = {};
   Timer? _uploadQueuePollTimer;

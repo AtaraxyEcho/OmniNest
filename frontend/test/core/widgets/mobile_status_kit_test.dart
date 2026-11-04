@@ -47,6 +47,7 @@ Future<void> _openConfirm(
 }
 
 void main() {
+  _appendTrailingActionTests();
   testWidgets('状态丸 23 高、大写、按色调取色', (tester) async {
     await _pumpSlot(
       tester,
@@ -225,5 +226,33 @@ void main() {
     await tester.tap(find.text('清空'));
     await tester.pumpAndSettle();
     expect(find.text('清空'), findsNothing);
+  });
+}
+
+void _appendTrailingActionTests() {
+  testWidgets('传输行尾操作 36dp、带 tooltip 并回调', (tester) async {
+    var tapped = false;
+    await _pumpSlot(
+      tester,
+      MobileTransferRow(
+        title: 'spring-raw.mov',
+        detail: '68%',
+        icon: OmniIcons.queue,
+        progress: 0.68,
+        statusLabel: 'UPLOADING',
+        trailingActions: MobileTransferAction(
+          icon: Icons.pause_rounded,
+          tooltip: '暂停上传',
+          onTap: () => tapped = true,
+        ),
+      ),
+    );
+
+    final action = find.byType(MobileTransferAction);
+    expect(tester.getSize(action).width, 36);
+    expect(find.byTooltip('暂停上传'), findsOneWidget);
+    await tester.tap(action);
+    await tester.pump();
+    expect(tapped, isTrue);
   });
 }

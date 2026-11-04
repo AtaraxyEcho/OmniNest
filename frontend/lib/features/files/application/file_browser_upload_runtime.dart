@@ -8,6 +8,98 @@ extension FileBrowserUploadRuntime on FileBrowserController {
   /// 批量上传并发文件数：小文件不必排在大文件后面，同时限制连接总量。
   static const int _uploadBatchConcurrency = 3;
 
+  /// 把服务端未完成的分片会话重新关联到用户重新选择的原文件。
+  ///
+  /// 分级校验：文件大小强一致（否则直接拒绝）；已完成分片再逐个用本地
+  /// 区间 MD5 与 ETag 对账，只有对得上的分片才跳过，对不上的重新上传。
+  /// 这样既不会把错文件续到原会话，也不会因预签名或本地文件变化而跳过坏分片。
+  Future<void> rebindServerUploadSession(
+    FileUploadQueueItem item,
+    XFile file,
+  ) async {
+    await _runAction(FileOperation.resumeUpload, () async {
+      final fileSize = await file.length();
+      if (fileSize != item.sizeBytes) {
+        throw const AppException(
+          code: AppErrorCodes.uploadRebindSizeMismatch,
+          message: '所选文件大小与原上传会话不一致',
+        );
+      }
+      final api = uploadRef.read(fileApiProvider);
+      final extended = await api.extendUploadSession(item.uploadId);
+      final partsInfo = await api.listUploadParts(item.uploadId);
+      if (partsInfo.parts.length != extended.totalParts) {
+        throw const AppException(
+          code: AppErrorCodes.operationFailed,
+          message: '上传分片明细不完整，无法续传',
+        );
+      }
+      final verifiedParts = <int>{};
+      var uploadedBytes = 0;
+      for (final part in partsInfo.parts) {
+        if (part.status.toUpperCase() != 'COMPLETED' || part.sizeBytes <= 0) {
+          continue;
+        }
+        final start = (part.partNumber - 1) * extended.partSizeBytes;
+        final end = math.min(start + part.sizeBytes, extended.sizeBytes);
+        if (end - start != part.sizeBytes) {
+          continue;
+        }
+        final eTag = part.eTag?.trim().replaceAll('"', '').toLowerCase();
+        if (eTag == null || !RegExp(r'^[0-9a-f]{32}$').hasMatch(eTag)) {
+          // 非 MD5 ETag（或缺少 ETag）无法证明本地分片一致，宁可重传。
+          continue;
+        }
+        try {
+          final digest = await md5.bind(file.openRead(start, end)).first;
+          if (digest.toString().toLowerCase() == eTag) {
+            verifiedParts.add(part.partNumber);
+            uploadedBytes += part.sizeBytes;
+          }
+        } on Object {
+          // 读取失败（文件被移动/权限变化）按未校验处理，后续重新上传该分片。
+        }
+      }
+      final session = FileUploadSession(
+        id: extended.id,
+        uploadId: item.uploadId,
+        parentId: extended.parentId,
+        fileName: extended.fileName,
+        sizeBytes: extended.sizeBytes,
+        partSizeBytes: extended.partSizeBytes,
+        totalParts: extended.totalParts,
+        mimeType: extended.mimeType,
+        status: extended.status,
+        uploadUrl: extended.uploadUrl,
+        uploadUrlExpiresAt: extended.uploadUrlExpiresAt,
+        parts: partsInfo.parts,
+        expiresAt: extended.expiresAt,
+      );
+      final taskId = 'rebound-${item.uploadId}';
+      final task = FileUploadClientTask(
+        id: taskId,
+        fileName: extended.fileName,
+        sizeBytes: extended.sizeBytes,
+        uploadedBytes: uploadedBytes.clamp(0, extended.sizeBytes),
+        status: 'UPLOADING',
+        messageCode: FileUploadTaskMessageCode.resuming,
+        uploadId: item.uploadId,
+      );
+      final runtime = _UploadRuntime(file: file, session: session);
+      runtime.completedPartNumbers.addAll(verifiedParts);
+      _uploadRuntimes[taskId] = runtime;
+      _upsertLocalUploadTask(task);
+      try {
+        await _runUploadRuntime(taskId);
+        if (_findLocalUploadTask(taskId)?.status.toUpperCase() == 'COMPLETED') {
+          await _refreshAfterLocalUploadSettled();
+        }
+      } catch (error) {
+        _settleUploadRuntimeFailure(taskId, runtime, error);
+      }
+    });
+  }
+
   Future<FileUploadBatchResult> uploadFiles(List<XFile> files) async {
     if (files.isEmpty) {
       return const FileUploadBatchResult(

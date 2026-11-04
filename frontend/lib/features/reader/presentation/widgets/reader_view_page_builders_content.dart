@@ -242,6 +242,14 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
         if (!mounted) return;
         annotationHandler?.highlight(text, start, end, context);
       },
+      onHighlightColor: (text, start, end, color) {
+        if (!mounted) return;
+        annotationHandler?.highlight(text, start, end, context, color: color);
+      },
+      onUpdateAnnotationColor: (annotation, color) {
+        if (!mounted) return;
+        annotationHandler?.updateColor(annotation, color, context);
+      },
       onAnnotate: (text, start, end) {
         if (!mounted) return;
         annotationHandler?.annotate(text, start, end, context);
@@ -425,6 +433,20 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           onHighlight: (text, start, end) {
             if (!mounted) return;
             annotationHandler?.highlight(text, start, end, context);
+          },
+          onHighlightColor: (text, start, end, color) {
+            if (!mounted) return;
+            annotationHandler?.highlight(
+              text,
+              start,
+              end,
+              context,
+              color: color,
+            );
+          },
+          onUpdateAnnotationColor: (annotation, color) {
+            if (!mounted) return;
+            annotationHandler?.updateColor(annotation, color, context);
           },
           onAnnotate: (text, start, end) {
             if (!mounted) return;

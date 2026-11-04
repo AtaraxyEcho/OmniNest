@@ -88,6 +88,7 @@ part 'file_browser_page_external.dart';
 part 'file_browser_page_batch.dart';
 part 'file_browser_page_subpage.dart';
 part 'file_browser_page_share_workspaces.dart';
+part 'file_browser_page_upload_queue.dart';
 part 'file_browser_page_transfer_workspaces.dart';
 part 'file_browser_page_inspector.dart';
 part 'file_browser_page_folder_picker.dart';

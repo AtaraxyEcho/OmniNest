@@ -4279,6 +4279,36 @@ abstract class AppLocalizations {
   /// **'The upload task will be removed from the queue. Unfinished server sessions will be cancelled.'**
   String get filesDeleteUploadTaskMessage;
 
+  /// No description provided for @filesCancelUploadSessionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Upload Session?'**
+  String get filesCancelUploadSessionTitle;
+
+  /// No description provided for @filesCancelUploadSessionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The server-side multipart upload will be cancelled and unfinished parts will be discarded.'**
+  String get filesCancelUploadSessionMessage;
+
+  /// No description provided for @filesRebindUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume from original file'**
+  String get filesRebindUpload;
+
+  /// No description provided for @filesRebindUploadNameMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file name differs from the original task. Continue with this file?'**
+  String get filesRebindUploadNameMismatch;
+
+  /// No description provided for @filesRebindUploadSizeMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file size does not match the upload session.'**
+  String get filesRebindUploadSizeMismatch;
+
   /// No description provided for @filesDeleteTask.
   ///
   /// In en, this message translates to:
@@ -13187,6 +13217,42 @@ abstract class AppLocalizations {
   /// **'Highlight'**
   String get readerHighlight;
 
+  /// No description provided for @readerHighlightColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlight color'**
+  String get readerHighlightColor;
+
+  /// No description provided for @readerHighlightColorYellow.
+  ///
+  /// In en, this message translates to:
+  /// **'Yellow highlight'**
+  String get readerHighlightColorYellow;
+
+  /// No description provided for @readerHighlightColorGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green highlight'**
+  String get readerHighlightColorGreen;
+
+  /// No description provided for @readerHighlightColorBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue highlight'**
+  String get readerHighlightColorBlue;
+
+  /// No description provided for @readerHighlightColorPink.
+  ///
+  /// In en, this message translates to:
+  /// **'Pink highlight'**
+  String get readerHighlightColorPink;
+
+  /// No description provided for @readerHighlightColorGray.
+  ///
+  /// In en, this message translates to:
+  /// **'Gray highlight'**
+  String get readerHighlightColorGray;
+
   /// No description provided for @readerAnnotate.
   ///
   /// In en, this message translates to:
@@ -13240,6 +13306,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete annotation'**
   String get readerDeleteAnnotation;
+
+  /// No description provided for @readerAnnotationDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Annotation deleted'**
+  String get readerAnnotationDeleted;
+
+  /// No description provided for @readerUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get readerUndo;
+
+  /// No description provided for @readerDeleteAnnotationNoteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This annotation contains a note. Delete it?'**
+  String get readerDeleteAnnotationNoteConfirm;
 
   /// No description provided for @readerSearchAnnotations.
   ///

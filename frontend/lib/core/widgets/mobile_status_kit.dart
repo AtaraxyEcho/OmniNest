@@ -76,6 +76,7 @@ class MobileTransferRow extends StatelessWidget {
     this.progress,
     this.statusLabel,
     this.tone = MobileStatusTone.calm,
+    this.trailingActions,
     this.onTap,
   });
 
@@ -87,6 +88,9 @@ class MobileTransferRow extends StatelessWidget {
   final double? progress;
   final String? statusLabel;
   final MobileStatusTone tone;
+
+  /// 行尾操作位：暂停/继续/取消等。触控热区由调用方按次级控件 36dp 提供。
+  final Widget? trailingActions;
   final VoidCallback? onTap;
 
   @override
@@ -146,6 +150,10 @@ class MobileTransferRow extends StatelessWidget {
           const SizedBox(width: 10),
           if (statusLabel != null)
             MobileStatusPill(label: statusLabel!, tone: tone),
+          if (trailingActions != null) ...[
+            const SizedBox(width: 8),
+            trailingActions!,
+          ],
         ],
       ),
     );
@@ -395,6 +403,53 @@ class _StatusIconTile extends StatelessWidget {
         icon: icon,
         size: 18,
         color: _statusForeground(context.env, tone),
+      ),
+    );
+  }
+}
+
+/// 传输行尾的次级图标操作（暂停/继续/取消/续传）。
+///
+/// 触控热区按移动端次级控件取 36dp；图标按钮必须带 tooltip 供读屏定位。
+class MobileTransferAction extends StatelessWidget {
+  const MobileTransferAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.destructive = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(
+              icon,
+              size: 18,
+              color:
+                  onTap == null
+                      ? context.env.inkMuted.withValues(alpha: 0.45)
+                      : destructive
+                      ? context.env.statusDanger
+                      : context.env.inkMuted,
+            ),
+          ),
+        ),
       ),
     );
   }

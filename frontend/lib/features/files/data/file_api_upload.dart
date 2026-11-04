@@ -76,6 +76,14 @@ mixin FileApiUpload on FileApiBase {
     parseEnvelope(response.data);
   }
 
+  /// 顺延上传会话有效期；过期前恢复上传必须先调用。
+  Future<FileUploadSession> extendUploadSession(String uploadId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/uploads/$uploadId/extend',
+    );
+    return parseUploadSessionResponse(response.data);
+  }
+
   Future<FileUploadPartsInfo> listUploadParts(String uploadId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/uploads/$uploadId/parts',

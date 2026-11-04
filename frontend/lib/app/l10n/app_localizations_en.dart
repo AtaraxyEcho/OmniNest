@@ -2292,6 +2292,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'The upload task will be removed from the queue. Unfinished server sessions will be cancelled.';
 
   @override
+  String get filesCancelUploadSessionTitle => 'Cancel Upload Session?';
+
+  @override
+  String get filesCancelUploadSessionMessage =>
+      'The server-side multipart upload will be cancelled and unfinished parts will be discarded.';
+
+  @override
+  String get filesRebindUpload => 'Resume from original file';
+
+  @override
+  String get filesRebindUploadNameMismatch =>
+      'The selected file name differs from the original task. Continue with this file?';
+
+  @override
+  String get filesRebindUploadSizeMismatch =>
+      'The selected file size does not match the upload session.';
+
+  @override
   String get filesDeleteTask => 'Delete Task';
 
   @override
@@ -7249,6 +7267,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerHighlight => 'Highlight';
 
   @override
+  String get readerHighlightColor => 'Highlight color';
+
+  @override
+  String get readerHighlightColorYellow => 'Yellow highlight';
+
+  @override
+  String get readerHighlightColorGreen => 'Green highlight';
+
+  @override
+  String get readerHighlightColorBlue => 'Blue highlight';
+
+  @override
+  String get readerHighlightColorPink => 'Pink highlight';
+
+  @override
+  String get readerHighlightColorGray => 'Gray highlight';
+
+  @override
   String get readerAnnotate => 'Annotate';
 
   @override
@@ -7282,6 +7318,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerDeleteAnnotation => 'Delete annotation';
+
+  @override
+  String get readerAnnotationDeleted => 'Annotation deleted';
+
+  @override
+  String get readerUndo => 'Undo';
+
+  @override
+  String get readerDeleteAnnotationNoteConfirm =>
+      'This annotation contains a note. Delete it?';
 
   @override
   String get readerSearchAnnotations => 'Search annotations';

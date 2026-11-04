@@ -651,6 +651,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   @override
   void dispose() {
+    _annotationHandler?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     ReaderSessionRecorder.recordSession(
       itemId: widget.itemId,

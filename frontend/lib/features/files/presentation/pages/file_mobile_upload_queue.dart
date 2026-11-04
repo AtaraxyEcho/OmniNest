@@ -14,6 +14,11 @@ class _HostedUploadQueue extends StatelessWidget {
     required this.totalCount,
     required this.busy,
     required this.onLoadNext,
+    this.onPauseLocal,
+    this.onResumeLocal,
+    this.onRemoveLocal,
+    this.onCancelServer,
+    this.onRebindServer,
   });
 
   final AppLocalizations l10n;
@@ -23,6 +28,11 @@ class _HostedUploadQueue extends StatelessWidget {
   final int totalCount;
   final bool busy;
   final VoidCallback onLoadNext;
+  final Future<void> Function(FileUploadClientTask task)? onPauseLocal;
+  final Future<void> Function(FileUploadClientTask task)? onResumeLocal;
+  final Future<void> Function(FileUploadClientTask task)? onRemoveLocal;
+  final Future<void> Function(FileUploadQueueItem item)? onCancelServer;
+  final Future<void> Function(FileUploadQueueItem item)? onRebindServer;
 
   static MobileStatusTone _toneOf(String status) {
     return switch (status.toUpperCase()) {
@@ -46,6 +56,113 @@ class _HostedUploadQueue extends StatelessWidget {
               (item) => !FileBrowserState.isTerminalUploadStatus(item.status),
             )
             .length;
+  }
+
+  Widget? _localActions(BuildContext context, FileUploadClientTask task) {
+    final status = task.status.toUpperCase();
+    final actions = <Widget>[];
+    if (status == 'QUEUED' ||
+        status == 'UPLOADING' ||
+        status == 'PENDING' ||
+        status == 'RUNNING') {
+      actions.add(
+        MobileTransferAction(
+          icon: Icons.pause_rounded,
+          tooltip: l10n.filesPauseUpload,
+          onTap:
+              busy || onPauseLocal == null ? null : () => onPauseLocal!(task),
+        ),
+      );
+    } else if (status == 'PAUSED' || status == 'FAILED') {
+      actions.add(
+        MobileTransferAction(
+          icon: Icons.play_arrow_rounded,
+          tooltip: l10n.filesResumeUpload,
+          onTap:
+              busy || onResumeLocal == null ? null : () => onResumeLocal!(task),
+        ),
+      );
+    }
+    actions.add(
+      status == 'COMPLETED'
+          ? MobileTransferAction(
+            icon: Icons.delete_outline_rounded,
+            tooltip: l10n.filesDeleteTask,
+            onTap:
+                busy || onRemoveLocal == null
+                    ? null
+                    : () => onRemoveLocal!(task),
+          )
+          : MobileTransferAction(
+            icon: Icons.close_rounded,
+            tooltip: l10n.filesCancel,
+            destructive: true,
+            onTap:
+                busy || onRemoveLocal == null
+                    ? null
+                    : () => _confirmAndRemoveLocal(context, task),
+          ),
+    );
+    return Row(mainAxisSize: MainAxisSize.min, children: actions);
+  }
+
+  Future<void> _confirmAndRemoveLocal(
+    BuildContext context,
+    FileUploadClientTask task,
+  ) async {
+    final confirmed = await showFilesConfirmDialog(
+      context,
+      title: l10n.filesDeleteUploadTask,
+      message: l10n.filesDeleteUploadTaskMessage,
+      confirmLabel: l10n.filesDeleteTask,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await onRemoveLocal?.call(task);
+  }
+
+  Widget? _serverActions(BuildContext context, FileUploadQueueItem item) {
+    final status = item.status.toUpperCase();
+    final actions = <Widget>[
+      if (item.totalParts > 1 &&
+          (status == 'CREATED' || status == 'UPLOADING') &&
+          onRebindServer != null)
+        MobileTransferAction(
+          icon: Icons.file_open_outlined,
+          tooltip: l10n.filesRebindUpload,
+          onTap: busy ? null : () => onRebindServer!(item),
+        ),
+      if (!FileBrowserState.isTerminalUploadStatus(item.status) &&
+          onCancelServer != null)
+        MobileTransferAction(
+          icon: Icons.close_rounded,
+          tooltip: l10n.filesCancel,
+          destructive: true,
+          onTap: busy ? null : () => _confirmAndCancelServer(context, item),
+        ),
+    ];
+    return actions.isEmpty
+        ? null
+        : Row(mainAxisSize: MainAxisSize.min, children: actions);
+  }
+
+  Future<void> _confirmAndCancelServer(
+    BuildContext context,
+    FileUploadQueueItem item,
+  ) async {
+    final confirmed = await showFilesConfirmDialog(
+      context,
+      title: l10n.filesCancelUploadSessionTitle,
+      message: l10n.filesCancelUploadSessionMessage,
+      confirmLabel: l10n.filesCancel,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await onCancelServer?.call(item);
   }
 
   int _countByStatus(String status) {
@@ -117,6 +234,7 @@ class _HostedUploadQueue extends StatelessWidget {
                     progress: task.progress,
                     statusLabel: _uploadStatusLabel(l10n, task.status),
                     tone: _toneOf(task.status),
+                    trailingActions: _localActions(context, task),
                   ),
                 for (final item in serverItems)
                   MobileTransferRow(
@@ -128,6 +246,7 @@ class _HostedUploadQueue extends StatelessWidget {
                     progress: item.progress,
                     statusLabel: _uploadStatusLabel(l10n, item.status),
                     tone: _toneOf(item.status),
+                    trailingActions: _serverActions(context, item),
                   ),
               ],
             ],

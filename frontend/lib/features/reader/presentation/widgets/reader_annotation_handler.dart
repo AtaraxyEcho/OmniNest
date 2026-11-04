@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
+import 'package:omninest/features/reader/domain/reader_highlight_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
@@ -39,6 +42,16 @@ class ReaderAnnotationHandler {
   List<ReaderChapter> chapters;
 
   List<ReaderAnnotation> _annotations = [];
+  final Map<
+    String,
+    ({
+      ReaderAnnotation annotation,
+      int index,
+      Timer timer,
+      BuildContext context,
+    })
+  >
+  _pendingDeletes = {};
 
   // 章节批注过滤结果缓存：以 _annotations 列表身份 + 章节为键。
   // 批注重载（新列表身份）或切章自然失效，调用方在整页重建时
@@ -78,7 +91,9 @@ class ReaderAnnotationHandler {
   /// 加载所有批注。
   Future<void> load() async {
     try {
-      _annotations = await dataManager.loadAnnotations(itemId);
+      final loaded = await dataManager.loadAnnotations(itemId);
+      final pendingIds = _pendingDeletes.keys.toSet();
+      _annotations = loaded.where((a) => !pendingIds.contains(a.id)).toList();
       onAnnotationsChanged();
     } on Exception catch (e) {
       if (kDebugMode) {
@@ -147,13 +162,23 @@ class ReaderAnnotationHandler {
     onAnnotationsChanged();
   }
 
+  /// 用户最近一次选择的高亮色，作为下一次新建高亮的默认值。
+  String _preferredHighlightColor = ReaderHighlightPalette.defaultColor;
+
+  static const Duration _undoWindow = Duration(seconds: 6);
+
   /// 创建高亮（保留被覆盖批注的已有备注，且先建后删防止异常丢数据）。
   Future<void> highlight(
     String selectedText,
     int startOffset,
     int endOffset,
-    BuildContext context,
-  ) async {
+    BuildContext context, {
+    String? color,
+  }) async {
+    final effectiveColor = color ?? _preferredHighlightColor;
+    if (color != null) {
+      _preferredHighlightColor = color;
+    }
     final chapter = chapterId;
     final overlapping = _findOverlapping(chapter, startOffset, endOffset);
     final preservedNote = _mergedNote(overlapping);
@@ -165,7 +190,7 @@ class ReaderAnnotationHandler {
         endOffset: endOffset,
         highlightText: selectedText,
         note: preservedNote,
-        color: '#FFEB3B',
+        color: effectiveColor,
       );
       final replacedIds = await _deleteAnnotations(overlapping);
       _publish([
@@ -196,15 +221,6 @@ class ReaderAnnotationHandler {
     }
   }
 
-  /// 预设批注颜色列表。
-  static const List<String> _presetColors = [
-    '#FFEB3B', // 黄色（高亮默认）
-    '#4CAF50', // 绿色
-    '#2196F3', // 蓝色
-    '#E91E63', // 粉色
-    '#E0E0E0', // 浅灰色（批注默认，亮暗主题均可见）
-  ];
-
   /// 将批注颜色字符串解析为 Color，无效值回退为黄色。
   ///
   /// 供 [ReaderViewContent] 等外部组件调用以避免重复实现。
@@ -220,7 +236,7 @@ class ReaderAnnotationHandler {
 
   /// 批注存色可能为空或不在预设内；编辑对话框只能选中预设格，回落批注默认色。
   static String _presetColorOrDefault(String? color) =>
-      _presetColors.contains(color) ? color! : '#E0E0E0';
+      ReaderHighlightPalette.colors.contains(color) ? color! : '#E0E0E0';
 
   /// 创建批注（弹出输入弹窗）。
   Future<void> annotate(
@@ -280,21 +296,142 @@ class ReaderAnnotationHandler {
     }
   }
 
-  /// 删除批注。
+  /// 删除批注：含笔记时先确认，随后进入 6 秒可撤销的软删除窗口。
   Future<void> delete(ReaderAnnotation annotation, BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final hasNote = annotation.note?.trim().isNotEmpty == true;
+    if (hasNote) {
+      final confirmed = await showWorkstationConfirmDialog(
+        context,
+        title: l10n.readerDeleteAnnotation,
+        message: l10n.readerDeleteAnnotationNoteConfirm,
+        confirmLabel: l10n.readerDeleteAnnotation,
+        destructive: true,
+      );
+      if (!confirmed || !context.mounted) {
+        return;
+      }
+    }
+    await _commitAllPendingDeletes();
+    if (!context.mounted) {
+      return;
+    }
+    final index = _annotations.indexWhere((a) => a.id == annotation.id);
+    if (index < 0) {
+      return;
+    }
+    _pendingDeletes[annotation.id] = (
+      annotation: annotation,
+      index: index,
+      timer: Timer(_undoWindow, () => unawaited(_commitDelete(annotation.id))),
+      context: context,
+    );
+    _publish(_annotations.where((a) => a.id != annotation.id).toList());
+    showReaderSnackBar(
+      context,
+      l10n.readerAnnotationDeleted,
+      duration: _undoWindow,
+      action: SnackBarAction(
+        label: l10n.readerUndo,
+        onPressed: () => undoDelete(annotation.id),
+      ),
+    );
+  }
+
+  /// 6 秒窗口内撤销：不写数据库、不请求网络。
+  void undoDelete(String annotationId) {
+    final pending = _pendingDeletes.remove(annotationId);
+    if (pending == null) {
+      return;
+    }
+    pending.timer.cancel();
+    final restored = [..._annotations];
+    restored.insert(
+      pending.index.clamp(0, restored.length),
+      pending.annotation,
+    );
+    _publish(restored);
+  }
+
+  Future<void> _commitAllPendingDeletes() async {
+    for (final id in _pendingDeletes.keys.toList()) {
+      await _commitDelete(id);
+    }
+  }
+
+  Future<void> _commitDelete(String annotationId) async {
+    final pending = _pendingDeletes.remove(annotationId);
+    if (pending == null) {
+      return;
+    }
+    pending.timer.cancel();
     try {
-      await dataManager.deleteAnnotation(annotation.id);
-      _publish(_annotations.where((a) => a.id != annotation.id).toList());
+      await dataManager.deleteAnnotation(annotationId);
     } on Exception catch (e) {
-      // 与新增/编辑同口径：删除失败必须可感知，否则批注原地留着，
-      // 用户以为已经删掉，下次进来还在。
       if (kDebugMode) {
         readerDebugLog('ReaderAnnotationHandler: annotation delete failed: $e');
+      }
+      final restored = [..._annotations];
+      restored.insert(
+        pending.index.clamp(0, restored.length),
+        pending.annotation,
+      );
+      _publish(restored);
+      if (pending.context.mounted) {
+        showReaderSnackBar(
+          pending.context,
+          AppLocalizations.of(pending.context).readerAnnotationDeleteFailed,
+        );
+      }
+    }
+  }
+
+  /// 页面销毁时立即提交未到期的软删除，避免记录只留在内存。
+  void dispose() {
+    for (final id in _pendingDeletes.keys.toList()) {
+      unawaited(_commitDelete(id));
+    }
+  }
+
+  /// 原地切换高亮颜色，保留原备注与选区偏移。
+  Future<void> updateColor(
+    ReaderAnnotation annotation,
+    String color,
+    BuildContext context,
+  ) async {
+    try {
+      await dataManager.updateAnnotation(
+        annotationId: annotation.id,
+        note: annotation.note,
+        color: color,
+      );
+      _publish([
+        for (final item in _annotations)
+          if (item.id == annotation.id)
+            ReaderAnnotation(
+              id: item.id,
+              readerItemId: item.readerItemId,
+              startOffset: item.startOffset,
+              endOffset: item.endOffset,
+              chapterId: item.chapterId,
+              highlightText: item.highlightText,
+              note: item.note,
+              color: color,
+              createdAt: item.createdAt,
+            )
+          else
+            item,
+      ]);
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'ReaderAnnotationHandler: annotation recolor failed: $e',
+        );
       }
       if (context.mounted) {
         showReaderSnackBar(
           context,
-          AppLocalizations.of(context).readerAnnotationDeleteFailed,
+          AppLocalizations.of(context).readerAnnotationSaveFailed,
         );
       }
     }
@@ -389,7 +526,7 @@ class _PresetColorRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (final colorHex in ReaderAnnotationHandler._presetColors)
+        for (final colorHex in ReaderHighlightPalette.colors)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: InkWell(

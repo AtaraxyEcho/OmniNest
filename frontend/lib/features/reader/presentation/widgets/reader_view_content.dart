@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_ann
 import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_color_toolbar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 class ReaderViewContent extends StatefulWidget {
@@ -37,6 +38,8 @@ class ReaderViewContent extends StatefulWidget {
     this.onImageTap,
     this.onLinkTap,
     this.onHighlight,
+    this.onHighlightColor,
+    this.onUpdateAnnotationColor,
     this.onAnnotate,
     this.onRemoveHighlight,
     this.onRemoveAnnotation,
@@ -109,6 +112,15 @@ class ReaderViewContent extends StatefulWidget {
   final ValueChanged<String>? onLinkTap;
   final void Function(String selectedText, int startOffset, int endOffset)?
   onHighlight;
+  final void Function(
+    String selectedText,
+    int startOffset,
+    int endOffset,
+    String colorHex,
+  )?
+  onHighlightColor;
+  final void Function(ReaderAnnotation annotation, String colorHex)?
+  onUpdateAnnotationColor;
   final void Function(String selectedText, int startOffset, int endOffset)?
   onAnnotate;
   final ValueChanged<ReaderAnnotation>? onRemoveHighlight;
@@ -495,8 +507,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     SelectableRegionState selectableRegionState,
   ) {
     final range = _resolveSelectionRange(_selectedText);
-    // 选中范围与已有高亮重叠时，高亮项切换为取消高亮（主流阅读器语义：
-    // 再次选中已高亮文本应可移除高亮，而非只能重建）。
+    // 选中范围与已有高亮重叠时，高亮项切换为取消高亮（再次选中可移除而非只能重建）。
     final overlappingHighlights =
         range == null
             ? const <ReaderAnnotation>[]
@@ -506,7 +517,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                 )
                 .toList();
     final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
-    // 临时诊断日志：定位「取消高亮」与批注存储偏移的对齐问题。
     readerDebugLog(
       '[reader-selection][menu] '
       'mode=${widget.visibleBlocks != null ? 'page' : 'scroll'} '
@@ -554,9 +564,60 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
           },
         ),
     ];
-    return AdaptiveTextSelectionToolbar.buttonItems(
+    final colorPickerEnabled =
+        range != null &&
+        (widget.onHighlightColor != null ||
+            (hasHighlightOverlap && widget.onUpdateAnnotationColor != null));
+    if (!colorPickerEnabled) {
+      return AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: selectableRegionState.contextMenuAnchors,
+        buttonItems: items,
+      );
+    }
+    final l10n = AppLocalizations.of(context);
+    final selectedColor =
+        hasHighlightOverlap
+            ? overlappingHighlights.first.color.toUpperCase()
+            : null;
+    void selectColor(String colorHex) {
+      final selectionRange = range;
+      selectableRegionState.hideToolbar();
+      selectableRegionState.clearSelection();
+      if (hasHighlightOverlap) {
+        if (colorHex.toUpperCase() == selectedColor) {
+          for (final annotation in overlappingHighlights) {
+            widget.onRemoveHighlight?.call(annotation);
+          }
+        } else {
+          for (final annotation in overlappingHighlights) {
+            widget.onUpdateAnnotationColor?.call(annotation, colorHex);
+          }
+        }
+        return;
+      }
+      widget.onHighlightColor?.call(
+        _selectedText,
+        selectionRange.$1,
+        selectionRange.$2,
+        colorHex,
+      );
+    }
+
+    return ReaderSelectionColorToolbar(
       anchors: selectableRegionState.contextMenuAnchors,
-      buttonItems: items,
+      selectedColor: selectedColor,
+      onSelectColor: selectColor,
+      addAnnotationLabel: l10n.readerAddAnnotation,
+      contextMenuButtonItems: selectableRegionState.contextMenuButtonItems,
+      onAnnotate:
+          widget.onAnnotate == null
+              ? null
+              : () {
+                final selectedText = _selectedText;
+                selectableRegionState.hideToolbar();
+                selectableRegionState.clearSelection();
+                widget.onAnnotate?.call(selectedText, range.$1, range.$2);
+              },
     );
   }
 
