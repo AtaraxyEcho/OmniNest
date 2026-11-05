@@ -4,7 +4,7 @@
 /// 新增超过 800 行的生产源码必须在此登记，登记即锁定当前行数。
 const sourceLineCaps = <String, int>{
   'lib/app/theme/mobile_env_palette.dart': 811,
-  'lib/core/widgets/mobile_sample_kit.dart': 883,
+  'lib/core/widgets/mobile_sample_kit.dart': 847,
   'lib/features/admin/presentation/pages/admin_operations_logs_center.dart':
       921,
   'lib/features/admin/presentation/pages/admin_users_page.dart': 910,
@@ -38,9 +38,9 @@ const sourceLineCaps = <String, int>{
   'lib/features/portal/presentation/widgets/weather_detail_sheet.dart': 881,
   'lib/features/reader/application/reader_book_provider.dart': 911,
   'lib/features/reader/data/epub_parser_service.dart': 833,
-  'lib/features/reader/data/reader_api.dart': 844,
-  'lib/features/reader/data/reader_sync_queue.dart': 829,
-  'lib/features/reader/presentation/pages/comic_detail_page.dart': 834,
+  'lib/features/reader/data/reader_api.dart': 788,
+  'lib/features/reader/data/reader_sync_queue.dart': 741,
+  'lib/features/reader/presentation/pages/comic_detail_page.dart': 831,
   'lib/features/reader/presentation/pages/reader_view_page.dart': 818,
   'lib/features/reader/presentation/widgets/book_detail_space.dart': 839,
   'lib/features/reader/presentation/widgets/reader_content_loader.dart': 814,

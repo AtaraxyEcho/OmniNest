@@ -15,11 +15,13 @@ void main() {
   };
 
   test('Files presentation 不直接取暗档语义亮彩', () {
-    final pattern = RegExp(r'FilesWorkstationPalette\.(?:emerald|amber|rose)\b');
+    final pattern = RegExp(
+      r'FilesWorkstationPalette\.(?:emerald|amber|rose)\b',
+    );
     final offenders = <String>[];
-    for (final entity in Directory('lib/features/files').listSync(
-      recursive: true,
-    )) {
+    for (final entity in Directory(
+      'lib/features/files',
+    ).listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) {
         continue;
       }

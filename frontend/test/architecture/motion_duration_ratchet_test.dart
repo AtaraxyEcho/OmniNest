@@ -17,9 +17,6 @@ void main() {
         '幻灯 chrome 淡入淡出，随转场决策一并处理',
     'lib/features/photos/presentation/widgets/photo_slideshow_overlays.dart 400':
         '幻灯遮罩与队列层淡入，随转场决策一并处理',
-    // 音乐区由并行会话持有，本轮不越界改其时长。
-    'lib/features/music/presentation/deck/music_deck_shell.dart 360':
-        '并行会话在途文件',
     'lib/features/music/presentation/player/music_immersive_cover_deck_widgets.dart 1400':
         '沉浸卡组轮播节奏，非交互反馈',
     'lib/features/music/presentation/player/music_immersive_lyric_line.dart 1400':

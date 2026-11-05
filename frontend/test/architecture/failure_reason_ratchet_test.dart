@@ -14,8 +14,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   /// 逐站判定后保留的例外：文案本身已给出原因或处置方式。
   const allowedUnboundFailures = <String, String>{
-    'lib/features/photos/presentation/pages/photo_detail_page.dart:245':
-        '文案已点名"离线地名库缺失"这一原因，再拼一层无新增信息',
     'lib/features/photos/presentation/widgets/batch_progress_dialog.dart:64':
         '打包下载失败已给出"重新选择同一路径继续"的处置动作',
     // 音乐区由并行会话持有，本轮不越界改其文案。
