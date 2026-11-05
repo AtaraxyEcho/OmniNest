@@ -147,6 +147,26 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     List<AuthUser> findDistinctByRoles_Permissions_CodeAndStatus(String permissionCode, String status);
 
     /**
+     * 查询拥有指定权限且状态匹配的用户标识。
+     *
+     * <p>只投影响应方 ID：管理审计每次写入都要广播同步事件，用实体查询会把
+     * 角色与权限的关联图一起加载，只为拿一个 ID 付出多次 join 与一级缓存开销。</p>
+     *
+     * @param permissionCode 权限编码
+     * @param status 用户状态
+     * @return 匹配用户标识
+     */
+    @Query("""
+            select distinct u.id from AuthUser u
+            join u.roles r
+            join r.permissions p
+            where p.code = :permissionCode and u.status = :status
+            """)
+    List<UUID> findIdsByPermissionCodeAndStatus(
+            @Param("permissionCode") String permissionCode,
+            @Param("status") String status);
+
+    /**
      * 查询首批用户标识。
      *
      * @param limit 批次上限

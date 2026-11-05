@@ -17,6 +17,7 @@ import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.notification.port.NotificationRealtimeQuery;
 import com.omninest.modules.notification.repository.NotificationRepository;
 import com.omninest.modules.notification.repository.NotificationTypeRepository;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -24,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +35,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -50,6 +56,14 @@ public class NotificationService implements NotificationPublisher, NotificationR
     private final UserSyncEventRecorder syncEventRecorder;
     private final PlatformTransactionManager transactionManager;
     private final NotificationEmailService notificationEmailService;
+
+    private static final int MAX_DEFERRED_NOTIFICATIONS = 4;
+
+    // 事务内触发的最佳努力通知必须等提交后再落库；并发上限防止
+    // 一次性任务收尾放出大量通知时堆积线程与连接。
+    private final Semaphore deferredPermits = new Semaphore(MAX_DEFERRED_NOTIFICATIONS);
+    private final ExecutorService deferredExecutor = Executors.newThreadPerTaskExecutor(
+            Thread.ofVirtual().name("notification-deferred-", 0).factory());
 
     /**
      * 创建通知并持久化。
@@ -120,9 +134,42 @@ public class NotificationService implements NotificationPublisher, NotificationR
     /**
      * 发送通知，失败时记录警告日志但不影响主流程。
      * 用于任务完成/失败等非关键通知场景。
+     *
+     * <p>调用方正处于事务中时必须延后到提交之后：独立短事务在业务主事务提交前落库，
+     * 一旦主事务回滚就会留下指向不存在结果的通知与邮件；延后执行同时避免主事务
+     * 连接未归还时再申请第二条连接。</p>
      */
     @Override
     public void notifyOrLog(UUID userId, String type, String title, String message, Map<String, Object> metadata) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatchDeferred(userId, type, title, message, metadata);
+                }
+            });
+            return;
+        }
+        deliverQuietly(userId, type, title, message, metadata);
+    }
+
+    private void dispatchDeferred(UUID userId, String type, String title, String message,
+                                  Map<String, Object> metadata) {
+        if (!deferredPermits.tryAcquire()) {
+            log.warn("延迟通知投递并发已满，丢弃本次通知: userId={}, type={}", userId, type);
+            return;
+        }
+        deferredExecutor.execute(() -> {
+            try {
+                deliverQuietly(userId, type, title, message, metadata);
+            } finally {
+                deferredPermits.release();
+            }
+        });
+    }
+
+    private void deliverQuietly(UUID userId, String type, String title, String message,
+                                Map<String, Object> metadata) {
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
             transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -131,6 +178,11 @@ public class NotificationService implements NotificationPublisher, NotificationR
             log.warn("发送通知失败: userId={}, type={}, errorType={}",
                     userId, type, ex.getClass().getSimpleName());
         }
+    }
+
+    @PreDestroy
+    void shutdownDeferredExecutor() {
+        deferredExecutor.shutdown();
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.modules.media.service.ProgressClockGuard;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
@@ -85,7 +86,8 @@ public class ReaderProgressService {
                 .min(BigDecimal.ONE);
         Double intraPageOffset = clampIntraPageOffset(request.intraPageOffset());
         // 缺少上报时间时按服务端接收时间处理：退化成"最新到达胜出"，而不是把写入永久挡住。
-        Instant clientUpdatedAt = request.clientUpdatedAt() != null ? request.clientUpdatedAt() : Instant.now();
+        Instant now = Instant.now();
+        Instant clientUpdatedAt = ProgressClockGuard.clamp(request.clientUpdatedAt(), now);
         int applied = progressRepository.upsertProgress(
                 ownerUserId,
                 readerItemId,

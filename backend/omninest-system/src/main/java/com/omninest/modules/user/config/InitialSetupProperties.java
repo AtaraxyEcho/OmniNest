@@ -1,6 +1,7 @@
 package com.omninest.modules.user.config;
 
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -12,6 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "omninest.setup")
 public class InitialSetupProperties {
     private boolean enabled = true;
+    @ToString.Exclude
     private String token;
     private boolean persistentStateEnabled = true;
     private String webBaseUrl;

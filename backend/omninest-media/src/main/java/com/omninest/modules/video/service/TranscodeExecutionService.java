@@ -86,16 +86,19 @@ public class TranscodeExecutionService {
             // 阶段 2：通过文件模块保存派生资产。
             fileLifecycleGuard.requireOwnedWritable(ownerUserId, finalSourceItem.getFileNodeId());
             long sizeBytes = Files.size(transcodedFile);
-            derivedFileNodeId = derivedAssetStorageService.store(
-                    ownerUserId,
-                    "VIDEO",
-                    videoItemId,
-                    "TRANSCODE",
-                    finalSourceItem.getFileNodeId() + "_h265.mp4",
-                    "h265.mp4",
-                    "video/mp4",
-                    transcodedFile
-            );
+            final Path uploadedFile = transcodedFile;
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                derivedFileNodeId = derivedAssetStorageService.store(
+                        ownerUserId,
+                        "VIDEO",
+                        videoItemId,
+                        "TRANSCODE",
+                        finalSourceItem.getFileNodeId() + "_h265.mp4",
+                        "h265.mp4",
+                        "video/mp4",
+                        uploadedFile
+                );
+            }
 
             // 阶段 3：创建派生视频版本并更新任务状态。
             fileLifecycleGuard.requireOwnedWritable(ownerUserId, finalSourceItem.getFileNodeId());
@@ -117,9 +120,11 @@ public class TranscodeExecutionService {
                 return;
             }
             failH265Task(taskId, videoItemId, ownerUserId, exception);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(exception);
         } catch (Exception e) {
             failH265Task(taskId, videoItemId, ownerUserId, e);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(e);
         } finally {
             if (transcodedFile != null) {
@@ -185,16 +190,19 @@ public class TranscodeExecutionService {
             taskRecordService.updateProgress(taskId, 50);
             fileLifecycleGuard.requireOwnedWritable(ownerUserId, sourceItem.getFileNodeId());
             long sizeBytes = Files.size(transcodedFile);
-            derivedFileNodeId = derivedAssetStorageService.store(
-                    ownerUserId,
-                    "VIDEO",
-                    videoItemId,
-                    "TRANSCODE",
-                    sourceItem.getFileNodeId() + "_audio_only.aac",
-                    "audio_only.aac",
-                    "audio/aac",
-                    transcodedFile
-            );
+            final Path uploadedFile = transcodedFile;
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                derivedFileNodeId = derivedAssetStorageService.store(
+                        ownerUserId,
+                        "VIDEO",
+                        videoItemId,
+                        "TRANSCODE",
+                        sourceItem.getFileNodeId() + "_audio_only.aac",
+                        "audio_only.aac",
+                        "audio/aac",
+                        uploadedFile
+                );
+            }
             log.info("音频提取 Phase 2/3：派生资产保存完成: videoItemId={}, fileNodeId={}, sizeBytes={}",
                     videoItemId, derivedFileNodeId, sizeBytes);
 
@@ -219,9 +227,11 @@ public class TranscodeExecutionService {
                 return false;
             }
             failAudioTask(taskId, videoItemId, ownerUserId, exception);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(exception);
         } catch (Exception e) {
             failAudioTask(taskId, videoItemId, ownerUserId, e);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(e);
         } finally {
             if (transcodedFile != null) {
@@ -331,16 +341,19 @@ public class TranscodeExecutionService {
             taskRecordService.updateProgress(taskId, 50);
             fileLifecycleGuard.requireOwnedWritable(ownerUserId, sourceItem.getFileNodeId());
             long sizeBytes = Files.size(transcodedFile);
-            derivedFileNodeId = derivedAssetStorageService.store(
-                    ownerUserId,
-                    "VIDEO",
-                    videoItemId,
-                    "TRANSCODE",
-                    sourceItem.getFileNodeId() + "_web_optimized.mp4",
-                    "web_optimized.mp4",
-                    "video/mp4",
-                    transcodedFile
-            );
+            final Path uploadedFile = transcodedFile;
+            try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId, 20)) {
+                derivedFileNodeId = derivedAssetStorageService.store(
+                        ownerUserId,
+                        "VIDEO",
+                        videoItemId,
+                        "TRANSCODE",
+                        sourceItem.getFileNodeId() + "_web_optimized.mp4",
+                        "web_optimized.mp4",
+                        "video/mp4",
+                        uploadedFile
+                );
+            }
             log.info("Web 优化 Phase 2/3：派生资产保存完成: videoItemId={}, fileNodeId={}, sizeBytes={}",
                     videoItemId, derivedFileNodeId, sizeBytes);
 
@@ -365,9 +378,11 @@ public class TranscodeExecutionService {
                 return;
             }
             failWebOptimizeTask(taskId, videoItemId, exception);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(exception);
         } catch (Exception e) {
             failWebOptimizeTask(taskId, videoItemId, e);
+            deleteOrphanDerived(taskId, ownerUserId, derivedFileNodeId);
             throw propagate(e);
         } finally {
             if (transcodedFile != null) {
@@ -413,6 +428,25 @@ public class TranscodeExecutionService {
     private boolean isLifecycleCancellation(BusinessException exception) {
         return ErrorCode.FILE_LIFECYCLE_CONFLICT.equals(exception.errorCode())
                 || ErrorCode.FILE_NOT_FOUND.equals(exception.errorCode());
+    }
+
+    /**
+     * 阶段三未提交时回收已上传的派生文件，避免重试堆出多份数 GB 孤儿对象。
+     *
+     * @param taskId 任务标识
+     * @param ownerUserId 所有者用户
+     * @param derivedFileNodeId 已入库的派生文件节点；为空表示尚未创建
+     */
+    private void deleteOrphanDerived(UUID taskId, UUID ownerUserId, UUID derivedFileNodeId) {
+        if (derivedFileNodeId == null) {
+            return;
+        }
+        try {
+            derivedAssetStorageService.deleteOwned(ownerUserId, derivedFileNodeId);
+        } catch (RuntimeException exception) {
+            log.warn("转码失败后清理派生文件失败: taskId={}, fileNodeId={}",
+                    taskId, derivedFileNodeId, exception);
+        }
     }
 
     private void cancelForLifecycle(

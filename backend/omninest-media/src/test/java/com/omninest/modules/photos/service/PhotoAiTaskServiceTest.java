@@ -11,6 +11,7 @@ import com.omninest.modules.photos.event.PhotoAiEvent;
 import com.omninest.modules.photos.event.PhotoAiEvent.Mode;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +55,7 @@ class PhotoAiTaskServiceTest {
                 photoItemRepository,
                 configService,
                 taskRecordService,
+                Mockito.mock(TaskHeartbeatRunner.class),
                 taskDispatchService,
                 completionService,
                 photoIndexTaskService

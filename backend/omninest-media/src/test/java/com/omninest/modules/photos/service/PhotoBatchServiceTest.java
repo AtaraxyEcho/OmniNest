@@ -39,6 +39,7 @@ import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.processing.TempStagingPort;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -103,6 +104,7 @@ class PhotoBatchServiceTest {
             derivedAssetStorageService,
             fileQueryService,
             taskRecordService,
+            Mockito.mock(TaskHeartbeatRunner.class),
             syncEventService,
             downloadProperties,
             transactionTemplate,
@@ -508,6 +510,7 @@ class PhotoBatchServiceTest {
                 derivedAssetStorageService,
                 fileQueryService,
                 taskRecordService,
+                Mockito.mock(TaskHeartbeatRunner.class),
                 syncEventService,
                 properties,
                 transactionTemplate,

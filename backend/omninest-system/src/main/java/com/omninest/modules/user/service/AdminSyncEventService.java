@@ -6,7 +6,6 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
-import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.List;
 import java.util.Map;
@@ -35,19 +34,27 @@ public class AdminSyncEventService {
      */
     public void record(String action, String resourceType, UUID resourceId) {
         String permission = resolveReadPermission(action);
-        List<AuthUser> recipients = authUserRepository.findDistinctByRoles_Permissions_CodeAndStatus(
+        // 只取收件人 ID：审计写入是高频路径，实体查询会把角色与权限的关联图
+        // 一起加载，仅为拿一个 ID 付出多次 join；写入也合并成一次批量 insert。
+        List<UUID> recipients = authUserRepository.findIdsByPermissionCodeAndStatus(
                 permission,
                 UserStatus.ACTIVE.getValue()
         );
-        recipients.forEach(user -> syncEventRecorder.record(new SyncEventCommand(
-                user.getId(),
-                SyncScope.ADMIN,
-                resourceType,
-                resourceId == null ? null : resourceId.toString(),
-                SyncAction.UPDATED,
-                null,
-                Map.of("action", action)
-        )));
+        if (recipients.isEmpty()) {
+            return;
+        }
+        List<SyncEventCommand> commands = recipients.stream()
+                .map(userId -> new SyncEventCommand(
+                        userId,
+                        SyncScope.ADMIN,
+                        resourceType,
+                        resourceId == null ? null : resourceId.toString(),
+                        SyncAction.UPDATED,
+                        null,
+                        Map.of("action", action)
+                ))
+                .toList();
+        syncEventRecorder.recordAll(commands);
     }
 
     private String resolveReadPermission(String action) {

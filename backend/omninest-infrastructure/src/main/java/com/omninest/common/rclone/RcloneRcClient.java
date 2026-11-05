@@ -1,7 +1,11 @@
 package com.omninest.common.rclone;
 
 import com.omninest.common.config.RcloneProperties;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,6 +19,8 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -30,7 +36,13 @@ import tools.jackson.databind.JsonNode;
 @Slf4j
 @Component
 public class RcloneRcClient implements RcloneGateway {
+    private static final Set<String> ALLOWED_REMOTE_TYPES =
+            Set.of("s3", "webdav", "onedrive", "drive", "dropbox");
+    private static final Pattern REMOTE_NAME_PATTERN =
+            Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
+
     private final RcloneProperties properties;
+    private final SafeUrlValidator safeUrlValidator;
     private final HttpClient httpClient;
     private final String authHeader;
 
@@ -38,9 +50,11 @@ public class RcloneRcClient implements RcloneGateway {
      * 根据 Rclone 运行配置创建 RC 客户端。
      *
      * @param properties Rclone 运行配置
+     * @param safeUrlValidator 出站地址校验器
      */
-    public RcloneRcClient(RcloneProperties properties) {
+    public RcloneRcClient(RcloneProperties properties, SafeUrlValidator safeUrlValidator) {
         this.properties = properties;
+        this.safeUrlValidator = safeUrlValidator;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -117,6 +131,12 @@ public class RcloneRcClient implements RcloneGateway {
      */
     @Override
     public void createRemote(String name, String type, Map<String, String> parameters) {
+        if (name == null || !REMOTE_NAME_PATTERN.matcher(name).matches()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "外部存储远端名称不合法");
+        }
+        if (type == null || !ALLOWED_REMOTE_TYPES.contains(type)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的外部存储类型");
+        }
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("name", name);
         params.put("type", type);
@@ -300,9 +320,13 @@ public class RcloneRcClient implements RcloneGateway {
 
     private HttpRequest buildRequest(String endpoint, Map<String, Object> params) {
         String url = properties.getEndpoint().replaceAll("/+$", "") + "/" + endpoint;
+        // RC 端点由部署配置决定；逐次请求复核协议、来源与自建端点档位，
+        // 防止配置被写成 file:// 或跳到元数据/保留地址。
+        URI target = OutboundEndpointRules.requireConfiguredEndpoint(
+                properties.getEndpoint(), URI.create(url), safeUrlValidator);
         String jsonBody = JsonSupport.toJson(params != null ? params : Map.of());
 
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(target)
                 .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));

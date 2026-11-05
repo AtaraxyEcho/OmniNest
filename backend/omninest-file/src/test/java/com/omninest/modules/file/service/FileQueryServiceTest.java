@@ -86,14 +86,16 @@ class FileQueryServiceTest {
             fileObjectRepository,
             objectStorageClient
     );
+    private final FileShareRecipientAccessService shareRecipientAccessService =
+            Mockito.mock(FileShareRecipientAccessService.class);
     private final FileContentAccessService fileContentAccessService = new FileContentAccessService(
             List.of(minioFileContentProvider),
             fileNodeRepository,
             fileObjectRepository,
-            new LocalContentAccessTokenService("test-local-content-secret")
+            new LocalContentAccessTokenService("test-local-content-secret"),
+            sharedSpaceService,
+            shareRecipientAccessService
     );
-    private final FileShareRecipientAccessService shareRecipientAccessService =
-            Mockito.mock(FileShareRecipientAccessService.class);
     private final FileDownloadService fileDownloadService = new FileDownloadService(
             fileNodeRepository,
             fileContentAccessService,

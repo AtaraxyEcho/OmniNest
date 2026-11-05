@@ -130,9 +130,12 @@ public class MusicMetadataExtractor {
             long fileSizeBytes
     ) {
         // MPEG1 Layer3 bitrate 表 (index 1-14)
-        int[] mp3Bitrates = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
-        // MPEG1 sampleRate 表 (index 0-2)
-        int[] mp3SampleRates = {44100, 48000, 32000};
+        int[] mpeg1Bitrates = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
+        // MPEG2/2.5 Layer3 bitrate 表：22.05kHz/11.025kHz 的有声书与播客都在这一档
+        int[] mpeg2Bitrates = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160};
+        int[] mpeg1SampleRates = {44100, 48000, 32000};
+        int[] mpeg2SampleRates = {22050, 24000, 16000};
+        int[] mpeg25SampleRates = {11025, 12000, 8000};
 
         // 限制扫描范围为 ID3 标签后 32KB，避免非 MP3 文件全量扫描 8MB
         int searchEnd = Math.min(bytes.length, searchFrom + 32 * 1024);
@@ -149,19 +152,29 @@ public class MusicMetadataExtractor {
                 int sampleRateIndex = (header >> 10) & 0x3; // sampleRate index
                 int padding = (header >> 9) & 1;
 
-                // 只处理 MPEG1 Layer3 (version=3, layer=1)
-                if (versionBits == 3 && layerBits == 1
+                // 只处理 Layer3；MPEG1 与 MPEG2/2.5 的码率表、采样率表与帧长系数都不同。
+                if (layerBits == 1
+                        && (versionBits == 3 || versionBits == 2 || versionBits == 0)
                         && bitrateIndex > 0 && bitrateIndex < 15
                         && sampleRateIndex < 3) {
-                    int bitrate = mp3Bitrates[bitrateIndex];
-                    int sampleRate = mp3SampleRates[sampleRateIndex];
+                    int bitrate = versionBits == 3
+                            ? mpeg1Bitrates[bitrateIndex] : mpeg2Bitrates[bitrateIndex];
+                    int[] sampleRateTable = switch (versionBits) {
+                        case 3 -> mpeg1SampleRates;
+                        case 2 -> mpeg2SampleRates;
+                        default -> mpeg25SampleRates;
+                    };
+                    int sampleRate = sampleRateTable[sampleRateIndex];
                     metadata.bitrate = bitrate;
                     metadata.sampleRate = sampleRate;
-                    int frameLength = (144 * bitrate * 1000) / sampleRate + padding * 4;
+                    // Layer3 padding 是 1 字节；MPEG2/2.5 每帧 576 采样，帧长系数为 72。
+                    int frameCoefficient = versionBits == 3 ? 144 : 72;
+                    int frameLength = (frameCoefficient * bitrate * 1000) / sampleRate + padding;
                     metadata.durationSeconds = resolveMp3Duration(
                             bytes, i, frameLength, bitrate, sampleRate, searchFrom, fileSizeBytes);
+                    // 命中合法帧头才结束扫描；0xFF 0xE0 也可能是标签或封面里的伪同步字节。
+                    return;
                 }
-                return;
             }
         }
     }

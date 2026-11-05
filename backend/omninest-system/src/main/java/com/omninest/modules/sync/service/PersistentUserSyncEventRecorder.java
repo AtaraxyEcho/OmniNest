@@ -7,6 +7,7 @@ import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.sync.domain.SyncEvent;
 import com.omninest.modules.sync.repository.SyncEventRepository;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,27 @@ public class PersistentUserSyncEventRecorder implements UserSyncEventRecorder {
     @Override
     @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
     public UUID record(SyncEventCommand command) {
+        SyncEvent event = toEntity(command);
+        syncEventRepository.save(event);
+        return event.getId();
+    }
+
+    /**
+     * 广播型事件一次落库：收件人数量与用户规模同阶，逐条 insert 会把一次管理
+     * 操作的写入放大到与用户数成正比。
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
+    public List<UUID> recordAll(List<SyncEventCommand> commands) {
+        if (commands == null || commands.isEmpty()) {
+            return List.of();
+        }
+        List<SyncEvent> events = commands.stream().map(this::toEntity).toList();
+        syncEventRepository.saveAll(events);
+        return events.stream().map(SyncEvent::getId).toList();
+    }
+
+    private SyncEvent toEntity(SyncEventCommand command) {
         validate(command);
         SyncEvent event = new SyncEvent();
         event.setId(UUID.randomUUID());
@@ -50,8 +72,7 @@ public class PersistentUserSyncEventRecorder implements UserSyncEventRecorder {
                 : new LinkedHashMap<>(command.hints()));
         event.setPublishStatus("PENDING");
         event.setPublishAttempts(0);
-        syncEventRepository.save(event);
-        return event.getId();
+        return event;
     }
 
     private void validate(SyncEventCommand command) {

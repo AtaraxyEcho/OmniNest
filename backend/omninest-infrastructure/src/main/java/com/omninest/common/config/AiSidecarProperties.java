@@ -1,6 +1,7 @@
 package com.omninest.common.config;
 
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class AiSidecarProperties {
 
     private String endpoint = "http://localhost:8090";
+    @ToString.Exclude
     private String secret;
     private int timeoutSeconds = 30;
     private long maxImageBytes = 64L * 1024 * 1024;

@@ -8,6 +8,7 @@ import com.omninest.modules.video.service.MoviePlaybackService;
 import com.omninest.modules.video.service.VideoStreamService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -19,6 +20,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -126,9 +128,12 @@ public class MediaPublicContentController {
     ResponseEntity<StreamingResponseBody> videoAsset(
             @PathVariable UUID videoItemId,
             @PathVariable UUID fileNodeId,
-            @RequestParam String token
+            @RequestParam String token,
+            HttpServletRequest request
     ) {
-        return streamAsset(mediaContentAccessService.openVideoAsset(token, videoItemId, fileNodeId));
+        return streamAsset(
+                mediaContentAccessService.openVideoAsset(token, videoItemId, fileNodeId),
+                HttpMethod.HEAD.matches(request.getMethod()));
     }
 
     @Operation(summary = "读取系列派生资源", description = "校验系列令牌和资源归属后转发海报或背景图")
@@ -136,12 +141,15 @@ public class MediaPublicContentController {
     ResponseEntity<StreamingResponseBody> seriesAsset(
             @PathVariable UUID seriesId,
             @PathVariable UUID fileNodeId,
-            @RequestParam String token
+            @RequestParam String token,
+            HttpServletRequest request
     ) {
-        return streamAsset(mediaContentAccessService.openSeriesAsset(token, seriesId, fileNodeId));
+        return streamAsset(
+                mediaContentAccessService.openSeriesAsset(token, seriesId, fileNodeId),
+                HttpMethod.HEAD.matches(request.getMethod()));
     }
 
-    private ResponseEntity<StreamingResponseBody> streamAsset(FileContentStream content) {
+    private ResponseEntity<StreamingResponseBody> streamAsset(FileContentStream content, boolean headOnly) {
         boolean executable = InlineContentPolicy.isExecutable(content.mimeType());
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(resolveMediaType(executable
@@ -155,6 +163,16 @@ public class MediaPublicContentController {
                 : ContentDisposition.inline())
                 .filename(content.fileName(), StandardCharsets.UTF_8)
                 .build());
+        // HEAD 预检不会执行 StreamingResponseBody 回调：此处必须立即关闭已打开的
+        // 底层流，否则浏览器每次探测海报/剧照都会永久泄漏一个句柄。
+        if (headOnly) {
+            try {
+                content.close();
+            } catch (IOException exception) {
+                log.debug("HEAD 预检关闭媒体流失败: message={}", exception.getMessage());
+            }
+            return ResponseEntity.ok().headers(headers).build();
+        }
         StreamingResponseBody body = outputStream -> {
             try (content) {
                 content.inputStream().transferTo(outputStream);

@@ -68,6 +68,39 @@ class FileSearchServiceTest {
     }
 
     @Test
+    void returnsDatabaseTitleMatchWhenLuceneHasNoCandidates() {
+        when(fileSearchIndexService.search(eq(USER_ID), eq("新名字"), anyInt(), any()))
+                .thenReturn(List.of());
+        when(searchableFileQuery.searchActiveFilesByName(USER_ID, "新名字", true, false, 50))
+                .thenReturn(Map.of(ACTIVE_FILE_ID, "新名字.pdf"));
+
+        List<SearchResultDto> results = service.search(USER_ID, "新名字");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().fileId()).isEqualTo(ACTIVE_FILE_ID);
+        assertThat(results.getFirst().title()).isEqualTo("新名字.pdf");
+        assertThat(results.getFirst().snippet()).isNull();
+    }
+
+    @Test
+    void appendsDatabaseTitleMatchAfterLuceneCandidates() {
+        UUID otherId = UUID.fromString("20000000-0000-0000-0000-000000000003");
+        when(fileSearchIndexService.search(eq(USER_ID), eq("报告"), anyInt(), any()))
+                .thenReturn(List.of(new SearchResultDto(ACTIVE_FILE_ID, "旧标题", "正文", 2.0)));
+        when(searchableFileQuery.findCurrentNames(eq(USER_ID), any()))
+                .thenReturn(Map.of(ACTIVE_FILE_ID, "报告.pdf"));
+        when(searchableFileQuery.searchActiveFilesByName(USER_ID, "报告", true, false, 50))
+                .thenReturn(Map.of(otherId, "报告备份.pdf"));
+
+        List<SearchResultDto> results = service.search(USER_ID, "报告");
+
+        assertThat(results).extracting(SearchResultDto::fileId)
+                .containsExactly(ACTIVE_FILE_ID, otherId);
+        assertThat(results.get(0).snippet()).isEqualTo("正文");
+        assertThat(results.get(1).snippet()).isNull();
+    }
+
+    @Test
     void blankQueryDoesNotAccessIndexOrDatabase() {
         assertThat(service.search(USER_ID, "  ")).isEmpty();
     }

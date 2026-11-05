@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
@@ -74,8 +75,20 @@ public class LocalFileContentProvider implements FileContentProvider {
 
     @Override
     public FileDownloadUrlDto createDownloadUrl(FileNode node) {
+        // 单参入口没有请求者身份，只能按所有者自己签发：非所有者在该入口拿到
+        // 的地址会在读取复核时被拒，宁可失败也不发出无主体的授权。
+        return createDownloadUrl(node, node.getOwnerUserId());
+    }
+
+    @Override
+    public FileDownloadUrlDto createDownloadUrl(FileNode node, UUID requesterUserId) {
         resolve(node);
-        LocalContentAccessTokenService.IssuedAccess issued = tokenService.issue(node.getOwnerUserId(), node.getId());
+        LocalContentAccessTokenService.IssuedAccess issued = tokenService.issue(
+                node.getOwnerUserId(),
+                node.getId(),
+                requesterUserId,
+                node.getSpaceType()
+        );
         String relativeUrl = "/api/v1/public/file-content/" + issued.token();
         return new FileDownloadUrlDto(node.getId(), node.getName(), relativeUrl, issued.expiresAt());
     }

@@ -2,6 +2,7 @@ package com.omninest.common.config;
 
 import com.omninest.common.storage.ObjectStorageBuckets;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -25,8 +26,10 @@ public class MinioProperties implements ObjectStorageBuckets {
      */
     private String dockerEndpoint;
 
+    @ToString.Exclude
     private String accessKey;
 
+    @ToString.Exclude
     private String secretKey;
 
     private int apiCallTimeoutSeconds = 1800;

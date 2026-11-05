@@ -3,6 +3,7 @@ package com.omninest.common.config;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import java.time.Duration;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -15,6 +16,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class RcloneProperties implements LocalExternalStorageSettings {
     private String endpoint = "http://localhost:5572";
     private String username = "";
+    @ToString.Exclude
     private String password = "";
     private int connectTimeoutSeconds = 10;
     private int readTimeoutSeconds = 300;

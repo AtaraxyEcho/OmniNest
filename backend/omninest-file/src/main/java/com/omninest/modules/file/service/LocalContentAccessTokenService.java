@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.HkdfSha256;
+import com.omninest.modules.file.domain.SpaceType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -22,14 +23,21 @@ import org.springframework.stereotype.Service;
  * 扩展后都能继续校验，避免进程内缓存导致跨节点 403。有效期与 MinIO 预签名一致取
  * 2 小时，覆盖长视频播放中的后续 Range 请求。</p>
  *
+ * <p>令牌同时绑定"谁、在哪个空间、以什么身份"取到这个地址：只签名文件与所有者
+ * 时，分享被撤销、成员被降权或文件移入回收站后，已发地址在剩余有效期内仍能读。
+ * 因此载荷携带 requesterUserId 与 spaceType，读取时逐次复核，而不是把 2 小时
+ * 当作不可撤销的授权窗口。</p>
+ *
  * @author OmniNest
  */
 @Service
 public class LocalContentAccessTokenService {
     private static final Duration TOKEN_TTL = Duration.ofHours(2);
     private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final String TOKEN_VERSION = "v1";
+    /** v2 起携带请求者与空间上下文；v1 令牌（仅文件+所有者）不再接受。 */
+    private static final String TOKEN_VERSION = "v2";
     private static final int NONCE_BYTES = 16;
+    private static final int FIELD_COUNT = 7;
     private static final Base64.Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder BASE64_DECODER = Base64.getUrlDecoder();
 
@@ -58,9 +66,19 @@ public class LocalContentAccessTokenService {
      *
      * @param ownerUserId 文件所有者 ID
      * @param fileId 文件节点 ID
+     * @param requesterUserId 本次取到地址的请求者 ID
+     * @param spaceType 文件所在空间
      * @return 访问授权
      */
-    public IssuedAccess issue(UUID ownerUserId, UUID fileId) {
+    public IssuedAccess issue(
+            UUID ownerUserId,
+            UUID fileId,
+            UUID requesterUserId,
+            SpaceType spaceType
+    ) {
+        if (ownerUserId == null || fileId == null || requesterUserId == null || spaceType == null) {
+            throw new IllegalArgumentException("本地内容令牌缺少必要的授权上下文");
+        }
         byte[] random = new byte[NONCE_BYTES];
         secureRandom.nextBytes(random);
         Instant expiresAt = Instant.now().plus(TOKEN_TTL);
@@ -68,6 +86,8 @@ public class LocalContentAccessTokenService {
                 TOKEN_VERSION,
                 ownerUserId.toString(),
                 fileId.toString(),
+                requesterUserId.toString(),
+                spaceType.name(),
                 Long.toString(expiresAt.getEpochSecond()),
                 BASE64_ENCODER.encodeToString(random));
         String payloadPart = BASE64_ENCODER.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
@@ -102,17 +122,19 @@ public class LocalContentAccessTokenService {
             throw invalidToken();
         }
         String[] fields = payload.split("\\|", -1);
-        if (fields.length != 5 || !TOKEN_VERSION.equals(fields[0])) {
+        if (fields.length != FIELD_COUNT || !TOKEN_VERSION.equals(fields[0])) {
             throw invalidToken();
         }
         try {
             UUID ownerUserId = UUID.fromString(fields[1]);
             UUID fileId = UUID.fromString(fields[2]);
-            Instant expiresAt = Instant.ofEpochSecond(Long.parseLong(fields[3]));
-            if (fields[4].isBlank() || !expiresAt.isAfter(Instant.now())) {
+            UUID requesterUserId = UUID.fromString(fields[3]);
+            SpaceType spaceType = SpaceType.valueOf(fields[4]);
+            Instant expiresAt = Instant.ofEpochSecond(Long.parseLong(fields[5]));
+            if (fields[6].isBlank() || !expiresAt.isAfter(Instant.now())) {
                 throw invalidToken();
             }
-            return new AccessGrant(ownerUserId, fileId, expiresAt);
+            return new AccessGrant(ownerUserId, fileId, requesterUserId, spaceType, expiresAt);
         } catch (IllegalArgumentException exception) {
             throw invalidToken();
         }
@@ -146,8 +168,16 @@ public class LocalContentAccessTokenService {
      *
      * @param ownerUserId 文件所有者 ID
      * @param fileId 文件节点 ID
+     * @param requesterUserId 取到地址的请求者 ID
+     * @param spaceType 签发时的文件空间
      * @param expiresAt 过期时间
      */
-    public record AccessGrant(UUID ownerUserId, UUID fileId, Instant expiresAt) {
+    public record AccessGrant(
+            UUID ownerUserId,
+            UUID fileId,
+            UUID requesterUserId,
+            SpaceType spaceType,
+            Instant expiresAt
+    ) {
     }
 }

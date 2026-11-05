@@ -75,7 +75,7 @@ class FileDownloadContentService {
                 && !sharedSpaceService.canDownload(userId)) {
             throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无权下载该文件");
         }
-        return fileContentAccessService.createDownloadUrl(node);
+        return fileContentAccessService.createDownloadUrl(node, userId);
     }
 
     @Transactional(readOnly = true)

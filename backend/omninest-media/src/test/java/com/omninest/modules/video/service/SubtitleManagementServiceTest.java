@@ -16,6 +16,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -54,6 +55,7 @@ class SubtitleManagementServiceTest {
     private MediaContentAccessService mediaContentAccessService;
     private MediaPlaybackTokenService mediaPlaybackTokenService;
     private MediaSyncEventService syncEventService;
+    private DerivedAssetStorageService derivedAssetStorageService;
 
     private SubtitleManagementService service;
 
@@ -66,6 +68,7 @@ class SubtitleManagementServiceTest {
         mediaContentAccessService = mock(MediaContentAccessService.class);
         mediaPlaybackTokenService = mock(MediaPlaybackTokenService.class);
         syncEventService = mock(MediaSyncEventService.class);
+        derivedAssetStorageService = mock(DerivedAssetStorageService.class);
 
         service = new SubtitleManagementService(new MediaProcessingLimitsProperties(),
                 subtitleTrackRepository,
@@ -74,7 +77,8 @@ class SubtitleManagementServiceTest {
                 fileQueryService,
                 mediaContentAccessService,
                 mediaPlaybackTokenService,
-                syncEventService
+                syncEventService,
+                derivedAssetStorageService
         );
         when(fileLifecycleGuard.requireOwnedWritable(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(subtitleFile("subtitle.srt", "application/x-subrip", 1024));
@@ -186,6 +190,30 @@ class SubtitleManagementServiceTest {
                 isNull(),
                 anyMap()
         );
+    }
+
+    @Test
+    void deleteSubtitle_removesDerivedVttOfExtractedTrack() {
+        MediaSubtitleTrack track = subtitleTrack(SUBTITLE_TRACK_ID, "zh", "中文字幕", 1);
+        track.setStreamIndex(2);
+        when(subtitleTrackRepository.findById(SUBTITLE_TRACK_ID)).thenReturn(Optional.of(track));
+
+        service.delete(OWNER_ID, SUBTITLE_TRACK_ID);
+
+        verify(subtitleTrackRepository).delete(track);
+        verify(derivedAssetStorageService).deleteOwned(OWNER_ID, FILE_NODE_ID);
+    }
+
+    @Test
+    void deleteSubtitle_keepsUserUploadedFileReferencedWithoutStreamIndex() {
+        MediaSubtitleTrack track = subtitleTrack(SUBTITLE_TRACK_ID, "zh", "用户字幕", 1);
+        when(subtitleTrackRepository.findById(SUBTITLE_TRACK_ID)).thenReturn(Optional.of(track));
+
+        service.delete(OWNER_ID, SUBTITLE_TRACK_ID);
+
+        verify(subtitleTrackRepository).delete(track);
+        verify(derivedAssetStorageService, org.mockito.Mockito.never())
+                .deleteOwned(any(), any());
     }
 
     @Test

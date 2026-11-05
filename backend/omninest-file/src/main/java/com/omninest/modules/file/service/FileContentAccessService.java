@@ -4,7 +4,10 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.MediaContentPurpose;
+import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -38,6 +41,8 @@ public class FileContentAccessService {
     private final FileNodeRepository fileNodeRepository;
     private final FileObjectRepository fileObjectRepository;
     private final LocalContentAccessTokenService tokenService;
+    private final SharedSpaceService sharedSpaceService;
+    private final FileShareRecipientAccessService shareRecipientAccessService;
 
     /**
      * 打开文件内容流。
@@ -53,10 +58,11 @@ public class FileContentAccessService {
      * 创建文件短期下载地址。
      *
      * @param node 已完成权限校验的文件节点
+     * @param requesterUserId 本次请求者 ID，写入本地媒体令牌的授权范围
      * @return 下载地址
      */
-    public FileDownloadUrlDto createDownloadUrl(FileNode node) {
-        return requireProvider(node).createDownloadUrl(node);
+    public FileDownloadUrlDto createDownloadUrl(FileNode node, UUID requesterUserId) {
+        return requireProvider(node).createDownloadUrl(node, requesterUserId);
     }
 
     /**
@@ -98,12 +104,42 @@ public class FileContentAccessService {
                         grant.ownerUserId()
                 )
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        // 令牌只证明"申请那一刻有权限"，不能替代读取时的复核：撤销分享、成员降权、
+        // 移入回收站在 2 小时有效期内都可能发生，而播放器每发一次 Range 都会带着它。
+        requireGrantStillValid(grant, node);
         FileContentProvider provider = requireProvider(node);
         if (!"LOCAL_FILESYSTEM".equals(provider.providerType())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "访问令牌不适用于当前内容提供者");
         }
         return provider.findRangeResource(node)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件资源不存在"));
+    }
+
+    private void requireGrantStillValid(
+            LocalContentAccessTokenService.AccessGrant grant, FileNode node) {
+        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
+        }
+        FilePurgeState purgeState = node.getPurgeState();
+        if (purgeState != null && purgeState != FilePurgeState.NONE) {
+            throw new BusinessException(ErrorCode.FILE_LIFECYCLE_CONFLICT, "文件正在执行永久删除任务");
+        }
+        // 空间在令牌有效期内被移动/改归属时，旧地址的授权语义已不成立。
+        if (node.getSpaceType() != grant.spaceType()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本地媒体访问授权已失效");
+        }
+        UUID requesterUserId = grant.requesterUserId();
+        if (requesterUserId.equals(node.getOwnerUserId())) {
+            return;
+        }
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            if (sharedSpaceService.canDownload(requesterUserId)) {
+                return;
+            }
+        } else if (shareRecipientAccessService.canAccessRecipientNode(requesterUserId, node)) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "本地媒体访问授权已失效");
     }
 
     /**

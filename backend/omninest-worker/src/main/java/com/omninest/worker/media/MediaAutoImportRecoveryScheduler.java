@@ -1,6 +1,8 @@
 package com.omninest.worker.media;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -21,10 +23,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @ConditionalOnSchedulerRuntime
 public class MediaAutoImportRecoveryScheduler {
+
+    /** 多实例部署下同一批超时任务只能由一个实例重投。 */
+    private static final String RECOVERY_LOCK_KEY = "omninest:worker:recovery:media-auto-import";
+    private static final Duration RECOVERY_LOCK_TTL = Duration.ofMinutes(2);
     private static final String TASK_TYPE = "MEDIA_AUTO_IMPORT";
     private static final int RECOVERY_BATCH_SIZE = 100;
 
     private final TaskRecordService taskRecordService;
+    private final DistributedLock distributedLock;
     private final MediaAutoImportRetryService retryService;
 
     @Value("${omninest.media-auto-import.stale-heartbeat-seconds:120}")
@@ -35,12 +42,20 @@ public class MediaAutoImportRecoveryScheduler {
      */
     @Scheduled(fixedDelayString = "${omninest.media-auto-import.recovery-interval-millis:30000}")
     public void recoverStaleTasks() {
-        Instant cutoff = Instant.now().minus(
-                Math.max(30L, staleHeartbeatSeconds),
-                ChronoUnit.SECONDS
-        );
-        taskRecordService.listStaleRunningTaskIds(TASK_TYPE, cutoff, RECOVERY_BATCH_SIZE)
-                .forEach(taskId -> recoverOne(taskId, cutoff));
+        String token = distributedLock.newToken();
+        if (!distributedLock.tryLock(RECOVERY_LOCK_KEY, token, RECOVERY_LOCK_TTL)) {
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(
+                    Math.max(30L, staleHeartbeatSeconds),
+                    ChronoUnit.SECONDS
+            );
+            taskRecordService.listStaleRunningTaskIds(TASK_TYPE, cutoff, RECOVERY_BATCH_SIZE)
+                    .forEach(taskId -> recoverOne(taskId, cutoff));
+        } finally {
+            distributedLock.unlock(RECOVERY_LOCK_KEY, token);
+        }
     }
 
     private void recoverOne(UUID taskId, Instant cutoff) {

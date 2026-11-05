@@ -60,7 +60,8 @@ public class ReaderNoteService {
      * @param request      创建请求
      * @return 创建的笔记 DTO
      */
-    @Transactional(rollbackFor = Exception.class)
+    // 不叠加外层事务：落库走 REQUIRES_NEW，外层持连接等待第二条连接会在
+    // 虚拟线程并发下耗尽连接池。前置校验是只读调用，各自独立事务即可。
     public ReaderNoteDto createNote(UUID ownerUserId, UUID readerItemId, CreateNoteRequest request) {
         if (request == null || request.content() == null || request.content().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "笔记内容不能为空");
@@ -121,6 +122,7 @@ public class ReaderNoteService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "笔记内容不能为空");
         }
         ReaderNote note = requireNote(ownerUserId, noteId);
+        requireExpectedVersion(note.getVersion(), request.expectedVersion(), "笔记");
         if (request.title() != null) {
             note.setTitle(request.title());
         }
@@ -164,8 +166,21 @@ public class ReaderNoteService {
                 note.getCharOffset(),
                 note.getTitle(),
                 note.getContent(),
-                note.getCreatedAt()
+                note.getCreatedAt(),
+                note.getVersion()
         );
+    }
+
+    /**
+     * 校验客户端最后看到的版本；缺省时不校验，保持旧客户端可用。
+     */
+    private static void requireExpectedVersion(Long currentVersion, Long expectedVersion, String label) {
+        if (expectedVersion == null) {
+            return;
+        }
+        if (!expectedVersion.equals(currentVersion)) {
+            throw new BusinessException(ErrorCode.CONFLICT, label + "已被其他设备修改，请刷新后重试");
+        }
     }
 
     /**

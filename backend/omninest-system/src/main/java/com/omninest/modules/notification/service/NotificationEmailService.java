@@ -2,6 +2,7 @@ package com.omninest.modules.notification.service;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.preferences.UserPreferenceQuery;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig;
 import com.omninest.modules.notification.domain.NotificationMessage;
@@ -58,6 +59,7 @@ public class NotificationEmailService {
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
     private final SystemInstanceInfo systemInstanceInfo;
+    private final RateLimitService rateLimitService;
 
     /**
      * 判断该用户此刻是否需要邮件投递：通道可用且偏好显式开启。
@@ -228,19 +230,20 @@ public class NotificationEmailService {
     /**
      * 每小时上限判定：批量任务收尾会一次性放出大量通知，不设上限会把收件箱和
      * 服务商配额一起打爆；超限的通知只丢邮件，站内通知仍然保留。
+     *
+     * <p>用原子计数器而不是"先查任务行再插入"：后者在并发收尾时两个请求会同时
+     * 读到未达上限并各自登记一封，配额形同虚设。</p>
      */
     private boolean exceedsRateLimit(UUID recipientUserId) {
         int limit = runtimeConfig.ratePerHour();
         if (limit <= 0) {
             return false;
         }
-        long recent = taskRecordService.countRecentTasks(
-                TASK_TYPE, recipientUserId, Instant.now().minus(RATE_WINDOW));
-        if (recent < limit) {
+        String key = "notification:email:" + recipientUserId;
+        if (rateLimitService.tryAcquire(key, limit, RATE_WINDOW)) {
             return false;
         }
-        log.warn("邮件投递达到每小时上限，本次不登记: userId={}, limit={}, recent={}",
-                recipientUserId, limit, recent);
+        log.warn("邮件投递达到每小时上限，本次不登记: userId={}, limit={}", recipientUserId, limit);
         return true;
     }
 

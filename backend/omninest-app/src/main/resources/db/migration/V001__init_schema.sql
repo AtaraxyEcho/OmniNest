@@ -4387,3 +4387,23 @@ CREATE INDEX "idx_media_scan_runs_library_source_created" ON "omni"."media_scan_
 CREATE INDEX "idx_media_video_items_source_only" ON "omni"."media_video_items" ("library_source_id")
   WHERE "library_source_id" IS NOT NULL;
 CREATE INDEX "idx_reader_bookshelf_item" ON "omni"."reader_bookshelf" ("reader_item_id");
+
+-- ── 任务与活跃会话的高频过滤索引 ───────────────────────────────────────
+-- 任务列表按 owner + 创建时间分页、按状态 + 创建时间扫描；
+-- 历史清理按 revoked_at 过滤已撤销会话。单列索引无法提供这些复合前缀。
+CREATE INDEX "idx_sys_tasks_owner_created_at" ON "omni"."sys_tasks" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+);
+CREATE INDEX "idx_sys_tasks_owner_status_created_at" ON "omni"."sys_tasks" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "status" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+);
+CREATE INDEX "idx_sys_tasks_status_created_at" ON "omni"."sys_tasks" USING btree (
+  "status" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+);
+CREATE INDEX "idx_sessions_revoked_at" ON "omni"."auth_active_sessions" USING btree (
+  "revoked_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+) WHERE "revoked_at" IS NOT NULL;

@@ -179,6 +179,22 @@ class SessionRevocationServiceTest {
     }
 
     @Test
+    void revokeSessionAndDeactivatePropagatesPersistenceFailureAfterPublishing() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        Duration ttl = Duration.ofDays(30);
+        Mockito.doThrow(new IllegalStateException("Database unavailable"))
+                .when(writer).persistRevocationAndDeactivate(userId, sessionId, "用户退出登录");
+
+        Assertions.assertThatThrownBy(
+                        () -> service.revokeSessionAndDeactivate(userId, sessionId, "用户退出登录", ttl))
+                .isInstanceOf(IllegalStateException.class);
+
+        // 黑名单先写入：即使落库失败，本次令牌也已被拒绝。
+        Mockito.verify(cache).markRevoked(userId, List.of(sessionId), ttl);
+    }
+
+    @Test
     void recordRevocationsUsesOneDatabaseBatch() {
         UUID userId = UUID.randomUUID();
         UUID firstSessionId = UUID.randomUUID();

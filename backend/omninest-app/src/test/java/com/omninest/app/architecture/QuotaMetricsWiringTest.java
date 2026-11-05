@@ -11,10 +11,12 @@ import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.service.FileStorageMetricsService;
+import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.quota.service.RuntimeStorageQuotaPolicy;
+import com.omninest.modules.quota.service.QuotaNotificationDispatcher;
 import com.omninest.modules.quota.service.StorageQuotaReservationService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,9 @@ class QuotaMetricsWiringTest {
             .withBean(UserAccountQuery.class, () -> mock(UserAccountQuery.class))
             .withBean(UserStorageCommand.class, () -> mock(UserStorageCommand.class))
             .withBean(AdminAuditRecorder.class, () -> mock(AdminAuditRecorder.class))
-            .withBean(NotificationService.class, () -> mock(NotificationService.class))
+            .withBean(NotificationPublisher.class, () -> mock(NotificationPublisher.class))
+            .withBean(QuotaNotificationDispatcher.class, () -> new QuotaNotificationDispatcher(
+                    mock(NotificationPublisher.class)))
             .withBean(FileMetricsRepository.class, () -> mock(FileMetricsRepository.class))
             .withBean(ReadThroughCache.class, () -> mock(ReadThroughCache.class))
             .withBean(StorageQuotaReservationService.class, () -> mock(StorageQuotaReservationService.class))

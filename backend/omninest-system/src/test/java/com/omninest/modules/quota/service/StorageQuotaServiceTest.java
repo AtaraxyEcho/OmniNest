@@ -19,7 +19,6 @@ import com.omninest.common.user.UserAccountDetails;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserAccountSummary;
 import com.omninest.common.user.UserStorageCommand;
-import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.QuotaStatus;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
@@ -58,7 +57,7 @@ class StorageQuotaServiceTest {
     @Mock
     private AdminAuditRecorder auditRecorder;
     @Mock
-    private NotificationService notificationService;
+    private QuotaNotificationDispatcher quotaNotificationDispatcher;
     @Mock
     private StorageQuotaReservationService reservationService;
     @Mock
@@ -79,10 +78,10 @@ class StorageQuotaServiceTest {
                 storageMetricsQuery,
                 storageQuotaPolicy,
                 auditRecorder,
-                notificationService,
                 reservationService,
                 adminActorVerifier,
-                userProfileCacheEvictor
+                userProfileCacheEvictor,
+                quotaNotificationDispatcher
         );
     }
 

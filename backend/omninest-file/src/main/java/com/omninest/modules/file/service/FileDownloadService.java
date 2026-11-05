@@ -44,7 +44,10 @@ public class FileDownloadService {
      */
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrl(RequestPrincipal requester, UUID fileId) {
-        return fileContentAccessService.createDownloadUrl(requireDownloadableNode(requester, fileId));
+        return fileContentAccessService.createDownloadUrl(
+                requireDownloadableNode(requester, fileId),
+                requester.userId()
+        );
     }
 
     /**
@@ -109,7 +112,7 @@ public class FileDownloadService {
                 throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限");
             }
             requireFileNode(node);
-            return fileContentAccessService.createDownloadUrl(node);
+            return fileContentAccessService.createDownloadUrl(node, userId);
         }
         // 定向分享只落 share_links + file_share_recipients；节点 shared 标志与
         // file_node_permissions 是早期模型，不能再作为当前分享的授权依据。
@@ -117,7 +120,7 @@ public class FileDownloadService {
             throw new BusinessException(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED, "无下载权限");
         }
         requireFileNode(node);
-        return fileContentAccessService.createDownloadUrl(node);
+        return fileContentAccessService.createDownloadUrl(node, userId);
     }
 
     /**
@@ -133,7 +136,10 @@ public class FileDownloadService {
      */
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrlAs(UUID actorUserId, UUID fileId) {
-        return fileContentAccessService.createDownloadUrl(requireDownloadableNode(actorUserId, fileId));
+        return fileContentAccessService.createDownloadUrl(
+                requireDownloadableNode(actorUserId, fileId),
+                actorUserId
+        );
     }
 
     /**

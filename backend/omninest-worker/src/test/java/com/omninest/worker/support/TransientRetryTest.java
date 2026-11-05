@@ -42,6 +42,7 @@ class TransientRetryTest {
         }))
                 .isInstanceOf(IOException.class)
                 .hasMessage("始终失败");
-        assertThat(attempts).hasValue(3);
+        // 退避扩到 500/1500/3000ms 后总尝试次数为 4：索引写锁窗口常超过 600ms。
+        assertThat(attempts).hasValue(4);
     }
 }

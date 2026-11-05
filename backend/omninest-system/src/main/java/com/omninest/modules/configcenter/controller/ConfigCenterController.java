@@ -1,7 +1,6 @@
 package com.omninest.modules.configcenter.controller;
 
 import com.omninest.common.api.ApiResponse;
-import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.configcenter.domain.ConfigSurface;
@@ -14,9 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,7 +32,6 @@ public class ConfigCenterController {
     private final ConfigCenterService configCenterService;
     private final CurrentUserContext currentUserContext;
     private final FreshAdminActorVerifier adminActorGuard;
-    private final AdminAuditRecorder adminAuditRecorder;
 
     @Operation(summary = "查询所有配置项", description = "获取系统配置中心的所有配置项列表")
     @GetMapping("/api/v1/admin/configs")
@@ -53,18 +49,9 @@ public class ConfigCenterController {
     ) {
         UUID actorUserId = currentUserContext.requireCurrentUserId();
         adminActorGuard.requireFreshAdminActor(actorUserId);
-        // 先取旧值上下文：敏感配置的旧值与新值必须以掩码进入审计载荷。
-        ConfigCenterService.ConfigAuditContext auditContext = configCenterService.auditContext(key);
-        ConfigEntryDto result = configCenterService.update(key, body.value(), body.reason(), actorUserId);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("key", key);
-        payload.put("oldValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : auditContext.oldValue());
-        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : body.value());
-        payload.put("reason", body.reason());
-        payload.put("changeBy", actorUserId.toString());
-        adminAuditRecorder.recordWithPayload(
-                actorUserId, "ADMIN_CONFIG_UPDATE", "sys_config_entries", null, payload);
-        return ApiResponse.success(result);
+        // 写入与审计由服务层同一事务完成；控制器不声明事务（项目硬性架构约束）。
+        return ApiResponse.success(
+                configCenterService.updateWithAudit(key, body.value(), body.reason(), actorUserId));
     }
 
     /**
@@ -91,17 +78,8 @@ public class ConfigCenterController {
     ApiResponse<ConfigEntryDto> rollback(@PathVariable UUID historyId) {
         UUID actorUserId = currentUserContext.requireCurrentUserId();
         adminActorGuard.requireFreshAdminActor(actorUserId);
-        ConfigEntryDto result = configCenterService.rollback(historyId, actorUserId);
-        // 至少记录回滚到哪个配置键与回滚后的值，否则审计无法追溯变更对象。
-        ConfigCenterService.ConfigAuditContext auditContext = configCenterService.auditContext(result.key());
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("key", result.key());
-        payload.put("historyId", historyId.toString());
-        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : result.value());
-        payload.put("changeBy", actorUserId.toString());
-        adminAuditRecorder.recordWithPayload(
-                actorUserId, "ADMIN_CONFIG_ROLLBACK", "sys_config_history", historyId, payload);
-        return ApiResponse.success(result);
+        return ApiResponse.success(
+                configCenterService.rollbackWithAudit(historyId, actorUserId));
     }
 
     public record UpdateConfigRequest(

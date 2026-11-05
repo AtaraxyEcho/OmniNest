@@ -9,6 +9,7 @@ import com.omninest.modules.photos.event.PhotoAiEvent.Mode;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -47,6 +48,7 @@ public class PhotoAiTaskService {
     private final PhotoItemRepository photoItemRepository;
     private final PhotosRuntimeConfigService configService;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final TaskDispatchService taskDispatchService;
     private final PhotoAiTaskCompletionService completionService;
     private final PhotoIndexTaskService photoIndexTaskService;
@@ -113,6 +115,9 @@ public class PhotoAiTaskService {
         if (!taskRecordService.claimForExecution(event.taskId(), "AI_ANALYSIS")) {
             return;
         }
+        // 大照片库的单项模型推理可能长时间无进度更新，心跳必须覆盖整个执行期，
+        // 否则 300s 未达 5% 就会被恢复器判定假死并并发重投。
+        TaskHeartbeatRunner.Heartbeat heartbeat = taskHeartbeatRunner.start(event.taskId(), 60);
         try {
             Mode mode = event.mode() == null ? Mode.SINGLE_PHOTO : event.mode();
             switch (mode) {
@@ -128,6 +133,10 @@ public class PhotoAiTaskService {
                 return;
             }
             throw exception;
+        } finally {
+            if (heartbeat != null) {
+                heartbeat.close();
+            }
         }
     }
 
@@ -197,6 +206,11 @@ public class PhotoAiTaskService {
         List<String> failedPhotoIds = new ArrayList<>();
         Page<UUID> page;
         do {
+            if (taskRecordService.isCancelled(event.taskId())) {
+                taskRecordService.markCancelled(event.taskId());
+                log.info("照片图像分析重分析任务已取消: taskId={}, processed={}", event.taskId(), processedItems);
+                return;
+            }
             page = photoItemRepository.findIdsByOwnerUserId(
                     event.ownerUserId(),
                     PageRequest.of(pageNumber, PAGE_SIZE, Sort.by(Sort.Direction.ASC, "id"))

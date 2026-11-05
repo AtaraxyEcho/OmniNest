@@ -17,7 +17,9 @@ import com.omninest.modules.configcenter.domain.ConfigDefinitionCatalog;
 import com.omninest.modules.configcenter.domain.ConfigEntry;
 import com.omninest.modules.configcenter.domain.ConfigHistory;
 import com.omninest.modules.configcenter.domain.ConfigSurface;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
+import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.repository.ConfigEntryRepository;
 import com.omninest.modules.configcenter.repository.ConfigHistoryRepository;
@@ -56,6 +58,7 @@ public class ConfigCenterService implements RuntimeConfigCommand {
     private final CredentialCipher credentialCipher;
     private final CurrentUserContext currentUserContext;
     private final RuntimeConfigCache runtimeConfigCache;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 在 API 角色启动阶段同步配置目录及兼容数据。
@@ -177,6 +180,57 @@ public class ConfigCenterService implements RuntimeConfigCommand {
      * @param key 配置键
      * @return 审计上下文；配置项不存在时 oldValue 为 null
      */
+    /**
+     * 更新配置并在同一事务内写入管理审计。
+     *
+     * <p>控制器与管理端批量更新服务各自持有事务边界；本方法只服务于配置中心
+     * 单键接口，避免把审计下沉到通用 {@link #update} 后让管理端重复记两条。</p>
+     *
+     * @param key 配置键
+     * @param value 新值
+     * @param reason 变更原因
+     * @param changedBy 操作者
+     * @return 更新后的配置
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ConfigEntryDto updateWithAudit(String key, String value, String reason, UUID changedBy) {
+        ConfigAuditContext auditContext = auditContext(key);
+        ConfigEntryDto result = update(key, value, reason, changedBy);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("key", key);
+        payload.put("oldValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : auditContext.oldValue());
+        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : value);
+        payload.put("reason", reason);
+        payload.put("changeBy", changedBy.toString());
+        adminAuditRecorder.recordWithPayload(
+                changedBy, "ADMIN_CONFIG_UPDATE", "config_entries", null, payload);
+        return result;
+    }
+
+    /**
+     * 回滚配置并在同一事务内写入管理审计。
+     *
+     * @param historyId 历史记录 ID
+     * @param changedBy 操作者
+     * @return 回滚后的配置
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ConfigEntryDto rollbackWithAudit(UUID historyId, UUID changedBy) {
+        // 旧值必须在回滚执行前读取：回滚后再查拿到的是回滚后的值。
+        String key = getConfigKeyByHistoryId(historyId);
+        ConfigAuditContext auditContext = auditContext(key);
+        ConfigEntryDto result = rollback(historyId, changedBy);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("key", result.key());
+        payload.put("historyId", historyId.toString());
+        payload.put("oldValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : auditContext.oldValue());
+        payload.put("newValue", auditContext.sensitive() ? ConfigHistoryDto.MASK : result.value());
+        payload.put("changeBy", changedBy.toString());
+        adminAuditRecorder.recordWithPayload(
+                changedBy, "ADMIN_CONFIG_ROLLBACK", "config_entries", historyId, payload);
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public ConfigAuditContext auditContext(String key) {
         boolean sensitive = ConfigDefinitionCatalog.find(key)
@@ -287,7 +341,9 @@ public class ConfigCenterService implements RuntimeConfigCommand {
 
     private String normalizeHistoryValue(ConfigDefinition definition, String storedValue) {
         if (!definition.sensitive()) {
-            return normalize(definition, storedValue);
+            // 历史行可能缺少旧值（首次设置或旧版本数据），回退到定义默认值，
+            // 与回滚语义一致，避免 normalize(null) 直接 400。
+            return normalize(definition, storedValue == null ? definition.defaultValue() : storedValue);
         }
         if (storedValue == null || storedValue.isBlank()) {
             return "";

@@ -1,7 +1,9 @@
 package com.omninest.worker.photos;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.photos.service.PhotoAiTaskService;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -24,6 +26,10 @@ import org.springframework.stereotype.Component;
 @ConditionalOnSchedulerRuntime
 public class PhotoAiTaskRecoveryScheduler {
 
+    /** 多实例部署下同一批超时任务只能由一个实例重投。 */
+    private static final String RECOVERY_LOCK_KEY = "omninest:worker:recovery:photo-ai-task";
+    private static final Duration RECOVERY_LOCK_TTL = Duration.ofMinutes(2);
+
     private static final int RECOVERY_BATCH_SIZE = 100;
     private static final String[] RECOVERED_TASK_TYPES = {
             PhotoAiTaskService.TASK_TYPE_SINGLE,
@@ -31,6 +37,7 @@ public class PhotoAiTaskRecoveryScheduler {
     };
 
     private final TaskRecordService taskRecordService;
+    private final DistributedLock distributedLock;
     private final PhotoAiTaskRetryService retryService;
 
     @Value("${photo.ai.stale-heartbeat-seconds:300}")
@@ -41,13 +48,21 @@ public class PhotoAiTaskRecoveryScheduler {
      */
     @Scheduled(fixedDelayString = "${photo.ai.recovery-interval-millis:60000}")
     public void recoverStaleTasks() {
-        Instant cutoff = Instant.now().minus(
-                Math.max(60L, staleHeartbeatSeconds),
-                ChronoUnit.SECONDS
-        );
-        for (String taskType : RECOVERED_TASK_TYPES) {
-            taskRecordService.listStaleRunningTaskIds(taskType, cutoff, RECOVERY_BATCH_SIZE)
-                    .forEach(taskId -> recoverOne(taskId, taskType, cutoff));
+        String token = distributedLock.newToken();
+        if (!distributedLock.tryLock(RECOVERY_LOCK_KEY, token, RECOVERY_LOCK_TTL)) {
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(
+                    Math.max(60L, staleHeartbeatSeconds),
+                    ChronoUnit.SECONDS
+            );
+            for (String taskType : RECOVERED_TASK_TYPES) {
+                taskRecordService.listStaleRunningTaskIds(taskType, cutoff, RECOVERY_BATCH_SIZE)
+                        .forEach(taskId -> recoverOne(taskId, taskType, cutoff));
+            }
+        } finally {
+            distributedLock.unlock(RECOVERY_LOCK_KEY, token);
         }
     }
 

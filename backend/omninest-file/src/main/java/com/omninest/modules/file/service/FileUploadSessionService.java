@@ -297,6 +297,10 @@ public class FileUploadSessionService {
             if (!UploadStatus.COMPLETED.getValue().equals(part.getStatus())) {
                 throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片状态异常");
             }
+            // 已完成分片的重传：只刷新 ETag，不重复累加 uploaded_parts。
+            // 否则最终合并会拿旧 ETag 去对 MinIO 的新分片，直接 InvalidPart。
+            fileUploadPartRepository.updateCompletedPartETag(
+                    session.getId(), partNumber, eTag, UploadStatus.COMPLETED.getValue());
         }
         if (updated > 0) {
             int sessionUpdated =
@@ -359,7 +363,11 @@ public class FileUploadSessionService {
             markSessionExpired(ownerUserId, uploadId);
             throw exception;
         } catch (RuntimeException exception) {
-            resetFinalizing(ownerUserId, uploadId);
+            // 对象已经存在说明合并已成功，此时回退 FINALIZING 会让并发的成功线程
+            // 在 finalize 阶段因状态不符而回滚；保持 FINALIZING 交给重试幂等恢复。
+            if (!objectStorageClient.objectExists(completion.key())) {
+                resetFinalizing(ownerUserId, uploadId);
+            }
             throw exception;
         }
         try {
@@ -439,6 +447,12 @@ public class FileUploadSessionService {
                 return;
             }
             if (!objectStorageClient.multipartUploadExists(completion.key(), completion.s3UploadId())) {
+                // 两次探测之间并发线程可能刚完成合并并销毁了 uploadId：
+                // 不复核会把成功完成的会话误判为内容丢失并置为 EXPIRED。
+                if (objectStorageClient.objectExists(completion.key())) {
+                    log.info("并发合并已完成，继续完成会话: uploadId={}", completion.s3UploadId());
+                    return;
+                }
                 log.warn("分片合并失败且 multipart 与合并结果均不存在: uploadId={}, errorType={}",
                         completion.s3UploadId(), exception.getClass().getSimpleName());
                 throw new UploadContentLostException();
@@ -480,22 +494,7 @@ public class FileUploadSessionService {
     }
 
     private void markSessionExpired(UUID ownerUserId, String uploadId) {
-        try {
-            transactionTemplate.executeWithoutResult(status -> {
-                FileUploadSession session = fileUploadSessionRepository
-                        .findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
-                        .orElse(null);
-                if (session != null
-                        && !UploadStatus.COMPLETED.getValue().equals(session.getStatus())
-                        && !UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
-                    session.setStatus(UploadStatus.EXPIRED.getValue());
-                    fileUploadSessionRepository.save(session);
-                }
-            });
-        } catch (RuntimeException exception) {
-            log.warn("上传会话过期状态落库失败: uploadId={}, errorType={}",
-                    uploadId, exception.getClass().getSimpleName());
-        }
+        cancellationService.expireForContentLoss(ownerUserId, uploadId);
     }
 
     /**

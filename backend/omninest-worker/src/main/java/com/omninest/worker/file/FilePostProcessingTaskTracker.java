@@ -38,7 +38,11 @@ public class FilePostProcessingTaskTracker {
 
     /** FilePostProcessingTaskService 创建任务时使用的资源类型。 */
     private static final String RESOURCE_TYPE = "FILE_NODE";
-    private static final List<String> ACTIVE_STATUSES = List.of("QUEUED", "RETRY_WAIT");
+    /**
+     * 活跃任务状态必须包含 RUNNING：消息重投或恢复器竞态发生在第一个消费者已领取
+     * 之后时，漏掉 RUNNING 会让第二个消费者误判"无任务"并以无追踪身份并发裸跑。
+     */
+    private static final List<String> ACTIVE_STATUSES = List.of("QUEUED", "RETRY_WAIT", "RUNNING");
     private static final int MAX_RETRIES = 3;
 
     private final TaskRecordService taskRecordService;

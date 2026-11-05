@@ -203,7 +203,15 @@ public record ConfigDefinition(
 
     private String normalizeUrl(String rawValue) {
         String value = rawValue.trim();
-        if (value.isBlank() || value.chars().anyMatch(Character::isISOControl)) {
+        if (value.isBlank()) {
+            // 默认值本身就是空串的地址项（邮件站内链接）必须允许清空与回滚到默认值，
+            // 否则管理端保存空串或回滚都会得到 CONFIG_VALUE_INVALID。
+            if (defaultValue != null && defaultValue.isEmpty()) {
+                return "";
+            }
+            throw new IllegalArgumentException("服务地址不能为空或包含控制字符");
+        }
+        if (value.chars().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("服务地址不能为空或包含控制字符");
         }
         URI uri;

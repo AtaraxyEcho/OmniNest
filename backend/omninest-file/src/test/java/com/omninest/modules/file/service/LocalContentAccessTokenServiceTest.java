@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -25,9 +26,12 @@ class LocalContentAccessTokenServiceTest {
     void shouldIssueFileScopedRandomTokens() {
         UUID ownerUserId = UUID.randomUUID();
         UUID fileId = UUID.randomUUID();
+        UUID requesterUserId = UUID.randomUUID();
 
-        LocalContentAccessTokenService.IssuedAccess first = service.issue(ownerUserId, fileId);
-        LocalContentAccessTokenService.IssuedAccess second = service.issue(ownerUserId, fileId);
+        LocalContentAccessTokenService.IssuedAccess first =
+                service.issue(ownerUserId, fileId, requesterUserId, SpaceType.PERSONAL);
+        LocalContentAccessTokenService.IssuedAccess second =
+                service.issue(ownerUserId, fileId, requesterUserId, SpaceType.PERSONAL);
 
         assertNotEquals(first.token(), second.token());
         LocalContentAccessTokenService.AccessGrant grant = service.requireGrant(first.token());
@@ -38,10 +42,27 @@ class LocalContentAccessTokenServiceTest {
     }
 
     @Test
+    void tokenCarriesRequesterAndSpaceSoAccessCanBeRechecked() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID requesterUserId = UUID.randomUUID();
+
+        String token = service
+                .issue(ownerUserId, fileId, requesterUserId, SpaceType.SHARED)
+                .token();
+
+        LocalContentAccessTokenService.AccessGrant grant = service.requireGrant(token);
+        assertEquals(requesterUserId, grant.requesterUserId());
+        assertEquals(SpaceType.SHARED, grant.spaceType());
+    }
+
+    @Test
     void shouldRejectUnknownAndTamperedTokens() {
         UUID ownerUserId = UUID.randomUUID();
         UUID fileId = UUID.randomUUID();
-        String token = service.issue(ownerUserId, fileId).token();
+        String token = service
+                .issue(ownerUserId, fileId, ownerUserId, SpaceType.PERSONAL)
+                .token();
         // 旧写法按末尾字符挑替换值，若该位本就是 'A'/'B' 就改成原值：
         // 令牌没变自然验签通过，这条用例约 1/64 概率假失败。
         char[] tampered = token.toCharArray();
@@ -59,7 +80,9 @@ class LocalContentAccessTokenServiceTest {
     void tokenIsVerifiableByAnotherInstanceWithTheSameSecret() {
         UUID ownerUserId = UUID.randomUUID();
         UUID fileId = UUID.randomUUID();
-        String token = service.issue(ownerUserId, fileId).token();
+        String token = service
+                .issue(ownerUserId, fileId, ownerUserId, SpaceType.PERSONAL)
+                .token();
 
         LocalContentAccessTokenService otherNode = new LocalContentAccessTokenService(SECRET);
 
@@ -70,7 +93,9 @@ class LocalContentAccessTokenServiceTest {
 
     @Test
     void tokenFromDifferentSecretIsRejected() {
-        String token = service.issue(UUID.randomUUID(), UUID.randomUUID()).token();
+        String token = service
+                .issue(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), SpaceType.PERSONAL)
+                .token();
         LocalContentAccessTokenService otherNode =
                 new LocalContentAccessTokenService("another-secret-at-least-32-bytes-long");
 

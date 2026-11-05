@@ -55,7 +55,7 @@ class FileDownloadServiceTest {
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.findByIdAndDeletedFalse(FILE_ID)).thenReturn(Optional.of(shared));
         when(sharedSpaceService.canDownload(USER_ID)).thenReturn(true);
-        when(fileContentAccessService.createDownloadUrl(shared)).thenReturn(URL);
+        when(fileContentAccessService.createDownloadUrl(shared, USER_ID)).thenReturn(URL);
 
         FileDownloadUrlDto result = service.createDownloadUrl(REQUESTER, FILE_ID);
 
@@ -76,7 +76,7 @@ class FileDownloadServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
                 .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED);
-        verify(fileContentAccessService, never()).createDownloadUrl(any());
+        verify(fileContentAccessService, never()).createDownloadUrl(any(), any());
     }
 
     @Test
@@ -143,7 +143,7 @@ class FileDownloadServiceTest {
         FileNode personal = file(SpaceType.PERSONAL, UUID.randomUUID());
         when(fileNodeRepository.findByIdAndDeletedFalse(FILE_ID)).thenReturn(Optional.of(personal));
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, personal)).thenReturn(true);
-        when(fileContentAccessService.createDownloadUrl(personal)).thenReturn(URL);
+        when(fileContentAccessService.createDownloadUrl(personal, USER_ID)).thenReturn(URL);
 
         FileDownloadUrlDto result = service.createDownloadUrlForShared(REQUESTER, FILE_ID);
 
@@ -161,7 +161,7 @@ class FileDownloadServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).errorCode())
                 .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED);
-        verify(fileContentAccessService, never()).createDownloadUrl(any());
+        verify(fileContentAccessService, never()).createDownloadUrl(any(), any());
     }
 
     @Test
@@ -172,7 +172,7 @@ class FileDownloadServiceTest {
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.findByIdAndDeletedFalse(FILE_ID)).thenReturn(Optional.of(personal));
         when(shareRecipientAccessService.canAccessRecipientNode(USER_ID, personal)).thenReturn(true);
-        when(fileContentAccessService.createDownloadUrl(personal)).thenReturn(URL);
+        when(fileContentAccessService.createDownloadUrl(personal, USER_ID)).thenReturn(URL);
 
         FileDownloadUrlDto result = service.createDownloadUrl(REQUESTER, FILE_ID);
 

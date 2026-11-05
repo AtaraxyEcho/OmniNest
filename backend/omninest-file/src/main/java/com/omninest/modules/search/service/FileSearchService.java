@@ -68,17 +68,26 @@ public class FileSearchService {
         String indexFilter = includePersonal && includeShared
                 ? null
                 : (includeShared ? SPACE_SHARED : SPACE_PERSONAL);
+        String trimmedQuery = query.trim();
         List<SearchResultDto> candidates = fileSearchIndexService.search(
                 ownerUserId,
-                query.trim(),
+                trimmedQuery,
                 MAX_RESULTS * CANDIDATE_MULTIPLIER,
                 indexFilter
         );
-        if (candidates.isEmpty()) {
+        // 文件名以数据库为实时真值：重命名/移动后无需等 Tika 重索引即可按新名字搜到。
+        Map<UUID, String> titleMatches = searchableFileQuery.searchActiveFilesByName(
+                ownerUserId,
+                trimmedQuery,
+                includePersonal,
+                includeShared,
+                MAX_RESULTS
+        );
+        if (candidates.isEmpty() && titleMatches.isEmpty()) {
             return List.of();
         }
         List<UUID> candidateIds = candidates.stream().map(SearchResultDto::fileId).toList();
-        Map<UUID, String> currentNames = new LinkedHashMap<>();
+        Map<UUID, String> currentNames = new LinkedHashMap<>(titleMatches);
         if (includePersonal) {
             currentNames.putAll(searchableFileQuery.findCurrentNames(ownerUserId, candidateIds));
         }
@@ -103,6 +112,15 @@ public class FileSearchService {
             if (results.size() >= MAX_RESULTS) {
                 break;
             }
+        }
+        for (Map.Entry<UUID, String> entry : titleMatches.entrySet()) {
+            if (results.size() >= MAX_RESULTS) {
+                break;
+            }
+            results.putIfAbsent(
+                    entry.getKey(),
+                    new SearchResultDto(entry.getKey(), entry.getValue(), null, 3.0)
+            );
         }
         return List.copyOf(results.values());
     }

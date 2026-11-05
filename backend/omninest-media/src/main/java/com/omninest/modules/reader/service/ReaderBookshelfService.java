@@ -37,7 +37,8 @@ public class ReaderBookshelfService {
      * @param readerItemId 阅读条目 ID
      * @return true 表示已添加到书架，false 表示已从书架移除
      */
-    @Transactional(rollbackFor = Exception.class)
+    // 不叠加外层事务：新增走 REQUIRES_NEW，删除在独立短事务内完成；
+    // 外层持连接等待第二条连接会在虚拟线程并发下耗尽连接池。
     public boolean toggleBookshelf(UUID ownerUserId, UUID readerItemId) {
         if (bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId)) {
             removeFromBookshelf(ownerUserId, readerItemId);
@@ -55,7 +56,6 @@ public class ReaderBookshelfService {
      * @param onBookshelf  true 表示加入书架，false 表示移除
      * @return 设定后的书架状态
      */
-    @Transactional(rollbackFor = Exception.class)
     public boolean setBookshelf(UUID ownerUserId, UUID readerItemId, boolean onBookshelf) {
         if (bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId) == onBookshelf) {
             return onBookshelf;
@@ -86,8 +86,11 @@ public class ReaderBookshelfService {
     }
 
     private void removeFromBookshelf(UUID ownerUserId, UUID readerItemId) {
-        bookshelfRepository.deleteByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId);
-        recordBookshelfEvent(ownerUserId, readerItemId, false);
+        // 派生 deleteBy 必须在事务中执行，与同步事件同一短事务。
+        transactionTemplate.executeWithoutResult(status -> {
+            bookshelfRepository.deleteByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId);
+            recordBookshelfEvent(ownerUserId, readerItemId, false);
+        });
         log.info("从书架移除: userId={}, itemId={}", ownerUserId, readerItemId);
     }
 

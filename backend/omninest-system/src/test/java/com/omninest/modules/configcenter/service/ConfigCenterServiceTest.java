@@ -1,5 +1,6 @@
 package com.omninest.modules.configcenter.service;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,13 +50,15 @@ class ConfigCenterServiceTest {
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
     private final RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
+    private final AdminAuditRecorder adminAuditRecorder = mock(AdminAuditRecorder.class);
     private final ConfigCenterService service = new ConfigCenterService(
             configEntryRepository,
             configHistoryRepository,
             publisher,
             credentialCipher,
             currentUserContext,
-            runtimeConfigCache
+            runtimeConfigCache,
+            adminAuditRecorder
     );
 
     @BeforeEach

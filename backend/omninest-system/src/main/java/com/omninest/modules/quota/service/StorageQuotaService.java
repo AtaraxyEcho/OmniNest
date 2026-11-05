@@ -12,7 +12,6 @@ import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import com.omninest.modules.quota.port.UserProfileCacheEvictor;
-import com.omninest.modules.notification.port.NotificationPublisher;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 集中存储配额管理服务。
@@ -43,10 +44,10 @@ public class StorageQuotaService {
     private final StorageMetricsQuery storageMetricsQuery;
     private final StorageQuotaPolicy storageQuotaPolicy;
     private final AdminAuditRecorder auditRecorder;
-    private final NotificationPublisher notificationService;
     private final StorageQuotaReservationService reservationService;
     private final AdminActorVerifier adminActorVerifier;
     private final UserProfileCacheEvictor userProfileCacheEvictor;
+    private final QuotaNotificationDispatcher quotaNotificationDispatcher;
 
     /**
      * 为持久业务来源预留存储配额。
@@ -206,14 +207,27 @@ public class StorageQuotaService {
                     owner.quotaBytes(),
                     owner.superAdmin()
             );
-            if (status == QuotaStatus.WARNING || status == QuotaStatus.CRITICAL) {
-                int percent = owner.quotaBytes() > 0
-                        ? (int) (owner.usedBytes() * 100 / owner.quotaBytes()) : 0;
-                String title = status == QuotaStatus.CRITICAL ? "存储空间即将满额" : "存储空间预警";
-                String message = "存储空间已使用 " + percent + "%，请及时清理";
-                notificationService.notifyOrLog(userId, "QUOTA_WARNING", title, message,
-                        Map.of("usedBytes", owner.usedBytes(), "quotaBytes", owner.quotaBytes()));
+            if (status != QuotaStatus.WARNING && status != QuotaStatus.CRITICAL) {
+                return;
             }
+            int percent = owner.quotaBytes() > 0
+                    ? (int) (owner.usedBytes() * 100 / owner.quotaBytes()) : 0;
+            String title = status == QuotaStatus.CRITICAL ? "存储空间即将满额" : "存储空间预警";
+            String message = "存储空间已使用 " + percent + "%，请及时清理";
+            Map<String, Object> metadata =
+                    Map.of("usedBytes", owner.usedBytes(), "quotaBytes", owner.quotaBytes());
+            // 只在主事务真正提交后投递：回滚时不能留下幽灵预警；
+            // 投递走独立线程，主线程不必在持有连接时等待第二条连接。
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        quotaNotificationDispatcher.dispatch(userId, "QUOTA_WARNING", title, message, metadata);
+                    }
+                });
+                return;
+            }
+            quotaNotificationDispatcher.dispatch(userId, "QUOTA_WARNING", title, message, metadata);
         } catch (Exception e) {
             log.warn("发送配额预警通知失败: userId={}", userId, e);
         }

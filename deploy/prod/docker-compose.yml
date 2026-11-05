@@ -208,7 +208,7 @@ services:
       OMNINEST_ROLE: api
       # 4C4G：显式堆上限；不设 MaxMetaspaceSize，由 mem_limit 约束，避免 Boot4 启动期 Metaspace OOM。
       JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx512m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_API:-10}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_API:-24}
     ports:
       - "127.0.0.1:${OMNINEST_SERVER_PORT:-8080}:8080"
     mem_limit: ${BACKEND_API_MEM_LIMIT:-768m}
@@ -253,7 +253,7 @@ services:
       - -c
       - max_wal_size=${PG_MAX_WAL_SIZE:-512MB}
       - -c
-      - max_connections=${PG_MAX_CONNECTIONS:-40}
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
       - -c
       - random_page_cost=1.1
     healthcheck:

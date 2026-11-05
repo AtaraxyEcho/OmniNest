@@ -60,7 +60,8 @@ public class ReaderAnnotationService {
      * @param request      创建请求
      * @return 创建的批注 DTO
      */
-    @Transactional(rollbackFor = Exception.class)
+    // 不叠加外层事务：落库走 REQUIRES_NEW，外层持连接等待第二条连接会在
+    // 虚拟线程并发下耗尽连接池。前置校验是只读调用，各自独立事务即可。
     public ReaderAnnotationDto createAnnotation(UUID ownerUserId, UUID readerItemId, CreateAnnotationRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "批注请求参数不能为空");
@@ -136,6 +137,7 @@ public class ReaderAnnotationService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "批注更新请求参数不能为空");
         }
         ReaderAnnotation annotation = requireAnnotation(ownerUserId, annotationId);
+        requireExpectedVersion(annotation.getVersion(), request.expectedVersion(), "批注");
         // null 表示本次不改备注；空串是用户把备注清空，保留高亮本体。
         if (request.note() != null) {
             annotation.setNote(request.note().isBlank() ? null : request.note());
@@ -185,8 +187,24 @@ public class ReaderAnnotationService {
                 annotation.getHighlightText(),
                 annotation.getNote(),
                 annotation.getColor(),
-                annotation.getCreatedAt()
+                annotation.getCreatedAt(),
+                annotation.getVersion()
         );
+    }
+
+    /**
+     * 校验客户端最后看到的版本。
+     *
+     * <p>缺省时不校验（旧客户端与本地优先队列的离线重放没有版本可带）；一旦提供，
+     * 与当前版本不一致说明另一端已改过，必须拒绝本次后写覆盖。</p>
+     */
+    private static void requireExpectedVersion(Long currentVersion, Long expectedVersion, String label) {
+        if (expectedVersion == null) {
+            return;
+        }
+        if (!expectedVersion.equals(currentVersion)) {
+            throw new BusinessException(ErrorCode.CONFLICT, label + "已被其他设备修改，请刷新后重试");
+        }
     }
 
     /**

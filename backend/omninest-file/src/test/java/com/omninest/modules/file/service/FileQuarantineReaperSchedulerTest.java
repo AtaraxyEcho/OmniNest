@@ -38,7 +38,7 @@ class FileQuarantineReaperSchedulerTest {
 
     private FileIngressItemRepository ingressItemRepository;
     private ObjectStorageClient objectStorageClient;
-    private FileUploadSessionService fileUploadSessionService;
+    private FileUploadCancellationService fileUploadCancellationService;
     private FileUploadSessionRepository uploadSessionRepository;
     private StorageQuotaService storageQuotaService;
     private FileQuarantineReaperScheduler scheduler;
@@ -47,7 +47,7 @@ class FileQuarantineReaperSchedulerTest {
     void setUp() {
         ingressItemRepository = mock(FileIngressItemRepository.class);
         objectStorageClient = mock(ObjectStorageClient.class);
-        fileUploadSessionService = mock(FileUploadSessionService.class);
+        fileUploadCancellationService = mock(FileUploadCancellationService.class);
         uploadSessionRepository = mock(FileUploadSessionRepository.class);
         storageQuotaService = mock(StorageQuotaService.class);
         ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
@@ -57,7 +57,7 @@ class FileQuarantineReaperSchedulerTest {
         scheduler = new FileQuarantineReaperScheduler(
                 ingressItemRepository,
                 objectStorageClient,
-                fileUploadSessionService,
+                fileUploadCancellationService,
                 uploadSessionRepository,
                 storageQuotaService,
                 configValueProvider,
@@ -82,7 +82,7 @@ class FileQuarantineReaperSchedulerTest {
 
         verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
         verify(ingressItemRepository).deleteByIdAndStatusIn(eq(item.getId()), any());
-        verify(fileUploadSessionService).cancelSession(OWNER_ID, "upload-123");
+        verify(fileUploadCancellationService).forceCancelForCleanup(OWNER_ID, "upload-123");
         verify(storageQuotaService, never()).releaseReservation(anyString(), any());
     }
 
@@ -102,7 +102,7 @@ class FileQuarantineReaperSchedulerTest {
         scheduler.reapExpiredQuarantineItems();
 
         verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
-        verify(fileUploadSessionService, never()).cancelSession(any(), anyString());
+        verify(fileUploadCancellationService, never()).forceCancelForCleanup(any(), anyString());
     }
 
     @Test
@@ -115,7 +115,7 @@ class FileQuarantineReaperSchedulerTest {
         scheduler.reapExpiredQuarantineItems();
 
         verify(objectStorageClient, never()).removeObject(any(ObjectStorageKey.class));
-        verify(fileUploadSessionService, never()).cancelSession(any(), anyString());
+        verify(fileUploadCancellationService, never()).forceCancelForCleanup(any(), anyString());
         verify(storageQuotaService, never()).releaseReservation(anyString(), any());
     }
 

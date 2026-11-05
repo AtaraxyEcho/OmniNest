@@ -8,6 +8,7 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileProcessInput;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 文件内容提供者统一契约。
@@ -46,6 +47,20 @@ public interface FileContentProvider {
      * @return 下载地址
      */
     FileDownloadUrlDto createDownloadUrl(FileNode node);
+
+    /**
+     * 以指定请求者身份创建短期下载地址。
+     *
+     * <p>本地只读内容签的是可撤销的短期令牌，必须把"谁申请"写进授权范围；默认
+     * 退化为按节点所有者签发的单参实现，对象存储预签名 URL 不区分请求者。</p>
+     *
+     * @param node 文件节点
+     * @param requesterUserId 本次请求者 ID
+     * @return 下载地址
+     */
+    default FileDownloadUrlDto createDownloadUrl(FileNode node, UUID requesterUserId) {
+        return createDownloadUrl(node);
+    }
     /**
      * 基于已加载的对象元数据创建下载地址，批量场景避免逐节点回查对象记录。
      * 默认退化为单节点查询实现。

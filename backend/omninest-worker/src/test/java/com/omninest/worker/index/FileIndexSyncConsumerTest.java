@@ -55,7 +55,8 @@ class FileIndexSyncConsumerTest {
 
         consumer.handle(event, message(), channel);
 
-        verify(syncService, times(3)).sync(event.ownerUserId(), event.fileNodeIds());
+        // 退避扩到 500/1500/3000ms 后总尝试次数为 4，最后一次失败才进死信。
+        verify(syncService, times(4)).sync(event.ownerUserId(), event.fileNodeIds());
         verify(channel).basicNack(1L, false, false);
         verify(channel, never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }

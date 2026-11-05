@@ -1,6 +1,7 @@
 package com.omninest.modules.file.repository;
 
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.SpaceType;
 import java.util.Collection;
 import java.util.List;
@@ -64,6 +65,66 @@ public interface FileNodeScanQueryRepository extends Repository<FileNode, UUID> 
     long countOwnedActiveFilesByCategories(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("categories") Collection<String> categories);
+
+    /**
+     * 按当前数据库文件名在个人空间实时匹配活动文件。
+     *
+     * <p>表达式与 {@code idx_file_nodes_name_trgm} 完全对齐：不得用
+     * {@code coalesce(name, '')} 包裹列，否则索引失效退化为全表扫描。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param escapedQuery 已转义 LIKE 元字符的关键词
+     * @param purgeState 回收站状态
+     * @param spaceType 空间类型
+     * @param derivedSource 派生资产来源标记
+     * @param pageable 分页参数
+     * @return 匹配节点
+     */
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.deleted = false
+              AND n.purgeState = :purgeState
+              AND n.spaceType = :spaceType
+              AND n.nodeType = 'FILE'
+              AND (n.sourceType IS NULL OR n.sourceType <> :derivedSource)
+              AND lower(n.name) LIKE lower(concat('%', :escapedQuery, '%')) ESCAPE '\\'
+            ORDER BY n.updatedAt DESC
+            """)
+    List<FileNode> searchActivePersonalFilesByName(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("escapedQuery") String escapedQuery,
+            @Param("purgeState") FilePurgeState purgeState,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("derivedSource") String derivedSource,
+            Pageable pageable);
+
+    /**
+     * 按当前数据库文件名在共享空间实时匹配活动文件。
+     *
+     * @param escapedQuery 已转义 LIKE 元字符的关键词
+     * @param purgeState 回收站状态
+     * @param spaceType 空间类型
+     * @param derivedSource 派生资产来源标记
+     * @param pageable 分页参数
+     * @return 匹配节点
+     */
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.deleted = false
+              AND n.purgeState = :purgeState
+              AND n.spaceType = :spaceType
+              AND n.nodeType = 'FILE'
+              AND (n.sourceType IS NULL OR n.sourceType <> :derivedSource)
+              AND lower(n.name) LIKE lower(concat('%', :escapedQuery, '%')) ESCAPE '\\'
+            ORDER BY n.updatedAt DESC
+            """)
+    List<FileNode> searchActiveSharedFilesByName(
+            @Param("escapedQuery") String escapedQuery,
+            @Param("purgeState") FilePurgeState purgeState,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("derivedSource") String derivedSource,
+            Pageable pageable);
 
     /**
      * 按业务分类与 ID 游标查询共享给当前用户且不属于其本人的未删除文件。

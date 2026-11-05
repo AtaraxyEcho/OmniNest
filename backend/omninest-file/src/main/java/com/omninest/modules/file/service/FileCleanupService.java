@@ -36,7 +36,7 @@ public class FileCleanupService {
     private final FileNodeRepository fileNodeRepository;
     private final FileUploadSessionRepository uploadSessionRepository;
     private final FileDeletionService fileDeletionService;
-    private final FileUploadSessionService fileUploadSessionService;
+    private final FileUploadCancellationService fileUploadCancellationService;
 
     @Scheduled(cron = "0 0 4 * * *")
     public void purgeExpiredRecycleBin() {
@@ -94,7 +94,7 @@ public class FileCleanupService {
             }
             for (FileUploadSession session : expired) {
                 try {
-                    fileUploadSessionService.cancelSession(session.getOwnerUserId(), session.getUploadId());
+                    fileUploadCancellationService.forceCancelForCleanup(session.getOwnerUserId(), session.getUploadId());
                     cleaned++;
                 } catch (Exception e) {
                     log.warn("过期上传会话清理失败: uploadId={}", session.getUploadId(), e);

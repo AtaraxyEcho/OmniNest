@@ -27,6 +27,7 @@ import com.omninest.modules.photos.repository.PhotoBatchTaskRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
@@ -80,6 +81,7 @@ public class PhotoBatchService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final MediaSyncEventService syncEventService;
     private final PhotoBatchDownloadProperties downloadProperties;
     private final TransactionTemplate transactionTemplate;
@@ -196,6 +198,9 @@ public class PhotoBatchService {
         // 必然触发乐观锁异常并使任务行停留在 RUNNING（同 D-009）。
         task = batchTaskRepository.save(task);
 
+        // 打包数十 GB ZIP 并上传 MinIO 的阶段远超 600s 心跳阈值；
+        // 不播心跳会被恢复器重投，两个 Worker 并发打包并在乐观锁冲突后泄漏 ZIP 对象。
+        TaskHeartbeatRunner.Heartbeat heartbeat = taskHeartbeatRunner.start(taskId, 60);
         try {
             List<UUID> photoIds = retainOwnedActive(ownerUserId, resolvePhotoIds(task));
             if ("DOWNLOAD".equals(task.getTaskType())) {
@@ -221,6 +226,10 @@ public class PhotoBatchService {
             throw ex instanceof RuntimeException runtimeException
                     ? runtimeException
                     : new IllegalStateException(ex.getMessage(), ex);
+        } finally {
+            if (heartbeat != null) {
+                heartbeat.close();
+            }
         }
     }
 

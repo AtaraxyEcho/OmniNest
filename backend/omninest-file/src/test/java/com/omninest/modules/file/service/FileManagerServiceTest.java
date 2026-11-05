@@ -26,6 +26,7 @@ import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.user.UserAccountDetails;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.file.domain.FileFavorite;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.FileObject;
@@ -84,7 +85,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * @author OmniNest
  */
 class FileManagerServiceTest {
+
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final RequestPrincipal OWNER = RequestPrincipal.credential(() -> OWNER_ID);
     private static final UUID FILE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID RECIPIENT_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID SHARE_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
@@ -194,6 +197,7 @@ class FileManagerServiceTest {
             sharedSpaceService,
             syncEventRecorder,
             mock(FileIndexSyncService.class),
+            mock(FileDownloadContentService.class),
             transactionTemplate
     );
 
@@ -1213,7 +1217,7 @@ class FileManagerServiceTest {
                 .thenReturn(new ByteArrayInputStream("content3".getBytes()));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        fileManagerService.packAsZip(OWNER_ID,
+        fileManagerService.packAsZip(OWNER,
                 List.of(file1Id.toString(), file2Id.toString(), file3Id.toString()), out);
 
         // 验证 ZIP 包含 3 个条目
@@ -1244,7 +1248,7 @@ class FileManagerServiceTest {
         when(fileObjectRepository.findAllById(any())).thenReturn(List.of(object));
 
         var entries = fileManagerService.planZipEntries(
-                OWNER_ID, List.of(fileId.toString(), fileId.toString()));
+                OWNER, List.of(fileId.toString(), fileId.toString()));
 
         assertThat(entries).hasSize(1);
     }
@@ -1265,7 +1269,7 @@ class FileManagerServiceTest {
         when(fileObjectRepository.findAllById(any())).thenReturn(List.of(object));
         fileManagerService.setMaxBatchDownloadTotalBytes(1024);
 
-        assertThatThrownBy(() -> fileManagerService.planZipEntries(OWNER_ID, List.of(fileId.toString())))
+        assertThatThrownBy(() -> fileManagerService.planZipEntries(OWNER, List.of(fileId.toString())))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("打包总大小超过限制");
     }
@@ -1307,7 +1311,7 @@ class FileManagerServiceTest {
                 .thenReturn(new ByteArrayInputStream("report-content".getBytes()));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        fileManagerService.packAsZip(OWNER_ID,
+        fileManagerService.packAsZip(OWNER,
                 List.of(folderId.toString(), fileId.toString()), out);
 
         // 验证 ZIP 仅包含 1 个条目（跳过了文件夹）
@@ -1359,7 +1363,7 @@ class FileManagerServiceTest {
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         fileManagerService.packAsZip(
-                OWNER_ID, List.of(firstId.toString(), secondId.toString(), trashedId.toString()), out);
+                OWNER, List.of(firstId.toString(), secondId.toString(), trashedId.toString()), out);
 
         List<String> entryNames = new ArrayList<>();
         try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()))) {

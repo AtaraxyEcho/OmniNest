@@ -34,6 +34,18 @@ public final class AdminOperationDescription {
             case "PHOTO_BATCH" -> "批量处理照片";
             case "PHOTO_INDEX" -> "更新照片搜索索引";
             case "PHOTO_AI" -> "执行照片智能识别";
+            case "PHOTO_THUMBNAILS" -> "生成照片缩略图";
+            case "PHOTO_MOTION" -> "生成动态照片预览";
+            case "PHOTO_MOTION_RESCAN" -> "重新扫描动态照片";
+            case "WEB_OPTIMIZE" -> "优化视频网页播放格式";
+            case "AUDIO_EXTRACT" -> "提取视频音轨";
+            case "SEARCH_INDEX_REBUILD" -> "重建搜索索引";
+            case "NOTIFICATION_EMAIL" -> "投递邮件通知";
+            case "LOCAL_VIDEO_LIBRARY_DISCOVERY" -> "发现本地影视库文件";
+            case "LOCAL_VIDEO_LIBRARY_APPLY" -> "应用本地影视库扫描结果";
+            case "FILE_PURGE" -> "永久删除文件";
+            case "FILE_SECURITY_SCAN" -> "扫描文件安全威胁";
+            case "MEDIA_SCAN" -> "扫描影视资料库";
             default -> routingKey == null || routingKey.isBlank()
                     ? "执行后台任务"
                     : "处理消息任务 " + routingKey;
@@ -49,11 +61,16 @@ public final class AdminOperationDescription {
      */
     public static String audit(String action, String resourceType) {
         return switch (normalize(action)) {
+            case "ADMIN_ROLE_CREATE" -> "创建角色";
+            case "ADMIN_ROLE_DELETE" -> "删除角色";
             case "ADMIN_ROLE_PERMISSIONS_UPDATE" -> "更新角色权限";
             case "ADMIN_CONFIG_UPDATE" -> "修改系统配置";
+            case "ADMIN_CONFIG_ROLLBACK" -> "回滚系统配置";
+            case "ADMIN_SETTING_UPDATE" -> "修改系统设置";
             case "ADMIN_TASK_RETRY" -> "重新投递失败任务";
             case "ADMIN_TASK_CANCEL" -> "取消排队任务";
             case "ADMIN_TASK_DLQ_DISCARD" -> "丢弃死信任务";
+            case "ADMIN_DLQ_RETRY" -> "重投死信任务";
             case "ADMIN_EXTERNAL_STORAGE_CREATE" -> "创建外部存储配置";
             case "ADMIN_EXTERNAL_STORAGE_STATUS_UPDATE" -> "修改外部存储状态";
             case "ADMIN_SESSION_REVOKE" -> "撤销用户会话";
@@ -61,8 +78,19 @@ public final class AdminOperationDescription {
             case "ADMIN_LOGIN_AUDIT_CLEANUP" -> "清理登录审计记录";
             case "ADMIN_SESSION_CLEANUP" -> "清理过期或已撤销会话";
             case "ADMIN_USER_CREATE" -> "创建用户";
+            case "ADMIN_USER_DELETE" -> "删除用户";
             case "ADMIN_USER_STATUS_UPDATE" -> "修改用户状态";
-            case "ADMIN_USER_ROLE_UPDATE" -> "修改用户角色";
+            case "ADMIN_USER_ROLES_UPDATE" -> "修改用户角色";
+            case "ADMIN_USER_2FA_RESET" -> "重置用户两步验证";
+            case "ADMIN_QUOTA_UPDATE" -> "修改用户存储配额";
+            case "ADMIN_NOTIFICATION_TYPE_UPDATE" -> "修改通知类型开关";
+            case "ADMIN_NOTIFICATION_EMAIL_TEST" -> "发送测试邮件";
+            case "ADMIN_STORAGE_RECALCULATE" -> "重算存储用量";
+            case "ADMIN_SEARCH_INDEX_REBUILD" -> "重建搜索索引";
+            case "ADMIN_PHOTO_GEO_BACKFILL" -> "补建照片地点数据";
+            case "ADMIN_PHOTO_GEO_IMPORT" -> "导入照片地点数据";
+            case "ADMIN_PHOTO_GEO_RELOAD" -> "重载照片地点数据";
+            case "ADMIN_READER_METADATA_UPDATE" -> "修改阅读器元数据";
             default -> resourceType == null || resourceType.isBlank()
                     ? "执行管理操作"
                     : "管理 " + resourceType;

@@ -1,6 +1,9 @@
 package com.omninest.modules.user.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.audit.AdminAuditRecorder;
+import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.FreshAdminActorVerifier;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.user.dto.AdminAnalyticsDto;
 import com.omninest.modules.user.dto.AdminConsoleSummaryDto;
@@ -8,6 +11,8 @@ import com.omninest.modules.user.service.AdminConsoleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminConsoleController {
     private final AdminConsoleService adminConsoleService;
+    private final CurrentUserContext currentUserContext;
+    private final FreshAdminActorVerifier adminActorGuard;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     @Operation(summary = "获取管理控制台概览数据")
     @GetMapping("/api/v1/admin/summary")
@@ -46,7 +54,14 @@ public class AdminConsoleController {
     @PostMapping("/api/v1/admin/storage/recalculate")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<Integer> recalculateStorage() {
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        // 存储重算会读取并改写全站用量账本：权限可能在签发 JWT 后被收回，
+        // 必须按当前数据库状态复核管理员身份，并留下审计记录。
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         int updated = adminConsoleService.recalculateStorageUsage();
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId, "ADMIN_STORAGE_RECALCULATE", "storage_usage", null,
+                Map.of("updatedUsers", updated));
         return ApiResponse.success(updated);
     }
 }

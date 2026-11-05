@@ -28,6 +28,7 @@ import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
@@ -93,6 +94,7 @@ public class ExternalImportExecutionService {
     private final TransactionTemplate transactionTemplate;
     private final NotificationPublisher notificationService;
     private final TaskRecordService taskRecordService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final BoundedFileTreeScanner fileTreeScanner;
     private final FileIngressSafetyService ingressSafetyService;
     private final FileIngressLifecycleService ingressLifecycleService;
@@ -129,11 +131,17 @@ public class ExternalImportExecutionService {
      * @param event 外部存储导入请求事件
      */
     public void execute(ExternalImportRequestedEvent event) {
+        TaskHeartbeatRunner.Heartbeat heartbeat = null;
         try {
             StorageImportTask task = markRunning(event.taskId());
             if (task == null) {
                 log.warn("导入任务未能进入执行态: taskId={}", event.taskId());
                 return;
+            }
+            // 单文件 ClamAV 扫描上限 30 分钟、大文件 MinIO 复制同样耗时；
+            // 不播心跳会被通用恢复器按 600s 假死重投，两个 Worker 并发导入同一任务。
+            if (task.getTaskId() != null) {
+                heartbeat = taskHeartbeatRunner.start(task.getTaskId(), 60);
             }
 
             StorageExternalAccount account = accountRepository.findById(task.getExternalAccountId())
@@ -145,6 +153,9 @@ public class ExternalImportExecutionService {
             }
             executeRcloneImport(task, account);
         } finally {
+            if (heartbeat != null) {
+                heartbeat.close();
+            }
             progressThrottle.remove(event.taskId());
             resumedRuns.remove(event.taskId());
         }
@@ -323,7 +334,11 @@ public class ExternalImportExecutionService {
                     fileNode.setUploadedBy(t.getOwnerUserId());
                 }
                 FileNode persistedNode = fileNodeRepository.save(fileNode);
-
+                if (prepResult.spaceType == SpaceType.SHARED) {
+                    // 与节点落库同事务原子记账：超额时连同 FileNode/FileObject 一起回滚。
+                    // 断点续传会跳过已入库文件，重试不会重复进入本事务。
+                    sharedSpaceQuotaService.increaseUsage(savedObject.getSizeBytes(), 1L);
+                }
                 registerUploadEvents(persistedNode, savedObject);
                 return persistedNode;
             });
@@ -972,16 +987,9 @@ public class ExternalImportExecutionService {
             if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
                 return;
             }
-            if (SpaceType.SHARED == resolveSpaceType(task)) {
-                // 完成是唯一记账点，且按该任务"已入库的累计量"入账：
-                // 失败重试后 totalSize 只是本次运行量，和失败路径的累计量纲混用会重复计入。
-                long importedBytes = ingressItemRepository.sumImportedBytesByTaskId(task.getId());
-                if (importedBytes > 0) {
-                    sharedSpaceQuotaService.increaseUsage(
-                            importedBytes,
-                            ingressItemRepository.countImportedFilesByTaskId(task.getId()));
-                }
-            } else {
+            // 共享空间已在每个文件入库的同一事务内记账，这里只结算个人空间预留；
+            // 再做一次汇总入账会在重试后重复计入。
+            if (SpaceType.SHARED != resolveSpaceType(task)) {
                 storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), totalSize);
             }
             task.setStatus(ImportTaskStatus.COMPLETED.getValue());

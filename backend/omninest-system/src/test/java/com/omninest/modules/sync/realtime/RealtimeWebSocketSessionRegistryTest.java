@@ -299,6 +299,42 @@ class RealtimeWebSocketSessionRegistryTest {
                 .count();
     }
 
+    @Test
+    void perIpLimitRejectsAndRollsBackSlots() throws Exception {
+        String[] clientIp = {"203.0.113.7"};
+        RealtimeWebSocketSessionRegistry limited = new RealtimeWebSocketSessionRegistry(
+                revocationChecker,
+                properties,
+                meterRegistry,
+                (remoteAddress, forwardedFor, realIp) -> clientIp[0]
+        );
+        WebSocketHandler handler = Mockito.mock(WebSocketHandler.class);
+        WebSocketHandler decorated = limited.decorate(handler);
+        java.util.List<WebSocketSession> established = new java.util.ArrayList<>();
+        for (int i = 0; i < 32; i++) {
+            WebSocketSession session = session("ip-" + i);
+            decorated.afterConnectionEstablished(session);
+            established.add(session);
+        }
+
+        WebSocketSession rejected = session("ip-over");
+        decorated.afterConnectionEstablished(rejected);
+        Mockito.verify(rejected).close(Mockito.any(CloseStatus.class));
+
+        // 逆序回退前两段槽位：换一个 IP 仍能建立连接，证明全局容量没有被单 IP 洪泛扣死。
+        clientIp[0] = "203.0.113.8";
+        WebSocketSession otherIp = session("other-ip");
+        decorated.afterConnectionEstablished(otherIp);
+        Mockito.verify(otherIp, Mockito.never()).close(Mockito.any(CloseStatus.class));
+
+        // 关闭一个旧连接后，同 IP 可以重新建立。
+        clientIp[0] = "203.0.113.7";
+        decorated.afterConnectionClosed(established.getFirst(), CloseStatus.NORMAL);
+        WebSocketSession replacement = session("ip-replacement");
+        decorated.afterConnectionEstablished(replacement);
+        Mockito.verify(replacement, Mockito.never()).close(Mockito.any(CloseStatus.class));
+    }
+
     private WebSocketSession session(String id) {
         WebSocketSession session = Mockito.mock(WebSocketSession.class);
         Mockito.when(session.getId()).thenReturn(id);

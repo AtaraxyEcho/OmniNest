@@ -6,6 +6,12 @@
 --   idx_media_video_items_owner_source   派生音轨/版本按源条目查询
 --   idx_content_assets_owner_file_node   内容资产按文件节点回查
 --
+-- 建索引一律 CONCURRENTLY 且位于事务块之外：这几张表在生产上可达千万行，
+-- 事务内建索引会持写锁到 COMMIT，整个升级窗口内业务写入全部排队。
+-- CONCURRENTLY 失败会留下 INVALID 索引，`IF NOT EXISTS` 不会替你重建；
+-- 升级后先确认 `select indisvalid from pg_index where indexrelid = '<索引>'::regclass`，
+-- 为 false 时 DROP 掉再重跑本段。
+--
 -- 新安装不需要执行：V001 已包含这四条索引。
 -- 已有环境执行顺序（先补结构，最后 repair 对齐校验和；repair 不能单独使用）：
 --   docker exec omninest-postgres psql -U omninest -d omninest -v ON_ERROR_STOP=1 \
@@ -19,24 +25,20 @@
 -- 2026-10-28 在开发库实测活动文件 0 条空分类。若其他环境存在空分类行，
 -- 需要先用业务侧重新扫描或一次性回填，不能依赖 repair 或本脚本。
 
-BEGIN;
-
-CREATE INDEX IF NOT EXISTS "idx_photo_items_active_file" ON "omni"."photo_items" USING btree (
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_photo_items_active_file" ON "omni"."photo_items" USING btree (
   "active_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE active_file_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS "idx_photo_items_motion_video_file" ON "omni"."photo_items" USING btree (
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_photo_items_motion_video_file" ON "omni"."photo_items" USING btree (
   "motion_video_file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE motion_video_file_node_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS "idx_media_video_items_owner_source" ON "omni"."media_video_items" USING btree (
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_video_items_owner_source" ON "omni"."media_video_items" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "source_video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE source_video_item_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS "idx_content_assets_owner_file_node" ON "omni"."content_assets" USING btree (
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_content_assets_owner_file_node" ON "omni"."content_assets" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE file_node_id IS NOT NULL;
-
-COMMIT;

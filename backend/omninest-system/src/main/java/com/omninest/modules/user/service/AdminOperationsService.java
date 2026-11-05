@@ -1,5 +1,6 @@
 package com.omninest.modules.user.service;
 
+import com.omninest.modules.user.service.AdminHealthProbeCache.HealthSnapshot;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.domain.TaskStatus;
@@ -95,6 +96,9 @@ public class AdminOperationsService {
     private final TaskRecordService taskRecordService;
     private final ObjectStorageBuckets objectStorageBuckets;
     private final HealthEndpoint healthEndpoint;
+
+    /** 健康探测短时缓存：内联初始化，避免改变 RequiredArgsConstructor 的签名。 */
+    private final AdminHealthProbeCache healthProbeCache = new AdminHealthProbeCache();
     private final ActiveSessionRepository activeSessionRepository;
     private final AuthLoginAuditRepository loginAuditRepository;
     private final SessionRevocationService sessionRevocationService;
@@ -641,6 +645,16 @@ public class AdminOperationsService {
      * 一次探测监控页展示的全部组件，供状态与详情复用同一结果。
      */
     private Map<String, HealthSnapshot> probeHealth() {
+        return healthProbeCache.get(this::probeAllHealth);
+    }
+
+    /**
+     * 真正执行一轮探测。
+     *
+     * <p>MinIO 与 ClamAV 是网络往返，单次超时以秒计；监控页每次刷新都串行跑一遍，
+     * 多人同时打开时会把被探测组件打穿，因此结果交给短时缓存复用。</p>
+     */
+    private Map<String, HealthSnapshot> probeAllHealth() {
         Map<String, HealthSnapshot> results = new LinkedHashMap<>();
         for (String componentName : List.of("db", "redis", "minio", "clamAv", "luceneIndex")) {
             results.put(componentName, probeHealth(componentName));
@@ -659,15 +673,6 @@ public class AdminOperationsService {
         } catch (Exception e) {
             return new HealthSnapshot("DOWN", "不可用");
         }
-    }
-
-    /**
-     * 单个组件的健康快照。
-     *
-     * @param status 界面展示状态
-     * @param detail 健康详情
-     */
-    private record HealthSnapshot(String status, String detail) {
     }
 
     private String uptime() {

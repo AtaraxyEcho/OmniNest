@@ -1,5 +1,6 @@
 package com.omninest.modules.sync.realtime;
 
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.SessionRevocationChecker;
 import com.omninest.modules.sync.config.SyncEventProperties;
 import io.micrometer.core.instrument.Gauge;
@@ -13,9 +14,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -31,7 +33,6 @@ import org.springframework.web.socket.handler.WebSocketHandlerDecoratorFactory;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(
         prefix = "omninest.runtime",
         name = "role",
@@ -44,16 +45,62 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
     private static final String REJECTED_SESSION_METRIC = "omninest.sync.realtime.sessions.rejected";
     private static final String REASON_CAPACITY = "capacity";
     private static final String REASON_PENDING = "pending";
+    private static final String REASON_IP_LIMIT = "ip_limit";
+    private static final int DEFAULT_MAX_SESSIONS_PER_IP = 32;
     private static final long CAPACITY_WARNING_INTERVAL_NANOS = Duration.ofMinutes(1).toNanos();
     private static final CloseStatus CAPACITY_EXCEEDED_STATUS = new CloseStatus(1013, "Service capacity exceeded");
 
     private final SessionRevocationChecker sessionRevocationChecker;
     private final SyncEventProperties properties;
     private final MeterRegistry meterRegistry;
+    private final ClientIpResolver clientIpResolver;
     private final Map<String, SessionContext> sessions = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> sessionsPerIp = new ConcurrentHashMap<>();
     private final AtomicInteger activeSessionCount = new AtomicInteger();
     private final AtomicInteger pendingSessionCount = new AtomicInteger();
     private final AtomicLong lastCapacityWarningNanos = new AtomicLong(Long.MIN_VALUE);
+
+    /**
+     * Spring 注入主构造函数。
+     *
+     * @param sessionRevocationChecker 会话撤销检查
+     * @param properties 实时同步配置
+     * @param meterRegistry 指标注册表
+     * @param clientIpResolver 可信代理边界内的客户端 IP 解析器
+     */
+    @Autowired
+    public RealtimeWebSocketSessionRegistry(
+            SessionRevocationChecker sessionRevocationChecker,
+            SyncEventProperties properties,
+            MeterRegistry meterRegistry,
+            ClientIpResolver clientIpResolver
+    ) {
+        this.sessionRevocationChecker = sessionRevocationChecker;
+        this.properties = properties;
+        this.meterRegistry = meterRegistry;
+        this.clientIpResolver = clientIpResolver;
+    }
+
+    /**
+     * 单元测试兼容构造函数：不做可信代理解析，按直连地址归组。
+     *
+     * @param sessionRevocationChecker 会话撤销检查
+     * @param properties 实时同步配置
+     * @param meterRegistry 指标注册表
+     */
+    RealtimeWebSocketSessionRegistry(
+            SessionRevocationChecker sessionRevocationChecker,
+            SyncEventProperties properties,
+            MeterRegistry meterRegistry
+    ) {
+        this(
+                sessionRevocationChecker,
+                properties,
+                meterRegistry,
+                (remoteAddress, forwardedFor, realIp) ->
+                        remoteAddress == null || remoteAddress.isBlank() ? "unknown" : remoteAddress
+        );
+    }
 
     @PostConstruct
     void registerMetrics() {
@@ -87,13 +134,22 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
                     rejectForCapacity(session, REASON_PENDING);
                     return;
                 }
+                String clientIp = resolveClientIp(session);
+                if (!tryAcquireIpSlot(clientIp)) {
+                    // 逆序回退前两段槽位：少回退一段都会在单 IP 洪泛后永久扣死全实例容量。
+                    pendingSessionCount.decrementAndGet();
+                    activeSessionCount.decrementAndGet();
+                    rejectForCapacity(session, REASON_IP_LIMIT);
+                    return;
+                }
                 boolean registered = false;
                 try {
                     SessionContext previous = sessions.putIfAbsent(
                             session.getId(),
-                            SessionContext.connected(session, Instant.now())
+                            SessionContext.connected(session, Instant.now(), clientIp)
                     );
                     if (previous != null) {
+                        releaseIpSlot(clientIp);
                         activeSessionCount.decrementAndGet();
                         pendingSessionCount.decrementAndGet();
                         rejectForCapacity(session, REASON_CAPACITY);
@@ -188,6 +244,33 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
         }
     }
 
+    private String resolveClientIp(WebSocketSession session) {
+        String remoteAddress = session.getRemoteAddress() != null
+                && session.getRemoteAddress().getAddress() != null
+                ? session.getRemoteAddress().getAddress().getHostAddress()
+                : null;
+        HttpHeaders headers = session.getHandshakeHeaders();
+        String forwardedFor = headers == null ? null : headers.getFirst("X-Forwarded-For");
+        String realIp = headers == null ? null : headers.getFirst("X-Real-IP");
+        return clientIpResolver.resolve(remoteAddress, forwardedFor, realIp);
+    }
+
+    private boolean tryAcquireIpSlot(String clientIp) {
+        if (clientIp == null || clientIp.isBlank() || "unknown".equalsIgnoreCase(clientIp)) {
+            return true;
+        }
+        AtomicInteger counter = sessionsPerIp.computeIfAbsent(clientIp, ignored -> new AtomicInteger());
+        return tryAcquire(counter, DEFAULT_MAX_SESSIONS_PER_IP);
+    }
+
+    private void releaseIpSlot(String clientIp) {
+        if (clientIp == null || clientIp.isBlank() || "unknown".equalsIgnoreCase(clientIp)) {
+            return;
+        }
+        sessionsPerIp.computeIfPresent(clientIp, (ip, counter) ->
+                counter.decrementAndGet() <= 0 ? null : counter);
+    }
+
     private boolean tryAcquireSessionSlot() {
         int limit = Math.max(1, properties.getRealtime().getMaxSessionsPerInstance());
         return tryAcquire(activeSessionCount, limit);
@@ -219,6 +302,7 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
         if (current.userId() == null) {
             pendingSessionCount.decrementAndGet();
         }
+        releaseIpSlot(current.clientIp());
         return true;
     }
 
@@ -254,17 +338,19 @@ public class RealtimeWebSocketSessionRegistry implements WebSocketHandlerDecorat
     private record SessionContext(
             WebSocketSession session,
             Instant connectedAt,
+            String clientIp,
             UUID userId,
             UUID sid,
             Instant issuedAt,
             Instant expiresAt
     ) {
-        private static SessionContext connected(WebSocketSession session, Instant connectedAt) {
-            return new SessionContext(session, connectedAt, null, null, null, null);
+        private static SessionContext connected(
+                WebSocketSession session, Instant connectedAt, String clientIp) {
+            return new SessionContext(session, connectedAt, clientIp, null, null, null, null);
         }
 
         private SessionContext authorized(UUID userId, UUID sid, Instant issuedAt, Instant expiresAt) {
-            return new SessionContext(session, connectedAt, userId, sid, issuedAt, expiresAt);
+            return new SessionContext(session, connectedAt, clientIp, userId, sid, issuedAt, expiresAt);
         }
     }
 }

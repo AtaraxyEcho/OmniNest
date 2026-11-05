@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "omninest.security")
 public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSecurityPolicy {
+    @ToString.Exclude
     private String jwtSecret = "change-me-omninest-local-jwt-secret-at-least-32-bytes";
 
     /**
@@ -26,6 +28,7 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
      */
     private boolean allowInsecureLocalSecret = false;
 
+    @ToString.Exclude
     private String credentialEncryptionKey = "";
 
     private int credentialEncryptionKeyVersion = 1;

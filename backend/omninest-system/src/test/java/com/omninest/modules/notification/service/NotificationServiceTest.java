@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class NotificationServiceTest {
 
@@ -197,6 +198,21 @@ class NotificationServiceTest {
 
         assertThat(result).isNotNull();
         verify(notificationRepository).save(any());
+    }
+
+    @Test
+    void notifyOrLog_defersCreationUntilTheActiveTransactionCommits() {
+        UUID userId = UUID.randomUUID();
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.notifyOrLog(userId, "TASK_COMPLETED", "title", "msg", Map.of());
+
+            // 未提交前不得落库：主事务回滚时不能留下幽灵通知。
+            verify(notificationRepository, never()).save(any());
+            assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

@@ -78,10 +78,47 @@ class ReaderAnnotationServiceTest {
         ReaderAnnotationDto result = createService(repository).updateAnnotation(
                 ownerUserId,
                 annotationId,
-                new UpdateAnnotationRequest("   ", "#2196F3"));
+                new UpdateAnnotationRequest("   ", "#2196F3", null));
 
         Assertions.assertThat(result.note()).isNull();
         Assertions.assertThat(result.color()).isEqualTo("#2196F3");
+    }
+
+    @Test
+    void updateAnnotationRejectsStaleExpectedVersion() {
+        ReaderAnnotationRepository repository = Mockito.mock(ReaderAnnotationRepository.class);
+        UUID ownerUserId = UUID.randomUUID();
+        UUID annotationId = UUID.randomUUID();
+        ReaderAnnotation annotation = existingAnnotation(ownerUserId, annotationId);
+        annotation.setVersion(4L);
+        Mockito.when(repository.findById(annotationId)).thenReturn(Optional.of(annotation));
+
+        Assertions.assertThatThrownBy(() -> createService(repository).updateAnnotation(
+                        ownerUserId,
+                        annotationId,
+                        new UpdateAnnotationRequest("新备注", null, 3L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已被其他设备修改");
+
+        Mockito.verify(repository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void updateAnnotationAcceptsMatchingExpectedVersion() {
+        ReaderAnnotationRepository repository = Mockito.mock(ReaderAnnotationRepository.class);
+        UUID ownerUserId = UUID.randomUUID();
+        UUID annotationId = UUID.randomUUID();
+        ReaderAnnotation annotation = existingAnnotation(ownerUserId, annotationId);
+        annotation.setVersion(4L);
+        Mockito.when(repository.findById(annotationId)).thenReturn(Optional.of(annotation));
+        Mockito.when(repository.save(annotation)).thenReturn(annotation);
+
+        ReaderAnnotationDto result = createService(repository).updateAnnotation(
+                ownerUserId,
+                annotationId,
+                new UpdateAnnotationRequest("新备注", null, 4L));
+
+        Assertions.assertThat(result.version()).isEqualTo(4L);
     }
 
     @Test
@@ -96,7 +133,7 @@ class ReaderAnnotationServiceTest {
         ReaderAnnotationDto result = createService(repository).updateAnnotation(
                 ownerUserId,
                 annotationId,
-                new UpdateAnnotationRequest(null, null));
+                new UpdateAnnotationRequest(null, null, null));
 
         Assertions.assertThat(result.note()).isEqualTo("旧备注");
         Assertions.assertThat(result.color()).isEqualTo("#FFEB3B");
@@ -114,7 +151,7 @@ class ReaderAnnotationServiceTest {
         ReaderAnnotationDto result = createService(repository).updateAnnotation(
                 ownerUserId,
                 annotationId,
-                new UpdateAnnotationRequest("新备注", null));
+                new UpdateAnnotationRequest("新备注", null, null));
 
         Assertions.assertThat(result.note()).isEqualTo("新备注");
         Assertions.assertThat(result.color()).isEqualTo("#FFEB3B");

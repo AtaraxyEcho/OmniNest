@@ -217,7 +217,8 @@ public class FileIngressPromotionService {
         try {
             objectStorageClient.copyObject(quarantineKey, targetKey, item.getMimeType());
         } catch (RuntimeException exception) {
-            removeObjectQuietly(quarantineKey, "清理文件晋升失败隔离对象失败");
+            // 隔离对象是这次上传的唯一源文件：清理它会让重试永久 NoSuchKey，
+            // 只回收可能写了一半的目标对象。
             removeObjectQuietly(targetKey, "清理文件晋升失败对象失败");
             throw exception;
         }
@@ -225,7 +226,6 @@ public class FileIngressPromotionService {
             return transactionTemplate.execute(
                     txStatus -> promoteInTransaction(item, sha256, event, quarantineKey, targetKey));
         } catch (RuntimeException exception) {
-            removeObjectQuietly(quarantineKey, "清理文件晋升失败隔离对象失败");
             removeObjectQuietly(targetKey, "清理文件晋升失败对象失败");
             throw exception;
         }

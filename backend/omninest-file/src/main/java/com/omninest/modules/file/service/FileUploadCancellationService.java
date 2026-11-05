@@ -11,6 +11,7 @@ import com.omninest.modules.file.repository.FileUploadPartRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -23,6 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 public class FileUploadCancellationService {
 
@@ -50,8 +52,26 @@ public class FileUploadCancellationService {
     }
 
     void cancel(UUID ownerUserId, String uploadId) {
+        cancelInternal(ownerUserId, uploadId, false);
+    }
+
+    /**
+     * 供后台清理任务强制取消滞留会话。
+     *
+     * <p>用户侧取消必须拒绝 {@code FINALIZING}/{@code SCANNING}；但清理任务面对的是
+     * 超过 TTL 的僵尸会话，任务早已不在运行，继续拒绝会让会话行、隔离对象与配额
+     * 预留永久泄漏。</p>
+     *
+     * @param ownerUserId 会话所有者
+     * @param uploadId 上传会话标识
+     */
+    void forceCancelForCleanup(UUID ownerUserId, String uploadId) {
+        cancelInternal(ownerUserId, uploadId, true);
+    }
+
+    private void cancelInternal(UUID ownerUserId, String uploadId, boolean force) {
         CancelTarget target = transactionTemplate.execute(
-                status -> prepare(ownerUserId, uploadId));
+                status -> prepare(ownerUserId, uploadId, force));
         if (target == null) {
             return;
         }
@@ -68,7 +88,47 @@ public class FileUploadCancellationService {
                 status -> finish(ownerUserId, uploadId, target.quotaAlreadyReleased()));
     }
 
-    private CancelTarget prepare(UUID ownerUserId, String uploadId) {
+    /**
+     * 内容丢失（合并产物与 multipart 均不存在）时把会话落到 EXPIRED 并释放预留。
+     *
+     * <p>进入 EXPIRED 后不会再走完成或取消路径，预留必须在这里释放，否则共享空间与
+     * 个人配额都会被一条死会话永久占住。</p>
+     *
+     * @param ownerUserId 会话所有者
+     * @param uploadId 上传会话标识
+     */
+    void expireForContentLoss(UUID ownerUserId, String uploadId) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                FileUploadSession session = sessionRepository
+                        .findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
+                        .orElse(null);
+                if (session == null
+                        || UploadStatus.COMPLETED.getValue().equals(session.getStatus())
+                        || UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
+                    return;
+                }
+                String previousStatus = session.getStatus();
+                boolean reservationLive = !UploadStatus.REJECTED.getValue().equals(previousStatus)
+                        && !UploadStatus.CANCELLED.getValue().equals(previousStatus)
+                        && !UploadStatus.EXPIRED.getValue().equals(previousStatus);
+                session.setStatus(UploadStatus.EXPIRED.getValue());
+                if (reservationLive && session.getQuotaReservationId() != null) {
+                    storageQuotaService.releaseReservation("UPLOAD", session.getId());
+                    session.setQuotaReservationId(null);
+                }
+                if (reservationLive && session.getSpaceType() == SpaceType.SHARED) {
+                    sharedSpaceQuotaService.releaseReservation(session.getTotalSizeBytes());
+                }
+                sessionRepository.save(session);
+            });
+        } catch (RuntimeException exception) {
+            log.warn("上传会话过期状态落库失败: uploadId={}, errorType={}",
+                    uploadId, exception.getClass().getSimpleName());
+        }
+    }
+
+    private CancelTarget prepare(UUID ownerUserId, String uploadId, boolean force) {
         FileUploadSession session = sessionRepository
                 .findForUpdateByUploadIdAndOwnerUserId(uploadId, ownerUserId)
                 .orElse(null);
@@ -79,8 +139,9 @@ public class FileUploadCancellationService {
         if (UploadStatus.COMPLETED.getValue().equals(status)) {
             return null;
         }
-        if (UploadStatus.FINALIZING.getValue().equals(status)
-                || UploadStatus.SCANNING.getValue().equals(status)) {
+        if (!force
+                && (UploadStatus.FINALIZING.getValue().equals(status)
+                || UploadStatus.SCANNING.getValue().equals(status))) {
             throw new BusinessException(ErrorCode.CONFLICT, "上传正在完成或安全扫描，不能取消");
         }
         if (!UploadStatus.CANCELLED.getValue().equals(status)) {

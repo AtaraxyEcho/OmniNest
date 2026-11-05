@@ -1,7 +1,9 @@
 package com.omninest.worker.photos;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.photos.service.GeoDatasetService;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -24,9 +26,14 @@ import org.springframework.stereotype.Component;
 @ConditionalOnSchedulerRuntime
 public class PhotoGeoTaskRecoveryScheduler {
 
+    /** 多实例部署下同一批超时任务只能由一个实例重投。 */
+    private static final String RECOVERY_LOCK_KEY = "omninest:worker:recovery:photo-geo-task";
+    private static final Duration RECOVERY_LOCK_TTL = Duration.ofMinutes(2);
+
     private static final int RECOVERY_BATCH_SIZE = 100;
 
     private final TaskRecordService taskRecordService;
+    private final DistributedLock distributedLock;
     private final PhotoGeoImportRetryService importRetryService;
     private final PhotoGeoBackfillRetryService backfillRetryService;
 
@@ -38,18 +45,26 @@ public class PhotoGeoTaskRecoveryScheduler {
      */
     @Scheduled(fixedDelayString = "${photo.geo.recovery-interval-millis:60000}")
     public void recoverStaleTasks() {
-        Instant cutoff = Instant.now().minus(
-                Math.max(60L, staleHeartbeatSeconds),
-                ChronoUnit.SECONDS
-        );
-        taskRecordService.listStaleRunningTaskIds(
-                        GeoDatasetService.TASK_TYPE_IMPORT, cutoff, RECOVERY_BATCH_SIZE)
-                .forEach(taskId -> recoverOne(taskId, "IMPORT", () ->
-                        importRetryService.recoverStaleTask(taskId, cutoff)));
-        taskRecordService.listStaleRunningTaskIds(
-                        GeoDatasetService.TASK_TYPE_BACKFILL, cutoff, RECOVERY_BATCH_SIZE)
-                .forEach(taskId -> recoverOne(taskId, "BACKFILL", () ->
-                        backfillRetryService.recoverStaleTask(taskId, cutoff)));
+        String token = distributedLock.newToken();
+        if (!distributedLock.tryLock(RECOVERY_LOCK_KEY, token, RECOVERY_LOCK_TTL)) {
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(
+                    Math.max(60L, staleHeartbeatSeconds),
+                    ChronoUnit.SECONDS
+            );
+            taskRecordService.listStaleRunningTaskIds(
+                            GeoDatasetService.TASK_TYPE_IMPORT, cutoff, RECOVERY_BATCH_SIZE)
+                    .forEach(taskId -> recoverOne(taskId, "IMPORT", () ->
+                            importRetryService.recoverStaleTask(taskId, cutoff)));
+            taskRecordService.listStaleRunningTaskIds(
+                            GeoDatasetService.TASK_TYPE_BACKFILL, cutoff, RECOVERY_BATCH_SIZE)
+                    .forEach(taskId -> recoverOne(taskId, "BACKFILL", () ->
+                            backfillRetryService.recoverStaleTask(taskId, cutoff)));
+        } finally {
+            distributedLock.unlock(RECOVERY_LOCK_KEY, token);
+        }
     }
 
     private void recoverOne(UUID taskId, String kind, Runnable recoveryAction) {

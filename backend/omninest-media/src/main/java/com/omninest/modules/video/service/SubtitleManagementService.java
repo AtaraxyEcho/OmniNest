@@ -6,6 +6,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -25,6 +26,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Slf4j
 @Service
@@ -43,6 +46,7 @@ public class SubtitleManagementService {
     private final MediaContentAccessService mediaContentAccessService;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
     private final MediaSyncEventService syncEventService;
+    private final DerivedAssetStorageService derivedAssetStorageService;
 
     @Transactional(readOnly = true)
     public List<SubtitleTrackDto> list(UUID ownerUserId, UUID videoItemId) {
@@ -101,8 +105,38 @@ public class SubtitleManagementService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(UUID ownerUserId, UUID subtitleId) {
         MediaSubtitleTrack track = findTrack(ownerUserId, subtitleId);
+        // 只有内嵌提取的字幕（streamIndex 非空）挂着派生 .vtt 节点；用户上传的字幕
+        // 只是引用个人网盘里的文件，删轨道不能动原文件。
+        UUID extractedFileId = track.getStreamIndex() != null ? track.getFileNodeId() : null;
         subtitleTrackRepository.delete(track);
         recordSubtitleEvent(ownerUserId, track.getVideoItemId());
+        if (extractedFileId != null) {
+            scheduleDerivedSubtitleCleanup(ownerUserId, extractedFileId);
+        }
+    }
+
+    // 轨道行提交后再删派生文件：事务回滚时轨道仍指向它，提前删除会留下空字幕。
+    private void scheduleDerivedSubtitleCleanup(UUID ownerUserId, UUID fileNodeId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    removeDerivedSubtitle(ownerUserId, fileNodeId);
+                }
+            });
+            return;
+        }
+        removeDerivedSubtitle(ownerUserId, fileNodeId);
+    }
+
+    private void removeDerivedSubtitle(UUID ownerUserId, UUID fileNodeId) {
+        try {
+            // deleteOwned 只接受 sourceType=DERIVED 的节点，同名用户文件不会被误删。
+            derivedAssetStorageService.deleteOwned(ownerUserId, fileNodeId);
+        } catch (RuntimeException exception) {
+            log.warn("删除提取字幕的派生文件失败: fileNodeId={}, errorType={}",
+                    fileNodeId, exception.getClass().getSimpleName());
+        }
     }
 
     /** 字幕轨道增删改后按所属影片发出 VIDEO 作用域失效事件，resourceId 固定为影片 ID。 */

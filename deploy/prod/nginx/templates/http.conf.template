@@ -6,6 +6,9 @@ map $http_upgrade $connection_upgrade {
 # 批量下载是同步长连接流；后端只能限制单实例并发，而生产后端端口仅绑定回环地址，
 # 外部请求全部经过这个单入口。按凭据做跨 API 副本的全局并发上限，超出返回 429。
 limit_conn_zone $http_authorization zone=omninest_batch_download:10m;
+# 凭据可刷新：同一用户换一枚 Token 就能再占一份额度。再按来源 IP 设一档，
+# 单个主机无法靠多开会话/刷新令牌把后端全局并发槽全部占满（NAT 下留 3 份余量）。
+limit_conn_zone $binary_remote_addr zone=omninest_batch_download_ip:10m;
 
 server {
     listen 80;
@@ -31,6 +34,7 @@ server {
     location = ${OMNINEST_WEB_BASE_PATH}api/v1/files/batch/download {
         client_max_body_size 64k;
         limit_conn omninest_batch_download 2;
+        limit_conn omninest_batch_download_ip 3;
         limit_conn_status 429;
         limit_conn_log_level warn;
         rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
@@ -45,12 +49,28 @@ server {
         proxy_send_timeout 3600s;
     }
 
+    # 壁纸直传：唯一需要 512MB 无缓冲请求体的业务入口。使用同级 ^~ 最长前缀，
+    # 与下方通用 api/ 入口并存；块内必须自带 rewrite 与全部转发头，不回退父块。
+    location ^~ ${OMNINEST_WEB_BASE_PATH}api/v1/backdrops {
+        client_max_body_size 512m;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
     # ^~ 前缀匹配：否则 API 路径以 .png/.js 等后缀结尾时会被下方静态正则
     # location 抢占，返回静态目录的 404 并附带公共缓存头。
     location ^~ ${OMNINEST_WEB_BASE_PATH}api/ {
-        # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
-        # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
-        client_max_body_size 2g;
+        # 登录等公开接口也走这里：默认收敛到 64MB，覆盖照片编辑/封面/头像，
+        # 仅壁纸直传单独放宽；流式下载仍保留 3600s 读超时。
+        client_max_body_size 64m;
         rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
@@ -153,6 +173,11 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "no-referrer" always;
+
+    # S3 预签名端口只服务对象读写，管理面（含 /minio/admin）不得直通公网。
+    location ^~ /minio/ {
+        return 403;
+    }
 
     location / {
         proxy_pass http://$omninest_minio;

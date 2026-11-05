@@ -41,5 +41,31 @@ public interface FileUploadPartRepository extends JpaRepository<FileUploadPart, 
             @Param("eTag") String eTag,
             @Param("completedStatus") String completedStatus);
 
+    /**
+     * 刷新已完成分片的 ETag。
+     *
+     * <p>客户端重传同一分片会产生新的 ETag；{@link #markPartCompleted} 不再命中已完成行，
+     * 若此处不刷新，最终合并仍用旧 ETag，MinIO 会报 {@code InvalidPart}。</p>
+     *
+     * @param uploadSessionId 上传会话 ID
+     * @param partNumber 分片序号
+     * @param eTag 新 ETag
+     * @param completedStatus 完成状态值
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update FileUploadPart part
+               set part.eTag = :eTag
+             where part.uploadSessionId = :uploadSessionId
+               and part.partNumber = :partNumber
+               and part.status = :completedStatus
+            """)
+    int updateCompletedPartETag(
+            @Param("uploadSessionId") UUID uploadSessionId,
+            @Param("partNumber") int partNumber,
+            @Param("eTag") String eTag,
+            @Param("completedStatus") String completedStatus);
+
     void deleteByUploadSessionId(UUID uploadSessionId);
 }

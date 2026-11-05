@@ -37,6 +37,7 @@ import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -97,7 +98,7 @@ class ExternalImportExecutionServiceTest {
             storageQuotaService, mock(SharedSpaceQuotaService.class), objectStorageClient, postProcessingTaskService,
             rcloneGateway, localStorageSettings, externalStorageService,
             objectStorageBuckets, transactionTemplate, notificationService, taskRecordService,
-            fileTreeScanner, ingressSafetyService, ingressLifecycleService
+            mock(TaskHeartbeatRunner.class), fileTreeScanner, ingressSafetyService, ingressLifecycleService
     );
 
     private static BoundedFileTreeScanner fileTreeScanner() {

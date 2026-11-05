@@ -16,14 +16,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class TransientRetry {
 
-    private static final int MAX_ATTEMPTS = 3;
-    private static final long BACKOFF_MILLIS = 200L;
+    private static final int MAX_ATTEMPTS = 4;
+    /** 递增退避：500ms、1500ms、3000ms；必须跨过 Lucene 全量重建的写锁窗口。 */
+    private static final long[] BACKOFF_MILLIS = {500L, 1500L, 3000L};
 
     private TransientRetry() {
     }
 
     /**
-     * 执行动作，失败时按 200/400 毫秒退避重试，最多三次；最后一次失败原样抛出。
+     * 执行动作，失败时按 500/1500/3000 毫秒退避重试，最多四次；最后一次失败原样抛出。
      *
      * @param label 日志标识
      * @param callable 业务动作
@@ -43,7 +44,7 @@ public final class TransientRetry {
                         label, attempt, MAX_ATTEMPTS,
                         exception.getClass().getSimpleName(), exception.getMessage());
                 try {
-                    TimeUnit.MILLISECONDS.sleep(BACKOFF_MILLIS * attempt);
+                    TimeUnit.MILLISECONDS.sleep(BACKOFF_MILLIS[Math.min(attempt - 1, BACKOFF_MILLIS.length - 1)]);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw exception;

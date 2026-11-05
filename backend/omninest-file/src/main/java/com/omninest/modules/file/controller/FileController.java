@@ -422,14 +422,14 @@ public class FileController {
             @Valid @RequestBody BatchDownloadRequest body,
             HttpServletResponse response
     ) throws IOException {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        RequestPrincipal requester = currentUserContext.requirePrincipal();
         // 先占并发槽位再解析：plan 抛错时直接释放，且超限请求不会进入流式响应阶段。
         try (var ignored = fileManagerService.acquireBatchDownloadLease()) {
             // 先完成校验再写响应头：ZIP 是流式响应，半途报错只能留下解压失败的半截文件
-            var entries = fileManagerService.planZipEntries(ownerUserId, body.fileIds());
+            var entries = fileManagerService.planZipEntries(requester, body.fileIds());
             response.setContentType("application/zip");
             response.setHeader("Content-Disposition", "attachment; filename=\"omninest-batch.zip\"");
-            fileManagerService.packZipEntries(entries, response.getOutputStream());
+            fileManagerService.packZipEntries(requester, entries, response.getOutputStream());
         }
     }
 

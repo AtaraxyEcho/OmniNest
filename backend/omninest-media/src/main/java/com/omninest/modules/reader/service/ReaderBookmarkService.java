@@ -60,7 +60,8 @@ public class ReaderBookmarkService {
      * @param request      创建请求
      * @return 创建的书签 DTO
      */
-    @Transactional(rollbackFor = Exception.class)
+    // 不叠加外层事务：落库走 REQUIRES_NEW，外层持连接等待第二条连接会在
+    // 虚拟线程并发下耗尽连接池。前置校验是只读调用，各自独立事务即可。
     public ReaderBookmarkDto createBookmark(UUID ownerUserId, UUID readerItemId, CreateBookmarkRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "书签请求参数不能为空");

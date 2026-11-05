@@ -163,7 +163,8 @@ public class MediaPlaybackProgressService {
         if (safeDuration > 0) {
             safePosition = Math.min(safePosition, safeDuration);
         }
-        Instant safeClientUpdatedAt = clientUpdatedAt == null ? Instant.now() : clientUpdatedAt;
+        Instant now = Instant.now();
+        Instant safeClientUpdatedAt = ProgressClockGuard.clamp(clientUpdatedAt, now);
         String safeDeviceId = normalizeDeviceId(deviceId);
         Optional<MediaPlaybackProgress> changed = repository.upsertIfNewer(
                 UUID.randomUUID(),

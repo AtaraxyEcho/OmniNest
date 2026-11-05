@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -110,7 +111,9 @@ public final class ReaderDtos {
             String highlightText,
             String note,
             String color,
-            Instant createdAt
+            Instant createdAt,
+            /** 服务端乐观锁版本：更新时回传作为并发校验的期望值。 */
+            Long version
     ) {
     }
 
@@ -121,7 +124,9 @@ public final class ReaderDtos {
             Long charOffset,
             String title,
             String content,
-            Instant createdAt
+            Instant createdAt,
+            /** 服务端乐观锁版本：更新时回传作为并发校验的期望值。 */
+            Long version
     ) {
     }
 
@@ -248,7 +253,10 @@ public final class ReaderDtos {
             String note,
             @Size(max = 16, message = "color 长度不能超过 16")
             @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
-            String color
+            String color,
+            /** 客户端最后看到的版本；缺省时退化为后写覆盖（兼容旧客户端与本地优先队列）。 */
+            @PositiveOrZero(message = "expectedVersion 不能为负数")
+            Long expectedVersion
     ) {
     }
 
@@ -267,7 +275,10 @@ public final class ReaderDtos {
     public record UpdateNoteRequest(
             @Size(max = 500, message = "title 长度不能超过 500")
             String title,
-            @NotBlank String content
+            @NotBlank String content,
+            /** 客户端最后看到的版本；缺省时退化为后写覆盖（兼容旧客户端与本地优先队列）。 */
+            @PositiveOrZero(message = "expectedVersion 不能为负数")
+            Long expectedVersion
     ) {
     }
 

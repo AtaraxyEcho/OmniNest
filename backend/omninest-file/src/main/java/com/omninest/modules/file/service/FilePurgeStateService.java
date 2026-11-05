@@ -39,6 +39,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 文件永久删除状态、清单和最终数据库清理服务。
@@ -349,6 +351,7 @@ public class FilePurgeStateService {
         Map<UUID, Long> releasedBytesByOwner = new LinkedHashMap<>();
         long deletedNodeCount = 0L;
         Set<UUID> candidateObjectIds = new HashSet<>();
+        Set<UUID> indexNodeIds = new HashSet<>();
         while (true) {
             Page<FileNode> page = fileNodeRepository.findByPurgeTaskIdOrderById(
                     event.taskId(),
@@ -357,6 +360,7 @@ public class FilePurgeStateService {
             if (page.isEmpty()) {
                 break;
             }
+            page.getContent().stream().map(FileNode::getId).forEach(indexNodeIds::add);
             FinalizationResult result = finalizeNodeBatch(
                     event, page.getContent(), sharedTask, operatorId);
             result.releasedBytesByOwner()
@@ -366,6 +370,10 @@ public class FilePurgeStateService {
             entityManager.flush();
             entityManager.clear();
         }
+        // 索引删除必须等节点行提交后再做：Lucene 落盘不参与数据库回滚，先删索引再回滚
+        // 会让仍然存在的文件搜不到；提交后再删最多留下过期条目，而搜索结果已按数据库
+        // 现状复核，过期条目不会展示。
+        scheduleSearchIndexCleanup(indexNodeIds, operatorId);
         // file_objects 行必须等整任务所有批次处理完再删：首批删行会让后续批次
         // 取不到版本对象大小，把已用配额永久留在高位；同时这里按全表引用复核，
         // 并发任务的节点或版本尚未删除时不能提前删行。
@@ -440,11 +448,37 @@ public class FilePurgeStateService {
         fileVersionRepository.deleteByFileNodeIdIn(nodeIds);
         Map<UUID, Long> releasedBytesByOwner =
                 quotaReleaseBytesByOwner(nodes, versions, sizeByObjectId(batchObjects));
-        // 索引删除覆盖个人与共享两个索引目录，节点归属人不影响清理结果。
-        fileSearchIndexService.deleteFiles(nodeIds, operatorId);
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
         return new FinalizationResult(nodes.size(), releasedBytesByOwner, Set.copyOf(objectIds));
+    }
+
+    private void scheduleSearchIndexCleanup(Set<UUID> nodeIds, UUID operatorId) {
+        if (nodeIds.isEmpty()) {
+            return;
+        }
+        List<UUID> ids = List.copyOf(nodeIds);
+        Runnable cleanup = () -> {
+            try {
+                // 索引删除覆盖个人与共享两个索引目录，节点归属人不影响清理结果。
+                fileSearchIndexService.deleteFiles(ids, operatorId);
+            } catch (RuntimeException exception) {
+                // 提交后的清理失败不能反过来把已完成的任务判失败：查询侧按数据库
+                // 现状过滤，残留条目不可见，后续索引重建会再次清理。
+                log.warn("永久删除后的索引清理失败: ownerUserId={}, fileCount={}, errorType={}",
+                        operatorId, ids.size(), exception.getClass().getSimpleName());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    cleanup.run();
+                }
+            });
+            return;
+        }
+        cleanup.run();
     }
 
     /**

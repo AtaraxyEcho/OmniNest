@@ -17,6 +17,8 @@ import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.common.security.RequestPrincipal;
 import com.omninest.modules.file.repository.FileAccessRecordRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
@@ -76,6 +78,7 @@ public class FileManagerService {
     private final SharedSpaceService sharedSpaceService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
+    private final FileDownloadContentService fileDownloadContentService;
     private final TransactionTemplate transactionTemplate;
 
     /** 单次打包总字节上限；默认 5GB，超限让客户端分批下载。 */
@@ -356,13 +359,13 @@ public class FileManagerService {
      * 跳过文件夹、回收站节点和无对象数据的文件；不同目录下的同名文件自动追加序号，
      * 因为 ZipOutputStream 遇到重名条目会直接抛错并截断已经在传输的响应流。
      *
-     * @param userId  用户 ID
-     * @param fileIds 要打包的文件 ID 列表
-     * @param out     输出流
+     * @param requester 请求主体
+     * @param fileIds   要打包的文件 ID 列表
+     * @param out       输出流
      */
-    public void packAsZip(UUID userId, List<String> fileIds, OutputStream out) {
+    public void packAsZip(RequestPrincipal requester, List<String> fileIds, OutputStream out) {
         try (BatchDownloadLease ignored = acquireBatchDownloadLease()) {
-            packZipEntries(planZipEntries(userId, fileIds), out);
+            packZipEntries(requester, planZipEntries(requester, fileIds), out);
         }
     }
 
@@ -395,7 +398,7 @@ public class FileManagerService {
      * @param bucketName 对象桶名
      * @param objectKey 对象键
      */
-    public record ZipPackEntry(String entryName, String bucketName, String objectKey) {
+    public record ZipPackEntry(String entryName, String bucketName, String objectKey, UUID fileId) {
     }
 
     /**
@@ -408,13 +411,14 @@ public class FileManagerService {
      * @param fileIds 待打包文件 ID 列表
      * @return 打包条目，文件夹与回收站节点不产出条目
      */
-    public List<ZipPackEntry> planZipEntries(UUID userId, List<String> fileIds) {
+    public List<ZipPackEntry> planZipEntries(RequestPrincipal requester, List<String> fileIds) {
         // 打包入口在同类内自调用，注解式事务不会经过代理；这里显式开短事务，
         // 保证校验、对象定位与字节合计读取同一快照。
-        return transactionTemplate.execute(status -> planZipEntriesInTransaction(userId, fileIds));
+        return transactionTemplate.execute(status -> planZipEntriesInTransaction(requester, fileIds));
     }
 
-    private List<ZipPackEntry> planZipEntriesInTransaction(UUID userId, List<String> fileIds) {
+    private List<ZipPackEntry> planZipEntriesInTransaction(RequestPrincipal requester, List<String> fileIds) {
+        UUID userId = requester.userId();
         List<UUID> nodeIds = fileIds.stream().map(this::parseFileId).distinct().toList();
         Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(nodeIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node));
@@ -454,6 +458,15 @@ public class FileManagerService {
                 continue;
             }
             if (node.getCurrentObjectId() == null) {
+                // 本地只读来源没有对象行，但内容可通过 File 模块统一下载接口读取。
+                // 直接跳过会让整批只剩空 ZIP；这里先打开再关闭，验证内容确实可读，
+                // 避免响应头发出后才发现本地文件缺失。
+                entries.add(planLocalContentEntry(requester, node, usedEntryNames));
+                totalBytes += Math.max(0, node.getSizeBytes());
+                if (totalBytes > maxBatchDownloadTotalBytes) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "打包总大小超过限制，请分批下载或单独下载大文件");
+                }
                 continue;
             }
             FileObject obj = objectsById.get(node.getCurrentObjectId());
@@ -464,7 +477,8 @@ public class FileManagerService {
             entries.add(new ZipPackEntry(
                     uniqueEntryName(node.getName(), usedEntryNames),
                     obj.getBucketName(),
-                    obj.getObjectKey()
+                    obj.getObjectKey(),
+                    null
             ));
             totalBytes += Math.max(0, obj.getSizeBytes());
             if (totalBytes > maxBatchDownloadTotalBytes) {
@@ -475,22 +489,44 @@ public class FileManagerService {
         return entries;
     }
 
+    private ZipPackEntry planLocalContentEntry(
+            RequestPrincipal requester, FileNode node, Set<String> usedEntryNames) {
+        try (FileContentStream content = fileDownloadContentService.openDownloadableFileContent(
+                requester, node.getId())) {
+            return new ZipPackEntry(
+                    uniqueEntryName(node.getName(), usedEntryNames),
+                    null,
+                    null,
+                    node.getId()
+            );
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + node.getId());
+        }
+    }
+
     /**
      * 按已规划好的条目写出 ZIP 流。
      *
      * @param entries 打包条目
      * @param out 输出流
      */
-    public void packZipEntries(List<ZipPackEntry> entries, OutputStream out) {
+    public void packZipEntries(RequestPrincipal requester, List<ZipPackEntry> entries, OutputStream out) {
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
             for (ZipPackEntry entry : entries) {
                 zip.putNextEntry(new ZipEntry(entry.entryName()));
-                try (InputStream in = objectStorageClient.getObject(
-                        new ObjectStorageKey(entry.bucketName(), entry.objectKey()))) {
-                    byte[] buffer = new byte[8192];
-                    int len;
-                    while ((len = in.read(buffer)) > 0) {
-                        zip.write(buffer, 0, len);
+                if (entry.fileId() != null) {
+                    try (FileContentStream content =
+                                 fileDownloadContentService.openDownloadableFileContent(requester, entry.fileId())) {
+                        content.inputStream().transferTo(zip);
+                    }
+                } else {
+                    try (InputStream in = objectStorageClient.getObject(
+                            new ObjectStorageKey(entry.bucketName(), entry.objectKey()))) {
+                        byte[] buffer = new byte[8192];
+                        int len;
+                        while ((len = in.read(buffer)) > 0) {
+                            zip.write(buffer, 0, len);
+                        }
                     }
                 }
                 zip.closeEntry();

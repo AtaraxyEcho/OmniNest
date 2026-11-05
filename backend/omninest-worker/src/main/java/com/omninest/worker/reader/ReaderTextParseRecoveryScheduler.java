@@ -1,6 +1,8 @@
 package com.omninest.worker.reader;
 
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -22,10 +24,15 @@ import org.springframework.stereotype.Component;
 @ConditionalOnSchedulerRuntime
 public class ReaderTextParseRecoveryScheduler {
 
+    /** 多实例部署下同一批超时任务只能由一个实例重投。 */
+    private static final String RECOVERY_LOCK_KEY = "omninest:worker:recovery:reader-text-parse";
+    private static final Duration RECOVERY_LOCK_TTL = Duration.ofMinutes(2);
+
     private static final String TASK_TYPE = "READER_PARSE";
     private static final int RECOVERY_BATCH_SIZE = 100;
 
     private final TaskRecordService taskRecordService;
+    private final DistributedLock distributedLock;
     private final ReaderTextParseRetryService retryService;
 
     @Value("${omninest.reader.text-parser.stale-heartbeat-seconds:120}")
@@ -36,9 +43,17 @@ public class ReaderTextParseRecoveryScheduler {
      */
     @Scheduled(fixedDelayString = "${omninest.reader.text-parser.recovery-interval-millis:30000}")
     public void recoverStaleTasks() {
-        Instant cutoff = Instant.now().minus(Math.max(30L, staleHeartbeatSeconds), ChronoUnit.SECONDS);
-        taskRecordService.listStaleRunningTaskIds(TASK_TYPE, cutoff, RECOVERY_BATCH_SIZE)
-                .forEach(taskId -> recoverOne(taskId, cutoff));
+        String token = distributedLock.newToken();
+        if (!distributedLock.tryLock(RECOVERY_LOCK_KEY, token, RECOVERY_LOCK_TTL)) {
+            return;
+        }
+        try {
+            Instant cutoff = Instant.now().minus(Math.max(30L, staleHeartbeatSeconds), ChronoUnit.SECONDS);
+            taskRecordService.listStaleRunningTaskIds(TASK_TYPE, cutoff, RECOVERY_BATCH_SIZE)
+                    .forEach(taskId -> recoverOne(taskId, cutoff));
+        } finally {
+            distributedLock.unlock(RECOVERY_LOCK_KEY, token);
+        }
     }
 
     private void recoverOne(UUID taskId, Instant cutoff) {

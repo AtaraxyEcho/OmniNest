@@ -80,12 +80,28 @@ server {
         proxy_send_timeout 3600s;
     }
 
+    # 壁纸直传：唯一需要 512MB 无缓冲请求体的业务入口。使用同级 ^~ 最长前缀，
+    # 与下方通用 api/ 入口并存；块内必须自带 rewrite 与全部转发头，不回退父块。
+    location ^~ ${OMNINEST_WEB_BASE_PATH}api/v1/backdrops {
+        client_max_body_size 512m;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
     # ^~ 前缀匹配：否则 API 路径以 .png/.js 等后缀结尾时会被下方静态正则
     # location 抢占，返回静态目录的 404 并附带公共缓存头。
     location ^~ ${OMNINEST_WEB_BASE_PATH}api/ {
-        # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
-        # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
-        client_max_body_size 2g;
+        # 登录等公开接口也走这里：默认收敛到 64MB，覆盖照片编辑/封面/头像，
+        # 仅壁纸直传单独放宽；流式下载仍保留 3600s 读超时。
+        client_max_body_size 64m;
         # add_header 在 location 级不继承 server 级；这里一旦新增任何响应头，
         # server 级 HSTS 会整体丢失，因此本 location 显式自声明。
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -209,6 +225,11 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "no-referrer" always;
+
+    # S3 预签名端口只服务对象读写，管理面（含 /minio/admin）不得直通公网。
+    location ^~ /minio/ {
+        return 403;
+    }
 
     location / {
         proxy_pass http://$omninest_minio;

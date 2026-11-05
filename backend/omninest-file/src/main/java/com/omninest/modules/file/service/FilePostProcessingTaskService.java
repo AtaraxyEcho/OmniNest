@@ -258,6 +258,8 @@ public class FilePostProcessingTaskService {
             return false;
         }
         String lower = mimeType.toLowerCase(Locale.ROOT);
+        // application/* 的纯文本结构化格式同样能被 Tika 抽出正文：
+        // 漏掉它们会让 JSON/XML/RTF/CSV 等只能按文件名搜到，重命名后也不会触发重建。
         return lower.startsWith("text/")
                 || lower.contains("pdf")
                 || lower.contains("epub")
@@ -265,7 +267,17 @@ public class FilePostProcessingTaskService {
                 || lower.contains("msword")
                 || lower.contains("mspowerpoint")
                 || lower.contains("msexcel")
-                || lower.contains("opendocument");
+                || lower.contains("opendocument")
+                || lower.contains("json")
+                || lower.contains("xml")
+                || lower.contains("rtf")
+                || lower.contains("csv")
+                || lower.contains("sql")
+                || lower.contains("javascript")
+                || lower.contains("yaml")
+                || lower.contains("toml")
+                || lower.contains("x-sh")
+                || lower.equals("application/x-httpd-php");
     }
 
     private static boolean isImage(String mimeType) {

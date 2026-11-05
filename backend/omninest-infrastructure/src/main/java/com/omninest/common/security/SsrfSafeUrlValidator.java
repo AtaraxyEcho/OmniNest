@@ -9,6 +9,9 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.security.Security;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,14 +44,81 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
         InetAddress[] getAllByName(String host) throws UnknownHostException;
     }
 
+    private static final long PINNED_DNS_TTL_NANOS = TimeUnit.SECONDS.toNanos(5);
+    private static final int MAX_PINNED_HOSTS = 1024;
+    private static final ConcurrentHashMap<String, PinnedAddresses> VERIFIED_PUBLIC_HOSTS =
+            new ConcurrentHashMap<>();
+
     private final HostResolver hostResolver;
+    /** 仅系统解析器写入钉死缓存；测试桩与自建端点档位不得污染全局 DNS 行为。 */
+    private final boolean usesSystemResolver;
 
     public SsrfSafeUrlValidator() {
-        this(InetAddress::getAllByName);
+        this(InetAddress::getAllByName, true);
     }
 
     SsrfSafeUrlValidator(HostResolver hostResolver) {
+        this(hostResolver, false);
+    }
+
+    private SsrfSafeUrlValidator(HostResolver hostResolver, boolean usesSystemResolver) {
         this.hostResolver = hostResolver;
+        this.usesSystemResolver = usesSystemResolver;
+    }
+
+    /**
+     * 读取刚通过 PUBLIC_ONLY 校验的公网地址，供 JEP 418 全局解析器钉死。
+     *
+     * @param host 主机名
+     * @return 未过期的已验证地址；无记录或已过期时为空
+     */
+    public static Optional<InetAddress[]> findPinnedPublicAddresses(String host) {
+        if (host == null || host.isBlank()) {
+            return Optional.empty();
+        }
+        String key = host.toLowerCase(Locale.ROOT);
+        PinnedAddresses pinned = VERIFIED_PUBLIC_HOSTS.get(key);
+        if (pinned == null) {
+            return Optional.empty();
+        }
+        if (System.nanoTime() - pinned.verifiedAtNanos() > PINNED_DNS_TTL_NANOS) {
+            VERIFIED_PUBLIC_HOSTS.remove(key, pinned);
+            return Optional.empty();
+        }
+        return Optional.of(pinned.addresses().clone());
+    }
+
+    /**
+     * 测试入口：登记一条已验地址。
+     *
+     * @param host 主机名
+     * @param addresses 已验证地址
+     */
+    static void pinVerifiedHost(String host, InetAddress[] addresses) {
+        pin(host, addresses);
+    }
+
+    /**
+     * 测试入口：清空短期钉死缓存。
+     */
+    static void clearPinnedHostsForTest() {
+        VERIFIED_PUBLIC_HOSTS.clear();
+    }
+
+    private static void pin(String host, InetAddress[] addresses) {
+        if (host == null || host.isBlank() || addresses == null || addresses.length == 0) {
+            return;
+        }
+        if (VERIFIED_PUBLIC_HOSTS.size() >= MAX_PINNED_HOSTS) {
+            // 缓存键来自外部域名，必须有上界；过期条目会在读取时自清理。
+            VERIFIED_PUBLIC_HOSTS.clear();
+        }
+        VERIFIED_PUBLIC_HOSTS.put(
+                host.toLowerCase(Locale.ROOT),
+                new PinnedAddresses(addresses.clone(), System.nanoTime()));
+    }
+
+    private record PinnedAddresses(InetAddress[] addresses, long verifiedAtNanos) {
     }
 
     /**
@@ -105,6 +175,11 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 if (isBlockedAddress(address, scope)) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
                 }
+            }
+            if (usesSystemResolver && scope == AddressScope.PUBLIC_ONLY) {
+                // 校验与 HttpClient 实际连接之间仍会再次解析；把刚验过的地址钉死 5 秒，
+                // 让紧随其后的连接复用同一组 IP，阻断 DNS Rebinding。
+                pin(host, addresses);
             }
         } catch (UnknownHostException exception) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 无法解析");

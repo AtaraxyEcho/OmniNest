@@ -53,7 +53,7 @@ public class FileQuarantineReaperScheduler {
 
     private final FileIngressItemRepository ingressItemRepository;
     private final ObjectStorageClient objectStorageClient;
-    private final FileUploadSessionService fileUploadSessionService;
+    private final FileUploadCancellationService fileUploadCancellationService;
     private final FileUploadSessionRepository uploadSessionRepository;
     private final StorageQuotaService storageQuotaService;
     private final ConfigValueProvider configValueProvider;
@@ -127,7 +127,7 @@ public class FileQuarantineReaperScheduler {
                 .filter(session -> !"COMPLETED".equals(session.getStatus()))
                 .ifPresent(session -> {
                     try {
-                        fileUploadSessionService.cancelSession(session.getOwnerUserId(), session.getUploadId());
+                        fileUploadCancellationService.forceCancelForCleanup(session.getOwnerUserId(), session.getUploadId());
                     } catch (Exception exception) {
                         log.warn("滞留上传会话取消失败: uploadId={}, errorType={}",
                                 session.getUploadId(), exception.getClass().getSimpleName());

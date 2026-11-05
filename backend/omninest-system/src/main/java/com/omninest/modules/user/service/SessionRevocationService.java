@@ -58,6 +58,8 @@ public class SessionRevocationService implements SessionRevocationChecker {
         try {
             writer.persistRevocation(userId, sessionId);
         } catch (RuntimeException exception) {
+            // 刷新令牌重放检测路径：调用方必须照常抛 RefreshTokenReplayException，
+            // 不能被落库失败改写成 500；Redis 黑名单已在下方无条件写入。
             log.error("数据库会话撤销写入失败: userId={}, sessionId={}", userId, sessionId, exception);
         }
         publishRevocations(userId, List.of(sessionId), ttl);
@@ -69,18 +71,18 @@ public class SessionRevocationService implements SessionRevocationChecker {
      * <p>刷新重放、主动登出与管理端强制退出使用本入口：调用方在吊销后通常会抛错或继续
      * 其它写操作，会话行与撤销记录的落库不能被后续失败回滚。</p>
      *
+     * <p>先写 Redis 黑名单再落库：落库失败时请求仍会被立即拒绝，不会出现"接口报错但
+     * 令牌照常可用"；数据库异常向上抛出，让显式登出与管理员撤销的调用方（及其审计）
+     * 一并回滚，而不是静默返回成功、等 Redis TTL 到期后会话自己"复活"。</p>
+     *
      * @param userId 用户标识
      * @param sessionId 会话标识
      * @param reason 写入会话行的撤销原因
      * @param ttl 撤销缓存保留时间
      */
     public void revokeSessionAndDeactivate(UUID userId, UUID sessionId, String reason, Duration ttl) {
-        try {
-            writer.persistRevocationAndDeactivate(userId, sessionId, reason);
-        } catch (RuntimeException exception) {
-            log.error("数据库会话撤销写入失败: userId={}, sessionId={}", userId, sessionId, exception);
-        }
         publishRevocations(userId, List.of(sessionId), ttl);
+        writer.persistRevocationAndDeactivate(userId, sessionId, reason);
     }
 
     /**

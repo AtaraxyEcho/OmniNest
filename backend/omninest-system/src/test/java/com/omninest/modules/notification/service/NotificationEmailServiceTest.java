@@ -2,6 +2,7 @@ package com.omninest.modules.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.preferences.UserPreferenceQuery;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.user.SystemInstanceInfo;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig;
@@ -23,6 +25,7 @@ import com.omninest.modules.notification.repository.NotificationRepository;
 import com.omninest.modules.notification.repository.NotificationTypeRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Map;
@@ -52,6 +55,7 @@ class NotificationEmailServiceTest {
     private final UserAccountQuery userAccountQuery = mock(UserAccountQuery.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
+    private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final com.omninest.common.user.SystemInstanceInfo systemInstanceInfo =
             mock(com.omninest.common.user.SystemInstanceInfo.class);
 
@@ -68,7 +72,8 @@ class NotificationEmailServiceTest {
             userAccountQuery,
             taskRecordService,
             taskDispatchService,
-            systemInstanceInfo
+            systemInstanceInfo,
+            rateLimitService
     );
 
     {
@@ -166,19 +171,14 @@ class NotificationEmailServiceTest {
     }
 
     @Test
-    void hourlyCapBlocksRegistrationAtAndAboveTheLimit() {
+    void hourlyCapBlocksRegistrationWhenTheAtomicCounterIsExhausted() {
         givenOptedInUser();
         when(runtimeConfig.ratePerHour()).thenReturn(2);
+        when(rateLimitService.tryAcquire(
+                eq("notification:email:" + USER_ID), eq(2), any(Duration.class)))
+                .thenReturn(false);
 
-        for (long recent : new long[] {2L, 3L}) {
-            when(taskRecordService.countRecentTasks(
-                    eq(NotificationEmailService.TASK_TYPE), eq(USER_ID), any(Instant.class)))
-                    .thenReturn(recent);
-
-            assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID))
-                    .as("已登记 %d 条、上限 2 时不应再登记", recent)
-                    .isEmpty();
-        }
+        assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID)).isEmpty();
 
         verify(taskRecordService, never())
                 .createQueuedTask(any(), any(), anyString(), anyString(), anyString(), anyString(), any(), any());
@@ -186,24 +186,24 @@ class NotificationEmailServiceTest {
     }
 
     @Test
-    void hourlyCapStillRegistersBelowTheLimit() {
+    void hourlyCapStillRegistersWhileTheCounterAllows() {
         givenOptedInUser();
         when(runtimeConfig.ratePerHour()).thenReturn(2);
-        when(taskRecordService.countRecentTasks(
-                eq(NotificationEmailService.TASK_TYPE), eq(USER_ID), any(Instant.class)))
-                .thenReturn(1L);
+        when(rateLimitService.tryAcquire(
+                eq("notification:email:" + USER_ID), eq(2), any(Duration.class)))
+                .thenReturn(true);
 
         assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID)).isPresent();
     }
 
     @Test
-    void zeroCapMeansUnlimitedAndSkipsTheCountQuery() {
+    void zeroCapMeansUnlimitedAndSkipsTheCounter() {
         givenOptedInUser();
         when(runtimeConfig.ratePerHour()).thenReturn(0);
 
         assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID)).isPresent();
 
-        verify(taskRecordService, never()).countRecentTasks(anyString(), any(), any());
+        verify(rateLimitService, never()).tryAcquire(anyString(), anyInt(), any());
     }
 
     @Test
