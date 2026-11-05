@@ -15,10 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 照片行变更后的统一收尾副作用：相册落库计数重算、逐张同步事件、搜索索引投递、看板缓存失效。
+ * 照片行变更后的统一收尾副作用：相册落库计数重算、逐张同步事件与看板缓存失效。
  *
- * <p>这些副作用必须成组发生，历史上散落在各业务方法里容易漏项（如批量打标签不投索引、
- * 移入回收站不重算相册计数）。相册计数与详情列表都以「活动照片」为准：照片进回收站不删
+ * <p>这些副作用必须成组发生，历史上散落在各业务方法里容易漏项（如移入回收站不重算相册计数）。相册计数与详情列表都以「活动照片」为准：照片进回收站不删
  * 相册关联条目，不在此重算就会让卡片数量长期高于点开后的实际数量。</p>
  *
  * @author OmniNest
@@ -31,7 +30,6 @@ public class PhotoChangeSideEffects {
 
     private final PhotoAlbumRepository albumRepository;
     private final PhotoAlbumItemRepository albumItemRepository;
-    private final PhotoIndexTaskService photoIndexTaskService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
 
@@ -97,9 +95,9 @@ public class PhotoChangeSideEffects {
     }
 
     /**
-     * 照片集合被移入或移出回收站后的成组收尾：相册计数、同步事件、索引刷新与看板失效。
+     * 照片集合被移入或移出回收站后的成组收尾：相册计数、同步事件与看板失效。
      *
-     * <p>索引刷新按照片逐个投递，由单写进程消费；看板缓存整批只失效一次。</p>
+     * <p>检索以数据库为准，回收站状态由查询条件直接过滤，不再有需要同步的索引副本。</p>
      *
      * @param ownerUserId 所有者用户 ID
      * @param photoIds 变更后的照片 ID
@@ -117,7 +115,6 @@ public class PhotoChangeSideEffects {
         }
         refreshAlbumCountsForPhotos(ownerUserId, photoIds);
         photoIds.forEach(photoId -> recordPhotoEvent(ownerUserId, photoId, action, null, hints));
-        photoIds.forEach(photoId -> photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId));
         invalidateDashboardCache(ownerUserId);
     }
 }

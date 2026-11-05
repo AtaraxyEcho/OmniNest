@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -36,7 +35,6 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoListItemProjection;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
-import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import com.omninest.modules.user.service.SystemInstanceConfigService;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -79,14 +77,13 @@ class PhotoLibraryServiceTest {
     private PhotoAlbumRepository albumRepository;
     private PhotoAlbumItemRepository albumItemRepository;
     private PhotoTagRepository photoTagRepository;
-    private PhotoSearchIndexService photoSearchIndexService;
+    private PhotoLabelPolicy photoLabelPolicy;
     private FileDeletionService fileDeletionService;
     private FileQueryService fileQueryService;
     private ReadThroughCache readThroughCache;
     private MediaSyncEventService syncEventService;
     private PhotoContentAnalysisService contentAnalysisService;
     private PhotoGeoService photoGeoService;
-    private PhotoIndexTaskService photoIndexTaskService;
     private SystemInstanceConfigService systemInstanceConfigService;
     private PhotosRuntimeConfigService photosRuntimeConfigService;
     private PhotoChangeSideEffects sideEffects;
@@ -100,23 +97,21 @@ class PhotoLibraryServiceTest {
         albumRepository = mock(PhotoAlbumRepository.class);
         albumItemRepository = mock(PhotoAlbumItemRepository.class);
         photoTagRepository = mock(PhotoTagRepository.class);
-        photoSearchIndexService = mock(PhotoSearchIndexService.class);
+        photoLabelPolicy = new PhotoLabelPolicy();
         fileDeletionService = mock(FileDeletionService.class);
         fileQueryService = mock(FileQueryService.class);
         readThroughCache = mock(ReadThroughCache.class);
         syncEventService = mock(MediaSyncEventService.class);
         contentAnalysisService = mock(PhotoContentAnalysisService.class);
         photoGeoService = mock(PhotoGeoService.class);
-        photoIndexTaskService = mock(PhotoIndexTaskService.class);
         systemInstanceConfigService = mock(SystemInstanceConfigService.class);
         when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
         photosRuntimeConfigService = mock(PhotosRuntimeConfigService.class);
         when(photosRuntimeConfigService.legacyListLimit()).thenReturn(200);
-        // 副作用组件按真实装配注入：既有断言继续验证相册计数重算、同步事件与索引投递。
+        // 副作用组件按真实装配注入：既有断言继续验证相册计数重算与同步事件。
         sideEffects = new PhotoChangeSideEffects(
                 albumRepository,
                 albumItemRepository,
-                photoIndexTaskService,
                 syncEventService,
                 readThroughCache
         );
@@ -127,13 +122,12 @@ class PhotoLibraryServiceTest {
                 albumRepository,
                 sideEffects,
                 photoTagRepository,
-                photoSearchIndexService,
+                photoLabelPolicy,
                 fileDeletionService,
                 fileQueryService,
                 readThroughCache,
                 contentAnalysisService,
                 photoGeoService,
-                photoIndexTaskService,
                 systemInstanceConfigService,
                 photosRuntimeConfigService,
                 new PhotoDtoAssembler(
@@ -222,8 +216,6 @@ class PhotoLibraryServiceTest {
         // 批量入口一次读、一次写：逐张 save 会把相册重算与缓存失效放大成 N 倍。
         verify(photoItemRepository).saveAll(List.of(firstPhoto, secondPhoto));
         verify(photoItemRepository, never()).save(any(PhotoItem.class));
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_2);
         verify(fileDeletionService, Mockito.never()).deletePermanentlyBatch(
                 any(), any(), anyBoolean(), any()
         );
@@ -329,27 +321,36 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
-    void listPhotosPage_usesLuceneHitsInRelevanceOrder() {
-        // 索引命中的 photoId 按 BM25 相关性排序；SQL IN 查询不保序，必须按索引顺序重排。
-        PhotoListItemProjection second = photoProjection(PHOTO_ID_1, "相关性第二");
-        PhotoListItemProjection first = photoProjection(PHOTO_ID_2, "相关性第一");
-        when(photoSearchIndexService.search(OWNER_ID, "sunset", 500))
-                .thenReturn(List.of(PHOTO_ID_2, PHOTO_ID_1));
-        when(photoItemRepository.findListByIds(eq(OWNER_ID), any()))
-                .thenReturn(List.of(second, first));
-        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(eq(OWNER_ID), any()))
+    void listPhotosPage_searchesDatabaseWithExpandedLabelCodes() {
+        // 「猫咪」只能通过同义词表反查成 SUBJECT:cat 的编码命中；写死原始关键词会漏掉这批照片。
+        PhotoListItemProjection projection = photoProjection(PHOTO_ID_1, "橘猫");
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("猫咪"), eq(List.of("cat")), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(projection), invocation.getArgument(3), 1));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(eq(OWNER_ID), any()))
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
         when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any())).thenReturn(Map.of());
 
         Page<PhotoListItemDto> result = service.listPhotosPage(
-                OWNER_ID, 0, 50, "createdAt,desc", " sunset ");
+                OWNER_ID, 0, 50, "createdAt,desc", " 猫咪 ");
 
-        assertThat(result.getContent()).extracting(PhotoListItemDto::id)
-                .containsExactly(PHOTO_ID_2, PHOTO_ID_1);
-        assertThat(result.getTotalElements()).isEqualTo(2);
-        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(Pageable.class));
+        assertThat(result.getContent()).extracting(PhotoListItemDto::id).containsExactly(PHOTO_ID_1);
+        verify(photoItemRepository, Mockito.never()).findListPage(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPage_passesNonEmptySentinelWhenNoLabelMatches() {
+        // JPA 会把空集合展开成非法的 IN ()，没有命中任何标签时必须退化为不会命中的哨兵。
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("sunset"), eq(List.of("__no_label__")), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "sunset");
+
+        verify(photoItemRepository).searchListPage(
+                eq(OWNER_ID), eq("sunset"), eq(List.of("__no_label__")), any(Pageable.class));
     }
 
     @Test
@@ -434,12 +435,13 @@ class PhotoLibraryServiceTest {
 
     @Test
     void listPhotosPage_usesSearchQueryOnlyForNonBlankKeyword() {
-        when(photoItemRepository.searchListPage(eq(OWNER_ID), eq("sunset"), any(Pageable.class)))
-                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("sunset"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
 
         service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "  sunset  ");
 
-        verify(photoItemRepository).searchListPage(eq(OWNER_ID), eq("sunset"), any(Pageable.class));
+        verify(photoItemRepository).searchListPage(eq(OWNER_ID), eq("sunset"), any(), any(Pageable.class));
         verify(photoItemRepository, Mockito.never()).findListPage(any(), any(Pageable.class));
     }
 
@@ -447,13 +449,13 @@ class PhotoLibraryServiceTest {
     void listPhotosPageEscapesLikeWildcardsBeforeReachingTheQuery() {
         // 前后通配已经由 SQL 拼好，用户敲的 % 与 _ 必须变成字面量，否则条件会被放宽。
         when(photoItemRepository.searchListPage(
-                eq(OWNER_ID), eq("100\\% \\_x"), any(Pageable.class)))
-                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
+                eq(OWNER_ID), eq("100\\% \\_x"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
 
         service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", " 100% _x ");
 
         verify(photoItemRepository).searchListPage(
-                eq(OWNER_ID), eq("100\\% \\_x"), any(Pageable.class));
+                eq(OWNER_ID), eq("100\\% \\_x"), any(), any(Pageable.class));
     }
 
     @Test
@@ -464,22 +466,23 @@ class PhotoLibraryServiceTest {
         assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", null).getContent()).isEmpty();
         assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "   ").getContent()).isEmpty();
 
-        verify(photoSearchIndexService, Mockito.never()).search(any(), any(), anyInt());
-        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(Pageable.class));
+        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(), any(Pageable.class));
     }
 
     @Test
     void listFavoritesPage_selectsTypedQueryBranch() {
         when(photoItemRepository.findFavoriteListPage(eq(OWNER_ID), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
-        when(photoItemRepository.searchFavoriteListPage(eq(OWNER_ID), eq("night"), any(Pageable.class)))
-                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
+        when(photoItemRepository.searchFavoriteListPage(
+                eq(OWNER_ID), eq("night"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
 
         service.listFavoritesPage(OWNER_ID, 0, 50, "createdAt,desc", null);
         service.listFavoritesPage(OWNER_ID, 0, 50, "createdAt,desc", "night");
 
         verify(photoItemRepository).findFavoriteListPage(eq(OWNER_ID), any(Pageable.class));
-        verify(photoItemRepository).searchFavoriteListPage(eq(OWNER_ID), eq("night"), any(Pageable.class));
+        verify(photoItemRepository).searchFavoriteListPage(
+                eq(OWNER_ID), eq("night"), any(), any(Pageable.class));
     }
 
     @Test
@@ -564,36 +567,38 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
-    void addTagTriggersPhotoIndexRefreshAfterCommit() {
+    void addTagPersistsTagRowAndRecordsSyncEvent() {
         PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
         when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
         when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边")).thenReturn(false);
 
         service.addTag(OWNER_ID, PHOTO_ID_1, "海边");
 
-        // 索引不得在标签事务内直接写：由协作者统一挂到 afterCommit。
-        verify(photoIndexTaskService, never()).index(any(), any());
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
+        // 标签落库即可被检索命中，不需要再向任何索引副本同步一次。
+        ArgumentCaptor<PhotoTag> tagCaptor = ArgumentCaptor.forClass(PhotoTag.class);
+        verify(photoTagRepository).save(tagCaptor.capture());
+        assertThat(tagCaptor.getValue().getTag()).isEqualTo("海边");
+        assertThat(tagCaptor.getValue().getPhotoId()).isEqualTo(PHOTO_ID_1);
+        verify(syncEventService, Mockito.atLeastOnce())
+                .record(eq(OWNER_ID), any(), eq("PHOTO_ITEM"), eq(PHOTO_ID_1.toString()), any(), any(), any());
     }
 
     @Test
-    void removeTagTriggersPhotoIndexRefreshAfterCommit() {
-        service.removeTag(OWNER_ID, PHOTO_ID_1, "海边");
-
-        verify(photoIndexTaskService, never()).index(any(), any());
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
-    }
-
-    @Test
-    void addTagSchedulesIndexWithoutInlineIndexing() {
+    void addTagIsIdempotentForExistingTag() {
         PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
         when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
-        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "山")).thenReturn(false);
+        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边")).thenReturn(true);
 
-        service.addTag(OWNER_ID, PHOTO_ID_1, "山");
+        service.addTag(OWNER_ID, PHOTO_ID_1, "海边");
 
-        verify(photoTagRepository).save(any(PhotoTag.class));
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
+        verify(photoTagRepository, Mockito.never()).save(any(PhotoTag.class));
+    }
+
+    @Test
+    void removeTagDeletesExactTagRow() {
+        service.removeTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        verify(photoTagRepository).deleteByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边");
     }
 
     // ── 辅助方法 ──

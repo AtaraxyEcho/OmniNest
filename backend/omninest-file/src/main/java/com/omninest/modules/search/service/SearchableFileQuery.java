@@ -12,20 +12,28 @@ import java.util.UUID;
 public interface SearchableFileQuery {
 
     /**
-     * 查询当前用户仍可搜索的文件名称。
+     * 按内容对象标识解析当前仍可搜索的文件节点。
+     *
+     * <p>正文索引只存不可变的内容对象标识，节点标识、文件名与空间归属都以数据库
+     * 实时状态为准：同一对象可能被复制成多个节点，也可能已经进入回收站或永久删除，
+     * 这些都必须在这里过滤掉。</p>
      *
      * @param ownerUserId 当前用户 ID
-     * @param candidateIds Lucene 返回的候选文件 ID
-     * @return 以文件 ID 为键的当前文件名称
+     * @param fileObjectIds 正文命中的内容对象标识
+     * @param includePersonal 是否包含个人空间
+     * @param includeShared 是否包含共享空间
+     * @return 当前可搜索的文件节点
      */
-    Map<UUID, String> findCurrentNames(UUID ownerUserId, Collection<UUID> candidateIds);
+    Collection<SearchableFileNode> findSearchableNodesByObjectIds(
+            UUID ownerUserId,
+            Collection<UUID> fileObjectIds,
+            boolean includePersonal,
+            boolean includeShared);
 
     /**
      * 按当前数据库文件名实时匹配活动文件。
      *
-     * <p>默认实现返回空映射，供只关心 Lucene 候选复核的既有测试与调用方使用。
-     * 生产实现由 {@link com.omninest.modules.file.service.SearchableFileQueryService}
-     * 覆盖。</p>
+     * <p>文件名是可变元数据，只存在于数据库；重命名后无需等正文重解析即可命中。</p>
      *
      * @param ownerUserId 当前用户 ID
      * @param query 用户输入关键词
@@ -34,24 +42,21 @@ public interface SearchableFileQuery {
      * @param limit 最多返回条数
      * @return 以文件 ID 为键的当前文件名称
      */
-    default Map<UUID, String> searchActiveFilesByName(
+    Map<UUID, String> searchActiveFilesByName(
             UUID ownerUserId,
             String query,
             boolean includePersonal,
             boolean includeShared,
             int limit
-    ) {
-        return Map.of();
-    }
+    );
 
     /**
-     * 查询共享空间中仍然活动的文件名称。
+     * 可搜索的文件节点即时快照。
      *
-     * <p>共享索引是全局目录，命中后的可见性由调用方按共享空间角色权限统一判定；
-     * 该查询只复核节点状态。</p>
-     *
-     * @param candidateIds Lucene 返回的候选文件 ID
-     * @return 以文件 ID 为键的当前文件名称
+     * @param fileId 文件节点 ID
+     * @param fileObjectId 内容对象 ID
+     * @param name 当前文件名
      */
-    Map<UUID, String> findCurrentSharedNames(Collection<UUID> candidateIds);
+    record SearchableFileNode(UUID fileId, UUID fileObjectId, String name) {
+    }
 }

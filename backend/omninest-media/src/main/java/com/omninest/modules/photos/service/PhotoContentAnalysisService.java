@@ -56,7 +56,6 @@ public class PhotoContentAnalysisService {
     private final PhotoContentLabelRepository labelRepository;
     private final PhotoItemRepository photoItemRepository;
     private final FileLifecycleGuard fileLifecycleGuard;
-    private final PhotoIndexTaskService photoIndexTaskService;
 
     /**
      * 判断当前照片是否已按目标流水线完成分析。
@@ -96,8 +95,7 @@ public class PhotoContentAnalysisService {
             UUID ownerUserId,
             PhotoItem photo,
             String contentHash,
-            String expectedPipelineVersion,
-            boolean triggerImmediateIndex
+            String expectedPipelineVersion
     ) {
         if (contentHash == null || contentHash.isBlank()
                 || expectedPipelineVersion == null || expectedPipelineVersion.isBlank()) {
@@ -151,7 +149,7 @@ public class PhotoContentAnalysisService {
                 metadataStringList(sourcePhoto, METADATA_SEMANTIC_TAGS),
                 sourcePhoto.getOcrText()
         );
-        apply(ownerUserId, photo.getId(), clonedAnalysis, labels, false, triggerImmediateIndex);
+        apply(ownerUserId, photo.getId(), clonedAnalysis, labels, false);
         return true;
     }
 
@@ -205,8 +203,7 @@ public class PhotoContentAnalysisService {
     public boolean tryShortCircuitDenseTextReanalysis(
             UUID ownerUserId,
             PhotoItem photo,
-            String expectedPipelineVersion,
-            boolean triggerImmediateIndex
+            String expectedPipelineVersion
     ) {
         if (photo.getProviderMetadata() == null) {
             return false;
@@ -241,7 +238,7 @@ public class PhotoContentAnalysisService {
                 OCR_LAYOUT_SOURCE,
                 List.of()
         ));
-        apply(ownerUserId, photo.getId(), syntheticAnalysis, labels, true, triggerImmediateIndex);
+        apply(ownerUserId, photo.getId(), syntheticAnalysis, labels, true);
         return true;
     }
 
@@ -253,7 +250,6 @@ public class PhotoContentAnalysisService {
      * @param analysis 结构化分析结果
      * @param labels 经过业务策略筛选的标签
      * @param skipOcr 是否跳过 OCR；为真时保留原 ocrText 与 OCR 版面标签
-     * @param triggerImmediateIndex 是否在同事务内投递单图索引 Outbox
      */
     @Transactional(rollbackFor = Exception.class)
     public void apply(
@@ -261,8 +257,7 @@ public class PhotoContentAnalysisService {
             UUID photoId,
             ContentAnalysis analysis,
             List<PhotoLabelPolicy.PhotoLabel> labels,
-            boolean skipOcr,
-            boolean triggerImmediateIndex
+            boolean skipOcr
     ) {
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new IllegalStateException("照片不存在"));
@@ -347,9 +342,6 @@ public class PhotoContentAnalysisService {
         photo.setProviderMetadata(metadata);
         photoItemRepository.save(photo);
 
-        if (triggerImmediateIndex) {
-            photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
-        }
     }
 
     /**

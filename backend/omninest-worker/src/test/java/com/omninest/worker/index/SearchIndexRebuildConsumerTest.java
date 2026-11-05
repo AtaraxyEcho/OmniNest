@@ -3,7 +3,6 @@ package com.omninest.worker.index;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
-import com.omninest.modules.photos.service.PhotoIndexTaskService;
 import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.rabbitmq.client.Channel;
@@ -21,6 +20,8 @@ import org.springframework.amqp.core.MessageProperties;
 /**
  * 全站搜索索引重建消费者编排测试。
  *
+ * <p>相册检索已收敛到 PostgreSQL，重建只覆盖文件正文索引一个根目录。</p>
+ *
  * @author OmniNest
  */
 class SearchIndexRebuildConsumerTest {
@@ -28,40 +29,32 @@ class SearchIndexRebuildConsumerTest {
     private final TaskRecordService taskRecordService = Mockito.mock(TaskRecordService.class);
     private final TaskFailureRetryService failureRetryService = Mockito.mock(TaskFailureRetryService.class);
     private final SearchIndexRebuildService rebuildService = Mockito.mock(SearchIndexRebuildService.class);
-    private final PhotoIndexTaskService photoIndexTaskService = Mockito.mock(PhotoIndexTaskService.class);
     private final Channel channel = Mockito.mock(Channel.class);
     private final SearchIndexRebuildConsumer consumer = new SearchIndexRebuildConsumer(
             taskRecordService,
             failureRetryService,
-            rebuildService,
-            photoIndexTaskService
+            rebuildService
     );
 
     @Test
-    void handleRebuildsFileIndexThenPhotoIndexAndReportsBoth() throws IOException {
+    void handleRebuildsFileIndexAndReportsDispatchedCount() throws IOException {
         UUID taskId = UUID.randomUUID();
         SearchIndexRebuildEvent event = new SearchIndexRebuildEvent(taskId, UUID.randomUUID());
         Mockito.when(taskRecordService.claimForExecution(taskId, "REBUILDING")).thenReturn(true);
         Mockito.when(rebuildService.rebuild(taskId)).thenReturn(Map.of("dispatchedFiles", 12L));
-        Mockito.when(photoIndexTaskService.rebuildAll()).thenReturn(7);
 
         consumer.handle(event, message(), channel);
 
-        InOrder order = Mockito.inOrder(rebuildService, photoIndexTaskService, taskRecordService, channel);
+        InOrder order = Mockito.inOrder(rebuildService, taskRecordService, channel);
         order.verify(rebuildService).rebuild(taskId);
-        order.verify(photoIndexTaskService).rebuildAll();
         ArgumentCaptor<Map<String, Object>> result = ArgumentCaptor.captor();
         order.verify(taskRecordService).markCompleted(Mockito.eq(taskId), result.capture());
         order.verify(channel).basicAck(1L, false);
-        // 文件索引与照片索引是两个独立根目录，任务结果必须同时暴露两侧计数，
-        // 否则管理员只能看到「重建成功」而无法判断相册侧是否真的重投过。
-        Assertions.assertThat(result.getValue())
-                .containsEntry("dispatchedFiles", 12L)
-                .containsEntry("reindexedPhotos", 7);
+        Assertions.assertThat(result.getValue()).containsEntry("dispatchedFiles", 12L);
     }
 
     @Test
-    void handleSkipsBothIndexesWhenClaimLost() throws IOException {
+    void handleSkipsRebuildWhenClaimLost() throws IOException {
         UUID taskId = UUID.randomUUID();
         SearchIndexRebuildEvent event = new SearchIndexRebuildEvent(taskId, UUID.randomUUID());
         Mockito.when(taskRecordService.claimForExecution(taskId, "REBUILDING")).thenReturn(false);
@@ -69,18 +62,17 @@ class SearchIndexRebuildConsumerTest {
         consumer.handle(event, message(), channel);
 
         Mockito.verify(channel).basicAck(1L, false);
-        Mockito.verifyNoInteractions(rebuildService, photoIndexTaskService);
+        Mockito.verifyNoInteractions(rebuildService);
         Mockito.verify(taskRecordService, Mockito.never()).markCompleted(Mockito.eq(taskId), Mockito.any());
     }
 
     @Test
-    void handleFailsTaskWhenPhotoIndexRebuildThrows() throws IOException {
+    void handleFailsTaskWhenRebuildThrows() throws IOException {
         UUID taskId = UUID.randomUUID();
         SearchIndexRebuildEvent event = new SearchIndexRebuildEvent(taskId, UUID.randomUUID());
         Mockito.when(taskRecordService.claimForExecution(taskId, "REBUILDING")).thenReturn(true);
-        Mockito.when(rebuildService.rebuild(taskId)).thenReturn(Map.of("dispatchedFiles", 3L));
-        Mockito.when(photoIndexTaskService.rebuildAll())
-                .thenThrow(new IllegalStateException("清空照片索引失败"));
+        IllegalStateException failure = new IllegalStateException("清空索引失败");
+        Mockito.when(rebuildService.rebuild(taskId)).thenThrow(failure);
 
         consumer.handle(event, message(), channel);
 
@@ -88,7 +80,7 @@ class SearchIndexRebuildConsumerTest {
                 Mockito.eq(taskId),
                 Mockito.eq(QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY),
                 Mockito.eq(event),
-                Mockito.any(IllegalStateException.class));
+                Mockito.eq(failure));
         Mockito.verify(channel).basicAck(1L, false);
         Mockito.verify(taskRecordService, Mockito.never()).markCompleted(Mockito.eq(taskId), Mockito.any());
     }

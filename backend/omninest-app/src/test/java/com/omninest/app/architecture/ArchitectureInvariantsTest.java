@@ -179,7 +179,6 @@ class ArchitectureInvariantsTest {
             Map.entry("VIDEO_TRANSCODE", "TranscodeExecutionService 持有 TaskHeartbeatRunner 租约"),
             Map.entry("WEB_OPTIMIZE", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("AUDIO_EXTRACT", "经 FilePostProcessingTaskTracker 生命周期领取"),
-            Map.entry("FILE_INDEX", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("THUMBNAIL", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("TEXT_EXTRACTION", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("SEARCH_INDEX_REBUILD", "SearchIndexRebuildService 分批 updateProgress"),

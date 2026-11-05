@@ -25,9 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>接口只落任务记录并投递 Outbox，清索引与逐文件重投放在 Worker 侧异步执行：
  * 存量文件可达十万级，同步重建必然超出请求超时，且 Lucene 写入必须留在单写进程内。</p>
  *
- * <p>本服务只覆盖文件索引根目录；照片索引是另一个独立根目录，由 Worker 侧消费者
- * 在同一任务里追加调用 {@code PhotoIndexTaskService.rebuildAll()}，
- * 因为 File 模块不依赖 Media 模块。</p>
+ * <p>本服务只覆盖文件正文索引；相册检索已收敛到 PostgreSQL，不再有需要重建的相册索引。</p>
  *
  * @author OmniNest
  */

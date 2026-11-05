@@ -88,24 +88,38 @@ backup_volume() {
         sh -c 'tar czf - -C /data .'
 }
 
-echo "[1/6] PostgreSQL 逻辑备份并流式加密 (${POSTGRES_DB})..."
+echo "[1/7] PostgreSQL 逻辑备份并流式加密 (${POSTGRES_DB})..."
 encrypt_to_file "${BACKUP_DIR}/postgres.dump.enc" \
     docker compose -f "${COMPOSE_FILE}" exec -T postgres \
     pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -Fc
 
 # MinIO 与 rclone 使用命名卷直接挂载，不依赖运行中的容器名；
 # compose down 之后 MinIO 容器不存在时同样可备份。
-echo "[2/6] MinIO 数据卷打包加密 (${PROJECT_NAME}_omninest-minio)..."
+echo "[2/7] MinIO 数据卷打包加密 (${PROJECT_NAME}_omninest-minio)..."
 backup_volume omninest-minio minio-data.tar.gz
 
-echo "[3/6] rclone 配置与本地卷打包加密..."
+echo "[3/7] rclone 配置与本地卷打包加密..."
 backup_volume omninest-rclone rclone-config.tar.gz
 backup_volume omninest-rclone-local rclone-local-data.tar.gz
 backup_volume omninest-rclone-imports rclone-imports-data.tar.gz
 
-echo "[4/6] 生成 SHA-256 校验和..."
+# 搜索索引卷必须随库一起备份：索引体积随语料增长但远小于对象存储，
+# 恢复后若缺索引，全站文件正文搜索为空，只能靠管理员手动触发全量重建。
+# 卷不存在时跳过而不是中断——纯 API 角色或未挂载索引卷的部署不应因这一步备份失败。
+echo "[4/7] 搜索索引卷打包加密..."
+if docker volume inspect "${PROJECT_NAME}_omninest-search" >/dev/null 2>&1; then
+    backup_volume omninest-search lucene-search.tar.gz
+else
+    echo "警告: 命名卷 ${PROJECT_NAME}_omninest-search 不存在，跳过搜索索引备份" >&2
+fi
+
+echo "[5/7] 生成 SHA-256 校验和..."
 (cd "${BACKUP_DIR}" && sha256sum postgres.dump.enc minio-data.tar.gz.enc \
-    rclone-config.tar.gz.enc rclone-local-data.tar.gz.enc rclone-imports-data.tar.gz.enc > SHA256SUMS)
+    rclone-config.tar.gz.enc rclone-local-data.tar.gz.enc rclone-imports-data.tar.gz.enc \
+    > SHA256SUMS)
+if [ -f "${BACKUP_DIR}/lucene-search.tar.gz.enc" ]; then
+    (cd "${BACKUP_DIR}" && sha256sum lucene-search.tar.gz.enc >> SHA256SUMS)
+fi
 chmod 600 "${BACKUP_DIR}/SHA256SUMS"
 
 BACKUP_KEY_SHA256="$(printf '%s' "${BACKUP_PASSPHRASE}" | sha256sum | cut -d' ' -f1)"
@@ -114,12 +128,17 @@ if [ -n "${CREDENTIAL_KEY:-}" ]; then
     CREDENTIAL_KEY_SHA256="$(printf '%s' "${CREDENTIAL_KEY}" | sha256sum | cut -d' ' -f1)"
 fi
 
-echo "[5/6] 写入加密与密钥指纹清单..."
+echo "[6/7] 写入加密与密钥指纹清单..."
 {
     echo "omninest backup ${STAMP}"
     echo "postgres: ${POSTGRES_DB} (custom format dump, encrypted)"
     echo "minio: ${PROJECT_NAME}_omninest-minio volume tarball (encrypted)"
     echo "rclone: ${PROJECT_NAME}_omninest-rclone / -local / -imports volume tarballs (encrypted)"
+    if [ -f "${BACKUP_DIR}/lucene-search.tar.gz.enc" ]; then
+        echo "lucene: ${PROJECT_NAME}_omninest-search volume tarball (encrypted)"
+    else
+        echo "lucene: (未挂载 omninest-search 卷，跳过)"
+    fi
     echo "encryption: aes-256-cbc-pbkdf2-600000"
     echo "integrity: sha256sum -c SHA256SUMS"
     echo "backup-key-sha256: ${BACKUP_KEY_SHA256}"
@@ -131,6 +150,6 @@ echo "[5/6] 写入加密与密钥指纹清单..."
 } > "${BACKUP_DIR}/MANIFEST.txt"
 chmod 600 "${BACKUP_DIR}/MANIFEST.txt"
 
-echo "[6/6] 完成。备份目录: ${BACKUP_DIR}"
+echo "[7/7] 完成。备份目录: ${BACKUP_DIR}"
 echo "注意: 恢复时必须提供同一口令；credential 密钥不同会导致外部存储/OAuth/TOTP 无法解密。"
 echo "注意：MinIO 为运行中快照，恢复时以数据库为准校验对象一致性。"

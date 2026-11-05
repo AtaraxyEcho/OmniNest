@@ -4368,6 +4368,23 @@ CREATE INDEX "idx_reader_items_title_trgm" ON "omni"."reader_items"
   USING gin (lower("title") "public"."gin_trgm_ops");
 CREATE INDEX "idx_reader_items_author_trgm" ON "omni"."reader_items"
   USING gin (lower("author_name") "public"."gin_trgm_ops");
+-- 文件与相册标题/正文包含匹配：文件搜索在 Lucene 之外还有一条按数据库实时文件名匹配的
+-- 路径（重命名后无需等文本重解析即可命中），相册搜索在 Lucene 退役后完全依赖这里。
+-- 部分索引的条件必须与查询里的 deleted 过滤同口径，否则规划器不会选中它。
+CREATE INDEX "idx_file_nodes_name_trgm" ON "omni"."file_nodes"
+  USING gin (lower("name") "public"."gin_trgm_ops")
+  WHERE "is_deleted" = false;
+CREATE INDEX "idx_photo_items_title_trgm" ON "omni"."photo_items"
+  USING gin (lower("title") "public"."gin_trgm_ops")
+  WHERE "deleted_at" IS NULL;
+CREATE INDEX "idx_photo_items_description_trgm" ON "omni"."photo_items"
+  USING gin (lower("description") "public"."gin_trgm_ops")
+  WHERE "deleted_at" IS NULL AND "description" IS NOT NULL;
+CREATE INDEX "idx_photo_items_ocr_text_trgm" ON "omni"."photo_items"
+  USING gin (lower("ocr_text") "public"."gin_trgm_ops")
+  WHERE "deleted_at" IS NULL AND "ocr_text" IS NOT NULL;
+CREATE INDEX "idx_photo_tags_tag_trgm" ON "omni"."photo_tags"
+  USING gin (lower("tag") "public"."gin_trgm_ops");
 
 -- ── 非 owner 前导的批量查询索引 ─────────────────────────────────────────
 -- 下列仓储方法按业务外键或「状态 + 时间」过滤而不带 owner_user_id，

@@ -196,7 +196,6 @@ class FileManagerServiceTest {
             sharedSpaceQuotaService,
             sharedSpaceService,
             syncEventRecorder,
-            mock(FileIndexSyncService.class),
             mock(FileDownloadContentService.class),
             transactionTemplate
     );

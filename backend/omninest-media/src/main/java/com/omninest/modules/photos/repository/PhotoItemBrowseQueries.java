@@ -66,11 +66,14 @@ public interface PhotoItemBrowseQueries {
     /**
      * 按关键词分页查询用户照片的轻量列表投影。
      *
-     * <p>这是 Lucene 索引不可用或没有命中时的降级路径：除标题与描述外还要覆盖用户标签，
-     * 否则索引尚未建好时按标签搜索会得到空结果。</p>
+     * <p>照片检索的唯一路径：除标题与描述外还要覆盖图中文字（OCR）与用户标签，
+     * 否则按发票号这类图中文字或按标签搜索会得到空结果。OCR 列允许为 null，
+     * 这里直接写 {@code LOWER(p.ocrText) LIKE ...}——三值逻辑下 NULL 自动落到后续
+     * OR 分支，且能命中 {@code idx_photo_items_ocr_text_trgm} 表达式索引。</p>
      *
      * @param ownerUserId 用户标识
-     * @param query 标题、描述或标签筛选词
+     * @param query 标题、描述、图中文字或标签筛选词
+     * @param labelCodes 由检索词反查出的受控标签编码，不能为空集合
      * @param pageable 分页和排序参数
      * @return 照片投影分页
      */
@@ -100,10 +103,16 @@ public interface PhotoItemBrowseQueries {
                AND p.deletedAt IS NULL
                AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(p.ocrText) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR EXISTS (SELECT 1 FROM PhotoTag tag
                                 WHERE tag.photoId = p.id
                                   AND tag.ownerUserId = :ownerUserId
-                                  AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'))
+                                  AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
+                    OR EXISTS (SELECT 1 FROM PhotoContentLabel label
+                                WHERE label.photoId = p.id
+                                  AND label.ownerUserId = :ownerUserId
+                                  AND label.state = 'AUTO'
+                                  AND label.labelCode IN :labelCodes))
             """,
             countQuery = """
                     SELECT COUNT(p)
@@ -114,52 +123,22 @@ public interface PhotoItemBrowseQueries {
                        AND p.deletedAt IS NULL
                        AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(p.ocrText) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR EXISTS (SELECT 1 FROM PhotoTag tag
                                         WHERE tag.photoId = p.id
                                           AND tag.ownerUserId = :ownerUserId
-                                          AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'))
+                                          AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
+                            OR EXISTS (SELECT 1 FROM PhotoContentLabel label
+                                        WHERE label.photoId = p.id
+                                          AND label.ownerUserId = :ownerUserId
+                                          AND label.state = 'AUTO'
+                                          AND label.labelCode IN :labelCodes))
                     """)
     Page<PhotoListItemProjection> searchListPage(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("query") String query,
+            @Param("labelCodes") Collection<String> labelCodes,
             Pageable pageable);
-
-    /**
-     * 按标识批量查询活动照片投影，用于全文索引命中后按相关性顺序取回展示字段。
-     *
-     * @param ownerUserId 用户标识
-     * @param ids 照片标识
-     * @return 命中的照片投影，顺序不保证
-     */
-    @Query("""
-            SELECT p.id AS id,
-                   p.ownerUserId AS ownerUserId,
-                   p.fileNodeId AS fileNodeId,
-                   p.title AS title,
-                   p.description AS description,
-                   p.width AS width,
-                   p.height AS height,
-                   p.orientation AS orientation,
-                   p.dateTaken AS dateTaken,
-                   p.gpsLatitude AS gpsLatitude,
-                   p.gpsLongitude AS gpsLongitude,
-                   p.gpsLocation AS gpsLocation,
-                   p.format AS format,
-                   p.fileSize AS fileSize,
-                   p.coverFileId AS coverFileId,
-                   p.metadataStatus AS metadataStatus,
-                   p.motionState AS motionState,
-                   p.createdAt AS createdAt
-              FROM PhotoItem p
-              JOIN FileNode file ON p.fileNodeId = file.id
-             WHERE p.ownerUserId = :ownerUserId
-               AND file.deleted = false
-               AND p.deletedAt IS NULL
-               AND p.id IN :ids
-            """)
-    List<PhotoListItemProjection> findListByIds(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("ids") Collection<UUID> ids);
 
     /**
      * 分页查询用户收藏照片的轻量列表投影。
@@ -213,7 +192,8 @@ public interface PhotoItemBrowseQueries {
      * 按关键词分页查询用户收藏照片的轻量列表投影。
      *
      * @param ownerUserId 用户标识
-     * @param query 标题或描述筛选词
+     * @param query 标题、描述、图中文字或标签筛选词
+     * @param labelCodes 由检索词反查出的受控标签编码，不能为空集合
      * @param pageable 分页和排序参数
      * @return 收藏照片投影分页
      */
@@ -245,10 +225,16 @@ public interface PhotoItemBrowseQueries {
                AND p.deletedAt IS NULL
                AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(p.ocrText) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                     OR EXISTS (SELECT 1 FROM PhotoTag tag
                                 WHERE tag.photoId = p.id
                                   AND tag.ownerUserId = :ownerUserId
-                                  AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'))
+                                  AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
+                    OR EXISTS (SELECT 1 FROM PhotoContentLabel label
+                                WHERE label.photoId = p.id
+                                  AND label.ownerUserId = :ownerUserId
+                                  AND label.state = 'AUTO'
+                                  AND label.labelCode IN :labelCodes))
             """,
             countQuery = """
                     SELECT COUNT(p)
@@ -261,14 +247,21 @@ public interface PhotoItemBrowseQueries {
                        AND p.deletedAt IS NULL
                        AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(p.ocrText) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
                             OR EXISTS (SELECT 1 FROM PhotoTag tag
                                         WHERE tag.photoId = p.id
                                           AND tag.ownerUserId = :ownerUserId
-                                          AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'))
+                                          AND LOWER(tag.tag) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
+                            OR EXISTS (SELECT 1 FROM PhotoContentLabel label
+                                        WHERE label.photoId = p.id
+                                          AND label.ownerUserId = :ownerUserId
+                                          AND label.state = 'AUTO'
+                                          AND label.labelCode IN :labelCodes))
                     """)
     Page<PhotoListItemProjection> searchFavoriteListPage(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("query") String query,
+            @Param("labelCodes") Collection<String> labelCodes,
             Pageable pageable);
 
     /**

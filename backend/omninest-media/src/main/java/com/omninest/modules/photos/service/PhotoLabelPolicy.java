@@ -198,7 +198,39 @@ public class PhotoLabelPolicy {
     }
 
     /**
-     * 展开标签的检索词，供 Lucene 索引统一写入。
+     * 把用户输入的检索词反查成受控标签编码。
+     *
+     * <p>照片检索已收敛到 PostgreSQL：索引期展开的同义词表在检索期必须做一次反向映射，
+     * 否则按「猫咪」搜不到只存了 {@code SUBJECT:cat} 的照片。多词查询要求每个词都落在
+     * 同一标签的检索词里，与原先 Lucene 逐词 MUST 的组合语义一致。</p>
+     *
+     * @param query 用户输入关键词
+     * @return 命中的标签编码（不含命名空间前缀）
+     */
+    public List<String> searchLabelCodes(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        String[] tokens = query.trim().toLowerCase(Locale.ROOT).split("\\s+");
+        List<String> codes = new ArrayList<>();
+        SEARCH_SYNONYMS_BY_KEY.forEach((key, synonyms) -> {
+            String haystack = (key + " " + synonyms).toLowerCase(Locale.ROOT);
+            boolean matched = true;
+            for (String token : tokens) {
+                if (!haystack.contains(token)) {
+                    matched = false;
+                    break;
+                }
+            }
+            if (matched) {
+                codes.add(key.substring(key.indexOf(':') + 1));
+            }
+        });
+        return codes;
+    }
+
+    /**
+     * 展开标签的检索词，供索引与查询共用同一份同义词口径。
      *
      * @param namespace 命名空间
      * @param code 稳定编码

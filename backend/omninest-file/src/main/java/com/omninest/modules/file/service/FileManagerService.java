@@ -77,7 +77,6 @@ public class FileManagerService {
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final SharedSpaceService sharedSpaceService;
     private final UserSyncEventRecorder syncEventRecorder;
-    private final FileIndexSyncService fileIndexSyncService;
     private final FileDownloadContentService fileDownloadContentService;
     private final TransactionTemplate transactionTemplate;
 
@@ -222,12 +221,7 @@ public class FileManagerService {
         chargeQuotaForCopy(userId, source.getSpaceType(), totalBytes, fileCount);
         // 预生成主键后整棵子树一次 saveAll：逐节点 save 会为每行单独 flush。
         fileNodeRepository.saveAll(copies);
-        // 索引只认文件节点：文件夹没有可提取的正文，投递进去只会让 Worker 空跑一轮查询。
-        List<UUID> copiedFileIds = copies.stream()
-                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
-                .map(FileNode::getId)
-                .toList();
-        fileIndexSyncService.scheduleAfterCommit(userId, copiedFileIds);
+        // 副本沿用同一 currentObjectId，正文早已索引在本人目录，复制不需要任何索引写入。
         recordFileEvent(userId, copiedRoot.getId(), SyncAction.CREATED);
         log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}, 复制节点数={}",
                 sourceId, copiedRoot.getId(), userId, copies.size());

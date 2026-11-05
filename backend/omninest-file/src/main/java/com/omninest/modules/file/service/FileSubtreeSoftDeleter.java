@@ -27,7 +27,6 @@ class FileSubtreeSoftDeleter {
     private static final int BATCH_SIZE = 500;
 
     private final FileNodeRepository fileNodeRepository;
-    private final FileIndexSyncService fileIndexSyncService;
     private final ApplicationEventPublisher eventPublisher;
     private final FileNodeLookupSupport lookup;
 
@@ -49,7 +48,6 @@ class FileSubtreeSoftDeleter {
                 return;
             }
             fileNodeRepository.softDeleteIds(ownerUserId, ids, deletedAt);
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, ids);
             eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, List.copyOf(ids), deletedAt));
             if (collectedIds != null) {
                 collectedIds.addAll(ids);

@@ -5,7 +5,6 @@ import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
-import com.omninest.modules.photos.service.PhotoIndexTaskService;
 import com.omninest.modules.task.service.TaskFailureRetryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.rabbitmq.client.Channel;
@@ -24,8 +23,7 @@ import org.springframework.stereotype.Component;
  * <p>重建是索引卷的唯一「清空 + 全量派发」入口，必须留在单写进程内执行；
  * 管理员接口只投递任务，本消费者负责认领、推进进度与落终态。</p>
  *
- * <p>文件索引与照片索引是两个独立根目录，跨这两个模块的编排只能落在 Worker 侧：
- * File 模块不依赖 Media 模块，反向调用会打断 Maven 依赖方向。</p>
+ * <p>相册检索已收敛到 PostgreSQL，重建只覆盖文件正文索引一个根目录。</p>
  *
  * @author OmniNest
  */
@@ -38,7 +36,6 @@ public class SearchIndexRebuildConsumer {
     private final TaskRecordService taskRecordService;
     private final TaskFailureRetryService taskFailureRetryService;
     private final SearchIndexRebuildService rebuildService;
-    private final PhotoIndexTaskService photoIndexTaskService;
 
     /**
      * 认领重建任务并执行索引清空与重新派发。
@@ -61,7 +58,6 @@ public class SearchIndexRebuildConsumer {
                 return;
             }
             Map<String, Object> result = new LinkedHashMap<>(rebuildService.rebuild(event.taskId()));
-            result.put("reindexedPhotos", photoIndexTaskService.rebuildAll());
             taskRecordService.markCompleted(event.taskId(), result);
             channel.basicAck(deliveryTag, false);
         } catch (Throwable executionException) {

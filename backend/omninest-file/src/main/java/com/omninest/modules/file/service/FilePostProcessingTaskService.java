@@ -77,19 +77,16 @@ public class FilePostProcessingTaskService {
     }
 
     /**
-     * 在当前文件事务内创建索引、文本提取和缩略图任务并写入 outbox。
-     * 索引任务始终创建，文本提取仅对文档类文件，缩略图仅对图片文件。
-     * 走 sys_task_dispatches outbox，避免请求线程直发 RabbitMQ。
-     * 各任务带 active-task 去重，避免重复触发时堆积重复任务记录。
+     * 在当前文件事务内创建正文提取和缩略图任务并写入 outbox。
+     *
+     * <p>只有可提取文本的文件才需要正文索引任务：文件名检索由数据库按当前名称实时完成，
+     * 不再为每份文件写一条只有元数据的索引文档，因此非文档类文件在这里没有任何索引任务。</p>
      *
      * @param event 文件上传事件
      * @param mimeType 文件 MIME 类型
      */
     @Transactional(rollbackFor = Exception.class)
     public void enqueuePostProcess(FileUploadedEvent event, String mimeType) {
-        if (!hasActiveTask(event, "FILE_INDEX")) {
-            enqueueIndex(event);
-        }
         if (isTextExtractable(mimeType) && !hasActiveTask(event, "TEXT_EXTRACTION")) {
             enqueueTextExtraction(event);
         }
@@ -99,18 +96,15 @@ public class FilePostProcessingTaskService {
     }
 
     /**
-     * 为索引重建派发元数据索引与文本提取任务，不重做缩略图等派生资产。
+     * 为索引重建或内容索引迁移派发正文提取任务，不重做缩略图等派生资产。
      *
      * <p>沿用上传后处理的任务类型与 active-task 去重，因此管理员重试、恢复与死信语义
-     * 一并生效；派生资产已在首次上传时生成，重建全文索引不应重新覆盖它们。</p>
+     * 一并生效；派生资产已在首次上传时生成，重建正文索引不应重新覆盖它们。</p>
      *
      * @param event 由存量文件节点还原的文件事件
      */
     @Transactional(rollbackFor = Exception.class)
     public void enqueueReindex(FileUploadedEvent event) {
-        if (!hasActiveTask(event, "FILE_INDEX")) {
-            enqueueIndex(event);
-        }
         if (isTextExtractable(event.mimeType()) && !hasActiveTask(event, "TEXT_EXTRACTION")) {
             enqueueTextExtraction(event);
         }
@@ -170,26 +164,6 @@ public class FilePostProcessingTaskService {
                 event.fileNodeId(),
                 ACTIVE_STATUSES
         ).isPresent();
-    }
-
-    private void enqueueIndex(FileUploadedEvent event) {
-        UUID taskId = UUID.randomUUID();
-        taskRecordService.createQueuedTask(
-                taskId,
-                event.ownerUserId(),
-                "FILE_INDEX",
-                QueueNames.FILE_INDEX_ROUTING_KEY,
-                "PENDING",
-                RESOURCE_TYPE,
-                event.fileNodeId(),
-                postProcessPayload(event)
-        );
-        taskDispatchService.enqueue(
-                taskId,
-                QueueNames.TASK_EXCHANGE,
-                QueueNames.FILE_INDEX_ROUTING_KEY,
-                event
-        );
     }
 
     private void enqueueTextExtraction(FileUploadedEvent event) {

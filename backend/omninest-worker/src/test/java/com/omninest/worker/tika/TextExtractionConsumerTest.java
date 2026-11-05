@@ -68,6 +68,9 @@ class TextExtractionConsumerTest {
 
     private TextExtractionConsumer textExtractionConsumer;
 
+    /** 测试用文件内容对象：正文索引以它为键，节点标识与文件名都不再写进索引。 */
+    private static final UUID INDEXED_OBJECT_ID = UUID.fromString("90000000-0000-0000-0000-000000000001");
+
     /** 流式索引会话收到的正文块，替代原先一次性 List 的分块断言。 */
     private final List<String> appendedChunks = new ArrayList<>();
 
@@ -81,7 +84,7 @@ class TextExtractionConsumerTest {
         );
         when(fileLifecycleGuard.findOwnedProcessable(any(), any()))
                 .thenReturn(Optional.of(describedFile(SpaceType.PERSONAL)));
-        lenient().when(fileSearchIndexService.openChunkIndex(any(), any(), any(), anyString()))
+        lenient().when(fileSearchIndexService.openChunkIndex(any(), any(), anyString()))
                 .thenReturn(chunkIndexSession);
         lenient().doAnswer(invocation -> {
             appendedChunks.add(invocation.getArgument(0));
@@ -123,7 +126,7 @@ class TextExtractionConsumerTest {
                 "/sample.bin",
                 "application/octet-stream",
                 1024L,
-                null,
+                INDEXED_OBJECT_ID,
                 "UPLOAD",
                 false,
                 spaceType == SpaceType.SHARED,
@@ -152,9 +155,8 @@ class TextExtractionConsumerTest {
         // 索引写入会先按 fileId 删旧文档再写空间字段：这里写错就让共享检索丢文件、
         // 上传者个人检索越权命中。
         verify(fileSearchIndexService).openChunkIndex(
-                eq(event.fileNodeId()),
+                eq(INDEXED_OBJECT_ID),
                 eq(event.ownerUserId()),
-                eq(event.fileName()),
                 eq("SHARED")
         );
         verify(chunkIndexSession).append(anyString());
@@ -181,9 +183,8 @@ class TextExtractionConsumerTest {
         textExtractionConsumer.handle(event, createMessage(), channel);
 
         verify(fileSearchIndexService).openChunkIndex(
-                eq(event.fileNodeId()),
+                eq(INDEXED_OBJECT_ID),
                 eq(event.ownerUserId()),
-                eq(event.fileName()),
                 eq("PERSONAL")
         );
         // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 contains 比较
@@ -204,9 +205,8 @@ class TextExtractionConsumerTest {
         textExtractionConsumer.handle(event, createMessage(), channel);
 
         verify(fileSearchIndexService).openChunkIndex(
-                eq(event.fileNodeId()),
+                eq(INDEXED_OBJECT_ID),
                 eq(event.ownerUserId()),
-                eq(event.fileName()),
                 eq("PERSONAL")
         );
         assertThat(appendedChunks.size()).isGreaterThanOrEqualTo(3);
@@ -315,9 +315,8 @@ class TextExtractionConsumerTest {
         textExtractionConsumer.handle(event, createMessage(), channel);
 
         verify(fileSearchIndexService).openChunkIndex(
-                eq(event.fileNodeId()),
+                eq(INDEXED_OBJECT_ID),
                 eq(event.ownerUserId()),
-                eq(event.fileName()),
                 eq("PERSONAL")
         );
         assertThat(appendedChunks.get(0)).contains("内嵌字体文本提取回归测试内容");
@@ -409,8 +408,8 @@ class TextExtractionConsumerTest {
     }
 
     @Test
-    @DisplayName("应正确传递 fileNodeId 和 ownerUserId 到索引服务")
-    void handle_shouldPassCorrectIdsToIndexService() throws IOException {
+    @DisplayName("应正确传递内容对象与 ownerUserId 到索引服务")
+    void handle_shouldPassObjectAndOwnerToIndexService() throws IOException {
         UUID fileNodeId = UUID.randomUUID();
         UUID ownerUserId = UUID.randomUUID();
         FileUploadedEvent event = new FileUploadedEvent(
@@ -430,9 +429,8 @@ class TextExtractionConsumerTest {
         textExtractionConsumer.handle(event, createMessage(), channel);
 
         verify(fileSearchIndexService).openChunkIndex(
-                eq(fileNodeId),
+                eq(INDEXED_OBJECT_ID),
                 eq(ownerUserId),
-                eq("notes.txt"),
                 eq("PERSONAL")
         );
         // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 trim 比较

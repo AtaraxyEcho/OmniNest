@@ -48,7 +48,6 @@ class MediaPathBoundaryTest {
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoMotionVideoService.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoMotionTrailerScanner.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/GeonamesImportService.java",
-            "omninest-media/src/main/java/com/omninest/modules/photos/search/PhotoSearchIndexService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderImportService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderItemService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderEpubArchiveStager.java",

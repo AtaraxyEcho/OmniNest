@@ -8,7 +8,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicTrackRepository;
-import com.omninest.modules.photos.domain.PhotoItem;
+import com.omninest.modules.photos.repository.PhotoListItemProjection;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -242,7 +242,7 @@ class MediaLibraryKeywordQueryIT {
         insertPhoto(owner, "Plain Sunset");
 
         var items = photoItemRepository.searchListPage(
-                owner, "70\\%", PageRequest.of(0, 20));
+                owner, "70\\%", List.of("__no_label__"), PageRequest.of(0, 20));
 
         assertThat(items.getContent()).singleElement()
                 .satisfies(item -> assertThat(item.getTitle()).isEqualTo("70% Sunset"));
@@ -263,10 +263,70 @@ class MediaLibraryKeywordQueryIT {
                 "旅行"
         );
 
-        var items = photoItemRepository.searchListPage(owner, "旅行", PageRequest.of(0, 20));
+        var items = photoItemRepository.searchListPage(
+                owner, "旅行", List.of("__no_label__"), PageRequest.of(0, 20));
 
         assertThat(items.getContent()).singleElement()
                 .satisfies(item -> assertThat(item.getId()).isEqualTo(taggedPhoto));
+    }
+
+    @Test
+    @DisplayName("照片：图中文字（OCR）同样参与关键词匹配")
+    void photoKeywordMatchesOcrText() {
+        UUID owner = UUID.randomUUID();
+        UUID receipt = insertPhoto(owner, "Receipt");
+        insertPhoto(owner, "Plain");
+        jdbcTemplate.update(
+                "update omni.photo_items set ocr_text = ? where id = ?",
+                "发票号码 12345",
+                receipt
+        );
+
+        var items = photoItemRepository.searchListPage(
+                owner, "12345", List.of("__no_label__"), PageRequest.of(0, 20));
+
+        assertThat(items.getContent()).singleElement()
+                .satisfies(item -> assertThat(item.getId()).isEqualTo(receipt));
+    }
+
+    @Test
+    @DisplayName("照片：受控 AI 标签按编码命中，且不串到其他用户")
+    void photoKeywordMatchesControlledAiLabelsPerOwner() {
+        UUID owner = UUID.randomUUID();
+        UUID otherOwner = UUID.randomUUID();
+        UUID catPhoto = insertPhoto(owner, "Snapshot");
+        UUID otherCatPhoto = insertPhoto(otherOwner, "Snapshot");
+        insertContentLabel(owner, catPhoto, "SUBJECT", "cat");
+        insertContentLabel(otherOwner, otherCatPhoto, "SUBJECT", "cat");
+
+        var items = photoItemRepository.searchListPage(
+                owner, "snapshot", List.of("cat"), PageRequest.of(0, 20));
+
+        assertThat(items.getContent()).extracting(PhotoListItemProjection::getId).containsExactly(catPhoto);
+    }
+
+    private void insertContentLabel(UUID owner, UUID photoId, String namespace, String labelCode) {
+        UUID runId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into omni.photo_content_analysis_runs "
+                        + "(id, owner_user_id, photo_id, pipeline_version, status, started_at, completed_at) "
+                        + "values (?, ?, ?, ?, 'SUCCEEDED', now(), now())",
+                runId,
+                owner,
+                photoId,
+                "content-analysis-test"
+        );
+        jdbcTemplate.update(
+                "insert into omni.photo_content_labels "
+                        + "(id, owner_user_id, photo_id, run_id, namespace, label_code, confidence, source) "
+                        + "values (?, ?, ?, ?, ?, ?, 0.9, 'TEST')",
+                UUID.randomUUID(),
+                owner,
+                photoId,
+                runId,
+                namespace,
+                labelCode
+        );
     }
 
     @Test

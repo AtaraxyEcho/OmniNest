@@ -227,43 +227,4 @@ public interface PhotoItemRelationQueries {
     List<PhotoActiveFileProjection> findActiveFileIds(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("photoIds") Collection<UUID> photoIds);
-
-    /**
-     * 按主键游标读取需要重建搜索索引的照片，跨全部用户。
-     *
-     * <p>仅服务于管理员发起的全站索引重建：索引字段口径变更后旧文档不会再被新查询命中，
-     * 只能整卷重投。排除回收站照片与文件已删除的照片，与 {@code findActiveByOwnerUserIdAndIdIn}
-     * 同一判据；游标按 ID 推进，与文件索引重建侧保持同一翻页方式。</p>
-     *
-     * @param afterId 上一页最大照片 ID，首页传最小 UUID
-     * @param limit 单批数量
-     * @return 按 ID 升序的照片投影批次
-     */
-    @Query("""
-            SELECT p.id AS id,
-                   p.ownerUserId AS ownerUserId
-              FROM PhotoItem p
-              JOIN FileNode file ON p.fileNodeId = file.id
-             WHERE file.deleted = false
-               AND p.deletedAt IS NULL
-               AND p.id > :afterId
-             ORDER BY p.id ASC
-            """)
-    List<PhotoIndexTargetProjection> findIndexablePhotosAfterId(
-            @Param("afterId") UUID afterId,
-            Pageable limit);
-
-    /**
-     * 统计需要重建搜索索引的照片总数，用于换算任务进度。
-     *
-     * @return 待重投照片数
-     */
-    @Query("""
-            SELECT COUNT(p)
-              FROM PhotoItem p
-              JOIN FileNode file ON p.fileNodeId = file.id
-             WHERE file.deleted = false
-               AND p.deletedAt IS NULL
-            """)
-    long countIndexablePhotos();
 }

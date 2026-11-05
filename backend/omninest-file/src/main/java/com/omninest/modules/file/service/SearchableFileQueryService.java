@@ -6,11 +6,12 @@ import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
 import com.omninest.modules.search.service.SearchableFileQuery;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,22 +30,46 @@ public class SearchableFileQueryService implements SearchableFileQuery {
     private final FileNodeScanQueryRepository fileNodeScanQueryRepository;
 
     /**
-     * 查询当前用户仍可搜索的文件名称。
+     * 按内容对象标识解析当前可搜索的文件节点。
      *
      * @param ownerUserId 当前用户 ID
-     * @param candidateIds Lucene 返回的候选文件 ID
-     * @return 以文件 ID 为键的当前文件名称
+     * @param fileObjectIds 正文命中的内容对象标识
+     * @param includePersonal 是否包含个人空间
+     * @param includeShared 是否包含共享空间
+     * @return 当前可搜索的文件节点
      */
     @Override
-    public Map<UUID, String> findCurrentNames(UUID ownerUserId, Collection<UUID> candidateIds) {
-        return fileNodeRepository.findSearchablePersonalNodes(
-                        ownerUserId,
-                        candidateIds,
-                        FilePurgeState.NONE,
-                        SpaceType.PERSONAL,
-                        DERIVED_SOURCE_TYPE
-                ).stream()
-                .collect(Collectors.toMap(FileNode::getId, FileNode::getName));
+    public Collection<SearchableFileNode> findSearchableNodesByObjectIds(
+            UUID ownerUserId,
+            Collection<UUID> fileObjectIds,
+            boolean includePersonal,
+            boolean includeShared
+    ) {
+        if (fileObjectIds == null || fileObjectIds.isEmpty()) {
+            return List.of();
+        }
+        List<FileNode> nodes = new ArrayList<>();
+        if (includePersonal) {
+            nodes.addAll(fileNodeRepository.findSearchablePersonalNodesByObjectIds(
+                    ownerUserId,
+                    fileObjectIds,
+                    FilePurgeState.NONE,
+                    SpaceType.PERSONAL,
+                    DERIVED_SOURCE_TYPE
+            ));
+        }
+        if (includeShared) {
+            nodes.addAll(fileNodeRepository.findSearchableSharedNodesByObjectIds(
+                    fileObjectIds,
+                    FilePurgeState.NONE,
+                    SpaceType.SHARED,
+                    DERIVED_SOURCE_TYPE
+            ));
+        }
+        return nodes.stream()
+                .map(node -> new SearchableFileNode(
+                        node.getId(), node.getCurrentObjectId(), node.getName()))
+                .toList();
     }
 
     @Override
@@ -87,16 +112,5 @@ public class SearchableFileQueryService implements SearchableFileQuery {
         return query.replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");
-    }
-
-    @Override
-    public Map<UUID, String> findCurrentSharedNames(Collection<UUID> candidateIds) {
-        return fileNodeRepository.findSearchableSharedNodes(
-                        candidateIds,
-                        FilePurgeState.NONE,
-                        SpaceType.SHARED,
-                        DERIVED_SOURCE_TYPE
-                ).stream()
-                .collect(Collectors.toMap(FileNode::getId, FileNode::getName));
     }
 }

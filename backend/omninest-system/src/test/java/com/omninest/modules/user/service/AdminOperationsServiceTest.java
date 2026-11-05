@@ -136,7 +136,7 @@ class AdminOperationsServiceTest {
         UUID logId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         UUID ownerUserId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
         List<Object[]> taskRows = Collections.singletonList(
-                new Object[]{taskId, "FILE_INDEX", "FAILED", 30, "omninest.file.index", "索引失败", 2,
+                new Object[]{taskId, "TEXT_EXTRACTION", "FAILED", 30, "omninest.text.extract", "索引失败", 2,
                         Instant.parse("2026-05-20T10:00:00Z"), Instant.parse("2026-05-20T10:10:00Z"),
                         ownerUserId, "member-it"}
         );
@@ -197,7 +197,7 @@ class AdminOperationsServiceTest {
                 }
                 """.formatted(fileNodeId, fileObjectId, actorUserId);
         when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
-                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", payload)));
+                taskRecord(taskId, "TEXT_EXTRACTION", "FAILED", "text.extract", payload)));
         // 状态守卫未命中（已被恢复器或其他管理员拉起）时 SQL 不返回行。
         when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0)))
                 .thenThrow(new EmptyResultDataAccessException(1));
@@ -227,15 +227,15 @@ class AdminOperationsServiceTest {
                 }
                 """.formatted(fileNodeId, fileObjectId, actorUserId);
         when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
-                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", payload)));
+                taskRecord(taskId, "TEXT_EXTRACTION", "FAILED", "text.extract", payload)));
         when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0))).thenReturn(
                 new AdminOperationsDto.TaskRecordItem(
                         taskId,
-                        "FILE_INDEX",
+                        "TEXT_EXTRACTION",
                         "更新文件索引",
                         "QUEUED",
                         0,
-                        "file.index",
+                        "text.extract",
                         null,
                         1,
                         Instant.now(),
@@ -252,7 +252,7 @@ class AdminOperationsServiceTest {
 
         ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(taskDispatchService).enqueue(
-                eq(taskId), eq(QueueNames.TASK_EXCHANGE), eq("file.index"), payloadCaptor.capture());
+                eq(taskId), eq(QueueNames.TASK_EXCHANGE), eq("text.extract"), payloadCaptor.capture());
         assertThat(payloadCaptor.getValue())
                 .containsEntry("fileNodeId", fileNodeId.toString())
                 .containsEntry("fileObjectId", fileObjectId.toString())
@@ -267,7 +267,7 @@ class AdminOperationsServiceTest {
         givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
-                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", "{}")));
+                taskRecord(taskId, "TEXT_EXTRACTION", "FAILED", "text.extract", "{}")));
 
         assertThatThrownBy(() -> service.retryTask(actorUserId, taskId))
                 .isInstanceOf(BusinessException.class)
@@ -572,7 +572,7 @@ class AdminOperationsServiceTest {
 
     private List<Object[]> rawTaskRow(UUID taskId, String status) {
         return Collections.singletonList(new Object[]{
-                taskId, "FILE_INDEX", status, 0, "file.index", null, 0,
+                taskId, "TEXT_EXTRACTION", status, 0, "text.extract", null, 0,
                 Instant.parse("2026-06-01T10:00:00Z"), Instant.parse("2026-06-01T10:00:00Z"), "{}"
         });
     }
@@ -580,11 +580,11 @@ class AdminOperationsServiceTest {
     private AdminOperationsDto.TaskRecordItem taskRecordItem(UUID taskId, String status) {
         return new AdminOperationsDto.TaskRecordItem(
                 taskId,
-                "FILE_INDEX",
+                "TEXT_EXTRACTION",
                 "更新文件索引",
                 status,
                 0,
-                "file.index",
+                "text.extract",
                 null,
                 0,
                 Instant.parse("2026-06-01T10:00:00Z"),

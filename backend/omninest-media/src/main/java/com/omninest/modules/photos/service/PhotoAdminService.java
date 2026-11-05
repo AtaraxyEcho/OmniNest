@@ -24,7 +24,6 @@ import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoScanJob;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoScanJobDto;
-import com.omninest.modules.photos.event.PhotoIndexEvent;
 import com.omninest.modules.photos.event.PhotoScanEvent;
 import com.omninest.modules.photos.event.PhotoThumbnailRegenerationEvent;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
@@ -464,14 +463,6 @@ public class PhotoAdminService {
         photoItemRepository.save(photo);
 
         UUID savedPhotoId = photo.getId();
-        // 照片记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"；
-        // 索引事件无独立任务记录，Outbox 任务标识复用照片 ID。
-        taskDispatchService.enqueue(
-                savedPhotoId,
-                QueueNames.TASK_EXCHANGE,
-                QueueNames.PHOTO_INDEX_ROUTING_KEY,
-                new PhotoIndexEvent(savedPhotoId, ownerUserId)
-        );
         if (!raw && file.currentObjectId() != null) {
             // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
             filePostProcessingTaskService.enqueueThumbnailIfAbsent(

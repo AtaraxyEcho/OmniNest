@@ -408,10 +408,13 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     List<FileNode> findByOwnerUserIdAndIdInAndDeletedFalse(UUID ownerUserId, Collection<UUID> ids);
 
     /**
-     * 批量复核个人空间搜索候选节点的当前数据库状态。
+     * 按内容对象标识复核个人空间命中的文件节点。
+     *
+     * <p>正文索引只存不可变的对象标识，检索命中后由这里解析出当前节点：节点可能已软删除、
+     * 已进入永久删除流程，或已换成另一个内容对象（历史版本回滚），都必须按库表现状过滤。</p>
      *
      * @param ownerUserId 所属用户 ID
-     * @param ids Lucene 候选文件 ID
+     * @param objectIds 正文命中的内容对象标识
      * @param purgeState 永久删除状态
      * @param spaceType 空间类型
      * @param derivedSource 派生文件来源编码
@@ -421,27 +424,28 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             select node
             from FileNode node
             where node.ownerUserId = :ownerUserId
-              and node.id in :ids
+              and node.currentObjectId in :objectIds
               and node.deleted = false
               and node.purgeState = :purgeState
               and node.spaceType = :spaceType
+              and node.nodeType = 'FILE'
               and (node.sourceType is null or node.sourceType <> :derivedSource)
             """)
-    List<FileNode> findSearchablePersonalNodes(
+    List<FileNode> findSearchablePersonalNodesByObjectIds(
             @Param("ownerUserId") UUID ownerUserId,
-            @Param("ids") Collection<UUID> ids,
+            @Param("objectIds") Collection<UUID> objectIds,
             @Param("purgeState") FilePurgeState purgeState,
             @Param("spaceType") SpaceType spaceType,
             @Param("derivedSource") String derivedSource
     );
 
     /**
-     * 批量复核共享空间搜索候选节点的当前数据库状态。
+     * 按内容对象标识复核共享空间命中的文件节点。
      *
      * <p>共享空间可见性由角色权限单独判定，这里不按 owner_user_id 过滤；
      * 节点仍须活动、未进入永久删除且非系统派生。</p>
      *
-     * @param ids Lucene 候选文件 ID
+     * @param objectIds 正文命中的内容对象标识
      * @param purgeState 永久删除状态
      * @param spaceType 空间类型
      * @param derivedSource 派生文件来源编码
@@ -450,14 +454,15 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("""
             select node
             from FileNode node
-            where node.id in :ids
+            where node.currentObjectId in :objectIds
               and node.deleted = false
               and node.purgeState = :purgeState
               and node.spaceType = :spaceType
+              and node.nodeType = 'FILE'
               and (node.sourceType is null or node.sourceType <> :derivedSource)
             """)
-    List<FileNode> findSearchableSharedNodes(
-            @Param("ids") Collection<UUID> ids,
+    List<FileNode> findSearchableSharedNodesByObjectIds(
+            @Param("objectIds") Collection<UUID> objectIds,
             @Param("purgeState") FilePurgeState purgeState,
             @Param("spaceType") SpaceType spaceType,
             @Param("derivedSource") String derivedSource

@@ -43,13 +43,11 @@ class PhotoContentAnalysisServiceTest {
             Mockito.mock(PhotoContentLabelRepository.class);
     private final PhotoItemRepository photoItemRepository = Mockito.mock(PhotoItemRepository.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
-    private final PhotoIndexTaskService photoIndexTaskService = Mockito.mock(PhotoIndexTaskService.class);
     private final PhotoContentAnalysisService service = new PhotoContentAnalysisService(
             runRepository,
             labelRepository,
             photoItemRepository,
-            fileLifecycleGuard,
-            photoIndexTaskService
+            fileLifecycleGuard
     );
 
     @BeforeEach
@@ -66,7 +64,7 @@ class PhotoContentAnalysisServiceTest {
     }
 
     @Test
-    void applyStoresOcrTextDenseStyleAndSchedulesIndex() {
+    void applyStoresOcrTextDenseStyleAndLabels() {
         PhotoItem photo = photo(new HashMap<>());
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID))
                 .thenReturn(Optional.of(photo));
@@ -77,7 +75,7 @@ class PhotoContentAnalysisServiceTest {
                 "STYLE", "document", 0.91F, PhotoContentAnalysisService.OCR_LAYOUT_SOURCE, List.of()
         ));
 
-        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, false, true);
+        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, false);
 
         assertThat(photo.getOcrText()).isEqualTo("增值税发票");
         assertThat(photo.getProviderMetadata())
@@ -86,7 +84,6 @@ class PhotoContentAnalysisServiceTest {
                 .containsEntry("semanticTags", List.of("文档"));
         assertThat(photo.getProviderMetadata().get("ocrDenseConfidence")).isEqualTo(0.91F);
         Mockito.verify(labelRepository).deleteByOwnerUserIdAndPhotoId(OWNER_ID, PHOTO_ID);
-        Mockito.verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID);
 
         ArgumentCaptor<List<PhotoContentLabel>> labelsCaptor = listCaptor();
         Mockito.verify(labelRepository).saveAll(labelsCaptor.capture());
@@ -114,13 +111,12 @@ class PhotoContentAnalysisServiceTest {
                 "SUBJECT", "cat", 0.9F, "mobileclip2-s0-onnx", List.of()
         ));
 
-        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, true, true);
+        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, true);
 
         assertThat(photo.getOcrText()).isEqualTo("旧文字");
         assertThat(photo.getProviderMetadata())
                 .containsEntry("ocrDenseStyle", "screenshot")
                 .containsEntry("ocrPipelineVersion", PhotoContentAnalysisService.EXPECTED_OCR_VERSION);
-        Mockito.verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID);
     }
 
     @Test
@@ -143,7 +139,7 @@ class PhotoContentAnalysisServiceTest {
                 "SUBJECT", "cat", 0.9F, "mobileclip2-s0-onnx", List.of()
         ));
 
-        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, true, false);
+        service.apply(OWNER_ID, PHOTO_ID, analysis, labels, true);
 
         ArgumentCaptor<List<PhotoContentLabel>> labelsCaptor = listCaptor();
         Mockito.verify(labelRepository).saveAll(labelsCaptor.capture());
@@ -191,12 +187,11 @@ class PhotoContentAnalysisServiceTest {
                 .thenReturn(Optional.of(photo));
 
         boolean shortCircuited = service.tryShortCircuitDenseTextReanalysis(
-                OWNER_ID, photo, PIPELINE, true);
+                OWNER_ID, photo, PIPELINE);
 
         assertThat(shortCircuited).isTrue();
         assertThat(photo.getOcrText()).isEqualTo("合同正文");
         assertThat(photo.getProviderMetadata()).containsEntry("ocrDenseStyle", "document");
-        Mockito.verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID);
         ArgumentCaptor<List<PhotoContentLabel>> labelsCaptor = listCaptor();
         Mockito.verify(labelRepository).saveAll(labelsCaptor.capture());
         assertThat(labelsCaptor.getValue()).singleElement().satisfies(label -> {
@@ -212,9 +207,9 @@ class PhotoContentAnalysisServiceTest {
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID))
                 .thenReturn(Optional.of(photo));
 
-        assertThat(service.tryShortCircuitDenseTextReanalysis(OWNER_ID, photo, PIPELINE, true))
+        assertThat(service.tryShortCircuitDenseTextReanalysis(OWNER_ID, photo, PIPELINE))
                 .isFalse();
-        Mockito.verifyNoInteractions(labelRepository, photoIndexTaskService);
+        Mockito.verifyNoInteractions(labelRepository);
     }
 
     @Test
@@ -247,7 +242,7 @@ class PhotoContentAnalysisServiceTest {
         ));
 
         boolean cloned = service.tryCloneFromSameHash(
-                OWNER_ID, targetPhoto, "hash-1", PIPELINE, true);
+                OWNER_ID, targetPhoto, "hash-1", PIPELINE);
 
         assertThat(cloned).isTrue();
         assertThat(targetPhoto.getOcrText()).isEqualTo("源图文字");

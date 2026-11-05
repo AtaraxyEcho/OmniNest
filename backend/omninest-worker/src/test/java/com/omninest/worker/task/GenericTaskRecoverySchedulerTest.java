@@ -184,7 +184,7 @@ class GenericTaskRecoverySchedulerTest {
         for (String taskType : List.of("PHOTO_SCAN", "PHOTO_THUMBNAILS", "PHOTO_BATCH",
                 "PHOTO_MOTION", "PHOTO_MOTION_RESCAN", "EXTERNAL_IMPORT",
                 "MEDIA_SCRAPE", "VIDEO_TRANSCODE", "WEB_OPTIMIZE",
-                "AUDIO_EXTRACT", "FILE_INDEX", "THUMBNAIL", "TEXT_EXTRACTION",
+                "AUDIO_EXTRACT", "THUMBNAIL", "TEXT_EXTRACTION",
                 "LOCAL_VIDEO_LIBRARY_DISCOVERY", "LOCAL_VIDEO_LIBRARY_APPLY")) {
             verify(taskRecordService).listStaleRunningTaskIds(eq(taskType), any(), org.mockito.ArgumentMatchers.anyInt());
         }

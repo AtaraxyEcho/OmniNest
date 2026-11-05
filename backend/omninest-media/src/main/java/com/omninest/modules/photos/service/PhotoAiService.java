@@ -67,9 +67,8 @@ public class PhotoAiService {
      *
      * @param ownerUserId 所属用户标识
      * @param photoId 照片标识
-     * @param triggerImmediateIndex 成功后是否立即投递单图搜索索引
      */
-    public void processPhoto(UUID ownerUserId, UUID photoId, boolean triggerImmediateIndex) {
+    public void processPhoto(UUID ownerUserId, UUID photoId) {
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         requirePhotoProcessable(ownerUserId, photo);
@@ -89,8 +88,7 @@ public class PhotoAiService {
                 ownerUserId,
                 photo,
                 originalContentHash,
-                expectedPipeline,
-                triggerImmediateIndex
+                expectedPipeline
         )) {
             log.info("相同原图哈希命中分析克隆: photoId={}", photoId);
             return;
@@ -100,8 +98,7 @@ public class PhotoAiService {
         if (skipOcr && expectedPipeline != null && contentAnalysisService.tryShortCircuitDenseTextReanalysis(
                 ownerUserId,
                 photo,
-                expectedPipeline,
-                triggerImmediateIndex
+                expectedPipeline
         )) {
             log.info("密集文本照片继承 OCR 标签完成重分析: photoId={}", photoId);
             return;
@@ -128,8 +125,7 @@ public class PhotoAiService {
                 photoId,
                 mergedAnalysis,
                 labels,
-                skipOcr,
-                triggerImmediateIndex
+                skipOcr
         );
         log.info(
                 "照片图像分析完成: photoId={}, skipOcr={}, labelCount={}, ocrTextLength={}",

@@ -216,9 +216,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         node.setNormalizedPath(newPath);
         rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
         fileNodeRepository.save(node);
-        // 共享文件夹里可能有其他成员上传的子项，索引重建必须落到各自所有者名下。
+        // 共享文件夹里可能有其他成员上传的子项，同步事件必须落到各自所有者名下。
+        // 正文索引以内容对象为键，同一空间内改名不需要重建。
         idsByOwner.forEach((ownerId, ids) ->
-                scheduleIndexAndEvent(ownerId, ids, node.getId(), SyncAction.UPDATED));
+                recordSyncEvent(ownerId, ids, node.getId(), SyncAction.UPDATED));
         return node;
     }
 
@@ -302,7 +303,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         }
         storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
         sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
-        scheduleIndexAndEvent(operatorId, subtreeIds, node.getId(), SyncAction.UPDATED);
+        // 跨空间移动后正文必须出现在共享目录，其余成员才检索得到；同一对象在旧目录的
+        // 文档不再能被个人空间的节点解析到，会随下一次重建自然回收。
+        scheduleContentIndexMigration(operatorId, subtreeIds);
+        recordSyncEvent(operatorId, subtreeIds, node.getId(), SyncAction.UPDATED);
         log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}, fileCount={}",
                 fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
@@ -367,9 +371,11 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
         // 上面的 checkQuota 只做快速失败；真正计入必须走条件更新，否则并发迁入会写超配额。
         storageQuotaService.chargeUsage(targetUserId, stats.totalBytes());
-        // 按变更前收集的完整子树投递索引同步：此刻子孙已变为 PERSONAL，
-        // 再按 SHARED 条件查询会返回空列表，导致整棵子树搜索索引漏更新。
-        scheduleIndexAndEvent(targetUserId, subtreeIds, node.getId(), SyncAction.UPDATED);
+        // 按变更前收集的完整子树投递：此刻子孙已变为 PERSONAL，再按 SHARED 条件查询
+        // 会返回空列表，导致整棵子树的正文迁移漏投。跨空间移动必须重新解析，
+        // 因为正文列不可回读、无法在两个索引目录之间复制。
+        scheduleContentIndexMigration(targetUserId, subtreeIds);
+        recordSyncEvent(targetUserId, subtreeIds, node.getId(), SyncAction.UPDATED);
         log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}, fileCount={}",
                 fileNodeId, targetUserId, stats.totalBytes(), stats.fileCount());
     }
@@ -440,7 +446,6 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         }
         idsByOwner.forEach((owner, ids) -> {
             applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(owner, ids, deletedAt));
-            fileIndexSyncService.scheduleAfterCommit(owner, ids);
             syncEventRecorder.record(new SyncEventCommand(
                     owner, SyncScope.FILES, "FILE_NODE", ids.getFirst().toString(),
                     SyncAction.DELETED, null, Map.of()));
@@ -708,12 +713,17 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         return nodes;
     }
 
-    private void scheduleIndexAndEvent(
-            UUID ownerUserId, List<UUID> ids, UUID rootId, SyncAction action) {
+    private void scheduleContentIndexMigration(UUID indexOwner, List<UUID> ids) {
         if (ids.isEmpty()) {
             return;
         }
-        fileIndexSyncService.scheduleAfterCommit(ownerUserId, ids);
+        fileIndexSyncService.scheduleAfterCommit(indexOwner, ids);
+    }
+
+    private void recordSyncEvent(UUID ownerUserId, List<UUID> ids, UUID rootId, SyncAction action) {
+        if (ids.isEmpty()) {
+            return;
+        }
         syncEventRecorder.record(new SyncEventCommand(
                 ownerUserId, SyncScope.FILES, "FILE_NODE", rootId.toString(), action, null, Map.of()));
     }

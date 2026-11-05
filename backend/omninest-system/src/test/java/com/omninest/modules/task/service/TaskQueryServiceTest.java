@@ -398,10 +398,10 @@ class TaskQueryServiceTest {
             task.setStackSummary("stack");
             task.setNextRetryAt(Instant.now());
             task.setCompletedAt(Instant.now());
-            task.setRoutingKey(QueueNames.FILE_INDEX_ROUTING_KEY);
+            task.setRoutingKey(QueueNames.TEXT_EXTRACTION_ROUTING_KEY);
             when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(task));
             TaskDispatch dispatch = new TaskDispatch();
-            dispatch.setRoutingKey(QueueNames.FILE_INDEX_ROUTING_KEY);
+            dispatch.setRoutingKey(QueueNames.TEXT_EXTRACTION_ROUTING_KEY);
             dispatch.setPayload("{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\"}");
             when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId))
                     .thenReturn(Optional.of(dispatch));

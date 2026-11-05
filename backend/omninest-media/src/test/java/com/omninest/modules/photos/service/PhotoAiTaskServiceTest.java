@@ -38,7 +38,6 @@ class PhotoAiTaskServiceTest {
     private TaskRecordService taskRecordService;
     private TaskDispatchService taskDispatchService;
     private PhotoAiTaskCompletionService completionService;
-    private PhotoIndexTaskService photoIndexTaskService;
     private PhotoAiTaskService service;
 
     @BeforeEach
@@ -49,7 +48,6 @@ class PhotoAiTaskServiceTest {
         taskRecordService = Mockito.mock(TaskRecordService.class);
         taskDispatchService = Mockito.mock(TaskDispatchService.class);
         completionService = Mockito.mock(PhotoAiTaskCompletionService.class);
-        photoIndexTaskService = Mockito.mock(PhotoIndexTaskService.class);
         service = new PhotoAiTaskService(
                 photoAiService,
                 photoItemRepository,
@@ -57,8 +55,7 @@ class PhotoAiTaskServiceTest {
                 taskRecordService,
                 Mockito.mock(TaskHeartbeatRunner.class),
                 taskDispatchService,
-                completionService,
-                photoIndexTaskService
+                completionService
         );
         Mockito.when(taskRecordService.claimForExecution(Mockito.any(UUID.class), Mockito.any(String.class)))
                 .thenReturn(true);
@@ -101,7 +98,7 @@ class PhotoAiTaskServiceTest {
         service.execute(new PhotoAiEvent(taskId, ownerUserId, photoId, Mode.SINGLE_PHOTO));
 
         Mockito.verify(taskRecordService).claimForExecution(taskId, "AI_ANALYSIS");
-        Mockito.verify(photoAiService).processPhoto(ownerUserId, photoId, true);
+        Mockito.verify(photoAiService).processPhoto(ownerUserId, photoId);
         Mockito.verify(completionService).complete(
                 Mockito.eq(taskId),
                 Mockito.eq(ownerUserId),
@@ -125,12 +122,11 @@ class PhotoAiTaskServiceTest {
                         ArgumentMatchers.any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(failedPhotoId, successfulPhotoId)));
         Mockito.doThrow(new IllegalStateException("sidecar rejected image"))
-                .when(photoAiService).processPhoto(ownerUserId, failedPhotoId, false);
+                .when(photoAiService).processPhoto(ownerUserId, failedPhotoId);
 
         service.execute(new PhotoAiEvent(taskId, ownerUserId, null, Mode.LIBRARY_REANALYSIS));
 
-        Mockito.verify(photoAiService).processPhoto(ownerUserId, successfulPhotoId, false);
-        Mockito.verify(photoIndexTaskService).indexBatchDirect(ownerUserId, List.of(successfulPhotoId));
+        Mockito.verify(photoAiService).processPhoto(ownerUserId, successfulPhotoId);
         ArgumentCaptor<Map<String, Object>> resultCaptor = mapCaptor();
         Mockito.verify(completionService).complete(
                 Mockito.eq(taskId),
@@ -150,7 +146,7 @@ class PhotoAiTaskServiceTest {
     }
 
     @Test
-    void executeLibraryReanalysisIndexesEachPageOnce() {
+    void executeLibraryReanalysisProcessesEveryPage() {
         UUID taskId = UUID.randomUUID();
         UUID ownerUserId = UUID.randomUUID();
         List<UUID> firstPage = java.util.stream.IntStream.range(0, 25)
@@ -172,8 +168,6 @@ class PhotoAiTaskServiceTest {
 
         service.execute(new PhotoAiEvent(taskId, ownerUserId, null, Mode.LIBRARY_REANALYSIS));
 
-        Mockito.verify(photoIndexTaskService).indexBatchDirect(ownerUserId, firstPage);
-        Mockito.verify(photoIndexTaskService).indexBatchDirect(ownerUserId, List.of(tailPhoto));
     }
 
     @Test
@@ -188,7 +182,7 @@ class PhotoAiTaskServiceTest {
                         ArgumentMatchers.any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(photoId)));
         Mockito.doThrow(new IllegalStateException("sidecar unavailable"))
-                .when(photoAiService).processPhoto(ownerUserId, photoId, false);
+                .when(photoAiService).processPhoto(ownerUserId, photoId);
 
         assertThatThrownBy(() -> service.execute(
                 new PhotoAiEvent(taskId, ownerUserId, null, Mode.LIBRARY_REANALYSIS)))
@@ -197,8 +191,6 @@ class PhotoAiTaskServiceTest {
 
         Mockito.verify(taskRecordService, Mockito.never()).markFailed(Mockito.eq(taskId), Mockito.anyString());
         Mockito.verifyNoInteractions(completionService);
-        Mockito.verify(photoIndexTaskService, Mockito.never())
-                .indexBatchDirect(Mockito.any(), Mockito.anyList());
     }
 
     @Test
@@ -219,7 +211,7 @@ class PhotoAiTaskServiceTest {
         UUID photoId = UUID.randomUUID();
         Mockito.when(configService.isAiEnabled()).thenReturn(true);
         Mockito.doThrow(new BusinessException(ErrorCode.FILE_LIFECYCLE_CONFLICT, "文件正在永久删除"))
-                .when(photoAiService).processPhoto(ownerUserId, photoId, true);
+                .when(photoAiService).processPhoto(ownerUserId, photoId);
 
         service.execute(new PhotoAiEvent(taskId, ownerUserId, photoId, Mode.SINGLE_PHOTO));
 

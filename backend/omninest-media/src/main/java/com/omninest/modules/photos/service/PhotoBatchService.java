@@ -74,7 +74,6 @@ public class PhotoBatchService {
     private final PhotoBatchTaskRepository batchTaskRepository;
     private final PhotoItemRepository photoItemRepository;
     private final PhotoTagRepository photoTagRepository;
-    private final PhotoIndexTaskService photoIndexTaskService;
     private final PhotoAlbumService albumService;
     private final TaskDispatchService taskDispatchService;
     private final FileMetadataQueryService fileMetadataQueryService;
@@ -312,9 +311,7 @@ public class PhotoBatchService {
                 .toList();
         if (!toInsert.isEmpty()) {
             photoTagRepository.saveAll(toInsert);
-            // 标签是索引字段：批量打标签后必须逐张投递索引事件，否则搜索命不中新标签。
-            toInsert.forEach(photoTag ->
-                    photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoTag.getPhotoId()));
+            // 标签是检索条件之一，落库即可被搜索命中，不再需要同步索引副本。
             recordBatchMutationEvent(ownerUserId);
         }
     }

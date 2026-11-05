@@ -63,7 +63,6 @@ x-backend-environment: &backend-environment
   OMNINEST_RCLONE_IMPORT_CONTAINER_PATH: /mnt/imports
   OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
   OMNINEST_SEARCH_INDEX_PATH: /var/lib/omninest/lucene
-  OMNINEST_SEARCH_PHOTO_INDEX_PATH: /var/lib/omninest/lucene-photo
   # GeoNames 离线逆地理编码数据集目录（omninest-geonames 卷；放入 dump 文件并重启即可自动导入）。
   OMNINEST_GEO_IMPORT_DIR: ${OMNINEST_GEO_IMPORT_DIR:-/var/lib/omninest/geonames}
   OMNINEST_NETEASE_API_BASE_URL: http://netease-music-api:3000
@@ -103,7 +102,6 @@ x-backend-service: &backend-service
       condition: service_healthy
   volumes:
     - omninest-search:/var/lib/omninest/lucene
-    - omninest-search-photo:/var/lib/omninest/lucene-photo
     - omninest-geonames:/var/lib/omninest/geonames
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports

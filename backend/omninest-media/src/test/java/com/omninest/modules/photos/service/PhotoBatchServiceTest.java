@@ -82,7 +82,6 @@ class PhotoBatchServiceTest {
     private final PhotoBatchTaskRepository batchTaskRepository = mock(PhotoBatchTaskRepository.class);
     private final PhotoItemRepository photoItemRepository = mock(PhotoItemRepository.class);
     private final PhotoTagRepository photoTagRepository = mock(PhotoTagRepository.class);
-    private final PhotoIndexTaskService photoIndexTaskService = mock(PhotoIndexTaskService.class);
     private final PhotoAlbumService albumService = mock(PhotoAlbumService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
@@ -97,7 +96,6 @@ class PhotoBatchServiceTest {
             batchTaskRepository,
             photoItemRepository,
             photoTagRepository,
-            photoIndexTaskService,
             albumService,
             taskDispatchService,
             fileMetadataQueryService,
@@ -232,8 +230,8 @@ class PhotoBatchServiceTest {
 
         service.executeBatchTask(TASK_ID, OWNER_ID);
 
-        // 标签参与索引字段，批量打标后必须投递索引事件，否则搜索查不到新标签。
-        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID);
+        // 标签落库即可被检索命中，批量打标只写库并记录一次同步事件。
+        verify(photoTagRepository).saveAll(any());
     }
 
     @Test
@@ -503,7 +501,6 @@ class PhotoBatchServiceTest {
                 batchTaskRepository,
                 photoItemRepository,
                 photoTagRepository,
-                photoIndexTaskService,
                 albumService,
                 taskDispatchService,
                 fileMetadataQueryService,

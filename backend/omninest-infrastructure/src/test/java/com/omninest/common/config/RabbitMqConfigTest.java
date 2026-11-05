@@ -91,9 +91,9 @@ class RabbitMqConfigTest {
 
     @Test
     void durableQueueKeepsExistingDeadLetterArgumentsWithoutNewDeclarationLimits() {
-        Queue queue = config.fileIndexQueue();
+        Queue queue = config.textExtractionQueue();
 
-        Assertions.assertThat(queue.getName()).isEqualTo(QueueNames.FILE_INDEX_QUEUE);
+        Assertions.assertThat(queue.getName()).isEqualTo(QueueNames.TEXT_EXTRACTION_QUEUE);
         Assertions.assertThat(queue.getArguments())
                 .containsEntry("x-dead-letter-exchange", QueueNames.DEAD_LETTER_EXCHANGE)
                 .containsEntry("x-dead-letter-routing-key", QueueNames.DEAD_LETTER_ROUTING_KEY)

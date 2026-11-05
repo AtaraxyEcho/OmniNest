@@ -57,7 +57,6 @@ public class FileQueryService {
     private final FileNodeRepository fileNodeRepository;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ApplicationEventPublisher eventPublisher;
-    private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final SharedSpaceService sharedSpaceService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
@@ -220,11 +219,8 @@ public class FileQueryService {
         if (NodeType.FILE.getValue().equals(saved.getNodeType())) {
             affectedFileIds.add(saved.getId());
         }
-        if (!affectedFileIds.isEmpty()) {
-            // 更新 Lucene 搜索索引中的文件名与路径，空间类型必须跟随节点本身，
-            // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
-        }
+        // 文件名是数据库里的可变元数据，检索时实时读取；正文索引以内容对象为键，
+        // 同一空间内改名不改变对象标识，因此这里不再触发任何索引写入与重新解析。
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return assembler.toDto(saved);
     }
@@ -259,10 +255,7 @@ public class FileQueryService {
         if (NodeType.FILE.getValue().equals(saved.getNodeType())) {
             affectedFileIds.add(saved.getId());
         }
-        if (!affectedFileIds.isEmpty()) {
-            // 移动后全局搜索仍按旧路径返回，必须重建文件索引。
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
-        }
+        // 同一空间内移动只改路径，正文索引按内容对象命中，无需重建。
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return assembler.toDto(saved);
     }
@@ -284,7 +277,6 @@ public class FileQueryService {
         Instant deletedAt = Instant.now();
         markDeleted(node, actorUserId, deletedAt);
         fileNodeRepository.save(node);
-        fileIndexSyncService.scheduleAfterCommit(actorUserId, List.of(node.getId()));
         eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(actorUserId, List.of(node.getId()), deletedAt));
         subtreeSoftDeleter.softDeleteDescendants(actorUserId, node, deletedAt, null);
         recordFileEvent(actorUserId, node.getId(), SyncAction.DELETED);
@@ -337,8 +329,9 @@ public class FileQueryService {
             sharedSpaceQuotaService.increaseUsage(sharedStats.totalBytes(), sharedStats.fileCount());
         }
 
-        // 发布恢复事件，触发 Lucene 重新索引：按节点真实所有者分组投递，
-        // 共享子树里别人上传的子文件不能挂到操作者名下重建索引。
+        // 发布恢复事件，触发客户端与媒体库刷新：按节点真实所有者分组投递，
+        // 共享子树里别人上传的子文件不能挂到操作者名下。正文索引按内容对象命中，
+        // 回收站进出不改变对象标识，因此不需要重建。
         Map<UUID, List<UUID>> restoredIdsByOwner = new LinkedHashMap<>();
         restoredAncestors.forEach(ancestor -> restoredIdsByOwner
                 .computeIfAbsent(ancestor.getOwnerUserId(), key -> new ArrayList<>())
@@ -350,10 +343,8 @@ public class FileQueryService {
                 .computeIfAbsent(descendant.getOwnerUserId(), key -> new ArrayList<>())
                 .add(descendant.getId()));
         Instant restoredAt = Instant.now();
-        restoredIdsByOwner.forEach((ownerId, ids) -> {
-            eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt));
-            fileIndexSyncService.scheduleAfterCommit(ownerId, ids);
-        });
+        restoredIdsByOwner.forEach((ownerId, ids) ->
+                eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt)));
         recordFileEvent(nodeOwnerUserId, saved.getId(), SyncAction.RESTORED);
 
         return assembler.toDto(saved);
@@ -444,8 +435,6 @@ public class FileQueryService {
         }
         if (!allToSave.isEmpty()) {
             fileNodeRepository.saveAll(allToSave);
-            // 后代已由 softDeleteDescendants 逐批投递过，这里只补根节点。
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, rootIds);
             eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, rootIds, deletedAt));
             recordLibraryInvalidation(ownerUserId, SyncAction.DELETED, allDeletedIds.size());
         }
@@ -597,7 +586,6 @@ public class FileQueryService {
                     sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount()));
             restoredIdsByOwner.forEach((ownerId, ids) -> {
                 eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt));
-                fileIndexSyncService.scheduleAfterCommit(ownerId, ids);
                 recordLibraryInvalidation(ownerId, SyncAction.RESTORED, ids.size());
             });
         }
@@ -663,10 +651,6 @@ public class FileQueryService {
             } catch (BusinessException exception) {
                 results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
             }
-        }
-        if (!affectedFileIds.isEmpty()) {
-            // 批量移动同样改变了文件路径，索引必须随事务提交重建。
-            fileIndexSyncService.scheduleAfterCommit(ownerUserId, affectedFileIds);
         }
         if (movedCount > 0) {
             recordLibraryInvalidation(ownerUserId, SyncAction.UPDATED, movedCount);

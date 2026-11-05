@@ -83,7 +83,7 @@ class PhotoAiServiceTest {
                         any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
                 .thenReturn(analysis);
 
-        service.processPhoto(ownerUserId, photoId, true);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verify(imageAnalysisGateway).analyzeContent(
                 aryEq(imageBytes),
@@ -99,8 +99,7 @@ class PhotoAiServiceTest {
                 eq(photoId),
                 analysisCaptor.capture(),
                 Mockito.anyList(),
-                eq(false),
-                eq(true)
+                eq(false)
         );
         assertSame(analysis, analysisCaptor.getValue());
     }
@@ -126,7 +125,7 @@ class PhotoAiServiceTest {
         Mockito.when(contentAnalysisService.mergePreservedOcrObservations(ownerUserId, photoId, analysis))
                 .thenReturn(analysis);
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verify(fileQueryService).openOwnedFileContent(ownerUserId, coverFileId);
         Mockito.verify(fileQueryService, Mockito.never()).openOwnedFileContent(ownerUserId, fileNodeId);
@@ -143,8 +142,7 @@ class PhotoAiServiceTest {
                 eq(photoId),
                 eq(analysis),
                 Mockito.anyList(),
-                eq(true),
-                eq(false)
+                eq(true)
         );
     }
 
@@ -159,13 +157,13 @@ class PhotoAiServiceTest {
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
         Mockito.when(contentAnalysisService.tryShortCircuitDenseTextReanalysis(
-                ownerUserId, photo, PIPELINE, true)).thenReturn(true);
+                ownerUserId, photo, PIPELINE)).thenReturn(true);
 
-        service.processPhoto(ownerUserId, photoId, true);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+                .apply(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -178,13 +176,13 @@ class PhotoAiServiceTest {
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
         Mockito.when(contentAnalysisService.tryCloneFromSameHash(
-                ownerUserId, photo, "hash-1", PIPELINE, false)).thenReturn(true);
+                ownerUserId, photo, "hash-1", PIPELINE)).thenReturn(true);
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+                .apply(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -199,13 +197,13 @@ class PhotoAiServiceTest {
         Mockito.when(contentAnalysisService.isAlreadyAnalyzed(
                 ownerUserId, photoId, "hash-1", PIPELINE)).thenReturn(true);
 
-        service.processPhoto(ownerUserId, photoId, true);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .tryCloneFromSameHash(any(), any(), any(), any(), anyBoolean());
+                .tryCloneFromSameHash(any(), any(), any(), any());
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+                .apply(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -219,7 +217,7 @@ class PhotoAiServiceTest {
                 .thenReturn(Optional.of(photo));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.processPhoto(ownerUserId, photoId, true));
+                () -> service.processPhoto(ownerUserId, photoId));
 
         assertEquals(ErrorCode.TASK_DEPENDENCY_NOT_READY, exception.errorCode());
         Mockito.verifyNoInteractions(fileQueryService, imageAnalysisGateway);
@@ -244,7 +242,7 @@ class PhotoAiServiceTest {
                         any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
                 .thenReturn(analysis(null));
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         ArgumentCaptor<byte[]> bytesCaptor = ArgumentCaptor.forClass(byte[].class);
         Mockito.verify(imageAnalysisGateway).analyzeContent(
@@ -279,7 +277,7 @@ class PhotoAiServiceTest {
                         any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
                 .thenReturn(analysis(null));
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verify(fileQueryService).openOwnedFileContent(ownerUserId, coverFileId);
         Mockito.verify(fileQueryService, Mockito.never()).openOwnedFileContent(ownerUserId, fileNodeId);
@@ -299,7 +297,7 @@ class PhotoAiServiceTest {
                 .thenReturn(content(new byte[]{1, 2, 3, 4, 5}));
 
         assertThrows(IllegalStateException.class,
-                () -> service.processPhoto(ownerUserId, photoId, false));
+                () -> service.processPhoto(ownerUserId, photoId));
 
         Mockito.verify(imageAnalysisGateway, Mockito.never()).analyzeContent(
                 any(), anyString(), anyString(), anyBoolean(), anyString(), anyInt());
@@ -321,10 +319,10 @@ class PhotoAiServiceTest {
                 .thenReturn(new ContentAnalysis(0, null, null, List.of(), List.of(), null));
 
         assertThrows(IllegalStateException.class,
-                () -> service.processPhoto(ownerUserId, photoId, false));
+                () -> service.processPhoto(ownerUserId, photoId));
 
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+                .apply(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -343,10 +341,10 @@ class PhotoAiServiceTest {
                 .thenThrow(new IllegalStateException("sidecar unavailable"));
 
         assertThrows(IllegalStateException.class,
-                () -> service.processPhoto(ownerUserId, photoId, false));
+                () -> service.processPhoto(ownerUserId, photoId));
 
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+                .apply(any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -372,14 +370,14 @@ class PhotoAiServiceTest {
         Mockito.when(contentAnalysisService.mergePreservedOcrObservations(ownerUserId, photoId, analysis))
                 .thenReturn(analysis);
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verify(contentAnalysisService, Mockito.never()).isAlreadyAnalyzed(
                 any(), any(), any(), any());
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .tryCloneFromSameHash(any(), any(), any(), any(), anyBoolean());
+                .tryCloneFromSameHash(any(), any(), any(), any());
         Mockito.verify(contentAnalysisService, Mockito.never())
-                .tryShortCircuitDenseTextReanalysis(any(), any(), any(), anyBoolean());
+                .tryShortCircuitDenseTextReanalysis(any(), any(), any());
         Mockito.verify(imageAnalysisGateway).analyzeContent(
                 any(byte[].class), anyString(), anyString(), eq(true), anyString(), anyInt());
     }
@@ -400,7 +398,7 @@ class PhotoAiServiceTest {
                         any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
                 .thenReturn(analysis(null));
 
-        service.processPhoto(ownerUserId, photoId, false);
+        service.processPhoto(ownerUserId, photoId);
 
         Mockito.verify(imageAnalysisGateway).analyzeContent(
                 any(byte[].class),

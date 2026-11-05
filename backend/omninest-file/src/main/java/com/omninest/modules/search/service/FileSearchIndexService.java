@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.modules.search.dto.SearchResultDto;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -51,20 +50,28 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 文件搜索索引服务，使用按用户隔离的 Lucene 索引目录。
- * 每个用户拥有独立的索引目录，防止跨用户搜索数据泄漏。
+ * 文件正文索引服务：按用户隔离的 Lucene 目录，文档键是不可变的 {@code fileObjectId}。
+ *
+ * <p>索引里只放正文与摘要，不再放文件名、空间类型这些可变元数据——它们以 PostgreSQL
+ * 为唯一事实来源，检索时按命中的对象标识实时回表解析。这样重命名、移动目录、复制、
+ * 软删除与回收站还原都不会让索引失效：节点标识变了，但它引用的内容对象没变。</p>
+ *
+ * <p>目录仍按用户物理隔离（个人空间按 {@code ownerUserId} 分目录，共享空间用全零 UUID
+ * 目录），既保证租户之间互不可见，也让用户注销时能秒级删盘；如果把全部用户的对象混进
+ * 一个目录再按 Top-K 回表过滤，大租户的高频词会把候选名额占满，小租户搜同一词会得到
+ * 零结果。</p>
+ *
+ * <p>正文列 {@code Store.NO} 不可回读，因此同一对象内容只会写一次；需要把内容搬到另一个
+ * 目录（跨空间移动、转存自他人共享）时只能重新解析源文件，这条路径由后处理任务负责。</p>
+ *
+ * @author OmniNest
  */
 @Slf4j
 @Service
 public class FileSearchIndexService implements Closeable {
-    private static final String FIELD_FILE_ID = "fileId";
-    private static final String FIELD_TITLE = "title";
+    private static final String FIELD_OBJECT_ID = "objectId";
     private static final String FIELD_CONTENT = "content";
-    private static final String FIELD_SPACE_TYPE = "spaceType";
-    private static final String FIELD_HAS_CONTENT = "hasContent";
     private static final String FIELD_SNIPPET = "snippet";
-    private static final String HAS_CONTENT_YES = "Y";
-    private static final String HAS_CONTENT_NO = "N";
     private static final String SPACE_PERSONAL = "PERSONAL";
     private static final String SPACE_SHARED = "SHARED";
     /**
@@ -73,6 +80,7 @@ public class FileSearchIndexService implements Closeable {
      */
     private static final UUID SHARED_INDEX_KEY = new UUID(0L, 0L);
     private static final int SNIPPET_MAX_CHARS = 200;
+    private static final int MAX_SEARCH_TOKENS = 16;
     private static final Duration USER_INDEX_IDLE_TTL = Duration.ofMinutes(30);
     /** 用户删除后的跨进程墓碑后缀：存在时禁止再为该用户创建索引。 */
     private static final String PURGE_MARKER_SUFFIX = ".purge";
@@ -121,10 +129,10 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 获取指定用户的索引目录路径。
+     * 获取指定索引键对应的目录路径。
      */
-    private Path getUserIndexPath(UUID userId) {
-        return basePath.resolve(userId.toString());
+    private Path getUserIndexPath(UUID indexKey) {
+        return basePath.resolve(indexKey.toString());
     }
 
     private UUID resolveIndexKey(UUID ownerUserId, String spaceType) {
@@ -136,12 +144,12 @@ public class FileSearchIndexService implements Closeable {
      * 懒加载：首次访问时创建 Directory 和 IndexWriter。
      * 使用 computeIfAbsent 保证线程安全，避免并发创建导致资源泄漏。
      */
-    private UserIndexState getUserIndexState(UUID userId) throws IOException {
-        if (isUserPurged(userId)) {
+    private UserIndexState getUserIndexState(UUID indexKey) throws IOException {
+        if (isUserPurged(indexKey)) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "用户搜索索引已清理");
         }
         try {
-            return userIndexes.get(userId, id -> {
+            return userIndexes.get(indexKey, id -> {
                 try {
                     Path userPath = getUserIndexPath(id);
                     Files.createDirectories(userPath);
@@ -159,9 +167,9 @@ public class FileSearchIndexService implements Closeable {
         }
     }
 
-    private <T> T withUserIndexState(UUID userId, UserIndexOperation<T> operation) throws Exception {
+    private <T> T withUserIndexState(UUID indexKey, UserIndexOperation<T> operation) throws Exception {
         while (true) {
-            UserIndexState state = getUserIndexState(userId);
+            UserIndexState state = getUserIndexState(indexKey);
             synchronized (state) {
                 if (state.closed) {
                     continue;
@@ -172,7 +180,7 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 打开指定用户索引的只读 NRT reader。
+     * 打开指定索引的只读 NRT reader。
      * 使用 DirectoryReader.open(writer) 获取近实时 reader，正确处理 Lucene 10 软删除。
      * 如果索引目录为空或不存在，返回 null。
      * 调用方负责在使用完毕后关闭 reader。
@@ -186,289 +194,131 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 索引文件文档，已存在同 fileId 文档则更新。
+     * 判断该内容对象在指定索引里是否已有正文文档。
      *
-     * <p>空间类型必须由调用方显式给出：默认成 PERSONAL 会让共享空间文件在重命名或
-     * 恢复后把文档写成个人空间，空间过滤与按空间检索因此失真。</p>
+     * <p>同一对象在个人空间被复制成多个节点、或转存后再次保存时，正文不需要重复解析；
+     * 调用方据此跳过整轮 Tika 提取。</p>
      *
-     * @param fileNodeId  文件节点 ID
      * @param ownerUserId 拥有者用户 ID
-     * @param title       文件标题
-     * @param content     可选的文本内容
-     * @param spaceType   空间类型（PERSONAL / SHARED）
+     * @param spaceType 空间类型（PERSONAL / SHARED）
+     * @param fileObjectId 文件对象 ID
+     * @return 已有正文文档时返回 true
      */
-    public void indexFile(UUID fileNodeId, UUID ownerUserId, String title, String content, String spaceType) {
-        if (isUserPurged(ownerUserId)) {
+    public boolean hasObjectContent(UUID ownerUserId, String spaceType, UUID fileObjectId) {
+        if (fileObjectId == null) {
+            return false;
+        }
+        Path indexDir = getUserIndexPath(resolveIndexKey(ownerUserId, spaceType));
+        if (!Files.exists(indexDir) || !indexExists(indexDir)) {
+            return false;
+        }
+        try {
+            SearcherManager manager = searcherFor(indexDir);
+            IndexSearcher searcher = manager.acquire();
+            try {
+                return searcher.count(new TermQuery(new Term(FIELD_OBJECT_ID, fileObjectId.toString()))) > 0;
+            } finally {
+                manager.release(searcher);
+            }
+        } catch (Exception exception) {
+            searchers.invalidate(indexDir);
+            log.warn("探测已索引正文失败: indexKeyHash={}, errorType={}",
+                    Integer.toHexString(resolveIndexKey(ownerUserId, spaceType).toString().hashCode()),
+                    exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /**
+     * 索引一份文件的完整正文分块。
+     *
+     * @param fileObjectId 文件对象 ID
+     * @param ownerUserId 拥有者用户 ID
+     * @param spaceType 空间类型（PERSONAL / SHARED）
+     * @param chunks 文本分块，按原文顺序
+     */
+    public void indexObjectChunks(
+            UUID fileObjectId, UUID ownerUserId, String spaceType, List<String> chunks) {
+        if (isUserPurged(resolveIndexKey(ownerUserId, spaceType))) {
             return;
         }
-        boolean hasContent = content != null && !content.isBlank();
+        if (chunks == null || chunks.isEmpty()) {
+            return;
+        }
         UUID indexKey = resolveIndexKey(ownerUserId, spaceType);
         try {
             withUserIndexState(indexKey, state -> {
-                // FILE_INDEX 仅写元数据；若 TEXT_EXTRACTION 已写入正文，不得覆盖清空。
-                if (!hasContent && alreadyHasContent(state, fileNodeId)) {
-                    return null;
+                state.writer.deleteDocuments(objectTerm(fileObjectId));
+                for (String chunk : chunks) {
+                    if (chunk == null || chunk.isBlank()) {
+                        continue;
+                    }
+                    state.writer.addDocument(buildDocument(fileObjectId, chunk));
                 }
-                Document doc = new Document();
-                // fileId 使用 StringField，确保 Term 精确匹配删除能正确工作。
-                doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
-                doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
-                doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
-                doc.add(new StringField(
-                        FIELD_HAS_CONTENT,
-                        hasContent ? HAS_CONTENT_YES : HAS_CONTENT_NO,
-                        Field.Store.YES
-                ));
-                if (hasContent) {
-                    doc.add(new TextField(FIELD_CONTENT, content, Field.Store.NO));
-                    doc.add(new StoredField(FIELD_SNIPPET, snippetOf(content)));
-                }
-                // 显式删除后新增，避免 Lucene 软删除使旧文档继续参与搜索。
-                state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
-                state.writer.addDocument(doc);
                 state.writer.commit();
                 return null;
             });
-            // 空间迁移后旧索引目录里的同名文档必须移除，否则个人/共享两条检索路径会同时命中。
-            removeFromOtherIndex(fileNodeId, ownerUserId, spaceType);
-            log.debug(
-                    "索引文件: fileNodeId={}, ownerUserId={}, title={}, spaceType={}",
-                    fileNodeId, ownerUserId, title, spaceType
-            );
+            log.debug("分块索引文件正文: fileObjectId={}, indexKeyHash={}, chunkCount={}",
+                    fileObjectId, Integer.toHexString(indexKey.toString().hashCode()), chunks.size());
         } catch (Exception e) {
-            throw indexFailure(
-                    "Lucene 索引写入失败: fileNodeId=" + fileNodeId + ", ownerUserId=" + ownerUserId, e);
+            throw indexFailure("Lucene 分块索引写入失败: fileObjectId=" + fileObjectId, e);
         }
     }
 
     /**
-     * 删除指定用户的文件索引。
+     * 删除若干内容对象的正文文档，个人与共享目录一并清理。
      *
-     * @param fileNodeId  文件节点 ID
+     * <p>调用方掌握的是对象标识而不是节点标识：同一对象可能被多个节点引用，
+     * 只有对象行被真正回收时才会走到这里。</p>
+     *
+     * @param fileObjectIds 文件对象 ID 集合
      * @param ownerUserId 拥有者用户 ID
      */
-    private boolean alreadyHasContent(UserIndexState state, UUID fileNodeId) throws IOException {
-        try (DirectoryReader reader = openReaderOrNull(state)) {
-            if (reader == null) {
-                return false;
-            }
-            return hasStoredContent(new IndexSearcher(reader), fileNodeId);
-        }
-    }
-
-    /**
-     * 判断该文件在索引里是否已有正文文档；searcher 为 null 表示索引尚未建立。
-     */
-    private boolean hasStoredContent(IndexSearcher searcher, UUID fileNodeId) throws IOException {
-        if (searcher == null) {
-            return false;
-        }
-        Query query = new BooleanQuery.Builder()
-                .add(new TermQuery(new Term(FIELD_FILE_ID, fileNodeId.toString())), BooleanClause.Occur.MUST)
-                .add(new TermQuery(new Term(FIELD_HAS_CONTENT, HAS_CONTENT_YES)), BooleanClause.Occur.MUST)
-                .build();
-        return searcher.count(query) > 0;
-    }
-
-    private String snippetOf(String content) {
-        String compact = content.replaceAll("\\s+", " ").trim();
-        return compact.length() <= SNIPPET_MAX_CHARS ? compact : compact.substring(0, SNIPPET_MAX_CHARS);
-    }
-
-    /**
-     * 从另一个空间索引中移除同一文件。
-     *
-     * <p>节点跨空间移动后只会重投当前空间，旧空间的文档不会自动消失；按 fileId
-     * 从另一目录一并删除，避免个人与共享检索重复命中同一节点。</p>
-     */
-    private void removeFromOtherIndex(UUID fileNodeId, UUID ownerUserId, String spaceType) {
-        UUID otherKey = SPACE_SHARED.equals(spaceType) ? ownerUserId : SHARED_INDEX_KEY;
-        if (!Files.exists(getUserIndexPath(otherKey))) {
+    public void deleteObjects(Collection<UUID> fileObjectIds, UUID ownerUserId) {
+        if (fileObjectIds == null || fileObjectIds.isEmpty()) {
             return;
         }
-        try {
-            withUserIndexState(otherKey, state -> {
-                state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
-                state.writer.commit();
-                return null;
-            });
-        } catch (Exception e) {
-            log.warn("清理另一空间索引失败: fileNodeId={}, errorType={}",
-                    fileNodeId, e.getClass().getSimpleName());
-        }
+        deleteObjectsFromIndex(fileObjectIds, ownerUserId);
+        deleteObjectsFromIndex(fileObjectIds, SHARED_INDEX_KEY);
     }
 
-    /**
-     * 删除指定用户的文件索引。
-     *
-     * @param fileNodeId  文件节点 ID
-     * @param ownerUserId 拥有者用户 ID
-     */
-    public void deleteFile(UUID fileNodeId, UUID ownerUserId) {
-        deleteFiles(List.of(fileNodeId), ownerUserId);
-    }
-
-    /**
-     * 批量删除文件索引，同时清理个人与共享目录。
-     *
-     * <p>调用方通常只掌握节点所有者，不知道节点当前所在空间；按 fileId 从两个目录
-     * 一并删除是幂等的，也能覆盖跨空间移动留下的旧文档。</p>
-     *
-     * @param fileNodeIds 文件节点 ID 集合
-     * @param ownerUserId 拥有者用户 ID
-     */
-    public void deleteFiles(Collection<UUID> fileNodeIds, UUID ownerUserId) {
-        if (fileNodeIds == null || fileNodeIds.isEmpty()) {
-            return;
-        }
-        if (!isUserPurged(ownerUserId)) {
-            deleteFilesFromIndex(fileNodeIds, ownerUserId);
-        }
-        deleteFilesFromIndex(fileNodeIds, SHARED_INDEX_KEY);
-    }
-
-    private void deleteFilesFromIndex(Collection<UUID> fileNodeIds, UUID indexKey) {
+    private void deleteObjectsFromIndex(Collection<UUID> fileObjectIds, UUID indexKey) {
         // 不存在的索引目录没有可删除文档；跳过可避免为仅删除过的用户创建空目录。
         if (!Files.exists(getUserIndexPath(indexKey))) {
             return;
         }
         try {
             withUserIndexState(indexKey, state -> {
-                for (UUID fileNodeId : fileNodeIds) {
-                    state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
+                for (UUID fileObjectId : fileObjectIds) {
+                    state.writer.deleteDocuments(objectTerm(fileObjectId));
                 }
                 state.writer.commit();
                 return null;
             });
-            log.debug("批量删除索引: count={}, indexKey={}", fileNodeIds.size(), indexKey);
+            log.debug("批量删除正文索引: count={}, indexKeyHash={}",
+                    fileObjectIds.size(), Integer.toHexString(indexKey.toString().hashCode()));
         } catch (Exception e) {
-            throw indexFailure(
-                    "Lucene 索引批量删除失败: count=" + fileNodeIds.size() + ", indexKey=" + indexKey, e);
+            throw indexFailure("Lucene 正文索引批量删除失败: count=" + fileObjectIds.size(), e);
         }
     }
 
-    /**
-     * 批量索引文件文档，一次 commit 减少 fsync 次数。
-     * 每个条目提供 fileNodeId、title、content 与 spaceType；content 可为 null。
-     *
-     * <p>与 {@link #indexFile} 同规则：条目不带正文时保留已抽取的正文文档，否则一次目录恢复
-     * 就会把可搜索的全文清成只剩标题。
-     *
-     * @param ownerUserId 拥有者用户 ID
-     * @param docs 待索引文档集合
-     */
-    public void indexFiles(UUID ownerUserId, Collection<IndexDocumentInput> docs) {
-        if (docs == null || docs.isEmpty() || isUserPurged(ownerUserId)) {
-            return;
-        }
-        Map<UUID, List<IndexDocumentInput>> docsByIndex = new LinkedHashMap<>();
-        for (IndexDocumentInput input : docs) {
-            docsByIndex.computeIfAbsent(resolveIndexKey(ownerUserId, input.spaceType()), key -> new ArrayList<>())
-                    .add(input);
-        }
-        for (Map.Entry<UUID, List<IndexDocumentInput>> entry : docsByIndex.entrySet()) {
-            UUID indexKey = entry.getKey();
-            List<IndexDocumentInput> indexDocs = entry.getValue();
-            try {
-                withUserIndexState(indexKey, state -> {
-                    try (DirectoryReader reader = openReaderOrNull(state)) {
-                        IndexSearcher searcher = reader == null ? null : new IndexSearcher(reader);
-                        for (IndexDocumentInput input : indexDocs) {
-                            boolean hasContent = input.content() != null && !input.content().isBlank();
-                            if (!hasContent && hasStoredContent(searcher, input.fileNodeId())) {
-                                continue;
-                            }
-                            Document doc = new Document();
-                            doc.add(new StringField(FIELD_FILE_ID, input.fileNodeId().toString(), Field.Store.YES));
-                            doc.add(new TextField(FIELD_TITLE, input.title(), Field.Store.YES));
-                            doc.add(new StringField(FIELD_SPACE_TYPE, input.spaceType(), Field.Store.YES));
-                            doc.add(new StringField(
-                                    FIELD_HAS_CONTENT,
-                                    hasContent ? HAS_CONTENT_YES : HAS_CONTENT_NO,
-                                    Field.Store.YES
-                            ));
-                            if (hasContent) {
-                                doc.add(new TextField(FIELD_CONTENT, input.content(), Field.Store.NO));
-                                doc.add(new StoredField(FIELD_SNIPPET, snippetOf(input.content())));
-                            }
-                            state.writer.deleteDocuments(new Term(FIELD_FILE_ID, input.fileNodeId().toString()));
-                            state.writer.addDocument(doc);
-                        }
-                    }
-                    state.writer.commit();
-                    return null;
-                });
-                for (IndexDocumentInput input : indexDocs) {
-                    removeFromOtherIndex(input.fileNodeId(), ownerUserId, input.spaceType());
-                }
-                log.debug("批量索引文件: count={}, indexKey={}", indexDocs.size(), indexKey);
-            } catch (Exception e) {
-                throw indexFailure(
-                        "Lucene 索引批量写入失败: count=" + indexDocs.size() + ", indexKey=" + indexKey, e);
-            }
-        }
+    private static Term objectTerm(UUID fileObjectId) {
+        return new Term(FIELD_OBJECT_ID, fileObjectId.toString());
     }
 
-    /**
-     * 分块索引超长文本文件。
-     *
-     * <p>千万字级网文无法塞进单条 Lucene 文档；按块写入多个同 fileId 文档，
-     * 删除时按 fileId 整批清除，搜索命中后按文件去重。</p>
-     *
-     * @param fileNodeId 文件节点 ID
-     * @param ownerUserId 拥有者用户 ID
-     * @param title 文件标题
-     * @param chunks 文本分块，按原文顺序
-     * @param spaceType 空间类型
-     */
-    public void indexFileChunks(
-            UUID fileNodeId, UUID ownerUserId, String title, List<String> chunks, String spaceType) {
-        if (isUserPurged(ownerUserId)) {
-            return;
-        }
-        indexFileChunksInternal(fileNodeId, ownerUserId, title, chunks, spaceType);
+    private Document buildDocument(UUID fileObjectId, String chunk) {
+        Document doc = new Document();
+        // objectId 用 StringField：TextField 会被分析器按 UUID 连字符切分，
+        // deleteDocuments 的精确 Term 永远匹配不到，表现为删除不生效、同一对象重复索引。
+        doc.add(new StringField(FIELD_OBJECT_ID, fileObjectId.toString(), Field.Store.YES));
+        doc.add(new TextField(FIELD_CONTENT, chunk, Field.Store.NO));
+        doc.add(new StoredField(FIELD_SNIPPET, snippetOf(chunk)));
+        return doc;
     }
 
-    private void indexFileChunksInternal(
-            UUID fileNodeId,
-            UUID ownerUserId,
-            String title,
-            List<String> chunks,
-            String spaceType
-    ) {
-        if (chunks == null || chunks.isEmpty()) {
-            indexFile(fileNodeId, ownerUserId, title, null, spaceType);
-            return;
-        }
-        UUID indexKey = resolveIndexKey(ownerUserId, spaceType);
-        try {
-            withUserIndexState(indexKey, state -> {
-                state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
-                for (String chunk : chunks) {
-                    if (chunk == null || chunk.isBlank()) {
-                        continue;
-                    }
-                    Document doc = new Document();
-                    doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
-                    doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
-                    doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
-                    doc.add(new StringField(FIELD_HAS_CONTENT, HAS_CONTENT_YES, Field.Store.YES));
-                    doc.add(new TextField(FIELD_CONTENT, chunk, Field.Store.NO));
-                    doc.add(new StoredField(FIELD_SNIPPET, snippetOf(chunk)));
-                    state.writer.addDocument(doc);
-                }
-                state.writer.commit();
-                return null;
-            });
-            removeFromOtherIndex(fileNodeId, ownerUserId, spaceType);
-            log.debug(
-                    "分块索引文件: fileNodeId={}, ownerUserId={}, chunkCount={}, spaceType={}",
-                    fileNodeId, ownerUserId, chunks.size(), spaceType
-            );
-        } catch (Exception e) {
-            throw indexFailure(
-                    "Lucene 分块索引写入失败: fileNodeId=" + fileNodeId + ", ownerUserId=" + ownerUserId, e);
-        }
+    private String snippetOf(String content) {
+        String compact = content.replaceAll("\\s+", " ").trim();
+        return compact.length() <= SNIPPET_MAX_CHARS ? compact : compact.substring(0, SNIPPET_MAX_CHARS);
     }
 
     /**
@@ -482,39 +332,37 @@ public class FileSearchIndexService implements Closeable {
     /**
      * 打开流式分块索引会话：解析每完成一块立即写入，避免整份正文驻留内存。
      *
-     * <p>会话按固定块数分批 commit；首个块写入前清除该文件旧文档，完成时移除另一空间
-     * 的残留文档。会话不是线程安全的，只供单个提取任务顺序调用。</p>
+     * <p>会话期间写入的文档停留在 {@link IndexWriter} 的未提交段缓冲区里，对只读
+     * {@link SearcherManager} 不可见；只有 {@link ChunkIndexSession#complete()} 的
+     * 唯一一次提交才让「删除旧文档 + 写入全部分块」在同一个 commit point 原子生效。
+     * 中途按批提交会把「只解析到前 8 块」的半成品暴露给检索侧，进程被 OOM 杀掉后
+     * 残缺分块还会永久留在索引里。</p>
      *
-     * @param fileNodeId 文件节点 ID
+     * <p>会话不是线程安全的，只供单个提取任务顺序调用。</p>
+     *
+     * @param fileObjectId 文件对象 ID
      * @param ownerUserId 拥有者用户 ID
-     * @param title 文件标题
      * @param spaceType 空间类型
      * @return 分块索引会话
      */
-    public ChunkIndexSession openChunkIndex(
-            UUID fileNodeId, UUID ownerUserId, String title, String spaceType) {
-        return new ChunkIndexSession(fileNodeId, ownerUserId, title, spaceType);
+    public ChunkIndexSession openChunkIndex(UUID fileObjectId, UUID ownerUserId, String spaceType) {
+        return new ChunkIndexSession(fileObjectId, ownerUserId, spaceType);
     }
 
     /**
      * 流式分块索引会话，用于文本提取器边解析边写 Lucene。
      */
     public class ChunkIndexSession {
-        private static final int COMMIT_EVERY_CHUNKS = 8;
-
-        private final UUID fileNodeId;
+        private final UUID fileObjectId;
         private final UUID ownerUserId;
-        private final String title;
         private final String spaceType;
         private final UUID indexKey;
-        private int pendingChunks;
         private int totalChunks;
         private boolean reset;
 
-        private ChunkIndexSession(UUID fileNodeId, UUID ownerUserId, String title, String spaceType) {
-            this.fileNodeId = fileNodeId;
+        private ChunkIndexSession(UUID fileObjectId, UUID ownerUserId, String spaceType) {
+            this.fileObjectId = fileObjectId;
             this.ownerUserId = ownerUserId;
-            this.title = title;
             this.spaceType = spaceType;
             this.indexKey = resolveIndexKey(ownerUserId, spaceType);
         }
@@ -525,48 +373,34 @@ public class FileSearchIndexService implements Closeable {
          * @param chunk 正文块
          */
         public void append(String chunk) {
-            if (chunk == null || chunk.isBlank() || isUserPurged(ownerUserId)) {
+            if (chunk == null || chunk.isBlank() || isUserPurged(indexKey)) {
                 return;
             }
             try {
                 withUserIndexState(indexKey, state -> {
                     if (!reset) {
-                        state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
+                        state.writer.deleteDocuments(objectTerm(fileObjectId));
                         reset = true;
                     }
-                    Document doc = new Document();
-                    doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
-                    doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
-                    doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
-                    doc.add(new StringField(FIELD_HAS_CONTENT, HAS_CONTENT_YES, Field.Store.YES));
-                    doc.add(new TextField(FIELD_CONTENT, chunk, Field.Store.NO));
-                    doc.add(new StoredField(FIELD_SNIPPET, snippetOf(chunk)));
-                    state.writer.addDocument(doc);
+                    state.writer.addDocument(buildDocument(fileObjectId, chunk));
                     totalChunks++;
-                    pendingChunks++;
-                    if (pendingChunks >= COMMIT_EVERY_CHUNKS) {
-                        state.writer.commit();
-                        pendingChunks = 0;
-                    }
                     return null;
                 });
             } catch (Exception exception) {
-                throw new IllegalStateException("分块索引写入失败: fileNodeId=" + fileNodeId, exception);
+                throw new IllegalStateException("分块索引写入失败: fileObjectId=" + fileObjectId, exception);
             }
         }
 
         /**
-         * 结束会话：提交剩余文档并清理另一空间索引中的同文件文档。
+         * 结束会话：提交全部分块。
+         *
+         * <p>没有任何可提取正文时不写文档——标题检索由数据库按文件名实时完成，
+         * 索引里不需要一条只有元数据的空文档。</p>
          *
          * @return 写入的块数
          */
         public int complete() {
-            if (isUserPurged(ownerUserId)) {
-                return totalChunks;
-            }
-            if (!reset) {
-                // 无可提取正文时仍保留标题元数据文档，沿用一次性索引的语义。
-                indexFile(fileNodeId, ownerUserId, title, null, spaceType);
+            if (isUserPurged(indexKey) || !reset) {
                 return totalChunks;
             }
             try {
@@ -575,100 +409,75 @@ public class FileSearchIndexService implements Closeable {
                     return null;
                 });
             } catch (Exception exception) {
-                throw new IllegalStateException("分块索引提交失败: fileNodeId=" + fileNodeId, exception);
+                throw new IllegalStateException("分块索引提交失败: fileObjectId=" + fileObjectId, exception);
             }
-            removeFromOtherIndex(fileNodeId, ownerUserId, spaceType);
-            log.debug("流式分块索引完成: fileNodeId={}, chunkCount={}, spaceType={}",
-                    fileNodeId, totalChunks, spaceType);
+            log.debug("流式分块索引完成: fileObjectId={}, chunkCount={}, spaceType={}",
+                    fileObjectId, totalChunks, spaceType);
             return totalChunks;
         }
     }
 
     /**
-     * 批量索引文档条目。
-     *
-     * @param fileNodeId 文件节点 ID
-     * @param title 文件标题
-     * @param content 可选文本内容
-     * @param spaceType 空间类型（PERSONAL / SHARED）
-     */
-    public record IndexDocumentInput(
-            UUID fileNodeId,
-            String title,
-            String content,
-            String spaceType
-    ) {
-    }
-
-    /**
-     * 在指定用户的索引中搜索文件（个人与共享空间）。
+     * 在指定用户的索引中搜索文件正文。
      *
      * @param ownerUserId 拥有者用户 ID
      * @param queryStr    搜索关键词
      * @param maxResults  最大返回数量
-     * @return 搜索结果列表
+     * @return 命中的内容对象与摘要
      */
-    public List<SearchResultDto> search(UUID ownerUserId, String queryStr, int maxResults) {
+    public List<FileContentHit> search(UUID ownerUserId, String queryStr, int maxResults) {
         return search(ownerUserId, queryStr, maxResults, null);
     }
 
     /**
-     * 在指定用户的个人索引与共享索引中搜索文件。
+     * 在指定用户的个人索引与共享索引中搜索正文。
      *
      * @param ownerUserId 拥有者用户 ID
      * @param queryStr    搜索关键词
      * @param maxResults  最大返回数量
      * @param spaceType   空间类型过滤（PERSONAL / SHARED / null 表示全部）
-     * @return 搜索结果列表
+     * @return 命中的内容对象与摘要
      */
-    public List<SearchResultDto> search(UUID ownerUserId, String queryStr, int maxResults, String spaceType) {
-        if (queryStr == null || queryStr.isBlank() || maxResults <= 0 || isUserPurged(ownerUserId)) {
-            return new ArrayList<>();
+    public List<FileContentHit> search(UUID ownerUserId, String queryStr, int maxResults, String spaceType) {
+        if (queryStr == null || queryStr.isBlank() || maxResults <= 0) {
+            return List.of();
         }
         boolean includePersonal = spaceType == null || SPACE_PERSONAL.equals(spaceType);
         boolean includeShared = spaceType == null || SPACE_SHARED.equals(spaceType);
-        List<SearchResultDto> results = new ArrayList<>();
-        if (includePersonal) {
-            results.addAll(searchDirectory(getUserIndexPath(ownerUserId), queryStr, maxResults, SPACE_PERSONAL));
+        List<FileContentHit> results = new ArrayList<>();
+        if (includePersonal && !isUserPurged(ownerUserId)) {
+            results.addAll(searchDirectory(getUserIndexPath(ownerUserId), queryStr, maxResults));
         }
         if (includeShared) {
-            results.addAll(searchDirectory(getUserIndexPath(SHARED_INDEX_KEY), queryStr, maxResults, SPACE_SHARED));
+            results.addAll(searchDirectory(getUserIndexPath(SHARED_INDEX_KEY), queryStr, maxResults));
         }
-        results.sort(Comparator.comparingDouble(SearchResultDto::score).reversed());
+        results.sort(Comparator.comparingDouble(FileContentHit::score).reversed());
         return results.size() > maxResults ? new ArrayList<>(results.subList(0, maxResults)) : results;
     }
 
-    private List<SearchResultDto> searchDirectory(
-            Path userDir, String queryStr, int maxResults, String spaceType) {
-        if (!Files.exists(userDir) || !indexExists(userDir)) {
+    private List<FileContentHit> searchDirectory(Path indexDir, String queryStr, int maxResults) {
+        if (!Files.exists(indexDir) || !indexExists(indexDir)) {
             return List.of();
         }
-        CachedSearcher cached;
+        SearcherManager manager;
         try {
-            cached = searchers.get(userDir, path -> {
-                try {
-                    return openSearcher(path);
-                } catch (IOException exception) {
-                    throw new UncheckedIOException(exception);
-                }
-            });
+            manager = searcherFor(indexDir);
         } catch (RuntimeException exception) {
-            log.warn("打开用户索引检索器失败: indexKeyHash={}, errorType={}",
-                    Integer.toHexString(userDir.toString().hashCode()),
+            log.warn("打开索引检索器失败: indexKeyHash={}, errorType={}",
+                    Integer.toHexString(indexDir.toString().hashCode()),
                     exception.getClass().getSimpleName());
             return List.of();
         }
-        SearcherManager manager = cached.manager();
         IndexSearcher searcher = null;
         try {
             manager.maybeRefresh();
             searcher = manager.acquire();
-            return collectHits(searcher, queryStr, maxResults, spaceType);
+            return collectHits(searcher, queryStr, maxResults);
         } catch (Exception exception) {
             // 目录被删除或重建时旧检索器可能失效，丢弃缓存让下一次请求重新打开。
-            searchers.invalidate(userDir);
+            searchers.invalidate(indexDir);
             log.error("Lucene 搜索失败: indexKeyHash={}, queryLength={}, errorType={}",
-                    Integer.toHexString(userDir.toString().hashCode()), queryStr.length(),
+                    Integer.toHexString(indexDir.toString().hashCode()), queryStr.length(),
                     exception.getClass().getSimpleName(), exception);
             return List.of();
         } finally {
@@ -681,6 +490,17 @@ public class FileSearchIndexService implements Closeable {
                 }
             }
         }
+    }
+
+    private SearcherManager searcherFor(Path indexDir) {
+        CachedSearcher cached = searchers.get(indexDir, path -> {
+            try {
+                return openSearcher(path);
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
+            }
+        });
+        return cached.manager();
     }
 
     private boolean indexExists(Path userDir) {
@@ -738,13 +558,10 @@ public class FileSearchIndexService implements Closeable {
     private record CachedSearcher(SearcherManager manager, Directory directory) {
     }
 
-    private static final int MAX_SEARCH_TOKENS = 16;
-
-    private List<SearchResultDto> collectHits(
+    private List<FileContentHit> collectHits(
             IndexSearcher searcher,
             String queryStr,
-            int maxResults,
-            String spaceType
+            int maxResults
     ) throws Exception {
         // 每个 token 会生成两个 PrefixQuery；限制去重后的词元数，避免长文本触发
         // Lucene TooManyClauses 与词典重写尖峰。
@@ -759,45 +576,34 @@ public class FileSearchIndexService implements Closeable {
         for (String token : tokens) {
             tokenQuery.add(buildTokenQuery(token), BooleanClause.Occur.MUST);
         }
-        // 空间过滤必须独立成 FILTER 子句；把 spaceType 拼进查询串会因默认 OR 退化成加分项。
-        BooleanQuery.Builder query = new BooleanQuery.Builder()
-                .add(tokenQuery.build(), BooleanClause.Occur.MUST);
-        if (spaceType != null) {
-            query.add(new TermQuery(new Term(FIELD_SPACE_TYPE, spaceType)), BooleanClause.Occur.FILTER);
-        }
-        Query built = query.build();
-        // 超长文件分块后同一 fileId 会命中多条文档，放宽候选后再按文件去重。
+        // 超长文件分块后同一对象会命中多条文档，放宽候选后再按对象去重。
         int candidateLimit = Math.max(maxResults * 8, maxResults);
-        TopDocs topDocs = searcher.search(built, candidateLimit);
-        Map<UUID, SearchResultDto> bestByFile = new LinkedHashMap<>();
+        TopDocs topDocs = searcher.search(tokenQuery.build(), candidateLimit);
+        Map<UUID, FileContentHit> bestByObject = new LinkedHashMap<>();
         for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
             Document doc = searcher.storedFields().document(scoreDoc.doc);
-            UUID fileId = UUID.fromString(doc.get(FIELD_FILE_ID));
-            SearchResultDto existing = bestByFile.get(fileId);
+            UUID objectId = UUID.fromString(doc.get(FIELD_OBJECT_ID));
+            FileContentHit existing = bestByObject.get(objectId);
             if (existing == null || scoreDoc.score > existing.score()) {
-                bestByFile.put(fileId, new SearchResultDto(
-                        fileId,
-                        doc.get(FIELD_TITLE),
+                bestByObject.put(objectId, new FileContentHit(
+                        objectId,
                         doc.get(FIELD_SNIPPET),
                         scoreDoc.score
                 ));
             }
         }
-        return new ArrayList<>(bestByFile.values());
+        return new ArrayList<>(bestByObject.values());
     }
 
     /**
-     * 查询词按写入时的分析器切分后逐词组合，任意字段命中即可。
+     * 查询词按写入时的分析器切分后逐词组合，任意词元命中正文即可。
      *
      * <p>不能把整段查询包成短语：中文分词后短语要求词元严格相邻，用户输入多个关键词
-     * 时常规组合会全部落空。标题词项加权，正文前缀命中给较低权重。</p>
+     * 时常规组合会全部落空。</p>
      */
     private Query buildTokenQuery(String token) {
-        Term titleTerm = new Term(FIELD_TITLE, token);
         Term contentTerm = new Term(FIELD_CONTENT, token);
         return new BooleanQuery.Builder()
-                .add(new BoostQuery(new TermQuery(titleTerm), 2.0f), BooleanClause.Occur.SHOULD)
-                .add(new BoostQuery(new PrefixQuery(titleTerm), 1.2f), BooleanClause.Occur.SHOULD)
                 .add(new TermQuery(contentTerm), BooleanClause.Occur.SHOULD)
                 .add(new BoostQuery(new PrefixQuery(contentTerm), 0.8f), BooleanClause.Occur.SHOULD)
                 .setMinimumNumberShouldMatch(1)
@@ -806,7 +612,7 @@ public class FileSearchIndexService implements Closeable {
 
     private List<String> analyzeTokens(String queryStr) throws IOException {
         List<String> tokens = new ArrayList<>();
-        try (TokenStream stream = analyzer.tokenStream(FIELD_TITLE, queryStr)) {
+        try (TokenStream stream = analyzer.tokenStream(FIELD_CONTENT, queryStr)) {
             CharTermAttribute term = stream.addAttribute(CharTermAttribute.class);
             stream.reset();
             while (stream.incrementToken()) {
@@ -927,7 +733,7 @@ public class FileSearchIndexService implements Closeable {
 
     /**
      * 清空所有用户的索引内容，用于管理员全量重建前的准备。
-     * 遍历磁盘上所有用户索引目录并清除。
+     * 遍历磁盘上所有索引目录并清除。
      *
      * @return 被清除的文档总数
      */
@@ -1039,7 +845,17 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 在单个用户索引状态锁内执行的操作。
+     * 正文命中的内容对象。
+     *
+     * @param fileObjectId 文件对象 ID，调用方据此回表解析当前可见节点
+     * @param snippet 命中分块的摘要
+     * @param score 相关性得分
+     */
+    public record FileContentHit(UUID fileObjectId, String snippet, float score) {
+    }
+
+    /**
+     * 在单个索引状态锁内执行的操作。
      *
      * @param <T> 操作返回类型
      */
@@ -1049,7 +865,7 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 单个用户的 Lucene 索引状态，包含 Directory 和 Writer。
+     * 单个索引键对应的 Lucene 状态，包含 Directory 和 Writer。
      * Reader 按需创建，不缓存，确保每次读取最新提交的数据。
      */
     private static class UserIndexState {

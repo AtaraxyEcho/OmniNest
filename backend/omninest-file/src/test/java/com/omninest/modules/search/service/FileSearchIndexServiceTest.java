@@ -3,7 +3,6 @@ package com.omninest.modules.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.omninest.modules.search.dto.SearchResultDto;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +24,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * FileSearchIndexService 单元测试。
- * 验证按用户隔离的 Lucene 索引目录行为。
+ *
+ * <p>正文索引只认不可变的内容对象标识，按用户目录物理隔离；文件名、节点标识与空间归属
+ * 都在检索时回表解析，因此这里的断言只覆盖「哪些对象命中、命中了哪一段」。</p>
+ *
+ * @author OmniNest
  */
 class FileSearchIndexServiceTest {
 
@@ -84,157 +87,180 @@ class FileSearchIndexServiceTest {
         }
     }
 
-    @Test
-    @DisplayName("搜索仅返回指定用户的结果，不包含其他用户的文档")
-    void search_onlyReturnsResultsForSpecifiedUser() {
-        // 为 userA 索引两份文档
-        UUID fileIdA1 = UUID.randomUUID();
-        UUID fileIdA2 = UUID.randomUUID();
-        service.indexFile(fileIdA1, USER_A, "项目报告", "第一季度工作总结", "PERSONAL");
-        service.indexFile(fileIdA2, USER_A, "会议纪要", "团队周会讨论内容", "PERSONAL");
-
-        // 为 userB 索引一份文档
-        UUID fileIdB1 = UUID.randomUUID();
-        service.indexFile(fileIdB1, USER_B, "项目报告", "第二季度工作计划", "PERSONAL");
-
-        // 以 userA 身份搜索"项目报告"
-        List<SearchResultDto> resultsA = service.search(USER_A, "项目报告", 50);
-        assertThat(resultsA).hasSize(1);
-        assertThat(resultsA.get(0).fileId()).isEqualTo(fileIdA1);
-
-        // 以 userB 身份搜索"项目报告"
-        List<SearchResultDto> resultsB = service.search(USER_B, "项目报告", 50);
-        assertThat(resultsB).hasSize(1);
-        assertThat(resultsB.get(0).fileId()).isEqualTo(fileIdB1);
+    private void index(UUID objectId, UUID owner, String space, String... chunks) {
+        service.indexObjectChunks(objectId, owner, space, List.of(chunks));
     }
 
     @Test
-    @DisplayName("搜索不同用户共享关键词时互不干扰")
-    void search_differentUsersWithSameKeyword_doNotLeak() {
-        UUID fileIdA = UUID.randomUUID();
-        UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "机密文档", "仅供内部使用", "PERSONAL");
-        service.indexFile(fileIdB, USER_B, "机密文档", "外部共享版本", "PERSONAL");
+    @DisplayName("正文检索只返回指定用户目录里的对象")
+    void searchOnlyReturnsObjectsFromTheSpecifiedUserDirectory() {
+        UUID objectA = UUID.randomUUID();
+        UUID objectB = UUID.randomUUID();
+        index(objectA, USER_A, "PERSONAL", "第一季度工作总结");
+        index(objectB, USER_B, "PERSONAL", "第二季度工作计划");
 
-        // userA 搜索"机密文档"只能看到自己的
-        List<SearchResultDto> resultsA = service.search(USER_A, "机密文档", 50);
-        assertThat(resultsA).hasSize(1);
-        assertThat(resultsA.get(0).fileId()).isEqualTo(fileIdA);
-
-        // userB 搜索"机密文档"只能看到自己的
-        List<SearchResultDto> resultsB = service.search(USER_B, "机密文档", 50);
-        assertThat(resultsB).hasSize(1);
-        assertThat(resultsB.get(0).fileId()).isEqualTo(fileIdB);
+        assertThat(service.search(USER_A, "工作总结", 50))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectA);
+        assertThat(service.search(USER_B, "工作总结", 50)).isEmpty();
     }
 
     @Test
-    @DisplayName("clearIndex 仅清除指定用户的索引，不影响其他用户")
-    void clearIndex_onlyClearsSpecifiedUserIndex() {
-        UUID fileIdA = UUID.randomUUID();
-        UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "用户A的文件", "内容A", "PERSONAL");
-        service.indexFile(fileIdB, USER_B, "用户B的文件", "内容B", "PERSONAL");
+    @DisplayName("共享目录对任一成员可见，但只在请求共享空间时命中")
+    void sharedObjectsLiveInTheGlobalDirectory() {
+        UUID objectId = UUID.randomUUID();
+        index(objectId, USER_A, "SHARED", "共享项目的第一季度正文");
 
-        // 清除 userA 的索引
-        int cleared = service.clearIndex(USER_A);
-        assertThat(cleared).isEqualTo(1);
-
-        // userA 搜索不到任何结果
-        List<SearchResultDto> resultsA = service.search(USER_A, "文件", 50);
-        assertThat(resultsA).isEmpty();
-
-        // userB 的索引不受影响
-        List<SearchResultDto> resultsB = service.search(USER_B, "文件", 50);
-        assertThat(resultsB).hasSize(1);
-        assertThat(resultsB.get(0).fileId()).isEqualTo(fileIdB);
+        assertThat(service.search(USER_B, "第一季度", 10, "SHARED"))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectId);
+        assertThat(service.search(USER_B, "第一季度", 10, "PERSONAL")).isEmpty();
+        assertThat(service.search(USER_B, "第一季度", 10))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectId);
     }
 
     @Test
-    @DisplayName("deleteFile 仅从指定用户的索引中删除文档")
-    void deleteFile_onlyDeletesFromSpecifiedUserIndex() {
-        UUID fileIdA = UUID.randomUUID();
-        UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "待删除文件", "内容A", "PERSONAL");
-        service.indexFile(fileIdB, USER_B, "待删除文件", "内容B", "PERSONAL");
+    @DisplayName("同一内容对象重复索引时旧分块被替换，不产生重复文档")
+    void reindexingSameObjectReplacesPreviousChunks() {
+        UUID objectId = UUID.randomUUID();
+        index(objectId, USER_A, "PERSONAL", "旧稿第一章 山洪爆发", "旧稿第二章 抢险记录");
 
-        // 仅删除 userA 的文档
-        service.deleteFile(fileIdA, USER_A);
+        index(objectId, USER_A, "PERSONAL", "新稿第三章 晴日");
 
-        // userA 搜索不到已删除的文档
-        List<SearchResultDto> resultsA = service.search(USER_A, "待删除", 50);
-        assertThat(resultsA).isEmpty();
-
-        // userB 的同名文档不受影响
-        List<SearchResultDto> resultsB = service.search(USER_B, "待删除", 50);
-        assertThat(resultsB).hasSize(1);
-        assertThat(resultsB.get(0).fileId()).isEqualTo(fileIdB);
+        assertThat(service.search(USER_A, "山洪", 50)).isEmpty();
+        assertThat(service.search(USER_A, "晴日", 50))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectId);
+        assertThat(service.clearIndex(USER_A)).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("clearAllIndexes 清除所有用户索引")
-    void clearAllIndexes_clearsAllUserIndexes() {
-        service.indexFile(UUID.randomUUID(), USER_A, "文件A", "内容A", "PERSONAL");
-        service.indexFile(UUID.randomUUID(), USER_B, "文件B", "内容B", "PERSONAL");
+    @DisplayName("多关键词按词元组合匹配，不要求词元在原文中相邻")
+    void multiKeywordQueryCombinesTokens() {
+        UUID objectId = UUID.randomUUID();
+        index(objectId, USER_A, "PERSONAL", "2026 年度报告，财务 分析");
 
-        int totalCleared = service.clearAllIndexes();
-        assertThat(totalCleared).isEqualTo(2);
-
-        // 两个用户的索引都应为空
-        assertThat(service.search(USER_A, "文件", 50)).isEmpty();
-        assertThat(service.search(USER_B, "文件", 50)).isEmpty();
+        assertThat(service.search(USER_A, "2026 财务", 10))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectId);
     }
 
     @Test
-    @DisplayName("更新同 fileId 的文档后搜索返回最新内容")
-    void indexFile_sameFileId_updatesExistingDocument() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFile(fileId, USER_A, "旧标题", "旧内容", "PERSONAL");
-        service.indexFile(fileId, USER_A, "新标题", "新内容", "PERSONAL");
+    @DisplayName("命中结果返回正文摘要而不是恒定 null")
+    void searchReturnsStoredSnippet() {
+        UUID objectId = UUID.randomUUID();
+        index(objectId, USER_A, "PERSONAL", "这是用于摘要展示的正文内容，包含季度财务分析。");
 
-        List<SearchResultDto> results = service.search(USER_A, "新标题", 50);
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).fileId()).isEqualTo(fileId);
+        List<FileSearchIndexService.FileContentHit> hits = service.search(USER_A, "季度财务", 10);
 
-        // 旧标题不应再被搜到
-        assertThat(service.search(USER_A, "旧标题", 50)).isEmpty();
+        assertThat(hits).hasSize(1);
+        assertThat(hits.getFirst().snippet()).contains("季度财务");
     }
 
     @Test
-    @DisplayName("每个用户索引目录在磁盘上独立创建")
-    void indexFile_createsPerUserDirectoriesOnDisk() {
-        service.indexFile(UUID.randomUUID(), USER_A, "测试文件", "内容", "PERSONAL");
-        service.indexFile(UUID.randomUUID(), USER_B, "测试文件", "内容", "PERSONAL");
+    @DisplayName("分块会话在 complete 前对外不可见，提交后一次生效")
+    void chunkSessionIsInvisibleUntilCompleted() throws Exception {
+        UUID objectId = UUID.randomUUID();
+        FileSearchIndexService.ChunkIndexSession session =
+                service.openChunkIndex(objectId, USER_A, "PERSONAL");
+        session.append("第一章 山洪爆发了");
+        session.append("第二章 抢险记录");
 
-        Path userPathA = tempDir.resolve(USER_A.toString());
-        Path userPathB = tempDir.resolve(USER_B.toString());
-        assertThat(Files.isDirectory(userPathA)).isTrue();
-        assertThat(Files.isDirectory(userPathB)).isTrue();
-        assertThat(userPathA).isNotEqualTo(userPathB);
+        // 另一个只读实例代表检索侧：没有 commit 就看不到半成品正文。
+        try (FileSearchIndexService reader = new FileSearchIndexService(tempDir.toString(), 64)) {
+            assertThat(reader.search(USER_A, "山洪", 10)).isEmpty();
+            assertThat(session.complete()).isEqualTo(2);
+            assertThat(reader.search(USER_A, "山洪", 10))
+                    .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                    .containsExactly(objectId);
+        }
     }
 
     @Test
-    @DisplayName("搜索不存在的用户返回空结果")
-    void search_nonExistentUser_returnsEmpty() {
-        UUID unknownUser = UUID.randomUUID();
-        List<SearchResultDto> results = service.search(unknownUser, "任何关键词", 50);
-        assertThat(results).isEmpty();
+    @DisplayName("无正文的分块会话不写文档，文件名检索不依赖索引")
+    void emptyChunkSessionWritesNothing() {
+        UUID objectId = UUID.randomUUID();
+        FileSearchIndexService.ChunkIndexSession session =
+                service.openChunkIndex(objectId, USER_A, "PERSONAL");
+
+        assertThat(session.complete()).isZero();
+        assertThat(service.clearIndex(USER_A)).isZero();
     }
 
     @Test
-    @DisplayName("删除不存在的文档不抛异常")
-    void deleteFile_nonExistentDocument_doesNotThrow() {
-        UUID unknownFile = UUID.randomUUID();
-        // 内部 catch 异常并记录日志，不向外抛出
-        service.deleteFile(unknownFile, USER_A);
-        // 无异常即通过
+    @DisplayName("deleteObjects 只删除指定对象，两个目录一并清理")
+    void deleteObjectsRemovesBothSpaceDirectories() {
+        UUID personal = UUID.randomUUID();
+        UUID shared = UUID.randomUUID();
+        index(personal, USER_A, "PERSONAL", "个人空间的待删除正文");
+        index(shared, USER_A, "SHARED", "共享空间的待删除正文");
+
+        service.deleteObjects(List.of(personal, shared), USER_A);
+
+        assertThat(service.search(USER_A, "待删除", 10)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("删除不存在的对象不抛异常")
+    void deleteObjectsForUnknownObjectDoesNotThrow() {
+        service.deleteObjects(List.of(UUID.randomUUID()), USER_A);
+    }
+
+    @Test
+    @DisplayName("clearIndex 只清空指定用户目录")
+    void clearIndexOnlyClearsSpecifiedUser() {
+        index(UUID.randomUUID(), USER_A, "PERSONAL", "内容A");
+        UUID objectB = UUID.randomUUID();
+        index(objectB, USER_B, "PERSONAL", "内容B");
+
+        assertThat(service.clearIndex(USER_A)).isEqualTo(1);
+
+        assertThat(service.search(USER_A, "内容", 50)).isEmpty();
+        assertThat(service.search(USER_B, "内容", 50))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectB);
+    }
+
+    @Test
+    @DisplayName("clearAllIndexes 清除所有目录并回收墓碑")
+    void clearAllIndexesClearsEveryDirectory() {
+        index(UUID.randomUUID(), USER_A, "PERSONAL", "内容A");
+        index(UUID.randomUUID(), USER_B, "PERSONAL", "内容B");
+
+        assertThat(service.clearAllIndexes()).isEqualTo(2);
+
+        assertThat(service.search(USER_A, "内容", 50)).isEmpty();
+        assertThat(service.search(USER_B, "内容", 50)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("每个用户目录在磁盘上独立创建")
+    void perUserDirectoriesAreCreatedIndependently() {
+        index(UUID.randomUUID(), USER_A, "PERSONAL", "内容");
+        index(UUID.randomUUID(), USER_B, "PERSONAL", "内容");
+
+        assertThat(Files.isDirectory(tempDir.resolve(USER_A.toString()))).isTrue();
+        assertThat(Files.isDirectory(tempDir.resolve(USER_B.toString()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("hasObjectContent 能区分已索引与未索引的对象")
+    void hasObjectContentReflectsIndexedObjects() {
+        UUID indexed = UUID.randomUUID();
+        index(indexed, USER_A, "PERSONAL", "已经索引的正文");
+
+        assertThat(service.hasObjectContent(USER_A, "PERSONAL", indexed)).isTrue();
+        assertThat(service.hasObjectContent(USER_A, "PERSONAL", UUID.randomUUID())).isFalse();
+        assertThat(service.hasObjectContent(USER_B, "PERSONAL", indexed)).isFalse();
     }
 
     @Test
     @DisplayName("另一写者持有 write.lock 时搜索仍返回命中")
-    void search_returnsHitsWhileAnotherWriterHoldsWriteLock() throws Exception {
-        UUID fileId = UUID.randomUUID();
+    void searchReturnsHitsWhileAnotherWriterHoldsWriteLock() throws Exception {
+        UUID objectId = UUID.randomUUID();
         FileSearchIndexService writerSide = new FileSearchIndexService(tempDir.toString(), 64);
-        writerSide.indexFile(fileId, USER_A, "山间晨雾", "内容", "PERSONAL");
+        writerSide.indexObjectChunks(objectId, USER_A, "PERSONAL", List.of("山间晨雾"));
         writerSide.close();
 
         Path userDir = tempDir.resolve(USER_A.toString());
@@ -247,13 +273,11 @@ class FileSearchIndexServiceTest {
                     new NIOFSDirectory(userDir), new IndexWriterConfig(new StandardAnalyzer())))
                     .isInstanceOf(LockObtainFailedException.class);
 
-            // 冷缓存的请求侧只能读：修复前这里会去 getOrCreateUserIndex 开第二个 IndexWriter，
-            // 抢锁失败被内部吞掉，表现为搜索静默返回空结果。
             FileSearchIndexService requestSide = new FileSearchIndexService(tempDir.toString(), 64);
             try {
                 assertThat(requestSide.search(USER_A, "山间晨雾", 10))
-                        .extracting(SearchResultDto::fileId)
-                        .containsExactly(fileId);
+                        .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                        .containsExactly(objectId);
             } finally {
                 requestSide.close();
             }
@@ -261,113 +285,14 @@ class FileSearchIndexServiceTest {
     }
 
     @Test
-    @DisplayName("indexFiles 不带正文时保留已抽取的正文文档")
-    void indexFiles_metadataOnly_preservesExtractedContent() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFileChunks(fileId, USER_A, "网文", List.of("第一章 山洪爆发了", "第二章 抢险记录"), "PERSONAL");
-
-        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
-                fileId, "网文", null, "PERSONAL")));
-
-        assertThat(service.search(USER_A, "山洪", 50))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(fileId);
-        assertThat(service.clearIndex(USER_A)).isEqualTo(2);
-    }
-
-    @Test
-    @DisplayName("indexFiles 带正文时按新内容覆盖旧文档")
-    void indexFiles_withContent_replacesExistingDocuments() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFileChunks(fileId, USER_A, "旧稿", List.of("第一章 山洪爆发了", "第二章 抢险记录"), "PERSONAL");
-
-        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
-                fileId, "新稿", "第三章 晴日", "PERSONAL")));
-
-        assertThat(service.search(USER_A, "山洪", 50)).isEmpty();
-        assertThat(service.search(USER_A, "晴日", 50))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(fileId);
-        assertThat(service.clearIndex(USER_A)).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("indexFiles 写入的正文同样受后续元数据批次保护")
-    void indexFiles_contentBecomesProtectedAgainstLaterMetadataOnlyBatch() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
-                fileId, "报告", "第四季度营收", "PERSONAL")));
-
-        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
-                fileId, "报告 (1)", null, "PERSONAL")));
-
-        assertThat(service.search(USER_A, "营收", 50))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(fileId);
-    }
-
-    @Test
-    @DisplayName("indexFiles 对没有正文的文件照常写入元数据")
-    void indexFiles_metadataOnly_indexesFilesWithoutContent() {
-        UUID fileId = UUID.randomUUID();
-
-        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
-                fileId, "新建文档", null, "PERSONAL")));
-
-        assertThat(service.search(USER_A, "新建文档", 50))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(fileId);
-    }
-
-    @Test
-    @DisplayName("共享空间文档写入全局索引，任一成员可按共享空间检索")
-    void sharedDocumentsLiveInGlobalIndexVisibleToAnyMember() {
-        UUID sharedFileId = UUID.randomUUID();
-        service.indexFile(sharedFileId, USER_A, "共享项目报告", "第一季度共享正文", "SHARED");
-
-        assertThat(service.search(USER_B, "共享项目报告", 10, "SHARED"))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(sharedFileId);
-        assertThat(service.search(USER_B, "共享项目报告", 10, "PERSONAL")).isEmpty();
-        assertThat(service.search(USER_B, "共享项目报告", 10))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(sharedFileId);
-    }
-
-    @Test
-    @DisplayName("多关键词按词元组合查询，不要求词元在原文中相邻")
-    void multiKeywordQueryMatchesTokensAcrossFields() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFile(fileId, USER_A, "2026 年度报告", "财务 分析", "PERSONAL");
-
-        // 旧实现把整串包成短语，会要求 “2026 财务” 连续出现而漏掉本条。
-        assertThat(service.search(USER_A, "2026 财务", 10))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(fileId);
-    }
-
-    @Test
-    @DisplayName("命中结果返回正文摘要而不是恒定 null")
-    void searchReturnsStoredSnippet() {
-        UUID fileId = UUID.randomUUID();
-        service.indexFile(fileId, USER_A, "项目报告", "这是用于摘要展示的正文内容，包含季度财务分析。", "PERSONAL");
-
-        List<SearchResultDto> results = service.search(USER_A, "季度财务", 10);
-
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().snippet()).contains("季度财务");
-    }
-
-    @Test
     @DisplayName("删除用户索引后墓碑阻止重建，直到管理员全量重建")
     void purgedUserCannotRecreateIndexUntilFullRebuild() throws Exception {
-        UUID fileId = UUID.randomUUID();
-        service.indexFile(fileId, USER_A, "待删除索引", "正文", "PERSONAL");
+        index(UUID.randomUUID(), USER_A, "PERSONAL", "待删除索引的正文");
 
         assertThat(service.deleteUserIndex(USER_A)).isTrue();
         assertThat(service.isUserPurged(USER_A)).isTrue();
 
-        service.indexFile(UUID.randomUUID(), USER_A, "删除后重建", "正文", "PERSONAL");
+        service.indexObjectChunks(UUID.randomUUID(), USER_A, "PERSONAL", List.of("删除后重建的正文"));
         assertThat(Files.exists(tempDir.resolve(USER_A.toString()))).isFalse();
         assertThat(service.search(USER_A, "删除后重建", 10)).isEmpty();
 
@@ -379,36 +304,35 @@ class FileSearchIndexServiceTest {
     @DisplayName("SearcherManager 缓存能感知清空与重新提交的新段")
     void searchManagerSeesClearAndNewCommits() {
         UUID first = UUID.randomUUID();
-        service.indexFile(first, USER_A, "第一版", "缓存刷新前的内容", "PERSONAL");
-        assertThat(service.search(USER_A, "第一版", 10))
-                .extracting(SearchResultDto::fileId)
+        index(first, USER_A, "PERSONAL", "缓存刷新前的内容");
+        assertThat(service.search(USER_A, "缓存刷新前", 10))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
                 .containsExactly(first);
 
         assertThat(service.clearIndex(USER_A)).isEqualTo(1);
-        assertThat(service.search(USER_A, "第一版", 10)).isEmpty();
+        assertThat(service.search(USER_A, "缓存刷新前", 10)).isEmpty();
 
         UUID second = UUID.randomUUID();
-        service.indexFile(second, USER_A, "第二版", "重新提交后的内容", "PERSONAL");
-        assertThat(service.search(USER_A, "第二版", 10))
-                .extracting(SearchResultDto::fileId)
+        index(second, USER_A, "PERSONAL", "重新提交后的内容");
+        assertThat(service.search(USER_A, "重新提交", 10))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
                 .containsExactly(second);
     }
 
     @Test
     @DisplayName("用户索引缓存超过容量后关闭旧资源并可从磁盘重新打开")
-    void indexCache_exceedsCapacity_evictsAndReopensIndex() throws Exception {
+    void indexCacheEvictsAndReopensFromDisk() throws Exception {
         service.close();
         service = new FileSearchIndexService(tempDir.toString(), 2);
-        UUID firstFileId = UUID.randomUUID();
-        service.indexFile(firstFileId, USER_A, "持久索引", "缓存淘汰后仍可搜索", "PERSONAL");
-        service.indexFile(UUID.randomUUID(), USER_B, "用户B", "内容B", "PERSONAL");
-        service.indexFile(UUID.randomUUID(), UUID.randomUUID(), "用户C", "内容C", "PERSONAL");
+        UUID persisted = UUID.randomUUID();
+        index(persisted, USER_A, "PERSONAL", "缓存淘汰后仍可搜索");
+        index(UUID.randomUUID(), USER_B, "PERSONAL", "内容B");
+        index(UUID.randomUUID(), UUID.randomUUID(), "PERSONAL", "内容C");
 
         assertThat(service.cachedUserIndexCount()).isLessThanOrEqualTo(2);
-        assertThat(service.search(USER_A, "持久索引", 10))
-                .extracting(SearchResultDto::fileId)
-                .containsExactly(firstFileId);
+        assertThat(service.search(USER_A, "缓存淘汰", 10))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(persisted);
         assertThat(service.cachedUserIndexCount()).isLessThanOrEqualTo(2);
     }
-
 }

@@ -113,4 +113,3 @@ omninest:
     secret-key: ${OMNINEST_MINIO_SECRET_KEY:}
   search:
     index-path: ${OMNINEST_SEARCH_INDEX_PATH:${user.home}/.omninest/lucene-index}
-    photo-index-path: ${OMNINEST_SEARCH_PHOTO_INDEX_PATH:${user.home}/.omninest/lucene-photo-index}

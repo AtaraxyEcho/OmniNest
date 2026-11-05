@@ -32,7 +32,6 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoListItemProjection;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
-import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -65,8 +64,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PhotoLibraryService {
 
-    /** 全文索引单次检索上限；相关性分页在内存中完成，必须有界。 */
-    private static final int SEARCH_INDEX_LIMIT = 500;
     /** 时间线/分组预览页上限：卡片预览不宜一次拉过多。 */
     private static final int PREVIEW_PAGE_MAX = 100;
     /** 单个永久删除任务承载的照片上限：任务载荷与单事务行数都必须有界。 */
@@ -83,13 +80,12 @@ public class PhotoLibraryService {
     private final PhotoAlbumRepository albumRepository;
     private final PhotoChangeSideEffects sideEffects;
     private final PhotoTagRepository photoTagRepository;
-    private final PhotoSearchIndexService photoSearchIndexService;
+    private final PhotoLabelPolicy photoLabelPolicy;
     private final FileDeletionService fileDeletionService;
     private final FileQueryService fileQueryService;
     private final ReadThroughCache readThroughCache;
     private final PhotoContentAnalysisService contentAnalysisService;
     private final PhotoGeoService photoGeoService;
-    private final PhotoIndexTaskService photoIndexTaskService;
     private final SystemInstanceConfigService systemInstanceConfigService;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
     private final PhotoDtoAssembler photoDtoAssembler;
@@ -152,11 +148,15 @@ public class PhotoLibraryService {
     /**
      * 分页查询用户照片列表。
      *
+     * <p>关键字检索完全由 PostgreSQL 承担：标题、描述、图中文字、用户标签与受控 AI 标签
+     * 都在同一张库表或其关联表里，走 {@code gin_trgm_ops} 表达式索引即可毫秒级返回，
+     * 不再维护一份随时可能落后的独立全文索引。</p>
+     *
      * @param ownerUserId 用户标识
      * @param page 页码，从零开始
      * @param size 每页条数
      * @param sort 排序表达式，格式为字段和方向
-     * @param query 标题或描述筛选词
+     * @param query 标题、描述、图中文字或标签筛选词
      * @return 照片轻量列表分页
      */
     @Transactional(readOnly = true)
@@ -172,47 +172,24 @@ public class PhotoLibraryService {
         if (trimmedQuery == null || trimmedQuery.isEmpty()) {
             return mapListPage(ownerUserId, photoItemRepository.findListPage(ownerUserId, pageable), false);
         }
-        Page<PhotoListItemDto> indexed = searchIndexedPhotosPage(ownerUserId, trimmedQuery, pageable);
-        if (indexed != null) {
-            return indexed;
-        }
         return mapListPage(
                 ownerUserId,
-                photoItemRepository.searchListPage(ownerUserId, normalizeQuery(trimmedQuery), pageable),
+                photoItemRepository.searchListPage(
+                        ownerUserId,
+                        normalizeQuery(trimmedQuery),
+                        labelCodesFor(trimmedQuery),
+                        pageable
+                ),
                 false
         );
     }
 
     /**
-     * 先用 Lucene 取按相关性排序的命中 ID，再按 ID 取回展示投影并切片。
-     *
-     * <p>索引未建立、无命中或命中的文档已全部失效时返回 null，由调用方回退到 SQL。
-     * 命中总数以索引上限为界：搜索结果不做无限翻页，避免一次搜索把整库拉进内存。</p>
+     * 检索词对应的受控标签编码；空集合会被 JPA 展开成非法 SQL，统一补一个不会命中的哨兵。
      */
-    private Page<PhotoListItemDto> searchIndexedPhotosPage(
-            UUID ownerUserId,
-            String query,
-            Pageable pageable
-    ) {
-        List<UUID> luceneIds = photoSearchIndexService.search(ownerUserId, query, SEARCH_INDEX_LIMIT);
-        if (luceneIds.isEmpty()) {
-            return null;
-        }
-        Map<UUID, PhotoListItemProjection> projectionsById = photoItemRepository
-                .findListByIds(ownerUserId, luceneIds)
-                .stream()
-                .collect(Collectors.toMap(PhotoListItemProjection::getId, item -> item, (left, right) -> left));
-        List<PhotoListItemProjection> ordered = luceneIds.stream()
-                .map(projectionsById::get)
-                .filter(Objects::nonNull)
-                .toList();
-        if (ordered.isEmpty()) {
-            return null;
-        }
-        int from = (int) Math.min(pageable.getOffset(), ordered.size());
-        int to = Math.min(from + pageable.getPageSize(), ordered.size());
-        List<PhotoListItemDto> content = photoDtoAssembler.mapListItems(ownerUserId, ordered.subList(from, to), false);
-        return new PageImpl<>(content, pageable, ordered.size());
+    private List<String> labelCodesFor(String query) {
+        List<String> codes = photoLabelPolicy.searchLabelCodes(query);
+        return codes.isEmpty() ? List.of("__no_label__") : codes;
     }
 
     /**
@@ -237,7 +214,12 @@ public class PhotoLibraryService {
         String normalizedQuery = normalizeQuery(query);
         Page<PhotoListItemProjection> result = normalizedQuery == null
                 ? photoItemRepository.findFavoriteListPage(ownerUserId, pageable)
-                : photoItemRepository.searchFavoriteListPage(ownerUserId, normalizedQuery, pageable);
+                : photoItemRepository.searchFavoriteListPage(
+                        ownerUserId,
+                        normalizedQuery,
+                        labelCodesFor(normalizedQuery),
+                        pageable
+                );
         return mapListPage(ownerUserId, result, true);
     }
 
@@ -726,7 +708,6 @@ public class PhotoLibraryService {
         photoTag.setTag(tag);
         photoTagRepository.save(photoTag);
         sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
-        photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
     /**
@@ -736,7 +717,6 @@ public class PhotoLibraryService {
     public void removeTag(UUID ownerUserId, UUID photoId, String tag) {
         photoTagRepository.deleteByOwnerUserIdAndPhotoIdAndTag(ownerUserId, photoId, tag);
         sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
-        photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
     /**

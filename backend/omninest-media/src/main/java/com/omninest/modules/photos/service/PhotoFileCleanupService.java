@@ -22,7 +22,6 @@ import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
-import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -62,7 +61,6 @@ public class PhotoFileCleanupService implements
     private final PhotoThumbnailService photoThumbnailService;
     private final PhotoContentLabelRepository contentLabelRepository;
     private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository;
-    private final PhotoSearchIndexService photoSearchIndexService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
     private final ResourceShareLinkService resourceShareLinkService;
@@ -200,7 +198,6 @@ public class PhotoFileCleanupService implements
         List<UUID> affectedAlbumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
         albumItemRepository.deleteByPhotoIdIn(photoIds);
         favoriteRepository.deleteByPhotoIdIn(photoIds);
-        photoSearchIndexService.deletePhotos(photoIds);
         itemRepository.deleteAllInBatch(photos);
         readThroughCache.invalidate("omninest:dashboard:photo:" + ownerUserId);
         refreshAffectedAlbums(ownerUserId, affectedAlbumIds);

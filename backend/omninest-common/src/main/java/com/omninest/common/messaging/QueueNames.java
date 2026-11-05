@@ -13,8 +13,6 @@ public final class QueueNames {
     public static final String SYNC_EVENT_ROUTING_PATTERN = "sync.user.#";
     public static final String NOTIFICATION_EVENT_EXCHANGE = "omni.notification";
     public static final String TASK_EXCHANGE = "omni.task";
-    public static final String FILE_INDEX_QUEUE = "omni.task.file-index";
-    public static final String FILE_INDEX_ROUTING_KEY = "file.index";
     public static final String FILE_RESTORE_INDEX_QUEUE = "omni.task.file-restore-index";
     public static final String FILE_RESTORE_INDEX_ROUTING_KEY = "file.restore.index";
     public static final String FILE_INDEX_SYNC_QUEUE = "omni.task.file-index-sync";
@@ -49,10 +47,6 @@ public final class QueueNames {
     public static final String PHOTO_SCAN_ROUTING_KEY = "photo.scan";
     public static final String PHOTO_THUMBNAILS_QUEUE = "omni.task.photo-thumbnails";
     public static final String PHOTO_THUMBNAILS_ROUTING_KEY = "photo.thumbnails";
-    public static final String PHOTO_INDEX_QUEUE = "omni.task.photo-index";
-    public static final String PHOTO_INDEX_ROUTING_KEY = "photo.index";
-    public static final String PHOTO_INDEX_USER_PURGE_QUEUE = "omni.task.photo-index-user-purge";
-    public static final String PHOTO_INDEX_USER_PURGE_ROUTING_KEY = "photo.index.user-purge";
     public static final String PHOTO_BATCH_QUEUE = "omni.task.photo-batch";
     public static final String PHOTO_BATCH_ROUTING_KEY = "photo.batch";
     public static final String PHOTO_AI_QUEUE = "omni.task.photo-ai";
@@ -82,7 +76,6 @@ public final class QueueNames {
     public static final String NOTIFICATION_EMAIL_ROUTING_KEY = "notification.email";
 
     private static final List<String> DURABLE_QUEUES = List.of(
-            FILE_INDEX_QUEUE,
             FILE_RESTORE_INDEX_QUEUE,
             FILE_INDEX_SYNC_QUEUE,
             FILE_INDEX_USER_PURGE_QUEUE,
@@ -100,8 +93,6 @@ public final class QueueNames {
             THUMBNAIL_QUEUE,
             PHOTO_SCAN_QUEUE,
             PHOTO_THUMBNAILS_QUEUE,
-            PHOTO_INDEX_QUEUE,
-            PHOTO_INDEX_USER_PURGE_QUEUE,
             PHOTO_BATCH_QUEUE,
             PHOTO_AI_QUEUE,
             PHOTO_GEO_IMPORT_QUEUE,

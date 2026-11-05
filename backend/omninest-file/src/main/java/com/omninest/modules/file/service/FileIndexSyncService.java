@@ -8,8 +8,6 @@ import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.search.service.FileSearchIndexService;
 import com.omninest.modules.task.service.TaskDispatchService;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,11 +17,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 文件搜索索引同步编排服务。
+ * 文件正文索引迁移服务：把「内容对象还没出现在目标索引目录」的节点重新投递正文提取。
  *
- * <p>索引请求一律经 Outbox 投递给 Worker，由单进程写 Lucene：API 与 Worker 共挂同一索引卷时，
- * 请求进程直接打开 {@code IndexWriter} 会与 Worker 抢 {@code write.lock}，抢锁失败被吞掉后
- * 表现为重命名与删除的索引静默丢失。口径与相册侧 {@code PhotoIndexTaskService} 一致。</p>
+ * <p>正文以不可变的 {@code fileObjectId} 为键、按用户目录物理隔离，因此重命名、移动目录、
+ * 复制、软删除与回收站还原都不再需要任何索引投递——节点标识与文件名都以数据库为实时真值。
+ * 只剩两种场景需要把内容搬到另一个目录：</p>
+ * <ul>
+ *   <li><b>跨空间移动</b>：正文原本在个人目录（或共享目录），迁到另一侧后成员检索不到；</li>
+ *   <li><b>转存他人共享文件</b>：内容对象属于对方，本人的目录里还没有这份正文。</li>
+ * </ul>
+ *
+ * <p>正文列 {@code Store.NO} 不可回读，跨目录复制只能重新解析源文件，所以这条路径保留
+ * Outbox + Worker 单写进程：请求进程直接写会与 Worker 抢 {@code write.lock}，抢锁失败
+ * 被吞掉后表现为索引静默丢失。</p>
  *
  * @author OmniNest
  */
@@ -37,41 +43,34 @@ public class FileIndexSyncService {
     private final TaskDispatchService taskDispatchService;
 
     /**
-     * 请求把指定节点重新同步进搜索索引。
+     * 请求把指定节点的正文迁移进它当前所属空间的索引目录。
      *
-     * <p>投递与业务写库同事务、提交后发布；写还是删由消费侧按节点当前状态决定，
-     * 因此重命名、软删除、批量删除与恢复都走同一入口。</p>
+     * <p>投递与业务写库同事务、提交后发布；是否需要真正解析由消费侧按索引现状决定。</p>
      *
      * @param ownerUserId 索引归属用户 ID
      * @param fileNodeIds 需要同步的文件节点 ID
      */
-    public void scheduleAfterCommit(UUID ownerUserId, Collection<UUID> fileNodeIds) {
+    public void scheduleAfterCommit(UUID ownerUserId, List<UUID> fileNodeIds) {
         if (ownerUserId == null || fileNodeIds == null || fileNodeIds.isEmpty()) {
             return;
         }
-        List<UUID> ids = List.copyOf(fileNodeIds);
         taskDispatchService.enqueue(
-                ids.getFirst(),
+                fileNodeIds.getFirst(),
                 QueueNames.TASK_EXCHANGE,
                 QueueNames.FILE_INDEX_SYNC_ROUTING_KEY,
-                new FileIndexSyncEvent(ownerUserId, ids)
+                new FileIndexSyncEvent(ownerUserId, List.copyOf(fileNodeIds))
         );
     }
 
     /**
-     * 按节点当前数据库状态重投索引或移出索引。
+     * 按索引现状决定是否为节点重投正文提取。
      *
-     * <p>仅由 Worker 侧消费调用。重命名、软删除、批量删除、恢复、复制与转存共用同一入口，
-     * 由节点当前状态决定重投还是移出。</p>
-     *
-     * <p>活动节点一律交回 {@code FILE_INDEX + TEXT_EXTRACTION}，不写「只补元数据」的快路径：
-     * 正文分块与标题共用同一个 {@code fileId} Term，而正文列 {@code Store.NO} 不可回读，
-     * 任何绕开抽取的重投都只能让文件按名字搜得到、按内容搜不到——实机验证过还原与复制
-     * 就是这个结果。沿用后处理任务类型还能一并吃到 active-task 去重、重试与死信语义。</p>
+     * <p>仅由 Worker 侧消费调用。目标目录里已有该对象的正文时直接跳过，因此同一空间内的
+     * 复制、改名与还原不会触发任何 Tika 解析。</p>
      *
      * @param ownerUserId 索引归属用户 ID
      * @param fileNodeIds 需要同步的文件节点 ID
-     * @return 实际处理的节点数
+     * @return 实际重投正文提取的节点数
      */
     public int sync(UUID ownerUserId, List<UUID> fileNodeIds) {
         if (fileNodeIds == null || fileNodeIds.isEmpty()) {
@@ -79,26 +78,28 @@ public class FileIndexSyncService {
         }
         Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(fileNodeIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node));
-        List<UUID> removals = new ArrayList<>();
         int redispatched = 0;
         for (UUID fileNodeId : fileNodeIds) {
             FileNode node = nodesById.get(fileNodeId);
+            // 软删除由数据库在检索时过滤，索引里留着正文不会露出，也不需要清理。
             if (node == null || node.isDeleted()) {
-                removals.add(fileNodeId);
                 continue;
             }
-            // 子树同步会把文件夹一起送进来：文件夹没有内容对象，进入后处理会在构造载荷时
-            // 抛空指针并让同批剩余文件全部中断。
+            // 文件夹没有内容对象，进入后处理会在构造载荷时抛空指针并让同批剩余文件全部中断。
             if (!NodeType.FILE.getValue().equalsIgnoreCase(node.getNodeType())
                     || node.getCurrentObjectId() == null) {
+                continue;
+            }
+            if (fileSearchIndexService.hasObjectContent(
+                    node.getOwnerUserId(),
+                    node.getSpaceType().getValue(),
+                    node.getCurrentObjectId())) {
                 continue;
             }
             filePostProcessingTaskService.enqueueReindex(FileUploadedEvent.fromNode(node));
             redispatched++;
         }
-        if (!removals.isEmpty()) {
-            fileSearchIndexService.deleteFiles(removals, ownerUserId);
-        }
-        return redispatched + removals.size();
+        log.debug("文件正文索引迁移: 节点数={}, 重投解析数={}", fileNodeIds.size(), redispatched);
+        return redispatched;
     }
 }

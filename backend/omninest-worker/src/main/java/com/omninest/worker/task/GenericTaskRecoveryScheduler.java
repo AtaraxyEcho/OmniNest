@@ -61,7 +61,6 @@ public class GenericTaskRecoveryScheduler {
             "VIDEO_TRANSCODE",
             "WEB_OPTIMIZE",
             "AUDIO_EXTRACT",
-            "FILE_INDEX",
             "THUMBNAIL",
             "TEXT_EXTRACTION",
             "SEARCH_INDEX_REBUILD",

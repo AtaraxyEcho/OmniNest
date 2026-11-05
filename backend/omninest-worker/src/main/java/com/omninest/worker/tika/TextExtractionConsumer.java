@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
@@ -44,18 +45,13 @@ public class TextExtractionConsumer {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         FilePostProcessingTaskTracker.TrackedTask tracked = null;
         FileSearchIndexService.ChunkIndexSession indexSession = null;
+        UUID extractedObjectId = null;
         boolean indexCommitted = false;
         try {
             // 领取也在 try 内：手动 ACK 模式没有容器兜底，领取异常逃逸会让消息永久 Unacked。
             tracked = taskTracker.begin(event.ownerUserId(), TASK_TYPE, event.fileNodeId(), "EXTRACTING");
             if (tracked.shouldSkip()) {
                 log.info("文本提取任务已被其他消费者领取，跳过重复处理: fileNodeId={}", event.fileNodeId());
-                channel.basicAck(deliveryTag, false);
-                return;
-            }
-            if (fileLifecycleGuard.findOwnedProcessable(event.ownerUserId(), event.fileNodeId()).isEmpty()) {
-                log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
-                taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
                 channel.basicAck(deliveryTag, false);
                 return;
             }
@@ -66,14 +62,21 @@ public class TextExtractionConsumer {
                     .orElse(null);
             if (descriptor == null) {
                 log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
-                taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
-                channel.basicAck(deliveryTag, false);
+                skipAndAck(channel, deliveryTag, tracked, "SOURCE_DELETED");
                 return;
             }
+            if (descriptor.currentObjectId() == null) {
+                // 外链导入占位节点等场景可能还没有内容对象：正文索引以对象为键，没有键就无从写入。
+                log.info("文件尚无内容对象，跳过文本提取: fileNodeId={}", event.fileNodeId());
+                skipAndAck(channel, deliveryTag, tracked, "NO_CONTENT_OBJECT");
+                return;
+            }
+            // 正文按不可变的内容对象索引：节点标识与文件名都是可变元数据，
+            // 以它们为键会让每次重命名都退化成整份文件的重新解析。
+            extractedObjectId = descriptor.currentObjectId();
             indexSession = fileSearchIndexService.openChunkIndex(
-                    event.fileNodeId(),
+                    extractedObjectId,
                     event.ownerUserId(),
-                    event.fileName(),
                     descriptor.spaceType().getValue()
             );
             TextExtractionService.ExtractionResult extraction =
@@ -84,10 +87,8 @@ public class TextExtractionConsumer {
             if (current == null) {
                 log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
                         event.fileNodeId());
-                fileSearchIndexService.deleteFiles(
-                        List.of(event.fileNodeId()), event.ownerUserId());
-                taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
-                channel.basicAck(deliveryTag, false);
+                fileSearchIndexService.deleteObjects(List.of(extractedObjectId), event.ownerUserId());
+                skipAndAck(channel, deliveryTag, tracked, "SOURCE_DELETED");
                 return;
             }
             int chunkCount = indexSession.complete();
@@ -110,12 +111,12 @@ public class TextExtractionConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("文本提取失败: fileNodeId={}", event.fileNodeId(), e);
-            if (indexSession != null && !indexCommitted) {
-                // 分块是边解析边写入的：中途失败会留下半截文档，
-                // 任务重试前必须按文件清掉，否则搜索命中残缺正文。
+            if (indexSession != null && !indexCommitted && extractedObjectId != null) {
+                // 分块是边解析边写入的：中途失败会在写缓冲里留下半截文档，
+                // 被后续文件的提交顺带刷出后就会命中残缺正文，必须按对象清掉再提交。
                 try {
-                    fileSearchIndexService.deleteFiles(
-                            List.of(event.fileNodeId()), event.ownerUserId());
+                    fileSearchIndexService.deleteObjects(
+                            List.of(extractedObjectId), event.ownerUserId());
                 } catch (RuntimeException cleanupException) {
                     log.warn("文本提取失败后清理半截索引失败: fileNodeId={}, errorType={}",
                             event.fileNodeId(), cleanupException.getClass().getSimpleName(), cleanupException);
@@ -137,5 +138,12 @@ public class TextExtractionConsumer {
                 channel.basicNack(deliveryTag, false, false);
             }
         }
+    }
+
+    /** 回写跳过原因并确认消息：手动 ACK 没有容器兜底，提前返回必须显式 ACK。 */
+    private void skipAndAck(Channel channel, long deliveryTag,
+            FilePostProcessingTaskTracker.TrackedTask tracked, String reason) throws IOException {
+        taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", reason));
+        channel.basicAck(deliveryTag, false);
     }
 }

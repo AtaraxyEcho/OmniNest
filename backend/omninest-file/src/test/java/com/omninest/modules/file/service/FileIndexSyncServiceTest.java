@@ -19,7 +19,9 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 /**
- * 文件索引同步编排测试。
+ * 正文索引迁移编排测试。
+ *
+ * <p>索引以内容对象为键，只有「目标目录里还没有这份正文」的节点才会被重新投递解析。</p>
  *
  * @author OmniNest
  */
@@ -64,33 +66,33 @@ class FileIndexSyncServiceTest {
     }
 
     @Test
-    void syncRedispatchesIndexAndExtractionForEveryActiveNode() {
+    void syncRedispatchesExtractionOnlyForObjectsMissingFromTheTargetDirectory() {
         UUID ownerUserId = UUID.randomUUID();
-        UUID renamedId = UUID.randomUUID();
-        UUID restoredId = UUID.randomUUID();
-        Mockito.when(fileNodeRepository.findAllById(List.of(renamedId, restoredId))).thenReturn(List.of(
-                activeNode(ownerUserId, renamedId, "新标题.pdf"),
-                activeNode(ownerUserId, restoredId, "还原的文件.pdf")
-        ));
+        UUID missingId = UUID.randomUUID();
+        UUID alreadyIndexedId = UUID.randomUUID();
+        FileNode missing = activeNode(ownerUserId, missingId, "未索引的共享文件.pdf");
+        FileNode alreadyIndexed = activeNode(ownerUserId, alreadyIndexedId, "已索引的副本.pdf");
+        Mockito.when(fileNodeRepository.findAllById(List.of(missingId, alreadyIndexedId)))
+                .thenReturn(List.of(missing, alreadyIndexed));
+        Mockito.when(fileSearchIndexService.hasObjectContent(
+                        ownerUserId, SpaceType.PERSONAL.getValue(), missing.getCurrentObjectId()))
+                .thenReturn(false);
+        Mockito.when(fileSearchIndexService.hasObjectContent(
+                        ownerUserId, SpaceType.PERSONAL.getValue(), alreadyIndexed.getCurrentObjectId()))
+                .thenReturn(true);
 
-        int processed = service.sync(ownerUserId, List.of(renamedId, restoredId));
+        int processed = service.sync(ownerUserId, List.of(missingId, alreadyIndexedId));
 
-        Assertions.assertThat(processed).isEqualTo(2);
+        Assertions.assertThat(processed).isEqualTo(1);
         ArgumentCaptor<FileUploadedEvent> captor = ArgumentCaptor.captor();
-        Mockito.verify(filePostProcessingTaskService, Mockito.times(2)).enqueueReindex(captor.capture());
+        Mockito.verify(filePostProcessingTaskService).enqueueReindex(captor.capture());
         Assertions.assertThat(captor.getAllValues())
                 .extracting(FileUploadedEvent::fileNodeId, FileUploadedEvent::fileName)
-                .containsExactly(
-                        Tuple.tuple(renamedId, "新标题.pdf"),
-                        Tuple.tuple(restoredId, "还原的文件.pdf")
-                );
-        // 只补元数据会让文件按名字搜得到、按内容搜不到，所以同步路径不再自己写索引文档。
-        Mockito.verify(fileSearchIndexService, Mockito.never())
-                .indexFiles(ArgumentMatchers.eq(ownerUserId), ArgumentMatchers.anyCollection());
+                .containsExactly(Tuple.tuple(missingId, "未索引的共享文件.pdf"));
     }
 
     @Test
-    void syncRemovesNodesThatAreMissingOrInTrash() {
+    void syncSkipsTrashedAndMissingNodesWithoutTouchingTheIndex() {
         UUID ownerUserId = UUID.randomUUID();
         UUID trashedId = UUID.randomUUID();
         UUID purgedId = UUID.randomUUID();
@@ -101,23 +103,28 @@ class FileIndexSyncServiceTest {
 
         int processed = service.sync(ownerUserId, List.of(trashedId, purgedId));
 
-        Assertions.assertThat(processed).isEqualTo(2);
-        Mockito.verify(fileSearchIndexService).deleteFiles(List.of(trashedId, purgedId), ownerUserId);
+        // 软删除由数据库在检索时过滤，索引里的正文不会露出，也不需要清理。
+        Assertions.assertThat(processed).isZero();
         Mockito.verifyNoInteractions(filePostProcessingTaskService);
+        Mockito.verifyNoInteractions(fileSearchIndexService);
     }
 
     @Test
-    void syncSkipsFolderNodesInSubtreeWithoutAbortingTheBatch() {
+    void syncSkipsFolderNodesWithoutAbortingTheBatch() {
         UUID ownerUserId = UUID.randomUUID();
         UUID folderId = UUID.randomUUID();
         UUID fileId = UUID.randomUUID();
         FileNode folder = activeNode(ownerUserId, folderId, "子目录");
         folder.setNodeType(NodeType.FOLDER.getValue());
         folder.setCurrentObjectId(null);
+        FileNode file = activeNode(ownerUserId, fileId, "目录下的文件.pdf");
         Mockito.when(fileNodeRepository.findAllById(List.of(folderId, fileId))).thenReturn(List.of(
                 folder,
-                activeNode(ownerUserId, fileId, "目录下的文件.pdf")
+                file
         ));
+        Mockito.when(fileSearchIndexService.hasObjectContent(
+                        ownerUserId, SpaceType.PERSONAL.getValue(), file.getCurrentObjectId()))
+                .thenReturn(false);
 
         int processed = service.sync(ownerUserId, List.of(folderId, fileId));
 
@@ -125,7 +132,6 @@ class FileIndexSyncServiceTest {
         ArgumentCaptor<FileUploadedEvent> captor = ArgumentCaptor.captor();
         Mockito.verify(filePostProcessingTaskService).enqueueReindex(captor.capture());
         Assertions.assertThat(captor.getValue().fileNodeId()).isEqualTo(fileId);
-        Mockito.verifyNoInteractions(fileSearchIndexService);
     }
 
     @Test

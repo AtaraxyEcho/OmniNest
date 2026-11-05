@@ -74,8 +74,6 @@ class FileQueryServiceTest {
     private final FileObjectRepository fileObjectRepository = Mockito.mock(FileObjectRepository.class);
     private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
     private final ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
-    private final FileIndexSyncService fileIndexSyncService =
-            Mockito.mock(FileIndexSyncService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
     private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
@@ -135,7 +133,6 @@ class FileQueryServiceTest {
                 fileNodeRepository,
                 fileLifecycleGuard,
                 eventPublisher,
-                fileIndexSyncService,
                 syncEventRecorder,
                 sharedSpaceService,
                 sharedSpaceQuotaService,
@@ -147,7 +144,7 @@ class FileQueryServiceTest {
                 listQueryService,
                 downloadService,
                 new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
-                new FileSubtreeSoftDeleter(fileNodeRepository, fileIndexSyncService, eventPublisher, lookup)
+                new FileSubtreeSoftDeleter(fileNodeRepository, eventPublisher, lookup)
         );
     }
 
@@ -500,8 +497,8 @@ class FileQueryServiceTest {
         assertThat(renamed.name()).isEqualTo("Archive");
         assertThat(renamed.normalizedPath()).isEqualTo("/Archive");
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
-        // 文件夹本身不入索引，但其下文件必须按新路径重建索引。
-        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(child.getId()));
+        // 正文索引以内容对象为键、文件名实时取自数据库：改名既不写索引也不重新解析。
+        assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
     }
 
     @Test
@@ -562,7 +559,7 @@ class FileQueryServiceTest {
         fileQueryService.moveNode(OWNER_ID, folderId, new MoveFileNodeRequest(targetFolderId));
 
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/Docs/a.txt");
-        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(child.getId()));
+        // 同一空间内移动只改路径，正文索引按内容对象命中，不需要重建。
     }
 
     @Test
@@ -1208,7 +1205,7 @@ class FileQueryServiceTest {
         assertThat(file.getNormalizedPath()).isEqualTo("/Archive/doc.pdf");
         assertThat(result).hasSize(1);
         assertThat(result.get(0).status()).isEqualTo("SUCCESS");
-        verify(fileIndexSyncService).scheduleAfterCommit(OWNER_ID, List.of(fileId));
+        // 批量移动同样只改路径，不写索引。
     }
 
     @Test

@@ -19,7 +19,6 @@ import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
-import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +52,6 @@ class PhotoFileCleanupServiceTest {
             Mockito.mock(PhotoContentLabelRepository.class);
     private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository =
             Mockito.mock(PhotoContentAnalysisRunRepository.class);
-    private final PhotoSearchIndexService photoSearchIndexService = Mockito.mock(PhotoSearchIndexService.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final ResourceShareLinkService resourceShareLinkService =
@@ -68,7 +66,6 @@ class PhotoFileCleanupServiceTest {
             photoThumbnailService,
             contentLabelRepository,
             contentAnalysisRunRepository,
-            photoSearchIndexService,
             syncEventService,
             readThroughCache,
             resourceShareLinkService
@@ -119,7 +116,6 @@ class PhotoFileCleanupServiceTest {
         Mockito.verify(contentAnalysisRunRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(albumItemRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(favoriteRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
-        Mockito.verify(photoSearchIndexService).deletePhotos(List.of(PHOTO_ID));
         Mockito.verify(resourceShareLinkService).revokeAllByResourceIds(List.of(PHOTO_ID));
         Mockito.verify(readThroughCache).invalidate("omninest:dashboard:photo:" + OWNER_ID);
         Mockito.verify(itemRepository).deleteAllInBatch(List.of(photo));

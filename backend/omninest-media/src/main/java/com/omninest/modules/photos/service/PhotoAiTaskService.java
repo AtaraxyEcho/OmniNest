@@ -51,7 +51,6 @@ public class PhotoAiTaskService {
     private final TaskHeartbeatRunner taskHeartbeatRunner;
     private final TaskDispatchService taskDispatchService;
     private final PhotoAiTaskCompletionService completionService;
-    private final PhotoIndexTaskService photoIndexTaskService;
 
     /**
      * 为新导入照片创建单张分析任务。
@@ -182,7 +181,7 @@ public class PhotoAiTaskService {
         if (event.photoId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "单张照片图像分析任务缺少照片标识");
         }
-        photoAiService.processPhoto(event.ownerUserId(), event.photoId(), true);
+        photoAiService.processPhoto(event.ownerUserId(), event.photoId());
         completionService.complete(
                 event.taskId(),
                 event.ownerUserId(),
@@ -218,7 +217,7 @@ public class PhotoAiTaskService {
             List<UUID> pageSucceededPhotoIds = new ArrayList<>();
             for (UUID photoId : page.getContent()) {
                 try {
-                    photoAiService.processPhoto(event.ownerUserId(), photoId, false);
+                    photoAiService.processPhoto(event.ownerUserId(), photoId);
                     succeededItems++;
                     pageSucceededPhotoIds.add(photoId);
                 } catch (BusinessException exception) {
@@ -253,9 +252,6 @@ public class PhotoAiTaskService {
                 }
             }
             pageNumber++;
-            if (!pageSucceededPhotoIds.isEmpty()) {
-                photoIndexTaskService.indexBatchDirect(event.ownerUserId(), pageSucceededPhotoIds);
-            }
             taskRecordService.updateResult(
                     event.taskId(),
                     Map.of(
@@ -301,7 +297,7 @@ public class PhotoAiTaskService {
             log.warn("忽略缺少任务标识和照片标识的旧版照片图像分析消息");
             return;
         }
-        photoAiService.processPhoto(event.ownerUserId(), event.photoId(), true);
+        photoAiService.processPhoto(event.ownerUserId(), event.photoId());
         completionService.invalidate(
                 event.ownerUserId(),
                 event.photoId(),
