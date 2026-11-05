@@ -35,6 +35,7 @@ class RealtimeStompClient implements RealtimeTransport {
   RealtimeStompClient({
     required this.url,
     required this.accessTokenResolver,
+    this.refreshSession,
     Random? random,
     StompClient Function(StompConfig config)? clientFactory,
   }) : _random = random ?? Random(),
@@ -57,6 +58,10 @@ class RealtimeStompClient implements RealtimeTransport {
 
   /// 每次建立连接时实时解析访问令牌；令牌在会话内轮换后重连仍可用。
   final String Function() accessTokenResolver;
+
+  /// 连续重连失败时主动续期：令牌过期造成的握手失败不会触发任何 HTTP 请求，
+  /// 只靠退避重连会用同一枚过期令牌无限循环，实时通道永久失联。
+  final Future<bool> Function()? refreshSession;
   final Random _random;
 
   /// STOMP 客户端构造入口，测试用桩替换以复现连接中途断开的竞态。
@@ -283,8 +288,21 @@ class RealtimeStompClient implements RealtimeTransport {
     final jitter = Duration(
       milliseconds: _random.nextInt(max(1, base.inMilliseconds ~/ 5)),
     );
-    _reconnectTimer = Timer(base + jitter, () {
+    _reconnectTimer = Timer(base + jitter, () async {
       _reconnectTimer = null;
+      if (_reconnectAttempt >= 2 &&
+          refreshSession != null &&
+          _desired &&
+          _client == null) {
+        try {
+          await refreshSession!();
+        } on Object {
+          // 续期失败继续用当前令牌重连，由下一轮退避再试。
+        }
+      }
+      if (_disposed || !_desired || _client != null) {
+        return;
+      }
       _open();
     });
   }

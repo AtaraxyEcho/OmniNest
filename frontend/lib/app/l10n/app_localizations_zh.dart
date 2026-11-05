@@ -248,6 +248,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupCreateFailed => '创建超级管理员失败';
 
   @override
+  String get setupAutoLoginFailed => '超级管理员已创建，但自动登录失败，请手动登录。';
+
+  @override
   String get setupSecureNotice => '安装令牌仅用于本次初始化，不会保存在客户端。';
 
   @override
@@ -344,6 +347,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationMarkAllReadFailed => '全部标为已读失败，请重试。';
+
+  @override
+  String get notificationMarkReadFailed => '标记已读失败，请重试。';
 
   @override
   String get notificationDelete => '删除通知';
@@ -3767,6 +3773,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminResetTwoFactor => '重置两步验证';
 
   @override
+  String get adminResetTwoFactorSuccess => '已重置两步验证，并结束该用户的全部会话。';
+
+  @override
   String adminResetTwoFactorConfirmMessage(Object name) {
     return '清除 $name 的动态口令秘钥与备份码，并退出其全部会话。用于认证器丢失或凭据加密密钥轮换后的恢复；该用户之后可用密码登录并重新开启两步验证。';
   }
@@ -3776,6 +3785,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminCreateRole => '新增自定义角色';
+
+  @override
+  String get adminRolePermissionsSaved => '角色权限已更新';
 
   @override
   String get adminRoleCode => '角色编码';

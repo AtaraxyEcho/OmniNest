@@ -88,11 +88,16 @@ class _WorkstationPaginationBarState extends State<WorkstationPaginationBar> {
   }
 
   void _submitJump(String value) {
+    final total = widget.totalPages;
+    // 空列表时分页条仍可能渲染：上界为负会让 clamp 落在空区间直接抛错。
+    if (total <= 0) {
+      return;
+    }
     final target = int.tryParse(value.trim());
     if (target == null) {
       return;
     }
-    final clamped = (target - 1).clamp(0, widget.totalPages - 1);
+    final clamped = (target - 1).clamp(0, total - 1);
     widget.onPageChanged(clamped);
     _jumpController.clear();
   }

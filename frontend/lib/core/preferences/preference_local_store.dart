@@ -88,6 +88,31 @@ class PreferenceLocalStore {
     await preferences.remove(_pendingDeletionKey(userId, scope));
   }
 
+  /// 登出时删除该账号的全部偏好快照与待合并变更。
+  ///
+  /// 键名带账号不会跨账号泄露，但登出后仍长期留在设备上：天气城市、界面偏好
+  /// 这类内容属于账号隐私，且下次登录会以"本地已有快照"的身份参与合并。
+  /// 三个键族必须一起清，只清快照会让待合并变更在下次登录时被重新写回。
+  Future<int> clearUser(String userId) async {
+    if (userId.isEmpty) {
+      return 0;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    final prefixes = <String>[
+      'preference.snapshot.$userId.',
+      'preference.pending.$userId.',
+      'preference.pending_delete.$userId.',
+    ];
+    final targets = preferences
+        .getKeys()
+        .where((key) => prefixes.any(key.startsWith))
+        .toList(growable: false);
+    for (final key in targets) {
+      await preferences.remove(key);
+    }
+    return targets.length;
+  }
+
   String _snapshotKey(String userId, String scope) {
     return 'preference.snapshot.$userId.$scope';
   }

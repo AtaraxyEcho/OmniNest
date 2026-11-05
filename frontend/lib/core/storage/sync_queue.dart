@@ -123,7 +123,10 @@ class SyncQueue {
           ..addColumns([count])
           ..where(
             _owned(_db.syncOperations.userId) &
-                _db.syncOperations.status.equals('pending'),
+                _db.syncOperations.status.equals('pending') &
+                // reader 队列由 ReaderSyncQueue 自己计数与清理，混入会让
+                // 普通同步的待处理徽标把阅读笔记算两遍。
+                _db.syncOperations.type.like('reader.%').not(),
           );
     final result = await query.getSingle();
     return result.read(count) ?? 0;
@@ -131,7 +134,11 @@ class SyncQueue {
 
   /// 清除已完成的操作。
   Future<int> clearCompleted() {
-    return (_db.delete(_db.syncOperations)
-      ..where((t) => _owned(t.userId) & t.status.equals('completed'))).go();
+    return (_db.delete(_db.syncOperations)..where(
+      (t) =>
+          _owned(t.userId) &
+          t.status.equals('completed') &
+          t.type.like('reader.%').not(),
+    )).go();
   }
 }

@@ -16,8 +16,20 @@ class OfflineTextCipher {
   OfflineTextCipher({required OfflineKeyStore keyStore}) : _keyStore = keyStore;
 
   static const _prefix = 'enc:v1:';
+  static const _knownPrefixes = <String>[_prefix, 'enc:v2:'];
   static const _keyInfo = 'omninest-offline-column-v1';
   static const _nonceLength = 12;
+
+  /// 判断字符串是否为密文信封。调用方必须据此拒绝把密文当明文解析：
+  /// 密钥缺失时把 `enc:v1:` 原文喂给 jsonDecode 只会得到"损坏"的错误结论。
+  static bool isEncryptedValue(String value) {
+    for (final prefix in _knownPrefixes) {
+      if (value.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   final OfflineKeyStore _keyStore;
   final Map<String, SecretKey> _derivedKeys = {};

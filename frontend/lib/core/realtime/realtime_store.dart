@@ -55,6 +55,9 @@ class RealtimeStore {
   }
 
   /// 原子摄取有序 REST 页面并在同一事务中推进游标。
+  ///
+  /// 单页最多两百条事件，逐条走「查重 + 查失效行 + 两次写入」会产生近千次
+  /// SQL 往返；这里改成一次查重、一次批量写已处理事件、一次批量 upsert 失效行。
   Future<Set<RealtimeScope>> ingestRestPage(
     List<RealtimeSyncEvent> events, {
     required int nextCursor,
@@ -65,15 +68,18 @@ class RealtimeStore {
       final previousCursor = state?.cursor ?? 0;
       final ordered = [...events]
         ..sort((left, right) => left.sequenceNo.compareTo(right.sequenceNo));
-      final changedScopes = <RealtimeScope>{};
+      final fresh = <RealtimeSyncEvent>[];
+      final seenEventIds = <String>{};
       for (final event in ordered) {
         if (event.sequenceNo <= previousCursor) {
           continue;
         }
-        if (await _ingestEvent(event)) {
-          changedScopes.add(event.scope);
+        // 同页重复投递只算一条：processedEvents 的主键是 (server, user, eventId)。
+        if (seenEventIds.add(event.eventId)) {
+          fresh.add(event);
         }
       }
+      final changedScopes = await _ingestRestEvents(fresh);
       await _database
           .into(_database.syncClientStates)
           .insertOnConflictUpdate(
@@ -87,6 +93,92 @@ class RealtimeStore {
           );
       return changedScopes;
     });
+  }
+
+  /// 批量摄取已按序号排好的一页事件，返回被刷新的作用域。
+  Future<Set<RealtimeScope>> _ingestRestEvents(
+    List<RealtimeSyncEvent> events,
+  ) async {
+    if (events.isEmpty) {
+      return <RealtimeScope>{};
+    }
+    final eventIds = events.map((event) => event.eventId).toList();
+    final processed =
+        await (_database.select(_database.syncProcessedEvents)..where(
+          (table) =>
+              table.serverKey.equals(serverKey) &
+              table.userId.equals(userId) &
+              table.eventId.isIn(eventIds),
+        )).get();
+    final processedIds = processed.map((row) => row.eventId).toSet();
+    final pending =
+        events.where((event) => !processedIds.contains(event.eventId)).toList();
+    if (pending.isEmpty) {
+      return <RealtimeScope>{};
+    }
+
+    final now = DateTime.now().toUtc();
+    await _database.batch((batch) {
+      batch.insertAll(_database.syncProcessedEvents, [
+        for (final event in pending)
+          SyncProcessedEventsCompanion.insert(
+            serverKey: serverKey,
+            userId: userId,
+            eventId: event.eventId,
+            sequenceNo: event.sequenceNo,
+            processedAt: now,
+          ),
+      ]);
+    });
+
+    // 同一 (作用域, 资源) 的多条事件合并成一次 upsert，revision 按条数累加，
+    // 与逐条摄取的语义一致：业务模块靠 revision 判断"刷新期间又变过"。
+    final deltas = <String, _InvalidationDelta>{};
+    for (final event in pending) {
+      final key = jsonEncode([
+        event.scope.name,
+        event.resourceType,
+        event.resourceId,
+      ]);
+      final delta = deltas[key];
+      if (delta == null) {
+        deltas[key] = _InvalidationDelta(
+          scope: event.scope,
+          resourceType: event.resourceType,
+          resourceId: event.resourceId,
+        );
+      } else {
+        delta.count += 1;
+      }
+    }
+    final existingRows =
+        await (_database.select(_database.syncPendingInvalidations)..where(
+          (table) =>
+              table.serverKey.equals(serverKey) &
+              table.userId.equals(userId) &
+              table.invalidationKey.isIn(deltas.keys),
+        )).get();
+    final existingRevisions = {
+      for (final row in existingRows) row.invalidationKey: row.revision,
+    };
+    await _database.batch((batch) {
+      batch.insertAllOnConflictUpdate(_database.syncPendingInvalidations, [
+        for (final entry in deltas.entries)
+          SyncPendingInvalidationsCompanion.insert(
+            serverKey: serverKey,
+            userId: userId,
+            invalidationKey: entry.key,
+            scope: entry.value.scope.name,
+            resourceType: entry.value.resourceType,
+            resourceId: Value(entry.value.resourceId),
+            revision: Value(
+              (existingRevisions[entry.key] ?? 0) + entry.value.count,
+            ),
+            createdAt: now,
+          ),
+      ]);
+    });
+    return deltas.values.map((delta) => delta.scope).toSet();
   }
 
   /// 游标过期时原子标记所有作用域失效并移动到服务端最新游标。
@@ -228,4 +320,18 @@ class RealtimeStore {
           ),
         );
   }
+}
+
+/// 批量摄取时按失效键聚合的增量。
+class _InvalidationDelta {
+  _InvalidationDelta({
+    required this.scope,
+    required this.resourceType,
+    required this.resourceId,
+  });
+
+  final RealtimeScope scope;
+  final String resourceType;
+  final String? resourceId;
+  int count = 1;
 }

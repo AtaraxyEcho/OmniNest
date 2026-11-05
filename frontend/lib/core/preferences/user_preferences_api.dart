@@ -1,4 +1,5 @@
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/preferences/preference_snapshot.dart';
@@ -56,23 +57,10 @@ class UserPreferencesApi {
   }
 
   Map<String, dynamic> _parseEnvelope(Map<String, dynamic>? body) {
-    final data = body ?? const <String, dynamic>{};
-    final code = data['code'];
-    if (code is num && code.toInt() >= 400) {
-      // errorName 是稳定业务符号，数字码只作为 details 里的兼容位。
-      final errorName = data['errorName']?.toString();
-      throw AppException(
-        code: errorName ?? code.toInt().toString(),
-        message: data['message']?.toString() ?? '偏好设置请求失败',
-        details: {
-          if (data['details'] is Map)
-            ...Map<String, Object?>.from(data['details'] as Map),
-          if (errorName != null) 'errorName': errorName,
-          'code': code.toInt().toString(),
-        },
-      );
-    }
-    return data;
+    // 网关空响应或非信封 JSON 一律视为失败：把 {} 当成"偏好已被清空"
+    // 会覆盖本地缓存里正常快照（随后又被同步回写，等于用户偏好被抹掉）。
+    ensureEnvelopeSuccess(body, fallbackMessage: '偏好设置请求失败');
+    return body!;
   }
 
   Map<String, dynamic>? _parseData(Map<String, dynamic>? body) {

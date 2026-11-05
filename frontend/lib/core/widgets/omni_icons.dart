@@ -318,12 +318,31 @@ class _OmniIconPainter extends CustomPainter {
   static final RegExp _commandPattern = RegExp(r'[MmLlHhVvAaZz]');
   static final RegExp _numberPattern = RegExp(r'-?\d*\.?\d+');
 
+  /// 路径解析结果按 path data 复用：图标每帧重绘都重新解析字符串会
+  /// 反复创建 Path 与临时 List；Path 只被 drawPath 读取，可安全共享。
+  static final Map<String, Path> _pathCache = <String, Path>{};
+  static const int _pathCacheLimit = 64;
+
+  static Path _parsePath(String data) {
+    final cached = _pathCache.remove(data);
+    if (cached != null) {
+      _pathCache[data] = cached;
+      return cached;
+    }
+    final parsed = _buildPath(data);
+    _pathCache[data] = parsed;
+    while (_pathCache.length > _pathCacheLimit) {
+      _pathCache.remove(_pathCache.keys.first);
+    }
+    return parsed;
+  }
+
   /// 解析原型使用的 SVG path 命令子集（M/L/H/V/A/Z 及相对形式）。
   ///
   /// 隐式重复坐标按 SVG 语义处理：M 后续坐标对为隐式 LineTo；首个相对
   /// m 出现在空路径上时按绝对坐标处理（SVG 规范）。当前点由解析器自行
   /// 跟踪（Path 无稳定 API 读取当前点）。
-  static Path _parsePath(String data) {
+  static Path _buildPath(String data) {
     final path = Path();
     var current = Offset.zero;
     var started = false;

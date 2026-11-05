@@ -4,6 +4,10 @@ import 'package:drift/drift.dart';
 ///
 /// [userId] 是记录归属账号：共享书籍在不同账号下复用同一个 itemId，
 /// 没有归属列时换号会读到上一个账号的书签。
+@TableIndex(
+  name: 'idx_cached_reader_bookmarks_user_item',
+  columns: {#userId, #readerItemId},
+)
 class CachedReaderBookmarks extends Table {
   TextColumn get id => text()();
 

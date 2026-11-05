@@ -62,16 +62,20 @@ class ApiClient {
           }
           if (!skipAuthorization) {
             final token = _currentAccessToken();
-            if (token != null && token.isNotEmpty) {
+            // 闸门结束优先于内部刷新拒绝：登出清理窗口里即使还读得到旧令牌，
+            // 也不得把它发出去；只有认证层显式 markActive 之后才允许恢复。
+            final gateEnded = _sessionGate?.ended ?? false;
+            final sessionEnded = gateEnded || _refreshRejected;
+            if (token != null && token.isNotEmpty && !gateEnded) {
               options.headers['Authorization'] = 'Bearer $token';
               options.extra[_requestTokenKey] = token;
               // 带上令牌即视为会话已重建，恢复刷新尝试。
               _refreshRejected = false;
-              _sessionGate?.markActive();
-            } else if (_sessionEnded && requiresSession(options.path)) {
-              // 会话已确定失效且未重新登录：退出登录后 Photo/File 等 provider
-              // 会成批重建并各发一个注定 401 的请求。本地直接拒绝，既不占
-              // 连接也不让服务端限流额度为一次登出买单。
+            } else if (sessionEnded && requiresSession(options.path)) {
+              // 会话已确定失效且未重新登录：退登过渡期内内存里可能仍残留旧令牌，
+              // 这里必须同时挡住"有令牌"和"无令牌"两种形态，避免把已登出用户的
+              // JWT 发出去，也避免 Photo/File 等 provider 成批重建时各发一个注定
+              // 401 的请求占连接与服务端限流额度。
               handler.reject(_sessionEndedError(options));
               return;
             }
@@ -286,10 +290,6 @@ class ApiClient {
     if (!uri.hasAuthority) {
       return false;
     }
-    final base = _apiBaseUri;
-    if (base == null || !base.hasAuthority) {
-      return false;
-    }
     int effectivePort(Uri value) {
       if (value.hasPort) {
         return value.port;
@@ -301,9 +301,24 @@ class ApiClient {
       };
     }
 
-    return uri.scheme != base.scheme ||
-        uri.host != base.host ||
-        effectivePort(uri) != effectivePort(base);
+    bool sameOrigin(Uri left, Uri right) {
+      return left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
+          left.host.toLowerCase() == right.host.toLowerCase() &&
+          effectivePort(left) == effectivePort(right);
+    }
+
+    final base = _apiBaseUri;
+    if (base != null && base.hasAuthority) {
+      return !sameOrigin(uri, base);
+    }
+    // 相对 baseUrl（如 `/api/v1`）：没有可比较的 API origin，改用页面 origin。
+    // 这里必须从严：同源判断失效时把绝对地址当外部源，宁可少带令牌，
+    // 也不能把 Bearer JWT 送到对象存储或第三方域名。
+    final pageOrigin = Uri.base;
+    if (pageOrigin.hasAuthority) {
+      return !sameOrigin(uri, pageOrigin);
+    }
+    return true;
   }
 
   bool _isUnrecoverableSession401(Response<dynamic> response) {
@@ -445,6 +460,9 @@ class ApiClient {
     final extra =
         Map<String, dynamic>.from(requestOptions.extra)
           ..[_retriedKey] = true
+          // 重放是一次新的请求周期：沿用已消耗的重试计数会让下一次 5xx
+          // 直接放弃重试，这里清零让重试拦截器重新按退避预算处理。
+          ..['retryCount'] = 0
           ..remove(_requestTokenKey);
 
     return dio

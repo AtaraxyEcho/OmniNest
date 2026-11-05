@@ -23,6 +23,9 @@ final localeControllerProvider = NotifierProvider<LocaleController, String>(
 
 class LocaleController extends Notifier<String> {
   String? _activeUserId;
+
+  /// 上一次绑定的非空账号：用于识别"换号"，避免把上一账号的设备偏好回写到新账号云端。
+  String? _lastBoundUserId;
   int _loadGeneration = 0;
 
   @override
@@ -70,6 +73,7 @@ class LocaleController extends Notifier<String> {
   }
 
   Future<void> _bindUser(String? userId) async {
+    final previousUserId = _lastBoundUserId;
     _activeUserId = userId;
     final generation = ++_loadGeneration;
     if (userId == null) {
@@ -90,6 +94,14 @@ class LocaleController extends Notifier<String> {
     }
     final remoteLanguage = snapshot.preferences['language']?.toString();
     if (remoteLanguage == null || remoteLanguage.isEmpty) {
+      final switchedAccount =
+          previousUserId != null && previousUserId != userId;
+      _lastBoundUserId = userId;
+      if (switchedAccount) {
+        // 新账号云端尚无偏好：保留本机呈现即可，禁止把上一账号的选择
+        // 反向写成新账号的云端设置。
+        return;
+      }
       await ref
           .read(preferenceSyncServiceProvider)
           .patch(
@@ -99,6 +111,7 @@ class LocaleController extends Notifier<String> {
           );
       return;
     }
+    _lastBoundUserId = userId;
     final resolved = _normalizeLanguage(remoteLanguage);
     state = resolved;
     await _writeDeviceLanguage(resolved);

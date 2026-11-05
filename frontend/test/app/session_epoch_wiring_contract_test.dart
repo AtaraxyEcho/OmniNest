@@ -46,6 +46,56 @@ void main() {
     );
   });
 
+  test('常驻内容 provider 的声明体内必须直接 watch 会话世代', () {
+    const providerDeclarations = <String, List<String>>{
+      'lib/features/photos/application/photo_controller.dart': [
+        'photoListProvider',
+        'photoFavoritesProvider',
+        'photoAlbumsProvider',
+        'photoLocationGroupsProvider',
+        'photoDetailProvider',
+        'photoAlbumDetailProvider',
+      ],
+      'lib/features/photos/application/photo_viewer_providers.dart': [
+        'photoTagsProvider',
+      ],
+      'lib/features/notifications/application/notification_type_controller.dart':
+          ['notificationTypesProvider', 'allNotificationTypesProvider'],
+      'lib/features/profile/presentation/widgets/profile_two_factor_card.dart':
+          ['profileTwoFactorStatusProvider'],
+      'lib/features/photos/application/photo_detail_memory_cache.dart': [
+        'photoDetailMemoryCacheProvider',
+      ],
+      'lib/features/portal/application/weather_provider.dart': [
+        'userLocationProvider',
+      ],
+    };
+    final violations = <String>[];
+    providerDeclarations.forEach((path, names) {
+      final source = File(path).readAsStringSync();
+      for (final name in names) {
+        final start = source.indexOf('final $name =');
+        if (start < 0) {
+          violations.add('$path 未声明 $name');
+          continue;
+        }
+        final next = source.indexOf('final ', start + 1);
+        final declaration = source.substring(
+          start,
+          next < 0 ? source.length : next,
+        );
+        if (!declaration.contains('sessionEpochProvider')) {
+          violations.add('$path#$name');
+        }
+      }
+    });
+    expect(
+      violations,
+      isEmpty,
+      reason: '以下 provider 换号后会继续渲染上一账号数据：${violations.join('，')}',
+    );
+  });
+
   test('会话重置协调器在换号时递增世代', () {
     final source =
         File(

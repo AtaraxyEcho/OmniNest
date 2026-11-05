@@ -14,6 +14,9 @@ final appearanceControllerProvider =
 
 class AppearanceController extends Notifier<ThemeMode> {
   String? _activeUserId;
+
+  /// 上一次绑定的非空账号：用于识别"换号"，避免把上一账号的设备偏好回写到新账号云端。
+  String? _lastBoundUserId;
   int _loadGeneration = 0;
 
   @override
@@ -60,6 +63,7 @@ class AppearanceController extends Notifier<ThemeMode> {
   }
 
   Future<void> _bindUser(String? userId) async {
+    final previousUserId = _lastBoundUserId;
     _activeUserId = userId;
     final generation = ++_loadGeneration;
     if (userId == null) {
@@ -80,6 +84,14 @@ class AppearanceController extends Notifier<ThemeMode> {
     }
     final remoteName = snapshot.preferences['themeMode']?.toString();
     if (remoteName == null || remoteName.isEmpty) {
+      final switchedAccount =
+          previousUserId != null && previousUserId != userId;
+      _lastBoundUserId = userId;
+      if (switchedAccount) {
+        // 新账号云端尚无偏好：保留本机呈现即可，禁止把上一账号的选择
+        // 反向写成新账号的云端设置。
+        return;
+      }
       await ref
           .read(preferenceSyncServiceProvider)
           .patch(
@@ -89,6 +101,7 @@ class AppearanceController extends Notifier<ThemeMode> {
           );
       return;
     }
+    _lastBoundUserId = userId;
     final resolved = themeModeFromName(remoteName);
     state = resolved;
     await _writeDeviceMode(resolved);

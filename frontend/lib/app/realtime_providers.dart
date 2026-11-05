@@ -48,6 +48,8 @@ final realtimeCoordinatorProvider = Provider<RealtimeCoordinator?>((ref) {
   final client = RealtimeStompClient(
     url: '${_withoutTrailingSlash(environment.wsBaseUrl)}/realtime',
     accessTokenResolver: () => apiClient.currentAccessToken() ?? '',
+    refreshSession:
+        () => ref.read(authSessionProvider.notifier).refreshSession(),
   );
   final coordinator = RealtimeCoordinator(
     api: RealtimeApi(apiClient),

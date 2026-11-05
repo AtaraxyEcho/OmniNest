@@ -36,6 +36,21 @@ void main() {
       );
     });
 
+    test('accepts a single trailing slash and keeps query parameters', () {
+      expect(
+        resolveDeepLinkPath(Uri.parse('omninest://s/abc123/')),
+        '/s/abc123',
+      );
+      expect(
+        resolveDeepLinkPath(
+          Uri.parse('omninest://reader/items/item-9/?chapter=3&offset=12'),
+        ),
+        '/reader/items/item-9?chapter=3&offset=12',
+      );
+      // 空段仍然拦：只放过末尾那一个。
+      expect(resolveDeepLinkPath(Uri.parse('omninest://s//')), isNull);
+    });
+
     test('rejects separator and control-character smuggling', () {
       // Uri.parse 在解析期就归一化点段：'%2e%2e/admin' 解出来是 /admin，
       // 只会留在 video 前缀之内，并不会跳到 /admin 路由（报告设想的穿越不成立）。

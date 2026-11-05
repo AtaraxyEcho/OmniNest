@@ -1,3 +1,4 @@
+import 'package:omninest/core/preferences/preference_local_store.dart';
 import 'package:omninest/core/security/offline_column_cipher.dart';
 import 'package:omninest/core/security/offline_memory_cache.dart';
 import 'package:omninest/core/storage/local_database.dart';
@@ -63,6 +64,9 @@ class DatabaseOfflineDataLifecycle implements OfflineDataLifecycle {
     // 重新登录后会拿旧密钥加密，新会话再也解不开这些密文。
     _textCipher?.evictUser(userId);
     await runStep(() => _database.clearUserData(userId));
+    // 偏好快照带账号前缀，但登出后仍留在设备上；它是跨账号合并的输入，
+    // 不清会让下次登录把上一账号的天气城市与界面偏好当成本地现状。
+    await runStep(() => const PreferenceLocalStore().clearUser(userId));
 
     if (firstError != null) {
       Error.throwWithStackTrace(firstError!, firstStackTrace!);

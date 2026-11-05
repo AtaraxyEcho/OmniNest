@@ -74,6 +74,45 @@ void main() {
     },
   );
 
+  test('同一资源的整页事件合并成一次失效，revision 按条数累加', () async {
+    await store.initializeCursor(cursor: 0, schemaVersion: 1);
+
+    final changed = await store.ingestRestPage(
+      [
+        event('event-10', 1),
+        event('event-11', 2),
+        event('event-12', 3, resourceId: 'node-2'),
+      ],
+      nextCursor: 3,
+      schemaVersion: 1,
+    );
+
+    expect(changed, {RealtimeScope.files});
+    final invalidations = await store.pendingInvalidations();
+    expect(invalidations, hasLength(2));
+    expect(
+      invalidations.firstWhere((item) => item.resourceId == 'node-1').revision,
+      2,
+    );
+    expect(
+      invalidations.firstWhere((item) => item.resourceId == 'node-2').revision,
+      1,
+    );
+  });
+
+  test('整页重复投递同一条事件只记账一次', () async {
+    await store.initializeCursor(cursor: 0, schemaVersion: 1);
+
+    await store.ingestRestPage(
+      [event('event-20', 1), event('event-20', 1)],
+      nextCursor: 1,
+      schemaVersion: 1,
+    );
+
+    final invalidations = await store.pendingInvalidations();
+    expect(invalidations.single.revision, 1);
+  });
+
   test('cursor reset marks every server scope dirty', () async {
     await store.resetToCursor(latestCursor: 50, schemaVersion: 1);
 

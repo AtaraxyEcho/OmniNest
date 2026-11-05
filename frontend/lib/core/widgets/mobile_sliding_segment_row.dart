@@ -98,6 +98,10 @@ class MobileSlidingSegmentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 无段可排时不进入几何计算：`labels.length - 1` 为负会让 clamp 空区间抛错。
+    if (labels.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final textScaler = MediaQuery.textScalerOf(context);
     final forced = equalSegmentWidth;
     final widths = <double>[
@@ -119,7 +123,7 @@ class MobileSlidingSegmentRow extends StatelessWidget {
       cursor += width + gap;
     }
 
-    final last = labels.length - 1;
+    final last = math.max(0, labels.length - 1);
     final target = selectedIndex.clamp(0, last);
     final Rect pillRect;
     final continuous = page;

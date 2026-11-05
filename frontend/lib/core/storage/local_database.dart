@@ -48,7 +48,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 28;
+  int get schemaVersion => 31;
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final rows =
@@ -452,8 +452,84 @@ class LocalDatabase extends _$LocalDatabase {
             );
           }
         }
+        // Schema v29：同步队列按账号、状态、类型与创建时间过滤/排序，
+        // 补齐复合索引，避免长会话每次重放都全表扫描。
+        if (from < 30) {
+          // 阅读批注/笔记补服务端乐观锁版本：本地行必须持有最后看到的版本，
+          // 更新时才能把并发修改交由服务端 409 拦截。
+          for (final table in const [
+            'cached_reader_annotations',
+            'cached_reader_notes',
+          ]) {
+            if (await _tableExists(migrator, table) &&
+                !await _columnExists(migrator, table, 'version')) {
+              await migrator.database.customStatement(
+                'ALTER TABLE $table ADD COLUMN version INTEGER NULL',
+              );
+            }
+          }
+        }
+        if (from < 29 &&
+            await _tableExists(migrator, 'sync_operations') &&
+            await _columnExists(migrator, 'sync_operations', 'created_at')) {
+          await migrator.database.customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_sync_ops_user_status_type_created '
+            'ON sync_operations (user_id, status, type, created_at)',
+          );
+        }
+        // Schema v31：批注/笔记/书签按 (账号, 书籍) 过滤，事件去重按
+        // (服务端, 账号, 处理时间) 清理；注解只覆盖新建库，升级库必须显式补索引。
+        if (from < 31) {
+          for (final index in const [
+            (
+              'idx_cached_reader_bookmarks_user_item',
+              'cached_reader_bookmarks',
+            ),
+            (
+              'idx_cached_reader_annotations_user_item',
+              'cached_reader_annotations',
+            ),
+            ('idx_cached_reader_notes_user_item', 'cached_reader_notes'),
+          ]) {
+            // 极老的库（v23 之前）里这些表可能只有 id + item_id，缺列时跳过，
+            // 让建索引这一步对不完整的老结构保持幂等，而不是升级直接失败。
+            if (await _tableExists(migrator, index.$2) &&
+                await _columnExists(migrator, index.$2, 'user_id') &&
+                await _columnExists(migrator, index.$2, 'reader_item_id')) {
+              await migrator.database.customStatement(
+                'CREATE INDEX IF NOT EXISTS ${index.$1} '
+                'ON ${index.$2} (user_id, reader_item_id)',
+              );
+            }
+          }
+          if (await _tableExists(migrator, 'sync_processed_events') &&
+              await _columnExists(
+                migrator,
+                'sync_processed_events',
+                'processed_at',
+              )) {
+            await migrator.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS '
+              'idx_sync_processed_events_server_user_time '
+              'ON sync_processed_events (server_key, user_id, processed_at)',
+            );
+          }
+        }
       },
     );
+  }
+
+  /// 认领冷启动窗口内以空账号写入的同步操作。
+  ///
+  /// 会话恢复前 `userId` 未知，队列按 `''` 落库；拿到真实账号后不认领，
+  /// 这些行既不会被当前账号重放，也会成为无人清理的孤儿。
+  Future<int> claimAnonymousOperations(String userId) {
+    if (userId.isEmpty) {
+      return Future<int>.value(0);
+    }
+    return (update(syncOperations)..where(
+      (table) => table.userId.equals(''),
+    )).write(SyncOperationsCompanion(userId: Value(userId)));
   }
 
   /// 清理退出账号关联的本地敏感数据，保留设备级背景设置。

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:omninest/app/session/session_epoch.dart';
@@ -20,6 +22,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
+import 'package:omninest/features/reader/data/local_book_cache.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
@@ -114,6 +117,9 @@ final sessionResetCoordinatorProvider = Provider<void>((ref) {
     clearFileDownloadUrlCaches();
     ref.read(photoDetailMemoryCacheProvider).clear();
     clearReaderDataUriDecodeCache();
+    // 阅读器解密生成的 *.plain.session.* 临时文件不随 provider 销毁：
+    // 异常退出时它们还留在上一账号的缓存目录里，换号链路必须主动扫掉。
+    unawaited(LocalBookCache.purgePlainSessionFiles(prevId));
     // 先递增会话世代：已接入世代的 provider 以依赖变化语义重建，旧账号
     // 数据不会被当作可访问旧值渲染（失效清单中未接入世代的 provider 仍
     // 由下方 invalidate 兜底重建）。

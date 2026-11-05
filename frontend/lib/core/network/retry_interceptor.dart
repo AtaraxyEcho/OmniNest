@@ -88,7 +88,9 @@ class RetryInterceptor extends Interceptor {
       handler.resolve(response);
     } on DioException catch (e) {
       handler.next(e);
-    } on Exception catch (_) {
+    } on Object catch (_) {
+      // 重放可能抛 Error（如已 finalize 的 FormData 触发 StateError）：
+      // 只捕获 Exception 会让 handler 永不完成，调用方永久挂起。
       handler.next(err);
     }
   }
@@ -129,8 +131,9 @@ class RetryInterceptor extends Interceptor {
       }
       handler.resolve(await dio.fetch<dynamic>(request));
     } on DioException catch (error) {
-      handler.reject(error);
-    } on Exception catch (_) {
+      // 第二个参数让后续错误拦截器仍能看到这次重试的失败，而不是被静默吞掉。
+      handler.reject(error, true);
+    } on Object catch (_) {
       handler.next(response);
     }
   }
@@ -185,7 +188,7 @@ class RetryInterceptor extends Interceptor {
 
   bool _isRetrySafe(RequestOptions options) {
     // FormData 发送一次后即 finalized，二次发送会抛 StateError（Error 而非
-    // Exception，会穿透 on Exception 导致未捕获崩溃）。
+    // Exception），重放必然失败，只能判定为不可重试。
     if (options.data is FormData || options.data is Stream) {
       // 单次订阅流与 FormData 同样不可重放：第二次监听会抛 StateError。
       return false;

@@ -105,6 +105,10 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
 
   Timer? _refreshTimer;
 
+  /// 跨入口的刷新单飞：30 秒定时器、401 重放与后台恢复都会调用刷新，
+  /// 而刷新令牌是一次性轮换的；并发携带同一枚令牌会被服务端按重放踢下线。
+  Future<SessionRefreshResult>? _inFlightRefresh;
+
   /// 登出意图标记：置位后禁止在途刷新、资料重拉和存储写入把状态写回
   /// 已登录。clearSession 先落地未认证再清理，窗口变长，必须挡住竞态。
   bool _rejectSessionWrites = false;
@@ -226,15 +230,36 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   Future<void> _applySession(AuthTokenResponse session) async {
     // 登录建立新会话：放行后续写入，并撤销可能仍在途的登出拒绝。
     _rejectSessionWrites = false;
+    final previousUserId = state.value?.user?.id;
+    if (previousUserId != null && previousUserId != session.user.id) {
+      // 直接换号（未经登出）时，上一账号的本地离线数据与密钥必须立刻清除，
+      // 否则新账号会看到上一账号的缓存正文。
+      try {
+        await ref
+            .read(offlineDataLifecycleProvider)
+            .clearUser(previousUserId)
+            .timeout(cleanupStepTimeout);
+      } catch (error) {
+        if (kDebugMode) {
+          devLog('换号清理上一账号离线数据失败: ${error.runtimeType}');
+        }
+      }
+    }
     await _saveSession(session);
     final authState = _toState(session);
     _scheduleRefresh(authState.expiresAt);
+    // 会话闸门只由认证状态机开启：ApiClient 看到残余令牌字符串不能自行放行，
+    // 否则登出清理窗口内读到旧令牌就会把已关闭的闸门重新打开。
+    ref.read(sessionGateProvider).markActive();
     state = AsyncData(authState);
   }
 
   /// 刷新当前会话并按结果分级处理：成功续期；服务端明确拒绝才清除
   /// 会话；瞬时网络故障保留本地会话与凭据，避免抖动被放大为登出。
   Future<bool> refreshSession() async {
+    if (_rejectSessionWrites) {
+      return false;
+    }
     final result = await _refreshWithStoredToken();
     if (_rejectSessionWrites) {
       return false;
@@ -276,12 +301,22 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     // 先拒绝在途写入并落地未认证：后续吊销与本地清理不得阻塞退出登录的
     // 界面切换，也不得被并发刷新写回已登录。
     _rejectSessionWrites = true;
+    _inFlightRefresh = null;
     // 读 .value 而不是 asData：重载过渡期状态是带前值的 AsyncLoading，asData 为 null
     // 会让 userId 取不到，离线库与密钥的清理被整段跳过——登出看似成功但数据还在设备上。
     final wasAuthenticated = state.value?.isAuthenticated ?? false;
     final userId = state.value?.user?.id;
     final store = ref.read(authSessionStoreProvider);
     final accessToken = store.readAccessToken();
+    // 立即摘掉内存访问令牌：后续吊销与离线清理各自最多 5 秒，这期间任何
+    // provider 重建都不得再读到已登出用户的 JWT（刷新令牌保留给吊销请求）。
+    try {
+      await store.saveAccessToken(null).timeout(cleanupStepTimeout);
+    } catch (error) {
+      if (kDebugMode) {
+        devLog('清空内存访问令牌失败: ${error.runtimeType}');
+      }
+    }
     // 先关掉客户端侧的身份通道：随后的 provider 级联重建不得再向服务端
     // 发出注定 401 的请求。闸门独立于 ApiClient 实例，重建后的客户端同样生效。
     ref.read(sessionGateProvider).markEnded();
@@ -357,7 +392,32 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     });
   }
 
-  Future<SessionRefreshResult> _refreshWithStoredToken() async {
+  Future<SessionRefreshResult> _refreshWithStoredToken() {
+    final existing = _inFlightRefresh;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _performStoredTokenRefresh();
+    _inFlightRefresh = future;
+    // 完成即释放；只清自己那一枚，避免把后来者刚建立的在途刷新抹掉。
+    unawaited(
+      future.then<void>(
+        (_) {
+          if (identical(_inFlightRefresh, future)) {
+            _inFlightRefresh = null;
+          }
+        },
+        onError: (Object _) {
+          if (identical(_inFlightRefresh, future)) {
+            _inFlightRefresh = null;
+          }
+        },
+      ),
+    );
+    return future;
+  }
+
+  Future<SessionRefreshResult> _performStoredTokenRefresh() async {
     final store = ref.read(authSessionStoreProvider);
     try {
       final refreshToken = await store.readRefreshToken();

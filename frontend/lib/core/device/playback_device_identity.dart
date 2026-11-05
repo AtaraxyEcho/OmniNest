@@ -10,7 +10,12 @@ class PlaybackDeviceIdentity {
 
   /// 读取或创建当前安装的设备标识。
   static Future<String> getOrCreate() {
-    return _pending ??= _loadOrCreate();
+    return _pending ??= _loadOrCreate().onError<Object>((error, stack) {
+      // 首次读取失败（插件未就绪、存储不可写）时清掉在途引用，
+      // 否则同一个 Rejected Future 会被整个进程永久复用。
+      _pending = null;
+      Error.throwWithStackTrace(error, stack);
+    });
   }
 
   static Future<String> _loadOrCreate() async {

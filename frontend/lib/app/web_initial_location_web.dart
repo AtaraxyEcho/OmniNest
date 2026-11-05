@@ -1,6 +1,8 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:omninest/app/web_initial_location_parse.dart';
+
 /// 读取 index.html 在引擎归一化 history 之前捕获的原始地址，
 /// 解析 hash 深链作为冷启动初始路由。
 ///
@@ -12,6 +14,5 @@ String? readWebInitialLocation() {
   if (initialHref == null) {
     return null;
   }
-  final fragment = Uri.parse(initialHref).fragment;
-  return fragment.startsWith('/') ? fragment : null;
+  return parseWebInitialLocation(initialHref);
 }

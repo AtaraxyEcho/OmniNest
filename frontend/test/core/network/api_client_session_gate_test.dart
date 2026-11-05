@@ -102,17 +102,23 @@ void main() {
     expect(adapter.paths, ['/files']);
   });
 
-  test('重新登录携带令牌后闸门解除', () async {
+  test('闸门只由认证层解除，登出窗口内的残余令牌不代表会话恢复', () async {
     String? token;
+    final gate = SessionGate();
     final adapter = _CountingAdapter();
-    final client = _client(adapter, readToken: () => token)..markSessionEnded();
+    final client = _client(adapter, readToken: () => token, sessionGate: gate)
+      ..markSessionEnded();
 
+    // 登出清理还没写完存储时，内存里仍能读到旧令牌；这不能重新打开闸门。
+    token = 'stale-token';
     await expectLater(
       client.dio.get<Map<String, dynamic>>('/files'),
       throwsA(isA<DioException>()),
     );
     expect(adapter.paths, isEmpty);
 
+    // 只有认证状态机建立新会话并显式激活闸门后才恢复出网。
+    gate.markActive();
     token = 'fresh-token';
     final response = await client.dio.get<Map<String, dynamic>>('/files');
 

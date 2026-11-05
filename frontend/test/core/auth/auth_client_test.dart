@@ -32,9 +32,8 @@ class _CapturingLogoutAdapter implements HttpClientAdapter {
 }
 
 String _jwtWithExpiry(DateTime expiry) {
-  String segment(Object value) => base64Url
-      .encode(utf8.encode(jsonEncode(value)))
-      .replaceAll('=', '');
+  String segment(Object value) =>
+      base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
   return '${segment({'alg': 'HS256'})}.${segment({'exp': expiry.millisecondsSinceEpoch ~/ 1000})}.sig';
 }
 
@@ -93,28 +92,31 @@ void main() {
     );
   });
 
-  test('logout keeps cookie credentials and drops expired access token', () async {
-    final adapter = _CapturingLogoutAdapter();
-    final client = AuthClient(
-      ApiClient(
-        const AppEnvironment(
-          apiBaseUrl: 'http://localhost:8080/api/v1',
-          wsBaseUrl: 'ws://localhost:8080/ws',
+  test(
+    'logout keeps cookie credentials and drops expired access token',
+    () async {
+      final adapter = _CapturingLogoutAdapter();
+      final client = AuthClient(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+          httpClientAdapter: adapter,
         ),
-        httpClientAdapter: adapter,
-      ),
-    );
+      );
 
-    await client.logout(
-      refreshToken: 'refresh-token',
-      accessToken: _jwtWithExpiry(
-        DateTime.now().subtract(const Duration(minutes: 1)),
-      ),
-    );
+      await client.logout(
+        refreshToken: 'refresh-token',
+        accessToken: _jwtWithExpiry(
+          DateTime.now().subtract(const Duration(minutes: 1)),
+        ),
+      );
 
-    expect(adapter.lastRequest?.headers['Authorization'], isNull);
-    expect(adapter.lastRequest?.extra['withCredentials'], isTrue);
-  });
+      expect(adapter.lastRequest?.headers['Authorization'], isNull);
+      expect(adapter.lastRequest?.extra['withCredentials'], isTrue);
+    },
+  );
 
   test('logout sends bearer only while access token is still valid', () async {
     final adapter = _CapturingLogoutAdapter();

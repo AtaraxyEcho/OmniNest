@@ -47,4 +47,52 @@ void main() {
     expect(find.text('popover-panel'), findsNothing);
     expect(popover.isOpen, isFalse);
   });
+
+  testWidgets('压栈新路由后锚点浮层随之收起，不悬在新页面之上', (tester) async {
+    final popover = AnchoredPopover();
+    addTearDown(() => popover.close());
+    final anchorKey = GlobalKey();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Builder(
+              builder:
+                  (context) => ElevatedButton(
+                    key: anchorKey,
+                    onPressed:
+                        () => popover.open(
+                          anchorKey.currentContext!,
+                          (_) => const SizedBox(
+                            width: 160,
+                            height: 120,
+                            child: Text('popover-panel'),
+                          ),
+                        ),
+                    child: const Text('open'),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('popover-panel'), findsOneWidget);
+
+    // 压栈：浮层插在根 Overlay 上，不随路由移动；当前路由被覆盖时必须收起。
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('next-page')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('next-page'), findsOneWidget);
+    expect(find.text('popover-panel'), findsNothing);
+    expect(popover.isOpen, isFalse);
+  });
 }

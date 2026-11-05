@@ -10,10 +10,8 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 
 Finder _pill() => find.byKey(segmentPillKey);
 
-Finder _segmentTap(String label) => find.ancestor(
-  of: find.text(label),
-  matching: find.byType(InkWell),
-);
+Finder _segmentTap(String label) =>
+    find.ancestor(of: find.text(label), matching: find.byType(InkWell));
 
 /// 用受控状态装配分段控件：点按真的改选中，才能判"滑块跟着选中走"。
 Future<void> _pumpControl(
@@ -60,10 +58,7 @@ Future<void> _pumpControl(
 
 void main() {
   testWidgets('切换分段时选中胶囊从旧段滑到新段', (tester) async {
-    await _pumpControl(
-      tester,
-      labels: const ['全部', '照片', '影视'],
-    );
+    await _pumpControl(tester, labels: const ['全部', '照片', '影视']);
 
     final originLeft = tester.getTopLeft(_pill()).dx;
     expect(
@@ -123,10 +118,7 @@ void main() {
     }
     // 整行宽出可用视口 → 必须可滚，而不是整体等比缩放。
     expect(
-      find.ancestor(
-        of: _pill(),
-        matching: find.byType(SingleChildScrollView),
-      ),
+      find.ancestor(of: _pill(), matching: find.byType(SingleChildScrollView)),
       findsOneWidget,
     );
     await tester.dragUntilVisible(

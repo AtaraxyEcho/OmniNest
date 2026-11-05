@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/server/server_config.dart';
 import 'package:omninest/core/server/server_config_store.dart';
 
@@ -24,13 +25,21 @@ class ServerConfigController extends AsyncNotifier<ServerConfig?> {
 
   /// 保存新的服务器配置；调用方需先完成探活确认地址可达。
   Future<void> apply(ServerConfig config) async {
+    await _clearSessionBeforeSwitchingServer();
     await ref.read(serverConfigStoreProvider).write(config);
     state = AsyncData(config);
   }
 
   /// 清除自定义配置并回落构建期预置。
   Future<void> clear() async {
+    await _clearSessionBeforeSwitchingServer();
     await ref.read(serverConfigStoreProvider).clear();
     state = const AsyncData(null);
+  }
+
+  /// 换服前必须先把当前会话注销到旧服务器：直接改写 baseUrl 会把旧服务器的
+  /// JWT 与 Refresh Token 发给新服务器，既登不进去也会泄露凭据。
+  Future<void> _clearSessionBeforeSwitchingServer() async {
+    await ref.read(authSessionProvider.notifier).clearSession();
   }
 }

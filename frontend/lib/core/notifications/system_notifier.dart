@@ -32,6 +32,12 @@ class SystemNotifier {
 
   bool _initialized = false;
 
+  /// 插件是否真的可用：初始化失败后置 false，后续 show 直接跳过。
+  ///
+  /// 只靠 `_initialized` 无法区分“初始化成功”与“失败后不再重试”，
+  /// Linux 桌面会因此对每条通知都抛一次插件异常（被 catch 静默吞掉）。
+  bool _available = false;
+
   bool get isSupported =>
       PlatformCapabilities.current().supportsSystemNotifications;
 
@@ -57,9 +63,11 @@ class SystemNotifier {
               >();
       // Android 13+ 运行时通知权限（清单已声明 POST_NOTIFICATIONS）。
       await android?.requestNotificationsPermission();
-      _initialized = true;
+      _available = true;
     } on Exception {
       // 初始化失败（无 Google 服务等）不阻塞应用，仅关闭通知能力。
+      _available = false;
+    } finally {
       _initialized = true;
     }
   }
@@ -83,6 +91,9 @@ class SystemNotifier {
       return;
     }
     await initialize();
+    if (!_available) {
+      return;
+    }
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'omninest_tasks',
@@ -93,6 +104,9 @@ class SystemNotifier {
       ),
       iOS: DarwinNotificationDetails(),
       macOS: DarwinNotificationDetails(),
+      // Linux 的 supportsSystemNotifications 为 true，缺少该分组时插件
+      // 每次 show 都会失败并被下面的 catch 静默吞掉，通知永远不出现。
+      linux: LinuxNotificationDetails(),
     );
     try {
       await _plugin.show(

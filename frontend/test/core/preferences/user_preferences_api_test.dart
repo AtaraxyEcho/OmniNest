@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
 
@@ -64,6 +65,36 @@ void main() {
     expect(snapshot.scope, 'locale.v1');
     expect(snapshot.version, 2);
     expect(snapshot.updatedAt, DateTime.parse('2026-07-15T01:00:00Z'));
+  });
+
+  test('非信封响应直接失败，不把本地偏好覆盖成空快照', () async {
+    final adapter = _CapturingAdapter(responseBody: const <String, dynamic>{});
+
+    await expectLater(
+      UserPreferencesApi(_apiClient(adapter)).getSnapshot('locale.v1'),
+      throwsA(isA<AppException>()),
+    );
+  });
+
+  test('HTTP 200 但信封 code 非 200 时按失败处理', () async {
+    final adapter = _CapturingAdapter(
+      responseBody: const <String, dynamic>{
+        'code': 500,
+        'errorName': 'INTERNAL_ERROR',
+        'message': '服务异常',
+      },
+    );
+
+    await expectLater(
+      UserPreferencesApi(_apiClient(adapter)).getSnapshot('locale.v1'),
+      throwsA(
+        isA<AppException>().having(
+          (error) => error.code,
+          'code',
+          'INTERNAL_ERROR',
+        ),
+      ),
+    );
   });
 }
 

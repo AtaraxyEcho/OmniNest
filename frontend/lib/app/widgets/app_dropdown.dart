@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/theme/workstation_skin.dart';
@@ -36,6 +37,7 @@ class AppDropdown<T> extends StatefulWidget {
     required this.items,
     required this.onChanged,
     this.label,
+    this.placeholder,
     this.width,
     this.suffixText,
     this.helperText,
@@ -51,6 +53,9 @@ class AppDropdown<T> extends StatefulWidget {
   ///
   /// [dense] 为 true 时作为字段内前缀文案，不抬升字段高度。
   final String? label;
+
+  /// 当前值不在 [items] 中时展示的占位文案；为空时显示空串而非首项。
+  final String? placeholder;
 
   /// 固定宽度；为空时由父级约束决定并横向撑满。
   final double? width;
@@ -79,15 +84,32 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
   }
 
   int _indexOfValue() {
-    final index = widget.items.indexWhere((item) => item.value == widget.value);
-    return index < 0 ? 0 : index;
+    return widget.items.indexWhere((item) => item.value == widget.value);
   }
 
   String get _currentLabel {
     final index = _indexOfValue();
     return index >= 0 && index < widget.items.length
         ? widget.items[index].label
-        : '';
+        : (widget.placeholder ?? '');
+  }
+
+  void _toggleMenu() {
+    _menu.isOpen ? _menu.close() : _menu.open();
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.arrowDown) {
+      _toggleMenu();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _select(int index) {
@@ -125,198 +147,209 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
 
     Widget field = Focus(
       focusNode: _focusNode,
+      onKeyEvent: _handleKeyEvent,
       onFocusChange: (value) => setState(() => _focused = value),
-      child: MenuAnchor(
-        controller: _menu,
-        useRootOverlay: true,
-        alignmentOffset: const Offset(0, 6),
-        // 工位形态交由皮肤 menuTheme 统一（直角、outline 强边、零阴影）。
-        style:
-            workstation
-                ? null
-                : MenuStyle(
-                  backgroundColor: WidgetStatePropertyAll(
-                    colors.surfaceContainerHigh,
+      child: Semantics(
+        button: true,
+        label: _currentLabel,
+        child: MenuAnchor(
+          controller: _menu,
+          useRootOverlay: true,
+          alignmentOffset: const Offset(0, 6),
+          // 工位形态交由皮肤 menuTheme 统一（直角、outline 强边、零阴影）。
+          style:
+              workstation
+                  ? null
+                  : MenuStyle(
+                    backgroundColor: WidgetStatePropertyAll(
+                      colors.surfaceContainerHigh,
+                    ),
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppControlTokens.menuRadius,
+                        ),
+                        side: BorderSide(color: colors.outlineVariant),
+                      ),
+                    ),
+                    elevation: const WidgetStatePropertyAll(8),
+                    padding: const WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(vertical: 6),
+                    ),
+                    minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
+                    maximumSize: const WidgetStatePropertyAll(
+                      Size(double.infinity, 320),
+                    ),
+                  ),
+          builder: (context, controller, child) {
+            final isOpen = controller.isOpen;
+            return MouseRegion(
+              cursor: SystemMouseCursors.click,
+              onHover: (_) {
+                if (!_hovered) {
+                  setState(() => _hovered = true);
+                }
+              },
+              onExit: (_) {
+                if (_hovered) {
+                  setState(() => _hovered = false);
+                }
+              },
+              child: GestureDetector(
+                onTap: () => isOpen ? controller.close() : controller.open(),
+                behavior: HitTestBehavior.opaque,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final boundedWidth =
+                        constraints.hasBoundedWidth
+                            ? constraints.maxWidth
+                            : null;
+                    final fieldWidth = widget.width ?? boundedWidth;
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: AppControlTokens.fieldHeight,
+                        minWidth: fieldWidth ?? 0,
+                        maxWidth: fieldWidth ?? double.infinity,
+                      ),
+                      child: InputDecorator(
+                        isFocused: _focused || isOpen,
+                        isEmpty: false,
+                        expands: false,
+                        decoration: InputDecoration(
+                          labelText: dense ? null : widget.label,
+                          floatingLabelBehavior:
+                              dense ? FloatingLabelBehavior.never : null,
+                          helperText: widget.helperText,
+                          isDense: true,
+                          suffixText:
+                              widget.suffixText == null ||
+                                      widget.suffixText!.isEmpty
+                                  ? null
+                                  : widget.suffixText,
+                          suffixIcon: AnimatedRotation(
+                            turns: isOpen ? 0.5 : 0,
+                            duration: MotionToken.reduced(
+                              context,
+                              MotionToken.fast,
+                            ),
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 20,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 0,
+                          ),
+                          filled: true,
+                          // 与主题输入框一致：浅色不用纯白填充。
+                          fillColor: colors.surfaceContainerLow,
+                          contentPadding: _contentPadding,
+                          border: _fieldBorder(colors.outlineVariant),
+                          enabledBorder: _fieldBorder(
+                            workstation
+                                ? colors.outlineVariant
+                                : _focused || isOpen
+                                ? colors.primary
+                                : _hovered
+                                ? colors.onSurfaceVariant
+                                : colors.outlineVariant,
+                          ),
+                          focusedBorder: _fieldBorder(
+                            workstation ? colors.onSurface : colors.primary,
+                            width: workstation ? 1 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (dense && widget.label != null) ...[
+                              Flexible(
+                                child: Text(
+                                  widget.label!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: labelStyle,
+                                ),
+                              ),
+                              Text(' · ', style: labelStyle),
+                            ],
+                            Expanded(
+                              child: Text(
+                                _currentLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: valueStyle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+          menuChildren: [
+            for (var i = 0; i < widget.items.length; i++)
+              MenuItemButton(
+                onPressed: widget.items[i].enabled ? () => _select(i) : null,
+                style: ButtonStyle(
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  minimumSize: WidgetStatePropertyAll(
+                    Size.fromHeight(AppControlTokens.menuItemHeight),
                   ),
                   shape: WidgetStatePropertyAll(
                     RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppControlTokens.menuRadius,
-                      ),
-                      side: BorderSide(color: colors.outlineVariant),
-                    ),
-                  ),
-                  elevation: const WidgetStatePropertyAll(8),
-                  padding: const WidgetStatePropertyAll(
-                    EdgeInsets.symmetric(vertical: 6),
-                  ),
-                  minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
-                  maximumSize: const WidgetStatePropertyAll(
-                    Size(double.infinity, 320),
-                  ),
-                ),
-        builder: (context, controller, child) {
-          final isOpen = controller.isOpen;
-          return MouseRegion(
-            cursor: SystemMouseCursors.click,
-            onHover: (_) {
-              if (!_hovered) {
-                setState(() => _hovered = true);
-              }
-            },
-            onExit: (_) {
-              if (_hovered) {
-                setState(() => _hovered = false);
-              }
-            },
-            child: GestureDetector(
-              onTap: () => isOpen ? controller.close() : controller.open(),
-              behavior: HitTestBehavior.opaque,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final boundedWidth =
-                      constraints.hasBoundedWidth ? constraints.maxWidth : null;
-                  final fieldWidth = widget.width ?? boundedWidth;
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: AppControlTokens.fieldHeight,
-                      minWidth: fieldWidth ?? 0,
-                      maxWidth: fieldWidth ?? double.infinity,
-                    ),
-                    child: InputDecorator(
-                      isFocused: _focused || isOpen,
-                      isEmpty: false,
-                      expands: false,
-                      decoration: InputDecoration(
-                        labelText: dense ? null : widget.label,
-                        floatingLabelBehavior:
-                            dense ? FloatingLabelBehavior.never : null,
-                        helperText: widget.helperText,
-                        isDense: true,
-                        suffixText:
-                            widget.suffixText == null ||
-                                    widget.suffixText!.isEmpty
-                                ? null
-                                : widget.suffixText,
-                        suffixIcon: AnimatedRotation(
-                          turns: isOpen ? 0.5 : 0,
-                          duration: MotionToken.reduced(
-                            context,
-                            MotionToken.fast,
-                          ),
-                          child: Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 20,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                        suffixIconConstraints: const BoxConstraints(
-                          minWidth: 28,
-                          minHeight: 0,
-                        ),
-                        filled: true,
-                        // 与主题输入框一致：浅色不用纯白填充。
-                        fillColor: colors.surfaceContainerLow,
-                        contentPadding: _contentPadding,
-                        border: _fieldBorder(colors.outlineVariant),
-                        enabledBorder: _fieldBorder(
+                      borderRadius:
                           workstation
-                              ? colors.outlineVariant
-                              : _focused || isOpen
-                              ? colors.primary
-                              : _hovered
-                              ? colors.onSurfaceVariant
-                              : colors.outlineVariant,
-                        ),
-                        focusedBorder: _fieldBorder(
-                          workstation ? colors.onSurface : colors.primary,
-                          width: workstation ? 1 : 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          if (dense && widget.label != null) ...[
-                            Flexible(
-                              child: Text(
-                                widget.label!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: labelStyle,
+                              ? BorderRadius.zero
+                              : BorderRadius.circular(
+                                AppControlTokens.controlRadius,
                               ),
-                            ),
-                            Text(' · ', style: labelStyle),
-                          ],
-                          Expanded(
-                            child: Text(
-                              _currentLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: valueStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
-        },
-        menuChildren: [
-          for (var i = 0; i < widget.items.length; i++)
-            MenuItemButton(
-              onPressed: widget.items[i].enabled ? () => _select(i) : null,
-              style: ButtonStyle(
-                padding: const WidgetStatePropertyAll(
-                  EdgeInsets.symmetric(horizontal: 12),
-                ),
-                minimumSize: WidgetStatePropertyAll(
-                  Size.fromHeight(AppControlTokens.menuItemHeight),
-                ),
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius:
-                        workstation
-                            ? BorderRadius.zero
-                            : BorderRadius.circular(
-                              AppControlTokens.controlRadius,
-                            ),
-                  ),
-                ),
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) =>
-                      states.contains(WidgetState.hovered)
-                          ? colors.onSurface.withValues(alpha: 0.06)
-                          : Colors.transparent,
-                ),
-                foregroundColor: WidgetStatePropertyAll(colors.onSurface),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.items[i].label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color:
-                            widget.items[i].value == widget.value
-                                ? colors.primary
-                                : colors.onSurface,
-                        fontWeight:
-                            widget.items[i].value == widget.value
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                      ),
                     ),
                   ),
-                  if (widget.items[i].value == widget.value)
-                    Icon(Icons.check_rounded, size: 16, color: colors.primary),
-                ],
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) =>
+                        states.contains(WidgetState.hovered)
+                            ? colors.onSurface.withValues(alpha: 0.06)
+                            : Colors.transparent,
+                  ),
+                  foregroundColor: WidgetStatePropertyAll(colors.onSurface),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.items[i].label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color:
+                              widget.items[i].value == widget.value
+                                  ? colors.primary
+                                  : colors.onSurface,
+                          fontWeight:
+                              widget.items[i].value == widget.value
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (widget.items[i].value == widget.value)
+                      Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: colors.primary,
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 

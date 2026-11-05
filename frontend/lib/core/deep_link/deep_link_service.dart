@@ -34,10 +34,16 @@ String? resolveDeepLinkPath(Uri uri) {
     return null;
   }
   final host = uri.host.trim();
-  if (host.isEmpty || uri.pathSegments.isEmpty) {
+  final pathSegments = uri.pathSegments.toList();
+  // 分享链接常带尾斜杠（omninest://s/token/）：只放过末尾这一个空段，
+  // 路径中间的空段仍按非法处理。
+  if (pathSegments.isNotEmpty && pathSegments.last.isEmpty) {
+    pathSegments.removeLast();
+  }
+  if (host.isEmpty || pathSegments.isEmpty) {
     return null;
   }
-  final segments = <String>[host, ...uri.pathSegments];
+  final segments = <String>[host, ...pathSegments];
   for (final segment in segments) {
     if (segment.isEmpty ||
         segment == '.' ||
@@ -48,7 +54,9 @@ String? resolveDeepLinkPath(Uri uri) {
       return null;
     }
   }
-  final route = '/${segments.map(Uri.encodeComponent).join('/')}';
+  // 查询参数承载章节偏移等非路径信息，原样带回；它不参与白名单判定。
+  final query = uri.hasQuery ? '?${uri.query}' : '';
+  final route = '/${segments.map(Uri.encodeComponent).join('/')}$query';
   for (final prefix in deepLinkAllowedPrefixes) {
     if (route.startsWith(prefix) ||
         route == prefix.substring(0, prefix.length - 1)) {

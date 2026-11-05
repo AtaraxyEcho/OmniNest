@@ -99,7 +99,12 @@ class MotionToken {
   static const double elementStagger = 0.08;
 
   /// 计算第 [index] 个元素的 stagger 延迟。
+  ///
+  /// [total] 非正数时没有可分配的间隔，直接返回零延迟，避免整除崩溃。
   static Duration staggerDelay(int index, {required int total}) {
+    if (total <= 0 || index <= 0) {
+      return Duration.zero;
+    }
     return Duration(milliseconds: (stagger.inMilliseconds * index) ~/ total);
   }
 }

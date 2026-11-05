@@ -80,13 +80,11 @@ class ConnectivityListener {
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> results) {
-    final connected = results.any(
-      (r) =>
-          r == ConnectivityResult.wifi ||
-          r == ConnectivityResult.mobile ||
-          r == ConnectivityResult.ethernet ||
-          r == ConnectivityResult.vpn,
-    );
+    // 除 none 以外的任何通道都视为在线：Linux 网桥、WSL/Hyper-V 虚拟交换机与
+    // 蓝牙共享网络会返回 other/bluetooth，按白名单判断会误报永久离线并停摆同步。
+    final connected =
+        results.isNotEmpty &&
+        results.any((result) => result != ConnectivityResult.none);
     final changed = !_connectivityInitialized || connected != _hasConnection;
     _connectivityInitialized = true;
     _hasConnection = connected;
@@ -124,7 +122,7 @@ class ConnectivityListener {
         try {
           await _dispatch(op);
           await _syncQueue.markCompleted(op.id);
-        } catch (e) {
+        } on Object catch (e) {
           // 损坏行的 jsonDecode 结果类型不匹配抛的是 Error（TypeError），
           // 只捕 Exception 会让一条坏数据停掉整批重放而不是跳过它。
           if (kDebugMode) {
@@ -134,6 +132,8 @@ class ConnectivityListener {
           await _syncQueue.markFailed(op.id);
         }
       }
+      // 已完成行不再需要保留：长期运行必须定期回收，否则队列表无限膨胀。
+      await _syncQueue.clearCompleted();
     } finally {
       _replaying = false;
       if (failures == 0) {
@@ -153,7 +153,9 @@ class ConnectivityListener {
     try {
       await ReaderSyncQueue.retryFailed();
       await ReaderSyncQueue.flush(api: api);
-    } on Exception catch (e) {
+    } on Object catch (e) {
+      // StateError 等 Error 也要吞住：否则阅读队列一处状态异常会中断
+      // 后续音乐与文件队列重放。
       if (kDebugMode) {
         devLog('阅读同步队列重放失败: $e');
       }

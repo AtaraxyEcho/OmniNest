@@ -554,6 +554,12 @@ abstract class AppLocalizations {
   /// **'Failed to create super administrator'**
   String get setupCreateFailed;
 
+  /// No description provided for @setupAutoLoginFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Super administrator created, but automatic sign-in failed. Please sign in manually.'**
+  String get setupAutoLoginFailed;
+
   /// No description provided for @setupSecureNotice.
   ///
   /// In en, this message translates to:
@@ -745,6 +751,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to mark all as read. Try again.'**
   String get notificationMarkAllReadFailed;
+
+  /// No description provided for @notificationMarkReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to mark as read. Try again.'**
+  String get notificationMarkReadFailed;
 
   /// No description provided for @notificationDelete.
   ///
@@ -7171,6 +7183,12 @@ abstract class AppLocalizations {
   /// **'Reset two-factor'**
   String get adminResetTwoFactor;
 
+  /// No description provided for @adminResetTwoFactorSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor reset. All sessions of this user were ended.'**
+  String get adminResetTwoFactorSuccess;
+
   /// No description provided for @adminResetTwoFactorConfirmMessage.
   ///
   /// In en, this message translates to:
@@ -7188,6 +7206,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New custom role'**
   String get adminCreateRole;
+
+  /// No description provided for @adminRolePermissionsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Role permissions updated'**
+  String get adminRolePermissionsSaved;
 
   /// No description provided for @adminRoleCode.
   ///

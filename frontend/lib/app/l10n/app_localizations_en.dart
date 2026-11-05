@@ -254,6 +254,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupCreateFailed => 'Failed to create super administrator';
 
   @override
+  String get setupAutoLoginFailed =>
+      'Super administrator created, but automatic sign-in failed. Please sign in manually.';
+
+  @override
   String get setupSecureNotice =>
       'The setup token is only used for initialization and is not stored on this device.';
 
@@ -357,6 +361,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationMarkAllReadFailed =>
       'Failed to mark all as read. Try again.';
+
+  @override
+  String get notificationMarkReadFailed => 'Failed to mark as read. Try again.';
 
   @override
   String get notificationDelete => 'Delete notification';
@@ -3885,6 +3892,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminResetTwoFactor => 'Reset two-factor';
 
   @override
+  String get adminResetTwoFactorSuccess =>
+      'Two-factor reset. All sessions of this user were ended.';
+
+  @override
   String adminResetTwoFactorConfirmMessage(Object name) {
     return 'Clear $name\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.';
   }
@@ -3895,6 +3906,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminCreateRole => 'New custom role';
+
+  @override
+  String get adminRolePermissionsSaved => 'Role permissions updated';
 
   @override
   String get adminRoleCode => 'Role code';

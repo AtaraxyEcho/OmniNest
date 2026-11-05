@@ -184,6 +184,11 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
     textCipher: ref.watch(offlineColumnCipherProvider),
     userId: userId,
   );
+  if (userId != null && userId.isNotEmpty) {
+    // 冷启动恢复会话前队列以空账号落库；拿到真实账号后立即认领，
+    // 否则这些操作既不会被重放，也不会在登出时被清理。
+    unawaited(db.claimAnonymousOperations(userId));
+  }
   // Web 的崩溃备份按账号分键：换号后不能读到上一个账号留下的那份位置。
   ReaderProgressBackupWeb.setUserId(userId);
   ReaderImageCache.init(imageRepository);

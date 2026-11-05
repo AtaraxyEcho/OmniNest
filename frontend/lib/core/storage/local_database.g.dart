@@ -2596,6 +2596,17 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2608,6 +2619,7 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
     note,
     color,
     createdAt,
+    version,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2697,6 +2709,12 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
     return context;
   }
 
@@ -2753,6 +2771,10 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
             DriftSqlType.dateTime,
             data['${effectivePrefix}created_at'],
           )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      ),
     );
   }
 
@@ -2774,6 +2796,9 @@ class CachedReaderAnnotation extends DataClass
   final String? note;
   final String color;
   final DateTime createdAt;
+
+  /// 服务端乐观锁版本；本地新建或旧库升级后为 null，更新时不带前置条件。
+  final int? version;
   const CachedReaderAnnotation({
     required this.id,
     required this.userId,
@@ -2785,6 +2810,7 @@ class CachedReaderAnnotation extends DataClass
     this.note,
     required this.color,
     required this.createdAt,
+    this.version,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2805,6 +2831,9 @@ class CachedReaderAnnotation extends DataClass
     }
     map['color'] = Variable<String>(color);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || version != null) {
+      map['version'] = Variable<int>(version);
+    }
     return map;
   }
 
@@ -2826,6 +2855,10 @@ class CachedReaderAnnotation extends DataClass
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       color: Value(color),
       createdAt: Value(createdAt),
+      version:
+          version == null && nullToAbsent
+              ? const Value.absent()
+              : Value(version),
     );
   }
 
@@ -2845,6 +2878,7 @@ class CachedReaderAnnotation extends DataClass
       note: serializer.fromJson<String?>(json['note']),
       color: serializer.fromJson<String>(json['color']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      version: serializer.fromJson<int?>(json['version']),
     );
   }
   @override
@@ -2861,6 +2895,7 @@ class CachedReaderAnnotation extends DataClass
       'note': serializer.toJson<String?>(note),
       'color': serializer.toJson<String>(color),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'version': serializer.toJson<int?>(version),
     };
   }
 
@@ -2875,6 +2910,7 @@ class CachedReaderAnnotation extends DataClass
     Value<String?> note = const Value.absent(),
     String? color,
     DateTime? createdAt,
+    Value<int?> version = const Value.absent(),
   }) => CachedReaderAnnotation(
     id: id ?? this.id,
     userId: userId ?? this.userId,
@@ -2887,6 +2923,7 @@ class CachedReaderAnnotation extends DataClass
     note: note.present ? note.value : this.note,
     color: color ?? this.color,
     createdAt: createdAt ?? this.createdAt,
+    version: version.present ? version.value : this.version,
   );
   CachedReaderAnnotation copyWithCompanion(
     CachedReaderAnnotationsCompanion data,
@@ -2909,6 +2946,7 @@ class CachedReaderAnnotation extends DataClass
       note: data.note.present ? data.note.value : this.note,
       color: data.color.present ? data.color.value : this.color,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      version: data.version.present ? data.version.value : this.version,
     );
   }
 
@@ -2924,7 +2962,8 @@ class CachedReaderAnnotation extends DataClass
           ..write('highlightText: $highlightText, ')
           ..write('note: $note, ')
           ..write('color: $color, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('version: $version')
           ..write(')'))
         .toString();
   }
@@ -2941,6 +2980,7 @@ class CachedReaderAnnotation extends DataClass
     note,
     color,
     createdAt,
+    version,
   );
   @override
   bool operator ==(Object other) =>
@@ -2955,7 +2995,8 @@ class CachedReaderAnnotation extends DataClass
           other.highlightText == this.highlightText &&
           other.note == this.note &&
           other.color == this.color &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.version == this.version);
 }
 
 class CachedReaderAnnotationsCompanion
@@ -2970,6 +3011,7 @@ class CachedReaderAnnotationsCompanion
   final Value<String?> note;
   final Value<String> color;
   final Value<DateTime> createdAt;
+  final Value<int?> version;
   final Value<int> rowid;
   const CachedReaderAnnotationsCompanion({
     this.id = const Value.absent(),
@@ -2982,6 +3024,7 @@ class CachedReaderAnnotationsCompanion
     this.note = const Value.absent(),
     this.color = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedReaderAnnotationsCompanion.insert({
@@ -2995,6 +3038,7 @@ class CachedReaderAnnotationsCompanion
     this.note = const Value.absent(),
     this.color = const Value.absent(),
     required DateTime createdAt,
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        readerItemId = Value(readerItemId),
@@ -3012,6 +3056,7 @@ class CachedReaderAnnotationsCompanion
     Expression<String>? note,
     Expression<String>? color,
     Expression<DateTime>? createdAt,
+    Expression<int>? version,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3025,6 +3070,7 @@ class CachedReaderAnnotationsCompanion
       if (note != null) 'note': note,
       if (color != null) 'color': color,
       if (createdAt != null) 'created_at': createdAt,
+      if (version != null) 'version': version,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3040,6 +3086,7 @@ class CachedReaderAnnotationsCompanion
     Value<String?>? note,
     Value<String>? color,
     Value<DateTime>? createdAt,
+    Value<int?>? version,
     Value<int>? rowid,
   }) {
     return CachedReaderAnnotationsCompanion(
@@ -3053,6 +3100,7 @@ class CachedReaderAnnotationsCompanion
       note: note ?? this.note,
       color: color ?? this.color,
       createdAt: createdAt ?? this.createdAt,
+      version: version ?? this.version,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3090,6 +3138,9 @@ class CachedReaderAnnotationsCompanion
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3109,6 +3160,7 @@ class CachedReaderAnnotationsCompanion
           ..write('note: $note, ')
           ..write('color: $color, ')
           ..write('createdAt: $createdAt, ')
+          ..write('version: $version, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3193,6 +3245,17 @@ class $CachedReaderNotesTable extends CachedReaderNotes
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3202,6 +3265,7 @@ class $CachedReaderNotesTable extends CachedReaderNotes
     title,
     content,
     createdAt,
+    version,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3265,6 +3329,12 @@ class $CachedReaderNotesTable extends CachedReaderNotes
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
     return context;
   }
 
@@ -3307,6 +3377,10 @@ class $CachedReaderNotesTable extends CachedReaderNotes
             DriftSqlType.dateTime,
             data['${effectivePrefix}created_at'],
           )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      ),
     );
   }
 
@@ -3325,6 +3399,9 @@ class CachedReaderNote extends DataClass
   final String? title;
   final String content;
   final DateTime createdAt;
+
+  /// 服务端乐观锁版本；本地新建或旧库升级后为 null，更新时不带前置条件。
+  final int? version;
   const CachedReaderNote({
     required this.id,
     required this.userId,
@@ -3333,6 +3410,7 @@ class CachedReaderNote extends DataClass
     this.title,
     required this.content,
     required this.createdAt,
+    this.version,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3348,6 +3426,9 @@ class CachedReaderNote extends DataClass
     }
     map['content'] = Variable<String>(content);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || version != null) {
+      map['version'] = Variable<int>(version);
+    }
     return map;
   }
 
@@ -3364,6 +3445,10 @@ class CachedReaderNote extends DataClass
           title == null && nullToAbsent ? const Value.absent() : Value(title),
       content: Value(content),
       createdAt: Value(createdAt),
+      version:
+          version == null && nullToAbsent
+              ? const Value.absent()
+              : Value(version),
     );
   }
 
@@ -3380,6 +3465,7 @@ class CachedReaderNote extends DataClass
       title: serializer.fromJson<String?>(json['title']),
       content: serializer.fromJson<String>(json['content']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      version: serializer.fromJson<int?>(json['version']),
     );
   }
   @override
@@ -3393,6 +3479,7 @@ class CachedReaderNote extends DataClass
       'title': serializer.toJson<String?>(title),
       'content': serializer.toJson<String>(content),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'version': serializer.toJson<int?>(version),
     };
   }
 
@@ -3404,6 +3491,7 @@ class CachedReaderNote extends DataClass
     Value<String?> title = const Value.absent(),
     String? content,
     DateTime? createdAt,
+    Value<int?> version = const Value.absent(),
   }) => CachedReaderNote(
     id: id ?? this.id,
     userId: userId ?? this.userId,
@@ -3412,6 +3500,7 @@ class CachedReaderNote extends DataClass
     title: title.present ? title.value : this.title,
     content: content ?? this.content,
     createdAt: createdAt ?? this.createdAt,
+    version: version.present ? version.value : this.version,
   );
   CachedReaderNote copyWithCompanion(CachedReaderNotesCompanion data) {
     return CachedReaderNote(
@@ -3426,6 +3515,7 @@ class CachedReaderNote extends DataClass
       title: data.title.present ? data.title.value : this.title,
       content: data.content.present ? data.content.value : this.content,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      version: data.version.present ? data.version.value : this.version,
     );
   }
 
@@ -3438,7 +3528,8 @@ class CachedReaderNote extends DataClass
           ..write('charOffset: $charOffset, ')
           ..write('title: $title, ')
           ..write('content: $content, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('version: $version')
           ..write(')'))
         .toString();
   }
@@ -3452,6 +3543,7 @@ class CachedReaderNote extends DataClass
     title,
     content,
     createdAt,
+    version,
   );
   @override
   bool operator ==(Object other) =>
@@ -3463,7 +3555,8 @@ class CachedReaderNote extends DataClass
           other.charOffset == this.charOffset &&
           other.title == this.title &&
           other.content == this.content &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.version == this.version);
 }
 
 class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
@@ -3474,6 +3567,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   final Value<String?> title;
   final Value<String> content;
   final Value<DateTime> createdAt;
+  final Value<int?> version;
   final Value<int> rowid;
   const CachedReaderNotesCompanion({
     this.id = const Value.absent(),
@@ -3483,6 +3577,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     this.title = const Value.absent(),
     this.content = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedReaderNotesCompanion.insert({
@@ -3493,6 +3588,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     this.title = const Value.absent(),
     required String content,
     required DateTime createdAt,
+    this.version = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        readerItemId = Value(readerItemId),
@@ -3506,6 +3602,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     Expression<String>? title,
     Expression<String>? content,
     Expression<DateTime>? createdAt,
+    Expression<int>? version,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3516,6 +3613,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
       if (title != null) 'title': title,
       if (content != null) 'content': content,
       if (createdAt != null) 'created_at': createdAt,
+      if (version != null) 'version': version,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3528,6 +3626,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     Value<String?>? title,
     Value<String>? content,
     Value<DateTime>? createdAt,
+    Value<int?>? version,
     Value<int>? rowid,
   }) {
     return CachedReaderNotesCompanion(
@@ -3538,6 +3637,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
       title: title ?? this.title,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      version: version ?? this.version,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3566,6 +3666,9 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3582,6 +3685,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
           ..write('title: $title, ')
           ..write('content: $content, ')
           ..write('createdAt: $createdAt, ')
+          ..write('version: $version, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8771,6 +8875,26 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
       $SyncPendingInvalidationsTable(this);
   late final $SyncProcessedEventsTable syncProcessedEvents =
       $SyncProcessedEventsTable(this);
+  late final Index idxSyncOpsUserStatusTypeCreated = Index(
+    'idx_sync_ops_user_status_type_created',
+    'CREATE INDEX idx_sync_ops_user_status_type_created ON sync_operations (user_id, status, type, created_at)',
+  );
+  late final Index idxCachedReaderBookmarksUserItem = Index(
+    'idx_cached_reader_bookmarks_user_item',
+    'CREATE INDEX idx_cached_reader_bookmarks_user_item ON cached_reader_bookmarks (user_id, reader_item_id)',
+  );
+  late final Index idxCachedReaderAnnotationsUserItem = Index(
+    'idx_cached_reader_annotations_user_item',
+    'CREATE INDEX idx_cached_reader_annotations_user_item ON cached_reader_annotations (user_id, reader_item_id)',
+  );
+  late final Index idxCachedReaderNotesUserItem = Index(
+    'idx_cached_reader_notes_user_item',
+    'CREATE INDEX idx_cached_reader_notes_user_item ON cached_reader_notes (user_id, reader_item_id)',
+  );
+  late final Index idxSyncProcessedEventsServerUserTime = Index(
+    'idx_sync_processed_events_server_user_time',
+    'CREATE INDEX idx_sync_processed_events_server_user_time ON sync_processed_events (server_key, user_id, processed_at)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -8790,6 +8914,11 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     syncClientStates,
     syncPendingInvalidations,
     syncProcessedEvents,
+    idxSyncOpsUserStatusTypeCreated,
+    idxCachedReaderBookmarksUserItem,
+    idxCachedReaderAnnotationsUserItem,
+    idxCachedReaderNotesUserItem,
+    idxSyncProcessedEventsServerUserTime,
   ];
 }
 
@@ -10112,6 +10241,7 @@ typedef $$CachedReaderAnnotationsTableCreateCompanionBuilder =
       Value<String?> note,
       Value<String> color,
       required DateTime createdAt,
+      Value<int?> version,
       Value<int> rowid,
     });
 typedef $$CachedReaderAnnotationsTableUpdateCompanionBuilder =
@@ -10126,6 +10256,7 @@ typedef $$CachedReaderAnnotationsTableUpdateCompanionBuilder =
       Value<String?> note,
       Value<String> color,
       Value<DateTime> createdAt,
+      Value<int?> version,
       Value<int> rowid,
     });
 
@@ -10185,6 +10316,11 @@ class $$CachedReaderAnnotationsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -10247,6 +10383,11 @@ class $$CachedReaderAnnotationsTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CachedReaderAnnotationsTableAnnotationComposer
@@ -10293,6 +10434,9 @@ class $$CachedReaderAnnotationsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
 }
 
 class $$CachedReaderAnnotationsTableTableManager
@@ -10351,6 +10495,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String> color = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int?> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderAnnotationsCompanion(
                 id: id,
@@ -10363,6 +10508,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 note: note,
                 color: color,
                 createdAt: createdAt,
+                version: version,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10377,6 +10523,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String> color = const Value.absent(),
                 required DateTime createdAt,
+                Value<int?> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderAnnotationsCompanion.insert(
                 id: id,
@@ -10389,6 +10536,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 note: note,
                 color: color,
                 createdAt: createdAt,
+                version: version,
                 rowid: rowid,
               ),
           withReferenceMapper:
@@ -10443,6 +10591,7 @@ typedef $$CachedReaderNotesTableCreateCompanionBuilder =
       Value<String?> title,
       required String content,
       required DateTime createdAt,
+      Value<int?> version,
       Value<int> rowid,
     });
 typedef $$CachedReaderNotesTableUpdateCompanionBuilder =
@@ -10454,6 +10603,7 @@ typedef $$CachedReaderNotesTableUpdateCompanionBuilder =
       Value<String?> title,
       Value<String> content,
       Value<DateTime> createdAt,
+      Value<int?> version,
       Value<int> rowid,
     });
 
@@ -10498,6 +10648,11 @@ class $$CachedReaderNotesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -10545,6 +10700,11 @@ class $$CachedReaderNotesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CachedReaderNotesTableAnnotationComposer
@@ -10580,6 +10740,9 @@ class $$CachedReaderNotesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
 }
 
 class $$CachedReaderNotesTableTableManager
@@ -10635,6 +10798,7 @@ class $$CachedReaderNotesTableTableManager
                 Value<String?> title = const Value.absent(),
                 Value<String> content = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int?> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderNotesCompanion(
                 id: id,
@@ -10644,6 +10808,7 @@ class $$CachedReaderNotesTableTableManager
                 title: title,
                 content: content,
                 createdAt: createdAt,
+                version: version,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10655,6 +10820,7 @@ class $$CachedReaderNotesTableTableManager
                 Value<String?> title = const Value.absent(),
                 required String content,
                 required DateTime createdAt,
+                Value<int?> version = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderNotesCompanion.insert(
                 id: id,
@@ -10664,6 +10830,7 @@ class $$CachedReaderNotesTableTableManager
                 title: title,
                 content: content,
                 createdAt: createdAt,
+                version: version,
                 rowid: rowid,
               ),
           withReferenceMapper:

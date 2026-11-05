@@ -13,6 +13,8 @@ class AnchoredPopover {
 
   OverlayEntry? _entry;
   _PopoverMetricsObserver? _metricsObserver;
+  Animation<double>? _coveringAnimation;
+  void Function(AnimationStatus)? _coveringListener;
 
   bool get isOpen => _entry != null;
 
@@ -76,6 +78,21 @@ class AnchoredPopover {
     // 重新打开时按当前锚点重新定位。
     _metricsObserver = _PopoverMetricsObserver(close);
     WidgetsBinding.instance.addObserver(_metricsObserver!);
+    // 根 Overlay 的浮层不属于当前路由：压栈新页面或切换分支时它不会跟着走，
+    // 会悬在新页面正上方。监听当前路由的被覆盖动画，一开始被盖就收起。
+    final covering = ModalRoute.of(anchorContext)?.secondaryAnimation;
+    if (covering != null) {
+      void onCoveringChanged(AnimationStatus status) {
+        if (status == AnimationStatus.forward ||
+            status == AnimationStatus.completed) {
+          _close(onChanged);
+        }
+      }
+
+      covering.addStatusListener(onCoveringChanged);
+      _coveringAnimation = covering;
+      _coveringListener = onCoveringChanged;
+    }
     overlay.insert(entry);
     onChanged?.call();
   }
@@ -93,6 +110,13 @@ class AnchoredPopover {
     _metricsObserver = null;
     if (observer != null) {
       WidgetsBinding.instance.removeObserver(observer);
+    }
+    final coveringAnimation = _coveringAnimation;
+    final coveringListener = _coveringListener;
+    _coveringAnimation = null;
+    _coveringListener = null;
+    if (coveringAnimation != null && coveringListener != null) {
+      coveringAnimation.removeStatusListener(coveringListener);
     }
     entry.remove();
     onChanged?.call();
