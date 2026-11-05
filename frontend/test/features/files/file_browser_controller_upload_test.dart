@@ -1101,6 +1101,39 @@ void main() {
     },
   );
 
+  test('超过单文件上限的文件在本地被拒绝，不创建上传会话', () async {
+    final repository = _FakeFileRepository()..maxFileSizeBytes = 4;
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    final result = await controller.uploadFiles([
+      XFile.fromData(
+        Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+        path: 'too-big.bin',
+        name: 'too-big.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    ]);
+
+    expect(result.failed, 1);
+    expect(
+      repository.createdSessionParentIds,
+      isEmpty,
+      reason: '超限文件不能先建会话再传几个 GB 才被服务端拒绝',
+    );
+    final task =
+        container
+            .read(fileBrowserControllerProvider)
+            .value!
+            .localUploadTasks
+            .single;
+    expect(task.status, 'FAILED');
+  });
+
   test('批量上传途中切换目录，排队文件仍写入发起时的目录', () async {
     final repository = _BatchFileRepository();
     final container = ProviderContainer.test(

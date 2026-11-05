@@ -96,10 +96,47 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
                       ],
                     ),
                     Expanded(
-                      child:
-                          _section == null
-                              ? _buildGroupList(context, l10n)
-                              : _buildSectionBody(context, l10n, _section!),
+                      child: ClipRect(
+                        child: AnimatedSwitcher(
+                          duration: MotionToken.reduced(
+                            context,
+                            MotionToken.pageSwitch,
+                          ),
+                          reverseDuration: MotionToken.reduced(
+                            context,
+                            const Duration(milliseconds: 200),
+                          ),
+                          switchInCurve: MotionToken.curve,
+                          switchOutCurve: MotionToken.curveIn,
+                          transitionBuilder:
+                              (child, animation) => FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0.12, 0),
+                                    end: Offset.zero,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: MotionToken.curve,
+                                    ),
+                                  ),
+                                  child: child,
+                                ),
+                              ),
+                          child: KeyedSubtree(
+                            key: ValueKey<String>(_section?.name ?? 'root'),
+                            child:
+                                _section == null
+                                    ? _buildGroupList(context, l10n)
+                                    : _buildSectionBody(
+                                      context,
+                                      l10n,
+                                      _section!,
+                                    ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

@@ -29,6 +29,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_content_skeleton.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_image_budget_notice.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tts_controls.dart';
@@ -664,6 +665,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   @override
   void dispose() {
+    // 退出阅读页即释放整章 blocks 与视觉行测量缓存，避免最后一章正文
+    // 随进程常驻；缓存重算成本只落在下次打开时。
+    clearReaderPaginationCaches();
     _annotationHandler?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     ReaderSessionRecorder.recordSession(

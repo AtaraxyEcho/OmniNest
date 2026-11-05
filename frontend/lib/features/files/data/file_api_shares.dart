@@ -34,7 +34,7 @@ mixin FileApiShares on FileApiBase {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/files/shared-with-me/$shareId/children',
+      '/files/shared-with-me/${Uri.encodeComponent(shareId)}/children',
       queryParameters: {
         if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
         'page': page,
@@ -99,7 +99,7 @@ mixin FileApiShares on FileApiBase {
     int? maxAccessCount,
   }) async {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
-      '/files/shares/$shareId',
+      '/files/shares/${Uri.encodeComponent(shareId)}',
       data: {
         if (password != null) 'password': password,
         if (expiresAt != null) 'expiresAt': expiresAt,
@@ -111,7 +111,7 @@ mixin FileApiShares on FileApiBase {
 
   Future<void> revokeShare(String shareId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/files/shares/$shareId',
+      '/files/shares/${Uri.encodeComponent(shareId)}',
     );
     parseEmptyResponse(response.data);
   }
@@ -119,7 +119,7 @@ mixin FileApiShares on FileApiBase {
   /// 探测文件媒体元数据（视频时长/分辨率，图片尺寸）。
   Future<FileMediaInfo> mediaInfo(String fileId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/files/$fileId/media-info',
+      '/files/${Uri.encodeComponent(fileId)}/media-info',
     );
     final data = parseData(response.data);
     int? asIntOrNull(Object? value) =>
@@ -160,7 +160,7 @@ mixin FileApiShares on FileApiBase {
     String session,
   ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/s/$token/preview',
+      '/s/${Uri.encodeComponent(token)}/preview',
       options: Options(headers: {'X-OmniNest-Share-Session': session}),
     );
     return parseData(response.data);
@@ -206,7 +206,7 @@ mixin FileApiShares on FileApiBase {
     String? targetParentId,
   ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/s/$token/accept',
+      '/s/${Uri.encodeComponent(token)}/accept',
       data: {
         if (targetParentId != null && targetParentId.isNotEmpty)
           'targetParentId': targetParentId,
@@ -251,7 +251,7 @@ mixin FileApiShares on FileApiBase {
       return existing;
     }
     final authorization = await apiClient.dio.post<Map<String, dynamic>>(
-      '/s/$token/authorize',
+      '/s/${Uri.encodeComponent(token)}/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
     );
     final data = parseData(authorization.data);

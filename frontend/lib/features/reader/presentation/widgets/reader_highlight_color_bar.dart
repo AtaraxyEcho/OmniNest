@@ -66,9 +66,8 @@ class ReaderHighlightColorBar extends StatelessWidget {
                           border:
                               selectedColor == colorHex
                                   ? Border.all(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
                                     width: 2,
                                   )
                                   : null,

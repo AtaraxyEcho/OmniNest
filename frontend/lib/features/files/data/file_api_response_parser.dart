@@ -88,6 +88,7 @@ class FileApiResponseParser {
       maxPartSizeBytes: asInt(data['maxPartSizeBytes']),
       maxTotalParts: asInt(data['maxTotalParts']),
       maxConcurrentParts: asInt(data['maxConcurrentParts']),
+      maxFileSizeBytes: asInt(data['maxFileSizeBytes']),
     );
   }
 

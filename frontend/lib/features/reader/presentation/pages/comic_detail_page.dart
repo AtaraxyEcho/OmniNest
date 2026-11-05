@@ -7,18 +7,17 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/domain/comic_navigation.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_source_tile.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_hero.dart';
 
-/// 漫画详情页 — 与文本详情页同构的 Hero + 页签布局。
-///
-/// Hero 行承载封面、标题、导入/阅读状态与核心动作；页签承载基本信息、
-/// 目录树与来源管理。滚动由外层详情页骨架承担，本页输出无滚动体的 Column。
+/// 漫画详情页 — 与文本详情页同构的 Hero + 页签布局：封面/标题/导入状态/核心动作
+/// 由 Hero 行承载，页签承载基本信息、目录树与来源管理；滚动由外层骨架承担。
 class ComicDetailPage extends ConsumerStatefulWidget {
   const ComicDetailPage({
     required this.item,
@@ -192,10 +191,8 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
         SizedBox(
           width: 144,
           height: 216,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: ReaderBookCover(item: item, size: ReaderCoverSize.large),
-          ),
+          // 与书架网格同一 tag：点封面进来时封面从网格位置飞到详情位。
+          child: ReaderDetailCoverHero(item: item),
         ),
         const SizedBox(width: 24),
         Expanded(
@@ -384,7 +381,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
           child: FilledButton.icon(
             onPressed:
                 widget.canRead
-                    ? () => context.push('/reader/comics/${item.id}/read')
+                    ? () => context.push(comicReaderRoute(item.id))
                     : null,
             icon: const Icon(Icons.play_arrow_rounded, size: 18),
             label: Text(
@@ -513,7 +510,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
                 style: FilledButton.styleFrom(
-                  backgroundColor: context.readerColors.danger,
+                  backgroundColor: dialogContext.readerColors.danger,
                 ),
                 child: Text(l10n.filesDelete),
               ),
@@ -788,7 +785,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               controller: controller,
               onNodeTap: (node) {
                 context.push(
-                  '/reader/comics/${widget.item.id}/read?catalogNodeId=${node.id}',
+                  comicReaderRoute(widget.item.id, catalogNodeId: node.id),
                 );
               },
             ),

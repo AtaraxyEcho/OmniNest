@@ -622,6 +622,13 @@ class _UserManagementPanel extends ConsumerWidget {
       await ref
           .read(adminUserControllerProvider.notifier)
           .resetTwoFactor(user.id);
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          l10n.adminResetTwoFactorSuccess,
+          severity: OmniFeedbackSeverity.success,
+        );
+      }
     } catch (error) {
       if (context.mounted) {
         showOmniFeedback(

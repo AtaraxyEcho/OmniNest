@@ -39,7 +39,7 @@ class ShareApi implements PublicShareRepository {
         return SharePreviewResult.needPassword(AppErrorCodes.needPassword);
       }
       final response = await _dio.get<Map<String, dynamic>>(
-        '/s/$token/preview',
+        '/s/${Uri.encodeComponent(token)}/preview',
         options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
       );
       final body = response.data;
@@ -89,7 +89,7 @@ class ShareApi implements PublicShareRepository {
         return ShareChildrenResult.error(AppErrorCodes.needPassword);
       }
       final response = await _dio.get<Map<String, dynamic>>(
-        '/s/$token/children',
+        '/s/${Uri.encodeComponent(token)}/children',
         queryParameters: {
           if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
           'page': page,
@@ -148,7 +148,7 @@ class ShareApi implements PublicShareRepository {
       }
       final client = _authDio ?? _dio;
       final response = await client.post<Map<String, dynamic>>(
-        '/s/$token/accept',
+        '/s/${Uri.encodeComponent(token)}/accept',
         data:
             targetParentId == null || targetParentId.isEmpty
                 ? null
@@ -201,7 +201,7 @@ class ShareApi implements PublicShareRepository {
         return ShareAccessResult.failure(AppErrorCodes.needPassword);
       }
       final response = await _dio.get<Map<String, dynamic>>(
-        '/s/$token',
+        '/s/${Uri.encodeComponent(token)}',
         options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
       );
       final body = response.data;
@@ -245,7 +245,7 @@ class ShareApi implements PublicShareRepository {
     }
     _sessionTokens.remove(token);
     final response = await _dio.post<Map<String, dynamic>>(
-      '/s/$token/authorize',
+      '/s/${Uri.encodeComponent(token)}/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
     );
     final body = response.data;

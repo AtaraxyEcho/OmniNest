@@ -22,6 +22,18 @@ class BlockClipper {
   /// 块索引区间裁剪缓存（图片独占页路径），与字符路径互相独立。
   static final List<_ClipCacheEntry> _indexClipCache = <_ClipCacheEntry>[];
 
+  /// 清空静态前缀缓存、字符区间裁剪缓存与块区间裁剪缓存。
+  ///
+  /// 本类无实例状态，清空只影响跨调用的缓存复用。供章节内容、排版参数或
+  /// 语言环境整体切换后由调用方显式触发，用于释放旧 blocks 身份引用；
+  /// 本文件内部不得调用，避免热路径缓存反复失效。
+  static void clearCaches() {
+    _prefixBlocks = null;
+    _prefixOffsets = null;
+    _clipCache.clear();
+    _indexClipCache.clear();
+  }
+
   /// 构建或复用 blocks 的累积字符前缀（blocks[i] 起始偏移，长度 = blocks.length + 1）。
   static List<int> _prefixFor(List<ContentBlock> blocks) {
     if (identical(_prefixBlocks, blocks) && _prefixOffsets != null) {

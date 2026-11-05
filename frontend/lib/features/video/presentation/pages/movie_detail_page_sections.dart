@@ -221,6 +221,7 @@ class _PosterMetaRow extends StatelessWidget {
           child: _CoverImage(
             url: item.posterImageUrl,
             cacheKey: 'movie-poster:${item.id}',
+            heroTag: 'movie-poster-${item.id}',
           ),
         ),
         const SizedBox(width: 24),
@@ -311,10 +312,13 @@ class _PosterMetaRow extends StatelessWidget {
 }
 
 class _CoverImage extends StatelessWidget {
-  const _CoverImage({this.url, this.cacheKey});
+  const _CoverImage({this.url, this.cacheKey, this.heroTag});
 
   final String? url;
   final String? cacheKey;
+
+  /// 与列表卡片一致的共享元素 tag；为空时不参与转场。
+  final String? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -322,13 +326,18 @@ class _CoverImage extends StatelessWidget {
     if (resolved == null || resolved.isEmpty) {
       return const ColoredBox(color: MovieDetailTheme.surface);
     }
-    return MoviePosterImage(
+    final poster = MoviePosterImage(
       imageUrl: resolved,
       cacheKey: cacheKey,
       cacheWidth: MoviePosterImage.decodeWidth(context, 160, cap: 480),
       alignment: Alignment.topCenter,
       fallback: const ColoredBox(color: MovieDetailTheme.surface),
     );
+    final tag = heroTag;
+    if (tag == null) {
+      return poster;
+    }
+    return Hero(tag: tag, child: poster);
   }
 }
 

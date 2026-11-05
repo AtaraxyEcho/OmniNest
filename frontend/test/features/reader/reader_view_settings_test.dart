@@ -305,4 +305,38 @@ void main() {
       expect(reloaded.withMobileDefaults().fontSize, 19);
     });
   });
+
+  group('排版参数的值相等', () {
+    test('同值不同实例相等，排版缓存不该被父层 copyWith 击穿', () {
+      final first = ReaderViewSettings(fontSize: 20, lineHeight: 1.9);
+      final second = ReaderViewSettings(fontSize: 20, lineHeight: 1.9);
+
+      expect(identical(first, second), isFalse);
+      expect(first, second);
+      expect(first.hashCode, second.hashCode);
+    });
+
+    test('任一排版或显示字段不同即不相等', () {
+      final base = ReaderViewSettings();
+
+      expect(base, isNot(base.copyWith(fontSize: 21)));
+      expect(base, isNot(base.copyWith(lineHeight: 2.0)));
+      expect(base, isNot(base.copyWith(fontFamily: 'sans')));
+      expect(base, isNot(base.copyWith(paletteId: 'light')));
+      expect(base, isNot(base.copyWith(readingMode: 'page')));
+      expect(base, isNot(base.copyWith(immersiveMode: true)));
+      expect(base, isNot(base.copyWith(pageTurnMode: 'cover')));
+      expect(base, isNot(base.copyWith(followBookTypesetting: true)));
+    });
+
+    test('toJson 往返后仍然相等', () {
+      final original = ReaderViewSettings(
+        fontSize: 19,
+        lineHeight: 1.85,
+        followBookTypesetting: true,
+      );
+
+      expect(ReaderViewSettings.fromJson(original.toJson()), original);
+    });
+  });
 }

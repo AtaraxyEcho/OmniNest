@@ -8,6 +8,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 应用级背景渲染层。
@@ -74,6 +75,24 @@ class AppBackdropSurface extends ConsumerWidget {
               28.0,
             )
             : 0.0;
+    // 只对静态图片做交叉溶解：交叉层放在 ImageFiltered 内部，避免
+    // 两张 4K 图各自高斯模糊造成双倍合成成本；视频是单实例播放器，
+    // 换 Key 会让新旧纹理争抢表面并黑屏，固定 Key 跳过溶解。
+    final animatedMedia =
+        asset?.isVideo == true
+            ? media
+            : AnimatedSwitcher(
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 300),
+              ),
+              switchInCurve: MotionToken.curve,
+              switchOutCurve: MotionToken.curveIn,
+              child: KeyedSubtree(
+                key: ValueKey<String>(asset?.id ?? 'none'),
+                child: media,
+              ),
+            );
     final mediaLayer =
         shouldBlur
             ? ImageFiltered(
@@ -81,9 +100,9 @@ class AppBackdropSurface extends ConsumerWidget {
                 sigmaX: blurSigma,
                 sigmaY: blurSigma,
               ),
-              child: media,
+              child: animatedMedia,
             )
-            : media;
+            : animatedMedia;
     return ExcludeSemantics(
       child: IgnorePointer(
         child: RepaintBoundary(

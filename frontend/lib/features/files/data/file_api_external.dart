@@ -56,7 +56,7 @@ mixin FileApiExternal on FileApiBase {
     required String encryptedCredentials,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/external-storages/$accountId',
+      '/external-storages/${Uri.encodeComponent(accountId)}',
       data: {
         'displayName': displayName,
         'encryptedCredentials': encryptedCredentials,
@@ -67,14 +67,14 @@ mixin FileApiExternal on FileApiBase {
 
   Future<void> disableExternalStorage(String accountId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/external-storages/$accountId',
+      '/external-storages/${Uri.encodeComponent(accountId)}',
     );
     parseEmptyResponse(response.data);
   }
 
   Future<void> deleteExternalStorage(String accountId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/external-storages/$accountId/permanent',
+      '/external-storages/${Uri.encodeComponent(accountId)}/permanent',
     );
     parseEmptyResponse(response.data);
   }
@@ -84,7 +84,7 @@ mixin FileApiExternal on FileApiBase {
     String path,
   ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/external-storages/$accountId/browse',
+      '/external-storages/${Uri.encodeComponent(accountId)}/browse',
       queryParameters: {'path': path},
       options: Options(receiveTimeout: FileApiBase._externalStorageTimeout),
     );
@@ -108,7 +108,7 @@ mixin FileApiExternal on FileApiBase {
     int size = 10,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/external-storages/$accountId/browse',
+      '/external-storages/${Uri.encodeComponent(accountId)}/browse',
       queryParameters: {'path': path, 'page': page, 'size': size},
       options: Options(receiveTimeout: FileApiBase._externalStorageTimeout),
     );
@@ -140,7 +140,7 @@ mixin FileApiExternal on FileApiBase {
     String? spaceType,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/external-storages/$accountId/import',
+      '/external-storages/${Uri.encodeComponent(accountId)}/import',
       data: {
         'sourcePath': sourcePath,
         'sourceKind': sourceKind,
@@ -180,7 +180,7 @@ mixin FileApiExternal on FileApiBase {
 
   Future<void> cancelImportTask(String taskId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/external-storages/import-tasks/$taskId',
+      '/external-storages/import-tasks/${Uri.encodeComponent(taskId)}',
     );
     parseEmptyResponse(response.data);
   }
@@ -188,7 +188,7 @@ mixin FileApiExternal on FileApiBase {
   /// 获取外部存储空间用量
   Future<ExternalSpaceUsage> getExternalStorageSpace(String accountId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/external-storages/$accountId/space',
+      '/external-storages/${Uri.encodeComponent(accountId)}/space',
       options: Options(receiveTimeout: FileApiBase._externalStorageTimeout),
     );
     return ExternalSpaceUsage.fromJson(parseData(response.data));
@@ -197,7 +197,7 @@ mixin FileApiExternal on FileApiBase {
   /// 测试外部存储连通性
   Future<void> testExternalStorageConnection(String accountId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/external-storages/$accountId/test',
+      '/external-storages/${Uri.encodeComponent(accountId)}/test',
       options: Options(receiveTimeout: FileApiBase._externalStorageTimeout),
     );
     final data = parseData(response.data);
@@ -212,7 +212,7 @@ mixin FileApiExternal on FileApiBase {
     required String accountId,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/external-connectors/$connectorCode/oauth/start',
+      '/external-connectors/${Uri.encodeComponent(connectorCode)}/oauth/start',
       queryParameters: {'accountId': accountId},
     );
     final data = parseData(response.data);
@@ -267,7 +267,7 @@ mixin FileApiExternal on FileApiBase {
     required String name,
   }) async {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
-      '/shared-space/files/$fileId/rename',
+      '/shared-space/files/${Uri.encodeComponent(fileId)}/rename',
       data: {'name': name},
     );
     return parseFileNodeResponse(response.data);
@@ -294,7 +294,7 @@ mixin FileApiExternal on FileApiBase {
   /// 删除共享空间文件
   Future<void> deleteSharedFile(String fileId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/shared-space/files/$fileId',
+      '/shared-space/files/${Uri.encodeComponent(fileId)}',
     );
     parseEmptyResponse(response.data);
   }

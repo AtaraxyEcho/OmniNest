@@ -18,21 +18,32 @@ class _WeatherReactiveDockSurface extends StatefulWidget {
 
 class _WeatherReactiveDockSurfaceState
     extends State<_WeatherReactiveDockSurface>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const double _reactionInset = 54;
 
   late final AnimationController _controller;
   late final Stopwatch _clock;
   bool _animationsDisabled = false;
 
+  /// 窗口最小化、失去焦点或退到后台时暂停：粒子画布按帧重绘，
+  /// 不可见时继续跑只是白烧 CPU 与电池。
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 16),
     );
     _clock = Stopwatch();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    _syncController();
   }
 
   @override
@@ -51,7 +62,9 @@ class _WeatherReactiveDockSurfaceState
 
   void _syncController() {
     final spec = WeatherSceneSpec.from(widget.weather);
-    final shouldAnimate = !_animationsDisabled && (spec.isRain || spec.isSnow);
+    final visible = _lifecycleState == AppLifecycleState.resumed;
+    final shouldAnimate =
+        visible && !_animationsDisabled && (spec.isRain || spec.isSnow);
     if (shouldAnimate) {
       if (!_clock.isRunning) {
         _clock.start();
@@ -69,6 +82,7 @@ class _WeatherReactiveDockSurfaceState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

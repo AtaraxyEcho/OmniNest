@@ -1,3 +1,4 @@
+import 'package:omninest/core/theme/motion_token.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -338,12 +339,14 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     }
 
     hits.addAll(_commands(l10n));
-    // 本地看板与远端搜索会命中同一实体；按类型、目标路由和标题去重，
-    // 避免同一部电影/同一本书出现两三次。
+    // 本地看板与远端搜索会命中同一实体；按类型与实体唯一 ID 去重，
+    // 避免同一部电影/同一本书出现两三次。音乐命中的 route 恒为 '/music'，
+    // 只用 route+标题会把不同歌手的同名歌曲误吞。
     final deduped = <_Hit>[];
     final seen = <String>{};
     for (final hit in hits) {
-      final key = '${hit.type}|${hit.route ?? ''}|${hit.title}';
+      final identity = hit.musicTrackId ?? hit.readerItemId ?? hit.route ?? '';
+      final key = '${hit.type}|$identity|${hit.title}';
       if (seen.add(key)) {
         deduped.add(hit);
       }
@@ -560,6 +563,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                                 final hit = filtered[index];
                                 if (hit.progress != null) {
                                   return _buildMediaCard(
+                                    context,
                                     p,
                                     hit,
                                     selected: index == highlight,
@@ -569,6 +573,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                                   );
                                 }
                                 return _buildListRow(
+                                  context,
                                   p,
                                   hit,
                                   selected: index == highlight,

@@ -46,16 +46,19 @@ final movieDashboardProvider = FutureProvider<MovieDashboard>((ref) {
 // 避免 Keep-alive 缓存让「新建库源」按钮按旧的空列表持续置灰。
 final videoStorageLocationsProvider =
     FutureProvider.autoDispose<List<VideoStorageLocation>>((ref) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(movieApiProvider).accessibleStorageLocations();
     });
 
 final videoLibrarySourcesProvider =
     FutureProvider.autoDispose<List<VideoLibrarySource>>((ref) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(movieApiProvider).librarySources();
     });
 
 final mediaLibraryAccessProvider = FutureProvider.autoDispose
     .family<MediaLibraryAccessSettings, String>((ref, sourceId) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(movieApiProvider).libraryAccess(sourceId);
     });
 
@@ -66,6 +69,7 @@ final mediaLibraryAccessUsersProvider = FutureProvider.autoDispose
       ref,
       key,
     ) {
+      ref.watch(sessionEpochProvider);
       return ref
           .watch(movieApiProvider)
           .libraryAccessUsers(query: key.query, page: key.page);
@@ -75,6 +79,7 @@ typedef VideoDirectoryKey = ({String locationId, String? parent});
 
 final videoStorageDirectoriesProvider = FutureProvider.autoDispose
     .family<MediaPage<VideoStorageDirectory>, VideoDirectoryKey>((ref, key) {
+      ref.watch(sessionEpochProvider);
       return ref
           .watch(movieApiProvider)
           .storageDirectories(locationId: key.locationId, parent: key.parent);
@@ -83,6 +88,7 @@ final videoStorageDirectoriesProvider = FutureProvider.autoDispose
 /// 部署可信挂载列表；仅在用户同时持有媒体库管理与系统配置读/管权限时消费。
 final videoTrustedMountsProvider =
     FutureProvider.autoDispose<List<VideoTrustedMount>>((ref) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(movieApiProvider).trustedMounts();
     });
 
@@ -93,6 +99,7 @@ final videoMountDirectoriesProvider = FutureProvider.autoDispose
       ref,
       key,
     ) {
+      ref.watch(sessionEpochProvider);
       return ref
           .watch(movieApiProvider)
           .trustedMountDirectories(mountKey: key.mountKey, parent: key.parent);
@@ -107,6 +114,7 @@ typedef MediaTreeKey = ({String runId, String? parentNodeId, int page});
 
 final mediaScanTreeProvider = FutureProvider.autoDispose
     .family<MediaPage<MediaScanTreeNode>, MediaTreeKey>((ref, key) {
+      ref.watch(sessionEpochProvider);
       return ref
           .watch(movieApiProvider)
           .mediaScanTree(

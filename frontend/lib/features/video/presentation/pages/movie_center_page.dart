@@ -1,8 +1,10 @@
+import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,6 +52,7 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
   // 进入页面的重进刷新节流：provider 常驻内存，posterUrl 是 2h/6h 的
   // 临时地址，不刷新则过期后海报灰块；15s 内往返不重复拉取。
   static DateTime? _lastEntryRefreshAt;
+  static int? _lastEntryRefreshEpoch;
   bool _hostedScope = false;
 
   @override
@@ -75,6 +78,13 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
       } else if (_hostedScope) {
         controller.selectSection(MovieSection.continueWatching);
       }
+      // 节流时间戳按会话世代隔离：跨账号仍沿用上一账号的窗口会让换号后
+      // 15 秒内进入影视中心拿到旧账号数据。
+      final epoch = ref.read(sessionEpochProvider);
+      if (_lastEntryRefreshEpoch != epoch) {
+        _lastEntryRefreshEpoch = epoch;
+        _lastEntryRefreshAt = null;
+      }
       final now = DateTime.now();
       final last = _lastEntryRefreshAt;
       if (last != null && now.difference(last) < const Duration(seconds: 15)) {
@@ -87,6 +97,16 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 错误用浮层提示，不再用 MaterialBanner 插入顶栏：后者会把整个
+    // MovieShell 向下顶约 56px，切换失败时整页跳动。
+    ref.listen(movieCenterControllerProvider, (previous, next) {
+      final message = next.value?.errorMessage;
+      if (message == null || message.isEmpty) {
+        return;
+      }
+      showMovieFeedback(context, message, isError: true);
+      ref.read(movieCenterControllerProvider.notifier).clearError();
+    });
     final state = ref.watch(movieCenterControllerProvider);
     // 托管态底由环境层绘制，异常/骨架页不再压一块重设计实底。
     final pageBackground =
@@ -100,21 +120,6 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
         final visibleState = data;
         return Column(
           children: [
-            if (data.errorMessage != null)
-              MaterialBanner(
-                content: Text(data.errorMessage!),
-                backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                actions: [
-                  TextButton(
-                    onPressed:
-                        () =>
-                            ref
-                                .read(movieCenterControllerProvider.notifier)
-                                .clearError(),
-                    child: Text(AppLocalizations.of(context).videoClose),
-                  ),
-                ],
-              ),
             Expanded(
               child: MovieShell(
                 section: visibleState.section,

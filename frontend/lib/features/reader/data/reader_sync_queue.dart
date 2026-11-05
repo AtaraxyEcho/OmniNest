@@ -9,8 +9,10 @@ import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 
+part 'reader_sync_queue_flush.dart';
 part 'reader_sync_queue_payload.dart';
 part 'reader_sync_queue_replacements.dart';
+part 'reader_sync_queue_versions.dart';
 
 /// 阅读器离线同步队列
 ///
@@ -19,7 +21,6 @@ part 'reader_sync_queue_replacements.dart';
 /// 所有用户数据写入本地优先，异步同步服务端，失败不阻塞。
 class ReaderSyncQueue {
   static LocalDatabase? _db;
-  static bool _syncing = false;
   static OfflineTextCipher? _textCipher;
   static String? _userId;
 
@@ -59,8 +60,18 @@ class ReaderSyncQueue {
     opNoteDelete,
   ];
 
-  /// 含笔记/批注正文的敏感操作：未绑定登录用户时不得以空 userId 落库。
-  static const Set<String> _sensitiveOperationTypes = {
+  /// 需要加密载荷的操作：只有这些类型的 JSON 里含自由文本。
+  static const Set<String> _encryptedOperationTypes = {
+    opBookmarkCreate,
+    opAnnotationCreate,
+    opAnnotationUpdate,
+    opNoteCreate,
+    opNoteUpdate,
+  };
+
+  /// 必须绑定登录用户才能落库的操作：空 userId 的行登出时清理不到，
+  /// 且会被下一个匿名上下文误当作自己的积压。
+  static const Set<String> _userBoundOperationTypes = {
     opBookmarkCreate,
     opBookmarkDelete,
     opAnnotationCreate,
@@ -346,15 +357,13 @@ class ReaderSyncQueue {
 
   /// 通用入队
   static Future<void> _enqueue(String type, Map<String, dynamic> data) async {
-    if (_sensitiveOperationTypes.contains(type)) {
-      if (_userId == null || _userId!.isEmpty) {
-        // 空 userId 的行登出时按账号清理不到，载荷又含正文；未绑定登录用户时拒绝入队。
-        throw StateError('阅读同步队列未绑定登录用户，拒绝写入敏感同步项');
-      }
-      if (_textCipher == null) {
-        // 无加密器时不再退化为明文落库；Web 生产环境使用标签页会话密钥。
-        throw StateError('阅读同步队列缺少敏感列加密器，拒绝明文写入同步项');
-      }
+    if (_userBoundOperationTypes.contains(type) &&
+        (_userId == null || _userId!.isEmpty)) {
+      throw StateError('阅读同步队列未绑定登录用户，拒绝写入同步项');
+    }
+    if (_encryptedOperationTypes.contains(type) && _textCipher == null) {
+      // 无加密器时不再退化为明文落库；Web 生产环境使用标签页会话密钥。
+      throw StateError('阅读同步队列缺少敏感列加密器，拒绝明文写入同步项');
     }
     await _database
         .into(_database.syncOperations)
@@ -362,7 +371,7 @@ class ReaderSyncQueue {
           SyncOperationsCompanion.insert(
             userId: Value(_userId ?? ''),
             type: type,
-            payload: await _serializePayload(data),
+            payload: await _serializePayload(type, data),
             createdAt: DateTime.now(),
           ),
         );
@@ -398,7 +407,7 @@ class ReaderSyncQueue {
       await (_database.update(_database.syncOperations)
         ..where((table) => table.id.equals(operation.id))).write(
         SyncOperationsCompanion(
-          payload: Value(await _serializePayload(payload)),
+          payload: Value(await _serializePayload(type, payload)),
         ),
       );
     }
@@ -469,7 +478,8 @@ class ReaderSyncQueue {
     for (final operation in operations) {
       final payload = await _decodePayload(operation);
       if (payload == null) {
-        staleIds.add(operation.id);
+        // 另一个标签页持有不同会话密钥时本页解不开它的行：这不是"同书旧进度"，
+        // 无权删除，跳过即可。删除会让那个标签页的未同步位置永久丢失。
         continue;
       }
       if (payload['itemId'] != itemId) {
@@ -557,97 +567,7 @@ class ReaderSyncQueue {
   /// 批量发送队列中的待同步操作。
   ///
   /// 网络请求超时由 Dio 层负责，避免底层请求仍在执行时提前释放同步锁。
-  static Future<void> flush({ReaderApi? api}) async {
-    if (_syncing || api == null) return;
-    _syncing = true;
-
-    try {
-      await _doFlush(api);
-    } finally {
-      _syncing = false;
-    }
-  }
-
-  /// 执行实际的队列刷新逻辑。
-  static Future<void> _doFlush(ReaderApi api) async {
-    // 进度行先出：同一本书已合并为一条，数量很小，但笔记/批注积压超过一批时
-    // 不能把续读指针排在 50 条之外等下一轮。其余操作仍按 createdAt 升序，
-    // 保持 create→update 的先后语义（倒序会让旧更新覆盖新创建载荷）。
-    final progressOps = await _pendingReaderOps(types: const [opProgress]);
-    final otherOps = await _pendingReaderOps(
-      types: _readerOperationTypes,
-      limit: maxOperationBatch,
-    );
-    final remainingSlots = (maxOperationBatch - progressOps.length).clamp(
-      0,
-      maxOperationBatch,
-    );
-    final pending = <SyncOperation>[
-      ...progressOps,
-      ...otherOps
-          .where((operation) => operation.type != opProgress)
-          .take(remainingSlots),
-    ];
-
-    for (final op in pending) {
-      // 创建回包会把后续更新/删除的 localId 改写成服务端 ID；pending 是本轮
-      // 开始时取的快照，派发前必须重读最新载荷，否则仍会带着临时 ID 发出去。
-      final current = await _reloadPendingOperation(op.id);
-      if (current == null) {
-        continue;
-      }
-      try {
-        await _dispatch(api, current);
-        await _markCompleted(current.id);
-      } on AppException catch (error) {
-        if (error.code == AppErrorCodes.forbidden) {
-          // 无 activity:write 的角色：书签/标注/笔记保留本地（本地优先
-          // 模型，本地即真值），跳过远端同步，不做无意义重试。
-          await _markCompleted(current.id);
-        } else if (_isIdempotentDeleteFailure(current, error)) {
-          // 记录多半在另一台设备上已经删掉了：补发永远不会成功，留着失败行会
-          // 长期占表，并让本地删除一直显示"尚未同步"。
-          await _markCompleted(current.id);
-        } else {
-          await _markFailed(current);
-        }
-      } on _UnrecoverableSyncPayload {
-        // 密钥轮换后的陈旧密文与网络失败不同：重试永远不会成功。保留有限次
-        // 重试供密钥暂时不可用的情况恢复，耗尽后清理，避免队列永久死锁。
-        if (current.retryCount + 1 >= maxOperationRetries) {
-          await _deleteOwnedOperations([current.id]);
-        } else {
-          await _markFailed(current);
-        }
-      } on FormatException {
-        await _markFailed(current);
-      } on TypeError {
-        await _markFailed(current);
-      } on Exception {
-        await _markFailed(current);
-      }
-    }
-    if (pending.isNotEmpty) {
-      // 已完成 reader 操作的 payload 含笔记/批注明文，同步成功后即清理，
-      // 不在本地库长期保留敏感明文副本
-      await (_database.delete(_database.syncOperations)..where(
-        (table) =>
-            table.status.equals('completed') &
-            table.type.isIn(_readerOperationTypes) &
-            _ownedByCurrentUser(table.userId),
-      )).go();
-    }
-    // 进度以本地 cached_reader_progress 为真值，重试耗尽的失败行只会
-    // 长期占表并在下次 retryFailed 里被反复捞起；笔记/批注失败行保留，
-    // 那些数据本地即唯一副本。
-    await (_database.delete(_database.syncOperations)..where(
-      (table) =>
-          table.type.equals(opProgress) &
-          table.status.equals('failed') &
-          table.retryCount.isBiggerOrEqualValue(maxOperationRetries) &
-          _ownedByCurrentUser(table.userId),
-    )).go();
-  }
+  static Future<void> flush({ReaderApi? api}) => runReaderSyncFlush(api);
 
   /// 这次失败是否等于"服务端已经没有这条记录"：只有删除操作可以按幂等完成处理。
   ///
@@ -727,11 +647,7 @@ class ReaderSyncQueue {
         );
 
       case opAnnotationUpdate:
-        await api.updateAnnotation(
-          payload['annotationId'] as String,
-          note: payload['note'] as String?,
-          color: payload['color'] as String?,
-        );
+        await ReaderSyncVersions.dispatchAnnotationUpdate(api, payload);
 
       case opAnnotationDelete:
         await api.deleteAnnotation(payload['annotationId'] as String);
@@ -750,11 +666,7 @@ class ReaderSyncQueue {
         );
 
       case opNoteUpdate:
-        await api.updateNote(
-          payload['noteId'] as String,
-          title: payload['title'] as String?,
-          content: payload['content'] as String,
-        );
+        await ReaderSyncVersions.dispatchNoteUpdate(api, payload);
 
       case opNoteDelete:
         await api.deleteNote(payload['noteId'] as String);

@@ -13,10 +13,50 @@ final Map<String, DateTime> _downloadUrlCacheAt = {};
 /// 下载地址签名失败登记（负缓存时间戳），30 秒内抑制重试。
 final Map<String, DateTime> _downloadUrlFailedAt = {};
 
+/// 进程级缓存上限：长会话翻阅数十万文件时，无上限 Map 会把每个
+/// 文件 ID 与其签名 URL 一直留在内存里，直到进程退出。
+const int _downloadUrlCacheLimit = 256;
+const int _textPreviewCacheLimit = 64;
+const int _downloadUrlFailureLimit = 128;
+
+/// 写入并淘汰最旧条目（Dart Map 保持插入顺序，首个键即最久未使用）。
+void _putCapped(
+  Map<String, String?> values,
+  Map<String, DateTime> timestamps,
+  String key,
+  String? value,
+  DateTime at,
+  int limit,
+) {
+  values.remove(key);
+  timestamps.remove(key);
+  values[key] = value;
+  timestamps[key] = at;
+  while (values.length > limit) {
+    final oldest = values.keys.first;
+    values.remove(oldest);
+    timestamps.remove(oldest);
+  }
+}
+
+void _rememberFailure(String fileId, DateTime at) {
+  _downloadUrlFailedAt.remove(fileId);
+  _downloadUrlFailedAt[fileId] = at;
+  while (_downloadUrlFailedAt.length > _downloadUrlFailureLimit) {
+    _downloadUrlFailedAt.remove(_downloadUrlFailedAt.keys.first);
+  }
+}
+
 /// 会话级 URL 缓存写入口（批量预热回填）；同时清除该 ID 的失败登记。
 void prewarmDownloadUrl(String fileId, String url, DateTime at) {
-  _downloadUrlCache[fileId] = url;
-  _downloadUrlCacheAt[fileId] = at;
+  _putCapped(
+    _downloadUrlCache,
+    _downloadUrlCacheAt,
+    fileId,
+    url,
+    at,
+    _downloadUrlCacheLimit,
+  );
   _downloadUrlFailedAt.remove(fileId);
 }
 
@@ -53,7 +93,13 @@ String? _cachedDownloadUrl(String fileId) {
     _downloadUrlCacheAt.remove(fileId);
     return null;
   }
-  return _downloadUrlCache[fileId];
+  final value = _downloadUrlCache.remove(fileId);
+  _downloadUrlCache[fileId] = value;
+  final stamp = _downloadUrlCacheAt.remove(fileId);
+  if (stamp != null) {
+    _downloadUrlCacheAt[fileId] = stamp;
+  }
+  return value;
 }
 
 String? _cachedTextPreview(String fileId) {
@@ -66,6 +112,12 @@ String? _cachedTextPreview(String fileId) {
     _textPreviewCache.remove(fileId);
     _textPreviewCacheAt.remove(fileId);
     return null;
+  }
+  _textPreviewCache.remove(fileId);
+  _textPreviewCache[fileId] = value;
+  final stamp = _textPreviewCacheAt.remove(fileId);
+  if (stamp != null) {
+    _textPreviewCacheAt[fileId] = stamp;
   }
   return value;
 }
@@ -88,12 +140,18 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
       final repository = ref.read(fileRepositoryProvider);
       try {
         final url = await repository.downloadUrl(fileId);
-        _downloadUrlCache[fileId] = url;
-        _downloadUrlCacheAt[fileId] = DateTime.now();
+        _putCapped(
+          _downloadUrlCache,
+          _downloadUrlCacheAt,
+          fileId,
+          url,
+          DateTime.now(),
+          _downloadUrlCacheLimit,
+        );
         _downloadUrlFailedAt.remove(fileId);
         return url;
       } catch (_) {
-        _downloadUrlFailedAt[fileId] = DateTime.now();
+        _rememberFailure(fileId, DateTime.now());
         return null;
       }
     });
@@ -124,7 +182,13 @@ final fileTextPreviewProvider = FutureProvider.autoDispose
       final preview = await ref
           .read(fileRepositoryProvider)
           .loadTextPreview(fileId);
-      _textPreviewCache[fileId] = preview;
-      _textPreviewCacheAt[fileId] = DateTime.now();
+      _putCapped(
+        _textPreviewCache,
+        _textPreviewCacheAt,
+        fileId,
+        preview,
+        DateTime.now(),
+        _textPreviewCacheLimit,
+      );
       return preview;
     });

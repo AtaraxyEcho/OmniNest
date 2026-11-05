@@ -12,7 +12,7 @@ import 'package:omninest/features/reader/application/reader_local_progress.dart'
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_hero.dart';
 
 enum _DetailTab { info, chapters, annotations, bookmarks }
 
@@ -127,10 +127,8 @@ class ReaderDetailTextContentState
         SizedBox(
           width: 144,
           height: 216,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: ReaderBookCover(item: item, size: ReaderCoverSize.large),
-          ),
+          // 与书架网格同一 tag：点封面进来时封面从网格位置飞到详情位。
+          child: ReaderDetailCoverHero(item: item),
         ),
         const SizedBox(width: 24),
         Expanded(

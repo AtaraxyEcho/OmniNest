@@ -91,33 +91,53 @@ class _InlineUploadQueueCardState extends State<_InlineUploadQueueCard> {
                           ? l10n.filesCollapseQueue
                           : l10n.filesExpandQueue,
                   onPressed: () => setState(() => _expanded = !_expanded),
-                  icon: Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
+                  icon: AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: MotionToken.reduced(
+                      context,
+                      MotionToken.pageSwitch,
+                    ),
+                    curve: MotionToken.curve,
+                    child: const Icon(Icons.keyboard_arrow_down_rounded),
                   ),
                 ),
               ],
             ),
-            if (_expanded) ...[
-              const SizedBox(height: 14),
-              for (final task in visibleTasks) ...[
-                _InlineUploadTaskRow(task: task),
-                if (task != visibleTasks.last) const SizedBox(height: 10),
-              ],
-              if (hiddenCount > 0) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    l10n.filesMoreInQueue(hiddenCount),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: context.filesColors.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+            // 展开区域用高度过渡而不是瞬间增删行：队列最多四行，
+            // 硬切换会把下方文件网格向下顶约 180px。
+            AnimatedSize(
+              duration: MotionToken.reduced(context, MotionToken.pageSwitch),
+              curve: MotionToken.curve,
+              alignment: Alignment.topCenter,
+              child:
+                  _expanded
+                      ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 14),
+                          for (final task in visibleTasks) ...[
+                            _InlineUploadTaskRow(task: task),
+                            if (task != visibleTasks.last)
+                              const SizedBox(height: 10),
+                          ],
+                          if (hiddenCount > 0) ...[
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                l10n.filesMoreInQueue(hiddenCount),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  color: context.filesColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      )
+                      : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),

@@ -49,6 +49,7 @@ class FileUploadPolicy {
     required this.maxPartSizeBytes,
     required this.maxTotalParts,
     required this.maxConcurrentParts,
+    this.maxFileSizeBytes = 0,
   });
 
   final int directUploadMaxBytes;
@@ -56,6 +57,9 @@ class FileUploadPolicy {
   final int maxPartSizeBytes;
   final int maxTotalParts;
   final int maxConcurrentParts;
+
+  /// 服务端单文件上限；0 表示未下发（老服务端），此时不做本地预检。
+  final int maxFileSizeBytes;
 }
 
 abstract final class FileUploadTaskMessageCode {

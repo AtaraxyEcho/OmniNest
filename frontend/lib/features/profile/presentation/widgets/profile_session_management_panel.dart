@@ -549,6 +549,7 @@ class _SessionRevokeButtonState extends ConsumerState<_SessionRevokeButton> {
       confirmLabel: l10n.profileRevokeSession,
       destructive: true,
     );
+    if (!mounted) return;
     if (confirmed != true) return;
     try {
       await ref

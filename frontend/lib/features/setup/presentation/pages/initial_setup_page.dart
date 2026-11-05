@@ -19,8 +19,8 @@ import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 part 'initial_setup_page_widgets.dart';
 part 'initial_setup_page_two_factor.dart';
 
@@ -194,11 +194,23 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
         setState(() => _pendingBackupCodes = backupCodes);
         return;
       }
-      await ref
-          .read(authSessionProvider.notifier)
-          .signInWithCredentials(username: username, password: password);
-      if (!mounted) return;
-      await ref.read(initialSetupProvider.notifier).refresh();
+      try {
+        await ref
+            .read(authSessionProvider.notifier)
+            .signInWithCredentials(username: username, password: password);
+        if (!mounted) return;
+        await ref.read(initialSetupProvider.notifier).refresh();
+      } on Object catch (error) {
+        // 超管已经创建成功：自动登录失败不能让页面继续停在初始化态
+        // （refresh 后它显示"已完成"并把错误吞掉），提示后转登录页手动登录。
+        if (!mounted) return;
+        showOmniFeedback(
+          context,
+          failureToast(l10n, l10n.setupAutoLoginFailed, error),
+          severity: OmniFeedbackSeverity.error,
+        );
+        context.go('/login');
+      }
     } on AppException catch (error) {
       if (!mounted) return;
       setState(() => _errorMessage = error.message);

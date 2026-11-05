@@ -153,6 +153,9 @@ void main() {
     expect(savedPermissions.single, {'file:read', 'file:write', 'task:admin'});
     // 保存后弹窗关闭。
     expect(find.byType(WorkstationDialogFrame), findsNothing);
+    // 成功 Toast 带停留计时器，结束前推进到自然消失。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

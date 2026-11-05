@@ -25,9 +25,14 @@ class ReaderLocalStorage {
 
   Future<String> _encipher(String plaintext) async {
     final cipher = _textCipher;
-    final userId = _columnUserId;
-    if (cipher == null || userId == null || userId.isEmpty) {
+    if (cipher == null) {
+      // 无安全存储的平台（测试桩）保持原样，生产 Web/原生都注入了加密器。
       return plaintext;
+    }
+    final userId = _columnUserId;
+    if (userId == null || userId.isEmpty) {
+      // 已配置加密器却拿不到账号：写明文会让登出清理与换号隔离同时失效。
+      throw StateError('阅读器本地存储缺少登录用户绑定，拒绝明文落库');
     }
     return cipher.encrypt(userId, plaintext);
   }
@@ -188,6 +193,10 @@ class ReaderLocalStorage {
             note: Value(await _encipherNullable(annotation.note)),
             color: Value(annotation.color),
             createdAt: annotation.createdAt ?? DateTime.now(),
+            version:
+                annotation.version == null
+                    ? const Value.absent()
+                    : Value(annotation.version),
           ),
         );
   }
@@ -211,6 +220,7 @@ class ReaderLocalStorage {
           note: await _decipherNullable(row.note),
           color: row.color,
           createdAt: row.createdAt,
+          version: row.version,
         ),
       );
     }
@@ -238,6 +248,7 @@ class ReaderLocalStorage {
           note: await _decipherNullable(row.note),
           color: row.color,
           createdAt: row.createdAt,
+          version: row.version,
         ),
       );
     }
@@ -286,6 +297,7 @@ class ReaderLocalStorage {
       note: await _decipherNullable(row.note),
       color: row.color,
       createdAt: row.createdAt,
+      version: row.version,
     );
   }
 
@@ -326,9 +338,13 @@ class ReaderLocalStorage {
             userId: Value(_columnUserId ?? ''),
             readerItemId: note.readerItemId,
             charOffset: Value(note.charOffset),
-            title: Value(note.title),
+            title: Value(await _encipherNullable(note.title)),
             content: await _encipher(note.content),
             createdAt: note.createdAt ?? DateTime.now(),
+            version:
+                note.version == null
+                    ? const Value.absent()
+                    : Value(note.version),
           ),
         );
   }
@@ -346,9 +362,10 @@ class ReaderLocalStorage {
           id: row.id,
           readerItemId: row.readerItemId,
           charOffset: row.charOffset,
-          title: row.title,
+          title: await _decipherNullable(row.title),
           content: await _decipher(row.content),
           createdAt: row.createdAt,
+          version: row.version,
         ),
       );
     }
@@ -363,7 +380,7 @@ class ReaderLocalStorage {
     await (_db.update(_db.cachedReaderNotes)
       ..where((t) => t.id.equals(noteId) & _ownedByUser(t.userId))).write(
       CachedReaderNotesCompanion(
-        title: Value(title),
+        title: Value(await _encipherNullable(title)),
         content: Value(await _encipher(content)),
       ),
     );
@@ -387,9 +404,10 @@ class ReaderLocalStorage {
       id: row.id,
       readerItemId: row.readerItemId,
       charOffset: row.charOffset,
-      title: row.title,
+      title: await _decipherNullable(row.title),
       content: await _decipher(row.content),
       createdAt: row.createdAt,
+      version: row.version,
     );
   }
 
@@ -496,7 +514,7 @@ class ReaderLocalStorage {
             userId: Value(_columnUserId ?? ''),
             itemId: itemId,
             contentPath: contentPath,
-            title: Value(title),
+            title: Value(await _encipher(title)),
             chapterNumber: Value(chapterNumber),
             charCount: Value(charCount),
             processedHtml: await _encipher(processedHtml),

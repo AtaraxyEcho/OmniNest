@@ -4,6 +4,8 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/security/offline_text_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
@@ -248,6 +250,179 @@ void main() {
     ).called(1);
     final cached = await storage.loadAnnotations('item-annotations');
     expect(cached.single.chapterId, 'chapter_3');
+  });
+
+  test('annotation update 携带本地版本并回写服务端新版本', () async {
+    final createdAt = DateTime(2026, 8, 1);
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'annotation-versioned',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '旧备注',
+        version: 3,
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'annotation-versioned',
+      note: '新备注',
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-versioned',
+        note: '新备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'annotation-versioned',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '新备注',
+        version: 4,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateAnnotation(
+        'annotation-versioned',
+        note: '新备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).called(1);
+    final cached = await storage.loadAnnotationById('annotation-versioned');
+    expect(cached?.version, 4);
+  });
+
+  test('annotation update 收到版本冲突后取回远端版本重试一次', () async {
+    final createdAt = DateTime(2026, 8, 2);
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'annotation-conflict',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '本地备注',
+        version: 3,
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'annotation-conflict',
+      note: '本地备注',
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).thenThrow(
+      const AppException(code: AppErrorCodes.conflict, message: '已被其他设备修改'),
+    );
+    when(() => api.annotations('item-annotations')).thenAnswer(
+      (_) async => [
+        ReaderAnnotation(
+          id: 'annotation-conflict',
+          readerItemId: 'item-annotations',
+          startOffset: 10,
+          endOffset: 20,
+          highlightText: 'highlight',
+          color: '#FFEB3B',
+          createdAt: createdAt,
+          note: '远端备注',
+          version: 7,
+        ),
+      ],
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 7,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'annotation-conflict',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '本地备注',
+        version: 8,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    // 冲突重试仍是本地内容覆盖，只是先经过一次显式的版本确认。
+    verify(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 7,
+      ),
+    ).called(1);
+    final cached = await storage.loadAnnotationById('annotation-conflict');
+    expect(cached?.version, 8);
+    expect(cached?.note, '本地备注');
+  });
+
+  test('note update 携带本地版本并回写服务端新版本', () async {
+    final createdAt = DateTime(2026, 8, 3);
+    await storage.saveNote(
+      ReaderNote(
+        id: 'note-versioned',
+        readerItemId: 'item-notes',
+        content: '旧内容',
+        createdAt: createdAt,
+        version: 2,
+      ),
+    );
+    await ReaderSyncQueue.enqueueNoteUpdate(
+      noteId: 'note-versioned',
+      content: '新内容',
+    );
+    when(
+      () => api.updateNote(
+        'note-versioned',
+        title: null,
+        content: '新内容',
+        expectedVersion: 2,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderNote(
+        id: 'note-versioned',
+        readerItemId: 'item-notes',
+        content: '新内容',
+        createdAt: createdAt,
+        version: 3,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final cached = await storage.loadNoteById('note-versioned');
+    expect(cached?.version, 3);
   });
 
   test('enqueueProgress 取代同书旧的进度行，保留其它书', () async {

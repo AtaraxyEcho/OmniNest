@@ -273,6 +273,17 @@ extension FileBrowserUploadRuntime on FileBrowserController {
     _UploadRuntime? uploadRuntime;
     try {
       final effectivePolicy = policy ?? await _repository.uploadPolicy();
+      // 单文件上限先本地拦一遍：超限文件传出去几个 GB 才被服务端拒绝，
+      // 白占带宽、白排队，也把队列堵在注定失败的任务上。
+      final maxFileSizeBytes = effectivePolicy.maxFileSizeBytes;
+      if (maxFileSizeBytes > 0 && sizeBytes > maxFileSizeBytes) {
+        throw AppException(
+          code: AppErrorCodes.operationFailed,
+          message:
+              '文件超过单文件上传上限'
+              '（${(maxFileSizeBytes / (1024 * 1024)).toStringAsFixed(0)} MB）',
+        );
+      }
       final needsMultipart = sizeBytes > effectivePolicy.directUploadMaxBytes;
       final partSizeBytes =
           needsMultipart

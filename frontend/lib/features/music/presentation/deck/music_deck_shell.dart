@@ -1,3 +1,4 @@
+import 'package:omninest/features/music/presentation/deck/music_deck_transition.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -91,13 +92,13 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     final width = MediaQuery.sizeOf(context).width;
     final compact = MobileShellScope.isHosted(context) || width < 760;
     return AnimatedSwitcher(
-      duration: MotionToken.resolve(context, const Duration(milliseconds: 360)),
-      reverseDuration: MotionToken.resolve(
+      duration: MotionToken.reduced(context, MotionToken.pageSwitch),
+      reverseDuration: MotionToken.reduced(
         context,
-        const Duration(milliseconds: 280),
+        const Duration(milliseconds: 200),
       ),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      switchInCurve: MotionToken.curve,
+      switchOutCurve: MotionToken.curveIn,
       layoutBuilder:
           (currentChild, previousChildren) => Stack(
             fit: StackFit.expand,
@@ -110,12 +111,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
               if (currentChild != null) currentChild,
             ],
           ),
-      transitionBuilder:
-          (child, animation) => FadeTransition(
-            opacity: animation,
-            // 仅淡入：避免缩放时透明沉浸层露出底层白/浅色边。
-            child: child,
-          ),
+      transitionBuilder: musicDeckImmersiveTransition,
       child:
           _immersivePlayerVisible
               ? MusicImmersiveOverlay(

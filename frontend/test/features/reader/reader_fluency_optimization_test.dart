@@ -202,7 +202,7 @@ void main() {
       expect(identical(first, second), isTrue);
     });
 
-    test('settings 换实例（排版参数失效）触发重算', () {
+    test('settings 等值新实例仍命中缓存（父层 copyWith 不击穿缓存）', () {
       final block = parseBlocks('<p>排版参数变化应触发重算的段落。</p>').first;
       final first = ReaderPaginationEngine.measureVisualLines(
         block,
@@ -218,9 +218,29 @@ void main() {
         1.0,
         blockGlobalOffset: 0,
       );
-      expect(identical(first, second), isFalse);
-      // 内容等价（同默认排版）
+      // 同值不同实例必须命中：父组件每次 build 都会 copyWith 出新对象，
+      // 按身份比较会让滚动热路径每帧重跑 TextPainter。
+      expect(identical(first, second), isTrue);
       expect(second.length, first.length);
+    });
+
+    test('排版参数真的变化时触发重算', () {
+      final block = parseBlocks('<p>字号变化应触发重算的段落。</p>').first;
+      final first = ReaderPaginationEngine.measureVisualLines(
+        block,
+        320,
+        ReaderViewSettings(),
+        1.0,
+        blockGlobalOffset: 0,
+      );
+      final second = ReaderPaginationEngine.measureVisualLines(
+        block,
+        320,
+        ReaderViewSettings(fontSize: 26),
+        1.0,
+        blockGlobalOffset: 0,
+      );
+      expect(identical(first, second), isFalse);
     });
 
     test('LRU 容量淘汰后重算仍得到等价结果', () {

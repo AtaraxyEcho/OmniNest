@@ -20,6 +20,16 @@ abstract final class _ReaderPaginationTextLayout {
   static int blockCharCount(ContentBlock block) =>
       BlockClipper.blockCharCount(block);
 
+  /// 清空静态视觉行测量缓存。
+  ///
+  /// 本类无实例状态，清空只影响跨调用的测量结果复用。供排版参数、字号
+  /// 缩放或文本环境整体变化后由调用方显式触发（退出阅读页经
+  /// `clearReaderPaginationCaches`），用于释放旧 blocks 与 settings 身份引用；
+  /// 本文件内部不得调用，避免测量热路径缓存反复失效。
+  static void clearCaches() {
+    _visualLinesCache.clear();
+  }
+
   static List<dynamic>? _getBlockLines(ContentBlock block) {
     return switch (block) {
       ParagraphBlock(:final lines) => lines,
@@ -30,9 +40,9 @@ abstract final class _ReaderPaginationTextLayout {
   }
 
   /// 视觉行测量缓存：滚动热路径的 contentYToCharOffset 每帧对命中块
-  /// 调用本方法，无缓存时每帧重建 TextPainter。键含 settings 身份
-  /// （排版参数）与 blockGlobalOffset（块前缀，章内恒定）；LRU 上限
-  /// 64 防内存增长，换章/换排版自然淘汰。
+  /// 调用本方法，无缓存时每帧重建 TextPainter。键含 settings 值
+  /// （排版参数，按字段比较而非身份：父层 copyWith 出等值实例不该击穿缓存）
+  /// 与 blockGlobalOffset（块前缀，章内恒定）；LRU 上限 64 防内存增长。
   static final List<_VisualLinesCacheEntry> _visualLinesCache =
       <_VisualLinesCacheEntry>[];
   static const _visualLinesCacheLimit = 64;
@@ -49,7 +59,7 @@ abstract final class _ReaderPaginationTextLayout {
       final entry = _visualLinesCache[i];
       if (identical(entry.block, block) &&
           entry.pageWidth == pageWidth &&
-          identical(entry.settings, settings) &&
+          entry.settings == settings &&
           entry.textScale == textScale &&
           entry.blockGlobalOffset == blockGlobalOffset &&
           entry.isContinuation == isContinuation) {
@@ -330,6 +340,15 @@ abstract final class _ReaderPaginationTextLayout {
 
     return result;
   }
+}
+
+/// 释放分页引擎的章节级静态缓存：前缀偏移、字符/块区间裁剪与视觉行测量。
+///
+/// 这些缓存都以整章 `List<ContentBlock>` 为键或值，离开阅读页后不清空会让
+/// 最后一章正文随进程常驻。退出阅读页时由页面显式调用。
+void clearReaderPaginationCaches() {
+  BlockClipper.clearCaches();
+  _ReaderPaginationTextLayout.clearCaches();
 }
 
 /// TextPainter 字符区间到章节字符区间的映射。

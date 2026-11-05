@@ -136,9 +136,19 @@ class MovieRedesignGridMetrics {
 
 /// 新版海报卡：2:3 海报 + hover 播放浮层 + 进度条 + 双语标题 + 等宽元信息行。
 class MovieRedesignPosterCard extends StatefulWidget {
-  const MovieRedesignPosterCard({required this.data, super.key});
+  const MovieRedesignPosterCard({
+    required this.data,
+    this.enableHero = false,
+    super.key,
+  });
 
   final MovieRedesignCardData data;
+
+  /// 是否参与跨页共享元素转场。
+  ///
+  /// 只允许主网格开启：同一路由里横滑轨与网格常出现同一条目，两处都用
+  /// 同一个 tag 会直接触发 `Multiple heroes that share the same tag` 断言。
+  final bool enableHero;
 
   @override
   State<MovieRedesignPosterCard> createState() =>
@@ -147,6 +157,15 @@ class MovieRedesignPosterCard extends StatefulWidget {
 
 class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
   bool _hovered = false;
+
+  /// 仅在主网格开启跨页转场；横滑轨必须保持关闭，否则同一条目会在同一路由
+  /// 出现两个相同 tag 的 Hero。
+  Widget _withHero(Widget child, String id) {
+    if (!widget.enableHero) {
+      return child;
+    }
+    return Hero(tag: 'movie-poster-$id', child: child);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -179,9 +198,12 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                       duration: MotionToken.normal,
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
-                      child: _PosterImage(
-                        posterUrl: data.posterUrl,
-                        cacheKey: 'movie-poster:${data.id}',
+                      child: _withHero(
+                        _PosterImage(
+                          posterUrl: data.posterUrl,
+                          cacheKey: 'movie-poster:${data.id}',
+                        ),
+                        data.id,
                       ),
                     ),
                     if (onPlay != null)
@@ -436,7 +458,8 @@ class MovieRedesignPosterGrid extends StatelessWidget {
             childAspectRatio: metrics.childAspectRatio,
           ),
           itemBuilder:
-              (context, index) => MovieRedesignPosterCard(data: items[index]),
+              (context, index) =>
+                  MovieRedesignPosterCard(data: items[index], enableHero: true),
         );
       },
     );
@@ -469,7 +492,8 @@ class MovieRedesignPosterSliverGrid extends StatelessWidget {
             childAspectRatio: metrics.childAspectRatio,
           ),
           delegate: SliverChildBuilderDelegate(
-            (context, index) => MovieRedesignPosterCard(data: items[index]),
+            (context, index) =>
+                MovieRedesignPosterCard(data: items[index], enableHero: true),
             childCount: items.length,
           ),
         );

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_hero.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 书库“继续阅读”横滑卡：小封面 + 标题作者 + 细进度线。
@@ -135,6 +136,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
     required this.onTap,
     this.onDelete,
     this.onToggleBookshelf,
+    this.enableHero = false,
     super.key,
   });
 
@@ -142,6 +144,12 @@ class ReaderLibraryGridCard extends ConsumerWidget {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
   final ValueChanged<ReaderItem>? onToggleBookshelf;
+
+  /// 是否参与进详情页的封面共享元素转场。
+  ///
+  /// 只允许主网格开启：「继续阅读」横滑轨与本网格常同屏出现同一条目，
+  /// 两处都用同一个 tag 会直接崩在 Multiple heroes 断言上。
+  final bool enableHero;
 
   bool get _hasActions => onDelete != null || onToggleBookshelf != null;
 
@@ -172,10 +180,14 @@ class ReaderLibraryGridCard extends ConsumerWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        ReaderBookCover(
-                          item: item,
-                          size: ReaderCoverSize.grid,
-                          zoomOnHover: true,
+                        ReaderCoverHero(
+                          itemId: item.id,
+                          enabled: enableHero,
+                          child: ReaderBookCover(
+                            item: item,
+                            size: ReaderCoverSize.grid,
+                            zoomOnHover: true,
+                          ),
                         ),
                         if (progress != null && progress > 0 && progress < 1)
                           Positioned(

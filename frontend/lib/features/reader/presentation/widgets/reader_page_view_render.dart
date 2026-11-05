@@ -33,9 +33,14 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
                 : MediaQuery.sizeOf(context).width;
         return SizedBox.expand(
           child: AnimatedBuilder(
-            animation: _animController!,
+            // 拖动期间进度写在 _flipProgressNotifier 上、松手后由动画控制器接管，
+            // 两者必须同时监听，否则手指未抬起前画面不跟随位移刷新。
+            animation: Listenable.merge([
+              _animController!,
+              _flipProgressNotifier,
+            ]),
             builder: (context, _) {
-              final t = _animController!.value;
+              final t = _isAnimating ? _animController!.value : _flipProgress;
               return switch (widget.turnMode) {
                 PageTurnMode.cover => _buildCover(current, target, t, width),
                 PageTurnMode.fade => _buildFade(current, target, t),

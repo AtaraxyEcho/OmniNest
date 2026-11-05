@@ -158,6 +158,10 @@ class NotificationController extends Notifier<NotificationState> {
 
   bool get _unreadOnly => state.filter == NotificationFilter.unread;
 
+  /// 列表是否为「滚动追加」形态：`loadMore` 置真，跳页/切档重置。
+  /// `_refreshPages` 据此决定是否需要重拉当前页之前的各页。
+  bool _appendMode = false;
+
   /// 加载通知列表（当前筛选）。
   Future<void> load({int page = 0, int size = 20}) async {
     final operation = _loadPage(page: page, size: size);
@@ -190,6 +194,7 @@ class NotificationController extends Notifier<NotificationState> {
     if (state.isLoading) {
       return;
     }
+    _appendMode = true;
     final nextPage = state.currentPage + 1;
     final maxPage = (state.total / size).ceil() - 1;
     if (nextPage > maxPage) {
@@ -264,10 +269,22 @@ class NotificationController extends Notifier<NotificationState> {
     final current = state;
     final generation = _loadGeneration;
     final unreadOnly = _unreadOnly;
-    final pages = await Future.wait([
-      for (var page = 0; page <= current.currentPage; page++)
-        _api.list(page: page, size: size, unreadOnly: unreadOnly),
-    ]);
+    // 桌面跳页只加载了当前一页，把所有页拼起来会把单页视图塞成整段历史；
+    // 滚动追加模式（items 是 0..currentPage 的拼接）才需要重拉前面各页，
+    // 缩减成前两页会让已经滚动过的列表在标记已读后突然变短。
+    final pages =
+        _appendMode
+            ? await Future.wait([
+              for (var page = 0; page <= current.currentPage; page++)
+                _api.list(page: page, size: size, unreadOnly: unreadOnly),
+            ])
+            : [
+              await _api.list(
+                page: current.currentPage,
+                size: size,
+                unreadOnly: unreadOnly,
+              ),
+            ];
     if (generation != _loadGeneration || current.filter != state.filter) {
       return;
     }
@@ -301,6 +318,8 @@ class NotificationController extends Notifier<NotificationState> {
   }
 
   Future<void> _loadPage({required int page, required int size}) async {
+    // 首页、跳页与切档都只承载单页，后续刷新不能按追加形态拼历史。
+    _appendMode = false;
     final generation = ++_loadGeneration;
     final filter = state.filter;
     final unreadOnly = filter == NotificationFilter.unread;

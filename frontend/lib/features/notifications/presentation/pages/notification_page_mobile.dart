@@ -163,13 +163,7 @@ class _NotificationMobileViewState
                           unreadLabel: l10n.notificationUnreadCount(
                             unreadCount,
                           ),
-                          onMarkAllRead:
-                              () =>
-                                  ref
-                                      .read(
-                                        notificationControllerProvider.notifier,
-                                      )
-                                      .markAllRead(),
+                          onMarkAllRead: _markAllRead,
                         ),
                       ),
                     Expanded(child: _buildBody(context, state, canManage)),
@@ -259,17 +253,46 @@ class _NotificationMobileViewState
         return _NotificationMobileRow(
           notification: notification,
           canManage: canManage,
-          onTap: () {
-            if (!notification.read) {
-              ref
-                  .read(notificationControllerProvider.notifier)
-                  .markRead(notification.id);
-            }
-          },
+          onTap: () => _markRead(notification),
           onDelete: () => _deleteNotification(notification),
         );
       },
     );
+  }
+
+  Future<void> _markRead(NotificationDto notification) async {
+    if (notification.read) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(notificationControllerProvider.notifier)
+          .markRead(notification.id);
+    } catch (error) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          failureToast(l10n, l10n.notificationMarkReadFailed, error),
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(notificationControllerProvider.notifier).markAllRead();
+    } catch (error) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          failureToast(l10n, l10n.notificationMarkAllReadFailed, error),
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
   }
 
   Future<void> _deleteNotification(NotificationDto notification) async {

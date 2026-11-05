@@ -133,6 +133,28 @@ void main() {
     expect(state.items.firstWhere((item) => item.id == target.id).read, isTrue);
     expect(state.total, 3);
   });
+
+  test('跳页后的实时刷新只重拉当前页，不把历史页拼进单页视图', () async {
+    await controller().load();
+    await controller().goToPage(2);
+    api.listCalls.clear();
+
+    await controller().refreshForRealtime();
+
+    expect(api.listCalls.map((call) => call.page), [2]);
+    expect(container.read(notificationControllerProvider).currentPage, 2);
+  });
+
+  test('滚动追加模式下实时刷新仍重拉已加载的各页', () async {
+    await controller().load();
+    await controller().loadMore(size: 2);
+    expect(container.read(notificationControllerProvider).currentPage, 1);
+    api.listCalls.clear();
+
+    await controller().refreshForRealtime(size: 2);
+
+    expect(api.listCalls.map((call) => call.page), [0, 1]);
+  });
 }
 
 /// 分页去重回归专用：total=5，页 0 返回 [a, b]，页 1 返回 [b, c]。

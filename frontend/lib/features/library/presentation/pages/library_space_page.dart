@@ -20,7 +20,6 @@ import 'package:omninest/features/library/presentation/widgets/library_space_wid
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
-import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -69,12 +68,17 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
 
   Future<void> _refreshDashboardSections() async {
     final center = ref.read(musicCenterControllerProvider.notifier);
-    await Future.wait(<Future<void>>[
-      ref.read(photoDashboardProvider.notifier).reload(),
-      ref.refresh(photoAlbumsProvider.future),
-      ref.refresh(movieDashboardProvider.future),
-      center.refresh(),
-    ]);
+    try {
+      await Future.wait(<Future<void>>[
+        ref.read(photoDashboardProvider.notifier).reload(),
+        ref.refresh(photoAlbumsProvider.future),
+        ref.refresh(movieDashboardProvider.future),
+        center.refresh(),
+      ]);
+    } on Object {
+      // 各仪表盘的失败已由自身 AsyncValue 呈现；后台刷新不能把异常
+      // 抛进 zone（断网时进页即产生未捕获异步错误）。
+    }
   }
 
   @override
@@ -590,9 +594,6 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     AppLocalizations l10n,
     AsyncValue<MusicCenterState> musicCenter,
   ) {
-    final albums =
-        musicCenter.asData?.value.albums.take(10).toList() ??
-        const <MusicAlbum>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -609,32 +610,53 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
           onAction: () => context.push('/music'),
         ),
         const SizedBox(height: 12),
-        if (musicCenter.isLoading && albums.isEmpty)
-          MobileSkeletonBlock(height: libraryAlbumRailHeight(context))
-        else if (albums.isEmpty)
-          EnvEmptyState(
-            icon: OmniIcons.music,
-            title: l10n.libraryEmptyMusicTitle,
-            message: l10n.libraryEmptyMusicMessage,
-            compact: true,
-          )
-        else
-          LibraryRail(
-            height: libraryAlbumRailHeight(context),
-            children: [
-              for (final album in albums)
-                LibraryAlbumCard(
-                  imageUrl: album.coverUrl,
-                  title: album.title,
-                  detail: album.artistName,
-                  onTap: () {
-                    unawaited(
-                      ref.read(musicPortalActionsProvider).playAlbum(album),
-                    );
-                  },
-                ),
-            ],
-          ),
+        // 失败必须给重试入口：此前 hasError 且列表为空会被渲染成"暂无音乐"，
+        // 用户既看不到失败原因也没有恢复路径。
+        musicCenter.when(
+          loading:
+              () =>
+                  MobileSkeletonBlock(height: libraryAlbumRailHeight(context)),
+          error:
+              (_, _) => EnvEmptyState(
+                icon: OmniIcons.music,
+                title: l10n.libraryEmptyMusicTitle,
+                message: l10n.libraryEmptyMusicMessage,
+                actionLabel: l10n.coreRetry,
+                onAction:
+                    () => unawaited(
+                      ref
+                          .read(musicCenterControllerProvider.notifier)
+                          .refresh(),
+                    ),
+              ),
+          data: (center) {
+            final albums = center.albums.take(10).toList();
+            if (albums.isEmpty) {
+              return EnvEmptyState(
+                icon: OmniIcons.music,
+                title: l10n.libraryEmptyMusicTitle,
+                message: l10n.libraryEmptyMusicMessage,
+                compact: true,
+              );
+            }
+            return LibraryRail(
+              height: libraryAlbumRailHeight(context),
+              children: [
+                for (final album in albums)
+                  LibraryAlbumCard(
+                    imageUrl: album.coverUrl,
+                    title: album.title,
+                    detail: album.artistName,
+                    onTap: () {
+                      unawaited(
+                        ref.read(musicPortalActionsProvider).playAlbum(album),
+                      );
+                    },
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }

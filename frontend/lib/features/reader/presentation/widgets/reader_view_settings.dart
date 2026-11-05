@@ -223,6 +223,42 @@ class ReaderViewSettings {
     return copyWith(readingMode: readingMode == 'page' ? 'scroll' : 'page');
   }
 
+  /// 按字段值比较，而不是对象身份。
+  ///
+  /// 排版测量缓存以本对象为键：父组件每次 `build` 都可能 `copyWith` 出内容完全
+  /// 相同的新实例，身份比较会让 64 条视觉行缓存整批失效、每帧重跑 TextPainter。
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ReaderViewSettings &&
+        other.fontFamily == fontFamily &&
+        other.fontSize == fontSize &&
+        other.lineHeight == lineHeight &&
+        other.paletteId == paletteId &&
+        other.readingMode == readingMode &&
+        other.immersiveMode == immersiveMode &&
+        other.pageTurnMode == pageTurnMode &&
+        other.volumeKeyPaging == volumeKeyPaging &&
+        other.followBookTypesetting == followBookTypesetting &&
+        other.mobileDefaults == mobileDefaults;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    fontFamily,
+    fontSize,
+    lineHeight,
+    paletteId,
+    readingMode,
+    immersiveMode,
+    pageTurnMode,
+    volumeKeyPaging,
+    followBookTypesetting,
+    mobileDefaults,
+  );
+
   Map<String, dynamic> toJson() => {
     'fontFamily': fontFamily,
     'fontSize': fontSize,

@@ -457,13 +457,17 @@ class _FakeFileRepository
   @override
   Future<void> revokeShare(String shareId) => throw UnimplementedError();
 
+  /// 服务端下发的单文件上限；0 表示不限制，用于验证本地预检。
+  int maxFileSizeBytes = 0;
+
   @override
-  Future<FileUploadPolicy> uploadPolicy() async => const FileUploadPolicy(
+  Future<FileUploadPolicy> uploadPolicy() async => FileUploadPolicy(
     directUploadMaxBytes: 64 * 1024 * 1024,
     defaultPartSizeBytes: 10 * 1024 * 1024,
     maxPartSizeBytes: 100 * 1024 * 1024,
     maxTotalParts: 1000,
     maxConcurrentParts: 4,
+    maxFileSizeBytes: maxFileSizeBytes,
   );
 
   @override

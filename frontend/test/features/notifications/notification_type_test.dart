@@ -185,10 +185,7 @@ void main() {
       const sameBoundaries = NotificationPreferences(
         quietHours: QuietHours(enabled: true, start: '08:00', end: '08:00'),
       );
-      expect(
-        sameBoundaries.isQuietAt(DateTime(2026, 10, 20, 8, 30)),
-        false,
-      );
+      expect(sameBoundaries.isQuietAt(DateTime(2026, 10, 20, 8, 30)), false);
 
       const malformed = NotificationPreferences(
         quietHours: QuietHours(enabled: true, start: '8am', end: '08:00'),

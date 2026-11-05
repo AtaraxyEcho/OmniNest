@@ -37,6 +37,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
             onPointerDown: _onPointerDown,
             onPointerMove: _onPointerMove,
             onPointerUp: _onPointerUp,
+            onPointerCancel: _onPointerCancel,
           ),
         ),
       ],
@@ -82,14 +83,21 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
 
   void _onPointerDown(PointerDownEvent event) {
     _primaryPointerDown = event.buttons == kPrimaryButton;
+    _velocityTracker = null;
     if (!_primaryPointerDown) return;
     _pointerKind = event.kind;
     _pointerDownPosition = event.localPosition;
     _pointerMoved = false;
+    final tracker = VelocityTracker.withKind(event.kind);
+    // 起始点也入队：样本数不足两点时 VelocityTracker 只能给出零速度，
+    // 短促甩动往往只有一个 move 事件。
+    tracker.addPosition(event.timeStamp, event.localPosition);
+    _velocityTracker = tracker;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     if (_pointerDownPosition == null) return;
+    _velocityTracker?.addPosition(event.timeStamp, event.localPosition);
     final delta = event.localPosition - _pointerDownPosition!;
     if (delta.distance > _ReaderPageViewState._tapMoveThreshold) {
       _pointerMoved = true;
@@ -114,6 +122,8 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    final velocity = _velocityTracker?.getVelocity() ?? Velocity.zero;
+    _velocityTracker = null;
     if (!_primaryPointerDown || _pointerDownPosition == null) return;
     _primaryPointerDown = false;
     final startPos = _pointerDownPosition!;
@@ -121,7 +131,17 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     _pointerKind = null;
 
     if (_isDragging) {
-      _onDragEnd(DragEndDetails(velocity: Velocity.zero));
+      // 翻页只关心水平分量；DragEndDetails 断言 primaryVelocity 与 velocity
+      // 的某一轴相等且另一轴为零，斜向甩动的 dy 必须归零后再传入。
+      final flingVelocity = Velocity(
+        pixelsPerSecond: Offset(velocity.pixelsPerSecond.dx, 0),
+      );
+      _onDragEnd(
+        DragEndDetails(
+          velocity: flingVelocity,
+          primaryVelocity: flingVelocity.pixelsPerSecond.dx,
+        ),
+      );
       return;
     }
 
@@ -164,6 +184,28 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     } else {
       widget.callbacks.onToggleControls();
     }
+  }
+
+  /// 指针被系统取消：手势被抢占、窗口失焦或触摸中断。
+  ///
+  /// 取消不会再补发 PointerUpEvent，必须在此复位指针状态；拖动中的半开
+  /// 翻页要平滑收回，否则页面停在中间且 [_isDragging] 残留会吞掉后续手势。
+  void _onPointerCancel(PointerCancelEvent event) {
+    _velocityTracker = null;
+    _primaryPointerDown = false;
+    _pointerDownPosition = null;
+    _pointerMoved = false;
+    _pointerKind = null;
+    if (!_isDragging) return;
+    _isDragging = false;
+    if (_animController == null) {
+      _flipProgress = 0;
+      if (mounted) {
+        _updateState(() {});
+      }
+      return;
+    }
+    _cancelFlip();
   }
 
   void _dispatchSlideBoundary(int direction) {

@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 进程内照片详情缓存。
@@ -38,6 +39,8 @@ class PhotoDetailMemoryCache {
 }
 
 final photoDetailMemoryCacheProvider = Provider<PhotoDetailMemoryCache>((ref) {
+  // 换号会递增世代：直接重建缓存实例，避免同一进程内残留上一账号的详情。
+  ref.watch(sessionEpochProvider);
   final cache = PhotoDetailMemoryCache();
   // 退出登录后同一进程可能切到另一个账号：进程内详情缓存必须立刻失效。
   ref.listen(authSessionProvider, (previous, next) {

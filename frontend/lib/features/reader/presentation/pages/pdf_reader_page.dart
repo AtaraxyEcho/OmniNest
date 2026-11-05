@@ -16,6 +16,7 @@ import 'package:omninest/features/reader/application/reader_preferences_controll
 import 'package:omninest/features/reader/application/reader_progress_sync_service.dart';
 import 'package:omninest/features/reader/application/reader_session_recorder.dart';
 import 'package:omninest/features/reader/domain/reader_progress.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
@@ -66,6 +67,10 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
   /// 退出只走一条通道，且只走一次：连点返回不得重复刷写进度。
   bool _exitStarted = false;
 
+  /// 进度上报服务在 initState 取好：dispose 里不能再用 ref，异常退出兜底
+  /// 仍要把最后一个节流窗口内的页码刷出去（该 Provider 与容器同生命周期）。
+  late final ReaderProgressSyncService _progressSyncService;
+
   /// 只有全书百分比时无法在总页数就绪前定页，记录下来等查看器就绪后补定位。
   double? _pendingPercentFallback;
 
@@ -73,6 +78,7 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _progressSyncService = ref.read(readerProgressSyncServiceProvider);
     _lastResumedAt = DateTime.now();
     _volumeKeyEventCancel = ReaderVolumeKeyService.instance().addListener(
       _handleVolumeKeyEvent,
@@ -85,6 +91,13 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _recordSession();
+    if (!_exitStarted) {
+      // 非正常路由退出（深链顶掉、外层直接销毁）不会走 _handleExit：
+      // 最后一个节流窗口内的页码仍需落盘并补报，否则续读指针停在旧位置。
+      _exitStarted = true;
+      // 页面已卸载：上报失败不能变成未捕获异步异常，本地落盘机会已经用掉。
+      unawaited(_syncProgress(force: true).onError<Object>((_, _) {}));
+    }
     _volumeKeyEventCancel?.call();
     if (_volumeKeyPagingPushed) {
       _volumeKeyPagingPushed = false;
@@ -312,8 +325,8 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     final total = _totalPages;
     final bookProgress = total > 0 ? _currentPage / total : 0.0;
     // 退出路径先 unawaited 上报再 pop，本地落盘的 await 结束时本页可能已卸载，
-    // 服务必须在 await 之前取好（该 Provider 非 autoDispose，实例与容器同生命周期）。
-    final syncService = ref.read(readerProgressSyncServiceProvider);
+    // 服务在 initState 已取好，这里不再触碰 ref（dispose 兜底同样走本方法）。
+    final syncService = _progressSyncService;
     await ReaderLocalProgress.save(
       itemId: widget.itemId,
       chapterProgress: bookProgress,
@@ -398,7 +411,19 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     // 而查看器可能仍在按页映射该文件。
     ref.watch(pdfBookHandleProvider(widget.itemId));
     if (_loading) {
-      return Scaffold(body: Center(child: AppLoading()));
+      // 加载态保留返回入口：慢网或卡住时用户不能被困在纯色页面里。
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => unawaited(_handleExit()),
+          ),
+        ),
+        body: const Center(child: AppLoading()),
+      );
     }
     if (_error != null || (_sessionFilePath == null && _bytes == null)) {
       return Scaffold(
@@ -426,7 +451,27 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
             onPressed: () => unawaited(_handleExit()),
           ),
         ),
-        body: _buildViewerBody(),
+        body: Stack(
+          children: [
+            Positioned.fill(child: _buildViewerBody()),
+            if (_totalPages > 0)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: IgnorePointer(
+                  child: ReaderProgressIndicator(
+                    settings: ReaderViewSettings.fromJson(
+                      ref.watch(readerPreferencesProvider).value ??
+                          const <String, dynamic>{},
+                    ),
+                    progress: _currentPage / _totalPages,
+                    currentPage: _currentPage - 1,
+                    totalPages: _totalPages,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

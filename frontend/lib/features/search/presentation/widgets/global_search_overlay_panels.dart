@@ -59,13 +59,17 @@ Widget _buildEmptyState(
 }
 
 Widget _buildListRow(
+  BuildContext context,
   CommandPaletteColors p,
   _Hit hit, {
   required bool selected,
   required VoidCallback onTap,
 }) {
-  return Material(
-    color: selected ? p.surfaceMuted : Colors.transparent,
+  return TweenAnimationBuilder<Color?>(
+    tween: ColorTween(end: selected ? p.surfaceMuted : Colors.transparent),
+    duration: MotionToken.reduced(context, const Duration(milliseconds: 100)),
+    curve: MotionToken.curve,
+    builder: (context, color, child) => Material(color: color, child: child),
     child: InkWell(
       onTap: onTap,
       child: Container(
@@ -166,6 +170,7 @@ class _HitThumbnail extends ConsumerWidget {
 }
 
 Widget _buildMediaCard(
+  BuildContext context,
   CommandPaletteColors p,
   _Hit hit, {
   required bool selected,
@@ -178,7 +183,12 @@ Widget _buildMediaCard(
       color: p.surface,
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 100),
+          ),
+          curve: MotionToken.curve,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: selected ? p.surfaceMuted : p.surface,

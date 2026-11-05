@@ -23,7 +23,7 @@ class AdminOperationsApi {
     Set<String> permissions,
   ) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/admin/roles/$roleCode/permissions',
+      '/admin/roles/${Uri.encodeComponent(roleCode)}/permissions',
       data: {'permissions': permissions.toList()},
     );
     return AdminRoleDetail.fromJson(parseData(response.data));
@@ -42,7 +42,7 @@ class AdminOperationsApi {
   /// 删除自定义角色：内置角色或仍有用户绑定时后端返回业务错误。
   Future<void> deleteRole(String roleCode) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/admin/roles/$roleCode',
+      '/admin/roles/${Uri.encodeComponent(roleCode)}',
     );
     parseData(response.data);
   }
@@ -60,7 +60,7 @@ class AdminOperationsApi {
     String? reason,
   ) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/admin/configs/detail/$key',
+      '/admin/configs/detail/${Uri.encodeComponent(key)}',
       data: {'value': value, 'reason': reason},
     );
     return AdminConfigEntry.fromJson(parseData(response.data));
@@ -68,7 +68,7 @@ class AdminOperationsApi {
 
   Future<List<AdminConfigHistory>> configHistory(String key) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/configs/$key/history',
+      '/admin/configs/${Uri.encodeComponent(key)}/history',
     );
     final envelope = parseEnvelope(response.data);
     final data = envelope['data'];
@@ -83,7 +83,7 @@ class AdminOperationsApi {
 
   Future<AdminConfigEntry> rollbackConfig(String historyId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/configs/history/$historyId/rollback',
+      '/admin/configs/history/${Uri.encodeComponent(historyId)}/rollback',
     );
     return AdminConfigEntry.fromJson(parseData(response.data));
   }
@@ -124,7 +124,7 @@ class AdminOperationsApi {
 
   Future<AdminTaskRecord> retryTask(String taskId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/tasks/$taskId/retry',
+      '/admin/tasks/${Uri.encodeComponent(taskId)}/retry',
     );
     return AdminTaskRecord.fromJson(parseData(response.data));
   }
@@ -132,7 +132,7 @@ class AdminOperationsApi {
   /// 取消排队或等待重试的任务；非法状态下后端返回业务错误。
   Future<AdminTaskRecord> cancelTask(String taskId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/tasks/$taskId/cancel',
+      '/admin/tasks/${Uri.encodeComponent(taskId)}/cancel',
     );
     return AdminTaskRecord.fromJson(parseData(response.data));
   }
@@ -140,7 +140,7 @@ class AdminOperationsApi {
   /// 丢弃死信任务；丢弃后任务进入 DISCARDED 终态，不可再重试。
   Future<AdminTaskRecord> discardDlqTask(String taskId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/tasks/dlq/$taskId/discard',
+      '/admin/tasks/dlq/${Uri.encodeComponent(taskId)}/discard',
     );
     return AdminTaskRecord.fromJson(parseData(response.data));
   }
@@ -165,7 +165,7 @@ class AdminOperationsApi {
   /// 重试死信队列任务
   Future<void> retryDlq(String taskId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/tasks/dlq/$taskId/retry',
+      '/tasks/dlq/${Uri.encodeComponent(taskId)}/retry',
     );
     parseAdminEnvelope(
       response.data,
@@ -358,7 +358,7 @@ class AdminOperationsApi {
     String? parent,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/storage/mounts/$mountKey/directories',
+      '/admin/storage/mounts/${Uri.encodeComponent(mountKey)}/directories',
       queryParameters: {if (parent != null) 'parent': parent, 'size': 200},
     );
     final data = parseData(response.data);
@@ -395,7 +395,7 @@ class AdminOperationsApi {
     required bool enabled,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/admin/storage/locations/$id',
+      '/admin/storage/locations/${Uri.encodeComponent(id)}',
       data: {'name': name, 'enabled': enabled},
     );
     return AdminStorageLocation.fromJson(parseData(response.data));
@@ -403,7 +403,7 @@ class AdminOperationsApi {
 
   Future<void> deleteStorageLocation(String id) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/admin/storage/locations/$id',
+      '/admin/storage/locations/${Uri.encodeComponent(id)}',
     );
     parseAdminEnvelope(
       response.data,
@@ -449,7 +449,7 @@ class AdminOperationsApi {
     String status,
   ) async {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
-      '/admin/external-storage/$id/status',
+      '/admin/external-storage/${Uri.encodeComponent(id)}/status',
       data: {'status': status},
     );
     return AdminExternalStorageItem.fromJson(parseData(response.data));
@@ -548,7 +548,7 @@ class AdminOperationsApi {
 
   Future<void> revokeSession(String sessionId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/sessions/$sessionId/revoke',
+      '/admin/sessions/${Uri.encodeComponent(sessionId)}/revoke',
     );
     parseAdminEnvelope(
       response.data,

@@ -5,11 +5,23 @@ part of 'notification_page.dart';
 /// 失败提示统一走 `failureToast`：保留动作文案，能映射出错误码的原因拼在后面，
 /// 未映射的意外异常不把 toString 抛到界面上。
 extension _NotificationPageActions on _NotificationPageState {
-  void _markRead(NotificationDto notification) {
-    if (!notification.read) {
-      ref
+  Future<void> _markRead(NotificationDto notification) async {
+    if (notification.read) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
           .read(notificationControllerProvider.notifier)
           .markRead(notification.id);
+    } catch (error) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          failureToast(l10n, l10n.notificationMarkReadFailed, error),
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
     }
   }
 

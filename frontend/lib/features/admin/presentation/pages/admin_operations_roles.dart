@@ -657,6 +657,11 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
           .read(adminOperationsActionsProvider)
           .updateRolePermissions(widget.role.code, _selected);
       if (mounted) {
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).adminRolePermissionsSaved,
+          severity: OmniFeedbackSeverity.success,
+        );
         Navigator.of(context).pop();
       }
     } catch (error) {

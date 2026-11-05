@@ -136,7 +136,7 @@ class ReaderSyncReplacements {
       await (database.update(database.syncOperations)
         ..where((table) => table.id.equals(operation.id))).write(
         SyncOperationsCompanion(
-          payload: Value(await _serializePayload(payload)),
+          payload: Value(await _serializePayload(operation.type, payload)),
         ),
       );
       rewritten.add(operation.type);

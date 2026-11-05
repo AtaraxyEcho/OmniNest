@@ -26,12 +26,14 @@ final latestMediaScanRunProvider = StreamProvider.autoDispose
       final api = ref.watch(movieApiProvider);
       // 连续网络/服务错误次数，达到阈值后抛出，避免无限重试掩盖真实故障。
       var consecutiveErrors = 0;
-      while (true) {
+      // autoDispose 后必须停下：循环继续会一直打接口，invalidate 也会抛已销毁。
+      while (ref.mounted) {
         MediaScanRun? run;
         try {
           run = await api.latestMediaScanRun(sourceId);
           consecutiveErrors = 0;
         } catch (_) {
+          if (!ref.mounted) return;
           // 网络抖动或服务临时不可用：短暂退避后重试，避免轮询流直接终止。
           if (++consecutiveErrors >= 3) {
             rethrow;
@@ -39,6 +41,7 @@ final latestMediaScanRunProvider = StreamProvider.autoDispose
           await Future<void>.delayed(const Duration(seconds: 3));
           continue;
         }
+        if (!ref.mounted) return;
         yield run;
         if (run == null || !run.active) {
           if (run != null) {

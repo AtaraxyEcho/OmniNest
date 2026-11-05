@@ -1,3 +1,4 @@
+import 'package:omninest/core/theme/motion_token.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -181,6 +182,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
       ref.invalidate(realtimeWeatherProvider);
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       _showMessage(
         l10n.profileWeatherCitySaveFailed(
           describeUserFacingError(error, l10n: l10n).message,

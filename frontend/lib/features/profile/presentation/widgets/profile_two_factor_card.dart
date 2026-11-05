@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
@@ -13,9 +14,10 @@ import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
 final profileTwoFactorStatusProvider =
-    FutureProvider.autoDispose<TwoFactorStatusData>(
-      (ref) => ref.watch(meApiProvider).twoFactorStatus(),
-    );
+    FutureProvider.autoDispose<TwoFactorStatusData>((ref) {
+      ref.watch(sessionEpochProvider);
+      return ref.watch(meApiProvider).twoFactorStatus();
+    });
 
 /// 个人资料安全分区的两步验证管理行：状态展示、自助开启向导、密码复核关闭。
 class ProfileTwoFactorCard extends ConsumerWidget {

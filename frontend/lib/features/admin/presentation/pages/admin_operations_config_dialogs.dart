@@ -399,8 +399,12 @@ class _QuotaEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final parsed = double.tryParse(controller.text.trim());
+    // 配额上限本身可能被配成 ≤ 1GB：此时 [1, maxGb-1] 是空区间，
+    // clamp 会抛 ArgumentError、divisions 也会变成 0 触发断言，整页白屏。
+    // 区间不成立时隐藏滑杆，只保留文本输入。
+    final hasSliderRange = maxGb > 1.0;
     final sliderValue =
-        unlimited
+        unlimited || !hasSliderRange
             ? maxGb
             : (parsed ?? initialGb).clamp(1.0, maxGb - 1.0).toDouble();
     return Column(
@@ -424,17 +428,18 @@ class _QuotaEditor extends StatelessWidget {
           onChanged: onUnlimitedChanged,
         ),
         const SizedBox(height: 2),
-        AppSlider(
-          value: sliderValue,
-          min: 1,
-          max: maxGb,
-          divisions: maxGb.round() - 1,
-          label:
-              unlimited
-                  ? l10n.adminConfigUnlimited
-                  : '${_formatQuotaInput(sliderValue)} GB',
-          onChanged: onValueChanged,
-        ),
+        if (hasSliderRange)
+          AppSlider(
+            value: sliderValue,
+            min: 1,
+            max: maxGb,
+            divisions: maxGb.round() - 1,
+            label:
+                unlimited
+                    ? l10n.adminConfigUnlimited
+                    : '${_formatQuotaInput(sliderValue)} GB',
+            onChanged: onValueChanged,
+          ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

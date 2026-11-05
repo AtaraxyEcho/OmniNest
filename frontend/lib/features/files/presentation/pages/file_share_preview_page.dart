@@ -323,8 +323,11 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       // 密码不进 URL：地址栏/历史/收藏不得留存分享口令；已授权的会话令牌
       // 留在 PublicShareService 内存里，登录回跳后直接复用并继续转存。
       _service.markPendingAccept(widget.token);
-      final redirect = Uri(path: '/s/${widget.token}').toString();
-      if (mounted) context.go('/login?redirect=$redirect');
+      final redirect =
+          Uri(path: '/s/${Uri.encodeComponent(widget.token)}').toString();
+      if (mounted) {
+        context.go('/login?redirect=${Uri.encodeQueryComponent(redirect)}');
+      }
       return;
     }
     _service.takePendingAccept(widget.token);

@@ -100,7 +100,16 @@ class TaskListNotifier extends Notifier<List<TaskRecord>> {
     if (!ref.mounted) {
       return;
     }
-    state = [...state, ...items];
+    // 后台任务随时入队，分页偏移会整体后移；按 id 去重避免同一任务
+    // 因翻页位移出现重复卡片。
+    final existingIds = state.map((task) => task.id).toSet();
+    final appended = <TaskRecord>[
+      for (final item in items)
+        if (existingIds.add(item.id)) item,
+    ];
+    if (appended.isNotEmpty) {
+      state = [...state, ...appended];
+    }
     _hasMore = items.length >= 20;
     _page++;
   }

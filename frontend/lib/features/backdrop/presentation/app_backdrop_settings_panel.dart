@@ -474,7 +474,7 @@ class _AppBackdropSettingsContentState
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: Text(
-                  MaterialLocalizations.of(context).cancelButtonLabel,
+                  MaterialLocalizations.of(dialogContext).cancelButtonLabel,
                 ),
               ),
               FilledButton(
@@ -673,7 +673,7 @@ class _BackdropTile extends StatelessWidget {
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: Text(
-                  MaterialLocalizations.of(context).cancelButtonLabel,
+                  MaterialLocalizations.of(dialogContext).cancelButtonLabel,
                 ),
               ),
               FilledButton(

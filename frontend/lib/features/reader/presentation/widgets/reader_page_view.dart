@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show PointerDeviceKind;
 
-import 'package:flutter/gestures.dart' show kPrimaryButton;
+import 'package:flutter/gestures.dart' show VelocityTracker, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_interaction_gate.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -153,6 +153,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
   bool _pointerMoved = false;
   bool _primaryPointerDown = false;
   PointerDeviceKind? _pointerKind;
+
+  /// 甩动识别：Listener 不经过手势竞技场，速度必须自行采样，
+  /// 否则松手时只能拿到硬编码零速度，快速轻扫无法翻页。
+  VelocityTracker? _velocityTracker;
   static const _tapMoveThreshold = 18.0;
 
   // ── 热区比例 ──

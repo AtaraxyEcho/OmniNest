@@ -18,7 +18,7 @@ mixin MovieApiLibrary on MovieApiBase {
 
   Future<MediaLibraryAccessSettings> libraryAccess(String sourceId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId/access',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/access',
     );
     return MediaLibraryAccessSettings.fromJson(parseData(response.data));
   }
@@ -30,7 +30,7 @@ mixin MovieApiLibrary on MovieApiBase {
     required int expectedVersion,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId/access',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/access',
       data: {
         'visibilityType': visibility.apiValue,
         'userIds': userIds.toList()..sort(),
@@ -66,7 +66,7 @@ mixin MovieApiLibrary on MovieApiBase {
     int size = 100,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/storage/locations/$locationId/directories',
+      '/storage/locations/${Uri.encodeComponent(locationId)}/directories',
       queryParameters: {
         if (parent != null) 'parent': parent,
         'page': page,
@@ -99,7 +99,7 @@ mixin MovieApiLibrary on MovieApiBase {
     int size = 100,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/storage/mounts/$mountKey/directories',
+      '/admin/storage/mounts/${Uri.encodeComponent(mountKey)}/directories',
       queryParameters: {
         if (parent != null) 'parent': parent,
         'page': page,
@@ -166,7 +166,7 @@ mixin MovieApiLibrary on MovieApiBase {
     required bool enabled,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}',
       data: {
         'name': name,
         'relativeRoot': relativeRoot,
@@ -180,28 +180,28 @@ mixin MovieApiLibrary on MovieApiBase {
 
   Future<void> deleteLibrarySource(String sourceId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '删除视频库源失败');
   }
 
   Future<ScrapeTask> scanLibrarySource(String sourceId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId/scan/tasks',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/scan/tasks',
     );
     return ScrapeTask.fromJson(parseData(response.data));
   }
 
   Future<ScrapeTask> discoverLibrarySource(String sourceId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId/discovery/tasks',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/discovery/tasks',
     );
     return ScrapeTask.fromJson(parseData(response.data));
   }
 
   Future<MediaScanRun?> latestMediaScanRun(String sourceId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/library-sources/$sourceId/scan-runs/latest',
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/scan-runs/latest',
     );
     final data = parseEnvelope(response.data)['data'];
     return data is Map<String, dynamic> ? MediaScanRun.fromJson(data) : null;
@@ -209,7 +209,7 @@ mixin MovieApiLibrary on MovieApiBase {
 
   Future<MediaScanRun> mediaScanRun(String runId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/scan-runs/$runId',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}',
     );
     return MediaScanRun.fromJson(parseData(response.data));
   }
@@ -221,7 +221,7 @@ mixin MovieApiLibrary on MovieApiBase {
     int size = 100,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/tree',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/tree',
       queryParameters: {
         if (parentNodeId != null) 'parentNodeId': parentNodeId,
         'page': page,
@@ -241,7 +241,7 @@ mixin MovieApiLibrary on MovieApiBase {
     required int expectedRevision,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/selection-rules',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/selection-rules',
       data: {
         'nodeId': nodeId,
         'selected': selected,
@@ -253,7 +253,7 @@ mixin MovieApiLibrary on MovieApiBase {
 
   Future<MediaSelectionSummary> mediaSelectionSummary(String runId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/selection-summary',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/selection-summary',
     );
     return MediaSelectionSummary.fromJson(parseData(response.data));
   }
@@ -263,7 +263,7 @@ mixin MovieApiLibrary on MovieApiBase {
     required int expectedRevision,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/apply/tasks',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/apply/tasks',
       data: {'expectedRevision': expectedRevision},
     );
     return ScrapeTask.fromJson(parseData(response.data));
@@ -271,28 +271,28 @@ mixin MovieApiLibrary on MovieApiBase {
 
   Future<MediaScanRun> pauseMediaScanRun(String runId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/pause',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/pause',
     );
     return MediaScanRun.fromJson(parseData(response.data));
   }
 
   Future<MediaScanRun> cancelMediaScanRun(String runId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/scan-runs/$runId/cancel',
+      '/video/scan-runs/${Uri.encodeComponent(runId)}/cancel',
     );
     return MediaScanRun.fromJson(parseData(response.data));
   }
 
   Future<NfoExport> nfoPreview(String videoItemId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/items/$videoItemId/nfo',
+      '/video/items/${Uri.encodeComponent(videoItemId)}/nfo',
     );
     return NfoExport.fromJson(parseData(response.data));
   }
 
   Future<NfoExport> exportNfo(String videoItemId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/video/items/$videoItemId/nfo',
+      '/video/items/${Uri.encodeComponent(videoItemId)}/nfo',
     );
     return NfoExport.fromJson(parseData(response.data));
   }

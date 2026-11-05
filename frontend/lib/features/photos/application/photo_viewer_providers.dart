@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
@@ -17,6 +18,7 @@ final photoInfoPanelVisibleProvider =
 
 /// 用户的标签清单（用于标签视图芯片）。
 final photoTagsProvider = FutureProvider.autoDispose<List<String>>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(photoRepositoryProvider).listTags();
 });
 
@@ -60,6 +62,7 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
 
   @override
   Future<TagPhotosState> build() async {
+    ref.watch(sessionEpochProvider);
     _page = 0;
     final first = await ref.watch(photoRepositoryProvider).listByTagPage(tag);
     return TagPhotosState(

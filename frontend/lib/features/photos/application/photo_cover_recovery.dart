@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 
@@ -20,7 +21,13 @@ class PhotoCoverRecoveryController extends Notifier<int> {
   int _attempts = 0;
 
   @override
-  int build() => 0;
+  int build() {
+    // 换号后必须重开熔断窗口：沿用上一账号的失败计数会让新账号直接放弃自愈。
+    ref.watch(sessionEpochProvider);
+    _lastAttemptAt = null;
+    _attempts = 0;
+    return 0;
+  }
 
   /// 缩略图加载失败时上报；按节流窗口决定是否触发恢复刷新。
   void reportFailure() {

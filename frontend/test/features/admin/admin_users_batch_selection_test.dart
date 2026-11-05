@@ -275,6 +275,9 @@ void main() {
     await tester.pumpAndSettle();
 
     verify(() => api.resetTwoFactor('u1')).called(1);
+    // 成功提示是带停留时长的 Overlay，用例结束前必须让计时器到期。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

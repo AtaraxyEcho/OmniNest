@@ -136,6 +136,9 @@ class MusicScanPage extends ConsumerWidget {
     if (confirmed != true) {
       return;
     }
+    if (!context.mounted) {
+      return;
+    }
     await ref.read(musicScanJobControllerProvider.notifier).startScan();
     if (!context.mounted) {
       return;
@@ -167,6 +170,9 @@ class MusicScanPage extends ConsumerWidget {
           ),
     );
     if (confirmed != true) {
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
     // 失败由命令层写进中心 errorMessage，这里不重复提示。

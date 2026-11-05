@@ -115,5 +115,8 @@ void main() {
     // 注：空假体经真实命令链会触发仓库错误与空态布局溢出（非本契约
     // 范畴），仅消费掉异常让用例聚焦进入顺序断言。
     tester.takeException();
+    // 错误提示走浮层 Toast：结束前让停留计时器到期，避免 pending timer。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 }

@@ -70,7 +70,10 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
       query['entry'] = 'chapter';
     }
     final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
-    context.push('/reader/items/$itemId/chapters/$chapterId$suffix');
+    context.push(
+      '/reader/items/${Uri.encodeComponent(itemId)}/chapters/'
+      '${Uri.encodeComponent(chapterId)}$suffix',
+    );
   }
 
   @override
@@ -163,11 +166,14 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
               bookshelfBusy: _bookshelfBusy,
               onToggleBookshelf: _toggleBookshelf,
               onRead: () {
-                context.push('/reader/pdfs/${detail.item.id}/read');
+                context.push(
+                  '/reader/pdfs/${Uri.encodeComponent(detail.item.id)}/read',
+                );
               },
               onEditMetadata:
-                  () =>
-                      context.push('/reader/items/${detail.item.id}/metadata'),
+                  () => context.push(
+                    '/reader/items/${Uri.encodeComponent(detail.item.id)}/metadata',
+                  ),
               onDelete: _deleteItem,
             );
           }
@@ -178,8 +184,9 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
               itemId: widget.itemId,
               progress: detail.progress,
               onEditMetadata:
-                  () =>
-                      context.push('/reader/items/${detail.item.id}/metadata'),
+                  () => context.push(
+                    '/reader/items/${Uri.encodeComponent(detail.item.id)}/metadata',
+                  ),
               onDelete: _deleteItem,
             );
           }
@@ -214,7 +221,9 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
                       charOffset: charOffset,
                     ),
             onEditMetadata:
-                () => context.push('/reader/items/${detail.item.id}/metadata'),
+                () => context.push(
+                  '/reader/items/${Uri.encodeComponent(detail.item.id)}/metadata',
+                ),
             onReparse: _reparse,
             onDelete: _deleteItem,
           );
@@ -325,7 +334,9 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
               ReaderDetailActionSheet(
                 onEditMetadata: () {
                   Navigator.of(sheetContext).pop();
-                  context.push('/reader/items/${item.id}/metadata');
+                  context.push(
+                    '/reader/items/${Uri.encodeComponent(item.id)}/metadata',
+                  );
                 },
                 onReparse: () {
                   Navigator.of(sheetContext).pop();

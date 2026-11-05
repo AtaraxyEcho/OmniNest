@@ -12,6 +12,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,
       onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
       child: _buildAnimationContent(),
     );
   }

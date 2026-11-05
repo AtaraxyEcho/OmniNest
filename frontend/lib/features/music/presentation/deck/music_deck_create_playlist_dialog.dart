@@ -165,12 +165,20 @@ class _MusicDeckCreatePlaylistDialogState
       );
       canvas.drawImageRect(decoded, src, dst, paint);
       final picture = recorder.endRecording();
-      final ui.Image scaled = await picture.toImage(targetWidth, targetHeight);
       try {
-        final data = await scaled.toByteData(format: ui.ImageByteFormat.png);
-        return data?.buffer.asUint8List() ?? source;
+        final ui.Image scaled = await picture.toImage(
+          targetWidth,
+          targetHeight,
+        );
+        try {
+          final data = await scaled.toByteData(format: ui.ImageByteFormat.png);
+          return data?.buffer.asUint8List() ?? source;
+        } finally {
+          scaled.dispose();
+        }
       } finally {
-        scaled.dispose();
+        // Picture 持有本机图形资源，不 dispose 时每次选封面都会留一份到 GC 前台。
+        picture.dispose();
       }
     } finally {
       decoded.dispose();

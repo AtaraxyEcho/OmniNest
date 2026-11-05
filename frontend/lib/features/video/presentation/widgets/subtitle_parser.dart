@@ -1,5 +1,13 @@
 // 字幕解析工具 — 支持 WebVTT / SRT / ASS 格式
 
+import 'package:flutter/foundation.dart';
+
+/// 超过该字符数的字幕放到后台 isolate 解析。
+///
+/// ASS 整集按行展开后有上万条 cue，主线程一次跑完会吃掉整帧预算，
+/// 表现为导入字幕时画面卡一下；小字幕同步解析，省掉 isolate 启动开销。
+const int subtitleBackgroundParseThreshold = 64 * 1024;
+
 class SubtitleCue {
   const SubtitleCue({
     required this.startMs,
@@ -23,6 +31,20 @@ List<SubtitleCue> parseSubtitleContent(String content) {
   // SRT 格式：纯数字序号开头 + 逗号分隔的时间码
   // WebVTT 格式：WEBVTT 开头 或 --> 分隔的时间码
   return parseWebVTTOrSRT(trimmed);
+}
+
+/// 按体积选择解析线程：大字幕走 [compute]，小字幕留在当前线程。
+///
+/// 返回的 [SubtitleCue] 只含值字段，可跨 isolate 传递。
+Future<List<SubtitleCue>> parseSubtitleContentAsync(String content) async {
+  final trimmed = content.trim();
+  if (trimmed.isEmpty) {
+    return const [];
+  }
+  if (trimmed.length <= subtitleBackgroundParseThreshold) {
+    return parseSubtitleContent(trimmed);
+  }
+  return compute(parseSubtitleContent, trimmed);
 }
 
 /// 解析 WebVTT / SRT 格式（两者结构几乎一致，仅时间码分隔符不同）

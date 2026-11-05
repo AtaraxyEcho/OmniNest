@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 
 class SearchResultTile extends StatelessWidget {
   const SearchResultTile({required this.result, super.key});
@@ -52,14 +53,22 @@ class SearchResultTile extends StatelessWidget {
   void _navigate(BuildContext context) {
     switch (result.type) {
       case 'file':
-        // 分支路由用 go 切换空间是预期语义（同级目的地，不留幽灵栈）。
-        context.go('/files');
+        // 命中项只有文件 ID：先进预览路由回源节点，落到 /files 根目录等于
+        // 把用户丢回列表，还得自己再找一遍。预览与其余详情页同为根级路由，
+        // 用 push 才有可弹层。
+        context.push('/files/preview/${result.id}');
       case 'book':
         // 其余都是壳层之外的根级路由：`go` 会换掉整条导航栈，之后侧滑没有
         // 可弹层，Android 直接结束 Activity（观感是「搜一下就退出」）。
         context.push('/reader/items/${result.id}');
       case 'video':
-        context.push('/video/${result.id}');
+        // 分集进剧集详情选集；用分集 id 拼影片详情会打开错误条目。
+        context.push(
+          movieDetailRouteFromIds(
+            videoItemId: result.id,
+            seriesId: result.seriesId,
+          ),
+        );
       case 'photo':
         context.push('/photos/${result.id}');
       case 'music':

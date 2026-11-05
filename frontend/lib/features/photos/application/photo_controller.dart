@@ -40,14 +40,17 @@ part 'photo_center_collection_loaders.dart';
 enum _ImportTaskPollOutcome { completed, failed, pending, unavailable }
 
 final photoListProvider = FutureProvider<PhotoPage>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(photoRepositoryProvider).listPhotos();
 });
 
 final photoFavoritesProvider = FutureProvider<PhotoPage>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(photoRepositoryProvider).listFavorites();
 });
 
 final photoAlbumsProvider = FutureProvider<List<PhotoAlbum>>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(photoRepositoryProvider).listAlbums();
 });
 
@@ -55,6 +58,7 @@ final photoAlbumsProvider = FutureProvider<List<PhotoAlbum>>((ref) {
 ///
 /// 不能由已加载照片在前端分组：窗口之外的地点根本不出现，张数也只反映已加载部分。
 final photoLocationGroupsProvider = FutureProvider<List<PhotoGroup>>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref
       .watch(photoRepositoryProvider)
       .getGroups(GroupBy.location.value, size: 200)
@@ -63,6 +67,7 @@ final photoLocationGroupsProvider = FutureProvider<List<PhotoGroup>>((ref) {
 
 final photoDetailProvider = FutureProvider.autoDispose
     .family<PhotoItem, String>((ref, photoId) async {
+      ref.watch(sessionEpochProvider);
       final photo = await ref.watch(photoRepositoryProvider).getPhoto(photoId);
       ref.read(photoDetailMemoryCacheProvider).put(photo);
       return photo;
@@ -70,6 +75,7 @@ final photoDetailProvider = FutureProvider.autoDispose
 
 final photoAlbumDetailProvider = FutureProvider.autoDispose
     .family<PhotoAlbumDetail, String>((ref, albumId) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(photoRepositoryProvider).getAlbumDetail(albumId);
     });
 

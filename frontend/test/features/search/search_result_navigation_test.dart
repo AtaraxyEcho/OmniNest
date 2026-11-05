@@ -17,6 +17,7 @@ import 'package:omninest/features/search/presentation/widgets/search_result_tile
 Future<GoRouter> _pumpSearch(
   WidgetTester tester, {
   required String type,
+  String? seriesId,
 }) async {
   final router = GoRouter(
     initialLocation: '/search',
@@ -31,6 +32,7 @@ Future<GoRouter> _pumpSearch(
                   title: '样本',
                   subtitle: '类型 $type',
                   type: type,
+                  seriesId: seriesId,
                 ),
               ),
             ),
@@ -47,8 +49,28 @@ Future<GoRouter> _pumpSearch(
         path: '/reader/items/:itemId',
         builder: (context, state) => const Scaffold(body: Text('land-book')),
       ),
-      GoRoute(path: '/music', builder: (context, state) => const Scaffold(body: Text('land-music'))),
-      GoRoute(path: '/files', builder: (context, state) => const Scaffold(body: Text('land-files'))),
+      GoRoute(
+        path: '/music',
+        builder: (context, state) => const Scaffold(body: Text('land-music')),
+      ),
+      GoRoute(
+        path: '/files',
+        builder: (context, state) => const Scaffold(body: Text('land-files')),
+      ),
+      GoRoute(
+        path: '/files/preview/:fileId',
+        builder:
+            (context, state) => Scaffold(
+              body: Text('land-file-preview-${state.pathParameters['fileId']}'),
+            ),
+      ),
+      GoRoute(
+        path: '/video/series/:seriesId',
+        builder:
+            (context, state) => Scaffold(
+              body: Text('land-series-${state.pathParameters['seriesId']}'),
+            ),
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -81,11 +103,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(marker), findsOneWidget);
-      expect(
-        router.canPop(),
-        isTrue,
-        reason: 'go 会换掉整条栈：侧滑没得弹就直接退出应用',
-      );
+      expect(router.canPop(), isTrue, reason: 'go 会换掉整条栈：侧滑没得弹就直接退出应用');
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -95,13 +113,28 @@ void main() {
     });
   }
 
-  testWidgets('file 结果仍用 go 切分支：同级目的地不留幽灵栈', (tester) async {
+  testWidgets('file 结果直接打开文件预览，而不是落回文件根目录', (tester) async {
     final router = await _pumpSearch(tester, type: 'file');
 
     await tester.tap(find.byType(ListTile));
     await tester.pumpAndSettle();
 
-    expect(find.text('land-files'), findsOneWidget);
-    expect(router.canPop(), isFalse);
+    expect(find.text('land-file-preview-x-1'), findsOneWidget);
+    expect(find.text('land-files'), findsNothing);
+    expect(router.canPop(), isTrue, reason: '预览是根级路由，push 才有可弹层');
+  });
+
+  testWidgets('分集结果进剧集详情选集，而不是用分集 id 打开影片', (tester) async {
+    final router = await _pumpSearch(
+      tester,
+      type: 'video',
+      seriesId: 'series-9',
+    );
+
+    await tester.tap(find.byType(ListTile));
+    await tester.pumpAndSettle();
+
+    expect(find.text('land-series-series-9'), findsOneWidget);
+    expect(router.canPop(), isTrue);
   });
 }

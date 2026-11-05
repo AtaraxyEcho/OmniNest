@@ -395,41 +395,68 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     bool sampleChrome = false,
   }) {
     final active = _panelCoordinator.active;
+    final Widget overlay;
     if (active == null) {
-      return const [];
+      overlay = const SizedBox.shrink(key: ValueKey('reader-panel-none'));
+    } else {
+      final l10n = AppLocalizations.of(context);
+      final title = switch (active) {
+        ReaderPanelType.contents => l10n.readerTableOfContents,
+        ReaderPanelType.settings => l10n.readerSettingsTitle,
+        ReaderPanelType.search => l10n.readerSearchCurrentChapter,
+        ReaderPanelType.annotations => l10n.readerAnnotations,
+        ReaderPanelType.shortcuts => l10n.readerShortcutsTitle,
+      };
+      final child = switch (active) {
+        ReaderPanelType.contents => _buildChapterPanel(detail),
+        ReaderPanelType.settings => ReaderViewSettingsPanel(
+          settings: _settings,
+          onSettingsChanged: onSettingsChanged,
+          mobile: sampleChrome,
+        ),
+        ReaderPanelType.search => _buildSearchPanel(content),
+        ReaderPanelType.annotations =>
+          _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
+        ReaderPanelType.shortcuts => ReaderShortcutPanel(
+          settings: _settings,
+          isComic: false,
+        ),
+      };
+      overlay = ReaderAdaptivePanelOverlay(
+        key: ValueKey(active),
+        title: title,
+        settings: _settings,
+        layout: layout,
+        eyebrow: detail.item.title,
+        onClose: _closeReaderPanel,
+        child: child,
+      );
     }
-    final l10n = AppLocalizations.of(context);
-    final title = switch (active) {
-      ReaderPanelType.contents => l10n.readerTableOfContents,
-      ReaderPanelType.settings => l10n.readerSettingsTitle,
-      ReaderPanelType.search => l10n.readerSearchCurrentChapter,
-      ReaderPanelType.annotations => l10n.readerAnnotations,
-      ReaderPanelType.shortcuts => l10n.readerShortcutsTitle,
-    };
-    final child = switch (active) {
-      ReaderPanelType.contents => _buildChapterPanel(detail),
-      ReaderPanelType.settings => ReaderViewSettingsPanel(
-        settings: _settings,
-        onSettingsChanged: onSettingsChanged,
-        mobile: sampleChrome,
-      ),
-      ReaderPanelType.search => _buildSearchPanel(content),
-      ReaderPanelType.annotations =>
-        _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
-      ReaderPanelType.shortcuts => ReaderShortcutPanel(
-        settings: _settings,
-        isComic: false,
-      ),
-    };
+    // 槽位始终存在：关闭面板时由 AnimatedSwitcher 保留旧子树并播放退场，
+    // 直接返回空列表会瞬间摘除整棵子树，没有任何过渡。
     return [
       Positioned.fill(
-        child: ReaderAdaptivePanelOverlay(
-          title: title,
-          settings: _settings,
-          layout: layout,
-          eyebrow: detail.item.title,
-          onClose: _closeReaderPanel,
-          child: child,
+        child: AnimatedSwitcher(
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 260),
+          ),
+          reverseDuration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 200),
+          ),
+          switchInCurve: MotionToken.curve,
+          switchOutCurve: MotionToken.curveIn,
+          layoutBuilder:
+              (currentChild, previousChildren) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  for (final child in previousChildren)
+                    IgnorePointer(child: child),
+                  if (currentChild != null) currentChild,
+                ],
+              ),
+          child: overlay,
         ),
       ),
     ];

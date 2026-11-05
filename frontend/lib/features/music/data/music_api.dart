@@ -45,7 +45,7 @@ class MusicApi {
   /// 单曲完整投影（含歌词）。列表接口不带歌词，播放前按需取词。
   Future<MusicTrack> trackDetail(String trackId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/tracks/$trackId',
+      '/music/tracks/${Uri.encodeComponent(trackId)}',
     );
     return MusicTrack.fromJson(parseData(response.data));
   }
@@ -141,7 +141,7 @@ class MusicApi {
     bool clearCover = false,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/music/playlists/$playlistId',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}',
       data: {
         'name': name,
         'description': description,
@@ -154,14 +154,14 @@ class MusicApi {
 
   Future<void> deletePlaylist(String playlistId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/music/playlists/$playlistId',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '删除歌单失败');
   }
 
   Future<List<MusicTrack>> playlistTracks(String playlistId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/playlists/$playlistId/items',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
     );
     return _parseList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
   }
@@ -173,7 +173,7 @@ class MusicApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/playlists/$playlistId/tracks/page',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
     return _parsePage(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
@@ -182,7 +182,7 @@ class MusicApi {
   /// 获取专辑内全部曲目（碟号、音轨号排序）。
   Future<List<MusicTrack>> albumTracks(String albumId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/albums/$albumId/tracks',
+      '/music/albums/${Uri.encodeComponent(albumId)}/tracks',
     );
     return _parseList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
   }
@@ -194,7 +194,7 @@ class MusicApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/albums/$albumId/tracks/page',
+      '/music/albums/${Uri.encodeComponent(albumId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
     return _parsePage(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
@@ -203,7 +203,7 @@ class MusicApi {
   /// 获取歌手内全部曲目（专辑名、碟号、音轨号排序）。
   Future<List<MusicTrack>> artistTracks(String artistId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/artists/$artistId/tracks',
+      '/music/artists/${Uri.encodeComponent(artistId)}/tracks',
     );
     return _parseList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
   }
@@ -215,7 +215,7 @@ class MusicApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/artists/$artistId/tracks/page',
+      '/music/artists/${Uri.encodeComponent(artistId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
     return _parsePage(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
@@ -226,7 +226,7 @@ class MusicApi {
     List<String> trackIds,
   ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/music/playlists/$playlistId/items',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
       data: {'trackIds': trackIds},
     );
     return MusicPlaylist.fromJson(parseData(response.data));
@@ -237,7 +237,7 @@ class MusicApi {
     List<String> trackIds,
   ) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/music/playlists/$playlistId/items',
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
       data: {'trackIds': trackIds},
     );
     return MusicPlaylist.fromJson(parseData(response.data));
@@ -245,7 +245,7 @@ class MusicApi {
 
   Future<MusicPlaybackPlan> playbackPlan(String trackId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/tracks/$trackId/playback-plan',
+      '/music/tracks/${Uri.encodeComponent(trackId)}/playback-plan',
     );
     return _resolvePlaybackPlan(parsePlaybackPlan(parseData(response.data)));
   }
@@ -254,7 +254,7 @@ class MusicApi {
   Future<void> favorite(String trackId) async {
     apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/music/tracks/$trackId/favorite',
+      '/music/tracks/${Uri.encodeComponent(trackId)}/favorite',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏失败');
   }
@@ -263,7 +263,7 @@ class MusicApi {
   Future<void> removeFavorite(String trackId) async {
     apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/music/tracks/$trackId/favorite',
+      '/music/tracks/${Uri.encodeComponent(trackId)}/favorite',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '取消收藏失败');
   }
@@ -273,7 +273,7 @@ class MusicApi {
     bool cascade = false,
   }) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/music/tracks/$trackId',
+      '/music/tracks/${Uri.encodeComponent(trackId)}',
       queryParameters: {'cascade': cascade},
     );
     return TaskSubmission.fromJson(parseData(response.data));
@@ -290,7 +290,7 @@ class MusicApi {
     bool clearCover = false,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/admin/music/tracks/$trackId',
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}',
       data: {
         if (title != null) 'title': title,
         if (artistName != null) 'artistName': artistName,
@@ -325,7 +325,7 @@ class MusicApi {
       return;
     }
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/music/tracks/$trackId/play-history',
+      '/music/tracks/${Uri.encodeComponent(trackId)}/play-history',
       data: {'playDuration': playDuration},
     );
     parseEnvelope(response.data);
@@ -433,7 +433,8 @@ class MusicApi {
 
   /// 获取音频流重定向 URL（302）。
   String streamUrl(String trackId) {
-    return '${apiClient.dio.options.baseUrl}/music/stream/$trackId';
+    return '${apiClient.dio.options.baseUrl}/music/stream/'
+        '${Uri.encodeComponent(trackId)}';
   }
 
   Future<MusicScanJob> createScanJob() async {
@@ -445,14 +446,14 @@ class MusicApi {
 
   Future<MusicScanJob> scanJobStatus(String jobId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/scan/$jobId/status',
+      '/music/scan/${Uri.encodeComponent(jobId)}/status',
     );
     return MusicScanJob.fromJson(parseData(response.data));
   }
 
   Future<List<MusicScrapeCandidate>> scrapeCandidates(String trackId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/music/tracks/$trackId/scrape-candidates',
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/scrape-candidates',
     );
     return _parseList(
       response.data,
@@ -466,7 +467,7 @@ class MusicApi {
     MusicScrapeCandidate candidate,
   ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/music/tracks/$trackId/scrape/apply',
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/scrape/apply',
       data: candidate.toApplyJson(),
     );
     return MusicTrack.fromJson(parseData(response.data));
@@ -483,7 +484,7 @@ class MusicApi {
   /// 查询指定艺术家下的活动专辑列表。
   Future<List<MusicAlbum>> artistAlbums(String artistId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/artists/$artistId/albums',
+      '/music/artists/${Uri.encodeComponent(artistId)}/albums',
     );
     return _parseList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
   }
@@ -491,7 +492,7 @@ class MusicApi {
   /// 按当前曲目的艺术家/标题/专辑搜索在线歌词候选。
   Future<MusicLyricsResult?> searchLyrics(String trackId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/music/tracks/$trackId/lyrics/search',
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/lyrics/search',
     );
     final envelope = parseEnvelope(response.data);
     final data = envelope['data'];
@@ -508,7 +509,7 @@ class MusicApi {
     String? lyricsTranslation,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/music/tracks/$trackId/lyrics/apply',
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/lyrics/apply',
       data: {'lyrics': lyrics, 'lyricsTranslation': lyricsTranslation},
     );
     return MusicTrack.fromJson(parseData(response.data));
@@ -576,7 +577,7 @@ class MusicApi {
     bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/$platform/playlists',
+      '/music/platforms/${Uri.encodeComponent(platform)}/playlists',
       queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
@@ -591,7 +592,7 @@ class MusicApi {
     bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/$platform/playlists/$playlistId/tracks',
+      '/music/platforms/${Uri.encodeComponent(platform)}/playlists/${Uri.encodeComponent(playlistId)}/tracks',
       queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
@@ -605,7 +606,7 @@ class MusicApi {
     bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/$platform/liked-tracks',
+      '/music/platforms/${Uri.encodeComponent(platform)}/liked-tracks',
       queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
@@ -625,7 +626,7 @@ class MusicApi {
     String platform,
   ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/$platform/recommendations/daily-tracks',
+      '/music/platforms/${Uri.encodeComponent(platform)}/recommendations/daily-tracks',
     );
     return DailyRecommendedTracks.fromJson(parseData(response.data));
   }
@@ -636,7 +637,7 @@ class MusicApi {
     String songId,
   ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/$platform/tracks/$songId/lyrics',
+      '/music/platforms/${Uri.encodeComponent(platform)}/tracks/${Uri.encodeComponent(songId)}/lyrics',
     );
     final data = parseData(response.data);
     final synced = data['syncedLyrics']?.toString();
@@ -674,7 +675,7 @@ class MusicApi {
   /// 轮询网易云 QR 登录状态
   Future<QrLoginStatus> checkNeteaseQrLogin(String key) async {
     final resp = await apiClient.dio.get<Map<String, dynamic>>(
-      '/music/platforms/netease/login-sessions/$key',
+      '/music/platforms/netease/login-sessions/${Uri.encodeComponent(key)}',
     );
     return QrLoginStatus.fromJson(parseData(resp.data));
   }
@@ -685,7 +686,7 @@ class MusicApi {
   /// 重试注定失败，却会把等待时间放大为退避之和（默认 2 次重试共 1s + 2s）。
   Future<void> platformLogout(String platform) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/music/platforms/$platform/connection',
+      '/music/platforms/${Uri.encodeComponent(platform)}/connection',
       options: Options(extra: <String, dynamic>{skipServerErrorRetryKey: true}),
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '断开平台连接失败');
@@ -698,7 +699,7 @@ class MusicApi {
   Future<PlatformUserInfo?> platformInfo(String platform) async {
     try {
       final resp = await apiClient.dio.get<Map<String, dynamic>>(
-        '/music/platform/$platform/info',
+        '/music/platform/${Uri.encodeComponent(platform)}/info',
       );
       final data = parseData(resp.data);
       if (data['userId'] == null || data['userId'].toString().isEmpty) {

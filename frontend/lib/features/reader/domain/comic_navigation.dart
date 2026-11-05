@@ -1,5 +1,14 @@
 import 'package:omninest/features/reader/domain/comic_models.dart';
 
+/// 漫画阅读页路由：条目与目录节点都可能含 `/`、`#`、`?`，必须统一编码。
+String comicReaderRoute(String itemId, {String? catalogNodeId}) {
+  final base = '/reader/comics/${Uri.encodeComponent(itemId)}/read';
+  if (catalogNodeId == null || catalogNodeId.isEmpty) {
+    return base;
+  }
+  return '$base?catalogNodeId=${Uri.encodeQueryComponent(catalogNodeId)}';
+}
+
 /// 目录节点应落到的页索引。
 ///
 /// 页面的 `catalogNodeId` 只绑在叶子节点上：点季、卷这类聚合节点时按页面找

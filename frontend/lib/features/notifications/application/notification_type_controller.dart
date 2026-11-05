@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 
 final notificationTypesProvider = FutureProvider<List<NotificationTypeConfig>>((
   ref,
 ) async {
+  ref.watch(sessionEpochProvider);
   final api = ref.watch(notificationTypeApiProvider);
   List<NotificationTypeConfig> types;
   try {
@@ -19,6 +21,7 @@ final notificationTypesProvider = FutureProvider<List<NotificationTypeConfig>>((
 /// 管理员视图：包含已禁用类型的完整列表。
 final allNotificationTypesProvider =
     FutureProvider<List<NotificationTypeConfig>>((ref) async {
+      ref.watch(sessionEpochProvider);
       final api = ref.watch(notificationTypeApiProvider);
       final types = await api.listAll();
       return [...types]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));

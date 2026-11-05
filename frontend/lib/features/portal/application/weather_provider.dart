@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
@@ -264,6 +265,7 @@ class WeatherData {
 /// 用户 GPS 位置 Provider（请求权限并获取经纬度）
 /// 返回 null 表示无 GPS 数据，由后端走 fallback 链（用户偏好 > 配置中心）
 final userLocationProvider = FutureProvider<String?>((ref) async {
+  ref.watch(sessionEpochProvider);
   try {
     if (kIsWeb) {
       // Web 端无 GPS，返回 null 让后端使用用户偏好或配置默认值
@@ -338,7 +340,7 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
   // 否则冷启动会用空字符串覆盖用户设置的城市而退回 IP 定位。
   final locationFuture = ref.watch(userLocationProvider.future);
   final preferredCityFuture = ref.watch(weatherLocationProvider.future);
-  final apiClient = ref.watch(apiClientProvider);
+  final weatherApi = ref.watch(weatherApiProvider);
   final location = await locationFuture;
   final preferredCity = (await preferredCityFuture)?.trim() ?? '';
   if (!ref.mounted) {
@@ -346,50 +348,41 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
   }
 
   try {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/weather/realtime',
-      queryParameters: {if (location != null) 'location': location},
-    );
-
-    if (response.statusCode == 200 && response.data != null) {
-      final data = response.data!;
-      if (data['code'] == 200 && data['data'] != null) {
-        final weather = WeatherData.fromJson(
-          data['data'] as Map<String, dynamic>,
-        );
-        if (weather.locationName.isNotEmpty || preferredCity.isEmpty) {
-          return weather;
-        }
-        return WeatherData(
-          temp: weather.temp,
-          feelsLike: weather.feelsLike,
-          text: weather.text,
-          icon: weather.icon,
-          humidity: weather.humidity,
-          windSpeed: weather.windSpeed,
-          windDir: weather.windDir,
-          pressure: weather.pressure,
-          visibility: weather.visibility,
-          uvIndex: weather.uvIndex,
-          sunrise: weather.sunrise,
-          sunset: weather.sunset,
-          aqi: weather.aqi,
-          pm2p5: weather.pm2p5,
-          aqiCategory: weather.aqiCategory,
-          updateTime: weather.updateTime,
-          healthAdvice: weather.healthAdvice,
-          tempMax: weather.tempMax,
-          tempMin: weather.tempMin,
-          precip: weather.precip,
-          windScale: weather.windScale,
-          textDay: weather.textDay,
-          textNight: weather.textNight,
-          hourly: weather.hourly,
-          daily: weather.daily,
-          locationName: preferredCity,
-          status: weather.status,
-        );
+    final payload = await weatherApi.fetchRealtime(location: location);
+    if (payload != null) {
+      final weather = WeatherData.fromJson(payload);
+      if (weather.locationName.isNotEmpty || preferredCity.isEmpty) {
+        return weather;
       }
+      return WeatherData(
+        temp: weather.temp,
+        feelsLike: weather.feelsLike,
+        text: weather.text,
+        icon: weather.icon,
+        humidity: weather.humidity,
+        windSpeed: weather.windSpeed,
+        windDir: weather.windDir,
+        pressure: weather.pressure,
+        visibility: weather.visibility,
+        uvIndex: weather.uvIndex,
+        sunrise: weather.sunrise,
+        sunset: weather.sunset,
+        aqi: weather.aqi,
+        pm2p5: weather.pm2p5,
+        aqiCategory: weather.aqiCategory,
+        updateTime: weather.updateTime,
+        healthAdvice: weather.healthAdvice,
+        tempMax: weather.tempMax,
+        tempMin: weather.tempMin,
+        precip: weather.precip,
+        windScale: weather.windScale,
+        textDay: weather.textDay,
+        textNight: weather.textNight,
+        hourly: weather.hourly,
+        daily: weather.daily,
+        locationName: preferredCity,
+        status: weather.status,
+      );
     }
     return WeatherData.empty();
   } catch (e) {

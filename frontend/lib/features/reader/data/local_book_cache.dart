@@ -472,8 +472,58 @@ class LocalBookCache {
     );
   }
 
-  String _encodePathSegment(String value) {
+  String _encodePathSegment(String value) => _encodePathSegmentStatic(value);
+
+  /// 与账号目录同名规则，供静态清理入口复用。
+  static String _encodePathSegmentStatic(String value) {
     return base64UrlEncode(utf8.encode(value)).replaceAll('=', '');
+  }
+
+  /// 换号/登出时清理指定账号缓存目录下的会话明文临时文件。
+  ///
+  /// 正常退出会删掉自己生成的那份，但进程被杀、路由被顶掉时文件仍留在磁盘上，
+  /// 内容是解密后的正文；只靠"下次进缓存目录再扫"等于把明文留到下次读书。
+  static Future<void> purgePlainSessionFiles(String? userId) async {
+    final owner = userId?.trim() ?? '';
+    if (owner.isEmpty) {
+      return;
+    }
+    try {
+      final appDir = await getTemporaryDirectory();
+      final directory = Directory(
+        p.join(appDir.path, 'reader_cache_v2', _encodePathSegmentStatic(owner)),
+      );
+      await purgePlainSessionFilesIn(directory);
+    } catch (error) {
+      if (kDebugMode) {
+        readerDebugLog('LocalBookCache: purge plain session skipped: $error');
+      }
+    }
+  }
+
+  /// 删除目录内全部会话明文临时文件，返回删除条数。
+  ///
+  /// 目录不存在时返回 0；单个文件删不掉（句柄被占用）不影响其余文件。
+  static Future<int> purgePlainSessionFilesIn(Directory directory) async {
+    if (!await directory.exists()) {
+      return 0;
+    }
+    var removed = 0;
+    await for (final entity in directory.list()) {
+      if (entity is! File ||
+          !p.basename(entity.path).contains('.plain.session')) {
+        continue;
+      }
+      try {
+        await entity.delete();
+        removed++;
+      } on FileSystemException catch (error) {
+        if (kDebugMode) {
+          readerDebugLog('LocalBookCache: purge plain session failed: $error');
+        }
+      }
+    }
+    return removed;
   }
 
   static String _createSessionToken() {

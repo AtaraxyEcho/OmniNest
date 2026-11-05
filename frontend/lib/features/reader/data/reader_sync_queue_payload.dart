@@ -2,11 +2,14 @@ part of 'reader_sync_queue.dart';
 
 /// 序列化队列载荷。
 ///
-/// 笔记/批注的标题、正文与摘录属于敏感内容，SQLite 本身不加密且失败行会长期
-/// 保留，因此落库前用列加密器加密；敏感操作在缺少加密器或用户绑定时由
-/// [_enqueue] 直接拒绝，不再退化为明文。
-Future<String> _serializePayload(Map<String, dynamic> data) async {
+/// 只有笔记/批注正文与摘录在落库前加密。进度、删除目标 ID 与会话记录不含
+/// 隐私正文，保持明文 JSON：它们必须在密钥不可用的另一个标签页里也可读，
+/// 否则跨标签页比较进度与读取待删 ID 都会失败，进而误删别人的队列行。
+Future<String> _serializePayload(String type, Map<String, dynamic> data) async {
   final encoded = jsonEncode(data);
+  if (!ReaderSyncQueue._encryptedOperationTypes.contains(type)) {
+    return encoded;
+  }
   final cipher = ReaderSyncQueue._textCipher;
   final userId = ReaderSyncQueue._userId;
   if (cipher == null || userId == null || userId.isEmpty) {
@@ -15,18 +18,29 @@ Future<String> _serializePayload(Map<String, dynamic> data) async {
   return cipher.encrypt(userId, encoded);
 }
 
-/// 反序列化队列载荷；密文无法解开时回退明文（兼容升级前已落库的行），
-/// 仍无法解析则返回 null，由调用方按原语义处理。
+/// 反序列化队列载荷。
+///
+/// 密文只能用当前密钥解开；密钥不可用或认证失败一律返回 null，禁止把密文
+/// 当明文再解析一次。无前缀的历史行按明文兼容读取。
 Future<Map<String, dynamic>?> _decodePayload(SyncOperation operation) async {
   final cipher = ReaderSyncQueue._textCipher;
   final userId = ReaderSyncQueue._userId;
   final stored = operation.payload;
-  if (cipher != null && userId != null && userId.isNotEmpty) {
+  final encrypted = OfflineTextCipher.isEncryptedValue(stored);
+  if (encrypted) {
+    if (cipher == null || userId == null || userId.isEmpty) {
+      return null;
+    }
+    final plain = await cipher.decrypt(userId, stored);
+    if (plain.isEmpty) {
+      return null;
+    }
     try {
-      final plain = await cipher.decrypt(userId, stored);
       return jsonDecode(plain) as Map<String, dynamic>;
-    } catch (_) {
-      // 旧版本可能以明文写入；继续尝试明文解析，不能把历史行直接判坏。
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
     }
   }
   try {

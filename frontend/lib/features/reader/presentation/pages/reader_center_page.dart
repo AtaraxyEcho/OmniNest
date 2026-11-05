@@ -371,7 +371,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
       );
       return;
     }
-    context.push('/reader/items/${item.id}');
+    context.push('/reader/items/${Uri.encodeComponent(item.id)}');
   }
 
   /// 继续阅读卡：直接打开阅读器（定位到上次章节），返回时回到当前页。
@@ -388,11 +388,11 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
       return;
     }
     if (item.isComic) {
-      context.push('/reader/comics/${item.id}/read');
+      context.push('/reader/comics/${Uri.encodeComponent(item.id)}/read');
       return;
     }
     if (item.itemType.toUpperCase() == 'PDF') {
-      context.push('/reader/pdfs/${item.id}/read');
+      context.push('/reader/pdfs/${Uri.encodeComponent(item.id)}/read');
       return;
     }
     final localSnapshot = ReaderProgressSnapshot.fromLocal(
@@ -418,10 +418,12 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     final best = ReaderProgressSnapshot.latest(localSnapshot, serverSnapshot);
     if (best != null && best.hasReadableProgress) {
       final chapterId = Uri.encodeComponent(best.chapterId);
-      context.push('/reader/items/${item.id}/chapters/$chapterId');
+      context.push(
+        '/reader/items/${Uri.encodeComponent(item.id)}/chapters/$chapterId',
+      );
       return;
     }
-    context.push('/reader/items/${item.id}');
+    context.push('/reader/items/${Uri.encodeComponent(item.id)}');
   }
 
   Future<void> _onToggleBookshelf(ReaderItem item) async {
@@ -761,6 +763,8 @@ class _LibraryGridSliver extends StatelessWidget {
               onTap: () => onOpenItem(item),
               onToggleBookshelf: onToggleBookshelf,
               onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
+              // 只有主网格参与转场：上方「继续阅读」横滑轨同屏出现同一条目。
+              enableHero: true,
             );
           }, childCount: items.length),
         );

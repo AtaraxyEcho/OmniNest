@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/application/photo_cover_recovery.dart';
@@ -35,6 +36,29 @@ void main() {
         container.read(photoCenterControllerProvider.notifier)
             as _CountingPhotoCenterController;
     expect(controller.realtimeRefreshCalls, 1);
+  });
+
+  test('换号后重置熔断计数，新会话第一次失败仍会触发恢复', () {
+    final container = ProviderContainer(
+      overrides: [
+        photoCenterControllerProvider.overrideWith(
+          () => _CountingPhotoCenterController(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(photoCoverRecoveryProvider.notifier).reportFailure();
+    expect(container.read(photoCoverRecoveryProvider), 1);
+
+    container.read(sessionEpochProvider.notifier).bump();
+
+    expect(container.read(photoCoverRecoveryProvider), 0);
+    container.read(photoCoverRecoveryProvider.notifier).reportFailure();
+    final controller =
+        container.read(photoCenterControllerProvider.notifier)
+            as _CountingPhotoCenterController;
+    expect(controller.realtimeRefreshCalls, 2);
   });
 
   test('连续失败达到次数上限后停止触发恢复刷新', () {

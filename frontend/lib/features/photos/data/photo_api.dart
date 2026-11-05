@@ -54,7 +54,7 @@ class PhotoApi {
   /// 获取单张照片详情
   Future<PhotoItem> getPhoto(String photoId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/$photoId',
+      '/photos/${Uri.encodeComponent(photoId)}',
     );
     return PhotoItem.fromJson(parseData(response.data));
   }
@@ -62,7 +62,7 @@ class PhotoApi {
   /// 将照片移入回收站（软删除，保留 30 天，可恢复）。
   Future<void> movePhotoToTrash(String photoId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/$photoId',
+      '/photos/${Uri.encodeComponent(photoId)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '移入回收站失败');
   }
@@ -88,7 +88,7 @@ class PhotoApi {
   /// 从回收站恢复照片。
   Future<void> restorePhoto(String photoId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/restore',
+      '/photos/${Uri.encodeComponent(photoId)}/restore',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '恢复照片失败');
   }
@@ -96,7 +96,7 @@ class PhotoApi {
   /// 为有 GPS 坐标但缺少地名的照片补充逆地理编码。
   Future<void> backfillGeocode(String photoId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/geocode',
+      '/photos/${Uri.encodeComponent(photoId)}/geocode',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '补充地名失败');
   }
@@ -107,7 +107,7 @@ class PhotoApi {
     Uint8List bytes,
   ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/edited-image',
+      '/photos/${Uri.encodeComponent(photoId)}/edited-image',
       data: bytes,
       options: Options(headers: {'Content-Type': 'image/jpeg'}),
     );
@@ -142,7 +142,7 @@ class PhotoApi {
     bool cascade = false,
   }) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/$photoId/purge',
+      '/photos/${Uri.encodeComponent(photoId)}/purge',
       queryParameters: {'cascade': cascade},
     );
     return TaskSubmission.fromJson(parseData(response.data));
@@ -179,7 +179,7 @@ class PhotoApi {
   Future<void> addFavorite(String photoId) async {
     apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/favorite',
+      '/photos/${Uri.encodeComponent(photoId)}/favorite',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏失败');
   }
@@ -191,7 +191,7 @@ class PhotoApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/albums/$albumId/candidates/page',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/candidates/page',
       queryParameters: {'page': page, 'size': size},
     );
     return PhotoPage.fromJson(parseData(response.data));
@@ -222,7 +222,7 @@ class PhotoApi {
   Future<void> removeFavorite(String photoId) async {
     apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/$photoId/favorite',
+      '/photos/${Uri.encodeComponent(photoId)}/favorite',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '取消收藏失败');
   }
@@ -263,7 +263,7 @@ class PhotoApi {
   /// 获取相册详情（元信息 + 首页照片）
   Future<PhotoAlbumDetail> getAlbumDetail(String albumId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/albums/$albumId',
+      '/photos/albums/${Uri.encodeComponent(albumId)}',
     );
     return PhotoAlbumDetail.fromJson(parseData(response.data));
   }
@@ -275,7 +275,7 @@ class PhotoApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/albums/$albumId/photos/page',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/photos/page',
       queryParameters: {'page': page, 'size': size},
     );
     return PhotoPage.fromJson(parseData(response.data));
@@ -288,7 +288,7 @@ class PhotoApi {
     String? description,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/photos/albums/$albumId',
+      '/photos/albums/${Uri.encodeComponent(albumId)}',
       data: {
         if (name != null) 'name': name,
         if (description != null) 'description': description,
@@ -300,7 +300,7 @@ class PhotoApi {
   /// 删除相册
   Future<void> deleteAlbum(String albumId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/albums/$albumId',
+      '/photos/albums/${Uri.encodeComponent(albumId)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '删除相册失败');
   }
@@ -311,7 +311,7 @@ class PhotoApi {
     required List<String> photoIds,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/albums/$albumId/items',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/items',
       data: {'photoIds': photoIds},
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '添加照片到相册失败');
@@ -323,7 +323,7 @@ class PhotoApi {
     required String photoId,
   }) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/albums/$albumId/items/$photoId',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/items/${Uri.encodeComponent(photoId)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '从相册移除照片失败');
   }
@@ -339,7 +339,7 @@ class PhotoApi {
   /// 查询扫描任务状态
   Future<PhotoScanJob> getScanStatus(String jobId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/scan/$jobId/status',
+      '/photos/scan/${Uri.encodeComponent(jobId)}/status',
     );
     return PhotoScanJob.fromJson(parseData(response.data));
   }
@@ -399,7 +399,7 @@ class PhotoApi {
   /// 添加标签
   Future<void> addTag(String photoId, String tag) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/tags',
+      '/photos/${Uri.encodeComponent(photoId)}/tags',
       data: {'tag': tag},
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '添加标签失败');
@@ -408,7 +408,7 @@ class PhotoApi {
   /// 移除标签
   Future<void> removeTag(String photoId, String tag) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/$photoId/tags/$tag',
+      '/photos/${Uri.encodeComponent(photoId)}/tags/${Uri.encodeComponent(tag)}',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '移除标签失败');
   }
@@ -444,7 +444,7 @@ class PhotoApi {
   /// 查询批量任务状态
   Future<PhotoBatchTask> getBatchTask(String taskId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/batch/$taskId',
+      '/photos/batch/${Uri.encodeComponent(taskId)}',
     );
     return PhotoBatchTask.fromJson(parseData(response.data));
   }
@@ -452,7 +452,7 @@ class PhotoApi {
   /// 获取照片批量 ZIP 的完整下载票据。
   Future<PhotoBatchDownloadTicket> getBatchDownloadTicket(String taskId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/batch/$taskId/download-ticket',
+      '/photos/batch/${Uri.encodeComponent(taskId)}/download-ticket',
     );
     final ticket = PhotoBatchDownloadTicket.fromJson(parseData(response.data));
     if (ticket.url.isEmpty ||
@@ -499,7 +499,7 @@ class PhotoApi {
   /// 这里解析出签名地址，由图片组件或下载器加载。返回 null 表示该照片没有 RAW 预览。
   Future<String?> rawPreviewUrl(String photoId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/$photoId/raw-preview',
+      '/photos/${Uri.encodeComponent(photoId)}/raw-preview',
     );
     final data = parseData(response.data);
     final url = data['url'];
@@ -513,7 +513,7 @@ class PhotoApi {
     Map<String, dynamic> editParams,
   ) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/edit',
+      '/photos/${Uri.encodeComponent(photoId)}/edit',
       data: {'editType': editType, 'editParams': editParams},
     );
     return PhotoEditVersion.fromJson(parseData(response.data));
@@ -522,7 +522,7 @@ class PhotoApi {
   /// 获取编辑版本列表
   Future<List<PhotoEditVersion>> listVersions(String photoId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/$photoId/versions',
+      '/photos/${Uri.encodeComponent(photoId)}/versions',
     );
     return parseList(response.data).map(PhotoEditVersion.fromJson).toList();
   }
@@ -530,7 +530,7 @@ class PhotoApi {
   /// 回滚到指定版本
   Future<void> revertToVersion(String photoId, String versionId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/versions/$versionId/revert',
+      '/photos/${Uri.encodeComponent(photoId)}/versions/${Uri.encodeComponent(versionId)}/revert',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '回滚照片版本失败');
   }
@@ -538,7 +538,7 @@ class PhotoApi {
   /// 恢复未经编辑的原始照片。
   Future<void> revertToOriginal(String photoId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/versions/revert-original',
+      '/photos/${Uri.encodeComponent(photoId)}/versions/revert-original',
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '恢复原图失败');
   }
@@ -551,7 +551,7 @@ class PhotoApi {
     int? maxAccessCount,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/albums/$albumId/share',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/share',
       data: {
         if (password != null && password.isNotEmpty) 'password': password,
         if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
@@ -564,7 +564,7 @@ class PhotoApi {
   /// 列出相册分享链接
   Future<List<PhotoShareLink>> listAlbumShares(String albumId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/albums/$albumId/share',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/share',
     );
     return parseList(response.data).map(PhotoShareLink.fromJson).toList();
   }
@@ -573,7 +573,7 @@ class PhotoApi {
   /// 必须解析并抛出；否则 Dio 在 status<500 下不抛错，失败会被静默当作成功。
   Future<void> revokeAlbumShare(String shareId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/share/$shareId',
+      '/photos/share/${Uri.encodeComponent(shareId)}',
     );
     parseEnvelope(response.data);
   }
@@ -581,7 +581,7 @@ class PhotoApi {
   /// 清空指定照片的全部有效分享链接，返回撤销条数。
   Future<int> revokeAllPhotoShares(String photoId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/$photoId/share',
+      '/photos/${Uri.encodeComponent(photoId)}/share',
     );
     return revokedShareCount(response.data);
   }
@@ -589,7 +589,7 @@ class PhotoApi {
   /// 清空指定相册的全部有效分享链接，返回撤销条数。
   Future<int> revokeAllAlbumShares(String albumId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/photos/albums/$albumId/share',
+      '/photos/albums/${Uri.encodeComponent(albumId)}/share',
     );
     return revokedShareCount(response.data);
   }
@@ -604,7 +604,7 @@ class PhotoApi {
     bool originalQuality = true,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/$photoId/share',
+      '/photos/${Uri.encodeComponent(photoId)}/share',
       data: {
         if (password != null && password.isNotEmpty) 'password': password,
         if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
@@ -630,7 +630,7 @@ class PhotoApi {
     required bool originalQuality,
   }) async {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
-      '/photos/share/$shareId',
+      '/photos/share/${Uri.encodeComponent(shareId)}',
       data: {
         'password': password,
         'expiresAt': expiresAt?.toUtc().toIso8601String(),
@@ -645,7 +645,7 @@ class PhotoApi {
   /// 列出单张照片分享链接
   Future<List<PhotoShareLink>> listPhotoShares(String photoId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/photos/$photoId/share',
+      '/photos/${Uri.encodeComponent(photoId)}/share',
     );
     return parseList(response.data).map(PhotoShareLink.fromJson).toList();
   }
@@ -653,7 +653,7 @@ class PhotoApi {
   /// 发起共享单张照片会话（公开接口）。
   Future<String> authorizeSharedPhoto(String token, {String? password}) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/public/photos/item/$token/authorize',
+      '/public/photos/item/${Uri.encodeComponent(token)}/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
     );
     return parseData(response.data)['sessionToken']?.toString() ??
@@ -666,7 +666,7 @@ class PhotoApi {
     required String sessionToken,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/public/photos/item/$token',
+      '/public/photos/item/${Uri.encodeComponent(token)}',
       options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
     );
     return PhotoItem.fromJson(parseData(response.data));
@@ -675,7 +675,7 @@ class PhotoApi {
   /// 校验共享相册密码并获取短期会话令牌。
   Future<String> authorizeSharedAlbum(String token, {String? password}) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/public/photos/share/$token/authorize',
+      '/public/photos/share/${Uri.encodeComponent(token)}/authorize',
       data: {if (password != null && password.isNotEmpty) 'password': password},
     );
     return parseData(response.data)['sessionToken']?.toString() ??
@@ -690,7 +690,7 @@ class PhotoApi {
     int size = 50,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/public/photos/share/$token',
+      '/public/photos/share/${Uri.encodeComponent(token)}',
       queryParameters: {'page': page, 'size': size},
       options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
     );

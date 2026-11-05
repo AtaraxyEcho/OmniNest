@@ -107,9 +107,22 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage>
     ref.read(_recentSearchQueriesProvider.notifier).commit(query);
   }
 
+  /// 壳层顶级分支：重复 push 会在 StatefulShellBranch 上叠出同名 page，
+  /// 破坏底部导航的栈状态；分支内导航一律 go，详情子路由才 push。
+  static const Set<String> _shellBranchRoutes = {
+    '/portal',
+    '/library',
+    '/reader',
+    '/files',
+  };
+
   void _openRoute(String route) {
     _commitRecent(_controller.text);
     if (!mounted) {
+      return;
+    }
+    if (_shellBranchRoutes.contains(route)) {
+      context.go(route);
       return;
     }
     context.pop();

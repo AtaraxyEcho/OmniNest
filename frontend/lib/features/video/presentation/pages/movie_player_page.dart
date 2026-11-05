@@ -1,3 +1,4 @@
+import 'package:omninest/core/theme/motion_token.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -469,15 +470,24 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                   alwaysIncludeSemantics: true,
                   child: Stack(
                     children: [
-                      MoviePlayerTopBar(
-                        title: title,
-                        subtitle: subtitle,
-                        isMobile: isMobilePlatform,
-                        onBack: _exitPlayer,
-                        onInfoTap:
-                            isMobilePlatform
-                                ? () => _showSettingsPanel(plan)
-                                : () => _showInfoPanel(plan),
+                      AnimatedSlide(
+                        offset:
+                            _showControls ? Offset.zero : const Offset(0, -0.2),
+                        duration: MotionToken.reduced(
+                          context,
+                          MotionToken.fast,
+                        ),
+                        curve: MotionToken.curve,
+                        child: MoviePlayerTopBar(
+                          title: title,
+                          subtitle: subtitle,
+                          isMobile: isMobilePlatform,
+                          onBack: _exitPlayer,
+                          onInfoTap:
+                              isMobilePlatform
+                                  ? () => _showSettingsPanel(plan)
+                                  : () => _showInfoPanel(plan),
+                        ),
                       ),
                       ValueListenableBuilder<double>(
                         valueListenable: _seekListenable,
@@ -485,81 +495,92 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                           return ValueListenableBuilder<double>(
                             valueListenable: _volumeListenable,
                             builder: (context, volume, _) {
-                              return MoviePlayerBottomBar(
-                                plan: plan,
-                                polledPosition: _polledPosition,
-                                playerDuration: _player.state.duration,
-                                bufferProgress: _bufferProgress,
-                                isSeeking: _isSeeking,
-                                seekValue: seekValue,
-                                onSeekStart: (v) {
-                                  setState(() {
-                                    _isSeeking = true;
-                                  });
-                                  _seekListenable.value = v;
-                                },
-                                onSeeking: (v) {
-                                  _seekListenable.value = v;
-                                },
-                                onSeekEnd: (v) {
-                                  final dur =
-                                      plan.durationSeconds > 0
-                                          ? Duration(
-                                            seconds: plan.durationSeconds,
-                                          )
-                                          : _player.state.duration;
-                                  final target = Duration(
-                                    milliseconds:
-                                        (v * dur.inMilliseconds).round(),
-                                  );
-                                  // 复位由 _seekToPosition 内部按 generation 执行；
-                                  // 旧 Seek 的 then 不能提前清掉新 Seek 的拖拽态。
-                                  unawaited(_seekToPosition(target));
-                                },
-                                onMouseActivity: _onMouseActivity,
-                                volume: volume,
-                                isMuted: _isMuted,
-                                onToggleMute: _toggleMute,
-                                onVolumeChanged: (v) {
-                                  _volume = v;
-                                  _isMuted = v <= 0;
-                                  // 音量滑块本身由 _volumeListenable 重建，无需整页 setState。
-                                  _volumeListenable.value = v;
-                                },
-                                setPlayerVolume: _player.setVolume,
-                                playbackSpeed: _playbackSpeed,
-                                activeSubtitleId: _activeSubtitleId,
-                                onAudioTap:
-                                    _hasAudioControls(plan)
-                                        ? () => _showAudioPanel(plan)
-                                        : null,
-                                onSubtitleTap: () => _showSubtitlePanel(plan),
-                                onSpeedTap: _showSpeedPanel,
-                                onSettingsTap: () => _showSettingsPanel(plan),
-                                onFullscreenTap: _toggleFullscreen,
-                                isFullscreen: isFullscreen,
-                                formatDuration: formatMoviePlayerDuration,
-                                playing: _player.stream.playing,
-                                onPlayPause:
-                                    () => unawaited(_requestPlayPause()),
-                                isMobile: isMobilePlatform,
-                                onRotateTap:
-                                    _rotateSupported
-                                        ? _toggleOrientation
-                                        : null,
-                                isLandscapeOrientation: _effectiveLandscape,
-                                onPreviousEpisode:
-                                    previousEpisode == null
-                                        ? null
-                                        : () => unawaited(
-                                          _playEpisode(previousEpisode),
-                                        ),
-                                onNextEpisode:
-                                    nextEpisode == null
-                                        ? null
-                                        : () => unawaited(
-                                          _playEpisode(nextEpisode),
-                                        ),
+                              return AnimatedSlide(
+                                offset:
+                                    _showControls
+                                        ? Offset.zero
+                                        : const Offset(0, 0.2),
+                                duration: MotionToken.reduced(
+                                  context,
+                                  MotionToken.fast,
+                                ),
+                                curve: MotionToken.curve,
+                                child: MoviePlayerBottomBar(
+                                  plan: plan,
+                                  polledPosition: _polledPosition,
+                                  playerDuration: _player.state.duration,
+                                  bufferProgress: _bufferProgress,
+                                  isSeeking: _isSeeking,
+                                  seekValue: seekValue,
+                                  onSeekStart: (v) {
+                                    setState(() {
+                                      _isSeeking = true;
+                                    });
+                                    _seekListenable.value = v;
+                                  },
+                                  onSeeking: (v) {
+                                    _seekListenable.value = v;
+                                  },
+                                  onSeekEnd: (v) {
+                                    final dur =
+                                        plan.durationSeconds > 0
+                                            ? Duration(
+                                              seconds: plan.durationSeconds,
+                                            )
+                                            : _player.state.duration;
+                                    final target = Duration(
+                                      milliseconds:
+                                          (v * dur.inMilliseconds).round(),
+                                    );
+                                    // 复位由 _seekToPosition 内部按 generation 执行；
+                                    // 旧 Seek 的 then 不能提前清掉新 Seek 的拖拽态。
+                                    unawaited(_seekToPosition(target));
+                                  },
+                                  onMouseActivity: _onMouseActivity,
+                                  volume: volume,
+                                  isMuted: _isMuted,
+                                  onToggleMute: _toggleMute,
+                                  onVolumeChanged: (v) {
+                                    _volume = v;
+                                    _isMuted = v <= 0;
+                                    // 音量滑块本身由 _volumeListenable 重建，无需整页 setState。
+                                    _volumeListenable.value = v;
+                                  },
+                                  setPlayerVolume: _player.setVolume,
+                                  playbackSpeed: _playbackSpeed,
+                                  activeSubtitleId: _activeSubtitleId,
+                                  onAudioTap:
+                                      _hasAudioControls(plan)
+                                          ? () => _showAudioPanel(plan)
+                                          : null,
+                                  onSubtitleTap: () => _showSubtitlePanel(plan),
+                                  onSpeedTap: _showSpeedPanel,
+                                  onSettingsTap: () => _showSettingsPanel(plan),
+                                  onFullscreenTap: _toggleFullscreen,
+                                  isFullscreen: isFullscreen,
+                                  formatDuration: formatMoviePlayerDuration,
+                                  playing: _player.stream.playing,
+                                  onPlayPause:
+                                      () => unawaited(_requestPlayPause()),
+                                  isMobile: isMobilePlatform,
+                                  onRotateTap:
+                                      _rotateSupported
+                                          ? _toggleOrientation
+                                          : null,
+                                  isLandscapeOrientation: _effectiveLandscape,
+                                  onPreviousEpisode:
+                                      previousEpisode == null
+                                          ? null
+                                          : () => unawaited(
+                                            _playEpisode(previousEpisode),
+                                          ),
+                                  onNextEpisode:
+                                      nextEpisode == null
+                                          ? null
+                                          : () => unawaited(
+                                            _playEpisode(nextEpisode),
+                                          ),
+                                ),
                               );
                             },
                           );
@@ -746,7 +767,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         return;
       }
       final content = decodeTextFileBytes(bytes);
-      final cues = parseSubtitleContent(content);
+      // 整集 ASS 可能上万条 cue，放后台 isolate 解析，别让导入卡住播放画面。
+      final cues = await parseSubtitleContentAsync(content);
+      if (!mounted) {
+        return;
+      }
       if (cues.isEmpty) {
         showMovieFeedback(context, l10n.videoSubtitleNoCues, isError: true);
         return;
@@ -803,8 +828,9 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       final subtitleContent = await _playbackService.loadSubtitle(url);
       if (!mounted || generation != _subtitleGeneration) return;
       devLog('字幕内容长度: ${subtitleContent.length}');
-      final cues = parseSubtitleContent(subtitleContent);
+      final cues = await parseSubtitleContentAsync(subtitleContent);
       devLog('字幕解析完成: ${cues.length} 条字幕');
+      if (!mounted || generation != _subtitleGeneration) return;
       _displaySubtitleCues(cues, generation);
     } catch (error) {
       devLog('WebVTT 获取失败: $error');

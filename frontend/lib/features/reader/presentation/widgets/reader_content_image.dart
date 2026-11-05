@@ -12,6 +12,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_pagination_
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 
 /// 渲染阅读正文中的网络、data URI 或本地缓存图片。
 class ReaderContentImage extends StatelessWidget {
@@ -60,9 +61,15 @@ class ReaderContentImage extends StatelessWidget {
               clampSlotToConstraints ? outerConstraints.maxHeight : 0.0,
           hasCaption: block.caption?.isNotEmpty == true,
         );
+        // 正文插图不随窗口宽度重解码：量化到固定档位后同一视觉档位复用位图。
+        final decodeWidth = quantizedDecodeWidth(
+          logicalWidth: width,
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        );
         return _buildContent(
           context,
           slotHeight: slotHeight,
+          decodeWidth: decodeWidth,
           isDataUri: isDataUri,
           isCachedImage: isCachedImage,
         );
@@ -73,6 +80,7 @@ class ReaderContentImage extends StatelessWidget {
   Widget _buildContent(
     BuildContext context, {
     required double slotHeight,
+    required int decodeWidth,
     required bool isDataUri,
     required bool isCachedImage,
   }) {
@@ -121,9 +129,9 @@ class ReaderContentImage extends StatelessWidget {
                     width: double.infinity,
                     child:
                         isCachedImage
-                            ? _buildCachedImage(slotHeight)
+                            ? _buildCachedImage(slotHeight, decodeWidth)
                             : isDataUri
-                            ? _buildDataUriImage(slotHeight)
+                            ? _buildDataUriImage(slotHeight, decodeWidth)
                             : _buildError(slotHeight),
                   ),
                 ),
@@ -151,7 +159,7 @@ class ReaderContentImage extends StatelessWidget {
     );
   }
 
-  Widget _buildCachedImage(double slotHeight) {
+  Widget _buildCachedImage(double slotHeight, int decodeWidth) {
     if (itemId == null) return _buildError(slotHeight);
     final imagePath = block.src.substring(
       _placeholderPrefix.length,
@@ -162,11 +170,12 @@ class ReaderContentImage extends StatelessWidget {
       imagePath: imagePath,
       bust: retryCount,
       slotHeight: slotHeight,
+      decodeWidth: decodeWidth,
       errorBuilder: () => _buildError(slotHeight),
     );
   }
 
-  Widget _buildDataUriImage(double slotHeight) {
+  Widget _buildDataUriImage(double slotHeight, int decodeWidth) {
     try {
       final commaIndex = block.src.indexOf(',');
       if (commaIndex < 0) {
@@ -189,6 +198,7 @@ class ReaderContentImage extends StatelessWidget {
         bytes,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
+        cacheWidth: decodeWidth,
         errorBuilder: (_, _, _) => _buildError(slotHeight),
       );
     } on Exception {
@@ -241,6 +251,7 @@ class _CachedReaderImage extends ConsumerWidget {
     required this.imagePath,
     required this.bust,
     required this.slotHeight,
+    required this.decodeWidth,
     required this.errorBuilder,
   });
 
@@ -248,6 +259,7 @@ class _CachedReaderImage extends ConsumerWidget {
   final String imagePath;
   final int bust;
   final double slotHeight;
+  final int decodeWidth;
   final Widget Function() errorBuilder;
 
   @override
@@ -270,6 +282,7 @@ class _CachedReaderImage extends ConsumerWidget {
           bytes,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
+          cacheWidth: decodeWidth,
           errorBuilder: (_, _, _) => errorBuilder(),
         );
       },
