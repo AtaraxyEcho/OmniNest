@@ -127,6 +127,10 @@ class ApplicationEnvironmentContractTest {
         assertThat(common.getProperty("music.providers.netease-base-url")).isNull();
         assertThat(common.getProperty("omninest.minio.endpoint")).isNull();
         assertThat(common.getProperty("omninest.setup.enabled")).isNull();
+        // 日志路径只由公共配置决定，dev/prod 都不覆盖它；放进下面的 dev/prod 同步清单
+        // 只会得到“两边都是 null”的恒真断言，因此在这里单独钉住。
+        assertThat(common.getProperty("logging.file.name"))
+                .isEqualTo("${OMNINEST_LOG_PATH:logs/omninest.log}");
 
         assertThat(dev.getProperty("spring.config.activate.on-profile")).isEqualTo("dev");
         Object devEmbeddedWorker = dev.getProperty("omninest.runtime.embedded-worker-enabled");
@@ -193,14 +197,19 @@ class ApplicationEnvironmentContractTest {
                 "omninest.rclone.import-container-path",
                 "omninest.minio.endpoint",
                 "omninest.minio.public-endpoint",
-                "omninest.minio.docker-endpoint",
-                "omninest.search.index-path",
-                "omninest.search.photo-index-path",
-                "logging.file.name"
+                "omninest.minio.docker-endpoint"
         );
         // 口令/密钥项允许 dev 与 prod 默认值不同：prod 禁止弱默认，运行时由
         // ProductionSecretsValidator / JwtSecretValidator 拒绝空白或示例值。
         for (String property : synchronizedProperties) {
+            // 两侧都缺失时 isEqualTo 会退化成比较两个 null，同步检查静默失效；
+            // 这里先钉住存在性，删除配置项必须同步删清单。
+            assertThat(dev.getProperty(property))
+                    .as("dev 配置缺少 %s，同步检查会退化为比较两个 null", property)
+                    .isNotNull();
+            assertThat(prod.getProperty(property))
+                    .as("prod 配置缺少 %s，同步检查会退化为比较两个 null", property)
+                    .isNotNull();
             assertThat(prod.getProperty(property))
                     .as("dev/prod 配置项 %s 应使用同一变量和默认值", property)
                     .isEqualTo(dev.getProperty(property));

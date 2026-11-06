@@ -56,7 +56,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
                 "omninest.setup.persistent-state-enabled=false",
                 "file.local-media.enabled=false",
                 "omninest.clamav.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-admin-user-batch-it",
                 "spring.jpa.properties.hibernate.generate_statistics=true"
         }
 )

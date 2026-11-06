@@ -71,8 +71,7 @@ import org.springframework.test.annotation.DirtiesContext;
                 "omninest.setup.persistent-state-enabled=false",
                 "reader.comic-parser.consume-in-api=false",
                 "file.local-media.enabled=false",
-                "omninest.clamav.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-task-perm-it"
+                "omninest.clamav.enabled=false"
         }
 )
 @ActiveProfiles("dev")

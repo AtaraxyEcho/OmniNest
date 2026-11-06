@@ -81,8 +81,7 @@ import org.springframework.test.annotation.DirtiesContext;
                 "file.local-media.enabled=false",
                 "omninest.clamav.enabled=false",
                 // 集成测试专用口令加密键（32 字节 Base64），只为让敏感配置能真实加解密。
-                "omninest.security.credential-encryption-key=b21uaW5lc3QtZW1haWwtaXQtY3JlZGVudGlhbC1rZXk=",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-email-it"
+                "omninest.security.credential-encryption-key=b21uaW5lc3QtZW1haWwtaXQtY3JlZGVudGlhbC1rZXk="
         }
 )
 @ActiveProfiles("dev")

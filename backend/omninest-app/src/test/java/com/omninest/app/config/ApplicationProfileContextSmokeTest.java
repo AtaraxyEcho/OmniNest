@@ -135,8 +135,7 @@ abstract class ApplicationProfileContextSmokeSupport {
                 "omninest.runtime.embedded-worker-enabled=false",
                 "omninest.setup.persistent-state-enabled=false",
                 "reader.comic-parser.consume-in-api=false",
-                "file.local-media.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-smoke-dev"
+                "file.local-media.enabled=false"
         }
 )
 @ActiveProfiles("dev")
@@ -170,7 +169,6 @@ class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmo
                 "omninest.setup.persistent-state-enabled=false",
                 "reader.comic-parser.consume-in-api=false",
                 "file.local-media.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-smoke-prod",
                 "omninest.security.jwt-secret=smoke-test-jwt-secret-at-least-32-bytes-long!",
                 "omninest.security.credential-encryption-key=smoke-credential-key-at-least-32-bytes!",
                 "spring.rabbitmq.password=smoke-rabbit-password",

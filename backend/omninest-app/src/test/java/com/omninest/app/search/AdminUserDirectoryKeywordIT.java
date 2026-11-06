@@ -52,8 +52,7 @@ import org.springframework.test.annotation.DirtiesContext;
                 "omninest.runtime.embedded-worker-enabled=false",
                 "omninest.setup.persistent-state-enabled=false",
                 "file.local-media.enabled=false",
-                "omninest.clamav.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-user-directory-keyword-it"
+                "omninest.clamav.enabled=false"
         }
 )
 @ActiveProfiles("dev")
