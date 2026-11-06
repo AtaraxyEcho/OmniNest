@@ -11,6 +11,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.LockObtainFailedException;
@@ -39,6 +43,7 @@ class FileSearchIndexServiceTest {
 
     private static final UUID USER_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID USER_B = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static final UUID USER_C = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     @BeforeEach
     void setUp() throws Exception {
@@ -253,6 +258,35 @@ class FileSearchIndexServiceTest {
         assertThat(service.hasObjectContent(USER_A, "PERSONAL", indexed)).isTrue();
         assertThat(service.hasObjectContent(USER_A, "PERSONAL", UUID.randomUUID())).isFalse();
         assertThat(service.hasObjectContent(USER_B, "PERSONAL", indexed)).isFalse();
+    }
+
+    @Test
+    @DisplayName("崩溃遗留的半截分块会被重试的完整会话覆盖")
+    void retryAfterPartialCommitReplacesStaleChunks() throws Exception {
+        UUID objectId = UUID.randomUUID();
+        Path userDir = tempDir.resolve(USER_C.toString());
+        Files.createDirectories(userDir);
+        // 模拟崩溃前已落盘的状态：半截分块被同一索引下另一次 commit 顺带刷出。
+        try (StandardAnalyzer analyzer = new StandardAnalyzer();
+             NIOFSDirectory directory = new NIOFSDirectory(userDir);
+             IndexWriter writer = new IndexWriter(directory, new IndexWriterConfig(analyzer))) {
+            Document partial = new Document();
+            partial.add(new StringField("objectId", objectId.toString(), Field.Store.YES));
+            partial.add(new TextField("content", "半截旧正文", Field.Store.NO));
+            writer.addDocument(partial);
+            writer.commit();
+        }
+
+        FileSearchIndexService.ChunkIndexSession session =
+                service.openChunkIndex(objectId, USER_C, "PERSONAL");
+        session.append("完整的新正文");
+        session.complete();
+
+        // 重试会话首个分块即按对象删除旧文档，半截内容不会残留。
+        assertThat(service.search(USER_C, "半截", 5)).isEmpty();
+        assertThat(service.search(USER_C, "新正文", 5))
+                .extracting(FileSearchIndexService.FileContentHit::fileObjectId)
+                .containsExactly(objectId);
     }
 
     @Test

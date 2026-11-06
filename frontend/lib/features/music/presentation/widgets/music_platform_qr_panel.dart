@@ -250,37 +250,39 @@ class _QrFrame extends StatelessWidget {
           // 激光扫描线：等待扫码时由上至下往复（样例 `animate-laser`）。
           if (session.status == PlatformQrDisplayStatus.waiting)
             Positioned.fill(
-              child: AnimatedBuilder(
-                animation: laser,
-                builder: (context, _) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      top:
-                          _framePadding +
-                          laser.value * (MusicPlatformQrPanel.qrSize - 16),
-                      left: 10,
-                      right: 10,
-                    ),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: <Color>[
-                              (isLight ? Colors.black : Colors.white)
-                                  .withValues(alpha: 0),
-                              (isLight ? Colors.black87 : Colors.white)
-                                  .withValues(alpha: 0.85),
-                              (isLight ? Colors.black : Colors.white)
-                                  .withValues(alpha: 0),
-                            ],
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: laser,
+                  builder: (context, _) {
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        top:
+                            _framePadding +
+                            laser.value * (MusicPlatformQrPanel.qrSize - 16),
+                        left: 10,
+                        right: 10,
+                      ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          height: 2,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: <Color>[
+                                (isLight ? Colors.black : Colors.white)
+                                    .withValues(alpha: 0),
+                                (isLight ? Colors.black87 : Colors.white)
+                                    .withValues(alpha: 0.85),
+                                (isLight ? Colors.black : Colors.white)
+                                    .withValues(alpha: 0),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           if (overlay != null) overlay,

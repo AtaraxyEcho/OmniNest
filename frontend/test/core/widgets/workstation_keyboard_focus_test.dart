@@ -5,8 +5,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_focus_target.dart';
 
 void main() {
+  testWidgets('按下时以 2% 缩放给出点击确认，松开后回弹', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: WorkstationFocusTarget(
+              enabled: true,
+              onActivate: () {},
+              builder:
+                  (context, focused) => const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: ColoredBox(color: Colors.black),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    AnimatedScale scaleWidget() => tester.widget<AnimatedScale>(
+      find.descendant(
+        of: find.byType(WorkstationFocusTarget),
+        matching: find.byType(AnimatedScale),
+      ),
+    );
+    expect(scaleWidget().scale, 1.0);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(WorkstationFocusTarget)),
+    );
+    await tester.pump();
+    expect(scaleWidget().scale, 0.98);
+
+    await gesture.up();
+    await tester.pump();
+    expect(scaleWidget().scale, 1.0);
+  });
+
   testWidgets('六个工位控件按声明顺序进入 Tab 链，Enter 各自触发', (tester) async {
     final log = <String>[];
     await tester.pumpWidget(

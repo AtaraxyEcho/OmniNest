@@ -211,12 +211,13 @@ class _PulsingStatusDotState extends State<_PulsingStatusDot>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(
-        begin: 0.35,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
-      child: widget.child,
+    return RepaintBoundary(
+      child: FadeTransition(
+        opacity: Tween(begin: 0.35, end: 1.0).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+        ),
+        child: widget.child,
+      ),
     );
   }
 }

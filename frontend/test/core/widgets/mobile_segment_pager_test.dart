@@ -88,4 +88,58 @@ void main() {
     expect(find.text('page-b'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('减少动效时外部改选直接落页', (tester) async {
+    Widget reduced({required String current}) => MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: Scaffold(
+          body: MobileSegmentPager<String>(
+            sections: sections,
+            current: current,
+            onChanged: (_) {},
+            pageBuilder: (context, section) => page(section),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(reduced(current: 'a'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(reduced(current: 'c'));
+    // jumpToPage 当帧生效，不会向 animateToPage 传零时长。
+    await tester.pump();
+    expect(find.text('page-c'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('宿主接管与交还分页控制器都不悬空', (tester) async {
+    Widget withController(PageController? controller) => MaterialApp(
+      home: Scaffold(
+        body: MobileSegmentPager<String>(
+          sections: sections,
+          current: 'a',
+          controller: controller,
+          onChanged: (_) {},
+          pageBuilder: (context, section) => page(section),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(withController(null));
+    await tester.pumpAndSettle();
+    final hostController = PageController();
+    addTearDown(hostController.dispose);
+
+    await tester.pumpWidget(withController(hostController));
+    await tester.pumpAndSettle();
+    expect(find.text('page-a'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // 宿主交还控制权：组件必须补建内建控制器而不是继续持有已释放的实例。
+    await tester.pumpWidget(withController(null));
+    await tester.pumpAndSettle();
+    expect(find.text('page-a'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

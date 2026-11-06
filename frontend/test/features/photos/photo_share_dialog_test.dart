@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 
-PhotoShareLink _link({required String id, DateTime? expiresAt}) {
+PhotoShareLink _link({
+  required String id,
+  DateTime? expiresAt,
+  String token = '',
+}) {
   return PhotoShareLink(
     id: id,
-    token: '',
+    token: token,
     resourceType: 'PHOTO_ITEM',
     resourceId: 'res-1',
     accessCount: 2,
@@ -21,6 +26,7 @@ Future<void> _pumpDialog(
   WidgetTester tester, {
   required List<PhotoShareLink> shares,
   required Future<void> Function(String shareId) onRevoke,
+  Future<String> Function(PhotoShareLink share)? shareUrlOf,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -37,6 +43,7 @@ Future<void> _pumpDialog(
                     title: '分享',
                     shares: shares,
                     onRevoke: onRevoke,
+                    shareUrlOf: shareUrlOf,
                   );
                 },
                 child: const Text('open'),
@@ -99,6 +106,43 @@ void main() {
     expect(find.text('永久有效'), findsOneWidget);
     expect(find.text('已过期'), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsNWidgets(2));
+  });
+
+  testWidgets('现有链接可一键复制完整分享地址', (tester) async {
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    await _pumpDialog(
+      tester,
+      shares: [_link(id: 'share-1', token: 'tok-1')],
+      onRevoke: (id) async {},
+      shareUrlOf:
+          (share) async =>
+              'https://example.test/#/shared/photos/${share.token}',
+    );
+
+    await tester.tap(find.byIcon(Icons.link));
+    await tester.pumpAndSettle();
+
+    expect(copied, ['https://example.test/#/shared/photos/tok-1']);
+
+    // 反馈条自带自动关闭计时器，推进到关闭后再结束测试。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('密码留空返回空字符串以显式创建无密码链接', (tester) async {
