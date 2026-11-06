@@ -17,11 +17,11 @@ const String _owner = 'route:/library';
 
 AppBackdropState _wallpaper() {
   final asset = AppBackdropAsset(
-    id: 'bundled-wallpaper',
-    path: bundledWallpaperAssetPathFor(AppBackdropSelectionTarget.mobile),
+    id: 'server-wallpaper',
+    path: 'https://example.com/wallpaper.jpg',
     title: 'OmniNest',
     mediaType: AppBackdropMediaType.image,
-    sourceType: AppBackdropSourceType.bundled,
+    sourceType: AppBackdropSourceType.server,
     fileSize: 0,
     modifiedAt: DateTime(2026),
     createdAt: DateTime(2026),

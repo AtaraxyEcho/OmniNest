@@ -8,13 +8,14 @@ import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
+import 'package:omninest/features/backdrop/presentation/bundled_wallpaper_poster.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 应用级背景渲染层。
 ///
 /// 图片素材三端统一走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
-/// 内置壁纸为打包静态图,桌面(含 Web)与移动分别使用不同素材。
+/// 内置默认壁纸是随包分发的视频,封面帧(打包静图)始终垫在视频层之下。
 class AppBackdropSurface extends ConsumerWidget {
   const AppBackdropSurface({
     required this.asset,
@@ -169,7 +170,7 @@ class AppBackdropSurface extends ConsumerWidget {
     if (isWebPlatform) {
       // HTML video 在首帧就绪或加载失败前不绘制内容；与 IO 端一致在
       // 底层保留静态海报（平台视图之下的画布内容仍按层级合成），避免黑闪。
-      // v2 起无内置动态壁纸,自定义视频失败不再回退默认视频。
+      // 海报只跟随素材自身：自定义视频失败时用它自己的缩略图，绝不回退内置默认视频。
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -241,11 +242,11 @@ class AppBackdropSurface extends ConsumerWidget {
       );
     }
     if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // 内置默认壁纸为打包静态图(CC0),桌面(含 Web)与移动分别使用
-      // 不同素材;按当前设备档位直接解析打包资产,不依赖本机素材行。
-      final target = ref.watch(appBackdropSelectionTargetProvider);
-      return _BundledBackdropImage(
-        path: bundledWallpaperAssetPathFor(target),
+      // 内置素材已是视频，走到这里只可能是历史行（v2 图片档）。封面帧就是同一段
+      // 素材的首帧，直接垫上比露错误底纹更接近预期；下一个启动周期的
+      // ensureBundledBackdrop 会用新元数据覆盖这一行。
+      return BundledWallpaperPoster(
+        key: const ValueKey<String>('backdrop-bundled-poster'),
         fit: fit,
         alignment: alignment,
       );
@@ -259,6 +260,13 @@ class AppBackdropSurface extends ConsumerWidget {
     AppBackdropAsset asset,
     BoxFit fit,
   ) {
+    if (asset.sourceType == AppBackdropSourceType.bundled) {
+      // 视频首帧就绪前与播放失败后都垫封面帧，避免默认壁纸位置露出舞台底色。
+      return BundledWallpaperPoster(
+        key: const ValueKey<String>('backdrop-bundled-poster'),
+        fit: fit,
+      );
+    }
     final thumbnail = asset.thumbnailPath;
     if (asset.sourceType == AppBackdropSourceType.server &&
         thumbnail != null &&
@@ -307,63 +315,6 @@ class _AppBackdropFallback extends StatelessWidget {
           size: 64,
         ),
       ),
-    );
-  }
-}
-
-/// 内置壁纸视图：`contain` 时用模糊同图铺底。
-///
-/// 打包壁纸此前直接交给 `Image.asset(fit: fit)`。用户把适配方式切到
-/// `contain` 后，图片按比例缩在视口中间，四周露出舞台实底，形成一圈
-/// 硬边——而自定义服务端壁纸走 `AppBackdropImage(blurPad: true)`，同一
-/// 设置下不会出现这道边。这里补齐同一层保护：低清模糊的 `cover` 同图
-/// 垫底，完整图 `contain` 叠在上层，任何窗口比例下都没有纯色硬边，
-/// 也不会把照片拉伸变形。
-class _BundledBackdropImage extends StatelessWidget {
-  const _BundledBackdropImage({
-    required this.path,
-    required this.fit,
-    required this.alignment,
-  });
-
-  final String path;
-  final BoxFit fit;
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    if (fit != BoxFit.contain) {
-      return Image.asset(
-        path,
-        key: const ValueKey<String>('backdrop-bundled-image'),
-        fit: fit,
-        alignment: alignment,
-      );
-    }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 模糊铺底只需要色彩关系，压低解码尺寸，避免全屏双份高分辨率解码。
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Image.asset(
-            path,
-            fit: BoxFit.cover,
-            alignment: alignment,
-            filterQuality: FilterQuality.low,
-            cacheWidth: 960,
-          ),
-        ),
-        // 只做轻微压暗：留白本身已是模糊照片，压得太重会被读成"黑边"，
-        // 与本次要消除的 letterbox 观感重新混在一起。
-        ColoredBox(color: Colors.black.withValues(alpha: 0.1)),
-        Image.asset(
-          path,
-          key: const ValueKey<String>('backdrop-bundled-image'),
-          fit: fit,
-          alignment: alignment,
-        ),
-      ],
     );
   }
 }

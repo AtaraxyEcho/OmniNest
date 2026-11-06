@@ -14,11 +14,11 @@ const String _readerOwner = 'route:/reader/items/1/chapters/2';
 
 AppBackdropState _enabledWallpaper({double blurAmount = 0}) {
   final asset = AppBackdropAsset(
-    id: 'bundled-wallpaper',
-    path: bundledWallpaperAssetPathFor(AppBackdropSelectionTarget.desktop),
+    id: 'server-wallpaper',
+    path: 'https://example.com/wallpaper.jpg',
     title: 'OmniNest',
     mediaType: AppBackdropMediaType.image,
-    sourceType: AppBackdropSourceType.bundled,
+    sourceType: AppBackdropSourceType.server,
     fileSize: 0,
     modifiedAt: DateTime(2026),
     createdAt: DateTime(2026),

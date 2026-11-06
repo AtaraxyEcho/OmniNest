@@ -9,7 +9,7 @@ const sourceLineCaps = <String, int>{
       921,
   'lib/features/admin/presentation/pages/admin_users_page.dart': 910,
   'lib/features/admin/presentation/widgets/admin_shell.dart': 825,
-  'lib/features/backdrop/presentation/app_backdrop_settings_panel.dart': 903,
+  'lib/features/backdrop/presentation/app_backdrop_settings_panel.dart': 839,
   'lib/features/files/application/file_browser_controller.dart': 789,
   'lib/features/files/application/file_browser_upload_actions.dart': 425,
   'lib/features/files/presentation/pages/file_browser_page_transfer_workspaces.dart':

@@ -13,7 +13,6 @@ import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
-import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_degraded_notice.dart';
 
@@ -350,10 +349,7 @@ class _WeatherSceneBackdrop extends ConsumerWidget {
                 ? asset!.thumbnailPath
                 : null)
             : asset?.path;
-    final bundled = Image.asset(
-      bundledWallpaperAssetPathFor(AppBackdropSelectionTarget.mobile),
-      fit: BoxFit.cover,
-    );
+    final bundled = BundledWallpaperPoster(cacheWidth: cacheWidth);
     return Stack(
       fit: StackFit.expand,
       children: [

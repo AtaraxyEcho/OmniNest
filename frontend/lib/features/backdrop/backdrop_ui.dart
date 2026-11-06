@@ -5,4 +5,5 @@ library;
 
 export 'package:omninest/features/backdrop/presentation/app_backdrop_scene_scope.dart';
 export 'package:omninest/features/backdrop/presentation/app_backdrop_settings_panel.dart';
+export 'package:omninest/features/backdrop/presentation/bundled_wallpaper_poster.dart';
 export 'package:omninest/features/backdrop/presentation/mobile_env_settings_sheet.dart';

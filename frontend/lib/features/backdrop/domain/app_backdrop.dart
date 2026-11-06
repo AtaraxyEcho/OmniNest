@@ -44,23 +44,22 @@ bool isBackdropAllowedFileName(String fileName) {
 /// 内置默认壁纸的稳定素材 ID,三端一致且不受服务端素材库影响。
 const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v2';
 
-/// 桌面端内置默认壁纸(GPT 生成图,CC0 无版权问题)的打包资产地址;
-/// Web 跟随 [AppBackdropSelectionTarget] 的桌面档语义同样使用该素材。
-const String bundledDesktopWallpaperAssetPath =
-    'assets/backdrops/default_desktop.jpg';
+/// 内置默认壁纸的打包资产地址。
+///
+/// 默认壁纸是一段随包分发的 6.6 秒循环视频（2560×1440 / H.264 / 24fps / 无音轨 /
+/// 约 2.1 MB）：桌面、移动与 Web 共用同一份素材，图片档已取消，避免同一位置
+/// 出现两套默认观感。素材按 CRF 23 重编码过——原始文件是 14 Mbps 的 11.7 MB，
+/// 对一张大面积平滑渐变的背景图属于无收益的超额码率，而 Web 首次访问要整包下载。
+const String bundledDefaultWallpaperAssetPath =
+    'assets/backdrops/default_wallpaper.mp4';
 
-/// 移动端内置默认壁纸的打包资产地址（WebP q80，与桌面 jpg 同为有损编码；
-/// 原 PNG 1.88MB，此编码 86KB，暗部无带状噪声）。
-const String bundledMobileWallpaperAssetPath =
-    'assets/backdrops/default_mobile.webp';
-
-/// 按设备类别返回内置默认壁纸的打包资产地址;渲染层直接经 [Image.asset] 使用。
-String bundledWallpaperAssetPathFor(AppBackdropSelectionTarget target) {
-  return switch (target) {
-    AppBackdropSelectionTarget.desktop => bundledDesktopWallpaperAssetPath,
-    AppBackdropSelectionTarget.mobile => bundledMobileWallpaperAssetPath,
-  };
-}
+/// 内置默认壁纸的封面帧（1920×1080 JPEG，取自视频首帧）。
+///
+/// 视频首帧就绪前垫底、素材库瓦片与天气面板取景都用它。取首帧而不是中段某帧，
+/// 是为了让「静态垫底 → 视频起播」之间不出现画面跳变。它不是可选壁纸，
+/// 因此不随 [AppBackdropSelectionTarget] 变化。
+const String bundledDefaultWallpaperPosterAssetPath =
+    'assets/backdrops/default_wallpaper_poster.jpg';
 
 /// 应用背景来源类型。
 enum AppBackdropSourceType {

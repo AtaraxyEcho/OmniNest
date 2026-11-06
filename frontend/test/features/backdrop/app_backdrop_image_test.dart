@@ -35,11 +35,11 @@ void main() {
     await pumpBackdrop(
       tester,
       url: 'https://example.com/custom.jpg',
-      fallbackAsset: bundledDesktopWallpaperAssetPath,
+      fallbackAsset: bundledDefaultWallpaperPosterAssetPath,
     );
     // placeholder 为深色 ColoredBox,不得出现默认壁纸 Image.asset。
     expect(
-      find.image(const AssetImage(bundledDesktopWallpaperAssetPath)),
+      find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
       findsNothing,
     );
     expect(find.byType(CachedNetworkImage), findsOneWidget);
@@ -48,20 +48,20 @@ void main() {
   testWidgets('fallbackAsset 为空时失败态只显示深色底', (tester) async {
     await pumpBackdrop(tester, url: '', fallbackAsset: null);
     expect(
-      find.image(const AssetImage(bundledDesktopWallpaperAssetPath)),
+      find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
       findsNothing,
     );
     expect(find.byType(ColoredBox), findsWidgets);
   });
 
-  testWidgets('url 为空时使用 fallbackAsset(内置默认壁纸场景)', (tester) async {
+  testWidgets('url 为空时使用 fallbackAsset(内置壁纸封面帧场景)', (tester) async {
     await pumpBackdrop(
       tester,
       url: '',
-      fallbackAsset: bundledDesktopWallpaperAssetPath,
+      fallbackAsset: bundledDefaultWallpaperPosterAssetPath,
     );
     expect(
-      find.image(const AssetImage(bundledDesktopWallpaperAssetPath)),
+      find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
       findsOneWidget,
     );
   });

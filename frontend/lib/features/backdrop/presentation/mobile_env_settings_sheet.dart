@@ -8,6 +8,7 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
+import 'package:omninest/features/backdrop/presentation/bundled_wallpaper_poster.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 视觉环境移动端设置（样例 EnvSettings）：根级全覆盖贴底抽屉——
@@ -385,7 +386,8 @@ class _EnvPreview extends StatelessWidget {
       return ColoredBox(color: context.env.line12);
     }
     if (value.sourceType == AppBackdropSourceType.bundled) {
-      return Image.asset(value.path, fit: BoxFit.cover);
+      // 内置默认壁纸是打包视频，预览用随包封面帧。
+      return const BundledWallpaperPoster();
     }
     final thumbnail = value.thumbnailPath;
     if (thumbnail != null && thumbnail.isNotEmpty) {

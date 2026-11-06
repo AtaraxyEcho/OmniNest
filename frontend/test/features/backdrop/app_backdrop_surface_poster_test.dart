@@ -8,13 +8,56 @@ import 'package:omninest/features/backdrop/presentation/app_backdrop_surface.dar
 import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
 
 void main() {
-  Future<void> pumpBundledSurface(
-    WidgetTester tester, {
-    required AppBackdropSelectionTarget target,
-  }) async {
+  Future<void> pumpBundledSurface(WidgetTester tester) async {
     final asset = AppBackdropAsset(
       id: bundledDefaultWallpaperId,
-      path: bundledWallpaperAssetPathFor(target),
+      path: bundledDefaultWallpaperAssetPath,
+      title: 'OmniNest',
+      mediaType: AppBackdropMediaType.video,
+      sourceType: AppBackdropSourceType.bundled,
+      fileSize: 0,
+      modifiedAt: DateTime(2026),
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+      thumbnailPath: bundledDefaultWallpaperPosterAssetPath,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: AppBackdropSurface(
+              asset: asset,
+              settings: const AppBackdropSettings(),
+              policy: AppBackdropPolicy.portalMobile,
+              environmentBlurSigma: 0,
+              active: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+  }
+
+  testWidgets('内置默认壁纸是打包视频：封面帧垫底且视频层同时挂载', (tester) async {
+    await pumpBundledSurface(tester);
+
+    // 视频首帧受解码与打开耗时影响，封面帧必须先铺满，避免露出舞台底色。
+    expect(
+      find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
+      findsOneWidget,
+    );
+    expect(find.byType(AppBackdropVideoView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('历史 v2 图片档的内置壁纸行回退封面帧而不是错误底纹', (tester) async {
+    // 升级前的数据库里存着 mediaType=image 的内置行，素材文件已随 v3 删除。
+    // 这一行要到下一次 ensureBundledBackdrop 才会被覆盖，期间不能显示错误图标。
+    final legacy = AppBackdropAsset(
+      id: bundledDefaultWallpaperId,
+      path: 'assets/backdrops/default_desktop.jpg',
       title: 'OmniNest',
       mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,
@@ -26,49 +69,23 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          appBackdropSelectionTargetProvider.overrideWithValue(target),
-        ],
         child: MaterialApp(
           home: Scaffold(
             body: AppBackdropSurface(
-              asset: asset,
+              asset: legacy,
               settings: const AppBackdropSettings(),
               policy: AppBackdropPolicy.portalMobile,
               environmentBlurSigma: 0,
-              active: true,
+              active: false,
             ),
           ),
         ),
       ),
     );
     await tester.pump();
-  }
-
-  testWidgets('内置默认壁纸为打包静态图,立即渲染且不建视频会话', (tester) async {
-    await pumpBundledSurface(
-      tester,
-      target: AppBackdropSelectionTarget.desktop,
-    );
-
-    bool isBundledImage(Widget widget) =>
-        widget is Image && widget.image is AssetImage;
-
-    // 桌面档渲染桌面内置素材,不得再挂视频层。
-    expect(
-      find.image(const AssetImage(bundledDesktopWallpaperAssetPath)),
-      findsOneWidget,
-    );
-    expect(find.byWidgetPredicate(isBundledImage), findsOneWidget);
-    expect(find.byType(AppBackdropVideoView), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('移动档内置默认壁纸渲染移动素材', (tester) async {
-    await pumpBundledSurface(tester, target: AppBackdropSelectionTarget.mobile);
 
     expect(
-      find.image(const AssetImage(bundledMobileWallpaperAssetPath)),
+      find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
       findsOneWidget,
     );
     expect(find.byType(AppBackdropVideoView), findsNothing);

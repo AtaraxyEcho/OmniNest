@@ -246,19 +246,21 @@ void main() {
   });
 
   group('AppBackdropRepository', () {
-    test('默认壁纸已按设备档位打包进 Flutter 资源', () async {
-      final desktop = await rootBundle.load(bundledDesktopWallpaperAssetPath);
-      final mobile = await rootBundle.load(bundledMobileWallpaperAssetPath);
+    test('默认壁纸视频与封面帧都已按打包资源分发', () async {
+      final video = await rootBundle.load(bundledDefaultWallpaperAssetPath);
+      final poster = await rootBundle.load(
+        bundledDefaultWallpaperPosterAssetPath,
+      );
 
-      // 断言只服务「资源确实打进包」这一个意图，不锁体积档位：
-      // 移动端已从 PNG 换成 WebP q80（约 86KB）。
-      expect(desktop.lengthInBytes, greaterThan(100 * 1024));
-      expect(mobile.lengthInBytes, greaterThan(50 * 1024));
-      // WebP 必须能被引擎解码，否则移动端默认底图整块落空。
-      final codec = await ui.instantiateImageCodec(mobile.buffer.asUint8List());
+      // 断言只服务「资源确实打进包」这一个意图，不锁具体码率：
+      // 默认壁纸是随包视频，封面帧只用于首帧就绪前垫底与瓦片预览。
+      expect(video.lengthInBytes, greaterThan(1024 * 1024));
+      expect(poster.lengthInBytes, greaterThan(20 * 1024));
+      // 封面帧必须能被引擎解码，否则视频首帧前会露出舞台底色。
+      final codec = await ui.instantiateImageCodec(poster.buffer.asUint8List());
       final frame = (await codec.getNextFrame()).image;
       expect(frame.width, greaterThan(0));
-      expect(frame.height, greaterThan(frame.width), reason: '移动端底图是竖幅');
+      expect(frame.height, greaterThan(0));
       frame.dispose();
     });
 
@@ -332,7 +334,7 @@ void main() {
       addTearDown(database.close);
       AppBackdropAsset bundledAsset(String id) => AppBackdropAsset(
         id: id,
-        path: bundledDesktopWallpaperAssetPath,
+        path: bundledDefaultWallpaperAssetPath,
         title: 'OmniNest',
         mediaType: AppBackdropMediaType.image,
         sourceType: AppBackdropSourceType.bundled,

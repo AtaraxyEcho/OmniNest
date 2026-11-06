@@ -12,9 +12,8 @@ import 'package:omninest/features/backdrop/application/app_backdrop_controller.d
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_drop_surface.dart';
-import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
-import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
+import 'package:omninest/features/backdrop/presentation/backdrop_tile_preview.dart';
 
 export 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
 
@@ -715,7 +714,7 @@ class _BackdropTile extends StatelessWidget {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: _BackdropTilePreview(backdrop: backdrop),
+                  child: BackdropTilePreview(backdrop: backdrop),
                 ),
                 Positioned.fill(
                   child: DecoratedBox(
@@ -833,69 +832,6 @@ class _BackdropTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackdropTilePreview extends StatelessWidget {
-  const _BackdropTilePreview({required this.backdrop});
-
-  final AppBackdropAsset backdrop;
-
-  @override
-  Widget build(BuildContext context) {
-    if (backdrop.sourceType == AppBackdropSourceType.server) {
-      final thumbnailUrl = backdrop.thumbnailPath;
-      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
-        return AppBackdropImage(
-          url: thumbnailUrl,
-          cacheKey: 'backdrop-preview:${backdrop.id}',
-          fit: BoxFit.cover,
-          fallbackUrl: backdrop.path.isNotEmpty ? backdrop.path : null,
-        );
-      }
-      if (backdrop.mediaType != AppBackdropMediaType.video &&
-          backdrop.path.isNotEmpty) {
-        return AppBackdropImage(
-          url: backdrop.path,
-          cacheKey: 'backdrop-preview-full:${backdrop.id}',
-          fit: BoxFit.cover,
-        );
-      }
-      return const _BackdropVideoPlaceholder();
-    }
-    if (backdrop.sourceType == AppBackdropSourceType.bundled) {
-      // 内置默认壁纸为打包静态图,路径由安装器按设备类别写入本机素材行,
-      // 瓦片直接渲染行内路径。
-      return Image.asset(backdrop.path, fit: BoxFit.cover);
-    }
-    return const _BackdropVideoPlaceholder();
-  }
-}
-
-class _BackdropVideoPlaceholder extends StatelessWidget {
-  const _BackdropVideoPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            BackdropStageColors.panelStart,
-            BackdropStageColors.panelEnd,
-          ],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.play_circle_outline_rounded,
-          color: Colors.white.withValues(alpha: 0.62),
-          size: 34,
         ),
       ),
     );
