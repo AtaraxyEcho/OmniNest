@@ -150,7 +150,7 @@ Browsing and retrieving are separate permissions. `CAN_BROWSE` covers listing fo
 | --- | --- |
 | Client | Flutter / Dart (Web · Android · Windows) |
 | Server | Java 25 · Spring Boot modular monolith (API / Worker / Scheduler) |
-| Data | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · optional image analysis sidecar |
+| Data | PostgreSQL · MinIO · RabbitMQ · Redis · optional image analysis sidecar |
 
 ---
 

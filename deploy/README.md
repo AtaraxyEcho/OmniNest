@@ -46,8 +46,8 @@ docker compose up -d
 docker exec omninest-postgres psql -U omninest -d omninest -c 'DROP SCHEMA omni CASCADE;'
 ```
 
-随后起后端，Flyway 会按当前基线重建 `omni` 模式、内置目录与默认配置。Redis、RabbitMQ 与
-Lucene 索引本就是可重建数据，不随库清理。生产环境在未发布阶段同样按基线重建；一旦进入
+随后起后端，Flyway 会按当前基线重建 `omni` 模式、内置目录与默认配置。Redis 与 RabbitMQ
+本就是可重建数据，不随库清理。生产环境在未发布阶段同样按基线重建；一旦进入
 已发布且环境执行过迁移的阶段，基线不可改写，必须改用递增迁移（见根目录 `AGENTS.md`）。
 
 若必须保留已有开发数据，可先备份，再依次执行 `deploy/db/upgrade-baseline-20261024.sql`
@@ -432,9 +432,9 @@ docker compose up -d --force-recreate nginx certbot backend-api backend-worker b
 
 ### 数据卷与网络
 
-本地影视目录以只读方式同时挂载给 backend 三种运行角色。Rclone 和
-Lucene 使用命名卷在容器间共享所需内容；PostgreSQL、Redis、RabbitMQ 和 MinIO
-数据分别使用独立命名卷。
+本地影视目录以只读方式同时挂载给 backend 三种运行角色。Rclone 使用命名卷在容器间
+共享所需内容；PostgreSQL、Redis、RabbitMQ 和 MinIO 数据分别使用独立命名卷。文件搜索
+完全落在 PostgreSQL，不再有共享索引卷。
 
 Nginx 使用固定内部地址作为后端可信代理身份。`OMNINEST_DOCKER_DYNAMIC_IP_RANGE`
 必须位于 `OMNINEST_DOCKER_SUBNET` 内，并且不能包含 `OMNINEST_NGINX_INTERNAL_IP`；
@@ -458,7 +458,7 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 - 建议宿主 crontab 每日执行 `backup.sh`，并将备份目录同步到异地存储。
 - MinIO 卷为运行中快照（crash-consistent）；恢复后以数据库记录为准核对
   派生资产，缺失的缩略图等可重建资产会由系统自动补齐。
-- Redis、RabbitMQ、Lucene 索引均为可重建数据，不在备份范围。
+- Redis、RabbitMQ 均为可重建数据，不在备份范围；文件搜索无需索引卷。
 - 跨版本恢复前先阅读根仓库发布说明，确认 Flyway 基线兼容。
 
 ## 密钥轮换

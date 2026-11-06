@@ -90,7 +90,12 @@ class AppBackdropSurface extends ConsumerWidget {
               switchOutCurve: MotionToken.curveIn,
               child: KeyedSubtree(
                 key: ValueKey<String>(asset?.id ?? 'none'),
-                child: media,
+                // AnimatedSwitcher 默认 layoutBuilder 是 StackFit.loose 的
+                // Stack：松约束下 Image 按固有像素排版，BoxFit 不参与，
+                // 宽视口里 cover/fill 都会退化成 letterbox（左右露出舞台
+                // 底色）。背景容器必须永远等于宿主，缩放语义只由 BoxFit
+                // 承担，因此这里显式拉满。
+                child: SizedBox.expand(child: media),
               ),
             );
     final mediaLayer =
@@ -239,9 +244,8 @@ class AppBackdropSurface extends ConsumerWidget {
       // 内置默认壁纸为打包静态图(CC0),桌面(含 Web)与移动分别使用
       // 不同素材;按当前设备档位直接解析打包资产,不依赖本机素材行。
       final target = ref.watch(appBackdropSelectionTargetProvider);
-      return Image.asset(
-        bundledWallpaperAssetPathFor(target),
-        key: const ValueKey<String>('backdrop-bundled-image'),
+      return _BundledBackdropImage(
+        path: bundledWallpaperAssetPathFor(target),
         fit: fit,
         alignment: alignment,
       );
@@ -303,6 +307,63 @@ class _AppBackdropFallback extends StatelessWidget {
           size: 64,
         ),
       ),
+    );
+  }
+}
+
+/// 内置壁纸视图：`contain` 时用模糊同图铺底。
+///
+/// 打包壁纸此前直接交给 `Image.asset(fit: fit)`。用户把适配方式切到
+/// `contain` 后，图片按比例缩在视口中间，四周露出舞台实底，形成一圈
+/// 硬边——而自定义服务端壁纸走 `AppBackdropImage(blurPad: true)`，同一
+/// 设置下不会出现这道边。这里补齐同一层保护：低清模糊的 `cover` 同图
+/// 垫底，完整图 `contain` 叠在上层，任何窗口比例下都没有纯色硬边，
+/// 也不会把照片拉伸变形。
+class _BundledBackdropImage extends StatelessWidget {
+  const _BundledBackdropImage({
+    required this.path,
+    required this.fit,
+    required this.alignment,
+  });
+
+  final String path;
+  final BoxFit fit;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (fit != BoxFit.contain) {
+      return Image.asset(
+        path,
+        key: const ValueKey<String>('backdrop-bundled-image'),
+        fit: fit,
+        alignment: alignment,
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 模糊铺底只需要色彩关系，压低解码尺寸，避免全屏双份高分辨率解码。
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Image.asset(
+            path,
+            fit: BoxFit.cover,
+            alignment: alignment,
+            filterQuality: FilterQuality.low,
+            cacheWidth: 960,
+          ),
+        ),
+        // 只做轻微压暗：留白本身已是模糊照片，压得太重会被读成"黑边"，
+        // 与本次要消除的 letterbox 观感重新混在一起。
+        ColoredBox(color: Colors.black.withValues(alpha: 0.1)),
+        Image.asset(
+          path,
+          key: const ValueKey<String>('backdrop-bundled-image'),
+          fit: fit,
+          alignment: alignment,
+        ),
+      ],
     );
   }
 }

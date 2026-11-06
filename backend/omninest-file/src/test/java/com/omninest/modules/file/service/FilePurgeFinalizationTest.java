@@ -23,7 +23,6 @@ import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.FilePurgeEntryRepository;
 import com.omninest.modules.file.repository.FileVersionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
-import com.omninest.modules.search.service.FileSearchIndexService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.persistence.EntityManager;
 import java.util.Collection;
@@ -59,7 +58,6 @@ class FilePurgeFinalizationTest {
     private final FileVersionRepository fileVersionRepository = mock(FileVersionRepository.class);
     private final FilePurgeEntryRepository purgeEntryRepository = mock(FilePurgeEntryRepository.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
-    private final FileSearchIndexService fileSearchIndexService = mock(FileSearchIndexService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final EntityManager entityManager = mock(EntityManager.class);
     private final FilePurgeStateService service = new FilePurgeStateService(
@@ -70,7 +68,6 @@ class FilePurgeFinalizationTest {
             mock(FileNodePermissionRepository.class),
             List.of(),
             storageQuotaService,
-            fileSearchIndexService,
             mock(ApplicationEventPublisher.class),
             mock(ReadThroughCache.class),
             taskRecordService,

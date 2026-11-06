@@ -10,7 +10,7 @@ The backend provides the shared API, authentication, file capabilities, media se
 - RabbitMQ for background work that needs persistence, progress, retries, recovery, or scheduling.
 - Redis for caching, short-lived state, concurrency control, and rate limiting.
 - MinIO and controlled Storage Providers for original content and derived assets.
-- Lucene for embedded search and Tika for content detection and text extraction.
+- PostgreSQL `pg_trgm` for file-name search and Tika for content-type detection.
 
 ## Runtime roles
 

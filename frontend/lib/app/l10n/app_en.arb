@@ -2596,13 +2596,6 @@
       "count": {}
     }
   },
-  "adminRebuildIndex": "Rebuild Index",
-  "adminRebuildIndexDone": "Cleared {count} index documents, re-indexing in progress",
-  "@adminRebuildIndexDone": {
-    "placeholders": {
-      "count": {}
-    }
-  },
   "adminApiResponseFormat": "Admin response format is incorrect",
   "adminNoResponse": "Server did not return admin result",
   "adminUserListFormat": "User list format is incorrect",

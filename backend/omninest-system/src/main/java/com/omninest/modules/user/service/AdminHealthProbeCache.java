@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 /**
  * 管理台健康探测的短时缓存。
  *
- * <p>监控页每次刷新都会串行探测 PostgreSQL、Redis、MinIO、ClamAV 与 Lucene，其中
+ * <p>监控页每次刷新都会串行探测 PostgreSQL、Redis、MinIO 与 ClamAV，其中
  * MinIO/ClamAV 是真实网络往返、超时以秒计。多个管理员同时打开页面或前端按秒轮询时，
  * 这些探测会成倍打到被探测组件上，而健康状态在几秒内不会变。</p>
  *

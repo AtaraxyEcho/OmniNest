@@ -11285,18 +11285,6 @@ abstract class AppLocalizations {
   /// **'Updated storage for {count} users'**
   String adminRecalculateDone(Object count);
 
-  /// No description provided for @adminRebuildIndex.
-  ///
-  /// In en, this message translates to:
-  /// **'Rebuild Index'**
-  String get adminRebuildIndex;
-
-  /// No description provided for @adminRebuildIndexDone.
-  ///
-  /// In en, this message translates to:
-  /// **'Cleared {count} index documents, re-indexing in progress'**
-  String adminRebuildIndexDone(Object count);
-
   /// No description provided for @adminApiResponseFormat.
   ///
   /// In en, this message translates to:

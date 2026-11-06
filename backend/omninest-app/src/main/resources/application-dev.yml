@@ -111,5 +111,3 @@ omninest:
     docker-endpoint: ${OMNINEST_MINIO_DOCKER_ENDPOINT:http://omninest-minio:9000}
     access-key: ${OMNINEST_MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${OMNINEST_MINIO_SECRET_KEY:minioadmin}
-  search:
-    index-path: ${OMNINEST_SEARCH_INDEX_PATH:${user.home}/.omninest/lucene-index}

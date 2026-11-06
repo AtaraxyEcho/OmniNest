@@ -4,7 +4,6 @@ import com.omninest.modules.reader.domain.ReaderAnnotation;
 import com.omninest.modules.reader.domain.ReaderBookmark;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
-import com.omninest.modules.search.domain.SearchIndexState;
 import jakarta.persistence.Column;
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,18 +49,6 @@ class SchemaColumnLengthContractTest {
                 ReaderItem.class, "itemType");
         assertLength(columnLengths, "reader_progress", "reading_mode",
                 ReaderProgress.class, "readingMode");
-    }
-
-    @Test
-    @DisplayName("搜索索引状态实体列宽与 V001 基线严格一致")
-    void searchEntityLengthsMatchBaseline() throws IOException {
-        Map<String, Integer> columnLengths = loadBaselineLengths();
-        // dictionary_version 没有显式 length 时 Hibernate 按 255 建模，比列宽 80 更宽：
-        // 校验模式不会报错，但超长的词典版本串会在写入时被数据库截断或拒绝。
-        assertLength(columnLengths, "search_index_states", "dictionary_version",
-                SearchIndexState.class, "dictionaryVersion");
-        assertLength(columnLengths, "search_index_states", "analyzer_name",
-                SearchIndexState.class, "analyzerName");
     }
 
     private static void assertLength(

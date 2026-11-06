@@ -74,7 +74,6 @@ class SharedSpaceServiceTest {
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
     private final ApplicationEventPublisher eventPublisher =
             mock(ApplicationEventPublisher.class);
-    private final FileIndexSyncService fileIndexSyncService = mock(FileIndexSyncService.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
 
     private SharedSpaceService service;
@@ -88,7 +87,7 @@ class SharedSpaceServiceTest {
                 fileNodeRepository, subtreeQueryRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, cascadeCleanup,
                 fileNodeScanQueryRepository, configValueProvider, new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
-                eventPublisher, fileIndexSyncService, syncEventRecorder,
+                eventPublisher, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );
@@ -459,7 +458,6 @@ class SharedSpaceServiceTest {
             assertThat(deletedChild.getSpaceType()).isEqualTo(SpaceType.PERSONAL);
             assertThat(deletedChild.getOwnerUserId()).isEqualTo(USER_A);
             assertThat(deletedChild.getNormalizedPath()).isEqualTo("/Project/old.txt");
-            verify(fileIndexSyncService).scheduleAfterCommit(USER_A, List.of(FOLDER_ID));
         }
 
         @Test

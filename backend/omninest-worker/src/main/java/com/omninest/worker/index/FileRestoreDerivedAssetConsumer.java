@@ -18,10 +18,8 @@ import org.springframework.stereotype.Component;
 /**
  * 文件恢复后的派生资产消费者：校验源对象是否仍在，并补齐缺失的图片缩略图。
  *
- * <p>搜索索引不在这里重建。恢复写入侧已经通过 {@code FileIndexSyncService} 派发
- * {@code FILE_INDEX + TEXT_EXTRACTION} 重投，那是唯一能保住正文的一条路；本消费者此前附带
- * 的 {@code indexFile(content=null)} 对已抽过正文的文件会被"已有正文就跳过"那道闸吞掉，
- * 属于第二条更弱的索引路径，已撤下。</p>
+ * <p>文件正文索引已下线，本消费者只处理派生资产。文件名检索以数据库为实时真值，
+ * 恢复后不需要任何索引重建。</p>
  *
  * <p>队列与路由键沿用 {@code omni.task.file-restore-index}：改名会在已部署的 broker 上留下
  * 需要手工清理的旧队列，而这条链路的职责已由类名与 Javadoc 说明，不值得换来运维残留。</p>

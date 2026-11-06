@@ -180,8 +180,6 @@ class ArchitectureInvariantsTest {
             Map.entry("WEB_OPTIMIZE", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("AUDIO_EXTRACT", "经 FilePostProcessingTaskTracker 生命周期领取"),
             Map.entry("THUMBNAIL", "经 FilePostProcessingTaskTracker 生命周期领取"),
-            Map.entry("TEXT_EXTRACTION", "经 FilePostProcessingTaskTracker 生命周期领取"),
-            Map.entry("SEARCH_INDEX_REBUILD", "SearchIndexRebuildService 分批 updateProgress"),
             Map.entry("LOCAL_VIDEO_LIBRARY_DISCOVERY", "发现批次刷新进度"),
             Map.entry("LOCAL_VIDEO_LIBRARY_APPLY", "MediaLibraryApplyExecutor 全程持有租约"),
             // 邮件通知是一次 SMTP 提交：它不持任何业务对象的写权限，被重投最多产生

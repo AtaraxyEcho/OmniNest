@@ -724,8 +724,10 @@ class _MobileAdminSectionSheet extends ConsumerWidget {
                     ),
                     selected: item == selected,
                     selectedTileColor: scheme.surfaceContainerHighest,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppControlTokens.controlRadius,
+                      ),
                     ),
                     onTap: () {
                       Navigator.pop(context);

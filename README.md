@@ -150,7 +150,7 @@ OmniNest 内置的开源音乐播放模块并非网易云音乐或其关联公�
 | --- | --- |
 | 客户端 | Flutter / Dart（Web · Android · Windows） |
 | 后端 | Java 25 · Spring Boot，模块化单体（API / Worker / Scheduler） |
-| 数据与存储 | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · 可选图像分析侧车 |
+| 数据与存储 | PostgreSQL · MinIO · RabbitMQ · Redis · 可选图像分析侧车 |
 
 ---
 

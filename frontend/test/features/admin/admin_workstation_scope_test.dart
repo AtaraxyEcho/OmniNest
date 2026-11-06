@@ -63,7 +63,7 @@ void main() {
       expect(Theme.of(captured).colorScheme.brightness, Brightness.light);
     });
 
-    testWidgets('弹窗与按钮主题全直角零阴影', (tester) async {
+    testWidgets('弹窗与按钮主题分级圆角、零阴影', (tester) async {
       late BuildContext captured;
       await tester.pumpWidget(
         _wrap(
@@ -77,17 +77,23 @@ void main() {
       );
       final theme = Theme.of(captured);
       final dialogShape = theme.dialogTheme.shape as RoundedRectangleBorder?;
-      expect(dialogShape?.borderRadius, BorderRadius.zero);
+      expect(
+        dialogShape?.borderRadius,
+        BorderRadius.circular(AppControlTokens.dialogRadius),
+      );
       expect(theme.dialogTheme.elevation, 0);
       final filledShape =
           theme.filledButtonTheme.style?.shape?.resolve({})
               as RoundedRectangleBorder?;
-      expect(filledShape?.borderRadius, BorderRadius.zero);
+      expect(
+        filledShape?.borderRadius,
+        BorderRadius.circular(AppControlTokens.controlRadius),
+      );
     });
   });
 
   group('工位基础件直角度量', () {
-    testWidgets('状态胶囊/迷你统计为直角细边框', (tester) async {
+    testWidgets('状态胶囊/迷你统计为圆角描边', (tester) async {
       await tester.pumpWidget(
         _wrap(
           const Center(
@@ -109,13 +115,18 @@ void main() {
               .whereType<BoxDecoration>()
               .toList();
       expect(decorations, isNotEmpty);
-      // 描边容器一律直角；无描边的圆点（状态指示灯）是规范唯一豁免。
+      // 描边容器统一走分级圆角：标签是胶囊、统计块是控件圆角；
+      // 无描边的圆点（状态指示灯）保持 circle 豁免。
       final bordered = decorations.where(
         (decoration) => decoration.border != null,
       );
       expect(bordered, isNotEmpty);
       for (final decoration in bordered) {
-        expect(decoration.borderRadius, isNull);
+        expect(
+          decoration.borderRadius,
+          isNotNull,
+          reason: '描边容器不得再退回直角',
+        );
       }
       expect(
         decorations.any((decoration) => decoration.shape == BoxShape.circle),
@@ -207,12 +218,18 @@ void main() {
       final scheme = Theme.of(captured).colorScheme;
 
       final enabled = decoration.enabledBorder as OutlineInputBorder;
-      expect(enabled.borderRadius, BorderRadius.zero);
+      expect(
+        enabled.borderRadius,
+        BorderRadius.circular(AppControlTokens.controlRadius),
+      );
       expect(enabled.borderSide.color, scheme.outlineVariant);
       expect(enabled.borderSide.width, 1);
 
       final focused = decoration.focusedBorder as OutlineInputBorder;
-      expect(focused.borderRadius, BorderRadius.zero);
+      expect(
+        focused.borderRadius,
+        BorderRadius.circular(AppControlTokens.controlRadius),
+      );
       expect(focused.borderSide.color, scheme.onSurface);
       expect(focused.borderSide.width, 1);
 
@@ -230,7 +247,7 @@ void main() {
     });
   });
 
-  group('AppDropdown 工位直角化', () {
+  group('AppDropdown 工位圆角化', () {
     Widget dropdown() {
       return AppDropdown<String>(
         value: 'a',
@@ -242,7 +259,7 @@ void main() {
       );
     }
 
-    testWidgets('工位 Scope 内：字段直角 hairline，注册工位标记扩展', (tester) async {
+    testWidgets('工位 Scope 内：字段圆角 hairline，注册工位标记扩展', (tester) async {
       late BuildContext captured;
       await tester.pumpWidget(
         _wrap(
@@ -265,11 +282,17 @@ void main() {
         find.byType(InputDecorator),
       );
       final enabled = decorator.decoration.enabledBorder as OutlineInputBorder;
-      expect(enabled.borderRadius, BorderRadius.zero);
+      expect(
+        enabled.borderRadius,
+        BorderRadius.circular(AppControlTokens.controlRadius),
+      );
       expect(enabled.borderSide.color, scheme.outlineVariant);
       expect(enabled.borderSide.width, 1);
       final focused = decorator.decoration.focusedBorder as OutlineInputBorder;
-      expect(focused.borderRadius, BorderRadius.zero);
+      expect(
+        focused.borderRadius,
+        BorderRadius.circular(AppControlTokens.controlRadius),
+      );
       expect(focused.borderSide.color, scheme.onSurface);
       expect(focused.borderSide.width, 1);
     });

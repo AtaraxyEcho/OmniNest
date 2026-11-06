@@ -122,8 +122,7 @@ public class TaskRedispatchService {
     ) {
         Map<String, Object> payload = parsePayload(payloadJson);
         return switch (routingKey) {
-            case QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
-                    QueueNames.THUMBNAIL_ROUTING_KEY,
+            case QueueNames.THUMBNAIL_ROUTING_KEY,
                     QueueNames.PHOTO_MOTION_ROUTING_KEY -> fileUploadedPayload(payload);
             case QueueNames.MEDIA_AUTO_IMPORT_ROUTING_KEY -> Map.of(
                     "taskId", taskId.toString(),
@@ -192,10 +191,6 @@ public class TaskRedispatchService {
             case QueueNames.PHOTO_BATCH_ROUTING_KEY -> Map.of(
                     "taskId", taskId.toString(),
                     "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
-            );
-            case QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY -> Map.of(
-                    "taskId", taskId.toString(),
-                    "actorUserId", requiredUuid(payload, "actorUserId").toString()
             );
             case QueueNames.PHOTO_AI_ROUTING_KEY -> {
                 Map<String, Object> analysis = new LinkedHashMap<>();

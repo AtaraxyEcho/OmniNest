@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/app_switch.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/player/music_visual_color_picker.dart';

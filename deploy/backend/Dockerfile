@@ -8,7 +8,7 @@ RUN apt-get update && \
 # 非 root 运行；预建并授权应用需写入的目录（命名卷首次挂载继承镜像内属主）。
 RUN groupadd --system omninest && \
     useradd --system --gid omninest --home-dir /app --shell /usr/sbin/nologin omninest && \
-    mkdir -p /app/logs /var/lib/omninest/lucene \
+    mkdir -p /app/logs \
         /var/lib/omninest/geonames \
         /tmp/omninest-probe /tmp/omninest-processing/transcode \
         /mnt/local /mnt/imports /mnt/local-media && \

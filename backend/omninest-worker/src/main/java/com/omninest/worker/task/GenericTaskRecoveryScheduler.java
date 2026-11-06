@@ -28,8 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>包含两类裁决：一是心跳超时恢复，覆盖缺少专用恢复调度器的长任务类型
  * （PHOTO_SCAN、PHOTO_THUMBNAILS、PHOTO_BATCH、PHOTO_MOTION、
  * PHOTO_MOTION_RESCAN、EXTERNAL_IMPORT、MEDIA_SCRAPE、VIDEO_TRANSCODE、
- * WEB_OPTIMIZE、AUDIO_EXTRACT、THUMBNAIL、
- * TEXT_EXTRACTION、SEARCH_INDEX_REBUILD、NOTIFICATION_EMAIL、
+ * WEB_OPTIMIZE、AUDIO_EXTRACT、THUMBNAIL、NOTIFICATION_EMAIL、
  * LOCAL_VIDEO_LIBRARY_DISCOVERY、LOCAL_VIDEO_LIBRARY_APPLY），
  * Worker 崩溃导致 RUNNING 任务心跳超时后，按重试次数裁决：可重试则经
  * Outbox 按退避时间重新入队，达到上限则进入死信；二是停滞任务清扫，对
@@ -62,8 +61,6 @@ public class GenericTaskRecoveryScheduler {
             "WEB_OPTIMIZE",
             "AUDIO_EXTRACT",
             "THUMBNAIL",
-            "TEXT_EXTRACTION",
-            "SEARCH_INDEX_REBUILD",
             "NOTIFICATION_EMAIL",
             "LOCAL_VIDEO_LIBRARY_DISCOVERY",
             "LOCAL_VIDEO_LIBRARY_APPLY"

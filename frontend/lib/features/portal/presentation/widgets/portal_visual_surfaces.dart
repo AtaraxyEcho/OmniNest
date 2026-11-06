@@ -533,7 +533,7 @@ class _CoverImageFallback extends StatelessWidget {
   }
 }
 
-class PortalMetricLine extends StatelessWidget {
+class PortalMetricLine extends StatefulWidget {
   const PortalMetricLine({
     required this.palette,
     required this.label,
@@ -548,21 +548,45 @@ class PortalMetricLine extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
+  State<PortalMetricLine> createState() => _PortalMetricLineState();
+}
+
+class _PortalMetricLineState extends State<PortalMetricLine> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    // 行内容统一带横向 12 内边距：可点击行的胶囊高亮与文字保持呼吸
-    // 空间，静态行（无高亮）与可点击行左缘对齐。
-    final row = Padding(
+    final palette = widget.palette;
+    final interactive = widget.onTap != null;
+    final hovered = interactive && _hovered;
+    // 行内容统一带横向 12 内边距：悬停胶囊与文字保持呼吸空间，
+    // 静态行（无悬停）与可点击行左缘对齐。
+    final row = AnimatedContainer(
+      duration: PortalMotion.duration(
+        context,
+        const Duration(milliseconds: 140),
+      ),
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        // 悬停只提升表面与文字对比，不改几何：三张状态卡此前只有
+        // InkWell 按压，鼠标移上去没有任何可点提示。
+        color:
+            hovered
+                ? palette.text.withValues(alpha: 0.07)
+                : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           Expanded(
             flex: 2,
             child: Text(
-              label,
+              widget.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: palette.muted,
+                color: hovered ? palette.text : palette.muted,
                 fontSize: AppTypography.bodyMedium,
               ),
             ),
@@ -571,7 +595,7 @@ class PortalMetricLine extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-              value,
+              widget.value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
@@ -585,15 +609,20 @@ class PortalMetricLine extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) {
+    if (!interactive) {
       return row;
     }
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: row,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: widget.onTap,
+          child: row,
+        ),
       ),
     );
   }

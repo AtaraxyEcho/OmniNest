@@ -101,7 +101,7 @@ class LogRetentionServiceTest {
         Path logs = Files.createDirectories(workDir.resolve("logs"));
         Path mediaLibrary = Files.createDirectories(workDir.resolve("var-lib-omninest"));
         Path activeLog = Files.createFile(logs.resolve("omninest.log"));
-        Path oldLuceneSegment = aged(mediaLibrary.resolve("segments_4"), 40);
+        Path oldDataFile = aged(mediaLibrary.resolve("segments_4"), 40);
         Path oldImport = aged(mediaLibrary.resolve("feature.log"), 40);
 
         Map<String, String> values = new HashMap<>();
@@ -110,7 +110,7 @@ class LogRetentionServiceTest {
         LogRetentionService service = service(activeLog, values);
 
         assertThat(service.cleanup(now)).isZero();
-        assertThat(oldLuceneSegment).exists();
+        assertThat(oldDataFile).exists();
         assertThat(oldImport).exists();
     }
 

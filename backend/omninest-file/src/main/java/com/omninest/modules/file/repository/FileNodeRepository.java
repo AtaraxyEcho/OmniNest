@@ -407,67 +407,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
 
     List<FileNode> findByOwnerUserIdAndIdInAndDeletedFalse(UUID ownerUserId, Collection<UUID> ids);
 
-    /**
-     * 按内容对象标识复核个人空间命中的文件节点。
-     *
-     * <p>正文索引只存不可变的对象标识，检索命中后由这里解析出当前节点：节点可能已软删除、
-     * 已进入永久删除流程，或已换成另一个内容对象（历史版本回滚），都必须按库表现状过滤。</p>
-     *
-     * @param ownerUserId 所属用户 ID
-     * @param objectIds 正文命中的内容对象标识
-     * @param purgeState 永久删除状态
-     * @param spaceType 空间类型
-     * @param derivedSource 派生文件来源编码
-     * @return 当前仍可搜索的节点
-     */
-    @Query("""
-            select node
-            from FileNode node
-            where node.ownerUserId = :ownerUserId
-              and node.currentObjectId in :objectIds
-              and node.deleted = false
-              and node.purgeState = :purgeState
-              and node.spaceType = :spaceType
-              and node.nodeType = 'FILE'
-              and (node.sourceType is null or node.sourceType <> :derivedSource)
-            """)
-    List<FileNode> findSearchablePersonalNodesByObjectIds(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("objectIds") Collection<UUID> objectIds,
-            @Param("purgeState") FilePurgeState purgeState,
-            @Param("spaceType") SpaceType spaceType,
-            @Param("derivedSource") String derivedSource
-    );
-
-    /**
-     * 按内容对象标识复核共享空间命中的文件节点。
-     *
-     * <p>共享空间可见性由角色权限单独判定，这里不按 owner_user_id 过滤；
-     * 节点仍须活动、未进入永久删除且非系统派生。</p>
-     *
-     * @param objectIds 正文命中的内容对象标识
-     * @param purgeState 永久删除状态
-     * @param spaceType 空间类型
-     * @param derivedSource 派生文件来源编码
-     * @return 当前仍可搜索的共享空间节点
-     */
-    @Query("""
-            select node
-            from FileNode node
-            where node.currentObjectId in :objectIds
-              and node.deleted = false
-              and node.purgeState = :purgeState
-              and node.spaceType = :spaceType
-              and node.nodeType = 'FILE'
-              and (node.sourceType is null or node.sourceType <> :derivedSource)
-            """)
-    List<FileNode> findSearchableSharedNodesByObjectIds(
-            @Param("objectIds") Collection<UUID> objectIds,
-            @Param("purgeState") FilePurgeState purgeState,
-            @Param("spaceType") SpaceType spaceType,
-            @Param("derivedSource") String derivedSource
-    );
-
     @Query("""
             select node
             from FileNode node

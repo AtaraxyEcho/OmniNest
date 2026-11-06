@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 文件后处理任务（THUMBNAIL / FILE_INDEX / TEXT_EXTRACTION）状态跟踪器。
+ * 文件后处理任务（THUMBNAIL / PHOTO_MOTION）状态跟踪器。
  *
  * <p>此前这三个消费者只执行业务不更新 sys_tasks，任务记录永远停留在 QUEUED。
  * 本组件补齐生命周期：按 (owner, taskType, FILE_NODE, fileNodeId) 解析任务记录，

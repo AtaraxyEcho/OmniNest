@@ -2470,13 +2470,6 @@
       "count": {}
     }
   },
-  "adminRebuildIndex": "重建索引",
-  "adminRebuildIndexDone": "已清除 {count} 个索引文档，请等待重新索引",
-  "@adminRebuildIndexDone": {
-    "placeholders": {
-      "count": {}
-    }
-  },
   "adminApiResponseFormat": "Admin 响应格式不正确",
   "adminNoResponse": "服务端没有返回 Admin 结果",
   "adminUserListFormat": "用户列表格式不正确",

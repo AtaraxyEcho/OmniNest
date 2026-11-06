@@ -139,8 +139,8 @@ class WorkstationSurfaceFlag extends ThemeExtension<WorkstationSurfaceFlag> {
   ) => this;
 }
 
-/// 在全局主题之上叠加工位皮肤：ColorScheme、全直角组件形状、
-/// 细线边框与零阴影，并保留全局已注册的 ThemeExtension。
+/// 在全局主题之上叠加工位皮肤：ColorScheme、分级圆角、细线边框与
+/// 零阴影，并保留全局已注册的 ThemeExtension。
 ///
 /// [overlayExtensions] 为模块专属扩展（如 FilesColors / AdminColors），
 /// 会以类型为键覆盖基础主题中的同名扩展。
@@ -154,7 +154,22 @@ ThemeData workstationThemeData({
   final isDark = scheme.brightness == Brightness.dark;
   final isDesktop = AppControlTokens.isDesktopDensity;
   final buttonHeight = isDesktop ? 32.0 : 44.0;
-  final edgeShape = RoundedRectangleBorder(borderRadius: BorderRadius.zero);
+  // 分级圆角取代此前的全直角：控件 8 / 卡片 12 / 对话框 14 / 菜单 12。
+  // 「建筑极简」的基因保留在 1px 细线描边、零阴影与紧凑密度上；纯直角
+  // 在暗色玻璃表面会让按钮、输入框、卡片读作同一种方块，层级只能靠
+  // 间距区分——这正是「所有控件都是矩形、不好看」的直接来源。
+  final edgeShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
+  );
+  final cardShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppControlTokens.cardRadius),
+  );
+  final dialogShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppControlTokens.dialogRadius),
+  );
+  final menuShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppControlTokens.menuRadius),
+  );
 
   final extensions = Map<Object, ThemeExtension<dynamic>>.of(base.extensions);
   extensions[WorkstationSurfaceFlag] = const WorkstationSurfaceFlag();
@@ -182,7 +197,7 @@ ThemeData workstationThemeData({
       backgroundColor: scheme.surfaceContainer,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      shape: edgeShape.copyWith(
+      shape: dialogShape.copyWith(
         side: BorderSide(color: scheme.outline, width: 1),
       ),
       titleTextStyle: textTheme.titleMedium?.copyWith(
@@ -194,7 +209,7 @@ ThemeData workstationThemeData({
       color: isDark ? WorkstationPalette.hoverDark : scheme.surfaceContainer,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      shape: edgeShape.copyWith(
+      shape: menuShape.copyWith(
         side: BorderSide(color: scheme.outline, width: 1),
       ),
       textStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
@@ -215,7 +230,7 @@ ThemeData workstationThemeData({
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(0),
         shape: WidgetStatePropertyAll(
-          edgeShape.copyWith(side: BorderSide(color: scheme.outline)),
+          menuShape.copyWith(side: BorderSide(color: scheme.outline)),
         ),
         side: WidgetStatePropertyAll(BorderSide(color: scheme.outline)),
       ),
@@ -225,7 +240,7 @@ ThemeData workstationThemeData({
         backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainer),
         elevation: const WidgetStatePropertyAll(0),
         shape: WidgetStatePropertyAll(
-          edgeShape.copyWith(side: BorderSide(color: scheme.outline)),
+          menuShape.copyWith(side: BorderSide(color: scheme.outline)),
         ),
       ),
     ),
@@ -233,6 +248,7 @@ ThemeData workstationThemeData({
       decoration: BoxDecoration(
         color: isDark ? scheme.onSurface : scheme.surfaceContainerHighest,
         border: Border.all(color: scheme.outline),
+        borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
       ),
       textStyle: TextStyle(
         fontFamily: AppTypography.monoFamily,
@@ -283,7 +299,11 @@ ThemeData workstationThemeData({
       constraints: BoxConstraints(minHeight: AppControlTokens.fieldHeight),
     ),
     checkboxTheme: CheckboxThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          AppControlTokens.checkboxRadius,
+        ),
+      ),
       side: BorderSide(color: scheme.outline, width: 1),
       visualDensity: VisualDensity.compact,
     ),
@@ -358,7 +378,7 @@ ThemeData workstationThemeData({
       color: scheme.surfaceContainer,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      shape: edgeShape.copyWith(side: BorderSide(color: scheme.outlineVariant)),
+      shape: cardShape.copyWith(side: BorderSide(color: scheme.outlineVariant)),
       margin: EdgeInsets.zero,
     ),
     bottomSheetTheme: const BottomSheetThemeData(
@@ -366,7 +386,12 @@ ThemeData workstationThemeData({
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       modalElevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      // 抽屉贴底，只圆上沿；四角全圆会在底部露缝。
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppControlTokens.dialogRadius),
+        ),
+      ),
       clipBehavior: Clip.none,
     ),
     listTileTheme: ListTileThemeData(
@@ -409,19 +434,18 @@ ThemeData workstationThemeData({
       dataRowMaxHeight: 44,
     ),
     switchTheme: SwitchThemeData(
-      // 几何无法经 SwitchThemeData 直角化（工位内一律用
-      // WorkstationToggle/WorkstationSwitch）；此处在配色上对齐直角开关：
-      // 选中轨道 onSurface 时滑块必须取反色 surface，否则与轨道同色不可见。
+      // 工位内一律用 WorkstationToggle/WorkstationSwitch 自绘胶囊开关；
+      // 此处配色与自绘件同源，避免将来混入原生 Switch 时出现第二种色。
       trackOutlineColor: WidgetStatePropertyAll(scheme.outline),
       trackOutlineWidth: const WidgetStatePropertyAll(1),
       thumbColor: WidgetStateProperty.resolveWith((states) {
         return states.contains(WidgetState.selected)
-            ? scheme.surface
+            ? scheme.onPrimary
             : scheme.outline;
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return scheme.onSurface;
+          return scheme.primary;
         }
         return scheme.surfaceContainerHighest;
       }),
@@ -431,7 +455,7 @@ ThemeData workstationThemeData({
 
 OutlineInputBorder _outlineInputBorder(Color color) {
   return OutlineInputBorder(
-    borderRadius: BorderRadius.zero,
+    borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
     borderSide: BorderSide(color: color, width: 1),
   );
 }

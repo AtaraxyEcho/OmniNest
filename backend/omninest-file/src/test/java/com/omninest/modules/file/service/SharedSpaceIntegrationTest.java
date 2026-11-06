@@ -89,7 +89,6 @@ class SharedSpaceIntegrationTest {
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
     private final ApplicationEventPublisher eventPublisher =
             mock(ApplicationEventPublisher.class);
-    private final FileIndexSyncService fileIndexSyncService = mock(FileIndexSyncService.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
 
     private SharedSpaceService service;
@@ -105,7 +104,7 @@ class SharedSpaceIntegrationTest {
                 fileNodeRepository, subtreeQueryRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, cascadeCleanup,
                 fileNodeScanQueryRepository, configValueProvider, new FileRestoreSupport(fileNodeRepository, subtreeQueryRepository),
-                eventPublisher, fileIndexSyncService, syncEventRecorder,
+                eventPublisher, syncEventRecorder,
                 mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
                 mock(AdminAuditRecorder.class), mock(RoleLookup.class)
         );

@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 限制 omninest-media 业务代码直接依赖 {@code java.nio.file.Path}。
  *
- * <p>白名单仅允许暂存/派生处理/Lucene 索引/路径安全校验类；其余业务服务
+ * <p>白名单仅允许暂存/派生处理/路径安全校验类；其余业务服务
  * 必须通过 File 内容接口或 {@code TempStagingPort} 访问临时文件。</p>
  *
  * @author OmniNest
@@ -28,7 +28,7 @@ class MediaPathBoundaryTest {
             Pattern.MULTILINE
     );
 
-    /** 允许直接使用 Path/Files 的暂存、派生处理、索引与路径安全类。 */
+    /** 允许直接使用 Path/Files 的暂存、派生处理与路径安全类。 */
     private static final Set<String> ALLOWED_PATH_SOURCES = Set.of(
             "omninest-media/src/main/java/com/omninest/modules/music/service/MusicCoverThumbnailService.java",
             "omninest-media/src/main/java/com/omninest/modules/music/service/MusicAdminService.java",

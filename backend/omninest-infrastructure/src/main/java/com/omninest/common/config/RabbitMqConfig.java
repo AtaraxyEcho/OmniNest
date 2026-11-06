@@ -81,28 +81,8 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    Queue fileIndexSyncQueue() {
-        return durableQueue(QueueNames.FILE_INDEX_SYNC_QUEUE);
-    }
-
-    @Bean
-    Queue fileIndexUserPurgeQueue() {
-        return durableQueue(QueueNames.FILE_INDEX_USER_PURGE_QUEUE);
-    }
-
-    @Bean
-    Queue searchIndexRebuildQueue() {
-        return durableQueue(QueueNames.SEARCH_INDEX_REBUILD_QUEUE);
-    }
-
-    @Bean
     Queue mediaAutoImportQueue() {
         return durableQueue(QueueNames.MEDIA_AUTO_IMPORT_QUEUE);
-    }
-
-    @Bean
-    Queue textExtractionQueue() {
-        return durableQueue(QueueNames.TEXT_EXTRACTION_QUEUE);
     }
 
     @Bean
@@ -233,36 +213,10 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    Binding fileIndexSyncBinding(Queue fileIndexSyncQueue, DirectExchange taskExchange) {
-        return BindingBuilder.bind(fileIndexSyncQueue)
-                .to(taskExchange)
-                .with(QueueNames.FILE_INDEX_SYNC_ROUTING_KEY);
-    }
-
-    @Bean
-    Binding fileIndexUserPurgeBinding(Queue fileIndexUserPurgeQueue, DirectExchange taskExchange) {
-        return BindingBuilder.bind(fileIndexUserPurgeQueue)
-                .to(taskExchange)
-                .with(QueueNames.FILE_INDEX_USER_PURGE_ROUTING_KEY);
-    }
-
-    @Bean
-    Binding searchIndexRebuildBinding(Queue searchIndexRebuildQueue, DirectExchange taskExchange) {
-        return BindingBuilder.bind(searchIndexRebuildQueue)
-                .to(taskExchange)
-                .with(QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY);
-    }
-
-    @Bean
     Binding mediaAutoImportBinding(Queue mediaAutoImportQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(mediaAutoImportQueue)
                 .to(taskExchange)
                 .with(QueueNames.MEDIA_AUTO_IMPORT_ROUTING_KEY);
-    }
-
-    @Bean
-    Binding textExtractionBinding(Queue textExtractionQueue, DirectExchange taskExchange) {
-        return BindingBuilder.bind(textExtractionQueue).to(taskExchange).with(QueueNames.TEXT_EXTRACTION_ROUTING_KEY);
     }
 
     @Bean

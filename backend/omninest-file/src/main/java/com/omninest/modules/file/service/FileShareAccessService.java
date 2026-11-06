@@ -72,7 +72,6 @@ public class FileShareAccessService {
     private final FileNodeSupport fileNodeSupport;
     private final StorageQuotaService storageQuotaService;
     private final UserSyncEventRecorder syncEventRecorder;
-    private final FileIndexSyncService fileIndexSyncService;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -491,7 +490,6 @@ public class FileShareAccessService {
         newNode.setSpaceType(SpaceType.PERSONAL);
         FileNode saved = fileNodeRepository.save(newNode);
         chargePersonalQuota(userId, newNode.getSizeBytes());
-        fileIndexSyncService.scheduleAfterCommit(userId, List.of(saved.getId()));
         recordFileEvent(userId, saved.getId(), SyncAction.CREATED);
     }
 
@@ -620,16 +618,8 @@ public class FileShareAccessService {
                 totalBytes += child.getSizeBytes();
             }
         }
-        List<FileNode> savedNodes = fileNodeRepository.saveAll(pending);
+        fileNodeRepository.saveAll(pending);
         chargePersonalQuota(userId, totalBytes);
-        // 只把文件节点投递全文索引：文件夹既没有内容可索引，入队只会产生无效查询。
-        List<UUID> fileIdsToIndex = savedNodes.stream()
-                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
-                .map(FileNode::getId)
-                .toList();
-        if (!fileIdsToIndex.isEmpty()) {
-            fileIndexSyncService.scheduleAfterCommit(userId, fileIdsToIndex);
-        }
         recordFileEvent(userId, newFolder.getId(), SyncAction.CREATED);
     }
 

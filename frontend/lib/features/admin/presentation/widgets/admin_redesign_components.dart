@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -218,7 +219,7 @@ class AdminServiceTile extends StatelessWidget {
     final color = _statusColor(c);
     return WorkbenchPanel(
       padding: const EdgeInsets.all(14),
-      borderRadius: 0,
+      borderRadius: AppControlTokens.cardRadius,
       child: Row(
         children: [
           Container(

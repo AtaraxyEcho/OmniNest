@@ -4,10 +4,10 @@ import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
 
-/// 文件档来源：`/search` 是文件全文索引（Lucene，限当前用户）。
+/// 文件档来源：`/search` 按数据库当前文件名匹配（限当前用户）。
 ///
 /// 覆盖层改走注册表之前只返回这一档结果，因此必须继续提供，否则换数据源
-/// 就把已经可用的文件全文搜索砍掉了。落点只能在搜索模块内：文件模块
+/// 就把已经可用的文件名搜索砍掉了。落点只能在搜索模块内：文件模块
 /// import 搜索模块的 data 会触 `CROSS_FEATURE_INTERNAL`。
 class FileScopedSearchSource extends ScopedSearchSource {
   const FileScopedSearchSource();
@@ -26,7 +26,7 @@ class FileScopedSearchSource extends ScopedSearchSource {
     if (keyword.isEmpty) {
       return const <ScopedSearchResult>[];
     }
-    // 全文索引接口不分页；第二页起返回空集，让「加载更多」自然停止。
+    // 文件名搜索接口不分页；第二页起返回空集，让「加载更多」自然停止。
     if (page > 0) {
       return const <ScopedSearchResult>[];
     }

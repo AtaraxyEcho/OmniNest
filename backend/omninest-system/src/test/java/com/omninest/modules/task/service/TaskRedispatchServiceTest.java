@@ -148,14 +148,14 @@ class TaskRedispatchServiceTest {
     }
 
     @Test
-    void rebuildsTextExtractionPayloadWithEmptyBucketAndObjectKey() {
-        // 重索引事件按设计不带桶与对象键，消费端只按 fileNodeId 回读内容；
+    void rebuildsThumbnailPayloadWithEmptyBucketAndObjectKey() {
+        // 缩略图事件按设计不带桶与对象键，消费端只按 fileNodeId 回读内容；
         // 重投不能因此判为缺少必填字段而永久失败。
         Map<String, Object> payload = redispatchService.rebuildPayload(
                 TASK_ID,
                 null,
-                "TEXT_EXTRACTION",
-                QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
+                "THUMBNAIL",
+                QueueNames.THUMBNAIL_ROUTING_KEY,
                 """
                         {"fileNodeId":"30000000-0000-0000-0000-000000000001",
                          "fileObjectId":"40000000-0000-0000-0000-000000000001",

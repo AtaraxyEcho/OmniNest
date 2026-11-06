@@ -7,9 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 无任务记录消息的本地少量重试。
  *
- * <p>索引与恢复类队列没有 {@code sys_task} 行，进入死信后没有任何补跑机制：
- * 一次瞬时失败（Lucene 写锁竞争、句柄尚未释放）就会让该节点永久缺索引，
- * 只能靠全量重建恢复。因此在投递死信之前先做几次短退避重试。</p>
+ * <p>恢复类队列没有 {@code sys_task} 行，进入死信后没有任何补跑机制：
+ * 一次瞬时失败（派生资产尚未落盘、句柄尚未释放）就会让该节点永久缺资产。
+ * 因此在投递死信之前先做几次短退避重试。</p>
  *
  * @author OmniNest
  */
@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 public final class TransientRetry {
 
     private static final int MAX_ATTEMPTS = 4;
-    /** 递增退避：500ms、1500ms、3000ms；必须跨过 Lucene 全量重建的写锁窗口。 */
+    /** 递增退避：500ms、1500ms、3000ms；覆盖派生资产落盘与句柄释放的短时抖动。 */
     private static final long[] BACKOFF_MILLIS = {500L, 1500L, 3000L};
 
     private TransientRetry() {

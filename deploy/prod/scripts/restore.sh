@@ -132,20 +132,15 @@ restore_volume() {
         sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar xzf "/backup/$1" -C /data' -- "${archive}"
 }
 
-echo "[1/7] 恢复 MinIO 数据卷..."
+echo "[1/6] 恢复 MinIO 数据卷..."
 restore_volume omninest-minio minio-data.tar.gz
 
-echo "[2/7] 恢复 rclone 配置与本地卷..."
+echo "[2/6] 恢复 rclone 配置与本地卷..."
 restore_volume omninest-rclone rclone-config.tar.gz
 restore_volume omninest-rclone-local rclone-local-data.tar.gz
 restore_volume omninest-rclone-imports rclone-imports-data.tar.gz
 
-# 旧备份包不含 lucene-search.tar.gz.enc，restore_volume 会告警跳过，
-# 恢复后按启动提示重建索引即可，不需要迁移脚本。
-echo "[3/7] 恢复搜索索引卷..."
-restore_volume omninest-search lucene-search.tar.gz
-
-echo "[4/7] 启动 PostgreSQL..."
+echo "[3/6] 启动 PostgreSQL..."
 docker compose -f "${COMPOSE_FILE}" up -d postgres
 # 等待 PostgreSQL 就绪：首次初始化（建库、恢复基线卷）耗时不定，固定 sleep 会竞态失败。
 attempts=0
@@ -159,7 +154,7 @@ until docker compose -f "${COMPOSE_FILE}" exec -T postgres \
     sleep 2
 done
 
-echo "[5/7] 重建数据库 ${POSTGRES_DB}..."
+echo "[4/6] 重建数据库 ${POSTGRES_DB}..."
 # dropdb/recreatedb 需要连接可用；容器内本地信任认证。
 # .env 的库名/用户名可能含空格或分号，统一用位置参数传入，禁止拼进 sh -c 脚本。
 docker compose -f "${COMPOSE_FILE}" exec -T postgres \
@@ -175,16 +170,10 @@ else
         < "${BACKUP_DIR}/postgres.dump"
 fi
 
-echo "[6/7] 校验备份清单..."
+echo "[5/6] 校验备份清单..."
 sed -n '1,9p' "${BACKUP_DIR}/MANIFEST.txt"
 
-echo "[7/7] 完成。现在可以 docker compose -f ${COMPOSE_FILE} up -d 启动全部服务。"
+echo "[6/6] 完成。现在可以 docker compose -f ${COMPOSE_FILE} up -d 启动全部服务。"
 echo "提示：恢复后首次启动应用会执行 Flyway 基线校验；如跨版本恢复请先阅读发布说明。"
-# 索引卷随库一起恢复；只有旧备份包（不含 lucene-search）才需要重建。
-# 索引里的文档以 fileObjectId 为键，节点标识与标题都实时取自数据库，
-# 因此短时间的索引落后只会漏结果，不会返回已删除或打不开的文件。
-if [ ! -f "${BACKUP_DIR}/lucene-search.tar.gz.enc" ] && [ ! -f "${BACKUP_DIR}/lucene-search.tar.gz" ]; then
-    echo "注意：本备份不含 omninest-search 索引卷。"
-    echo "      启动后请以管理员调用 POST /api/v1/search/rebuild（子路径部署加 Web 前缀）重建全站索引，"
-    echo "      并按返回的 taskId 轮询 /api/v1/tasks/{taskId} 确认完成后再对外提供搜索。"
-fi
+# 旧备份包可能含 lucene-search.tar.gz；文件搜索已改为数据库文件名匹配，
+# 该压缩包属于可重建的派生数据，不再恢复，可直接忽略。

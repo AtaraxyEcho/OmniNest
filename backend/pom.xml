@@ -37,7 +37,6 @@
         <!-- Spring Boot 4.1.1 的 BOM 仍管理 amqp-client 5.30.0，落后 spring-rabbit 4.1.1 声明的 5.31.0 -->
         <rabbit-amqp-client.version>5.31.0</rabbit-amqp-client.version>
         <lombok.version>1.18.48</lombok.version>
-        <lucene.version>10.5.1</lucene.version>
         <minio.version>8.5.12</minio.version>
         <aws.sdk.version>2.55.10</aws.sdk.version>
         <testcontainers.version>1.21.4</testcontainers.version>
@@ -132,26 +131,6 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>org.apache.lucene</groupId>
-                <artifactId>lucene-core</artifactId>
-                <version>${lucene.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.lucene</groupId>
-                <artifactId>lucene-queryparser</artifactId>
-                <version>${lucene.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.lucene</groupId>
-                <artifactId>lucene-analysis-common</artifactId>
-                <version>${lucene.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.lucene</groupId>
-                <artifactId>lucene-analysis-smartcn</artifactId>
-                <version>${lucene.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-annotations-jakarta</artifactId>
                 <version>${swagger.annotations.version}</version>
@@ -174,6 +153,11 @@
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>

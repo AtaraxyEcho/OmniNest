@@ -117,12 +117,12 @@ class GenericTaskRecoverySchedulerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void heartbeatRecoveryCoversIndexRebuildAndNotificationEmail() {
-        // 两者都会领取 RUNNING 且没有专用恢复调度器；遗漏会让崩溃后的任务永久卡在 RUNNING。
+    void heartbeatRecoveryCoversNotificationEmail() {
+        // 邮件任务领取 RUNNING 且没有专用恢复调度器；遗漏会让崩溃后的任务永久卡在 RUNNING。
         List<String> taskTypes = (List<String>) ReflectionTestUtils.getField(
                 GenericTaskRecoveryScheduler.class, "RECOVERED_TASK_TYPES");
         assertThat(taskTypes)
-                .contains("SEARCH_INDEX_REBUILD", "NOTIFICATION_EMAIL")
+                .contains("NOTIFICATION_EMAIL")
                 // MEDIA_SCAN 执行期间停留在 QUEUED，由停滞清扫兜底，不参与心跳恢复。
                 .doesNotContain("MEDIA_SCAN");
     }
@@ -184,7 +184,7 @@ class GenericTaskRecoverySchedulerTest {
         for (String taskType : List.of("PHOTO_SCAN", "PHOTO_THUMBNAILS", "PHOTO_BATCH",
                 "PHOTO_MOTION", "PHOTO_MOTION_RESCAN", "EXTERNAL_IMPORT",
                 "MEDIA_SCRAPE", "VIDEO_TRANSCODE", "WEB_OPTIMIZE",
-                "AUDIO_EXTRACT", "THUMBNAIL", "TEXT_EXTRACTION",
+                "AUDIO_EXTRACT", "THUMBNAIL",
                 "LOCAL_VIDEO_LIBRARY_DISCOVERY", "LOCAL_VIDEO_LIBRARY_APPLY")) {
             verify(taskRecordService).listStaleRunningTaskIds(eq(taskType), any(), org.mockito.ArgumentMatchers.anyInt());
         }

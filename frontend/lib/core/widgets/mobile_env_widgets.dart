@@ -327,8 +327,10 @@ class _MobileConfirmButton extends StatelessWidget {
   }
 }
 
-/// 样例 .env-switch 的几何与动效：34×20 胶囊轨道 + 14px 圆点，右移 14px，
-/// 200ms ease。颜色由调用方给出：环境面板取极性表，阅读调色板用自己的实底。
+/// 移动端胶囊开关：与工位 `WorkstationSwitch` 共用同一套几何
+/// （`AppSwitchTrack`，36×20 轨道 + 14px 圆点）。
+///
+/// 颜色由调用方给出：环境面板取极性表，阅读调色板用自己的实底。
 class MobilePillSwitch extends StatelessWidget {
   const MobilePillSwitch({
     required this.value,
@@ -357,42 +359,13 @@ class MobilePillSwitch extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onChanged == null ? null : () => onChanged!(!value),
-        child: AnimatedContainer(
-          duration: MotionToken.reduced(
-            context,
-            const Duration(milliseconds: 200),
-          ),
-          curve: Curves.ease,
-          width: 34,
-          height: 20,
-          decoration: BoxDecoration(
-            color: value ? trackOn : trackOff,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: AnimatedAlign(
-            duration: MotionToken.reduced(
-              context,
-              const Duration(milliseconds: 200),
-            ),
-            curve: Curves.ease,
-            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: AnimatedContainer(
-                duration: MotionToken.reduced(
-                  context,
-                  const Duration(milliseconds: 200),
-                ),
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: value ? knobOn : knobOff,
-                  boxShadow: knobShadow,
-                ),
-              ),
-            ),
-          ),
+        child: AppSwitchTrack(
+          value: value,
+          trackOn: trackOn,
+          trackOff: trackOff,
+          thumbOn: knobOn,
+          thumbOff: knobOff,
+          thumbShadow: knobShadow,
         ),
       ),
     );

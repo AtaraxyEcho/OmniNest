@@ -393,7 +393,6 @@ public class AdminOperationsService {
                 new AdminOperationsDto.MonitoringMetric("死信任务", String.valueOf(dlqTasks), "count",
                         dlqTasks > 0 ? "WARN" : "UP")
         );
-        String luceneStatus = health.get("luceneIndex").status();
         List<AdminOperationsDto.MonitoringComponent> components = List.of(
                 component("PostgreSQL", health.get("db").status(), Map.of(
                         "连接池", "OmniNestHikariPool",
@@ -411,10 +410,6 @@ public class AdminOperationsService {
                 )),
                 component("MinIO", health.get("minio").status(), Map.of(
                         "userFilesBucket", objectStorageBuckets.userFiles()
-                )),
-                component("Lucene Index", luceneStatus, Map.of(
-                        "mode", "embedded",
-                        "writable", "UP".equals(luceneStatus)
                 )),
                 component("ClamAV", health.get("clamAv").status(), Map.of(
                         "用途", "上传与外部导入入库前病毒扫描",
@@ -656,7 +651,7 @@ public class AdminOperationsService {
      */
     private Map<String, HealthSnapshot> probeAllHealth() {
         Map<String, HealthSnapshot> results = new LinkedHashMap<>();
-        for (String componentName : List.of("db", "redis", "minio", "clamAv", "luceneIndex")) {
+        for (String componentName : List.of("db", "redis", "minio", "clamAv")) {
             results.put(componentName, probeHealth(componentName));
         }
         return results;

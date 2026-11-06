@@ -18,13 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "搜索", description = "全文搜索接口")
+@Tag(name = "搜索", description = "文件名搜索接口")
 public class SearchController {
     private final FileSearchService fileSearchService;
     private final CurrentUserContext currentUserContext;
 
-    @Operation(summary = "全文搜索",
-            description = "根据关键词搜索当前用户的个人空间与可见的共享空间文件；spaceType 可按空间过滤")
+    @Operation(summary = "文件名搜索",
+            description = "按文件名实时匹配当前用户的个人空间与可见共享空间文件；spaceType 可按空间过滤")
     @GetMapping("/api/v1/search")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<SearchResultDto>> search(

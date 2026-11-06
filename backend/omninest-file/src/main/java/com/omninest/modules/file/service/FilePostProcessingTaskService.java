@@ -77,36 +77,18 @@ public class FilePostProcessingTaskService {
     }
 
     /**
-     * 在当前文件事务内创建正文提取和缩略图任务并写入 outbox。
+     * 在当前文件事务内为图片创建缩略图任务并写入 outbox。
      *
-     * <p>只有可提取文本的文件才需要正文索引任务：文件名检索由数据库按当前名称实时完成，
-     * 不再为每份文件写一条只有元数据的索引文档，因此非文档类文件在这里没有任何索引任务。</p>
+     * <p>文件正文索引已下线，上传不再触发 Tika 解析；文件名检索由数据库按当前名称
+     * 实时完成，非图片文件在这里没有任何后处理任务。</p>
      *
      * @param event 文件上传事件
      * @param mimeType 文件 MIME 类型
      */
     @Transactional(rollbackFor = Exception.class)
     public void enqueuePostProcess(FileUploadedEvent event, String mimeType) {
-        if (isTextExtractable(mimeType) && !hasActiveTask(event, "TEXT_EXTRACTION")) {
-            enqueueTextExtraction(event);
-        }
         if (isImage(mimeType) && !hasActiveTask(event, "THUMBNAIL")) {
             enqueueThumbnail(event);
-        }
-    }
-
-    /**
-     * 为索引重建或内容索引迁移派发正文提取任务，不重做缩略图等派生资产。
-     *
-     * <p>沿用上传后处理的任务类型与 active-task 去重，因此管理员重试、恢复与死信语义
-     * 一并生效；派生资产已在首次上传时生成，重建正文索引不应重新覆盖它们。</p>
-     *
-     * @param event 由存量文件节点还原的文件事件
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void enqueueReindex(FileUploadedEvent event) {
-        if (isTextExtractable(event.mimeType()) && !hasActiveTask(event, "TEXT_EXTRACTION")) {
-            enqueueTextExtraction(event);
         }
     }
 
@@ -166,26 +148,6 @@ public class FilePostProcessingTaskService {
         ).isPresent();
     }
 
-    private void enqueueTextExtraction(FileUploadedEvent event) {
-        UUID taskId = UUID.randomUUID();
-        taskRecordService.createQueuedTask(
-                taskId,
-                event.ownerUserId(),
-                "TEXT_EXTRACTION",
-                QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
-                "PENDING",
-                RESOURCE_TYPE,
-                event.fileNodeId(),
-                postProcessPayload(event)
-        );
-        taskDispatchService.enqueue(
-                taskId,
-                QueueNames.TASK_EXCHANGE,
-                QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
-                event
-        );
-    }
-
     private void enqueueThumbnail(FileUploadedEvent event) {
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(
@@ -225,33 +187,6 @@ public class FilePostProcessingTaskService {
                 "sizeBytes", event.sizeBytes(),
                 "occurredAt", event.occurredAt() == null ? "" : event.occurredAt().toString()
         );
-    }
-
-    private static boolean isTextExtractable(String mimeType) {
-        if (mimeType == null) {
-            return false;
-        }
-        String lower = mimeType.toLowerCase(Locale.ROOT);
-        // application/* 的纯文本结构化格式同样能被 Tika 抽出正文：
-        // 漏掉它们会让 JSON/XML/RTF/CSV 等只能按文件名搜到，重命名后也不会触发重建。
-        return lower.startsWith("text/")
-                || lower.contains("pdf")
-                || lower.contains("epub")
-                || lower.contains("officedocument")
-                || lower.contains("msword")
-                || lower.contains("mspowerpoint")
-                || lower.contains("msexcel")
-                || lower.contains("opendocument")
-                || lower.contains("json")
-                || lower.contains("xml")
-                || lower.contains("rtf")
-                || lower.contains("csv")
-                || lower.contains("sql")
-                || lower.contains("javascript")
-                || lower.contains("yaml")
-                || lower.contains("toml")
-                || lower.contains("x-sh")
-                || lower.equals("application/x-httpd-php");
     }
 
     private static boolean isImage(String mimeType) {

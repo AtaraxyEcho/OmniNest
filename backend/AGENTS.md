@@ -10,7 +10,7 @@
 omninest-common          纯领域契约、端口接口、通用异常与工具（严禁依赖 Spring/Jakarta/MinIO/RabbitMQ/Jackson2）
   ├── omninest-infrastructure  基础设施实现（MinIO/S3、Redis、RabbitMQ、Security、SSRF、ClamAV、Rclone、AI Sidecar）
   └── omninest-system          系统管理核心（用户/认证/RBAC、配额账本、配置中心、任务中心、审计、实时同步/通知）
-        └── omninest-file            统一文件树、多 Provider 内容定位、可恢复上传会话、外部导入、共享空间、Lucene 文件搜索
+        └── omninest-file            统一文件树、多 Provider 内容定位、可恢复上传会话、外部导入、共享空间、PostgreSQL 文件名搜索
               └── omninest-media           影视（Video）、音乐（Music）、相册（Photos）、阅读器（Reader）、壁纸（Backdrop）、天气
                     └── omninest-worker          后台异步消费者（*Consumer）与恢复调度器（*RecoveryScheduler）
                           └── omninest-app             启动入口、全局配置、Flyway 迁移脚本与全量架构棘轮测试
@@ -44,7 +44,6 @@ mvn test -pl omninest-app -Dtest="*MigrationTest,SharedSpaceLedgerIT,AuditQueryC
 | **跨模块与基础设施隔离** | `controller` 仅可调用本模块 Service；严禁跨模块直接调用 `repository`（既有 JPQL JOIN `FileNode` 除外）；业务模块（`system`/`file`/`media`/`worker`）**严禁直接 import 基础设施实现类**（`SsrfSafeUrlValidator`、`TrustedProxyClientIpResolver`、`AesGcmCredentialCipher`、`RedisUtil`、`RedisTokenBucketRateLimiter`、`RedisRuntimeConfigCache`、`RcloneRcClient`、`AiSidecarClient`、`*Properties`），必须仅依赖 `omninest-common` 端口接口；严禁使用 Jackson 2 运行时（`com.fasterxml.jackson.core/databind`），统一使用 `tools.jackson` 与 `JsonSupport`。 | `ModuleDependencyBoundaryTest.java` |
 | **事务与远程 IO 边界** | **`@Transactional` 只允许标在 Service 方法或类上，严禁标在 Controller 或 Worker `*Consumer.java` 上**；**严禁在任何 `@Transactional` 方法内调用 `ObjectStorageClient`（MinIO）或 `RcloneGateway` 远程 IO**，避免网络阻塞占满 HikariCP 连接池；事务内触发缓存驱逐、MQ 广播或 `REQUIRES_NEW` 子事务通知（如配额预警）必须注册到 `TransactionSynchronization.afterCommit()` / `afterCompletion(STATUS_COMMITTED)`。 | `ArchitectureInvariantsTest.java`、`ModuleDependencyBoundaryTest.java` |
 | **SQL 与 `pg_trgm` 索引保护** | Repository JPQL 模糊查询**严禁写 `lower(coalesce(col, '')) like ...`**（会导致 `gin_trgm_ops` 索引失效退化为全表扫描），必须写 `lower(col) like lower(concat('%', :escapedQuery, '%')) escape '\\'` 并使用 `LikePatterns.escapeSpecials`；严禁字符串拼接 SQL/JPQL；动态排序字段必须经白名单校验；批量更新/删除必须使用批量语句（如 `StorageQuotaService.batchUpdateQuota` 严禁退化为逐行查询更新）。 | `ArchitectureInvariantsTest.java` |
-| **Lucene 单写进程隔离** | 只有文件正文索引一个 Lucene 卷（相册检索已收敛到 PostgreSQL）。API 与 Worker 共挂同一索引卷，**API 请求线程严禁直接调用 `fileSearchIndexService` 的写/删/清空方法**（不在 `FILE_INDEX_WRITER_SOURCES` 白名单内调用即红灯），必须通过 Outbox 投递 `FILE_INDEX_SYNC`（仅跨空间移动与转存）或 `TEXT_EXTRACTION`（正文解析）交由 Worker 单写侧执行。索引文档键是 `fileObjectId`，重命名、移动目录、复制、软删除与还原都不需要写索引。 | `ModuleDependencyBoundaryTest.java` |
 | **出网执行体与 SSRF 闸门** | 任何新增使用 `HttpClient`、`Socket`、`ProcessBuilder`、`RestTemplate`、`RestClient`、`RcloneGateway` 或 `JavaMailSenderImpl` 的类，必须在 `REGISTERED_OUTBOUND_SOURCES` 中登记；外部请求必须禁用自动重定向（`HttpClient.Redirect.NEVER`），通过 `SafeUrlValidator` / `OutboundEndpointRules` 逐跳校验协议与解析后的公网 IP。 | `OutboundExecutorRegistryTest.java` |
 | **Flyway 迁移基线契约** | `db/migration` 下仅允许存在 `V001__init_schema.sql`（表/索引/约束）与 `V002__builtin_catalog.sql`（内置角色/权限/通知/配置），**严禁新增 `V003`**；`V001` 严禁出现 `INSERT INTO` 或任何外键语法（`FOREIGN KEY`/`REFERENCES`/`ON DELETE`/`ON UPDATE`）。修改约束或内置目录时，必须同步更新迁移测试中的基线断言。 | `FlywayMigrationLayoutTest.java`、`BuiltinCatalogFlywayMigrationTest.java`、`JsonPayloadCapacityFlywayMigrationTest.java` |
 

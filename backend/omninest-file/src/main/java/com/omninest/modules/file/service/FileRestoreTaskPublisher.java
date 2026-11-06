@@ -21,9 +21,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 文件恢复后的派生资产修复任务发布服务。
  *
- * <p>只负责源对象校验与缩略图补齐。搜索索引不在这里派发：恢复写入侧已经调用
- * {@code FileIndexSyncService.scheduleAfterCommit} 重投 {@code FILE_INDEX + TEXT_EXTRACTION}，
- * 那是唯一能保住已抽取正文的一条路，索引恢复不允许有第二条更弱的入口。</p>
+ * <p>只负责源对象校验与缩略图补齐。文件名检索以数据库为实时真值，恢复后无需
+ * 重建任何索引，因此这里不派发额外的后处理任务。</p>
  *
  * @author OmniNest
  */

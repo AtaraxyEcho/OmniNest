@@ -15,16 +15,8 @@ public final class QueueNames {
     public static final String TASK_EXCHANGE = "omni.task";
     public static final String FILE_RESTORE_INDEX_QUEUE = "omni.task.file-restore-index";
     public static final String FILE_RESTORE_INDEX_ROUTING_KEY = "file.restore.index";
-    public static final String FILE_INDEX_SYNC_QUEUE = "omni.task.file-index-sync";
-    public static final String FILE_INDEX_SYNC_ROUTING_KEY = "file.index.sync";
-    public static final String FILE_INDEX_USER_PURGE_QUEUE = "omni.task.file-index-user-purge";
-    public static final String FILE_INDEX_USER_PURGE_ROUTING_KEY = "file.index.user-purge";
-    public static final String SEARCH_INDEX_REBUILD_QUEUE = "omni.task.search-index-rebuild";
-    public static final String SEARCH_INDEX_REBUILD_ROUTING_KEY = "search.index.rebuild";
     public static final String MEDIA_AUTO_IMPORT_QUEUE = "omni.task.media-auto-import";
     public static final String MEDIA_AUTO_IMPORT_ROUTING_KEY = "media.auto-import";
-    public static final String TEXT_EXTRACTION_QUEUE = "omni.task.text-extraction";
-    public static final String TEXT_EXTRACTION_ROUTING_KEY = "text.extract";
     public static final String MEDIA_QUEUE = "omni.task.media";
     public static final String MEDIA_SCRAPE_ROUTING_KEY = "media.scrape";
     public static final String MEDIA_SCAN_QUEUE = "omni.task.media-scan";
@@ -77,11 +69,7 @@ public final class QueueNames {
 
     private static final List<String> DURABLE_QUEUES = List.of(
             FILE_RESTORE_INDEX_QUEUE,
-            FILE_INDEX_SYNC_QUEUE,
-            FILE_INDEX_USER_PURGE_QUEUE,
-            SEARCH_INDEX_REBUILD_QUEUE,
             MEDIA_AUTO_IMPORT_QUEUE,
-            TEXT_EXTRACTION_QUEUE,
             MEDIA_QUEUE,
             MEDIA_SCAN_QUEUE,
             VIDEO_TRANSCODE_QUEUE,

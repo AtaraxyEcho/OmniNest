@@ -22,7 +22,6 @@ The table below lists the main runtime components.
 | Component | Coordinates | Upstream |
 |---|---|---|
 | Spring Boot / Spring Framework | `org.springframework.boot` | https://spring.io/projects/spring-boot |
-| Apache Lucene (core / queryparser / analysis) | `org.apache.lucene:*` | https://lucene.apache.org |
 | Apache Tika (transitive) | `org.apache.tika:*` | https://tika.apache.org |
 | Jackson (annotations / core / databind) | `com.fasterxml.jackson.core:*` | https://github.com/FasterXML/jackson |
 | Netty (buffer / codec / handler / transport, etc.) | `io.netty:*` | https://netty.io |

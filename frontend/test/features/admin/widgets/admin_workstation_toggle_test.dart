@@ -14,7 +14,7 @@ Widget _wrap(Widget child, {Brightness brightness = Brightness.dark}) {
   );
 }
 
-/// 找到 32×16 轨道容器（组件内以 ValueKey 标记，区别于 10×10 滑块）。
+/// 找到 36×20 胶囊轨道容器（组件内以 ValueKey 标记，区别于圆点滑块）。
 AnimatedContainer _trackOf(WidgetTester tester) {
   return tester.widget<AnimatedContainer>(
     find.byKey(const ValueKey('workstation-toggle-track')),
@@ -93,7 +93,7 @@ void main() {
       expect(semantics.properties.toggled, isTrue);
     });
 
-    testWidgets('选中态轨道 onSurface 反色填充，未选中 surfaceContainerHighest', (
+    testWidgets('选中态轨道 primary 填充，未选中 surfaceContainerHighest', (
       tester,
     ) async {
       const toggle = Key('toggle');
@@ -121,8 +121,8 @@ void main() {
       final scheme = Theme.of(captured).colorScheme;
       expect(
         (_trackOf(tester).decoration as BoxDecoration).color,
-        scheme.onSurface,
-        reason: '选中轨道以 onSurface 反色填充',
+        scheme.primary,
+        reason: '选中轨道以 primary 实色填充',
       );
 
       await tester.tap(find.byKey(toggle));

@@ -6167,14 +6167,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminRebuildIndex => 'Rebuild Index';
-
-  @override
-  String adminRebuildIndexDone(Object count) {
-    return 'Cleared $count index documents, re-indexing in progress';
-  }
-
-  @override
   String get adminApiResponseFormat => 'Admin response format is incorrect';
 
   @override

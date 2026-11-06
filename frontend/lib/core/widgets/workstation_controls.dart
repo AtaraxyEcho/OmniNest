@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/app_switch.dart';
 import 'package:omninest/core/widgets/workstation_focus_target.dart';
 
 /// 工位控件的状态过渡时长：只有 1px 边框与底色换色，几何尺寸不变。
@@ -17,10 +18,7 @@ import 'package:omninest/core/widgets/workstation_focus_target.dart';
 /// 跳到终态，不做颜色渐变。
 const Duration _stateChangeDuration = Duration(milliseconds: 120);
 
-/// 方形开关的滑块位移：比配色切换略长，让 20px 位移看得清方向。
-const Duration _switchChangeDuration = Duration(milliseconds: 140);
-
-/// 工位输入装饰：1px 细线直角、凹入槽体底色。
+/// 工位输入装饰：1px 细线圆角、凹入槽体底色。
 ///
 /// 默认边框为 hairline（outlineVariant），聚焦仅 1px 精准升为
 /// onSurface，杜绝未聚焦时呈现强边框的“伪选中态”。
@@ -31,12 +29,13 @@ InputDecoration workstationInputDecoration(
   double height = 32,
 }) {
   final scheme = Theme.of(context).colorScheme;
+  final radius = BorderRadius.circular(AppControlTokens.controlRadius);
   final enabledBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.zero,
+    borderRadius: radius,
     borderSide: BorderSide(color: scheme.outlineVariant, width: 1),
   );
   final focusedBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.zero,
+    borderRadius: radius,
     borderSide: BorderSide(color: scheme.onSurface, width: 1),
   );
   return InputDecoration(
@@ -551,13 +550,14 @@ class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
   }
 }
 
-/// 建筑极简主义工位开关：32×16 矩形轨道 + 10px 方形滑块，120ms 过渡。
+/// 工位开关：36×20 胶囊轨道 + 14px 圆点，150ms 位移。
 ///
-/// 选中态轨道以 onSurface 反色填充（滑块转 surface），未选中为
+/// 几何与 `MobilePillSwitch`、音乐 `_VisualSwitch` 同源（见
+/// `AppSwitchTrack`），全产品只此一套开关形状。选中态轨道取
+/// `colorScheme.primary`、圆点取 onPrimary；未选中为
 /// surfaceContainerHighest 底 + outline 描边。提供 [label] 时渲染为
 /// 整行可点的开关行（label 左、开关右，可选 [subtitle] 次级说明），
-/// 禁用态整行 45% 透明；不提供 [label] 时为独立开关，触控密度下
-/// 热区外扩到 44px。
+/// 禁用态整行 45% 透明；不提供 [label] 时为独立开关，热区 44px。
 class WorkstationToggle extends StatelessWidget {
   const WorkstationToggle({
     required this.value,
@@ -595,38 +595,24 @@ class WorkstationToggle extends StatelessWidget {
     }
 
     Widget trackFor(bool focused) {
+      // 开态轨道实色填充即状态信号，不再叠描边；关态靠 outline 声明边界。
       final borderColor =
           selected
-              ? scheme.onSurface
+              ? null
               : interactive && focused
               ? scheme.onSurface
               : interactive
               ? scheme.outline
               : scheme.outlineVariant;
-      final transition = MotionToken.reduced(context, _stateChangeDuration);
-      return AnimatedContainer(
-        // 轨道键：测试与调用方定位轨道几何（32×16）用。
-        key: const ValueKey('workstation-toggle-track'),
-        duration: transition,
-        width: 32,
-        height: 16,
-        // 轨道内宽 30：滑块 10 + 两侧各 2px 余量，选中态右移 16px。
-        padding: EdgeInsets.only(
-          top: 2,
-          bottom: 2,
-          left: selected ? 18 : 2,
-          right: selected ? 2 : 18,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? scheme.onSurface : scheme.surfaceContainerHighest,
-          border: Border.all(color: borderColor, width: 1),
-        ),
-        child: AnimatedContainer(
-          duration: transition,
-          width: 10,
-          height: 10,
-          color: selected ? scheme.surface : scheme.outline,
-        ),
+      return AppSwitchTrack(
+        // 轨道键：测试与调用方定位轨道几何（36×20）用。
+        trackKey: const ValueKey('workstation-toggle-track'),
+        value: selected,
+        trackOn: scheme.primary,
+        trackOff: scheme.surfaceContainerHighest,
+        thumbOn: scheme.onPrimary,
+        thumbOff: scheme.outline,
+        borderColor: borderColor,
       );
     }
 
@@ -693,10 +679,11 @@ class WorkstationToggle extends StatelessWidget {
   }
 }
 
-/// 建筑极简主义方形开关：0px 轨道 + 方形滑块，140ms 平滑过渡。
+/// 工位开关（无标签版）：与 [WorkstationToggle] 共用同一胶囊几何。
 ///
-/// 语义与 workstation 主题 Switch 色一致（选中 = 主前景轨道），
-/// 但几何为纯直角，替代 M3 胶囊形态。
+/// 保留独立包装是因为设置行 / 通知开关只需要一个裸开关，不需要整行
+/// 可点区域与次级说明。热区 44×32：桌面鼠标定位精确，32 高度足够，
+/// 又不把紧凑表单行撑高。
 class WorkstationSwitch extends StatelessWidget {
   const WorkstationSwitch({
     required this.value,
@@ -716,9 +703,6 @@ class WorkstationSwitch extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final interactive = enabled && onChanged != null;
     final selected = value;
-    final trackColor =
-        selected ? scheme.onSurface : scheme.surfaceContainerHighest;
-    final thumbColor = selected ? scheme.surface : scheme.outline;
     return WorkstationFocusTarget(
       enabled: interactive,
       toggled: selected,
@@ -729,12 +713,13 @@ class WorkstationSwitch extends StatelessWidget {
       },
       builder: (context, focused) {
         final borderColor =
-            selected || (interactive && focused)
+            selected
+                ? null
+                : interactive && focused
                 ? scheme.onSurface
                 : interactive
                 ? scheme.outline
                 : scheme.outlineVariant;
-        final transition = MotionToken.reduced(context, _switchChangeDuration);
         return MouseRegion(
           cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
           child: GestureDetector(
@@ -742,29 +727,16 @@ class WorkstationSwitch extends StatelessWidget {
             excludeFromSemantics: true,
             onTap: interactive ? () => onChanged!(!value) : null,
             child: SizedBox(
-              width: 44,
-              height: 28,
+              width: AppSwitchGeometry.touchHitTarget,
+              height: AppSwitchGeometry.desktopHitTarget,
               child: Center(
-                child: AnimatedContainer(
-                  duration: transition,
-                  width: 36,
-                  height: 20,
-                  padding: EdgeInsets.only(
-                    left: selected ? 20 : 2,
-                    top: 3,
-                    bottom: 3,
-                    right: selected ? 2 : 20,
-                  ),
-                  decoration: BoxDecoration(
-                    color: trackColor,
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: AnimatedContainer(
-                    duration: transition,
-                    width: 14,
-                    height: 14,
-                    color: thumbColor,
-                  ),
+                child: AppSwitchTrack(
+                  value: selected,
+                  trackOn: scheme.primary,
+                  trackOff: scheme.surfaceContainerHighest,
+                  thumbOn: scheme.onPrimary,
+                  thumbOff: scheme.outline,
+                  borderColor: borderColor,
                 ),
               ),
             ),

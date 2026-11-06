@@ -72,6 +72,33 @@ abstract final class AppControlTokens {
   /// 菜单面板圆角。
   static const double menuRadius = 12;
 
+  /// 卡片 / 面板圆角：比控件大一档，形成「控件 < 卡片 < 对话框」的层级。
+  static const double cardRadius = 12;
+
+  /// 对话框 / 抽屉面板圆角。
+  static const double dialogRadius = 14;
+
+  /// 胶囊圆角：只用于开关轨道、标签与头像，容器不使用。
+  static const double pillRadius = 999;
+
+  /// 复选框圆角：比控件小一档，避免小尺寸控件被圆角吃掉轮廓。
+  static const double checkboxRadius = 4;
+
+  /// 工具栏 / 表单最小间距（图标与文字之间）。
+  static const double gapXs = 4;
+
+  /// 同组紧凑控件间距（相邻按钮）。
+  static const double gapSm = 8;
+
+  /// 同组工具栏控件标准间距（搜索框与筛选器）。
+  static const double gapMd = 12;
+
+  /// 分组之间间距（筛选区与列表之间）。
+  static const double gapLg = 16;
+
+  /// 区块之间间距（面板与面板之间）。
+  static const double gapXl = 24;
+
   /// 桌面模块侧栏展开宽度。
   static const double sidebarWidth = 256;
 

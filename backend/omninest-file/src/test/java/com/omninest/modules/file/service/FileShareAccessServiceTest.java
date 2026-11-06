@@ -78,13 +78,12 @@ class FileShareAccessServiceTest {
     private final FileNodeSupport fileNodeSupport = Mockito.mock(FileNodeSupport.class);
     private final StorageQuotaService storageQuotaService = Mockito.mock(StorageQuotaService.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
-    private final FileIndexSyncService fileIndexSyncService = Mockito.mock(FileIndexSyncService.class);
 
     private final FileShareAccessService service = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             rateLimitService, notificationService,
             fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport, storageQuotaService,
-            syncEventRecorder, fileIndexSyncService,
+            syncEventRecorder,
             new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class))
     );
 
@@ -334,15 +333,14 @@ class FileShareAccessServiceTest {
                     assertThat(exception.getMessage()).contains("节点过多");
                 });
 
-        // 护栏必须在任何落盘之前生效：不建节点、不扣配额、不入队索引、不发同步事件。
+        // 护栏必须在任何落盘之前生效：不建节点、不扣配额、不发同步事件。
         verify(fileNodeRepository, never()).saveAll(Mockito.anyList());
-        verify(fileIndexSyncService, never()).scheduleAfterCommit(any(), any());
         verify(storageQuotaService, never()).chargeUsage(any(), Mockito.anyLong());
         Mockito.verifyNoInteractions(syncEventRecorder);
     }
 
     @Test
-    void acceptFolderShareEnqueuesIndexOnlyForFileNodes() {
+    void acceptFolderSharePersistsFileAndFolderNodes() {
         when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
         when(shareLinkRepository.findById(SHARE_ID))
                 .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
@@ -358,15 +356,15 @@ class FileShareAccessServiceTest {
 
         ArgumentCaptor<List<FileNode>> saved = ArgumentCaptor.forClass(List.class);
         verify(fileNodeRepository).saveAll(saved.capture());
-        List<UUID> savedFileIds = saved.getValue().stream()
+        // 文件夹与文件都随分享接收落到个人空间，缺一会让子树不完整。
+        // 复制节点会重新分配 ID，因此只校验类型构成，不断言具体 ID。
+        assertThat(saved.getValue()).isNotEmpty();
+        assertThat(saved.getValue().stream()
                 .filter(savedNode -> NodeType.FILE.getValue().equals(savedNode.getNodeType()))
-                .map(FileNode::getId)
-                .toList();
-        ArgumentCaptor<List<UUID>> indexed = ArgumentCaptor.forClass(List.class);
-        verify(fileIndexSyncService).scheduleAfterCommit(eq(RECIPIENT), indexed.capture());
-        // 文件夹没有可索引内容：全文索引队列只收 FILE 节点 ID。
-        assertThat(savedFileIds).hasSize(1);
-        assertThat(indexed.getValue()).containsExactlyElementsOf(savedFileIds);
+                .count()).isEqualTo(1L);
+        assertThat(saved.getValue().stream()
+                .filter(savedNode -> NodeType.FOLDER.getValue().equals(savedNode.getNodeType()))
+                .count()).isGreaterThan(0L);
     }
 
     private ShareLink share(String resourceType) {

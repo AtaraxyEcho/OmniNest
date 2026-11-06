@@ -1,6 +1,6 @@
 import 'dart:ui' show ImageFilter;
 
-import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/app_switch.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:flutter/material.dart';

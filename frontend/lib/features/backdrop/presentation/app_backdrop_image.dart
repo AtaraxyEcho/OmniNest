@@ -168,8 +168,10 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
                   errorWidget: (context, url, error) => _buildAssetFallback(),
                 ),
               ),
+              // 留白压暗保持克制：模糊同图已足够与完整图分离，压得过重
+              // 会让 contain 的四周重新读成"黑边"。
               ColoredBox(
-                color: Colors.black.withValues(alpha: 0.18),
+                color: Colors.black.withValues(alpha: 0.1),
                 child: CachedNetworkImage(
                   imageUrl: primary,
                   cacheKey: widget.cacheKey,

@@ -46,7 +46,7 @@ extension AdminTagToneColor on AdminTagTone {
   Color border(BuildContext context) => _base(context).withValues(alpha: 0.28);
 }
 
-/// 语义化状态标签：状态点 + 文本，直角描边样式。
+/// 语义化状态标签：状态点 + 文本，胶囊描边样式。
 class AdminStatusTag extends StatelessWidget {
   const AdminStatusTag({
     required this.label,
@@ -64,6 +64,7 @@ class AdminStatusTag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
         color: tone.background(context),
+        borderRadius: BorderRadius.circular(AppControlTokens.pillRadius),
         border: Border.all(color: tone.border(context)),
       ),
       child: Row(
@@ -252,8 +253,8 @@ class _AdminFilterBarState extends State<AdminFilterBar> {
             ? filterChildren.take(2).toList()
             : filterChildren;
     return Wrap(
-      spacing: 12,
-      runSpacing: 8,
+      spacing: AppControlTokens.gapMd,
+      runSpacing: AppControlTokens.gapSm,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         SizedBox(

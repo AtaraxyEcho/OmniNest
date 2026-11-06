@@ -34,7 +34,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | 数据访问 | Spring Data JPA、Hibernate、Flyway、PostgreSQL |
 | 后台任务 | Spring AMQP、RabbitMQ、Redis |
 | 内容与媒体 | MinIO SDK、受控 Storage Provider、Apache Tika |
-| 搜索 | Lucene 嵌入式索引 |
+| 搜索 | PostgreSQL `pg_trgm` 文件名包含匹配 |
 | 接口文档 | SpringDoc OpenAPI |
 
 ## 运行角色
@@ -113,7 +113,6 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | `LOCAL_FILESYSTEM` | 管理员登记的只读影视来源；只保存受控 `mountKey`，不暴露宿主机绝对路径 |
 | RabbitMQ | 需要跨请求执行、进度跟踪、失败重试、恢复或调度的后台任务 |
 | Redis | 缓存、短期状态、限流和并发控制 |
-| Lucene | 可重建的嵌入式搜索索引 |
 
 业务模块不得直接操作 MinIO Client、Rclone、宿主机绝对路径或底层 `Path`。本地影视来源默认只读，不提供重命名、移动、删除、复制、分享、版本语义；显式导入为受管内容后才具备托管存储能力。大型文件、媒体探测和派生输出必须使用流式或后台任务路径。
 

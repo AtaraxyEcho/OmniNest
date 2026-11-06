@@ -304,12 +304,9 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                   ),
                   shape: WidgetStatePropertyAll(
                     RoundedRectangleBorder(
-                      borderRadius:
-                          workstation
-                              ? BorderRadius.zero
-                              : BorderRadius.circular(
-                                AppControlTokens.controlRadius,
-                              ),
+                      borderRadius: BorderRadius.circular(
+                        AppControlTokens.controlRadius,
+                      ),
                     ),
                   ),
                   backgroundColor: WidgetStateProperty.resolveWith(
@@ -360,13 +357,8 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
   }
 
   OutlineInputBorder _fieldBorder(Color color, {double width = 1}) {
-    final workstation =
-        Theme.of(context).extension<WorkstationSurfaceFlag>() != null;
     return OutlineInputBorder(
-      borderRadius:
-          workstation
-              ? BorderRadius.zero
-              : BorderRadius.circular(AppControlTokens.controlRadius),
+      borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
       borderSide: BorderSide(color: color, width: width),
     );
   }

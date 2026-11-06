@@ -18,7 +18,6 @@ import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.FilePurgeEntryRepository;
 import com.omninest.modules.file.repository.FileVersionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
-import com.omninest.modules.search.service.FileSearchIndexService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
@@ -39,8 +38,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 文件永久删除状态、清单和最终数据库清理服务。
@@ -64,7 +61,6 @@ public class FilePurgeStateService {
     private final FileNodePermissionRepository permissionRepository;
     private final List<FilePurgeParticipant> participants;
     private final StorageQuotaService storageQuotaService;
-    private final FileSearchIndexService fileSearchIndexService;
     private final ApplicationEventPublisher eventPublisher;
     private final ReadThroughCache readThroughCache;
     private final TaskRecordService taskRecordService;
@@ -373,10 +369,6 @@ public class FilePurgeStateService {
         // 并发任务的节点或版本尚未删除时不能提前删行。
         List<UUID> purgedObjectIds = deleteUnreferencedObjects(candidateObjectIds);
         int deletedObjectCount = purgedObjectIds.size();
-        // 正文索引以内容对象为键，只有对象行确实被回收才需要删文档；删一半的副本或
-        // 历史版本还会被其他节点引用，删索引会让仍在的文件搜不到。索引删除同样必须等
-        // 节点行提交后再做：Lucene 落盘不参与数据库回滚。
-        scheduleSearchIndexCleanup(purgedObjectIds, operatorId);
         // 共享目录可能包含多个成员上传的文件，配额与缓存必须按节点真实所有者分别释放。
         releasedBytesByOwner.forEach((owner, bytes) -> {
             if (bytes > 0L) {
@@ -450,34 +442,6 @@ public class FilePurgeStateService {
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
         return new FinalizationResult(nodes.size(), releasedBytesByOwner, Set.copyOf(objectIds));
-    }
-
-    private void scheduleSearchIndexCleanup(List<UUID> purgedObjectIds, UUID operatorId) {
-        if (purgedObjectIds.isEmpty()) {
-            return;
-        }
-        List<UUID> ids = List.copyOf(purgedObjectIds);
-        Runnable cleanup = () -> {
-            try {
-                // 索引删除覆盖个人与共享两个索引目录，操作者归属不影响清理结果。
-                fileSearchIndexService.deleteObjects(ids, operatorId);
-            } catch (RuntimeException exception) {
-                // 提交后的清理失败不能反过来把已完成的任务判失败：查询侧按数据库
-                // 现状过滤，残留条目不可见，后续索引重建会再次清理。
-                log.warn("永久删除后的索引清理失败: ownerUserId={}, fileCount={}, errorType={}",
-                        operatorId, ids.size(), exception.getClass().getSimpleName());
-            }
-        };
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    cleanup.run();
-                }
-            });
-            return;
-        }
-        cleanup.run();
     }
 
     /**

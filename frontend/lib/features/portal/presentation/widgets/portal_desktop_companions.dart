@@ -25,6 +25,33 @@ class _HoverCoverScaleState extends State<_HoverCoverScale> {
   }
 }
 
+/// 悬停表面：只把指针进出重建为 hovered，几何保持静止。
+///
+/// 与 [_HoverCoverScale] 同一套节流思路，但用于状态卡片：它们不该
+/// 跟着指针放大，只该提亮表面与描边。几何不变也保证列表不会因为
+/// 悬停而抖动。
+class _HoverSurface extends StatefulWidget {
+  const _HoverSurface({required this.builder});
+
+  final Widget Function(BuildContext context, bool hovered) builder;
+
+  @override
+  State<_HoverSurface> createState() => _HoverSurfaceState();
+}
+
+class _HoverSurfaceState extends State<_HoverSurface> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: widget.builder(context, _hovered),
+    );
+  }
+}
+
 /// 胶片条迷你卡封面自愈：加载失败（签名 URL 过期为主因）时按模块
 /// 有限次重试对应数据分区，重签 URL 后由稳定缓存键命中或重新下载。
 class _VisualFilmStrip extends ConsumerStatefulWidget {
@@ -81,85 +108,115 @@ class _VisualFilmStripState extends ConsumerState<_VisualFilmStrip> {
     final itemHeight = dense ? 82.0 : (relaxed ? 126.0 : 110.0);
     final itemWidth = dense ? 126.0 : (relaxed ? 180.0 : 158.0);
     final gap = dense ? 8.0 : 12.0;
+    Widget buildItem(int index, double width) {
+      final item = items[index];
+      final active = index == activeIndex;
+      return SizedBox(
+        width: width,
+        height: itemHeight,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onFocusChange: (focused) {
+              if (focused) {
+                onSelected(index);
+              }
+            },
+            onTap: () => onSelected(index),
+            child: AnimatedContainer(
+              duration: PortalMotion.duration(
+                context,
+                const Duration(milliseconds: 180),
+              ),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.all(active ? 3 : 0),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color:
+                      active
+                          ? palette.accent.withValues(alpha: 0.80)
+                          : Colors.transparent,
+                  width: active ? 1.4 : 0,
+                ),
+              ),
+              child: _HoverCoverScale(
+                builder:
+                    (context, hovered) => PortalGradientCover(
+                      palette: palette,
+                      title: item.title,
+                      subtitle: item.subtitle,
+                      variant: item.variant,
+                      imageUrl: item.imageUrl,
+                      readerItemId: item.readerItemId,
+                      coverCacheKey: item.coverCacheKey,
+                      onCoverError: () => _handleCoverError(item.module),
+                      fallbackIcon: item.icon.iconData,
+                      height: itemHeight,
+                      maxCoverWidth: width,
+                      maxCoverHeight: itemHeight,
+                      minCoverHeight: itemHeight,
+                      directImage: true,
+                      foregroundPadding: EdgeInsets.fromLTRB(
+                        8,
+                        8,
+                        8,
+                        dense ? 40 : 52,
+                      ),
+                      contentScale:
+                          hovered &&
+                                  !MediaQuery.disableAnimationsOf(context)
+                              ? 1.05
+                              : 1.0,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return PortalVisualPanel(
       palette: palette,
       padding: panelPadding,
       lightweight: lightweight,
-      child: SizedBox(
-        height: itemHeight,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: items.length,
-          separatorBuilder: (_, _) => SizedBox(width: gap),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final active = index == activeIndex;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxWidth;
+          if (items.isEmpty || !available.isFinite) {
+            return const SizedBox.shrink();
+          }
+          final stretchedWidth =
+              (available - (items.length - 1) * gap) / items.length;
+          if (stretchedWidth <= itemWidth) {
+            // 窄窗口：保持横向滚动，条目宽度沿用现有分档。
             return SizedBox(
-              width: itemWidth,
-              height: double.infinity,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onFocusChange: (focused) {
-                    if (focused) {
-                      onSelected(index);
-                    }
-                  },
-                  onTap: () => onSelected(index),
-                  child: AnimatedContainer(
-                    duration: PortalMotion.duration(
-                      context,
-                      const Duration(milliseconds: 180),
-                    ),
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.all(active ? 3 : 0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color:
-                            active
-                                ? palette.accent.withValues(alpha: 0.80)
-                                : Colors.transparent,
-                        width: active ? 1.4 : 0,
-                      ),
-                    ),
-                    child: _HoverCoverScale(
-                      builder:
-                          (context, hovered) => PortalGradientCover(
-                            palette: palette,
-                            title: item.title,
-                            subtitle: item.subtitle,
-                            variant: item.variant,
-                            imageUrl: item.imageUrl,
-                            readerItemId: item.readerItemId,
-                            coverCacheKey: item.coverCacheKey,
-                            onCoverError: () => _handleCoverError(item.module),
-                            fallbackIcon: item.icon.iconData,
-                            height: itemHeight,
-                            maxCoverWidth: itemWidth,
-                            maxCoverHeight: itemHeight,
-                            minCoverHeight: itemHeight,
-                            directImage: true,
-                            foregroundPadding: EdgeInsets.fromLTRB(
-                              8,
-                              8,
-                              8,
-                              dense ? 40 : 52,
-                            ),
-                            contentScale:
-                                hovered &&
-                                        !MediaQuery.disableAnimationsOf(context)
-                                    ? 1.05
-                                    : 1.0,
-                          ),
-                    ),
-                  ),
-                ),
+              height: itemHeight,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => SizedBox(width: gap),
+                itemBuilder: (context, index) => buildItem(index, itemWidth),
               ),
             );
-          },
-        ),
+          }
+          // 宽窗口按可用宽度等分，单卡超过基准宽 1.45 倍后封顶，避免四张
+          // 卡被拉成扁条。封顶后右侧剩余空间保持空置：胶片条始终居左
+          // 排列，不做居中成组（用户确认保持原来的居左）。
+          final perItem = math.min(stretchedWidth, itemWidth * 1.45);
+          return SizedBox(
+            height: itemHeight,
+            child: Row(
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  if (index > 0) SizedBox(width: gap),
+                  buildItem(index, perItem),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -364,14 +421,33 @@ class _NoticeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = Container(
+    return _HoverSurface(
+      builder: (context, hovered) => _buildTile(context, hovered),
+    );
+  }
+
+  Widget _buildTile(BuildContext context, bool hovered) {
+    final interactive = onTap != null;
+    final highlighted = interactive && hovered;
+    final child = AnimatedContainer(
+      duration: PortalMotion.duration(
+        context,
+        const Duration(milliseconds: 140),
+      ),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: palette.structuralStrongSurface(alpha: 0.60),
+        // 悬停提亮表面并加深描边，不改内边距与行高：卡片不会在
+        // 指针进出时轻微位移，列表也不会因此抖动。
+        color: palette.structuralStrongSurface(
+          alpha: highlighted ? 0.78 : 0.60,
+        ),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: palette.muted.withValues(alpha: 0.18)),
+        border: Border.all(
+          color: palette.muted.withValues(alpha: highlighted ? 0.36 : 0.18),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -428,15 +504,18 @@ class _NoticeTile extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) {
+    if (!interactive) {
       return child;
     }
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: child,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: child,
+        ),
       ),
     );
   }

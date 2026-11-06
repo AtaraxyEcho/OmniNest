@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
@@ -169,7 +170,7 @@ void main() {
   });
 
   group('FilesWorkstationScope', () {
-    testWidgets('覆盖 FilesColors 为 Zinc 工位色并全直角化弹窗', (tester) async {
+    testWidgets('覆盖 FilesColors 为 Zinc 工位色并圆角化弹窗', (tester) async {
       late BuildContext captured;
       await tester.pumpWidget(
         _wrap(
@@ -190,7 +191,10 @@ void main() {
       final dialogShape = dialog.shape;
       expect(dialogShape is RoundedRectangleBorder, isTrue);
       if (dialogShape is RoundedRectangleBorder) {
-        expect(dialogShape.borderRadius, BorderRadius.zero);
+        expect(
+          dialogShape.borderRadius,
+          BorderRadius.circular(AppControlTokens.dialogRadius),
+        );
       }
       expect(dialog.elevation, 0);
       expect(

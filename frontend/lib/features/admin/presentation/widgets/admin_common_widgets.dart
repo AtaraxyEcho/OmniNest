@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 
@@ -114,7 +115,7 @@ class AdminMetricCard extends StatelessWidget {
     final resolvedAccent = accent ?? c.primary;
     return WorkbenchPanel(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderRadius: 0,
+      borderRadius: AppControlTokens.cardRadius,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       child: ClipRect(
         // 固定卡高下的兜底：OverflowBox 放开子级高度约束，Column 按固有
@@ -207,6 +208,7 @@ class AdminMetricMiniStat extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvedColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
         border: Border.all(color: resolvedColor.withValues(alpha: 0.28)),
       ),
       child: Padding(
@@ -274,6 +276,9 @@ class AdminStatusPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvedColor.withValues(alpha: 0.14),
+        // 状态胶囊本来就是按高度收边的形状，直角会读成「小卡片」而不是
+        // 「状态标签」；胶囊圆角是标签类控件的统一语义。
+        borderRadius: BorderRadius.circular(AppControlTokens.pillRadius),
         border: Border.all(color: resolvedColor.withValues(alpha: 0.28)),
       ),
       child: Padding(
@@ -327,8 +332,8 @@ class AdminInfoPanel extends StatelessWidget {
   /// 仅用于已用 SizedBox/Expanded 限高的并排面板；页面纵向流式布局须保持 false。
   final bool expandBody;
 
-  /// 面板内边距；null 时沿用工作台面板默认 24。
-  /// 样板控制台卡片为 p-5（20），页面按样板传值。
+  /// 面板内边距；null 时取统一的 20（样板控制台卡片的 p-5）。
+  /// 页面不应再按页覆写，否则同一控制台的卡片内缘会错位。
   final EdgeInsetsGeometry? padding;
 
   /// 为 true 时标题区带 1px 底部分隔线（样板 pb-4 border-b mb-4 形态），
@@ -382,8 +387,8 @@ class AdminInfoPanel extends StatelessWidget {
             )
             : header;
     return WorkbenchPanel(
-      borderRadius: 0,
-      padding: padding ?? const EdgeInsets.all(24),
+      borderRadius: AppControlTokens.cardRadius,
+      padding: padding ?? const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -425,7 +430,7 @@ class AdminEmptyFeature extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.adminColors;
     return WorkbenchPanel(
-      borderRadius: 0,
+      borderRadius: AppControlTokens.cardRadius,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),

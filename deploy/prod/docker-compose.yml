@@ -62,7 +62,6 @@ x-backend-environment: &backend-environment
   OMNINEST_RCLONE_IMPORT_HOST_PATH: /mnt/imports
   OMNINEST_RCLONE_IMPORT_CONTAINER_PATH: /mnt/imports
   OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
-  OMNINEST_SEARCH_INDEX_PATH: /var/lib/omninest/lucene
   # GeoNames 离线逆地理编码数据集目录（omninest-geonames 卷；放入 dump 文件并重启即可自动导入）。
   OMNINEST_GEO_IMPORT_DIR: ${OMNINEST_GEO_IMPORT_DIR:-/var/lib/omninest/geonames}
   OMNINEST_NETEASE_API_BASE_URL: http://netease-music-api:3000
@@ -101,7 +100,6 @@ x-backend-service: &backend-service
     minio:
       condition: service_healthy
   volumes:
-    - omninest-search:/var/lib/omninest/lucene
     - omninest-geonames:/var/lib/omninest/geonames
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
@@ -218,8 +216,6 @@ services:
       OMNINEST_ROLE: worker
       JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx512m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-6}
-      OMNINEST_WORKER_FILE_INDEX_CONCURRENCY: "1"
-      OMNINEST_WORKER_TEXT_EXTRACTION_CONCURRENCY: "1"
       OMNINEST_WORKER_MEDIA_CONCURRENCY: "1"
     mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-768m}
 
@@ -456,8 +452,6 @@ volumes:
   omninest-rclone-local:
   omninest-rclone-imports:
   omninest-ai-models:
-  omninest-search:
-  omninest-search-photo:
   omninest-geonames:
   omninest-certbot-config:
   omninest-certbot-challenges:

@@ -4,9 +4,7 @@ import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.search.dto.SearchResultDto;
-import com.omninest.modules.search.service.SearchableFileQuery.SearchableFileNode;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -15,26 +13,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 文件搜索应用服务，将正文索引命中与数据库当前状态合并。
+ * 文件搜索应用服务，按数据库当前文件名实时匹配活动文件。
  *
- * <p>索引侧只回答「哪些内容对象命中、命中的是哪一段」，节点标识、文件名与可见性
- * 全部由数据库实时决定。因此重命名、移动目录、复制、软删除与回收站还原都不需要
- * 触碰索引：对象标识没变，它引用的节点变了也一样能搜到。</p>
- *
- * @author OmniNest
+ * <p>文件正文索引已下线。文件名与可见性以 PostgreSQL 为唯一事实来源，因此重命名、
+ * 移动目录、复制、软删除与回收站还原都不需要重建索引，也不会让搜索结果过期。</p>
  */
 @Service
 @RequiredArgsConstructor
 public class FileSearchService {
 
     private static final int MAX_RESULTS = 50;
-    private static final int CANDIDATE_MULTIPLIER = 3;
     private static final String SPACE_PERSONAL = "PERSONAL";
     private static final String SPACE_SHARED = "SHARED";
-    /** 文件名命中没有正文摘要，给一个略高于纯正文命中的固定分，保证标题优先展示。 */
-    private static final float TITLE_MATCH_SCORE = 3.0F;
+    private static final double TITLE_MATCH_SCORE = 3.0F;
 
-    private final FileSearchIndexService fileSearchIndexService;
     private final SearchableFileQuery searchableFileQuery;
     private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
@@ -43,7 +35,7 @@ public class FileSearchService {
      *
      * @param ownerUserId 当前用户 ID
      * @param query 搜索关键词
-     * @return 经数据库复核的搜索结果
+     * @return 文件名命中的文件
      */
     public List<SearchResultDto> search(UUID ownerUserId, String query) {
         return search(ownerUserId, query, null);
@@ -57,7 +49,7 @@ public class FileSearchService {
      * @param ownerUserId 当前用户 ID
      * @param query 搜索关键词
      * @param spaceType 空间类型（PERSONAL / SHARED / 空表示全部）
-     * @return 经数据库复核的搜索结果
+     * @return 文件名命中的文件
      */
     public List<SearchResultDto> search(UUID ownerUserId, String query, String spaceType) {
         if (query == null || query.isBlank()) {
@@ -72,78 +64,21 @@ public class FileSearchService {
                 return List.of();
             }
         }
-        String indexFilter = includePersonal && includeShared
-                ? null
-                : (includeShared ? SPACE_SHARED : SPACE_PERSONAL);
-        String trimmedQuery = query.trim();
-        List<FileSearchIndexService.FileContentHit> hits = fileSearchIndexService.search(
-                ownerUserId,
-                trimmedQuery,
-                MAX_RESULTS * CANDIDATE_MULTIPLIER,
-                indexFilter
-        );
-        // 文件名以数据库为实时真值：重命名/移动后无需重建索引即可按新名字搜到。
         Map<UUID, String> titleMatches = searchableFileQuery.searchActiveFilesByName(
                 ownerUserId,
-                trimmedQuery,
+                query.trim(),
                 includePersonal,
                 includeShared,
                 MAX_RESULTS
         );
-        if (hits.isEmpty() && titleMatches.isEmpty()) {
-            return List.of();
-        }
-        Map<UUID, List<SearchableFileNode>> nodesByObject = groupByObjectId(hits, ownerUserId,
-                includePersonal, includeShared);
-        Map<UUID, SearchResultDto> results = new LinkedHashMap<>();
-        for (FileSearchIndexService.FileContentHit hit : hits) {
-            for (SearchableFileNode node : nodesByObject.getOrDefault(hit.fileObjectId(), List.of())) {
-                if (results.size() >= MAX_RESULTS) {
-                    break;
-                }
-                results.putIfAbsent(node.fileId(), new SearchResultDto(
-                        node.fileId(),
-                        node.name(),
-                        hit.snippet(),
-                        hit.score()
-                ));
-            }
-        }
+        List<SearchResultDto> results = new ArrayList<>();
         for (Map.Entry<UUID, String> entry : titleMatches.entrySet()) {
             if (results.size() >= MAX_RESULTS) {
                 break;
             }
-            results.putIfAbsent(
-                    entry.getKey(),
-                    new SearchResultDto(entry.getKey(), entry.getValue(), null, TITLE_MATCH_SCORE)
-            );
+            results.add(new SearchResultDto(entry.getKey(), entry.getValue(), null, TITLE_MATCH_SCORE));
         }
-        return List.copyOf(results.values());
-    }
-
-    /**
-     * 按命中的内容对象批量解析当前节点。
-     *
-     * <p>一个对象可能被复制成多个节点（副本共享同一内容对象），每个副本都是独立结果；
-     * 已删除或已换对象的历史命中在这里被过滤掉。</p>
-     */
-    private Map<UUID, List<SearchableFileNode>> groupByObjectId(
-            List<FileSearchIndexService.FileContentHit> hits,
-            UUID ownerUserId,
-            boolean includePersonal,
-            boolean includeShared
-    ) {
-        Map<UUID, List<SearchableFileNode>> nodesByObject = new LinkedHashMap<>();
-        if (hits.isEmpty()) {
-            return nodesByObject;
-        }
-        List<UUID> objectIds = new ArrayList<>(hits.size());
-        hits.forEach(hit -> objectIds.add(hit.fileObjectId()));
-        for (SearchableFileNode node : searchableFileQuery.findSearchableNodesByObjectIds(
-                ownerUserId, objectIds, includePersonal, includeShared)) {
-            nodesByObject.computeIfAbsent(node.fileObjectId(), key -> new ArrayList<>()).add(node);
-        }
-        return nodesByObject;
+        return List.copyOf(results);
     }
 
     private String normalizeSpaceType(String spaceType) {

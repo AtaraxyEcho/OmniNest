@@ -5962,14 +5962,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get adminRebuildIndex => '重建索引';
-
-  @override
-  String adminRebuildIndexDone(Object count) {
-    return '已清除 $count 个索引文档，请等待重新索引';
-  }
-
-  @override
   String get adminApiResponseFormat => 'Admin 响应格式不正确';
 
   @override

@@ -31,13 +31,13 @@ class RabbitQueueBacklogMonitorTest {
         monitor.registerMetrics();
         Mockito.when(amqpAdmin.getQueueProperties(Mockito.anyString()))
                 .thenAnswer(invocation -> queueProperties(
-                        QueueNames.TEXT_EXTRACTION_QUEUE.equals(invocation.getArgument(0)) ? 12 : 0
+                        QueueNames.MEDIA_AUTO_IMPORT_QUEUE.equals(invocation.getArgument(0)) ? 12 : 0
                 ));
 
         monitor.inspect();
 
         double queueDepth = meterRegistry.get("omninest.rabbitmq.queue.messages")
-                .tag("queue", QueueNames.TEXT_EXTRACTION_QUEUE)
+                .tag("queue", QueueNames.MEDIA_AUTO_IMPORT_QUEUE)
                 .gauge()
                 .value();
         Assertions.assertThat(queueDepth).isEqualTo(12.0);
@@ -72,16 +72,16 @@ class RabbitQueueBacklogMonitorTest {
                 properties
         );
         monitor.registerMetrics();
-        Mockito.when(amqpAdmin.getQueueProperties(QueueNames.TEXT_EXTRACTION_QUEUE))
+        Mockito.when(amqpAdmin.getQueueProperties(QueueNames.MEDIA_AUTO_IMPORT_QUEUE))
                 .thenThrow(new IllegalStateException("broker unavailable"));
         Mockito.when(amqpAdmin.getQueueProperties(Mockito.argThat(
-                queue -> !QueueNames.TEXT_EXTRACTION_QUEUE.equals(queue)
+                queue -> !QueueNames.MEDIA_AUTO_IMPORT_QUEUE.equals(queue)
         ))).thenReturn(queueProperties(1));
 
         monitor.inspect();
 
         double failedDepth = meterRegistry.get("omninest.rabbitmq.queue.messages")
-                .tag("queue", QueueNames.TEXT_EXTRACTION_QUEUE)
+                .tag("queue", QueueNames.MEDIA_AUTO_IMPORT_QUEUE)
                 .gauge()
                 .value();
         double nextDepth = meterRegistry.get("omninest.rabbitmq.queue.messages")

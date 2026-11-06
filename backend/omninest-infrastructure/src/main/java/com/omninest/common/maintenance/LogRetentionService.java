@@ -51,7 +51,7 @@ public class LogRetentionService {
     private final Path activeLogPath;
     /**
      * 允许清理的唯一基目录：应用自身写日志的目录。扫描路径必须落在其内，
-     * 否则配置中心一个值就能把删除范围指到 Lucene 索引或媒体导入目录。
+     * 否则配置中心一个值就能把删除范围指到任意数据目录。
      */
     private final Path logBaseDirectory;
 
