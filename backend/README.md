@@ -42,7 +42,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | 角色 | 职责 |
 | --- | --- |
 | `api` | 对外提供 REST API、认证授权、文件和媒体访问、任务查询及实时连接 |
-| `worker` | 消费 RabbitMQ 后台任务，执行索引、导入、解析、缩略图、媒体和安全处理 |
+| `worker` | 消费 RabbitMQ 后台任务，执行导入、解析、缩略图、媒体和安全处理 |
 | `scheduler` | 执行清理、恢复、重试、保留策略和定时调度 |
 
 通过 `OMNINEST_ROLE` 选择运行角色（api/worker/scheduler），Spring Profile（`OMNINEST_PROFILE`）只决定 dev/prod 配置集。开发环境可以使用 API 进程承载部分 Reader 漫画消费逻辑；生产环境按部署编排拆分运行角色，但仍使用同一个应用镜像。裸机直跑生产时必须设置 `OMNINEST_PROFILE=prod`——默认 dev 配置集会开放 Swagger 与 actuator 细节端点。
@@ -52,7 +52,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | 模块 | 责任 |
 | --- | --- |
 | `omninest-common` | 公共响应、异常、基础模型和跨模块通用能力 |
-| `omninest-infrastructure` | 数据库、缓存、消息、存储、搜索和运行时基础设施 |
+| `omninest-infrastructure` | 数据库、缓存、消息、存储和运行时基础设施 |
 | `omninest-system` | 用户、角色、权限、配置、通知、任务、审计和系统状态 |
 | `omninest-file` | FileNode、内容 Provider、上传下载、版本、回收站和物理存储生命周期 |
 | `omninest-media` | Movies、Music、Photos、Reader 和其他媒体领域服务与元数据 |
@@ -67,7 +67,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | --- | --- | --- |
 | 认证与安装 | `/api/v1/auth/*`、`/api/v1/setup/*` | 登录、注册、刷新 Token、安装状态和首个超级管理员初始化 |
 | 当前用户 | `/api/v1/me`、`/api/v1/preferences/*` | 个人资料、密码、头像、会话和个人偏好 |
-| 文件与搜索 | `/api/v1/files/*`、`/api/v1/search` | 文件列表、上传下载、预览、回收站、搜索和索引重建 |
+| 文件与搜索 | `/api/v1/files/*`、`/api/v1/search` | 文件列表、上传下载、预览、回收站和按文件名搜索 |
 | 媒体业务 | `/api/v1/photos/*`、`/api/v1/video/*`、`/api/v1/music/*`、`/api/v1/reader/*` | 相册、影视、音乐、书籍/漫画的内容访问和业务操作 |
 | 后台任务 | `/api/v1/tasks/*` | 任务状态、重试、死信查询和失败任务处理 |
 | 管理中心 | `/api/v1/admin/*` | 用户、角色权限、配置、日志、会话、监控、存储和媒体扫描 |

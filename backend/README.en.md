@@ -17,7 +17,7 @@ The backend provides the shared API, authentication, file capabilities, media se
 | Role | Responsibility |
 | --- | --- |
 | `api` | REST API, authentication, authorization, file and media access, task queries, and realtime connections |
-| `worker` | Consumes RabbitMQ tasks for indexing, parsing, thumbnails, media processing, and security processing |
+| `worker` | Consumes RabbitMQ tasks for importing, parsing, thumbnails, media processing, and security processing |
 | `scheduler` | Runs cleanup, recovery, retry, retention, and scheduled jobs |
 
 Select the runtime with `OMNINEST_ROLE` or a Spring profile. API, Worker, and Scheduler can use the same application image with different roles.
@@ -27,7 +27,7 @@ Select the runtime with `OMNINEST_ROLE` or a Spring profile. API, Worker, and Sc
 | Module | Responsibility |
 | --- | --- |
 | `omninest-common` | Shared responses, exceptions, base models, and cross-module utilities |
-| `omninest-infrastructure` | Database, cache, messaging, storage, search, and runtime infrastructure |
+| `omninest-infrastructure` | Database, cache, messaging, storage, and runtime infrastructure |
 | `omninest-system` | Users, roles, permissions, configuration, notifications, tasks, audit, and system status |
 | `omninest-file` | FileNode, content Providers, upload/download, versions, recycle bin, and physical storage lifecycle |
 | `omninest-media` | Movies, Music, Photos, Reader, and media metadata services |
