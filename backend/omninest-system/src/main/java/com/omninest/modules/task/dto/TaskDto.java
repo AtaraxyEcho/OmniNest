@@ -15,7 +15,7 @@ import java.util.UUID;
 @Schema(description = "任务信息")
 public record TaskDto(
         @Schema(description = "任务 ID") UUID id,
-        @Schema(description = "任务类型", example = "FILE_INDEX") String type,
+        @Schema(description = "任务类型", example = "MEDIA_AUTO_IMPORT") String type,
         @Schema(description = "任务状态", example = "COMPLETED") String status,
         @Schema(description = "任务执行阶段", example = "DELETING_OBJECTS") String phase,
         @Schema(description = "进度百分比", example = "100") int progress,

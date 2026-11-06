@@ -2215,31 +2215,6 @@ CREATE TABLE "omni"."reader_reading_sessions" (
 COMMENT ON COLUMN "omni"."reader_reading_sessions"."client_session_id" IS '客户端会话幂等ID，用于离线队列重试去重';
 COMMENT ON TABLE "omni"."reader_reading_sessions" IS '阅读会话表，用于统计阅读时长';
 
-CREATE TABLE "omni"."search_index_states" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-  "owner_user_id" uuid,
-  "index_path" text NOT NULL,
-  "schema_version" varchar(32) NOT NULL,
-  "analyzer_name" varchar(80) NOT NULL,
-  "dictionary_version" varchar(80),
-  "status" varchar(32) NOT NULL DEFAULT 'READY'::character varying,
-  "last_rebuild_task_id" uuid,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
-)
-;
-COMMENT ON COLUMN "omni"."search_index_states"."id" IS '状态唯一标识，主键';
-COMMENT ON COLUMN "omni"."search_index_states"."owner_user_id" IS '所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."search_index_states"."index_path" IS '搜索索引路径';
-COMMENT ON COLUMN "omni"."search_index_states"."schema_version" IS '索引结构版本';
-COMMENT ON COLUMN "omni"."search_index_states"."analyzer_name" IS '分词器名称';
-COMMENT ON COLUMN "omni"."search_index_states"."dictionary_version" IS '词典版本';
-COMMENT ON COLUMN "omni"."search_index_states"."status" IS '状态';
-COMMENT ON COLUMN "omni"."search_index_states"."last_rebuild_task_id" IS '最后重建任务ID，关联sys_tasks';
-COMMENT ON COLUMN "omni"."search_index_states"."updated_at" IS '更新时间';
-COMMENT ON COLUMN "omni"."search_index_states"."version" IS '乐观锁版本号';
-COMMENT ON TABLE "omni"."search_index_states" IS '搜索索引状态表，记录用户索引路径、版本和重建状态';
-
 CREATE TABLE "omni"."share_links" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
@@ -3740,12 +3715,6 @@ CREATE UNIQUE INDEX "uk_reading_sessions_client_session" ON "omni"."reader_readi
 
 ALTER TABLE "omni"."reader_reading_sessions" ADD CONSTRAINT "reader_reading_sessions_pkey" PRIMARY KEY ("id");
 
-CREATE INDEX "idx_search_index_states_owner" ON "omni"."search_index_states" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-
-ALTER TABLE "omni"."search_index_states" ADD CONSTRAINT "search_index_states_pkey" PRIMARY KEY ("id");
-
 CREATE INDEX "idx_share_links_owner_created" ON "omni"."share_links" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
@@ -4344,8 +4313,8 @@ COMMENT ON COLUMN "omni"."sys_task_dispatches"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."sys_task_dispatches"."version" IS '乐观锁版本号';
 
 -- ── 模糊检索索引（pg_trgm）────────────────────────────────────────────
--- 与 Lucene 全文索引分工：这里服务管理台与媒体库的“包含匹配”筛选，
--- 表达式必须与查询里的 LOWER(...) 完全一致，否则索引不会被命中。
+-- 服务管理台、媒体库与文件搜索的“包含匹配”筛选；表达式必须与查询里的
+-- LOWER(...) 完全一致，否则索引不会被命中。
 CREATE INDEX "idx_music_tracks_title_trgm" ON "omni"."music_tracks"
   USING gin (lower("title") "public"."gin_trgm_ops");
 CREATE INDEX "idx_music_tracks_artist_trgm" ON "omni"."music_tracks"
@@ -4368,8 +4337,8 @@ CREATE INDEX "idx_reader_items_title_trgm" ON "omni"."reader_items"
   USING gin (lower("title") "public"."gin_trgm_ops");
 CREATE INDEX "idx_reader_items_author_trgm" ON "omni"."reader_items"
   USING gin (lower("author_name") "public"."gin_trgm_ops");
--- 文件与相册标题/正文包含匹配：文件搜索在 Lucene 之外还有一条按数据库实时文件名匹配的
--- 路径（重命名后无需等文本重解析即可命中），相册搜索在 Lucene 退役后完全依赖这里。
+-- 文件与相册标题/正文包含匹配：文件搜索按数据库里的当前文件名实时匹配（重命名后
+-- 立即命中，不依赖任何后台解析产物），相册搜索同样只依赖这里的表达式索引。
 -- 部分索引的条件必须与查询里的 deleted 过滤同口径，否则规划器不会选中它。
 CREATE INDEX "idx_file_nodes_name_trgm" ON "omni"."file_nodes"
   USING gin (lower("name") "public"."gin_trgm_ops")

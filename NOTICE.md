@@ -22,7 +22,7 @@ The table below lists the main runtime components.
 | Component | Coordinates | Upstream |
 |---|---|---|
 | Spring Boot / Spring Framework | `org.springframework.boot` | https://spring.io/projects/spring-boot |
-| Apache Tika (transitive) | `org.apache.tika:*` | https://tika.apache.org |
+| Apache Tika (`tika-core`) | `org.apache.tika:tika-core` | https://tika.apache.org |
 | Jackson (annotations / core / databind) | `com.fasterxml.jackson.core:*` | https://github.com/FasterXML/jackson |
 | Netty (buffer / codec / handler / transport, etc.) | `io.netty:*` | https://netty.io |
 | Guava | `com.google.guava:guava` | https://github.com/google/guava |

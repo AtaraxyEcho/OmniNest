@@ -108,7 +108,7 @@ public final class AdminOperationsDto {
     @Schema(description = "任务记录项")
     public record TaskRecordItem(
             @Schema(description = "任务 ID") UUID id,
-            @Schema(description = "任务类型", example = "FILE_INDEX") String taskType,
+            @Schema(description = "任务类型", example = "MEDIA_AUTO_IMPORT") String taskType,
             @Schema(description = "任务内容描述") String description,
             @Schema(description = "任务状态", example = "COMPLETED") String status,
             @Schema(description = "进度百分比", example = "100") int progress,

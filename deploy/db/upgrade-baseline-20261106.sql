@@ -1,10 +1,13 @@
 -- 2026-11-06 基线升级脚本（仅用于已经执行过既有 V001 的存量数据库）。
 --
--- 本次基线的结构变化：补齐内容回收与库源清理所需的按列索引。
--- 这些外键列此前只有以 owner_user_id 开头的复合索引，内容回收按
--- track/photo/video/file 标识单独 IN (...) 删除时用不到该前缀。
+-- 本次基线的结构变化：
+--   1. 补齐内容回收与库源清理所需的按列索引。这些外键列此前只有以
+--      owner_user_id 开头的复合索引，内容回收按 track/photo/video/file 标识
+--      单独 IN (...) 删除时用不到该前缀。
+--   2. 删除 Lucene 时代的搜索索引状态表。文件搜索改为按数据库当前文件名实时
+--      匹配后，该表已无任何代码读写，仅剩历史索引路径与重建任务记录。
 --
--- 新安装不需要执行：V001 已包含全部索引。
+-- 新安装不需要执行：V001 已包含全部索引，也不再创建搜索索引状态表。
 -- 已有环境执行顺序（先建索引，最后 repair 对齐校验和；repair 不能单独使用）：
 --   docker exec omninest-postgres psql -U omninest -d omninest -v ON_ERROR_STOP=1 \
 --     < deploy/db/upgrade-baseline-20261106.sql
@@ -27,3 +30,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_watch_history_video_item" ON 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_video_favorites_video_item" ON "omni"."media_video_favorites" ("video_item_id");
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_video_collection_items_video_item" ON "omni"."media_video_collection_items" ("video_item_id");
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_scan_candidates_library_source" ON "omni"."media_scan_candidates" ("library_source_id");
+
+-- 删除 Lucene 搜索索引状态表。该表只存索引路径、分词器/词典版本与最后重建任务，
+-- 属于纯派生的运行态元数据；搜索改为数据库文件名匹配后没有任何读写方，直接丢弃即可。
+DROP TABLE IF EXISTS "omni"."search_index_states";
