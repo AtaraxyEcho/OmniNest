@@ -3879,8 +3879,12 @@ CREATE INDEX "idx_storage_quota_reservations_expiry" ON "omni"."storage_quota_re
   "status" "pg_catalog"."text_ops" ASC NULLS LAST,
   "expires_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
 );
+-- 两个字节列记录互不重叠的量：reserved_bytes 是当前仍持有的额度，
+-- committed_bytes 是已转入 used_bytes 的用量。结算时 reserved 归零、committed 记账，
+-- 因此两者之间不存在大小关系（早期按"reserved 是上限"写的 committed<=reserved
+-- 会让每一次真实结算都以 23514 失败）。
 ALTER TABLE "omni"."storage_quota_reservations" ADD CONSTRAINT "chk_storage_quota_reservations_bytes" CHECK (
-  reserved_bytes >= 0 AND committed_bytes >= 0 AND committed_bytes <= reserved_bytes
+  reserved_bytes >= 0 AND committed_bytes >= 0
 );
 ALTER TABLE "omni"."storage_quota_reservations" ADD CONSTRAINT "chk_storage_quota_reservations_status" CHECK (
   status::text = ANY (ARRAY['RESERVED'::character varying, 'COMMITTED'::character varying, 'RELEASED'::character varying, 'EXPIRED'::character varying]::text[])

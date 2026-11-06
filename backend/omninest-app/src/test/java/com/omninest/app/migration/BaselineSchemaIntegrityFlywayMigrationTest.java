@@ -152,6 +152,41 @@ class BaselineSchemaIntegrityFlywayMigrationTest {
     }
 
     @Test
+    void settledQuotaReservationKeepsZeroHeldBytes() throws SQLException {
+        // 结算后的真实形状：reserved_bytes 归零、committed_bytes 记账。两个列记录
+        // 互不重叠的量；早期按"reserved 是上限"写的 committed<=reserved 会让每一次
+        // 真实结算都以 23514 失败（背景素材上传即因此永久停在扫描阶段）。
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO omni.storage_quota_reservations
+                        (owner_user_id, source_type, source_id, reserved_bytes,
+                         committed_bytes, quota_applied, status, expires_at)
+                    VALUES
+                        (gen_random_uuid(), 'BACKDROP_UPLOAD', gen_random_uuid(), 0,
+                         11747231, false, 'COMMITTED', now() + interval '1 hour')
+                    """);
+            Assertions.assertThat(countObjects("""
+                    SELECT count(*)
+                    FROM omni.storage_quota_reservations
+                    WHERE status = 'COMMITTED' AND reserved_bytes = 0
+                    """)).isEqualTo(1);
+        }
+        // 放宽上限关系不等于放弃约束：负数仍然必须被拒。
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            Assertions.assertThatThrownBy(() -> statement.executeUpdate("""
+                            INSERT INTO omni.storage_quota_reservations
+                                (owner_user_id, source_type, source_id, reserved_bytes, expires_at)
+                            VALUES
+                                (gen_random_uuid(), 'UPLOAD', gen_random_uuid(), -1, now())
+                            """))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("chk_storage_quota_reservations_bytes");
+        }
+    }
+
+    @Test
     void currentMigrationsAreRecordedByFlyway() throws SQLException {
         Assertions.assertThat(countObjects("""
                 SELECT count(*)

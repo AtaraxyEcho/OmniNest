@@ -6,6 +6,9 @@
 --      单独 IN (...) 删除时用不到该前缀。
 --   2. 删除 Lucene 时代的搜索索引状态表。文件搜索改为按数据库当前文件名实时
 --      匹配后，该表已无任何代码读写，仅剩历史索引路径与重建任务记录。
+--   3. 修正配额预留的字节约束。reserved_bytes 与 committed_bytes 记录互不重叠
+--      的量（当前持有 / 已记账），旧的 committed_bytes <= reserved_bytes 会让
+--      每一次真实结算都以 23514 失败。
 --
 -- 新安装不需要执行：V001 已包含全部索引，也不再创建搜索索引状态表。
 -- 已有环境执行顺序（先建索引，最后 repair 对齐校验和；repair 不能单独使用）：
@@ -34,3 +37,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_media_scan_candidates_library_sourc
 -- 删除 Lucene 搜索索引状态表。该表只存索引路径、分词器/词典版本与最后重建任务，
 -- 属于纯派生的运行态元数据；搜索改为数据库文件名匹配后没有任何读写方，直接丢弃即可。
 DROP TABLE IF EXISTS "omni"."search_index_states";
+
+-- 配额预留：reserved_bytes 是当前仍持有的额度，committed_bytes 是已转入 used_bytes
+-- 的用量，两者互不重叠。结算时 reserved 归零、committed 记账，因此只保留非负约束；
+-- 旧的 committed_bytes <= reserved_bytes 默许的是"reserved 是上限"的旧模型，
+-- 在 2026-11-03 改成按增量记账后，任何一次真实结算都会被它拒掉。
+ALTER TABLE "omni"."storage_quota_reservations"
+  DROP CONSTRAINT IF EXISTS "chk_storage_quota_reservations_bytes";
+ALTER TABLE "omni"."storage_quota_reservations"
+  ADD CONSTRAINT "chk_storage_quota_reservations_bytes" CHECK (
+    reserved_bytes >= 0 AND committed_bytes >= 0
+  );
