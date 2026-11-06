@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -126,6 +127,9 @@ String? _cachedTextPreview(String fileId) {
 /// 文件夹或获取失败时返回 null。
 final fileDownloadUrlProvider = FutureProvider.autoDispose
     .family<String?, String>((ref, fileId) async {
+      // 换号必须让签名地址重新求值：进程级缓存由会话协调器清空，
+      // 但未销毁的 Provider 实例不会主动重跑。
+      ref.watch(sessionEpochProvider);
       final cached = _cachedDownloadUrl(fileId);
       if (cached != null) {
         return cached;
@@ -159,6 +163,7 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
 /// 预览页专用的下载地址：共享端点同时覆盖所有者、共享空间成员和定向分享接收者。
 final filePreviewDownloadUrlProvider = FutureProvider.autoDispose
     .family<String?, FileNode>((ref, file) async {
+      ref.watch(sessionEpochProvider);
       try {
         return await ref.read(fileApiProvider).downloadSharedUrl(file.id);
       } catch (_) {
@@ -168,13 +173,15 @@ final filePreviewDownloadUrlProvider = FutureProvider.autoDispose
 
 /// 预览页专用文本内容：使用与共享下载相同的授权端点签名。
 final filePreviewTextProvider = FutureProvider.autoDispose
-    .family<String, FileNode>(
-      (ref, file) => ref.read(fileApiProvider).loadSharedTextPreview(file.id),
-    );
+    .family<String, FileNode>((ref, file) {
+      ref.watch(sessionEpochProvider);
+      return ref.read(fileApiProvider).loadSharedTextPreview(file.id);
+    });
 
 /// 按文件 ID 加载有界文本预览。
 final fileTextPreviewProvider = FutureProvider.autoDispose
     .family<String, String>((ref, fileId) async {
+      ref.watch(sessionEpochProvider);
       final cached = _cachedTextPreview(fileId);
       if (cached != null) {
         return cached;

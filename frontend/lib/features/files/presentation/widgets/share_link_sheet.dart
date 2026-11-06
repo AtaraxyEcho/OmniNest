@@ -628,7 +628,6 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
       copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
       severity:
           copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
-      duration: const Duration(seconds: 1),
     );
   }
 

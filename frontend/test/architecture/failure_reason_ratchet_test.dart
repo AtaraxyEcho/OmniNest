@@ -16,13 +16,6 @@ void main() {
   const allowedUnboundFailures = <String, String>{
     'lib/features/photos/presentation/widgets/batch_progress_dialog.dart:64':
         '打包下载失败已给出"重新选择同一路径继续"的处置动作',
-    // 音乐区由并行会话持有，本轮不越界改其文案。
-    'lib/features/music/presentation/deck/music_deck_content_support.dart:738':
-        '并行会话在途文件',
-    'lib/features/music/presentation/player/music_mobile_now_playing.dart:457':
-        '并行会话在途文件',
-    'lib/features/music/presentation/widgets/music_mobile_mini_player_slot.dart:295':
-        '并行会话在途文件',
   };
 
   const catchHeads = [

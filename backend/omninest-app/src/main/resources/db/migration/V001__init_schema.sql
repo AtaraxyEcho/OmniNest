@@ -4424,3 +4424,40 @@ CREATE INDEX "idx_sys_tasks_status_created_at" ON "omni"."sys_tasks" USING btree
 CREATE INDEX "idx_sessions_revoked_at" ON "omni"."auth_active_sessions" USING btree (
   "revoked_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
 ) WHERE "revoked_at" IS NOT NULL;
+
+-- ── 内容回收与库源清理的按列索引 ────────────────────────────────────────
+-- 下列外键列只有以 owner_user_id 开头的复合索引；内容回收按 track/photo/
+-- video/file 标识单独 IN (...) 删除或统计时用不到该前缀，只能全表扫描。
+CREATE INDEX "idx_file_access_records_file_node" ON "omni"."file_access_records" USING btree (
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_file_favorites_file_node" ON "omni"."file_favorites" USING btree (
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_music_favorites_track" ON "omni"."music_favorites" USING btree (
+  "track_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_music_play_history_track" ON "omni"."music_play_history" USING btree (
+  "track_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_music_playlist_items_track" ON "omni"."music_playlist_items" USING btree (
+  "track_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_photo_analysis_runs_photo_id" ON "omni"."photo_content_analysis_runs" USING btree (
+  "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_photo_content_labels_photo_id" ON "omni"."photo_content_labels" USING btree (
+  "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_media_watch_history_video_item" ON "omni"."media_watch_history" USING btree (
+  "video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_media_video_favorites_video_item" ON "omni"."media_video_favorites" USING btree (
+  "video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_media_video_collection_items_video_item" ON "omni"."media_video_collection_items" USING btree (
+  "video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_media_scan_candidates_library_source" ON "omni"."media_scan_candidates" USING btree (
+  "library_source_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);

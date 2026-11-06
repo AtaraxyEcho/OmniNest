@@ -42,7 +42,7 @@ extension ReaderViewPageBuildersLinks on ReaderViewPageBuilders {
       return null;
     }
     final anchor = _extractReaderAnchor(href);
-    final normalizedHref = _normalizeReaderHref(href);
+    final normalizedHref = _resolveReaderHref(href);
     if (normalizedHref.isEmpty) {
       return _ReaderLinkTarget(currentChapterId, anchor);
     }
@@ -59,6 +59,59 @@ extension ReaderViewPageBuildersLinks on ReaderViewPageBuilders {
       }
     }
     return null;
+  }
+
+  /// 解析正文链接：相对路径以当前章节目录为基准消解 `.` 与 `..`。
+  ///
+  /// EPUB 正文常用 `../Text/chapter02.xhtml#fn1` 这类跨目录写法，只剥前导
+  /// `./` 会让它永远匹配不到章节 contentPath，被误判为不支持的链接。
+  String _resolveReaderHref(String href) {
+    final normalized = _normalizeReaderHref(href);
+    if (normalized.isEmpty || normalized.startsWith('/')) {
+      return _removeDotSegments(normalized);
+    }
+    final currentPath = _currentChapterContentPath();
+    if (currentPath == null || currentPath.isEmpty) {
+      return _removeDotSegments(normalized);
+    }
+    final normalizedCurrent = _normalizeReaderHref(currentPath);
+    final slashIndex = normalizedCurrent.lastIndexOf('/');
+    final baseDir =
+        slashIndex >= 0 ? normalizedCurrent.substring(0, slashIndex + 1) : '';
+    return _removeDotSegments('$baseDir$normalized');
+  }
+
+  String? _currentChapterContentPath() {
+    for (final chapter in contentLoader?.allChapters ?? const []) {
+      if (chapter.id == currentChapterId) {
+        return chapter.contentPath;
+      }
+    }
+    return null;
+  }
+
+  String _removeDotSegments(String path) {
+    final segments = <String>[];
+    final parts = path.split('/');
+    for (var index = 0; index < parts.length; index++) {
+      final part = parts[index];
+      if (part.isEmpty || part == '.') {
+        if (index == 0 && part.isEmpty) {
+          segments.add('');
+        }
+        continue;
+      }
+      if (part == '..') {
+        if (segments.isNotEmpty &&
+            segments.last != '' &&
+            segments.last != '..') {
+          segments.removeLast();
+        }
+        continue;
+      }
+      segments.add(part);
+    }
+    return segments.join('/');
   }
 
   String _normalizeReaderHref(String href) {
@@ -83,7 +136,8 @@ extension ReaderViewPageBuildersLinks on ReaderViewPageBuilders {
     if (uri == null) {
       return false;
     }
-    return uri.hasScheme && uri.scheme.toLowerCase() != 'file';
+    // 所有带 scheme 的地址（含 file:）都不是章节内相对路径，不能进入匹配循环。
+    return uri.hasScheme;
   }
 
   String? _extractReaderAnchor(String href) {

@@ -55,7 +55,7 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
       final page = await ref
           .read(photoRepositoryProvider)
           .listByPeriod(year: year, month: month);
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = PhotoPeriodState(
@@ -66,7 +66,7 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
         hasMore: page.hasMore,
       );
     } on Exception catch (e) {
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = PhotoPeriodState(

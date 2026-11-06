@@ -250,7 +250,7 @@ class AdminOperationsApi {
     AdminSharedSpacePermission permission,
   ) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
-      '/shared-space/permissions/${permission.roleId}',
+      '/shared-space/permissions/${Uri.encodeComponent(permission.roleId)}',
       data: {
         'canBrowse': permission.canBrowse,
         'canUpload': permission.canUpload,

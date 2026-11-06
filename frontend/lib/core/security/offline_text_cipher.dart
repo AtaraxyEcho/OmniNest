@@ -57,8 +57,12 @@ class OfflineTextCipher {
 
   /// 解密文本；历史明文（无前缀）原样返回，解密失败返回空串。
   Future<String> decrypt(String userId, String stored) async {
-    if (stored.isEmpty || !stored.startsWith(_prefix)) {
+    if (stored.isEmpty) {
       return stored;
+    }
+    if (!stored.startsWith(_prefix)) {
+      // 其它代际前缀（如 enc:v2:）同样是密文，不能当明文交给上层解析。
+      return isEncryptedValue(stored) ? '' : stored;
     }
     try {
       final combined = base64Decode(stored.substring(_prefix.length));

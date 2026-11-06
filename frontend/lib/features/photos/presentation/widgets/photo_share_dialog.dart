@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -20,6 +22,7 @@ Future<(String, String)?> showPhotoShareDialog(
   required List<PhotoShareLink> shares,
   required Future<void> Function(String shareId) onRevoke,
   Future<int> Function()? onRevokeAll,
+  Future<String> Function(PhotoShareLink share)? shareUrlOf,
 }) async {
   String expiryOption = 'never';
   final remainingShares = [...shares];
@@ -261,6 +264,40 @@ Future<(String, String)?> showPhotoShareDialog(
                                             ],
                                           ),
                                         ),
+                                        if (shareUrlOf != null)
+                                          IconButton(
+                                            tooltip:
+                                                AppLocalizations.of(
+                                                  ctx,
+                                                ).filesCopyLink,
+                                            icon: const Icon(
+                                              Icons.link,
+                                              size: 18,
+                                            ),
+                                            onPressed: () async {
+                                              final url = await shareUrlOf(
+                                                share,
+                                              );
+                                              final copied =
+                                                  await copyTextToClipboard(
+                                                    url,
+                                                  );
+                                              if (!ctx.mounted) return;
+                                              // 令牌只在创建响应里回传明文，列表行不带
+                                              // 可用地址；这里用调用方解析的基址重建。
+                                              showOmniFeedback(
+                                                ctx,
+                                                copied
+                                                    ? AppLocalizations.of(
+                                                      ctx,
+                                                    ).filesCopiedClipboard
+                                                    : url,
+                                                severity:
+                                                    OmniFeedbackSeverity
+                                                        .success,
+                                              );
+                                            },
+                                          ),
                                         IconButton(
                                           tooltip:
                                               AppLocalizations.of(

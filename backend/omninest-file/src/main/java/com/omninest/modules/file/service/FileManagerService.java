@@ -15,6 +15,7 @@ import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -182,6 +183,10 @@ public class FileManagerService {
                     : fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                             source.getOwnerUserId(), SpaceType.PERSONAL, prefix);
             subtree.addAll(descendants.stream()
+                    // 派生资产与本地只读挂载节点没有可下载的内容对象：复制会生成
+                    // currentObjectId 为空的僵尸文件，并把不计费的字节计入配额。
+                    .filter(node -> !"DERIVED".equals(node.getSourceType()))
+                    .filter(node -> !SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType()))
                     // 父节点必须先于子节点建副本，才能按父子映射推导新路径
                     .sorted(Comparator.comparingInt(node -> node.getNormalizedPath().length()))
                     .toList());

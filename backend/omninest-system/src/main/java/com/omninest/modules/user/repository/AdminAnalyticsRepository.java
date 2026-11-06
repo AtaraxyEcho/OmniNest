@@ -16,18 +16,21 @@ public class AdminAnalyticsRepository {
 
     /**
      * 近 N 天每日新增用户数（空日期补零）。
+     *
+     * <p>分桶必须按实例配置时区，与任务趋势图一致；按会话时区（UTC）切分时，
+     * 东八区凌晨 0-8 点的新增用户会被算进前一日，三张图横轴错位一天。</p>
      */
     @SuppressWarnings("unchecked")
-    public List<Object[]> dailyUserGrowth(int days) {
+    public List<Object[]> dailyUserGrowth(int days, String zoneId) {
         Query query = entityManager.createNativeQuery("""
                 select to_char(series_day, 'YYYY-MM-DD') as date, coalesce(cnt, 0) as value
                 from generate_series(
-                    date_trunc('day', now()) - make_interval(days => :days - 1),
-                    date_trunc('day', now()),
+                    date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1),
+                    date_trunc('day', now() AT TIME ZONE :zoneId),
                     interval '1 day'
                 ) series_day
                 left join (
-                    select date_trunc('day', created_at) as d, count(*) as cnt
+                    select date_trunc('day', created_at AT TIME ZONE :zoneId) as d, count(*) as cnt
                     from omni.auth_users
                     where created_at >= now() - make_interval(days => :days)
                     group by d
@@ -35,6 +38,7 @@ public class AdminAnalyticsRepository {
                 order by series_day
                 """);
         query.setParameter("days", days);
+        query.setParameter("zoneId", zoneId);
         return query.getResultList();
     }
 
@@ -72,20 +76,24 @@ public class AdminAnalyticsRepository {
 
     /**
      * 近 N 天每日累计存储量（字节），空日期沿用前一日值。
+     *
+     * <p>与新增用户、任务吞吐同口径按实例时区切分自然日。</p>
      */
     @SuppressWarnings("unchecked")
-    public List<Object[]> dailyStorageGrowth(int days) {
+    public List<Object[]> dailyStorageGrowth(int days, String zoneId) {
         Query query = entityManager.createNativeQuery("""
                 with baseline as (
                     select coalesce(sum(size_bytes), 0) as bytes
                     from omni.file_objects
-                    where created_at < date_trunc('day', now()) - make_interval(days => :days - 1)
+                    where (created_at AT TIME ZONE :zoneId)
+                          < date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1)
                 ),
                 daily as (
-                    select date_trunc('day', created_at) as d,
+                    select date_trunc('day', created_at AT TIME ZONE :zoneId) as d,
                            coalesce(sum(size_bytes), 0) as bytes
                     from omni.file_objects
-                    where created_at >= date_trunc('day', now()) - make_interval(days => :days - 1)
+                    where (created_at AT TIME ZONE :zoneId)
+                          >= date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1)
                     group by d
                 ),
                 cumulative as (
@@ -95,14 +103,15 @@ public class AdminAnalyticsRepository {
                 select to_char(series_day, 'YYYY-MM-DD') as date,
                        coalesce(c.total, (select bytes from baseline)) as value
                 from generate_series(
-                    date_trunc('day', now()) - make_interval(days => :days - 1),
-                    date_trunc('day', now()),
+                    date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1),
+                    date_trunc('day', now() AT TIME ZONE :zoneId),
                     interval '1 day'
                 ) series_day
                 left join cumulative c on c.d = series_day
                 order by series_day
                 """);
         query.setParameter("days", days);
+        query.setParameter("zoneId", zoneId);
         return query.getResultList();
     }
 }

@@ -140,8 +140,11 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     ref.onDispose(_stopProcessingPoll);
     final repository = ref.watch(appBackdropRepositoryProvider);
     ref.watch(appBackdropSelectionTargetProvider);
-    final session = await ref.watch(authSessionProvider.future);
-    final userId = session.user?.id;
+    // 只订阅用户身份：selectAsync 等首帧会话恢复完成，之后仅在 user.id
+    // 变化时重建；同账号 token 静默续期发布的 expiresAt 不再触发整树重建。
+    final userId = await ref.watch(
+      authSessionProvider.selectAsync((session) => session.user?.id),
+    );
     if (userId != null && _serverAssetsOwner != userId) {
       _serverAssetsOwner = userId;
       await repository.clearBackdrops().catchError((Object _) {

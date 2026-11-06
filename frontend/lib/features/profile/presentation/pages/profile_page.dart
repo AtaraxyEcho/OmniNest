@@ -166,9 +166,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
     try {
       await preferencesController.save(preferences);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      _showMessage(AppLocalizations.of(context).profileNotificationSaveFailed);
+      final l10n = AppLocalizations.of(context);
+      _showMessage(
+        failureToast(l10n, l10n.profileNotificationSaveFailed, error),
+      );
     }
   }
 

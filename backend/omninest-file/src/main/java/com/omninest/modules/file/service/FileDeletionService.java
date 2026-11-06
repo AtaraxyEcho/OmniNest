@@ -260,6 +260,10 @@ public class FileDeletionService {
         if (!root.isDeleted()) {
             // 软删除必须由实际操作人执行：共享空间要按操作者复核权限并写入 deleted_by。
             fileQueryService.deleteNode(operatorId, fileNodeId);
+            // 软删除链路的批量 @Modifying(clearAutomatically = true) 会清空一级缓存；
+            // 重新载入受管实体再写入清理状态，避免脱管快照把 is_deleted 脏写回 false。
+            root = fileNodeRepository.findById(fileNodeId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         }
         UUID taskId = UUID.randomUUID();
         Instant requestedAt = Instant.now();
@@ -348,18 +352,29 @@ public class FileDeletionService {
             );
         }
 
-        for (FileNode root : roots) {
-            if (!root.isDeleted()) {
-                // 与单文件路径一致：共享节点由操作者软删除，个人节点要求操作者即所有者。
-                fileQueryService.deleteNode(operatorId, root.getId());
-            }
+        // 父目录的软删除会连带处理同批子节点；先剔除被上级覆盖的活动根，
+        // 否则下一轮 deleteNode 查不到活动节点会抛 404 让整批回滚。
+        List<FileNode> activeRoots = removeNestedRoots(roots.stream()
+                .filter(root -> !root.isDeleted())
+                .toList());
+        boolean anySoftDeleted = false;
+        for (FileNode root : activeRoots) {
+            // 与单文件路径一致：共享节点由操作者软删除，个人节点要求操作者即所有者。
+            fileQueryService.deleteNode(operatorId, root.getId());
+            anySoftDeleted = true;
         }
 
         UUID taskId = UUID.randomUUID();
         Instant requestedAt = Instant.now();
-        roots.forEach(root -> markPurgeQueued(root, taskId, requestedAt));
-        fileNodeRepository.saveAll(roots);
-        roots.forEach(root -> assignSubtreeToPurge(root.getOwnerUserId(), root, taskId, requestedAt));
+        // 软删除会清空一级缓存，roots 中的实体已脱管；重取受管实例后再写清理状态，
+        // 避免 saveAll 走 merge 时用旧 version 触发乐观锁失败。
+        List<FileNode> managedRoots = anySoftDeleted
+                ? fileNodeRepository.findAllById(roots.stream().map(FileNode::getId).toList())
+                : roots;
+        managedRoots.forEach(root -> markPurgeQueued(root, taskId, requestedAt));
+        fileNodeRepository.saveAll(managedRoots);
+        managedRoots.forEach(root ->
+                assignSubtreeToPurge(root.getOwnerUserId(), root, taskId, requestedAt));
         int cancelledTaskCount = cancelRelatedTasksInBatches(rootOwners, taskId);
         if (cancelledTaskCount > 0) {
             log.info("批量永久删除任务已冻结关联任务: taskId={}, cancelledTaskCount={}",

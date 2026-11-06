@@ -58,7 +58,7 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
       final page = await ref
           .read(photoRepositoryProvider)
           .listAlbumCandidates(albumId: albumId);
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = PhotoAlbumPickerState(
@@ -69,7 +69,7 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
         hasMore: page.hasMore,
       );
     } on Exception catch (e) {
-      if (generation != _generation) {
+      if (!ref.mounted || generation != _generation) {
         return;
       }
       state = PhotoAlbumPickerState(

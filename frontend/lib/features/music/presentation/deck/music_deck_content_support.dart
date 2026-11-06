@@ -735,11 +735,12 @@ ValueChanged<MusicPlayableItem>? _favoriteHandler(
               severity: OmniFeedbackSeverity.success,
             );
           }
-        } on Exception {
+        } on Exception catch (error) {
           if (context.mounted) {
+            final l10n = AppLocalizations.of(context);
             showOmniFeedback(
               context,
-              AppLocalizations.of(context).musicFavoriteToggleFailed,
+              failureToast(l10n, l10n.musicFavoriteToggleFailed, error),
               severity: OmniFeedbackSeverity.error,
             );
           }

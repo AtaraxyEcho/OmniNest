@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 /// 工位自绘控件的键盘可达外壳。
 ///
@@ -46,6 +47,13 @@ class WorkstationFocusTarget extends StatefulWidget {
 
 class _WorkstationFocusTargetState extends State<WorkstationFocusTarget> {
   bool _focused = false;
+  bool _pressed = false;
+
+  void _setPressed(bool pressed) {
+    if (_pressed != pressed) {
+      setState(() => _pressed = pressed);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +85,20 @@ class _WorkstationFocusTargetState extends State<WorkstationFocusTarget> {
             },
           ),
         },
-        child: Builder(builder: (context) => widget.builder(context, _focused)),
+        child: Listener(
+          onPointerDown: enabled ? (_) => _setPressed(true) : null,
+          onPointerUp: enabled ? (_) => _setPressed(false) : null,
+          onPointerCancel: enabled ? (_) => _setPressed(false) : null,
+          // 仅绘制期缩放，不参与布局；焦点环仍不改变控件几何尺寸。
+          child: AnimatedScale(
+            scale: _pressed ? 0.98 : 1.0,
+            duration: MotionToken.reduced(context, MotionToken.fast),
+            curve: MotionToken.curve,
+            child: Builder(
+              builder: (context) => widget.builder(context, _focused),
+            ),
+          ),
+        ),
       ),
     );
   }

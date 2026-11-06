@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
@@ -292,13 +293,14 @@ class _MusicMobileMiniPlayerSlotState
   Future<void> _runCommand(Future<void> Function() command) async {
     try {
       await command();
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).musicPlaybackError,
+        failureToast(l10n, l10n.musicPlaybackError, error),
         severity: OmniFeedbackSeverity.error,
       );
     }

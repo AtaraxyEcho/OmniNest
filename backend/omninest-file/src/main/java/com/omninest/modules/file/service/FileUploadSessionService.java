@@ -35,17 +35,13 @@ import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import lombok.RequiredArgsConstructor;
@@ -287,7 +283,7 @@ public class FileUploadSessionService {
         ensureCompletable(session);
         FileUploadPart part = fileUploadPartRepository.findByUploadSessionIdAndPartNumber(session.getId(), partNumber)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片不存在"));
-        String eTag = normalizeETag(request == null ? null : request.eTag());
+        String eTag = UploadPartCompletion.normalizeETag(request == null ? null : request.eTag());
         int updated = fileUploadPartRepository.markPartCompleted(
                 session.getId(), partNumber, eTag, UploadStatus.COMPLETED.getValue());
         if (updated == 0) {
@@ -404,7 +400,8 @@ public class FileUploadSessionService {
             return new MultipartCompletion(
                     completeDirectSession(ownerUserId, session, request, directObjectReady), null, null, List.of());
         }
-        applyCompletedPartRequest(session, request == null ? null : request.parts());
+        UploadPartCompletion.apply(
+                fileUploadPartRepository, session, request == null ? null : request.parts());
 
         String sha256 = normalizeSha256(request == null ? null : request.sha256());
         if (sha256 != null && session.getSha256() != null && !session.getSha256().equalsIgnoreCase(sha256)) {
@@ -623,10 +620,18 @@ public class FileUploadSessionService {
         if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已完成，无需延期");
         }
-        if (UploadStatus.EXPIRED.getValue().equals(session.getStatus())) {
+        Instant now = Instant.now();
+        if (UploadStatus.EXPIRED.getValue().equals(session.getStatus())
+                || (session.getExpiresAt() != null && !now.isBefore(session.getExpiresAt()))) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已过期，无法延期");
         }
-        session.setExpiresAt(Instant.now().plus(uploadSettings.sessionTtl()));
+        if (!UploadStatus.CREATED.getValue().equals(session.getStatus())
+                && !UploadStatus.UPLOADING.getValue().equals(session.getStatus())) {
+            // 已取消/拒绝/合并扫描中的会话不再持有有效的配额预留，
+            // 放行延期会重签直传 URL，绕过预留额度。
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "当前上传会话状态不支持延期");
+        }
+        session.setExpiresAt(now.plus(uploadSettings.sessionTtl()));
         if (session.getQuotaReservationId() != null) {
             storageQuotaService.extendReservation("UPLOAD", session.getId(), session.getExpiresAt());
         }
@@ -902,14 +907,6 @@ public class FileUploadSessionService {
         return sha256;
     }
 
-    private String normalizeETag(String rawETag) {
-        String eTag = rawETag == null ? "" : rawETag.trim().replace("\"", "");
-        if (eTag.isEmpty() || eTag.length() > 160) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "ETag 格式不合法");
-        }
-        return eTag;
-    }
-
     private int resolvePartSizeBytes(long totalSizeBytes, Integer requestedPartSizeBytes) {
         if (requestedPartSizeBytes != null) {
             if (requestedPartSizeBytes < uploadLimits.getMinPartSizeBytes() || requestedPartSizeBytes > uploadLimits.getMaxPartSizeBytes()) {
@@ -958,39 +955,6 @@ public class FileUploadSessionService {
                     return part;
                 })
                 .toList();
-    }
-
-    private void applyCompletedPartRequest(
-            FileUploadSession session,
-            List<CompleteFileUploadPartRequest> requestedParts
-    ) {
-        if (requestedParts == null || requestedParts.isEmpty()) {
-            return;
-        }
-        Set<Integer> partNumbers = new HashSet<>();
-        for (CompleteFileUploadPartRequest requestedPart : requestedParts) {
-            if (requestedPart.partNumber() > session.getTotalParts()) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "分片序号超出上传会话范围");
-            }
-            if (!partNumbers.add(requestedPart.partNumber())) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "分片序号重复");
-            }
-        }
-        Map<Integer, FileUploadPart> partsByNumber = fileUploadPartRepository
-                .findByUploadSessionIdOrderByPartNumber(session.getId())
-                .stream()
-                .collect(Collectors.toMap(FileUploadPart::getPartNumber, p -> p));
-        List<FileUploadPart> toSave = new ArrayList<>();
-        for (CompleteFileUploadPartRequest requestedPart : requestedParts) {
-            FileUploadPart part = partsByNumber.get(requestedPart.partNumber());
-            if (part == null) {
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传分片不存在");
-            }
-            part.setETag(normalizeETag(requestedPart.eTag()));
-            part.setStatus(UploadStatus.COMPLETED.getValue());
-            toSave.add(part);
-        }
-        fileUploadPartRepository.saveAll(toSave);
     }
 
     private void ensureAllPartsCompleted(FileUploadSession session, List<FileUploadPart> parts) {

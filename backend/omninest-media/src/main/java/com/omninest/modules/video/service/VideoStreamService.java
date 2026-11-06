@@ -229,13 +229,8 @@ public class VideoStreamService {
         if ("cached".equals(audioMode) && audioCached.isPresent()) {
             UUID audioFileNodeId = audioCached.get().getFileNodeId();
             log.info("使用缓存音频 mux: videoItemId={}, audioFileNodeId={}", videoItemId, audioFileNodeId);
-            if (streamKey == null) {
-                streamWithCachedAudio(
-                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, null, output, ownSlot);
-            } else {
-                streamWithCachedAudio(
-                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, streamKey, output, ownSlot);
-            }
+            // 已加载并鉴权过的条目直接下传，避免同一次流请求重复查询与复核。
+            streamWithCachedAudio(sourceItem, audioFileNodeId, startSeconds, streamKey, output, ownSlot);
             return;
         }
         if ("cached".equals(audioMode)) {
@@ -243,11 +238,7 @@ public class VideoStreamService {
         } else {
             log.info("使用原始音频实时转码: videoItemId={}", videoItemId);
         }
-        if (streamKey == null) {
-            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, null, output, ownSlot);
-        } else {
-            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, streamKey, output, ownSlot);
-        }
+        streamAudioTranscoded(sourceItem, startSeconds, streamKey, output, ownSlot);
     }
 
     private String streamKey(UUID viewerUserId, UUID videoItemId) {
@@ -296,17 +287,21 @@ public class VideoStreamService {
     public void streamAudioTranscoded(
             UUID ownerUserId, UUID videoItemId, long startSeconds, OutputStream output
     ) {
-        streamAudioTranscoded(ownerUserId, videoItemId, startSeconds, null, output, true);
+        streamAudioTranscoded(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId),
+                startSeconds, null, output, true);
     }
 
-    private void streamAudioTranscoded(
-            UUID ownerUserId, UUID videoItemId, long startSeconds, String streamKey,
+    /**
+     * 以已加载并鉴权的条目启动实时转码流；单次请求只查询/鉴权一次源条目。
+     */
+    void streamAudioTranscoded(
+            MediaVideoItem item, long startSeconds, String streamKey,
             OutputStream output, boolean ownSlot
     ) {
-        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
-
+        UUID videoItemId = item.getId();
         String demuxer = VideoLiveInputFormats.requireDemuxer(item.getContainerFormat());
-        String internalUrl = resolveInput(ownerUserId, item.getFileNodeId());
+        String internalUrl = resolveInput(item.getOwnerUserId(), item.getFileNodeId());
         log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, demuxer={}, startSeconds={}",
                 videoItemId, item.getAudioCodec(), item.getContainerFormat(), demuxer, startSeconds);
 
@@ -392,7 +387,9 @@ public class VideoStreamService {
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
             long startSeconds, OutputStream output
     ) {
-        streamWithCachedAudio(ownerUserId, sourceVideoItemId, audioFileNodeId, startSeconds, null, output, true);
+        streamWithCachedAudio(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId),
+                audioFileNodeId, startSeconds, null, output, true);
     }
 
     /**
@@ -404,11 +401,22 @@ public class VideoStreamService {
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
             long startSeconds, String streamKey, OutputStream output, boolean ownSlot
     ) {
-        MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
+        streamWithCachedAudio(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId),
+                audioFileNodeId, startSeconds, streamKey, output, ownSlot);
+    }
 
+    /**
+     * 以已加载并鉴权的源条目启动缓存音频混流；单次请求只查询/鉴权一次源条目。
+     */
+    void streamWithCachedAudio(
+            MediaVideoItem sourceItem, UUID audioFileNodeId,
+            long startSeconds, String streamKey, OutputStream output, boolean ownSlot
+    ) {
+        UUID sourceVideoItemId = sourceItem.getId();
         String videoDemuxer = VideoLiveInputFormats.requireDemuxer(sourceItem.getContainerFormat());
-        String videoInternalUrl = resolveInput(ownerUserId, sourceItem.getFileNodeId());
-        String audioInternalUrl = resolveInput(ownerUserId, audioFileNodeId);
+        String videoInternalUrl = resolveInput(sourceItem.getOwnerUserId(), sourceItem.getFileNodeId());
+        String audioInternalUrl = resolveInput(sourceItem.getOwnerUserId(), audioFileNodeId);
 
         log.info("缓存音频 mux 开始: sourceVideoItemId={}, demuxer={}, startSeconds={}",
                 sourceVideoItemId, videoDemuxer, startSeconds);

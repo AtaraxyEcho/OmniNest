@@ -100,27 +100,29 @@ class _DeckEqualizerMeterState extends State<_DeckEqualizerMeter>
         // 纯装饰动效：竖条每帧改高度，若进入语义树，Windows 辅助功能桥会
         // 每帧重建 AXTree（error: 154），因此整体排除出语义树。
         child: ExcludeSemantics(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < _controllers.length; i++) ...[
-                AnimatedBuilder(
-                  animation: _animations[i],
-                  builder: (context, _) {
-                    // bounce 的摆幅取基准高度的 60%，与样例的视觉幅度接近。
-                    final swing = 1 + 0.6 * _animations[i].value;
-                    return Container(
-                      width: 2 * scale,
-                      height:
-                          _DeckEqualizerMeter.baseHeights[i] * swing * scale,
-                      decoration: const BoxDecoration(color: Colors.white),
-                    );
-                  },
-                ),
-                SizedBox(width: 4 * scale),
+          child: RepaintBoundary(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < _controllers.length; i++) ...[
+                  AnimatedBuilder(
+                    animation: _animations[i],
+                    builder: (context, _) {
+                      // bounce 的摆幅取基准高度的 60%，与样例的视觉幅度接近。
+                      final swing = 1 + 0.6 * _animations[i].value;
+                      return Container(
+                        width: 2 * scale,
+                        height:
+                            _DeckEqualizerMeter.baseHeights[i] * swing * scale,
+                        decoration: const BoxDecoration(color: Colors.white),
+                      );
+                    },
+                  ),
+                  SizedBox(width: 4 * scale),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -167,22 +169,24 @@ class _PulsingDotState extends State<_PulsingDot>
   Widget build(BuildContext context) {
     // 纯装饰的逐帧透明度动画：排除出语义树，避免辅助功能桥逐帧重建。
     return ExcludeSemantics(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return Opacity(
-            // pulse 的呼吸区间：满亮到 0.4，与 Tailwind pulse 的幅度一致。
-            opacity: 0.4 + 0.6 * _controller.value,
-            child: Container(
-              width: widget.size,
-              height: widget.size,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Opacity(
+              // pulse 的呼吸区间：满亮到 0.4，与 Tailwind pulse 的幅度一致。
+              opacity: 0.4 + 0.6 * _controller.value,
+              child: Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

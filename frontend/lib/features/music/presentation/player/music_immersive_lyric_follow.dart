@@ -42,6 +42,23 @@ extension _MusicImmersiveLyricFollow on _MusicImmersiveLyricsState {
     return false;
   }
 
+  /// 跟随滚动时长：快节奏歌词相邻行间隔可能小于固定 320ms，
+  /// 下一次滚动会打断上一次动画；按行间隔的 65% 计算并钳制在 160–320ms。
+  Duration _followDuration() {
+    final lyrics = widget.lyrics;
+    final index = _activeIndex;
+    if (index < 0 || index + 1 >= lyrics.length) {
+      return const Duration(milliseconds: 320);
+    }
+    final gapMs =
+        lyrics[index + 1].position.inMilliseconds -
+        lyrics[index].position.inMilliseconds;
+    if (gapMs <= 0) {
+      return const Duration(milliseconds: 320);
+    }
+    return Duration(milliseconds: (gapMs * 0.65).round().clamp(160, 320));
+  }
+
   /// 焦点位命中的歌词行下标（拖动预览与松手跳转共用）。
   int _indexAtAnchor(
     ScrollMetrics metrics, {
@@ -97,12 +114,17 @@ extension _MusicImmersiveLyricFollow on _MusicImmersiveLyricsState {
       _pendingFollowTarget = target;
       return;
     }
+    if (MotionToken.prefersReduced(context)) {
+      // 减弱动效直接落位；零时长 animateTo 会违反时长大于零的契约。
+      _scrollController.jumpTo(target);
+      return;
+    }
     _followAnimating = true;
     unawaited(
       _scrollController
           .animateTo(
             target,
-            duration: const Duration(milliseconds: 320),
+            duration: _followDuration(),
             curve: Curves.easeOutCubic,
           )
           .then<void>((_) {}, onError: (Object _) {})

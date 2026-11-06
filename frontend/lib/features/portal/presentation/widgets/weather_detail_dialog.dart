@@ -194,19 +194,21 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                       if (effectsReady)
                         Positioned.fill(
                           child: IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: _animCtrl,
-                              builder:
-                                  (_, _) => CustomPaint(
-                                    key: const ValueKey(
-                                      'weather-scene-effects',
+                            child: RepaintBoundary(
+                              child: AnimatedBuilder(
+                                animation: _animCtrl,
+                                builder:
+                                    (_, _) => CustomPaint(
+                                      key: const ValueKey(
+                                        'weather-scene-effects',
+                                      ),
+                                      painter: _WeatherScenePainter(
+                                        spec: spec,
+                                        elapsed: _elapsedSeconds,
+                                        particleColor: atm.particleColor,
+                                      ),
                                     ),
-                                    painter: _WeatherScenePainter(
-                                      spec: spec,
-                                      elapsed: _elapsedSeconds,
-                                      particleColor: atm.particleColor,
-                                    ),
-                                  ),
+                              ),
                             ),
                           ),
                         ),
@@ -260,7 +262,6 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
   }
 
   // ─── 顶栏：提示 + 更新时间 + 关闭 ──────────────────────────────────────
-
   Widget _buildHeader(
     BuildContext context,
     WeatherDetailLayoutMetrics metrics,

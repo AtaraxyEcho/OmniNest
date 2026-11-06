@@ -6848,7 +6848,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String readerWordCountWan(Object count) {
-    return '$count 万';
+    return '$count × 10,000 words';
   }
 
   @override

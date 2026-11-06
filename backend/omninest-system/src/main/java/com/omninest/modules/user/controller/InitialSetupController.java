@@ -63,8 +63,8 @@ public class InitialSetupController {
             @Valid @RequestBody(required = false) TwoFactorSecretRequest body,
             HttpServletRequest servletRequest
     ) {
-        // 与创建超管同门槛：安装令牌、限流、再生成秘钥，避免匿名扫描器消耗配额。
-        initialSetupService.validateSetupToken(setupToken);
+        // 限流必须先于令牌校验：错误令牌若在校验处直接抛 403，就永远不会消耗配额，
+        // 匿名请求即可无限枚举安装令牌。
         String remoteAddress = resolveClientIp(servletRequest);
         if (!rateLimitService.tryAcquire(
                 "setup:2fa:ip:" + remoteAddress,
@@ -73,6 +73,7 @@ public class InitialSetupController {
         )) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "秘钥生成请求过于频繁，请稍后再试");
         }
+        initialSetupService.validateSetupToken(setupToken);
         return ApiResponse.success(
                 initialSetupService.newTwoFactorSecret(body == null ? null : body.username())
         );

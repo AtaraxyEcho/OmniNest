@@ -51,7 +51,19 @@ public class AdminConsoleService {
     private final HealthEndpoint healthEndpoint;
     private final SystemInstanceConfigService systemInstanceConfigService;
 
-    @Transactional(readOnly = true)
+    /**
+     * 对象存储探活是真实网络往返（超时以秒计），必须走短时缓存；
+     * 每个管理员刷新都直连 MinIO 会把抖动放大成成倍的等待。
+     */
+    private final AdminHealthProbeCache healthProbeCache = new AdminHealthProbeCache();
+
+    /**
+     * 管理台汇总。
+     *
+     * <p>刻意不声明 {@code @Transactional}：MinIO 探活是网络 IO，若包在事务里，
+     * 探活等待期间会一直占住 HikariCP 连接。各仓储方法自带只读事务，
+     * 逐查询执行仍然安全。</p>
+     */
     public AdminConsoleSummaryDto summary() {
         List<AuthRole> roles = loadRoles();
         List<ConfigEntryDto> configs = configCenterService.list();
@@ -59,13 +71,15 @@ public class AdminConsoleService {
         AdminConsoleSummaryDto.ConfigStats configStats = configStats(configs);
         AdminConsoleSummaryDto.TaskStats taskStats = taskStats();
         AdminConsoleSummaryDto.StorageStats storageStats = storageStats();
+        // 探活在所有数据库读取之后执行，保证它无论如何都落在事务边界之外。
+        String storageStatus = storageStatus();
         return new AdminConsoleSummaryDto(
                 userStats,
                 roleSummaries(roles),
                 configStats,
                 taskStats,
                 storageStats,
-                health(userStats, configStats, taskStats, storageStats)
+                health(userStats, configStats, taskStats, storageStats, storageStatus)
         );
     }
 
@@ -176,10 +190,10 @@ public class AdminConsoleService {
             AdminConsoleSummaryDto.UserStats userStats,
             AdminConsoleSummaryDto.ConfigStats configStats,
             AdminConsoleSummaryDto.TaskStats taskStats,
-            AdminConsoleSummaryDto.StorageStats storageStats
+            AdminConsoleSummaryDto.StorageStats storageStats,
+            String storageStatus
     ) {
         String taskStatus = taskStats.failed() + taskStats.dlq() > 0 ? "WARN" : "UP";
-        String storageStatus = componentStatus("minio");
         return List.of(
                 new AdminConsoleSummaryDto.HealthItem("API 服务", "UP", "管理接口可访问"),
                 new AdminConsoleSummaryDto.HealthItem("用户中心", "UP", userStats.total() + " 个账号"),
@@ -188,6 +202,13 @@ public class AdminConsoleService {
                 new AdminConsoleSummaryDto.HealthItem(
                         "对象存储", storageStatus, storageStats.objectCount() + " 个对象")
         );
+    }
+
+    private String storageStatus() {
+        return healthProbeCache.get(() -> Map.of(
+                        "minio", new AdminHealthProbeCache.HealthSnapshot(componentStatus("minio"), "")))
+                .get("minio")
+                .status();
     }
 
     private String componentStatus(String componentName) {
@@ -207,11 +228,11 @@ public class AdminConsoleService {
      */
     @Transactional(readOnly = true)
     public AdminAnalyticsDto analytics(int days) {
+        String zoneId = systemInstanceConfigService.timeZone().getId();
         return new AdminAnalyticsDto(
-                toDailyMetrics(analyticsRepository.dailyUserGrowth(days)),
-                toDailyTaskMetrics(analyticsRepository.dailyTaskThroughput(
-                        days, systemInstanceConfigService.timeZone().getId())),
-                toDailyMetrics(analyticsRepository.dailyStorageGrowth(days)),
+                toDailyMetrics(analyticsRepository.dailyUserGrowth(days, zoneId)),
+                toDailyTaskMetrics(analyticsRepository.dailyTaskThroughput(days, zoneId)),
+                toDailyMetrics(analyticsRepository.dailyStorageGrowth(days, zoneId)),
                 systemLoadSnapshot()
         );
     }

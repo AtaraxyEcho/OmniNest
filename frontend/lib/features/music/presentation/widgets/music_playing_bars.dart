@@ -100,32 +100,34 @@ class _MusicPlayingBarsState extends State<MusicPlayingBars>
       child: SizedBox(
         width: size,
         height: size,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < _controllers.length; i++) ...[
-                AnimatedBuilder(
-                  animation: _animations[i],
-                  builder: (context, _) {
-                    final swing = 1 + 0.55 * _animations[i].value;
-                    final height = size * _baseHeights[i] * swing;
-                    return Container(
-                      width: widget.barWidth,
-                      height: height.clamp(widget.barWidth, size),
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    );
-                  },
-                ),
-                if (i != _controllers.length - 1)
-                  SizedBox(width: widget.barWidth * 0.7),
+        child: RepaintBoundary(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < _controllers.length; i++) ...[
+                  AnimatedBuilder(
+                    animation: _animations[i],
+                    builder: (context, _) {
+                      final swing = 1 + 0.55 * _animations[i].value;
+                      final height = size * _baseHeights[i] * swing;
+                      return Container(
+                        width: widget.barWidth,
+                        height: height.clamp(widget.barWidth, size),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      );
+                    },
+                  ),
+                  if (i != _controllers.length - 1)
+                    SizedBox(width: widget.barWidth * 0.7),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

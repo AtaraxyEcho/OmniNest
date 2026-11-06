@@ -304,7 +304,6 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
       copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
       severity:
           copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
-      duration: const Duration(seconds: 1),
     );
   }
 

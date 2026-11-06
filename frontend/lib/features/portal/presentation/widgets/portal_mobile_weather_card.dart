@@ -82,24 +82,26 @@ class _WeatherCardState extends ConsumerState<_WeatherCard>
               // 粒子背景层
               if (weatherAsync.hasValue)
                 Positioned.fill(
-                  child:
-                      _animationsDisabled
-                          ? CustomPaint(
-                            painter: _CardParticlePainter(
-                              weather: weatherAsync.value!,
-                              elapsed: 0,
-                            ),
-                          )
-                          : AnimatedBuilder(
-                            animation: _animCtrl,
-                            builder:
-                                (_, _) => CustomPaint(
-                                  painter: _CardParticlePainter(
-                                    weather: weatherAsync.value!,
-                                    elapsed: _elapsed,
+                  child: RepaintBoundary(
+                    child:
+                        _animationsDisabled
+                            ? CustomPaint(
+                              painter: _CardParticlePainter(
+                                weather: weatherAsync.value!,
+                                elapsed: 0,
+                              ),
+                            )
+                            : AnimatedBuilder(
+                              animation: _animCtrl,
+                              builder:
+                                  (_, _) => CustomPaint(
+                                    painter: _CardParticlePainter(
+                                      weather: weatherAsync.value!,
+                                      elapsed: _elapsed,
+                                    ),
                                   ),
-                                ),
-                          ),
+                            ),
+                  ),
                 ),
               // 内容层
               Padding(

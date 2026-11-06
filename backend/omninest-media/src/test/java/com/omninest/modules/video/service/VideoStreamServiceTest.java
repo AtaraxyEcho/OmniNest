@@ -104,8 +104,7 @@ class VideoStreamServiceTest {
         VideoStreamService spyService = spy(service);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         doNothing().when(spyService).streamWithCachedAudio(
-                OWNER_ID,
-                VIDEO_ITEM_ID,
+                item,
                 audioFileNodeId,
                 12L,
                 null,
@@ -116,8 +115,7 @@ class VideoStreamServiceTest {
         spyService.streamByAudioMode(OWNER_ID, VIDEO_ITEM_ID, 12L, "cached", output);
 
         verify(spyService).streamWithCachedAudio(
-                OWNER_ID,
-                VIDEO_ITEM_ID,
+                item,
                 audioFileNodeId,
                 12L,
                 null,
@@ -146,8 +144,7 @@ class VideoStreamServiceTest {
         VideoStreamService spyService = spy(service);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         doNothing().when(spyService).streamWithCachedAudio(
-                catalogOwner,
-                VIDEO_ITEM_ID,
+                item,
                 audioFileNodeId,
                 0L,
                 null,
@@ -159,8 +156,7 @@ class VideoStreamServiceTest {
 
         // 播放计划按源条目所有者宣告缓存，流端点必须用同一把钥匙查
         verify(spyService).streamWithCachedAudio(
-                catalogOwner,
-                VIDEO_ITEM_ID,
+                item,
                 audioFileNodeId,
                 0L,
                 null,

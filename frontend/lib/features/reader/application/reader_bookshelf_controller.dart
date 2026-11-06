@@ -77,6 +77,8 @@ class ReaderBookshelfController extends AsyncNotifier<ReaderBookshelfState> {
     ref.watch(sessionEpochProvider);
     // 加架/移架后重取第一页：窗口只含已加架条目，本地增删无法维持分页与总数一致。
     ref.watch(readerBookshelfRevisionProvider);
+    // 重建即作废旧会话在途分页：同一 Notifier 实例的字段不会随 build 自动复位。
+    _generation++;
     return _loadFirstPage();
   }
 
@@ -98,7 +100,7 @@ class ReaderBookshelfController extends AsyncNotifier<ReaderBookshelfState> {
   Future<void> refresh() async {
     final generation = ++_generation;
     final next = await _loadFirstPage();
-    if (generation != _generation) {
+    if (!ref.mounted || generation != _generation) {
       return;
     }
     state = AsyncData(next);
@@ -119,7 +121,7 @@ class ReaderBookshelfController extends AsyncNotifier<ReaderBookshelfState> {
         size: kReaderBookshelfPageSize,
       );
       final latest = state.asData?.value;
-      if (latest == null || generation != _generation) {
+      if (!ref.mounted || latest == null || generation != _generation) {
         // 取数在飞期间已另起一轮（刷新或换号）：这一页属于旧窗口，不能追加。
         return;
       }
@@ -137,6 +139,9 @@ class ReaderBookshelfController extends AsyncNotifier<ReaderBookshelfState> {
         ),
       );
     } on Exception {
+      if (!ref.mounted || generation != _generation) {
+        return;
+      }
       final latest = state.asData?.value;
       if (latest != null) {
         state = AsyncData(latest.copyWith(loadingMore: false));

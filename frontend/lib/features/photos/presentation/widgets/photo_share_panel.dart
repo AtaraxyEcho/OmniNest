@@ -510,6 +510,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           () => ref
               .read(photoCenterControllerProvider.notifier)
               .revokeAllPhotoShares(widget.photo.id),
+      shareUrlOf: (share) => _buildShareUrl(share.token),
     );
     if (!mounted) return;
     if (result == null) {

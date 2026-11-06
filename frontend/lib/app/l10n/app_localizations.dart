@@ -12500,7 +12500,7 @@ abstract class AppLocalizations {
   /// No description provided for @readerWordCountWan.
   ///
   /// In en, this message translates to:
-  /// **'{count} 万'**
+  /// **'{count} × 10,000 words'**
   String readerWordCountWan(Object count);
 
   /// No description provided for @readerRetry.

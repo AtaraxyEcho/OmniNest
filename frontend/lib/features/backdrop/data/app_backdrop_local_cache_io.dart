@@ -67,6 +67,7 @@ class AppBackdropLocalVideoCache {
     required String remoteUrl,
   }) async {
     final epoch = _cacheEpoch;
+    File? temp;
     try {
       if (remoteUrl.isEmpty) {
         return null;
@@ -79,27 +80,43 @@ class AppBackdropLocalVideoCache {
         }
         return target.path;
       }
+      // 先写临时文件再原子改名：中途断网留下的半截 mp4 会被 length > 0
+      // 误判为有效缓存，导致壁纸永久黑屏。
+      temp = File('${target.path}.downloading');
+      if (await temp.exists()) {
+        await temp.delete();
+      }
       await _dio.download(
         remoteUrl,
-        target.path,
+        temp.path,
         options: Options(responseType: ResponseType.stream),
       );
       if (epoch != _cacheEpoch) {
         // 清空期间完成的下载：删除落盘文件，避免清空后又占用磁盘。
-        if (await target.exists()) {
-          await target.delete();
+        if (await temp.exists()) {
+          await temp.delete();
         }
         return null;
       }
-      if (!await target.exists() || await target.length() <= 0) {
-        if (await target.exists()) {
-          await target.delete();
+      if (!await temp.exists() || await temp.length() <= 0) {
+        if (await temp.exists()) {
+          await temp.delete();
         }
         return null;
       }
+      await temp.rename(target.path);
       _readyById[assetId] = target.path;
       return target.path;
     } on Object catch (error) {
+      if (temp != null) {
+        try {
+          if (await temp.exists()) {
+            await temp.delete();
+          }
+        } on Object {
+          // 临时文件清理失败不改变本次下载结论，下次下载会先清空再写。
+        }
+      }
       if (kDebugMode) {
         devLog('背景视频本地缓存失败: assetId=$assetId $error');
       }

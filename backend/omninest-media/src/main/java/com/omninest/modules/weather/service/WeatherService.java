@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
@@ -100,8 +101,11 @@ public class WeatherService {
         weatherExecutor.shutdownNow();
     }
 
-    /** JWT 生成锁 */
-    private final Object jwtLock = new Object();
+    /** JWT 生成锁：用 ReentrantLock 而非 synchronized，避免虚拟线程在锁内阻塞时钉死载体线程。 */
+    private final ReentrantLock jwtLock = new ReentrantLock();
+
+    /** 配置快照锁：锁内可能穿透到数据库读取配置，同样不得使用 synchronized。 */
+    private final ReentrantLock configLock = new ReentrantLock();
 
     /** 天气数据 singleflight：防止同一位置的并发请求穿透缓存 */
     private final ConcurrentHashMap<String, CompletableFuture<WeatherDto>> inflightRequests =
@@ -119,9 +123,12 @@ public class WeatherService {
     @EventListener
     public void onConfigRefresh(ConfigRefreshEvent event) {
         if (event == null || event.key() == null || CONFIG_KEYS.contains(event.key())) {
-            synchronized (this) {
+            configLock.lock();
+            try {
                 configCache = null;
                 configCacheExpiry = Instant.MIN;
+            } finally {
+                configLock.unlock();
             }
         }
     }
@@ -702,7 +709,8 @@ public class WeatherService {
         String cachedToken = weatherCacheStore.findJwt(credentialId).orElse(null);
         if (cachedToken != null) return cachedToken;
 
-        synchronized (jwtLock) {
+        jwtLock.lock();
+        try {
             cachedToken = weatherCacheStore.findJwt(credentialId).orElse(null);
             if (cachedToken != null) return cachedToken;
 
@@ -733,6 +741,8 @@ public class WeatherService {
             } catch (Exception e) {
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "JWT 签名失败: " + e.getMessage());
             }
+        } finally {
+            jwtLock.unlock();
         }
     }
 
@@ -754,7 +764,8 @@ public class WeatherService {
         Map<String, String> cached = this.configCache;
         if (cached != null && now.isBefore(this.configCacheExpiry)) return cached;
 
-        synchronized (this) {
+        configLock.lock();
+        try {
             cached = this.configCache;
             if (cached != null && now.isBefore(this.configCacheExpiry)) return cached;
 
@@ -784,6 +795,8 @@ public class WeatherService {
             this.configCache = Map.copyOf(newConfig);
             this.configCacheExpiry = now.plus(CONFIG_CACHE_TTL);
             return this.configCache;
+        } finally {
+            configLock.unlock();
         }
     }
 

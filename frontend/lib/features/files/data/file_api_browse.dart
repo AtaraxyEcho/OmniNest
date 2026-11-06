@@ -45,9 +45,16 @@ mixin FileApiBrowse on FileApiBase {
       '/files/download-urls',
       data: {'fileIds': fileIds},
     );
-    final data = parseData(response.data);
-    final items = data['items'];
-    if (items is! List) {
+    // 后端契约是 ApiResponse<List<FileDownloadUrlDto>>，data 直接是数组；
+    // 同时兼容 items 包装，避免任何一侧结构调整后预热静默失效。
+    final rawData = parseEnvelope(response.data)['data'];
+    final items = switch (rawData) {
+      final List<dynamic> list => list,
+      final Map<String, dynamic> map when map['items'] is List =>
+        map['items'] as List<dynamic>,
+      _ => null,
+    };
+    if (items == null) {
       return;
     }
     final now = DateTime.now();

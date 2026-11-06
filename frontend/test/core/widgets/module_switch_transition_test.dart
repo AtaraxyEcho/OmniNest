@@ -22,16 +22,30 @@ void main() {
     );
 
     expect(find.text('module-content'), findsOneWidget);
+    final moduleElement = tester.element(find.text('module-content'));
     setState(() => transitionKey = 1);
     await tester.pump();
 
-    final enteringOpacity = tester.widget<Opacity>(find.byType(Opacity));
-    expect(enteringOpacity.opacity, lessThan(1));
+    final enteringFade = tester.widget<FadeTransition>(
+      find.descendant(
+        of: find.byType(ModuleSwitchTransition),
+        matching: find.byType(FadeTransition),
+      ),
+    );
+    expect(enteringFade.opacity.value, lessThan(1));
     expect(find.text('module-content'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    // 静止态直接返回子树，不再常驻 Opacity + Transform 合成层。
-    expect(find.byType(Opacity), findsNothing);
+    // 常驻同构树：静止态保留 FadeTransition（不透明度为 1，不再推离屏层），
+    // 页面树 Element 不变，切换结束不会让 StatefulNavigationShell 重挂。
+    final settledFade = tester.widget<FadeTransition>(
+      find.descendant(
+        of: find.byType(ModuleSwitchTransition),
+        matching: find.byType(FadeTransition),
+      ),
+    );
+    expect(settledFade.opacity.value, 1.0);
+    expect(tester.element(find.text('module-content')), same(moduleElement));
     expect(find.text('module-content'), findsOneWidget);
   });
 
@@ -49,6 +63,12 @@ void main() {
     );
 
     expect(find.text('static-content'), findsOneWidget);
-    expect(find.byType(Opacity), findsNothing);
+    final settledFade = tester.widget<FadeTransition>(
+      find.descendant(
+        of: find.byType(ModuleSwitchTransition),
+        matching: find.byType(FadeTransition),
+      ),
+    );
+    expect(settledFade.opacity.value, 1.0);
   });
 }

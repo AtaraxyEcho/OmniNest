@@ -19,9 +19,12 @@ final musicFavoriteTracksProvider = FutureProvider<List<MusicTrack>>((ref) {
   return ref.watch(musicApiProvider).favorites();
 });
 
-final musicPlaybackQueueOwnerIdProvider = FutureProvider<String?>((ref) async {
-  final authState = await ref.watch(authSessionProvider.future);
-  return authState.user?.id;
+final musicPlaybackQueueOwnerIdProvider = FutureProvider<String?>((ref) {
+  // 只订阅用户身份：等首帧会话恢复，但仅在 user.id 变化时重建；
+  // 同账号 token 静默续期不应重建播放队列归属。
+  return ref.watch(
+    authSessionProvider.selectAsync((session) => session.user?.id),
+  );
 });
 
 final musicCenterControllerProvider =

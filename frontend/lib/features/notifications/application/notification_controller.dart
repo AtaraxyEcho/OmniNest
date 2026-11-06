@@ -55,16 +55,19 @@ class UnreadCountNotifier extends Notifier<int> {
     final userId = ref.watch(
       authSessionProvider.select((async) => async.value?.user?.id),
     );
+    final generation = ++_generation;
     if (userId != null) {
-      unawaited(_loadInitialCount());
+      unawaited(_loadInitialCount(generation));
     }
     return 0;
   }
 
-  Future<void> _loadInitialCount() async {
+  int _generation = 0;
+
+  Future<void> _loadInitialCount(int generation) async {
     try {
       final count = await ref.read(notificationApiProvider).unreadCount();
-      if (ref.mounted) {
+      if (ref.mounted && generation == _generation) {
         state = count;
       }
     } on Exception catch (error) {
@@ -80,7 +83,13 @@ class UnreadCountNotifier extends Notifier<int> {
 
   /// 从服务端严格刷新未读数量。
   Future<void> refresh() async {
-    state = await ref.read(notificationApiProvider).unreadCount();
+    final generation = _generation;
+    final count = await ref.read(notificationApiProvider).unreadCount();
+    // 换号窗口内完成的旧请求不得覆盖新账号的未读数。
+    if (!ref.mounted || generation != _generation) {
+      return;
+    }
+    state = count;
   }
 }
 
@@ -147,6 +156,11 @@ class NotificationController extends Notifier<NotificationState> {
   @override
   NotificationState build() {
     ref.watch(sessionEpochProvider);
+    // 重建时递增代际并清空在途编排：旧账号的响应不得写回新会话。
+    _loadGeneration++;
+    _activeOperation = null;
+    _realtimeRefresh = null;
+    _appendMode = false;
     return const NotificationState();
   }
 
@@ -227,6 +241,9 @@ class NotificationController extends Notifier<NotificationState> {
         isLoading: false,
       );
     } catch (_) {
+      if (!ref.mounted || generation != _loadGeneration) {
+        return;
+      }
       state = state.copyWith(isLoading: false);
     }
   }
@@ -351,8 +368,12 @@ class NotificationController extends Notifier<NotificationState> {
 
   /// 标记指定通知为已读。未读筛选视图下已读条目随即移出列表。
   Future<void> markRead(String id) async {
+    final generation = _loadGeneration;
     final wasUnread = state.items.any((item) => item.id == id && !item.read);
     await _api.markRead([id]);
+    if (!ref.mounted || generation != _loadGeneration) {
+      return;
+    }
     if (_unreadOnly) {
       state = state.copyWith(
         items: [
@@ -377,7 +398,11 @@ class NotificationController extends Notifier<NotificationState> {
 
   /// 全部标记已读。未读筛选视图下列表清空。
   Future<void> markAllRead() async {
+    final generation = _loadGeneration;
     await _api.markAllRead();
+    if (!ref.mounted || generation != _loadGeneration) {
+      return;
+    }
     if (_unreadOnly) {
       state = state.copyWith(items: [], total: 0);
     } else {
@@ -390,8 +415,12 @@ class NotificationController extends Notifier<NotificationState> {
 
   /// 删除指定通知。
   Future<void> deleteNotification(String id) async {
+    final generation = _loadGeneration;
     final notification = state.items.where((item) => item.id == id).firstOrNull;
     await _api.deleteNotification(id);
+    if (!ref.mounted || generation != _loadGeneration) {
+      return;
+    }
     state = state.copyWith(
       items: [
         for (final item in state.items)
@@ -408,7 +437,11 @@ class NotificationController extends Notifier<NotificationState> {
 
   /// 清空当前账户的全部通知。
   Future<void> clearAll() async {
+    final generation = _loadGeneration;
     await _api.clearAll();
+    if (!ref.mounted || generation != _loadGeneration) {
+      return;
+    }
     state = NotificationState(filter: state.filter);
     ref.read(unreadCountProvider.notifier).set(0);
   }

@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
@@ -454,13 +455,14 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
           severity: OmniFeedbackSeverity.success,
         );
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (!context.mounted) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       showOmniFeedback(
         context,
-        AppLocalizations.of(context).musicFavoriteToggleFailed,
+        failureToast(l10n, l10n.musicFavoriteToggleFailed, error),
         severity: OmniFeedbackSeverity.error,
       );
     }

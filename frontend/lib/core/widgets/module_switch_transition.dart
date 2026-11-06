@@ -21,6 +21,7 @@ class ModuleSwitchTransition extends StatefulWidget {
 class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  late final Animation<double> _opacity;
   late bool _forward;
 
   @override
@@ -32,6 +33,10 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
       value: 1,
       vsync: this,
     );
+    _opacity = Tween<double>(
+      begin: 0.78,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuart));
   }
 
   @override
@@ -57,25 +62,23 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
 
   @override
   Widget build(BuildContext context) {
-    // 减弱动效：直接呈现子树终态，不包 Opaque/Transform，视觉结果不变。
-    if (MotionToken.prefersReduced(context)) {
-      return widget.child;
-    }
-    return AnimatedBuilder(
-      animation: _controller,
-      child: widget.child,
-      builder: (context, child) {
-        // 静止态直接返回子树，避免常驻 Opacity + Transform 合成层。
-        if (_controller.isCompleted) {
-          return child!;
-        }
-        final progress = Curves.easeOutQuart.transform(_controller.value);
-        final offset = (1 - progress) * (_forward ? 10 : -10);
-        return Opacity(
-          opacity: 0.78 + progress * 0.22,
-          child: Transform.translate(offset: Offset(offset, 0), child: child),
-        );
-      },
+    // 常驻同构树：无论动画进行中、已结束还是减弱动效，都保持
+    // FadeTransition → AnimatedBuilder 的固定深度；Opacity 在 1.0 时
+    // 不产生离屏合成层，也不会在完成瞬间让 StatefulNavigationShell 重挂。
+    return FadeTransition(
+      opacity: _opacity,
+      child: AnimatedBuilder(
+        animation: _controller,
+        child: widget.child,
+        builder: (context, child) {
+          final progress =
+              _controller.isCompleted
+                  ? 1.0
+                  : Curves.easeOutQuart.transform(_controller.value);
+          final offset = (1 - progress) * (_forward ? 10.0 : -10.0);
+          return Transform.translate(offset: Offset(offset, 0), child: child);
+        },
+      ),
     );
   }
 }

@@ -20,6 +20,7 @@ import com.omninest.modules.user.repository.SystemInstanceRepository;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.List;
@@ -251,11 +252,24 @@ public class InitialSetupService {
                 || configuredToken == null
                 || configuredToken.length() < MIN_SETUP_TOKEN_LENGTH
                 || providedToken == null
-                || !MessageDigest.isEqual(
-                        configuredToken.getBytes(StandardCharsets.UTF_8),
-                        providedToken.getBytes(StandardCharsets.UTF_8)
-                )) {
+                || !constantTimeEquals(configuredToken, providedToken)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "安装凭据无效或安装向导不可用");
+        }
+    }
+
+    /**
+     * 先取定长摘要再比对：直接比较原文时，长度不同会让
+     * {@link MessageDigest#isEqual} 立即返回，泄露已配置令牌的字节长度。
+     */
+    private static boolean constantTimeEquals(String expected, String actual) {
+        try {
+            byte[] expectedDigest = MessageDigest.getInstance("SHA-256")
+                    .digest(expected.getBytes(StandardCharsets.UTF_8));
+            byte[] actualDigest = MessageDigest.getInstance("SHA-256")
+                    .digest(actual.getBytes(StandardCharsets.UTF_8));
+            return MessageDigest.isEqual(expectedDigest, actualDigest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 不可用", e);
         }
     }
 

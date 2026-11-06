@@ -103,7 +103,9 @@ class BackdropApi {
 
   /// 删除背景素材。
   Future<void> delete(String assetId) async {
-    final response = await apiClient.dio.delete<dynamic>('/backdrops/$assetId');
+    final response = await apiClient.dio.delete<dynamic>(
+      '/backdrops/${Uri.encodeComponent(assetId)}',
+    );
     _ensureOk(response.data);
   }
 

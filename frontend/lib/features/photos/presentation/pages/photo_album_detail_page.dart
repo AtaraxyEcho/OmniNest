@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/widgets/app_empty_state.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -441,6 +442,11 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           () => ref
               .read(photoCenterControllerProvider.notifier)
               .revokeAllAlbumShares(albumId),
+      shareUrlOf: (share) async {
+        final baseUrl =
+            await ref.read(webShareBaseUrlResolverProvider).resolve();
+        return '$baseUrl/#/shared/photos/${share.token}';
+      },
     );
 
     if (!context.mounted) return;
@@ -459,17 +465,20 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           );
       if (!context.mounted) return;
       final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
-      if (context.mounted) {
-        // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取
-        // 服务器下发的对外 Web 地址，未配置时回退到客户端推导值。
-        showOmniFeedback(
-          context,
-          AppLocalizations.of(
-            context,
-          ).photosShareLinkCreated('$baseUrl/#/shared/photos/${link.token}'),
-          severity: OmniFeedbackSeverity.success,
-        );
-      }
+      if (!context.mounted) return;
+      // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取
+      // 服务器下发的对外 Web 地址，未配置时回退到客户端推导值。
+      final shareUrl = '$baseUrl/#/shared/photos/${link.token}';
+      // 令牌只在创建响应里回传明文：创建后立即复制，避免用户只剩一个一闪而过的提示。
+      final copied = await copyTextToClipboard(shareUrl);
+      if (!context.mounted) return;
+      showOmniFeedback(
+        context,
+        copied
+            ? AppLocalizations.of(context).filesCopiedClipboard
+            : AppLocalizations.of(context).photosShareLinkCreated(shareUrl),
+        severity: OmniFeedbackSeverity.success,
+      );
     } on Exception catch (error) {
       if (context.mounted) {
         showOmniFeedback(

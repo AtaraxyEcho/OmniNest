@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.cn.smart.SmartChineseAnalyzer;
@@ -98,6 +99,12 @@ public class FileSearchIndexService implements Closeable {
     private final Cache<Path, CachedSearcher> searchers;
 
     /**
+     * 索引生命周期读写锁：检索与增量写入持读锁，全量清空/删盘持写锁。
+     * 清空期间若允许并发检索重新打开索引，会读到正在删除的段文件。
+     */
+    private final ReentrantReadWriteLock lifecycleLock = new ReentrantReadWriteLock();
+
+    /**
      * 创建文件搜索索引服务。
      *
      * @param indexPath 索引根目录
@@ -168,14 +175,19 @@ public class FileSearchIndexService implements Closeable {
     }
 
     private <T> T withUserIndexState(UUID indexKey, UserIndexOperation<T> operation) throws Exception {
-        while (true) {
-            UserIndexState state = getUserIndexState(indexKey);
-            synchronized (state) {
-                if (state.closed) {
-                    continue;
+        lifecycleLock.readLock().lock();
+        try {
+            while (true) {
+                UserIndexState state = getUserIndexState(indexKey);
+                synchronized (state) {
+                    if (state.closed) {
+                        continue;
+                    }
+                    return operation.execute(state);
                 }
-                return operation.execute(state);
             }
+        } finally {
+            lifecycleLock.readLock().unlock();
         }
     }
 
@@ -208,12 +220,19 @@ public class FileSearchIndexService implements Closeable {
         if (fileObjectId == null) {
             return false;
         }
-        Path indexDir = getUserIndexPath(resolveIndexKey(ownerUserId, spaceType));
-        if (!Files.exists(indexDir) || !indexExists(indexDir)) {
-            return false;
-        }
+        UUID indexKey = resolveIndexKey(ownerUserId, spaceType);
+        Path indexDir = getUserIndexPath(indexKey);
+        lifecycleLock.readLock().lock();
         try {
+            // 检索器已缓存说明段文件已打开过，无需再新建 NIOFSDirectory 扫描磁盘。
+            if (searchers.getIfPresent(indexDir) == null
+                    && (!Files.exists(indexDir) || !indexExists(indexDir))) {
+                return false;
+            }
             SearcherManager manager = searcherFor(indexDir);
+            // 与 searchDirectory 对齐：刚 commit 的文档必须刷新到 NRT reader，
+            // 否则去重检查读到旧快照，同一个对象会被整轮重复解析与索引。
+            manager.maybeRefresh();
             IndexSearcher searcher = manager.acquire();
             try {
                 return searcher.count(new TermQuery(new Term(FIELD_OBJECT_ID, fileObjectId.toString()))) > 0;
@@ -223,9 +242,11 @@ public class FileSearchIndexService implements Closeable {
         } catch (Exception exception) {
             searchers.invalidate(indexDir);
             log.warn("探测已索引正文失败: indexKeyHash={}, errorType={}",
-                    Integer.toHexString(resolveIndexKey(ownerUserId, spaceType).toString().hashCode()),
+                    Integer.toHexString(indexKey.toString().hashCode()),
                     exception.getClass().getSimpleName());
             return false;
+        } finally {
+            lifecycleLock.readLock().unlock();
         }
     }
 
@@ -456,39 +477,47 @@ public class FileSearchIndexService implements Closeable {
     }
 
     private List<FileContentHit> searchDirectory(Path indexDir, String queryStr, int maxResults) {
-        if (!Files.exists(indexDir) || !indexExists(indexDir)) {
-            return List.of();
-        }
-        SearcherManager manager;
+        lifecycleLock.readLock().lock();
         try {
-            manager = searcherFor(indexDir);
-        } catch (RuntimeException exception) {
-            log.warn("打开索引检索器失败: indexKeyHash={}, errorType={}",
-                    Integer.toHexString(indexDir.toString().hashCode()),
-                    exception.getClass().getSimpleName());
-            return List.of();
-        }
-        IndexSearcher searcher = null;
-        try {
-            manager.maybeRefresh();
-            searcher = manager.acquire();
-            return collectHits(searcher, queryStr, maxResults);
-        } catch (Exception exception) {
-            // 目录被删除或重建时旧检索器可能失效，丢弃缓存让下一次请求重新打开。
-            searchers.invalidate(indexDir);
-            log.error("Lucene 搜索失败: indexKeyHash={}, queryLength={}, errorType={}",
-                    Integer.toHexString(indexDir.toString().hashCode()), queryStr.length(),
-                    exception.getClass().getSimpleName(), exception);
-            return List.of();
-        } finally {
-            if (searcher != null) {
-                try {
-                    manager.release(searcher);
-                } catch (IOException exception) {
-                    log.warn("释放文件索引 searcher 失败: errorType={}",
-                            exception.getClass().getSimpleName());
+            // 缓存命中时跳过磁盘段文件探测：每次搜索都打开 NIOFSDirectory
+            // 会造成冗余的目录遍历与 segments 文件读取。
+            if (searchers.getIfPresent(indexDir) == null
+                    && (!Files.exists(indexDir) || !indexExists(indexDir))) {
+                return List.of();
+            }
+            SearcherManager manager;
+            try {
+                manager = searcherFor(indexDir);
+            } catch (RuntimeException exception) {
+                log.warn("打开索引检索器失败: indexKeyHash={}, errorType={}",
+                        Integer.toHexString(indexDir.toString().hashCode()),
+                        exception.getClass().getSimpleName());
+                return List.of();
+            }
+            IndexSearcher searcher = null;
+            try {
+                manager.maybeRefresh();
+                searcher = manager.acquire();
+                return collectHits(searcher, queryStr, maxResults);
+            } catch (Exception exception) {
+                // 目录被删除或重建时旧检索器可能失效，丢弃缓存让下一次请求重新打开。
+                searchers.invalidate(indexDir);
+                log.error("Lucene 搜索失败: indexKeyHash={}, queryLength={}, errorType={}",
+                        Integer.toHexString(indexDir.toString().hashCode()), queryStr.length(),
+                        exception.getClass().getSimpleName(), exception);
+                return List.of();
+            } finally {
+                if (searcher != null) {
+                    try {
+                        manager.release(searcher);
+                    } catch (IOException exception) {
+                        log.warn("释放文件索引 searcher 失败: errorType={}",
+                                exception.getClass().getSimpleName());
+                    }
                 }
             }
+        } finally {
+            lifecycleLock.readLock().unlock();
         }
     }
 
@@ -685,6 +714,17 @@ public class FileSearchIndexService implements Closeable {
      * @return 目录已删除或原本不存在时返回 true；删除失败返回 false
      */
     public boolean deleteUserIndex(UUID ownerUserId) {
+        // 删盘必须独占：检索或增量写入若在删除窗口重新打开索引，
+        // 会读到正在被移除的段文件（NoSuchFileException / AlreadyClosedException）。
+        lifecycleLock.writeLock().lock();
+        try {
+            return deleteUserIndexLocked(ownerUserId);
+        } finally {
+            lifecycleLock.writeLock().unlock();
+        }
+    }
+
+    private boolean deleteUserIndexLocked(UUID ownerUserId) {
         // 先立墓碑再删盘：其它进程的索引写入会因墓碑拒绝创建目录，
         // 不再依赖“删盘瞬间恰好没有新 writer”的时序。
         markUserPurged(ownerUserId);
@@ -738,6 +778,15 @@ public class FileSearchIndexService implements Closeable {
      * @return 被清除的文档总数
      */
     public int clearAllIndexes() {
+        lifecycleLock.writeLock().lock();
+        try {
+            return clearAllIndexesLocked();
+        } finally {
+            lifecycleLock.writeLock().unlock();
+        }
+    }
+
+    private int clearAllIndexesLocked() {
         int totalCleared = 0;
         try {
             // 先关闭并清除所有已缓存的用户索引

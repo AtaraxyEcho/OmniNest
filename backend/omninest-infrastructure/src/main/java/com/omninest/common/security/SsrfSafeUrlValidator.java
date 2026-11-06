@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.security.Security;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -110,12 +111,34 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
             return;
         }
         if (VERIFIED_PUBLIC_HOSTS.size() >= MAX_PINNED_HOSTS) {
-            // 缓存键来自外部域名，必须有上界；过期条目会在读取时自清理。
-            VERIFIED_PUBLIC_HOSTS.clear();
+            // 缓存键来自外部域名，必须有上界；过期条目会先被清掉。
+            long now = System.nanoTime();
+            VERIFIED_PUBLIC_HOSTS.entrySet().removeIf(
+                    entry -> now - entry.getValue().verifiedAtNanos() > PINNED_DNS_TTL_NANOS);
+            if (VERIFIED_PUBLIC_HOSTS.size() >= MAX_PINNED_HOSTS) {
+                // 只淘汰最旧的一条：全量 clear 会让刚通过校验的目标域名失去钉死地址，
+                // 建立连接时回退到二次 DNS 解析，给 DNS 重绑定留下窗口。
+                evictOldestPinnedHost();
+            }
         }
         VERIFIED_PUBLIC_HOSTS.put(
                 host.toLowerCase(Locale.ROOT),
                 new PinnedAddresses(addresses.clone(), System.nanoTime()));
+    }
+
+    private static void evictOldestPinnedHost() {
+        String oldestHost = null;
+        long oldestVerifiedAt = Long.MAX_VALUE;
+        for (Map.Entry<String, PinnedAddresses> entry : VERIFIED_PUBLIC_HOSTS.entrySet()) {
+            long verifiedAt = entry.getValue().verifiedAtNanos();
+            if (verifiedAt < oldestVerifiedAt) {
+                oldestVerifiedAt = verifiedAt;
+                oldestHost = entry.getKey();
+            }
+        }
+        if (oldestHost != null) {
+            VERIFIED_PUBLIC_HOSTS.remove(oldestHost);
+        }
     }
 
     private record PinnedAddresses(InetAddress[] addresses, long verifiedAtNanos) {

@@ -46,7 +46,7 @@ class NotificationTypeApi {
     required bool enabled,
   }) async {
     final response = await _client.dio.put<Map<String, dynamic>>(
-      '/notification-types/$id',
+      '/notification-types/${Uri.encodeComponent(id)}',
       data: {'enabled': enabled},
     );
     final data = response.data;

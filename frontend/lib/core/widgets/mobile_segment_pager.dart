@@ -78,6 +78,17 @@ class _MobileSegmentPagerState<T> extends State<MobileSegmentPager<T>> {
   @override
   void didUpdateWidget(covariant MobileSegmentPager<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      if (widget.controller != null) {
+        // 宿主接管分页：回收内建控制器，避免悬空引用与泄漏。
+        _ownedController?.dispose();
+        _ownedController = null;
+      } else {
+        _ownedController = PageController(initialPage: _targetIndex);
+      }
+      _lastReported = _targetIndex;
+      return;
+    }
     final target = _targetIndex;
     if (_lastReported == target) {
       // 落页由本组件发起，调用方只是把同一个值回灌：不再动画，避免回声。
@@ -90,10 +101,15 @@ class _MobileSegmentPagerState<T> extends State<MobileSegmentPager<T>> {
     if ((_controller.page ?? target.toDouble()).round() == target) {
       return;
     }
+    if (MotionToken.prefersReduced(context)) {
+      // 零时长会违反 animateToPage 的 duration > 0 契约；减弱动效直接落页。
+      _controller.jumpToPage(target);
+      return;
+    }
     _controller.animateToPage(
       target,
-      duration: MotionToken.reduced(context, const Duration(milliseconds: 280)),
-      curve: Curves.easeOutCubic,
+      duration: MotionToken.normal,
+      curve: MotionToken.curve,
     );
   }
 

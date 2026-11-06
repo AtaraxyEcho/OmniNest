@@ -2957,7 +2957,7 @@
       "count": {}
     }
   },
-  "readerWordCountWan": "{count} 万",
+  "readerWordCountWan": "{count} × 10,000 words",
   "@readerWordCountWan": {
     "placeholders": {
       "count": {}
