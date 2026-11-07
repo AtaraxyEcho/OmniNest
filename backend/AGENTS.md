@@ -22,17 +22,20 @@ omninest-common          纯领域契约、端口接口、通用异常与工具�
 
 ```bash
 # 1. 运行单个单元测试类（日常修改迭代首选，秒级反馈）
+#    只带 -pl 时会复用本地仓库里被依赖模块的 SNAPSHOT；刚改过被依赖模块时追加 -am
 mvn test -pl <module-name> -Dtest=<TestClassName>
 
 # 2. 运行全部后端架构棘轮与边界测试（修改依赖、行数、事务、SQL、出网、配置后必跑）
-mvn test -pl omninest-app -Dtest="*Architecture*Test,*Boundary*Test,*Registry*Test,*Wiring*Test,*Consistency*Test,FlywayMigrationLayoutTest"
+mvn test -pl omninest-app -am -Dtest="*Architecture*Test,*Boundary*Test,*Registry*Test,*Wiring*Test,*Consistency*Test,FlywayMigrationLayoutTest" -Dsurefire.failIfNoSpecifiedTests=false
 
 # 3. 运行指定模块的完整单元测试套件
 mvn test -pl omninest-file
 
 # 4. 运行基于 Testcontainers 的真实 PostgreSQL 迁移与账本集成测试（需 Docker 环境）
-mvn test -pl omninest-app -Dtest="*MigrationTest,SharedSpaceLedgerIT,AuditQueryContractIT"
+mvn test -pl omninest-app -am -Dtest="*MigrationTest,SharedSpaceLedgerIT,AuditQueryContractIT" -Dsurefire.failIfNoSpecifiedTests=false
 ```
+
+- **`-am` 与 `-Dsurefire.failIfNoSpecifiedTests=false` 是一对**：`-pl` 单独执行时，测试编译会引用本地仓库里的旧 SNAPSHOT，被依赖模块改了方法签名就会报「找不到适合的方法」（源码其实一致）；`-am` 让 reactor 用当前源码重建依赖，而它带来的副作用是上游模块「没有匹配用例」，用该开关忽略即可。两条缺一都会得到与本次改动无关的失败。
 
 ## 3. 后端架构棘轮红线（触发即挂 CI）
 

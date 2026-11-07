@@ -27,11 +27,14 @@ deploy/vision-sidecar/   Python 图像分析侧车服务与容器定义
 
 ```bash
 # 后端架构棘轮与迁移基线快速校验（无需改动工作目录）
-mvn -f backend/pom.xml test -pl omninest-app -Dtest="*Architecture*Test,*Boundary*Test,*Registry*Test,*Wiring*Test,*Consistency*Test,FlywayMigrationLayoutTest"
+mvn -f backend/pom.xml test -pl omninest-app -am -Dtest="*Architecture*Test,*Boundary*Test,*Registry*Test,*Wiring*Test,*Consistency*Test,FlywayMigrationLayoutTest" -Dsurefire.failIfNoSpecifiedTests=false
 
-# 前端架构棘轮与部署模板契约快速校验
-flutter test --directory=frontend test/architecture/
+# 前端架构棘轮与部署模板契约快速校验（子 shell 切目录，不改动当前工作目录）
+( cd frontend && flutter test test/architecture/ )
 ```
+
+- **前端命令用子 shell 切目录**：`flutter test` 没有 `--directory` 参数（写了会直接报 `Could not find an option named "--directory"`），且必须在含 `pubspec.yaml` 的目录下运行。
+- **架构棘轮命令的 `-am` 与 `failIfNoSpecifiedTests` 不能省**：只写 `-pl omninest-app` 时会用本地仓库里的旧 SNAPSHOT 编译测试，被依赖模块改了方法签名就报「找不到适合的方法」，与被审代码无关；`-am` 让 reactor 用当前源码重建依赖，配套的 `-Dsurefire.failIfNoSpecifiedTests=false` 用于忽略上游模块「没有匹配用例」这一正常情况。看到「测试编译失败但源码明显一致」时先怀疑缺 `-am`，不要改源码迁就。
 
 - **唯一 Git 仓库与工具桥接**：根目录是唯一 Git 仓库（严禁创建嵌套 `.git` 或 submodule）；同时也是唯一 AI 规则源（严禁另建独立内容的 `.cursorrules` 或 `CLAUDE.md`，如需兼容旧版工具仅允许软链接或单行 `@AGENTS.md` 引用）。
 - **按需提交原则**：仅在完成代码修改任务且用户未要求暂缓提交时，在根仓库创建 commit（默认不 push）；纯代码审查、方案设计或排障咨询任务严禁擅自创建 commit。Windows 环境优先使用 Git Bash。
