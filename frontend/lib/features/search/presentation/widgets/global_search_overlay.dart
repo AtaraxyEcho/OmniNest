@@ -19,12 +19,12 @@ import 'package:omninest/features/portal/application/portal_dashboard_providers.
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/domain/reader_dashboard.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
+import 'package:omninest/features/search/application/search_history_store.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
 import 'package:omninest/features/search/presentation/theme/search_overlay_colors.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 part 'global_search_overlay_panels.dart';
 
@@ -120,8 +120,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     // 存储键要跨异步边界使用，必须在 await 之前取好：getter 内的 ref.read
     // 若排在 await 之后，面板已关闭时就会命中已卸载的 Widget。
     final storageKey = _recentQueriesKey;
-    final preferences = await SharedPreferences.getInstance();
-    final saved = preferences.getStringList(storageKey) ?? const [];
+    // store 在 await 之前取好：面板关闭后回包时不能再碰 ref。
+    final store = ref.read(searchHistoryStoreProvider);
+    final saved = await store.load(storageKey);
     if (!mounted) {
       return;
     }
@@ -158,6 +159,8 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     // 命中跳转先记历史再 pop 本面板，写盘回调可能落在卸载之后：
     // 存储键与待写列表都在 pop 前定格，回调只碰 SharedPreferences，不碰 ref/context。
     final storageKey = _recentQueriesKey;
+    // 与上面同理：写盘回调可能落在卸载之后，store 必须在 pop 前取出。
+    final store = ref.read(searchHistoryStoreProvider);
     _recentQueries
       ..remove(q)
       ..insert(0, q);
@@ -165,17 +168,17 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       _recentQueries.removeRange(8, _recentQueries.length);
     }
     unawaited(
-      _persistRecentQueries(storageKey, List<String>.from(_recentQueries)),
+      _persistRecentQueries(store, storageKey, List<String>.from(_recentQueries)),
     );
   }
 
   Future<void> _persistRecentQueries(
+    SearchHistoryStore store,
     String storageKey,
     List<String> snapshot,
   ) async {
     try {
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setStringList(storageKey, snapshot);
+      await store.save(storageKey, snapshot);
     } on Exception catch (error) {
       devLog('搜索历史写入失败: ${error.runtimeType}');
     }

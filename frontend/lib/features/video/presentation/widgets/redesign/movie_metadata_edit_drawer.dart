@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/features/video/application/movie_metadata_commands.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
@@ -147,7 +148,7 @@ class _MovieMetadataEditPanelState
     setState(() => _saving = true);
     try {
       await ref
-          .read(movieApiProvider)
+          .read(movieMetadataCommandsProvider)
           .updateMetadata(
             videoItemId: item.id,
             title: title,

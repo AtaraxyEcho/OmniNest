@@ -229,7 +229,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
   Future<_PdfRestoreTarget> _resolveRestoreTarget() async {
     ReaderProgress? serverProgress;
     try {
-      final detail = await ref.read(readerApiProvider).detail(widget.itemId);
+      final detail = await ref.read(
+        readerItemDetailProvider(widget.itemId).future,
+      );
       serverProgress = detail.progress;
     } on Exception {
       serverProgress = null;

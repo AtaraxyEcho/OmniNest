@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/version/app_version_controller.dart';
 import 'package:omninest/core/version/app_version_api.dart';
 import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -84,8 +85,7 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
       _result = null;
     });
     try {
-      final api = ref.read(appVersionApiProvider);
-      final info = await api.version();
+      final info = await ref.read(appVersionControllerProvider).checkForUpdate();
       if (mounted) {
         setState(() => _result = info);
       }

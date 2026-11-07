@@ -352,12 +352,9 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
 
   Future<void> _playTrackById(String trackId) async {
     final l10n = AppLocalizations.of(context);
-    MusicTrack? track;
-    try {
-      track = await ref.read(musicApiProvider).trackDetail(trackId);
-    } on Exception {
-      track = null;
-    }
+    final track = await ref
+        .read(musicHistoryControllerProvider.notifier)
+        .trackDetail(trackId);
     if (!mounted) {
       return;
     }

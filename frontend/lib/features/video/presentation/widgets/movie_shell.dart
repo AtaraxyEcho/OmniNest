@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:omninest/features/video/application/media_import_task_waiter.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -23,7 +24,6 @@ import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
@@ -406,18 +406,14 @@ class MovieTopBar extends StatelessWidget {
                   'm2ts',
                 ],
                 onImportCompleteWithResult: (result) async {
-                  final taskApi = ref.read(taskApiProvider);
+                  final taskWaiter = ref.read(mediaImportTaskWaiterProvider);
                   for (final file in result.imported) {
                     final taskId = file.mediaAutoImportTaskId;
                     if (taskId == null || taskId.isEmpty) {
                       continue;
                     }
                     try {
-                      await taskApi.waitForTerminal(
-                        taskId,
-                        timeout: const Duration(minutes: 2),
-                        interval: const Duration(seconds: 2),
-                      );
+                      await taskWaiter.waitForTerminal(taskId);
                     } on Object catch (error) {
                       // 轮询异常不阻断上传结果，但结果未确认需要用户可感知。
                       if (context.mounted) {

@@ -423,18 +423,14 @@ class _MovieMobileTopBar extends StatelessWidget {
                   'm2ts',
                 ],
                 onImportCompleteWithResult: (result) async {
-                  final taskApi = ref.read(taskApiProvider);
+                  final taskWaiter = ref.read(mediaImportTaskWaiterProvider);
                   for (final file in result.imported) {
                     final taskId = file.mediaAutoImportTaskId;
                     if (taskId == null || taskId.isEmpty) {
                       continue;
                     }
                     try {
-                      await taskApi.waitForTerminal(
-                        taskId,
-                        timeout: const Duration(minutes: 2),
-                        interval: const Duration(seconds: 2),
-                      );
+                      await taskWaiter.waitForTerminal(taskId);
                     } on Object catch (error) {
                       // 轮询异常不阻断上传结果，但结果未确认需要用户可感知。
                       if (context.mounted) {

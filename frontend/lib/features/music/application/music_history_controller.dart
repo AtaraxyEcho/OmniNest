@@ -94,6 +94,18 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
     }
   }
 
+  /// 按 id 取曲目详情。
+  ///
+  /// 历史行只存播放快照，点播前需要一次完整详情；失败按不可播放处理，
+  /// 由页面给出提示，不把异常抛进 UI 的事件回调。
+  Future<MusicTrack?> trackDetail(String trackId) async {
+    try {
+      return await _api().trackDetail(trackId);
+    } on Exception {
+      return null;
+    }
+  }
+
   Future<void> loadMore() async {
     final current = state.asData?.value;
     if (current == null || !current.hasMore || current.loadingMore) {

@@ -13,17 +13,6 @@ const _allowedViolations = <String>{
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/portal_mobile_shell.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
   // Portal 阅读进度卡与 hosted 内容复用阅读模块认证封面组件。
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/reading_progress_widget.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_two_factor_card.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/reader/presentation/pages/pdf_reader_page.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/redesign/movie_metadata_edit_drawer.dart',
-  // presentation 直连 Data 层 API/本地存储的存量债（缺陷报告 FUNC-M04）：
-  // 只能随各页接入 application controller 逐条消除，修复后必须从本清单移除。
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/music/presentation/pages/music_history_page.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_mobile_content.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_support_panels.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/search/presentation/widgets/global_search_overlay.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/movie_shell.dart',
-  'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/movie_shell_mobile.dart',
 };
 const _maxProductionSourceLines = 1200;
 

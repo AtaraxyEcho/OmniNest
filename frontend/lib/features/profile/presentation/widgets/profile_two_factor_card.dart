@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/features/profile/application/two_factor_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_models.dart';
@@ -16,7 +16,7 @@ import 'package:omninest/core/feedback/omni_feedback.dart';
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>((ref) {
       ref.watch(sessionEpochProvider);
-      return ref.watch(meApiProvider).twoFactorStatus();
+      return ref.watch(twoFactorControllerProvider).status();
     });
 
 /// 个人资料安全分区的两步验证管理行：状态展示、自助开启向导、密码复核关闭。
@@ -333,8 +333,8 @@ class _TwoFactorEnableDialogState
   Future<void> _submitPassword() async {
     await _run(() async {
       _setup = await ref
-          .read(meApiProvider)
-          .twoFactorSetup(password: _passwordController.text);
+          .read(twoFactorControllerProvider)
+          .setup(password: _passwordController.text);
       if (!mounted) {
         return;
       }
@@ -345,8 +345,8 @@ class _TwoFactorEnableDialogState
   Future<void> _submitCode() async {
     await _run(() async {
       _codes = await ref
-          .read(meApiProvider)
-          .twoFactorEnable(code: _codeController.text.trim());
+          .read(twoFactorControllerProvider)
+          .enable(code: _codeController.text.trim());
       if (!mounted) {
         return;
       }
@@ -496,8 +496,8 @@ class _TwoFactorDisableDialogState
     });
     try {
       await ref
-          .read(meApiProvider)
-          .twoFactorDisable(
+          .read(twoFactorControllerProvider)
+          .disable(
             password: _passwordController.text,
             code: _codeController.text,
           );
