@@ -6,7 +6,7 @@ const sourceLineCaps = <String, int>{
   'lib/app/theme/mobile_env_palette.dart': 811,
   'lib/core/widgets/mobile_sample_kit.dart': 847,
   'lib/features/admin/presentation/pages/admin_operations_logs_center.dart':
-      921,
+      913,
   'lib/features/admin/presentation/pages/admin_users_page.dart': 910,
   'lib/features/admin/presentation/widgets/admin_shell.dart': 825,
   'lib/features/backdrop/presentation/app_backdrop_settings_panel.dart': 839,

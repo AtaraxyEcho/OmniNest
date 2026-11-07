@@ -612,7 +612,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'AQI ${w.aqi} · ${w.aqiCategory} · PM2.5 ${w.pm2p5} μg/m³',
+                'AQI ${w.aqiDisplay} · ${w.aqiCategory} · PM2.5 ${w.pm25Display} μg/m³',
                 style: TextStyle(
                   fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w600,
@@ -891,7 +891,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
       _MetricCell(
         icon: Icons.wb_sunny_outlined,
         label: l10n.portalWeatherUV,
-        value: 'UV ${w.uvIndex}',
+        value: 'UV ${w.uvDisplay}',
         trailing: _buildUvBar(w.uvIndex),
       ),
       _MetricCell(

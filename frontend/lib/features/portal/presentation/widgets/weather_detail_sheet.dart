@@ -564,7 +564,7 @@ class _WeatherMetrics extends StatelessWidget {
       ),
       (
         l10n.weatherMetricAirQuality,
-        '${weather.aqi}',
+        weather.aqiDisplay,
         weather.aqiCategory,
         true,
       ),

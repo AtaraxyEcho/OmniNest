@@ -3945,6 +3945,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminLoginFailed => '失败';
 
   @override
+  String get adminLoginPendingTwoFactor => '待完成两步验证';
+
+  @override
   String get adminFilterAction => '操作类型';
 
   @override
@@ -11377,6 +11380,99 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorDownloadPermissionRequired => '该文件需要共享空间的下载权限';
+
+  @override
+  String get errorParamError => '请求参数不合法';
+
+  @override
+  String get errorBadRequest => '请求无法处理';
+
+  @override
+  String get errorRateLimited => '请求过于频繁，请稍后重试';
+
+  @override
+  String get errorDependencyUnavailable => '依赖服务不可用，请稍后重试';
+
+  @override
+  String get errorRegistrationDisabled => '当前服务器未开放注册';
+
+  @override
+  String get errorInternalError => '服务器内部错误，请稍后重试';
+
+  @override
+  String get errorTaskStatusIllegal => '任务当前状态不允许该操作';
+
+  @override
+  String get errorTaskAlreadyCompleted => '任务已完成，无法重复操作';
+
+  @override
+  String get errorTaskDependencyNotReady => '依赖任务尚未完成';
+
+  @override
+  String get errorConfigNotFound => '配置项不存在';
+
+  @override
+  String get errorConfigValueInvalid => '配置值不合法';
+
+  @override
+  String get errorFileUploadFailed => '文件上传失败，请重试';
+
+  @override
+  String get errorFileSizeExceeded => '文件大小超过限制';
+
+  @override
+  String get errorFileQuotaExceeded => '存储配额不足';
+
+  @override
+  String get errorFilePathInvalid => '文件路径不合法';
+
+  @override
+  String get errorFileObjectMissing => '文件内容缺失';
+
+  @override
+  String get errorFileSecurityRejected => '文件未通过安全扫描';
+
+  @override
+  String get errorMediaTranscodeFailed => '媒体转码失败';
+
+  @override
+  String get errorMusicRecommendationUnavailable => '推荐内容暂不可用';
+
+  @override
+  String get errorMediaFormatUnsupported => '不支持该媒体格式';
+
+  @override
+  String get errorReadingProgressInvalid => '阅读进度无效';
+
+  @override
+  String get errorChapterTextUnavailable => '章节内容不可用';
+
+  @override
+  String get errorBackdropUnsupportedFormat => '不支持该壁纸格式';
+
+  @override
+  String get errorBackdropQuotaExceeded => '壁纸配额已满';
+
+  @override
+  String get errorBackdropFileTooLarge => '壁纸文件过大';
+
+  @override
+  String get errorBackdropScanUnavailable => '安全扫描暂不可用，请稍后重试';
+
+  @override
+  String get errorBackdropMalwareDetected => '检测到恶意文件，已拒绝上传';
+
+  @override
+  String get errorBackdropScanFailed => '安全扫描未通过，已拒绝上传';
+
+  @override
+  String get errorTwoFactorInvalidCode => '验证码不正确';
+
+  @override
+  String get errorTwoFactorNotConfigured => '尚未开启两步验证';
+
+  @override
+  String get errorTwoFactorAlreadyEnabled => '两步验证已开启';
 
   @override
   String get filesOpListVersions => '查看版本';

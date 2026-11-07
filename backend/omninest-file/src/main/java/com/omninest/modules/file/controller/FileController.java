@@ -118,6 +118,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 100);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileQueryService.listFilesPage(ownerUserId, parentId, category, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -153,6 +154,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         SpaceType type;
         try {
@@ -175,6 +177,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileManagerService.listRecentFiles(ownerUserId, page, size));
     }
@@ -186,6 +189,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileFavoriteService.listFavoriteFilesPage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -477,6 +481,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileShareService.listSharedWithMePage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -495,6 +500,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 50);
         UUID userId = currentUserContext.requireCurrentUserId();
         Page<FileShareChildDto> items = fileShareAccessService.shareChildrenForRecipient(
                 userId, shareId, parentId, page, size);
@@ -509,6 +515,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileShareService.listMySharesPage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -555,6 +562,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 50);
         var items = fileShareService.listAllSharesPage(currentUserContext.requireCurrentUserId(), page, size);
         return ApiResponse.success(PageResponse.of(
                 items.getContent(),
@@ -607,6 +615,7 @@ public class FileController {
             @RequestParam(defaultValue = "50") int size,
             HttpServletRequest request
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 50);
         Page<FileShareChildDto> items = fileShareAccessService.shareChildrenSession(
                 token, sessionToken, resolveClientIp(request), parentId, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -650,6 +659,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileUploadQueueService.listUploadQueue(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
@@ -734,6 +744,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
     ) {
+        size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 200);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = externalStorageAccountService.listExternalAccounts(ownerUserId);
         return ApiResponse.success(PageClamps.pagedResponse(items, page, size));

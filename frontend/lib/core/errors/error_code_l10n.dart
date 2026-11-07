@@ -63,13 +63,81 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorBookDownloadTimeout;
       case 'READER_BOOK_DOWNLOAD_FAILED':
         return errorBookDownloadFailed;
+      // 常见业务码：登录、上传、任务、配置、媒体与壁纸的高频失败原因。
+      case 'PARAM_ERROR':
+        return errorParamError;
+      case 'BAD_REQUEST':
+        return errorBadRequest;
+      case 'RATE_LIMITED':
+        return errorRateLimited;
+      case 'DEPENDENCY_UNAVAILABLE':
+        return errorDependencyUnavailable;
+      case 'REGISTRATION_DISABLED':
+        return errorRegistrationDisabled;
+      case 'INTERNAL_ERROR':
+        return errorInternalError;
+      case 'TASK_STATUS_ILLEGAL':
+        return errorTaskStatusIllegal;
+      case 'TASK_ALREADY_COMPLETED':
+        return errorTaskAlreadyCompleted;
+      case 'TASK_DEPENDENCY_NOT_READY':
+        return errorTaskDependencyNotReady;
+      case 'CONFIG_NOT_FOUND':
+        return errorConfigNotFound;
+      case 'CONFIG_VALUE_INVALID':
+        return errorConfigValueInvalid;
+      case 'FILE_UPLOAD_FAILED':
+        return errorFileUploadFailed;
+      case 'FILE_SIZE_EXCEEDED':
+        return errorFileSizeExceeded;
+      case 'FILE_QUOTA_EXCEEDED':
+        return errorFileQuotaExceeded;
+      case 'FILE_PATH_INVALID':
+        return errorFilePathInvalid;
+      case 'FILE_OBJECT_MISSING':
+        return errorFileObjectMissing;
+      case 'FILE_SECURITY_REJECTED':
+        return errorFileSecurityRejected;
+      case 'MEDIA_TRANSCODE_FAILED':
+        return errorMediaTranscodeFailed;
+      case 'MUSIC_RECOMMENDATION_UNAVAILABLE':
+        return errorMusicRecommendationUnavailable;
+      case 'MEDIA_FORMAT_UNSUPPORTED':
+        return errorMediaFormatUnsupported;
+      case 'READING_PROGRESS_INVALID':
+        return errorReadingProgressInvalid;
+      case 'CHAPTER_TEXT_UNAVAILABLE':
+        return errorChapterTextUnavailable;
+      case 'BACKDROP_UNSUPPORTED_FORMAT':
+        return errorBackdropUnsupportedFormat;
+      case 'BACKDROP_QUOTA_EXCEEDED':
+        return errorBackdropQuotaExceeded;
+      case 'BACKDROP_FILE_TOO_LARGE':
+        return errorBackdropFileTooLarge;
+      case 'BACKDROP_SCAN_UNAVAILABLE':
+        return errorBackdropScanUnavailable;
+      case 'BACKDROP_MALWARE_DETECTED':
+        return errorBackdropMalwareDetected;
+      case 'BACKDROP_SCAN_FAILED':
+        return errorBackdropScanFailed;
+      case 'TWO_FACTOR_INVALID_CODE':
+        return errorTwoFactorInvalidCode;
+      case 'TWO_FACTOR_NOT_CONFIGURED':
+        return errorTwoFactorNotConfigured;
+      case 'TWO_FACTOR_ALREADY_ENABLED':
+        return errorTwoFactorAlreadyEnabled;
       default:
         final resumableMessage = _resumableFailureMessage(code);
         if (resumableMessage != null) {
           return resumableMessage;
         }
-        return (fallback != null && fallback.isNotEmpty)
-            ? fallback
+        // 服务端 message 只有中文一种语言：中文界面回退它比通用文案更具体，
+        // 其它语言回退只会把中文漏进界面，宁可显示通用失败文案。
+        final localizedFallback = fallback;
+        return localeName.startsWith('zh') &&
+                localizedFallback != null &&
+                localizedFallback.isNotEmpty
+            ? localizedFallback
             : errorOperationFailed;
     }
   }

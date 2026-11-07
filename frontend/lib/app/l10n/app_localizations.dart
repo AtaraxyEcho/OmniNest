@@ -7507,6 +7507,12 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get adminLoginFailed;
 
+  /// No description provided for @adminLoginPendingTwoFactor.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending 2FA'**
+  String get adminLoginPendingTwoFactor;
+
   /// No description provided for @adminFilterAction.
   ///
   /// In en, this message translates to:
@@ -21351,6 +21357,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloading this file requires the download permission in the shared space'**
   String get errorDownloadPermissionRequired;
+
+  /// No description provided for @errorParamError.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid request parameters'**
+  String get errorParamError;
+
+  /// No description provided for @errorBadRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be processed'**
+  String get errorBadRequest;
+
+  /// No description provided for @errorRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Please try again later'**
+  String get errorRateLimited;
+
+  /// No description provided for @errorDependencyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A required service is unavailable. Please try again later'**
+  String get errorDependencyUnavailable;
+
+  /// No description provided for @errorRegistrationDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration is disabled on this server'**
+  String get errorRegistrationDisabled;
+
+  /// No description provided for @errorInternalError.
+  ///
+  /// In en, this message translates to:
+  /// **'Server error. Please try again later'**
+  String get errorInternalError;
+
+  /// No description provided for @errorTaskStatusIllegal.
+  ///
+  /// In en, this message translates to:
+  /// **'This task cannot be changed in its current state'**
+  String get errorTaskStatusIllegal;
+
+  /// No description provided for @errorTaskAlreadyCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This task is already finished'**
+  String get errorTaskAlreadyCompleted;
+
+  /// No description provided for @errorTaskDependencyNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'A dependent task has not finished yet'**
+  String get errorTaskDependencyNotReady;
+
+  /// No description provided for @errorConfigNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration item not found'**
+  String get errorConfigNotFound;
+
+  /// No description provided for @errorConfigValueInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid configuration value'**
+  String get errorConfigValueInvalid;
+
+  /// No description provided for @errorFileUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Please try again'**
+  String get errorFileUploadFailed;
+
+  /// No description provided for @errorFileSizeExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is larger than the allowed limit'**
+  String get errorFileSizeExceeded;
+
+  /// No description provided for @errorFileQuotaExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough storage quota'**
+  String get errorFileQuotaExceeded;
+
+  /// No description provided for @errorFilePathInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid file path'**
+  String get errorFilePathInvalid;
+
+  /// No description provided for @errorFileObjectMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The file content is missing'**
+  String get errorFileObjectMissing;
+
+  /// No description provided for @errorFileSecurityRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The file did not pass the security scan'**
+  String get errorFileSecurityRejected;
+
+  /// No description provided for @errorMediaTranscodeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Media conversion failed'**
+  String get errorMediaTranscodeFailed;
+
+  /// No description provided for @errorMusicRecommendationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommendations are temporarily unavailable'**
+  String get errorMusicRecommendationUnavailable;
+
+  /// No description provided for @errorMediaFormatUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This media format is not supported'**
+  String get errorMediaFormatUnsupported;
+
+  /// No description provided for @errorReadingProgressInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading progress could not be saved'**
+  String get errorReadingProgressInvalid;
+
+  /// No description provided for @errorChapterTextUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter text is unavailable'**
+  String get errorChapterTextUnavailable;
+
+  /// No description provided for @errorBackdropUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported wallpaper format'**
+  String get errorBackdropUnsupportedFormat;
+
+  /// No description provided for @errorBackdropQuotaExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper storage quota is full'**
+  String get errorBackdropQuotaExceeded;
+
+  /// No description provided for @errorBackdropFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The wallpaper file is too large'**
+  String get errorBackdropFileTooLarge;
+
+  /// No description provided for @errorBackdropScanUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Security scan is unavailable. Please try again later'**
+  String get errorBackdropScanUnavailable;
+
+  /// No description provided for @errorBackdropMalwareDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'Malware detected, upload rejected'**
+  String get errorBackdropMalwareDetected;
+
+  /// No description provided for @errorBackdropScanFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The security scan failed, upload rejected'**
+  String get errorBackdropScanFailed;
+
+  /// No description provided for @errorTwoFactorInvalidCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect verification code'**
+  String get errorTwoFactorInvalidCode;
+
+  /// No description provided for @errorTwoFactorNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor verification is not set up yet'**
+  String get errorTwoFactorNotConfigured;
+
+  /// No description provided for @errorTwoFactorAlreadyEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor verification is already enabled'**
+  String get errorTwoFactorAlreadyEnabled;
 
   /// No description provided for @filesOpListVersions.
   ///

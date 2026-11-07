@@ -62,6 +62,8 @@ public class AuthService {
     public static final String CHALLENGE_TYPE_VERIFY = "verify";
     public static final String CHALLENGE_TYPE_ENROLL = "enroll";
     private static final Duration TWO_FACTOR_CHALLENGE_TTL = Duration.ofMinutes(5);
+    /** 登录挑战与两步验证引导的失效文案：与刷新令牌失效区分，避免误导用户去重登。 */
+    private static final String CHALLENGE_INVALID = "登录凭证已失效，请重新登录";
     /** 不存在的用户也执行一次同强度 BCrypt，消除用户名枚举的响应时间差。 */
     private static final String DUMMY_PASSWORD_HASH =
             "$2a$12$/cjZ3pCwj52WIu8AMPS.CerPeJL5LZfZz/tNsDY/ZXBpkEKbni0oO";
@@ -120,7 +122,12 @@ public class AuthService {
             ));
         });
         if (outcome == null || outcome.session() == null) {
-            UUID userId = outcome == null ? prepared.getId() : outcome.profile().getId();
+            AuthUser pending = outcome == null ? prepared : outcome.profile();
+            UUID userId = pending.getId();
+            // 账号已写库并分配角色，只是未签发令牌。审计必须留痕，否则管理员在
+            // 登录审计里看不到"该账号注册后停在 2FA 引导"这一状态。
+            auditLogin(pending, pending.getUsername(), clientPlatform, deviceId, deviceName,
+                    ipAddress, userAgent, "CHALLENGE", "注册后待完成两步验证");
             log.info("注册命中强制两步验证，返回注册引导挑战: userId={}", userId);
             return buildChallengeResponse(userId, CHALLENGE_TYPE_ENROLL);
         }
@@ -184,7 +191,7 @@ public class AuthService {
             String userAgent
     ) {
         Jwt challengeJwt = decodeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
-        UUID userId = parseUserId(challengeJwt.getSubject());
+        UUID userId = parseUserId(challengeJwt.getSubject(), CHALLENGE_INVALID);
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-login", 5, Duration.ofMinutes(1));
         AuthUser profile = loadActiveUserWithRoles(userId);
         String jti = challengeJwt.getClaimAsString("jti");
@@ -239,7 +246,7 @@ public class AuthService {
         // 重放同一挑战令牌再次重置待绑定密钥。
         reserveChallengeToken(jti);
         releaseChallengeToken(jti);
-        UUID userId = parseUserId(challengeJwt.getSubject());
+        UUID userId = parseUserId(challengeJwt.getSubject(), CHALLENGE_INVALID);
         if (twoFactorService.isEnabled(userId)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证已完成绑定，引导令牌已失效");
         }
@@ -257,7 +264,7 @@ public class AuthService {
     @Transactional(rollbackFor = Exception.class)
     public TwoFactorBootstrapEnableResponse bootstrapTwoFactorEnable(String challengeToken, String code) {
         Jwt challengeJwt = decodeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
-        UUID userId = parseUserId(challengeJwt.getSubject());
+        UUID userId = parseUserId(challengeJwt.getSubject(), CHALLENGE_INVALID);
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-enable", 5, Duration.ofMinutes(1));
         String jti = challengeJwt.getClaimAsString("jti");
         // 与登录第二步同构：先占位再执行一次性写操作，失败时归还，
@@ -299,7 +306,7 @@ public class AuthService {
             String userAgent
     ) {
         Jwt challengeJwt = decodeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
-        UUID userId = parseUserId(challengeJwt.getSubject());
+        UUID userId = parseUserId(challengeJwt.getSubject(), CHALLENGE_INVALID);
         AuthUser profile = loadActiveUserWithRoles(userId);
         if (!twoFactorService.isEnabled(userId)) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置");
@@ -356,7 +363,8 @@ public class AuthService {
      * @return 用户标识
      */
     public UUID verifyChallengeToken(String rawToken, String expectedUse) {
-        return parseUserId(decodeChallengeToken(rawToken, expectedUse).getSubject());
+        return parseUserId(
+                decodeChallengeToken(rawToken, expectedUse).getSubject(), CHALLENGE_INVALID);
     }
 
     /**
@@ -374,7 +382,7 @@ public class AuthService {
                 "omninest:2fa:challenge:" + jti, 1, TWO_FACTOR_CHALLENGE_TTL)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证已使用，请重新发起");
         }
-        return parseUserId(jwt.getSubject());
+        return parseUserId(jwt.getSubject(), CHALLENGE_INVALID);
     }
 
     private Jwt decodeChallengeToken(String rawToken, String expectedUse) {
@@ -780,7 +788,7 @@ public class AuthService {
     private void enforceSamePlatformMutex(UUID userId, String clientPlatform, UUID newSessionId) {
         // 以数据库未撤销会话为准，而不是只信 Redis 注册表里的单条最新 sid：
         // Redis 淘汰/重启后仍可能有同一平台的多条旧会话，只吊销其中一条会让其余
-        // access token 在 TTL 内继续可用。逐条写入吊销缓存，再批量落库。
+        // access token 在 TTL 内继续可用。
         List<AuthActiveSession> existingSessions = activeSessionRepository
                 .findByUserIdAndClientPlatformAndRevokedAtIsNull(userId, clientPlatform)
                 .stream()
@@ -789,16 +797,21 @@ public class AuthService {
         if (existingSessions.isEmpty()) {
             return;
         }
-        for (AuthActiveSession session : existingSessions) {
-            sessionRevocationService.revokeSession(
-                    userId, session.getId(), authenticationTokenPolicy.refreshTokenTtl());
-        }
-        // 批量吊销是 @Modifying 更新，必须由事务承载；单独开短事务而不是复用调用方事务，
-        // 才不会和上面 REQUIRES_NEW 的逐条写入同时占住两个连接。
-        transactionTemplate.execute(status -> activeSessionRepository.revokeByUserAndPlatformExcluding(
-                userId, clientPlatform, newSessionId, "同平台新设备登录"));
+        List<UUID> staleSessionIds = existingSessions.stream()
+                .map(AuthActiveSession::getId)
+                .toList();
+        // 先批量写吊销缓存：旧令牌立刻失效，不必等数据库提交。
+        sessionRevocationService.publishRevocations(
+                userId, staleSessionIds, authenticationTokenPolicy.refreshTokenTtl());
+        // 再在一个短事务里落撤销记录并批量更新会话行。逐条 revokeSession 会让事务数随
+        // 旧会话数量线性增长，而这里所有写入本来就互不依赖，没有逐条提交的必要。
+        transactionTemplate.execute(status -> {
+            sessionRevocationService.recordRevocations(userId, staleSessionIds);
+            return activeSessionRepository.revokeByUserAndPlatformExcluding(
+                    userId, clientPlatform, newSessionId, "同平台新设备登录");
+        });
         log.info("同平台互斥: userId={}, platform={}, 已撤销会话数={}",
-                userId, clientPlatform, existingSessions.size());
+                userId, clientPlatform, staleSessionIds.size());
     }
 
     /**
@@ -885,10 +898,20 @@ public class AuthService {
     }
 
     private UUID parseUserId(String subject) {
+        return parseUserId(subject, "刷新凭证无效");
+    }
+
+    /**
+     * 解析令牌主体为用户标识。
+     *
+     * <p>失效文案由调用方给出：登录挑战、两步验证引导与刷新令牌是三条不同链路，
+     * 共用一条"刷新凭证无效"会让用户在 2FA 步骤收到无从判断下一步的提示。</p>
+     */
+    private UUID parseUserId(String subject, String invalidMessage) {
         try {
             return UUID.fromString(subject);
         } catch (RuntimeException ex) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证无效");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, invalidMessage);
         }
     }
 

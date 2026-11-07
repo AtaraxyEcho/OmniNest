@@ -22,6 +22,21 @@ part 'admin_list_pagination.dart';
 /// 状态标签语义色。
 enum AdminTagTone { success, warning, error, info, neutral }
 
+/// 登录审计结果的三态呈现。
+///
+/// 注册命中强制两步验证时账号已创建、令牌未签发：既不是一次成功登录，
+/// 也不是失败，单用成功/失败两态会把这类记录显示成红色失败。
+(String, AdminTagTone) adminLoginResultPresentation(
+  AppLocalizations l10n,
+  String loginResult,
+) {
+  return switch (loginResult) {
+    'SUCCESS' => (l10n.adminLoginSuccess, AdminTagTone.success),
+    'CHALLENGE' => (l10n.adminLoginPendingTwoFactor, AdminTagTone.warning),
+    _ => (l10n.adminLoginFailed, AdminTagTone.error),
+  };
+}
+
 /// 语义色对应的标签配色：前景取 Admin 主题扩展的语义基色，背景为
 /// 前景低透明底色，附同色描边，保证明暗两套主题下的可读性一致。
 extension AdminTagToneColor on AdminTagTone {

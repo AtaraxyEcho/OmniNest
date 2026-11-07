@@ -22,15 +22,32 @@ public final class PageClamps {
     }
 
     /**
-     * 按域上限夹取每页数量。
+     * 按域上限与该域默认页大小夹取每页数量。
+     *
+     * <p>{@code size} 非正表示客户端没有给出有效值，按调用方声明的域默认值处理。控制器同时
+     * 用 {@code defaultValue} 声明缺省值时，两处必须落到同一个数：否则同一个接口会出现
+     * "不传是 100 条、传 0 是 20 条"的两种默认。</p>
+     *
+     * @param size 请求每页数量
+     * @param maxSize 该域允许的最大每页数量，超过全局 {@link #MAX_SIZE} 时按全局上限
+     * @param defaultSize 该域默认每页数量
+     * @return 夹取后的每页数量
+     */
+    public static int safeSize(int size, int maxSize, int defaultSize) {
+        int limit = Math.min(Math.max(1, maxSize), MAX_SIZE);
+        int fallback = Math.min(Math.max(1, defaultSize), limit);
+        return Math.min(Math.max(1, size <= 0 ? fallback : size), limit);
+    }
+
+    /**
+     * 按域上限夹取每页数量；非正数按全局默认 {@link #DEFAULT_SIZE} 处理。
      *
      * @param size 请求每页数量
      * @param maxSize 该域允许的最大每页数量
      * @return 夹取后的每页数量
      */
     public static int safeSize(int size, int maxSize) {
-        int limit = Math.min(Math.max(1, maxSize), MAX_SIZE);
-        return Math.min(Math.max(1, size <= 0 ? DEFAULT_SIZE : size), limit);
+        return safeSize(size, maxSize, DEFAULT_SIZE);
     }
 
     public static int safeLimit(int limit, int defaultLimit) {

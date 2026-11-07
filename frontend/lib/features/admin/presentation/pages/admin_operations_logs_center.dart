@@ -362,9 +362,7 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
         for (final item in items)
           [
             item.username,
-            item.loginResult == 'SUCCESS'
-                ? l10n.adminLoginSuccess
-                : l10n.adminLoginFailed,
+            adminLoginResultPresentation(l10n, item.loginResult).$1,
             item.clientPlatform,
             item.ipAddress,
             item.failureReason ?? '',
@@ -707,17 +705,16 @@ class _LoginAuditLogTab extends StatelessWidget {
             emptyState: AdminListEmptyState(message: l10n.adminNoLoginLogs),
             rowCellsBuilder: (context, index) {
               final item = result.items[index];
-              final success = item.loginResult == 'SUCCESS';
+              final (resultLabel, resultTone) = adminLoginResultPresentation(
+                l10n,
+                item.loginResult,
+              );
               return [
                 AdminCellText(
                   item.username,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                AdminStatusTag(
-                  label:
-                      success ? l10n.adminLoginSuccess : l10n.adminLoginFailed,
-                  tone: success ? AdminTagTone.success : AdminTagTone.error,
-                ),
+                AdminStatusTag(label: resultLabel, tone: resultTone),
                 AdminCellText(item.clientPlatform),
                 AdminCellText(
                   _userAgentSummary(item.userAgent),

@@ -2,11 +2,9 @@ package com.omninest.modules.configcenter.service;
 
 import com.omninest.modules.configcenter.repository.ConfigHistoryRepository;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ConfigHistoryRetentionService {
-    private static final int CONFIG_KEY_PAGE_SIZE = 100;
 
     private final ConfigHistoryRepository configHistoryRepository;
 
@@ -34,60 +31,17 @@ public class ConfigHistoryRetentionService {
     public int deleteExpiredBatch(Instant cutoff, int minimumVersions, int batchSize) {
         int normalizedMinimumVersions = Math.max(1, Math.min(minimumVersions, 100));
         int normalizedBatchSize = Math.max(1, Math.min(batchSize, 5000));
-        List<UUID> candidateIds = new ArrayList<>(normalizedBatchSize);
-
-        for (int page = 0; candidateIds.size() < normalizedBatchSize; page++) {
-            List<String> configKeys = configHistoryRepository.findDistinctConfigKeysCreatedBefore(
-                    cutoff,
-                    PageRequest.of(page, CONFIG_KEY_PAGE_SIZE)
-            );
-            if (configKeys.isEmpty()) {
-                break;
-            }
-            collectCandidates(
-                    configKeys,
-                    cutoff,
-                    normalizedMinimumVersions,
-                    normalizedBatchSize,
-                    candidateIds
-            );
-            if (configKeys.size() < CONFIG_KEY_PAGE_SIZE) {
-                break;
-            }
-        }
-
+        // 一次取回整批候选：逐配置键"先查保护集、再查过期集"会让查询次数随键数量线性增长，
+        // 而分区排名本来就能在库内一次算完。
+        List<UUID> candidateIds = configHistoryRepository.findRetentionCandidateIds(
+                cutoff,
+                normalizedMinimumVersions,
+                normalizedBatchSize
+        );
         if (candidateIds.isEmpty()) {
             return 0;
         }
         configHistoryRepository.deleteAllByIdInBatch(candidateIds);
         return candidateIds.size();
-    }
-
-    private void collectCandidates(
-            List<String> configKeys,
-            Instant cutoff,
-            int minimumVersions,
-            int batchSize,
-            List<UUID> candidateIds
-    ) {
-        for (String configKey : configKeys) {
-            int remaining = batchSize - candidateIds.size();
-            if (remaining <= 0) {
-                return;
-            }
-            List<UUID> protectedIds = configHistoryRepository.findRecentIdsByConfigKey(
-                    configKey,
-                    PageRequest.of(0, minimumVersions)
-            );
-            if (protectedIds.isEmpty()) {
-                continue;
-            }
-            candidateIds.addAll(configHistoryRepository.findExpiredIdsExcluding(
-                    configKey,
-                    cutoff,
-                    protectedIds,
-                    PageRequest.of(0, remaining)
-            ));
-        }
     }
 }

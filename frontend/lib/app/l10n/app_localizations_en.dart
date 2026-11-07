@@ -4071,6 +4071,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLoginFailed => 'Failed';
 
   @override
+  String get adminLoginPendingTwoFactor => 'Pending 2FA';
+
+  @override
   String get adminFilterAction => 'Action';
 
   @override
@@ -11762,6 +11765,113 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get errorDownloadPermissionRequired =>
       'Downloading this file requires the download permission in the shared space';
+
+  @override
+  String get errorParamError => 'Invalid request parameters';
+
+  @override
+  String get errorBadRequest => 'The request could not be processed';
+
+  @override
+  String get errorRateLimited => 'Too many requests. Please try again later';
+
+  @override
+  String get errorDependencyUnavailable =>
+      'A required service is unavailable. Please try again later';
+
+  @override
+  String get errorRegistrationDisabled =>
+      'Registration is disabled on this server';
+
+  @override
+  String get errorInternalError => 'Server error. Please try again later';
+
+  @override
+  String get errorTaskStatusIllegal =>
+      'This task cannot be changed in its current state';
+
+  @override
+  String get errorTaskAlreadyCompleted => 'This task is already finished';
+
+  @override
+  String get errorTaskDependencyNotReady =>
+      'A dependent task has not finished yet';
+
+  @override
+  String get errorConfigNotFound => 'Configuration item not found';
+
+  @override
+  String get errorConfigValueInvalid => 'Invalid configuration value';
+
+  @override
+  String get errorFileUploadFailed => 'Upload failed. Please try again';
+
+  @override
+  String get errorFileSizeExceeded =>
+      'The file is larger than the allowed limit';
+
+  @override
+  String get errorFileQuotaExceeded => 'Not enough storage quota';
+
+  @override
+  String get errorFilePathInvalid => 'Invalid file path';
+
+  @override
+  String get errorFileObjectMissing => 'The file content is missing';
+
+  @override
+  String get errorFileSecurityRejected =>
+      'The file did not pass the security scan';
+
+  @override
+  String get errorMediaTranscodeFailed => 'Media conversion failed';
+
+  @override
+  String get errorMusicRecommendationUnavailable =>
+      'Recommendations are temporarily unavailable';
+
+  @override
+  String get errorMediaFormatUnsupported =>
+      'This media format is not supported';
+
+  @override
+  String get errorReadingProgressInvalid =>
+      'Reading progress could not be saved';
+
+  @override
+  String get errorChapterTextUnavailable => 'Chapter text is unavailable';
+
+  @override
+  String get errorBackdropUnsupportedFormat => 'Unsupported wallpaper format';
+
+  @override
+  String get errorBackdropQuotaExceeded => 'Wallpaper storage quota is full';
+
+  @override
+  String get errorBackdropFileTooLarge => 'The wallpaper file is too large';
+
+  @override
+  String get errorBackdropScanUnavailable =>
+      'Security scan is unavailable. Please try again later';
+
+  @override
+  String get errorBackdropMalwareDetected =>
+      'Malware detected, upload rejected';
+
+  @override
+  String get errorBackdropScanFailed =>
+      'The security scan failed, upload rejected';
+
+  @override
+  String get errorTwoFactorInvalidCode => 'Incorrect verification code';
+
+  @override
+  String get errorTwoFactorNotConfigured =>
+      'Two-factor verification is not set up yet';
+
+  @override
+  String get errorTwoFactorAlreadyEnabled =>
+      'Two-factor verification is already enabled';
 
   @override
   String get filesOpListVersions => 'View versions';

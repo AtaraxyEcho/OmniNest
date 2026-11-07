@@ -43,59 +43,36 @@ public interface ConfigHistoryRepository extends JpaRepository<ConfigHistory, UU
     List<ConfigHistory> findByConfigKeyIn(Collection<String> configKeys);
 
     /**
-     * 分页查询存在过期历史的配置键。
+     * 查询可清理的历史标识：每配置键保留最近 minimumVersions 个版本，其余早于 cutoff 的删除。
+     *
+     * <p>分区排名在库内一次算完，避免逐配置键查保护集再查过期集。只对存在过期记录的键排名，
+     * 使窗口函数的输入规模由"有历史需要清理的配置键"决定，而不是整张历史表。</p>
      *
      * @param cutoff 截止时间
-     * @param pageable 配置键分页参数
-     * @return 配置键列表
-     */
-    @Query("""
-            select distinct history.configKey from ConfigHistory history
-            where history.createdAt < :cutoff
-            order by history.configKey
-            """)
-    List<String> findDistinctConfigKeysCreatedBefore(
-            @Param("cutoff") Instant cutoff,
-            Pageable pageable
-    );
-
-    /**
-     * 查询配置键需要保留的最近历史标识。
-     *
-     * @param configKey 配置键
-     * @param pageable 最小保留版本边界
-     * @return 最近历史标识
-     */
-    @Query("""
-            select history.id from ConfigHistory history
-            where history.configKey = :configKey
-            order by history.createdAt desc, history.id desc
-            """)
-    List<UUID> findRecentIdsByConfigKey(
-            @Param("configKey") String configKey,
-            Pageable pageable
-    );
-
-    /**
-     * 查询过期且不在保护集合中的历史标识。
-     *
-     * @param configKey 配置键
-     * @param cutoff 截止时间
-     * @param protectedIds 受保护的最近历史标识
-     * @param pageable 删除批次边界
+     * @param minimumVersions 每个配置键保留的版本数
+     * @param batchSize 单批删除上限
      * @return 待删除历史标识
      */
-    @Query("""
-            select history.id from ConfigHistory history
-            where history.configKey = :configKey
-            and history.createdAt < :cutoff
-            and history.id not in :protectedIds
-            order by history.createdAt asc, history.id asc
-            """)
-    List<UUID> findExpiredIdsExcluding(
-            @Param("configKey") String configKey,
+    @Query(value = """
+            with expired_keys as (
+                select distinct config_key from omni.config_histories where created_at < :cutoff
+            ), ranked as (
+                select history.id, history.created_at,
+                       row_number() over (
+                           partition by history.config_key
+                           order by history.created_at desc, history.id desc
+                       ) as version_rank
+                from omni.config_histories history
+                where history.config_key in (select config_key from expired_keys)
+            )
+            select id from ranked
+            where version_rank > :minimumVersions and created_at < :cutoff
+            order by created_at asc, id asc
+            limit :batchSize
+            """, nativeQuery = true)
+    List<UUID> findRetentionCandidateIds(
             @Param("cutoff") Instant cutoff,
-            @Param("protectedIds") List<UUID> protectedIds,
-            Pageable pageable
+            @Param("minimumVersions") int minimumVersions,
+            @Param("batchSize") int batchSize
     );
 }

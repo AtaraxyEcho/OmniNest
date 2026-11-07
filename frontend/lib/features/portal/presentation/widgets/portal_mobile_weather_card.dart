@@ -220,7 +220,10 @@ class _WeatherContent extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  l10n.portalWeatherFeelsLike(weather.text, weather.feelsLike),
+                  l10n.portalWeatherFeelsLike(
+                    weather.text.isEmpty ? '--' : weather.text,
+                    weather.feelsLike,
+                  ),
                   style: labelStyle?.copyWith(color: detailColor),
                 ),
               ],
@@ -240,7 +243,7 @@ class _WeatherContent extends StatelessWidget {
               Icon(Icons.air, size: detailIconSize, color: aqiColor),
               const SizedBox(width: 6),
               Text(
-                'AQI ${weather.aqi} · PM2.5 ${weather.pm2p5} · ${weather.aqiCategory}',
+                'AQI ${weather.aqiDisplay} · PM2.5 ${weather.pm25Display} · ${weather.aqiCategory}',
                 style: TextStyle(
                   fontSize: AppTypography.bodySmall,
                   color: aqiColor,

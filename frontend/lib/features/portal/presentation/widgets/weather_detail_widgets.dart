@@ -11,7 +11,7 @@ class _TipData {
 }
 
 _TipData? _resolveTip(WeatherData w, AppLocalizations l10n) {
-  if (w.aqi > 100) {
+  if ((w.aqi ?? 0) > 100) {
     return _TipData(Icons.masks_outlined, l10n.portalWeatherTipMask);
   }
   final code = int.tryParse(w.icon) ?? 999;
@@ -21,7 +21,7 @@ _TipData? _resolveTip(WeatherData w, AppLocalizations l10n) {
   if (code >= 400 && code < 500) {
     return _TipData(Icons.ac_unit_outlined, l10n.portalWeatherTipIce);
   }
-  if (w.uvIndex >= 6) {
+  if ((w.uvIndex ?? 0) >= 6) {
     return _TipData(Icons.wb_sunny_outlined, l10n.portalWeatherTipUV);
   }
   if (w.feelsLike <= 5) {
@@ -180,14 +180,21 @@ class _MetricCell extends StatelessWidget {
 }
 
 /// 样例 UvBar。
-Widget _buildUvBar(int value) {
-  final pct = (value / 11).clamp(0.0, 1.0);
-  final color = switch (value) {
-    <= 2 => SeverityColors.good,
-    <= 5 => SeverityColors.warning,
-    <= 7 => SeverityColors.caution,
-    _ => SeverityColors.danger,
-  };
+Widget _buildUvBar(int? value) {
+  // 缺数据时不画填充条：紫外线 0 表示"最弱"，与"没有数据"不是同一件事。
+  final pct = value == null ? 0.0 : (value / 11).clamp(0.0, 1.0);
+  final Color color;
+  if (value == null) {
+    color = Colors.white.withValues(alpha: 0.25);
+  } else if (value <= 2) {
+    color = SeverityColors.good;
+  } else if (value <= 5) {
+    color = SeverityColors.warning;
+  } else if (value <= 7) {
+    color = SeverityColors.caution;
+  } else {
+    color = SeverityColors.danger;
+  }
   return SizedBox(
     height: 6,
     child: ClipRRect(

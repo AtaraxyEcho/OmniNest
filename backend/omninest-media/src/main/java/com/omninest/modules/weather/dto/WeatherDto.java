@@ -17,11 +17,11 @@ public record WeatherDto(
     String windDir,
     String pressure,
     String visibility,
-    int uvIndex,
+    Integer uvIndex,
     String sunrise,
     String sunset,
-    int aqi,
-    int pm2p5,
+    Integer aqi,
+    Integer pm2p5,
     String aqiCategory,
     String updateTime,
     String healthAdvice,
@@ -91,10 +91,10 @@ public record WeatherDto(
 
     private static WeatherDto degraded(String status) {
         return new WeatherDto(
-            0.0, 0.0, "未知", "999",
+            0.0, 0.0, "", "999",
             "--", "--", "--", "--", "--",
-            0, "--", "--",
-            0, 0, "--", "", "",
+            null, "--", "--",
+            null, null, "--", "", "",
             0.0, 0.0, "--", "--", "--", "--",
             List.of(), List.of(), "",
             status

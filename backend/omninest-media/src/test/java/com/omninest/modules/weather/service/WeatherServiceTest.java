@@ -227,7 +227,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather(null);
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
             assertThat(result.temp()).isZero();
         }
 
@@ -244,7 +244,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather(null);
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
             // 读取失败时返回默认配置供本次请求使用，但不写入缓存；下一次请求会重试。
             assertThat(ReflectionTestUtils.getField(weatherService, "configCache")).isNull();
         }
@@ -368,7 +368,9 @@ class WeatherServiceTest {
             WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");
 
             assertThat(result.temp()).isEqualTo(25.0);
-            assertThat(result.aqi()).isZero();
+            // 空气质量接口缺失时必须是 null：0 会被读成"空气优"。
+            assertThat(result.aqi()).isNull();
+            assertThat(result.pm2p5()).isNull();
             assertThat(result.aqiCategory()).isEqualTo("--");
         }
 
@@ -384,7 +386,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
         }
     }
 
@@ -405,7 +407,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather(null);
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
             verify(weatherCacheStore).markLocationMissing("不存在市");
         }
 
@@ -420,7 +422,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
             // 读取侧使用 cityName + "|" + lang；写入漏掉语言后缀会让负缓存永远不命中。
             verify(weatherCacheStore).markLocationMissing("116.41,39.92|zh");
         }
@@ -439,7 +441,7 @@ class WeatherServiceTest {
 
             WeatherDto result = weatherService.getRealtimeWeather("贵阳");
 
-            assertThat(result.text()).isEqualTo("未知");
+            assertThat(result.text()).isEmpty();
             verify(weatherCacheStore, never()).markLocationMissing(anyString());
         }
 
@@ -509,7 +511,7 @@ class WeatherServiceTest {
             WeatherDto empty = WeatherDto.empty();
 
             assertThat(empty.temp()).isZero();
-            assertThat(empty.text()).isEqualTo("未知");
+            assertThat(empty.text()).isEmpty();
             assertThat(empty.icon()).isEqualTo("999");
             assertThat(empty.humidity()).isEqualTo("--");
             assertThat(empty.sunrise()).isEqualTo("--");

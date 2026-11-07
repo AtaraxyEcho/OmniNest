@@ -145,11 +145,11 @@ class WeatherData {
   final String windDir;
   final String pressure;
   final String visibility;
-  final int uvIndex;
+  final int? uvIndex;
   final String sunrise;
   final String sunset;
-  final int aqi;
-  final int pm2p5;
+  final int? aqi;
+  final int? pm2p5;
   final String aqiCategory;
   final String updateTime;
   final String healthAdvice;
@@ -182,18 +182,19 @@ class WeatherData {
     return WeatherData(
       temp: (json['temp'] as num?)?.toInt() ?? 0,
       feelsLike: (json['feelsLike'] as num?)?.toInt() ?? 0,
-      text: json['text'] as String? ?? '未知',
+      // 缺描述时用中性占位符：这里写死中文会在英文界面直接漏出中文。
+      text: json['text'] as String? ?? '--',
       icon: json['icon'] as String? ?? '999',
       humidity: json['humidity'] as String? ?? '--',
       windSpeed: json['windSpeed'] as String? ?? '--',
       windDir: json['windDir'] as String? ?? '',
       pressure: json['pressure'] as String? ?? '--',
       visibility: json['visibility'] as String? ?? '--',
-      uvIndex: json['uvIndex'] as int? ?? 0,
+      uvIndex: json['uvIndex'] as int?,
       sunrise: json['sunrise'] as String? ?? '--',
       sunset: json['sunset'] as String? ?? '--',
-      aqi: json['aqi'] as int? ?? 0,
-      pm2p5: json['pm2p5'] as int? ?? 0,
+      aqi: json['aqi'] as int?,
+      pm2p5: json['pm2p5'] as int?,
       aqiCategory: json['aqiCategory'] as String? ?? '--',
       updateTime: json['updateTime'] as String? ?? '',
       healthAdvice: json['healthAdvice'] as String? ?? '',
@@ -228,11 +229,11 @@ class WeatherData {
       windDir: '--',
       pressure: '--',
       visibility: '--',
-      uvIndex: 0,
+      uvIndex: null,
       sunrise: '--',
       sunset: '--',
-      aqi: 0,
-      pm2p5: 0,
+      aqi: null,
+      pm2p5: null,
       aqiCategory: '--',
       updateTime: '',
       healthAdvice: '',
@@ -245,13 +246,27 @@ class WeatherData {
     );
   }
 
-  /// AQI 等级颜色（int 值）
+  /// 空气质量数值的展示文本：缺数据时用占位符，不能落成 "0"。
+  ///
+  /// 0 在 AQI 与 PM2.5 的业务语义里是"最好的一档"，缺数据却显示 0 会被读成
+  /// "空气优"，比不显示更有害。
+  String get aqiDisplay => aqi?.toString() ?? '--';
+
+  /// PM2.5 数值的展示文本。
+  String get pm25Display => pm2p5?.toString() ?? '--';
+
+  /// 紫外线指数的展示文本。
+  String get uvDisplay => uvIndex?.toString() ?? '--';
+
+  /// AQI 等级颜色（int 值）；缺数据时取中性灰，避免被读成"优"。
   int get aqiColor {
-    if (aqi <= 50) return 0xFF00897B;
-    if (aqi <= 100) return 0xFFF9A825;
-    if (aqi <= 150) return 0xFFEF6C00;
-    if (aqi <= 200) return 0xFFD32F2F;
-    if (aqi <= 300) return 0xFF7B1FA2;
+    final value = aqi;
+    if (value == null) return 0xFF8A8A8A;
+    if (value <= 50) return 0xFF00897B;
+    if (value <= 100) return 0xFFF9A825;
+    if (value <= 150) return 0xFFEF6C00;
+    if (value <= 200) return 0xFFD32F2F;
+    if (value <= 300) return 0xFF7B1FA2;
     return 0xFF4E342E;
   }
 

@@ -44,4 +44,36 @@ void main() {
     );
     expect(l10n.errorDownloadPermissionRequired, isNot(l10n.errorForbidden));
   });
+
+  test('常见业务码有本地化文案，不回落到服务端中文', () {
+    for (final code in const [
+      'PARAM_ERROR',
+      'RATE_LIMITED',
+      'FILE_QUOTA_EXCEEDED',
+      'FILE_SIZE_EXCEEDED',
+      'FILE_SECURITY_REJECTED',
+      'MEDIA_TRANSCODE_FAILED',
+      'BACKDROP_MALWARE_DETECTED',
+      'TWO_FACTOR_INVALID_CODE',
+      'TWO_FACTOR_ALREADY_ENABLED',
+    ]) {
+      final message = l10n.messageForErrorCode(code, fallback: '服务端中文');
+      expect(message, isNot('服务端中文'), reason: code);
+      expect(message, isNot(l10n.errorOperationFailed), reason: code);
+    }
+  });
+
+  test('未知码只在中文界面回落服务端文案，英文界面用通用失败文案', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    final zh = lookupAppLocalizations(const Locale('zh'));
+
+    expect(
+      en.messageForErrorCode('SOME_UNMAPPED_CODE', fallback: '服务端中文'),
+      en.errorOperationFailed,
+    );
+    expect(
+      zh.messageForErrorCode('SOME_UNMAPPED_CODE', fallback: '服务端中文'),
+      '服务端中文',
+    );
+  });
 }

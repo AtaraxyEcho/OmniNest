@@ -539,7 +539,7 @@ public class WeatherService {
             JsonNode aqiEntry = findByCode(indexes, "us-epa");
             if (aqiEntry == null) aqiEntry = findByCode(indexes, "qaqi");
             if (aqiEntry != null) {
-                now.put("aqi", getIntSafe(aqiEntry, "aqiDisplay"));
+                now.put("aqi", getIntOrNull(aqiEntry, "aqiDisplay"));
                 now.put("category", aqiEntry.path("category").asString(null));
             }
         }
@@ -550,7 +550,7 @@ public class WeatherService {
             if (pm25 != null) {
                 JsonNode concentration = pm25.path("concentration");
                 if (concentration.isObject()) {
-                    now.put("pm2p5", getIntSafe(concentration, "value"));
+                    now.put("pm2p5", getIntOrNull(concentration, "value"));
                 }
             }
         }
@@ -610,11 +610,11 @@ public class WeatherService {
             valueWithUnit(now, "humidity", "%"), valueWithUnit(now, "windSpeed", " km/h"),
             now.path("windDir").asString(null), valueWithUnit(now, "pressure", " hPa"),
             valueWithUnit(now, "vis", " km"),
-            today != null ? today.path("uvIndex").asInt() : 0,
+            today != null ? getIntOrNull(today, "uvIndex") : null,
             today != null ? today.path("sunrise").asString(null) : "--",
             today != null ? today.path("sunset").asString(null) : "--",
-            air != null ? getIntSafe(air, "aqi") : 0,
-            air != null ? getIntSafe(air, "pm2p5") : 0,
+            air != null ? getIntOrNull(air, "aqi") : null,
+            air != null ? getIntOrNull(air, "pm2p5") : null,
             air != null ? getStringSafe(air, "category", "--") : "--",
             weatherNow.path("updateTime").asString(null),
             air != null ? getStringSafe(air, "advice", "") : "",
@@ -813,10 +813,26 @@ public class WeatherService {
 
     // ==================== 工具方法 ====================
 
-    private int getIntSafe(JsonNode obj, String key) {
-        String val = obj.path(key).asString(null);
-        if (val == null || val.isBlank()) return 0;
-        try { return (int) Double.parseDouble(val); } catch (NumberFormatException e) { return 0; }
+    /**
+     * 读取可空整数：缺字段、空值或非数字一律返回 null。
+     *
+     * <p>空气质量与紫外线里 0 是有业务含义的档位（最优 / 最弱），拿 0 兜底会把
+     * "没有数据"呈现成"最好"，比缺省展示更具误导性。</p>
+     */
+    private Integer getIntOrNull(JsonNode obj, String key) {
+        JsonNode value = obj.path(key);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        String text = value.asString(null);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return (int) Double.parseDouble(text);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private String getStringSafe(JsonNode obj, String key, String defaultValue) {

@@ -404,12 +404,14 @@ class AuthServiceTest {
 
             service.login(new LoginRequest("admin", "pass"), "android", "new-device", "Pixel 8", "10.0.0.1", "okhttp");
 
-            // 验证旧会话被加入黑名单
-            verify(sessionRevocationService).revokeSession(
+            // 旧会话一次性写入吊销缓存与撤销记录，事务数不随旧会话数量增长
+            verify(sessionRevocationService).publishRevocations(
                     eq(user.getId()),
-                    eq(oldSessionId),
+                    eq(List.of(oldSessionId)),
                     any(Duration.class)
             );
+            verify(sessionRevocationService).recordRevocations(
+                    eq(user.getId()), eq(List.of(oldSessionId)));
             // 验证旧会话在 DB 中被撤销
             verify(activeSessionRepository).revokeByUserAndPlatformExcluding(
                     eq(user.getId()), eq("android"), any(UUID.class), eq("同平台新设备登录"));
@@ -429,7 +431,10 @@ class AuthServiceTest {
             service.login(new LoginRequest("admin", "pass"), "android", "device", "Pixel", "10.0.0.1", "okhttp");
 
             // 不应撤销任何会话
-            verify(sessionRevocationService, never()).revokeSession(any(), any(), any());
+            verify(sessionRevocationService, never())
+                    .publishRevocations(any(), any(), any());
+            verify(sessionRevocationService, never())
+                    .recordRevocations(any(), any());
             verify(activeSessionRepository, never()).revokeByUserAndPlatformExcluding(any(), any(), any(), any());
         }
 
