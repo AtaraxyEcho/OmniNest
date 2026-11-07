@@ -427,7 +427,7 @@ extension FileBrowserUploadRuntime on FileBrowserController {
       currentTask.copyWith(
         status: 'FAILED',
         messageCode: FileUploadTaskMessageCode.failed,
-        message: describeUserFacingError(error).displayMessage,
+        message: userFacingErrorDisplayText(error),
       ),
     );
     return _UploadFileResult.failed;

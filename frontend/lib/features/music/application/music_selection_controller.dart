@@ -101,7 +101,7 @@ class MusicSelectionController extends Notifier<MusicSelectionState> {
             trackId: track.id,
             title: track.title,
             success: false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }

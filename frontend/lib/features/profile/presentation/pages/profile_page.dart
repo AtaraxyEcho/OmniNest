@@ -152,7 +152,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     } catch (error) {
       // 与移动端一致：展示具体失败原因（格式/大小/扫描），并用错误样式。
       _showMessage(
-        describeUserFacingError(error, l10n: l10n).message,
+        userFacingErrorText(error, l10n: l10n),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -190,7 +190,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
       _showMessage(
         l10n.profileWeatherCitySaveFailed(
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
         ),
       );
     }
@@ -486,7 +486,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 Expanded(
                   child: Text(
                     l10n.profileLoadFailed(
-                      describeUserFacingError(error, l10n: l10n).message,
+                      userFacingErrorText(error, l10n: l10n),
                     ),
                   ),
                 ),

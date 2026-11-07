@@ -730,7 +730,14 @@ public class MusicAdminService {
             artist = artist(catalogOwnerId, artistName);
             artistCache.put(artistCacheKey, artist);
         }
-        String albumCacheKey = catalogOwnerId + "|" + albumTitle.toLowerCase(Locale.ROOT);
+        // 专辑身份是「标题 + 艺术家」，与 album(...) 的库内匹配口径一致。
+        // 只用标题做键会把不同歌手的同名专辑（"Greatest Hits"、"Live"）合并到第一张，
+        // 后续歌手的曲目全部挂到别人名下。
+        String albumCacheKey = catalogOwnerId
+                + "|"
+                + albumTitle.toLowerCase(Locale.ROOT)
+                + "\u0000"
+                + artistName.toLowerCase(Locale.ROOT);
         MusicAlbum album = albumCache.get(albumCacheKey);
         if (album == null) {
             album = album(catalogOwnerId, albumTitle, artistName);

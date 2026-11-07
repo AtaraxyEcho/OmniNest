@@ -113,6 +113,11 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
     /**
      * 批量重算艺术家曲目数与专辑数，单条 SQL 覆盖一组艺术家。
      *
+     * <p>与「活动曲目」相关查询（{@code findTop12ActiveByOwnerUserId}、
+     * {@code searchVisibleActiveArtists}）同口径，只统计 {@code file_nodes.is_deleted = false}
+     * 的曲目：回收站里的文件仍留在 {@code music_tracks}，不排除会让艺术家卡片显示
+     * 已删除曲目，与详情页的曲目列表对不上。</p>
+     *
      * @param ownerUserId 所有者用户 ID
      * @param artistIds 艺术家 ID 集合
      * @return 更新的行数
@@ -122,10 +127,16 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             UPDATE omni.music_artists artist
             SET track_count = (
                     SELECT COUNT(*)::int FROM omni.music_tracks track
-                    WHERE track.owner_user_id = :ownerUserId AND track.artist_id = artist.id),
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.artist_id = artist.id
+                      AND fn.is_deleted = false),
                 album_count = (
                     SELECT COUNT(DISTINCT track.album_id)::int FROM omni.music_tracks track
-                    WHERE track.owner_user_id = :ownerUserId AND track.artist_id = artist.id),
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.artist_id = artist.id
+                      AND fn.is_deleted = false),
                 updated_at = now()
             WHERE artist.owner_user_id = :ownerUserId
               AND artist.id IN (:artistIds)

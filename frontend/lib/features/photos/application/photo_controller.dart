@@ -318,7 +318,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     try {
       return await call();
     } on Exception catch (e) {
-      partialErrors.add(describeUserFacingError(e).message);
+      partialErrors.add(userFacingErrorText(e));
       return fallback;
     }
   }
@@ -546,7 +546,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
           seedWasInFavorites: seedWasInFavorites,
         );
       }
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -583,7 +583,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       await _repo.applyEditedImage(photoId, bytes);
       ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -593,7 +593,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     try {
       await _repo.backfillGeocode(photoId);
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }

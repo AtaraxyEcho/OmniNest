@@ -955,6 +955,12 @@ public class TaskRecordService {
     }
 
     private void recordEvent(TaskRecord record, SyncAction action) {
+        // 系统级任务（定时对账、清理、扫描等）的归属用户为空，没有可接收实时事件的会话。
+        // 同步事件记录器的收件人是必填项，缺省会抛 PARAM_ERROR 并连带回滚整个任务事务，
+        // 让系统任务既建不出来也流转不了，因此这里直接跳过。
+        if (record.getOwnerUserId() == null) {
+            return;
+        }
         syncEventRecorder.record(new SyncEventCommand(
                 record.getOwnerUserId(),
                 SyncScope.TASKS,

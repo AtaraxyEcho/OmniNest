@@ -162,6 +162,14 @@ public class MovieTaskService {
         }
         MediaVideoItem videoItem = mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
         UUID catalogOwnerUserId = videoItem.getOwnerUserId();
+        // 播放页与详情页都会触发 Web 优化，重复点击会为同一源文件排多个 FFmpeg 任务，
+        // 并发写同一输出路径互相覆盖；与转码同口径，先复用仍在跑的同类任务。
+        TaskRecord activeOptimize = taskRecordService.findActiveResourceTask(
+                requesterUserId, WEB_OPTIMIZE, "FILE_NODE", videoItem.getFileNodeId(), ACTIVE_TRANSCODE_STATUSES)
+                .orElse(null);
+        if (activeOptimize != null) {
+            return new ScrapeTaskDto(activeOptimize.getId(), activeOptimize.getStatus(), "该影片的 Web 优化任务已在队列中");
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(
                 taskId, requesterUserId, WEB_OPTIMIZE, QueueNames.VIDEO_TRANSCODE_ROUTING_KEY,

@@ -142,7 +142,7 @@ extension MovieCenterCommands on MovieCenterController {
       final refreshed = centerState.asData?.value ?? current;
       centerState = AsyncData(refreshed.copyWith(lastTask: task));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -152,7 +152,7 @@ extension MovieCenterCommands on MovieCenterController {
       await _api.probeItem(item.id);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -169,7 +169,7 @@ extension MovieCenterCommands on MovieCenterController {
         _liveOr(current).copyWith(lastTask: task, tasks: tasks),
       );
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -186,7 +186,7 @@ extension MovieCenterCommands on MovieCenterController {
         _liveOr(current).copyWith(lastTask: task, tasks: tasks),
       );
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -207,7 +207,7 @@ extension MovieCenterCommands on MovieCenterController {
       await _api.favorite(videoItemId: item.id, favorite: favorite);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -223,7 +223,7 @@ extension MovieCenterCommands on MovieCenterController {
       unawaited(centerRef.read(taskListProvider.notifier).load());
       return submission;
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -255,7 +255,7 @@ extension MovieCenterCommands on MovieCenterController {
       await refresh();
       centerRef.invalidate(movieDetailProvider(videoItemId));
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -269,7 +269,7 @@ extension MovieCenterCommands on MovieCenterController {
       await _api.setSeriesFavorite(seriesId, favorite: favorite);
       await refresh();
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -308,7 +308,7 @@ extension MovieCenterCommands on MovieCenterController {
       );
       centerRef.invalidate(movieSubtitlesProvider(videoItemId));
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -364,7 +364,7 @@ extension MovieCenterCommands on MovieCenterController {
       await _api.deleteSubtitle(subtitleId);
       centerRef.invalidate(movieSubtitlesProvider(videoItemId));
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -384,7 +384,7 @@ extension MovieCenterCommands on MovieCenterController {
         );
       }
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -402,7 +402,7 @@ extension MovieCenterCommands on MovieCenterController {
         );
       }
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -456,7 +456,7 @@ extension MovieCenterCommands on MovieCenterController {
       await refresh();
       centerRef.invalidate(movieSeriesDetailProvider(seriesId));
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -473,7 +473,7 @@ extension MovieCenterCommands on MovieCenterController {
       await refresh();
       centerRef.invalidate(collectionItemsProvider(collectionId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -490,7 +490,7 @@ extension MovieCenterCommands on MovieCenterController {
       await refresh();
       centerRef.invalidate(collectionItemsProvider(collectionId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -500,7 +500,7 @@ extension MovieCenterCommands on MovieCenterController {
       await _api.deleteCollection(collectionId);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }

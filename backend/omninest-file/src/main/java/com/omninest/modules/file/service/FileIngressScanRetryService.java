@@ -4,6 +4,7 @@ import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileUploadSession;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.UploadStatus;
 import com.omninest.modules.file.event.FileSecurityScanRequestedEvent;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
@@ -42,6 +43,7 @@ public class FileIngressScanRetryService {
     private final FileIngressLifecycleService ingressLifecycleService;
     private final FileUploadSessionRepository uploadSessionRepository;
     private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final NotificationPublisher notificationPublisher;
 
     /**
@@ -127,6 +129,12 @@ public class FileIngressScanRetryService {
             if (session.getQuotaReservationId() != null) {
                 storageQuotaService.releaseReservation("UPLOAD", session.getId());
                 session.setQuotaReservationId(null);
+            }
+            if (session.getSpaceType() == SpaceType.SHARED
+                    && !UploadStatus.REJECTED.getValue().equals(session.getStatus())) {
+                // 共享空间没有个人预留行，额度记在共享账本的 reserved_bytes 上；
+                // 会话一旦落 REJECTED，清理任务会按“预留已释放”跳过，这里的遗漏就是永久泄漏。
+                sharedSpaceQuotaService.releaseReservation(session.getTotalSizeBytes());
             }
             session.setStatus(UploadStatus.REJECTED.getValue());
             uploadSessionRepository.save(session);

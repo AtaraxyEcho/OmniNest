@@ -285,7 +285,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _error = describeUserFacingError(error, l10n: l10n).message,
+          () => _error = userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {
@@ -350,7 +350,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _error = describeUserFacingError(error, l10n: l10n).message,
+          () => _error = userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {
@@ -535,7 +535,7 @@ class _ConfigHistoryDialog extends ConsumerWidget {
                           showOmniFeedback(
                             context,
                             l10n.adminLoadFailed(
-                              describeUserFacingError(e, l10n: l10n).message,
+                              userFacingErrorText(e, l10n: l10n),
                             ),
                             severity: OmniFeedbackSeverity.error,
                           );

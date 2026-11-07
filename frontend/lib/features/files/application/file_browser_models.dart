@@ -306,6 +306,8 @@ class FileBrowserState {
     'EXPIRED',
     'FAILED',
     'CONFLICT',
+    // 安全扫描判定病毒或重试耗尽：会话已被后端收口，不会再转 COMPLETED。
+    'REJECTED',
   };
 
   /// 判断上传状态是否已经进入终态。

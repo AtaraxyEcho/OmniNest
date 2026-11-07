@@ -23,6 +23,7 @@ import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
@@ -55,6 +56,8 @@ class ExternalStorageServiceTest {
             mock(StorageExternalAccountRepository.class);
     private final StorageImportTaskRepository importTaskRepository =
             mock(StorageImportTaskRepository.class);
+    private final FileIngressItemRepository ingressItemRepository =
+            mock(FileIngressItemRepository.class);
     private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository =
             mock(StorageRemoteMetadataCacheRepository.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
@@ -70,7 +73,8 @@ class ExternalStorageServiceTest {
 
     private final ExternalStorageService service = new ExternalStorageService(
             rcloneGateway, accountRepository,
-            importTaskRepository, remoteMetadataCacheRepository, taskDispatchService, taskRecordService,
+            importTaskRepository, ingressItemRepository, remoteMetadataCacheRepository,
+            taskDispatchService, taskRecordService,
             credentialService, sharedSpaceService, importProperties, oauthService, endpointGuard,
             storageQuotaService, transactionTemplate()
     );

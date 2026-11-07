@@ -74,7 +74,7 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
       }
       state = PhotoAlbumPickerState(
         albumId: albumId,
-        error: describeUserFacingError(e).message,
+        error: userFacingErrorText(e),
       );
     }
   }
@@ -133,7 +133,7 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
         totalElements: live.totalElements,
         nextPage: live.nextPage,
         hasMore: live.hasMore,
-        error: describeUserFacingError(e).message,
+        error: userFacingErrorText(e),
       );
     }
   }
@@ -221,7 +221,7 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
         totalElements: current.totalElements,
         nextPage: current.nextPage,
         hasMore: current.hasMore,
-        error: describeUserFacingError(e).message,
+        error: userFacingErrorText(e),
       );
       return false;
     }

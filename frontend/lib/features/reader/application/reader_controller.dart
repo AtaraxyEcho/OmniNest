@@ -353,7 +353,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     try {
       return await call();
     } on Exception catch (e) {
-      partialErrors.add(describeUserFacingError(e).message);
+      partialErrors.add(userFacingErrorText(e));
       return fallback;
     }
   }
@@ -502,7 +502,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       unawaited(_cleanupDeletedItemAfterCompletion(itemId, submission.taskId));
       return submission;
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -528,7 +528,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       ReaderProgressBackupWeb.clear(itemId);
       ref.invalidate(readerItemDetailProvider(itemId));
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       await _restoreItemAfterFailedDelete();
     }
   }
@@ -539,7 +539,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     try {
       await refresh();
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
     }
   }
 
@@ -563,7 +563,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
         addedToBookshelf: item?.addedToBookshelf ?? false,
       );
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -585,7 +585,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       await refresh();
       return item;
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).displayMessage);
+      _setError(userFacingErrorDisplayText(e));
       rethrow;
     }
   }
@@ -596,7 +596,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       await _api.cancelImport(itemId);
       await refresh();
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).displayMessage);
+      _setError(userFacingErrorDisplayText(error));
       rethrow;
     }
   }
@@ -613,7 +613,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       await refresh();
       return item;
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).displayMessage);
+      _setError(userFacingErrorDisplayText(e));
       rethrow;
     }
   }
@@ -627,7 +627,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       await _api.updateItemMetadata(itemId: itemId, fields: fields);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).displayMessage);
+      _setError(userFacingErrorDisplayText(e));
       rethrow;
     }
   }
@@ -637,7 +637,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     try {
       return await _api.importCandidates();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).displayMessage);
+      _setError(userFacingErrorDisplayText(e));
       rethrow;
     }
   }
@@ -655,7 +655,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
             ReaderCoverCandidate(fileNodeId: node.id, fileName: node.name),
       ];
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).displayMessage);
+      _setError(userFacingErrorDisplayText(e));
       rethrow;
     }
   }

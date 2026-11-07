@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/errors/error_codes.dart';
+import 'package:omninest/core/errors/user_facing_error_locale.dart';
 
 class UserFacingError {
   const UserFacingError({
@@ -50,10 +51,39 @@ String failureToast(AppLocalizations l10n, String actionLabel, Object error) {
   return l10n.commonFailureWithReason(actionLabel, described.message);
 }
 
+/// 同 [describeUserFacingError]，未给 [l10n] 时按当前 UI 语言解析。
+///
+/// 供需要同时读取 `message` 与 `code` 的控制器使用：直接调用
+/// [describeUserFacingError] 不传 `l10n` 会保留服务端中文原文。
+UserFacingError localizedUserFacingError(
+  Object error, {
+  AppLocalizations? l10n,
+}) => describeUserFacingError(
+  error,
+  l10n: l10n ?? UserFacingErrorLocale.resolve(),
+);
+
+/// 取可直接展示的错误文案。
+///
+/// 应用层（Riverpod Notifier、导入/扫描队列等）没有 `BuildContext`，把结果写进
+/// `state.errorMessage` 后由界面直接展示：不给 [l10n] 时按当前 UI 语言解析，
+/// 才能让英文界面看到英文；直接取 `describeUserFacingError(error).message`
+/// 会保留中文服务端原文。有上下文的展示层可显式传入 `context.l10n`。
+String userFacingErrorText(Object error, {AppLocalizations? l10n}) =>
+    localizedUserFacingError(error, l10n: l10n).message;
+
+/// 同 [userFacingErrorText]，但保留旧数字错误码的括号后缀。
+///
+/// 文件上传等长驻任务条目会长期展示这句话，排障时需要看到服务端下发的数字码；
+/// 稳定符号码（ErrorCode 枚举名）仍不会出现在文案里。
+String userFacingErrorDisplayText(Object error, {AppLocalizations? l10n}) =>
+    localizedUserFacingError(error, l10n: l10n).displayMessage;
+
 /// 将异常映射为用户可见错误。
 ///
 /// 提供 [l10n] 时优先使用本地化文案；未提供时返回稳定错误码，
-/// 展示层用 [UserFacingErrorL10n.localizeUserFacing] 再映射。
+/// 展示层用 [UserFacingErrorL10n.localizeUserFacing] 再映射。控制器层请改用
+/// [userFacingErrorText]，它按当前 UI 语言解析。
 UserFacingError describeUserFacingError(
   Object error, {
   AppLocalizations? l10n,

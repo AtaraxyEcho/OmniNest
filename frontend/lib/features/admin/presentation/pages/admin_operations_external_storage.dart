@@ -68,7 +68,7 @@ class AdminExternalStoragePage extends ConsumerWidget {
                   loading: () => const _EmptyText('…'),
                   error:
                       (error, _) => _EmptyText(
-                        describeUserFacingError(error, l10n: l10n).message,
+                        userFacingErrorText(error, l10n: l10n),
                       ),
                   data:
                       (items) =>
@@ -336,7 +336,7 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _errorMessage = describeUserFacingError(error, l10n: l10n).message;
+          _errorMessage = userFacingErrorText(error, l10n: l10n);
         });
       }
     } finally {

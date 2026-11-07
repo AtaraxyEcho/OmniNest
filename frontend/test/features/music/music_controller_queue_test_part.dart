@@ -273,7 +273,9 @@ void registerMusicQueueTests() {
     expect(state.currentItem?.playableKey, 'local:track-lyric-fail');
     expect(state.isPlaying, isTrue);
     expect(state.currentItem?.track.lyricsRaw, isNull);
-    expect(state.errorMessage, 'MUSIC_LYRICS_LOAD_FAILED');
+    // 展示层文案必须是本地化结果，内部错误码不得透出。
+    expect(state.errorMessage, lookupAppLocalizations(const Locale('zh')).musicLyricsLoadFailed);
+    expect(state.errorMessage, isNot('MUSIC_LYRICS_LOAD_FAILED'));
   });
 
   test('在线歌词补拉失败写入 errorMessage 且不阻断播放', () async {
@@ -306,7 +308,9 @@ void registerMusicQueueTests() {
     expect(state.currentItem?.playableKey, 'online:netease:188888');
     expect(state.isPlaying, isTrue);
     expect(state.currentTrack?.lyricsRaw, isNull);
-    expect(state.errorMessage, 'MUSIC_LYRICS_LOAD_FAILED');
+    // 展示层文案必须是本地化结果，内部错误码不得透出。
+    expect(state.errorMessage, lookupAppLocalizations(const Locale('zh')).musicLyricsLoadFailed);
+    expect(state.errorMessage, isNot('MUSIC_LYRICS_LOAD_FAILED'));
     expect(state.currentItem?.lyricsLoadFailed, isTrue);
   });
 

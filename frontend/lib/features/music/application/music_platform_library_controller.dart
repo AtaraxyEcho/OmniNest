@@ -236,7 +236,7 @@ class MusicPlatformLibraryController
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
-      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+      _recordPlaylistFailure(key, userFacingErrorText(error));
       return cached?.items ?? const <OnlineTrack>[];
     } finally {
       _setPlaylistLoading(key, loading: false);
@@ -297,7 +297,7 @@ class MusicPlatformLibraryController
       if (!ref.mounted || !_ownsTrackRequest(key, seq)) {
         return;
       }
-      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+      _recordPlaylistFailure(key, userFacingErrorText(error));
     } finally {
       _setPlaylistAppending(key, appending: false);
     }
@@ -341,7 +341,7 @@ class MusicPlatformLibraryController
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
-      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+      _recordPlaylistFailure(key, userFacingErrorText(error));
       // 整表失败时退回已加载页，点击播放不至于空队列。
       return cached?.items ?? const <OnlineTrack>[];
     } finally {
@@ -447,7 +447,7 @@ class MusicPlatformLibraryController
     } on Object catch (error) {
       return MusicPlatformLibraryState(
         failures: <String, String>{
-          'platforms': describeUserFacingError(error).message,
+          'platforms': userFacingErrorText(error),
         },
       );
     }
@@ -486,7 +486,7 @@ class MusicPlatformLibraryController
               .platform] = List<OnlinePlaylist>.unmodifiable(page.items);
         } on Object catch (error) {
           failures['${status.platform}:playlists'] =
-              describeUserFacingError(error).message;
+              userFacingErrorText(error);
         }
       }),
     );
@@ -543,7 +543,7 @@ class MusicPlatformLibraryController
           likedTracksByPlatform[status.platform] = page;
         } on Object catch (error) {
           failures['${status.platform}:liked'] =
-              describeUserFacingError(error).message;
+              userFacingErrorText(error);
         }
       }),
     );
@@ -635,7 +635,7 @@ class MusicPlatformLibraryController
       }
     } on Object catch (error) {
       if (ref.mounted) {
-        _recordLikedFailure(targets, describeUserFacingError(error).message);
+        _recordLikedFailure(targets, userFacingErrorText(error));
       }
       return;
     } finally {
@@ -676,7 +676,7 @@ class MusicPlatformLibraryController
       }
       _recordLikedFailure(<String>[
         platform,
-      ], describeUserFacingError(error).message);
+      ], userFacingErrorText(error));
       // 整表失败时退回已加载页，重建不至于空队列。
       return cached?.items ?? const <OnlineTrack>[];
     } finally {
@@ -899,7 +899,7 @@ class MusicPlatformLibraryController
               );
           tracksByKey[entry.key] = page;
         } on Object catch (error) {
-          failures[entry.key] = describeUserFacingError(error).message;
+          failures[entry.key] = userFacingErrorText(error);
         }
       }
     }

@@ -76,7 +76,7 @@ extension MusicLibraryQueueMore on MusicCenterController {
           latest.copyWith(
             tracksLoadingMore: false,
             isPlaying: false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }

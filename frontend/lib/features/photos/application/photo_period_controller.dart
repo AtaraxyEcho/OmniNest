@@ -71,7 +71,7 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
       }
       state = PhotoPeriodState(
         period: (year, month),
-        error: describeUserFacingError(e).message,
+        error: userFacingErrorText(e),
       );
     }
   }
@@ -131,7 +131,7 @@ class PhotoPeriodNotifier extends Notifier<PhotoPeriodState> {
         totalElements: live.totalElements,
         nextPage: live.nextPage,
         hasMore: live.hasMore,
-        error: describeUserFacingError(e).message,
+        error: userFacingErrorText(e),
       );
     }
   }

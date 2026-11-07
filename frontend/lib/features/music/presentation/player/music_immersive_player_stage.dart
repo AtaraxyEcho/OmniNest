@@ -549,7 +549,7 @@ class _MusicImmersivePlayerStageState
         _schedulePlaybackSync();
       } on Exception catch (error) {
         if (kDebugMode) {
-          final message = describeUserFacingError(error).message;
+          final message = userFacingErrorText(error);
           devLog('Music 沉浸播放命令失败: $message');
         }
       }

@@ -250,7 +250,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
       state = state.copyWith(
         status: PlatformQrDisplayStatus.error,
         regenerating: false,
-        failureMessage: describeUserFacingError(error).message,
+        failureMessage: userFacingErrorText(error),
       );
       return false;
     }
@@ -307,7 +307,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
           _consecutiveFailures++;
           _applyStatus(
             PlatformQrDisplayStatus.error,
-            failureMessage: describeUserFacingError(error).message,
+            failureMessage: userFacingErrorText(error),
           );
           if (_consecutiveFailures >= maximumConsecutiveFailures) {
             return;
@@ -354,7 +354,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
     } on Object catch (error) {
       // 刷新失败不影响"已登录"这一事实，账号资料可下次进入时再回源；
       // 但原因要保留给终态：资料未落地时面板需要向用户说明同步未完成。
-      _loginRefreshErrorMessage = describeUserFacingError(error).message;
+      _loginRefreshErrorMessage = userFacingErrorText(error);
     }
   }
 

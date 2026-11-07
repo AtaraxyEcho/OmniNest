@@ -229,6 +229,10 @@ public interface PhotoItemTimelineQueries {
     /**
      * 统计指定维度下的照片分组数量。
      *
+     * <p>分组键必须与 {@link #findGroupPreviewPage} 逐字一致：DATE 维度用
+     * {@code COALESCE(date_taken, created_at)} 归月，否则没有 EXIF 拍摄时间的截图会被
+     * 列表算进月份分组、却被计数排除，分页元数据比实际分组少一截。</p>
+     *
      * @param ownerUserId 用户标识
      * @param groupBy 分组维度
      * @param zoneId 日期分组使用的时区
@@ -237,7 +241,7 @@ public interface PhotoItemTimelineQueries {
     @Query(value = """
             SELECT COUNT(DISTINCT CASE
                        WHEN :groupBy = 'DATE'
-                           THEN TO_CHAR(p.date_taken AT TIME ZONE :zoneId, 'YYYY-MM')
+                           THEN TO_CHAR(COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId, 'YYYY-MM')
                        WHEN :groupBy = 'LOCATION'
                            THEN COALESCE(NULLIF(p.gps_location ->> 'city', ''), '未知位置')
                        WHEN :groupBy = 'FORMAT'
@@ -255,7 +259,6 @@ public interface PhotoItemTimelineQueries {
                AND f.is_deleted = false
                AND p.deleted_at IS NULL
                AND (:groupBy <> 'TAG' OR t.id IS NOT NULL)
-               AND (:groupBy <> 'DATE' OR p.date_taken IS NOT NULL)
             """, nativeQuery = true)
     long countPhotoGroups(
             @Param("ownerUserId") UUID ownerUserId,

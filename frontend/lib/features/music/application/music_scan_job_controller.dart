@@ -87,7 +87,7 @@ class MusicScanJobController extends Notifier<MusicScanJobState> {
     } on Exception catch (error) {
       if (!_disposed) {
         state = state.copyWith(
-          errorMessage: describeUserFacingError(error).message,
+          errorMessage: userFacingErrorText(error),
         );
       }
     }
@@ -142,7 +142,7 @@ class MusicScanJobController extends Notifier<MusicScanJobState> {
       // 回写基准取发布时刻的实况：同一世代的重叠轮询或 startScan 在途时，
       // 用本轮发起时抓的快照整份发布会把它们写入的任务进度覆盖掉。
       state = state.copyWith(
-        errorMessage: describeUserFacingError(error).message,
+        errorMessage: userFacingErrorText(error),
       );
     }
   }

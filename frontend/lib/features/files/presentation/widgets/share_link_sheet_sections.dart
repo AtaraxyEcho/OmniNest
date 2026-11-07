@@ -272,10 +272,10 @@ extension _ShareLinkSheetSections on _ShareLinkSheetState {
           const SizedBox(height: 6),
           Text(
             shareState.hasError
-                ? describeUserFacingError(
+                ? userFacingErrorText(
                   shareState.error!,
                   l10n: AppLocalizations.of(context),
-                ).message
+                )
                 : '',
             style: TextStyle(
               fontSize: AppTypography.bodySmall,

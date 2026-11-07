@@ -24,7 +24,7 @@ class FilePreviewRoutePage extends ConsumerWidget {
           error:
               (error, _) => Scaffold(
                 body: AppErrorView(
-                  message: describeUserFacingError(error, l10n: l10n).message,
+                  message: userFacingErrorText(error, l10n: l10n),
                   onRetry: () => ref.invalidate(fileNodeByIdProvider(fileId)),
                   onBack: () => Navigator.of(context).maybePop(),
                 ),

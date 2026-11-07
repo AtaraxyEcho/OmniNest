@@ -126,6 +126,7 @@ extension MovieCenterPaging on MovieCenterController {
       fetch:
           (page) => _api.seriesByTypePage(
             seriesType: anime ? 'ANIME' : 'TV',
+            keyword: _searchKeyword,
             page: page,
           ),
       onPaging: (paging) => _setSeriesPaging(anime: anime, paging: paging),

@@ -279,6 +279,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
             jobId,
             file,
             parentId,
+            spaceType,
             cancellation,
           );
         } on MediaImportCancelledException {
@@ -311,6 +312,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
     String jobId,
     XFile file,
     String? parentId,
+    String spaceType,
     MediaImportCancellationToken cancellation,
   ) async {
     final importService = ref.read(mediaImportServiceProvider);
@@ -320,6 +322,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
       final node = await importService.findImportedNode(
         parentId: parentId,
         fileName: file.name,
+        spaceType: spaceType,
         timeout: const Duration(seconds: 5),
       );
       if (!ref.mounted) return false;
@@ -350,7 +353,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
         return '$message（${error.code}）';
       }
     }
-    return describeUserFacingError(error).displayMessage;
+    return userFacingErrorDisplayText(error);
   }
 
   String? _contentKind(String fileName) {

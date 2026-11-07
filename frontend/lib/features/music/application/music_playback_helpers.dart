@@ -61,7 +61,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
         _replaceState(
           latest!.copyWith(
             isPlaying: false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }
@@ -136,7 +136,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
       playbackItems: const <MusicPlayableItem>[],
       playbackIndex: -1,
       isPlaying: false,
-      errorMessage: describeUserFacingError(error).message,
+      errorMessage: userFacingErrorText(error),
     );
     _replaceState(failedState);
     _queuePersistence.schedule(failedState);
@@ -170,7 +170,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
         durationSeconds: item.track.durationSeconds,
       );
     } on Object catch (error) {
-      _partialErrors.add(describeUserFacingError(error).message);
+      _partialErrors.add(userFacingErrorText(error));
     }
   }
 
@@ -293,7 +293,8 @@ extension MusicPlaybackHelpers on MusicCenterController {
     if (kDebugMode) {
       devLog('[MusicLyrics] 加载失败: $error');
     }
-    _setError('MUSIC_LYRICS_LOAD_FAILED');
+    // 写内部错误码会把 'MUSIC_LYRICS_LOAD_FAILED' 原样弹给用户，必须走本地化文案。
+    _setError(UserFacingErrorLocale.resolve().musicLyricsLoadFailed);
     final current = _currentState;
     if (current == null) {
       return;
@@ -412,7 +413,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
         source: MusicQueueSource.transient,
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
     }
   }
 }

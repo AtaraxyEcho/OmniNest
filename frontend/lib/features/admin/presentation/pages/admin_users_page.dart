@@ -633,7 +633,7 @@ class _UserManagementPanel extends ConsumerWidget {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -674,7 +674,7 @@ class _UserManagementPanel extends ConsumerWidget {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -703,7 +703,7 @@ class _UserManagementPanel extends ConsumerWidget {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
           severity: OmniFeedbackSeverity.error,
         );
       }

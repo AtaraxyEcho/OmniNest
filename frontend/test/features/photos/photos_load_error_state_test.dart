@@ -127,7 +127,9 @@ void main() {
     addTearDown(container.dispose);
 
     final failed = await container.read(photoCenterControllerProvider.future);
-    expect(failed.errorMessage, '会话已在其他设备登录');
+    // 控制器按当前 UI 语言解析错误码，UNAUTHORIZED 走本地化文案而非服务端原文；
+    // 这里断言的是四条并发失败被折叠成同一句可展示文案。
+    expect(failed.errorMessage, '未登录或登录已过期');
 
     // 重新登录后成功刷新：copyWith 的 errorMessage 传 null 等于「不修改」，
     // 少了 clearError 横幅会永远留在页面上。

@@ -66,7 +66,10 @@ class TaskRecord {
   /// 本人可重试：仅 FAILED。DLQ 仅管理端可重试。
   bool get canRetry => status == 'FAILED' && retryCount < maxRetries;
   bool get isCancelled => status == 'CANCELLED';
-  bool get isTerminal => isCompleted || isFailed || isCancelled;
+
+  /// 管理员在死信队列里显式丢弃的任务：不会再有任何状态流转。
+  bool get isDiscarded => status == 'DISCARDED';
+  bool get isTerminal => isCompleted || isFailed || isCancelled || isDiscarded;
 
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;

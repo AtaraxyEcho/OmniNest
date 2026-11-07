@@ -2,7 +2,23 @@ FROM nginx:1.28-alpine
 
 RUN apk add --no-cache gettext
 
-COPY web /usr/share/nginx/html
+# 站点基准路径：根部署保持 "/"，反代子路径部署时形如 "/omninest/"。
+# 预构建产物已按同一前缀构建（base-href 决定了资源引用），这里只需把它摆到
+# 对应的子目录，Nginx 模板的 `try_files $uri $uri/ ${OMNINEST_WEB_BASE_HREF}index.html`
+# 才能命中；直接铺在 html/ 根下会让 /omninest/ 陷入内部重定向错误。
+ARG WEB_BASE_HREF=/
+
+COPY web /opt/omninest/web
+
+RUN case "${WEB_BASE_HREF}" in \
+        /) web_target=/usr/share/nginx/html ;; \
+        /*/) web_target="/usr/share/nginx/html${WEB_BASE_HREF%/}" ;; \
+        *) echo "WEB_BASE_HREF 必须是 / 或形如 /omninest/ 的绝对路径" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p "$web_target" \
+    && cp -a /opt/omninest/web/. "$web_target"/ \
+    && rm -rf /opt/omninest/web
+
 COPY deploy/prod/nginx/templates/ /opt/omninest/templates/
 COPY deploy/prod/nginx/validate-config.sh /opt/omninest/validate-config.sh
 COPY deploy/prod/nginx/render-config.sh /opt/omninest/render-config.sh

@@ -280,6 +280,20 @@ class TaskRecordServiceTest {
         Assertions.assertThat(cancelled).isEqualTo(2);
     }
 
+    @Test
+    void systemTaskWithoutOwnerSkipsSyncEventInsteadOfFailing() {
+        UUID taskId = UUID.randomUUID();
+        Mockito.when(taskRecordRepository.save(Mockito.any(TaskRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // 系统级任务（对账、清理、扫描）没有归属用户，也没有可接收事件的会话。
+        // 同步记录器要求收件人必填，缺守卫会抛 PARAM_ERROR 并回滚整个任务事务。
+        Assertions.assertThatCode(() -> service.createQueuedTask(
+                taskId, null, "QUOTA_RECONCILE", "quota.reconcile", Map.of()))
+                .doesNotThrowAnyException();
+        Mockito.verifyNoInteractions(syncEventRecorder);
+    }
+
     private TaskRecord taskRecord(int progress) {
         TaskRecord record = new TaskRecord();
         record.setId(UUID.randomUUID());

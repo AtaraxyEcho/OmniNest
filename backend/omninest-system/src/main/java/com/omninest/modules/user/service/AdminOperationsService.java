@@ -343,7 +343,10 @@ public class AdminOperationsService {
         Map<String, HealthSnapshot> health = probeHealth();
         Map<String, Long> taskCounts = taskRecordRepository.countGroupedByStatus();
         long runningTasks = taskCounts.getOrDefault(TaskStatus.RUNNING.getValue(), 0L);
-        long queuedTasks = taskCounts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L);
+        // 待执行 = 从未启动的 QUEUED + 等待退避到期的 RETRY_WAIT：两者都还没有执行线程，
+        // 只算 QUEUED 会让退避重试中的积压从队列深度里消失。
+        long queuedTasks = taskCounts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L)
+                + taskCounts.getOrDefault(TaskStatus.RETRY_WAIT.getValue(), 0L);
         // DISCARDED 是管理员显式处置后的终态，不计入 failed/dlq 告警桶，避免已处置任务持续触发告警。
         long failedTasks = taskCounts.getOrDefault(TaskStatus.FAILED.getValue(), 0L);
         long dlqTasks = taskCounts.getOrDefault(TaskStatus.DLQ.getValue(), 0L);
@@ -351,7 +354,8 @@ public class AdminOperationsService {
                 LocalDate.now(systemInstanceConfigService.timeZone())
                         .atStartOfDay(systemInstanceConfigService.timeZone()).toInstant()
         );
-        // 队列深度只表示尚未执行的 QUEUED 任务，死信单独展示，避免把历史失败量误报为待处理积压。
+        // 队列深度只表示尚未执行的待办任务（QUEUED + RETRY_WAIT），死信单独展示，
+        // 避免把历史失败量误报为待处理积压。
         long queueDepth = queuedTasks;
         String queueStatus = failedTasks + dlqTasks > 0 ? "WARN" : "UP";
         String overallStatus = snapshot.diskUsage() >= 90 || snapshot.jvmHeapUsage() >= 90 || "WARN".equals(queueStatus)

@@ -19,6 +19,7 @@ Future<void> waitForFonts() async {
 
 /// 判断是否为 Flutter Web engine 层的运行时噪音（无需处理）
 bool isEngineNoise(Object error) {
+  // 这里按 engine 原始文本做关键字判定，不能本地化：映射后这些英文特征串就没了。
   final message = describeUserFacingError(error).message;
   if (message.contains('Non-error') && message.contains('null')) return true;
   if (message.contains('LateInitializationError') &&

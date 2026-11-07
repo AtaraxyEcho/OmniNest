@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/errors/user_facing_error_locale.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const localePreferenceScope = 'locale.v1';
@@ -37,12 +38,12 @@ class LocaleController extends Notifier<String> {
       final userId = next.value?.user?.id;
       unawaited(_bindUser(userId));
     }, fireImmediately: true);
-    return initial;
+    return _applyLanguage(initial);
   }
 
   Future<void> setLanguage(String languageCode) async {
     final resolved = _normalizeLanguage(languageCode);
-    state = resolved;
+    state = _applyLanguage(resolved);
     await _writeDeviceLanguage(resolved);
     final userId = _activeUserId;
     if (userId == null) {
@@ -68,7 +69,7 @@ class LocaleController extends Notifier<String> {
     final resolved = _normalizeLanguage(
       snapshot.preferences['language']?.toString(),
     );
-    state = resolved;
+    state = _applyLanguage(resolved);
     await _writeDeviceLanguage(resolved);
   }
 
@@ -79,8 +80,8 @@ class LocaleController extends Notifier<String> {
     if (userId == null) {
       final preferences = await SharedPreferences.getInstance();
       if (generation == _loadGeneration) {
-        state = _normalizeLanguage(
-          preferences.getString(localeDeviceLanguageKey),
+        state = _applyLanguage(
+          _normalizeLanguage(preferences.getString(localeDeviceLanguageKey)),
         );
       }
       return;
@@ -113,8 +114,14 @@ class LocaleController extends Notifier<String> {
     }
     _lastBoundUserId = userId;
     final resolved = _normalizeLanguage(remoteLanguage);
-    state = resolved;
+    state = _applyLanguage(resolved);
     await _writeDeviceLanguage(resolved);
+  }
+
+  /// 记录语言并同步到进程级镜像：控制器层据此解析可展示的错误文案。
+  String _applyLanguage(String languageCode) {
+    UserFacingErrorLocale.bind(languageCode);
+    return languageCode;
   }
 
   Future<void> _writeDeviceLanguage(String languageCode) async {

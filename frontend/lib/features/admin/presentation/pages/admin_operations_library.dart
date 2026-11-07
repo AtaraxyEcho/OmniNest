@@ -121,7 +121,7 @@ class _LibrarySourcesSectionState
         showOmniFeedback(
           context,
           l10n.adminLoadFailed(
-            describeUserFacingError(error, l10n: l10n).message,
+            userFacingErrorText(error, l10n: l10n),
           ),
           severity: OmniFeedbackSeverity.error,
         );
@@ -151,7 +151,7 @@ class _LibrarySourcesSectionState
         showOmniFeedback(
           context,
           l10n.adminLoadFailed(
-            describeUserFacingError(error, l10n: l10n).message,
+            userFacingErrorText(error, l10n: l10n),
           ),
           severity: OmniFeedbackSeverity.error,
         );
@@ -203,7 +203,7 @@ class _LibrarySourcesSectionState
         showOmniFeedback(
           context,
           l10n.adminLoadFailed(
-            describeUserFacingError(error, l10n: l10n).message,
+            userFacingErrorText(error, l10n: l10n),
           ),
           severity: OmniFeedbackSeverity.error,
         );

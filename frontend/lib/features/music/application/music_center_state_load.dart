@@ -154,14 +154,14 @@ extension MusicCenterStateLoad on MusicCenterController {
               resolvedPlan = await _playbackResolver.resolve(fallback);
             } on Object catch (fallbackError) {
               _partialErrors.add(
-                describeUserFacingError(fallbackError).message,
+                userFacingErrorText(fallbackError),
               );
             }
           } else {
-            _partialErrors.add(describeUserFacingError(error).message);
+            _partialErrors.add(userFacingErrorText(error));
           }
         } else {
-          _partialErrors.add(describeUserFacingError(error).message);
+          _partialErrors.add(userFacingErrorText(error));
         }
       }
     }
@@ -416,6 +416,8 @@ extension MusicCenterStateLoad on MusicCenterController {
   /// 判断解析失败是否属于资源确定性不可用（已删除/已下架等），可安全自动跳过；
   /// 网络瞬断类错误不匹配，会停播报错而不是移除队列条目。
   bool _isUnavailableResource(Object error) {
+    // 按服务端原文做关键字匹配（旧后端只给中文文案），这里不能本地化，
+    // 否则英文界面下会丢掉这些兜底判据。
     final described = describeUserFacingError(error);
     final code = described.code?.trim().toUpperCase();
     if (code == '5001' || code == 'MEDIA_NOT_FOUND' || code == '404') {

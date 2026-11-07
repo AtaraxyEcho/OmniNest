@@ -699,6 +699,9 @@ public class FileUploadSessionService {
                     }
                     if (actualSize != session.getTotalSizeBytes()) {
                         removeObjectQuietly(key, "清理直传大小不一致的隔离对象失败");
+                        // 隔离对象已删，客户端无法用同一会话重传：会话必须就地收口。
+                        // 只抛错不落地会让它停在 CREATED 并占着个人/共享配额直到 24 小时过期。
+                        markSessionExpired(ownerUserId, uploadId);
                         throw new BusinessException(
                                 ErrorCode.FILE_UPLOAD_FAILED,
                                 "上传内容大小与申报不一致"

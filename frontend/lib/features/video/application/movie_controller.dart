@@ -397,7 +397,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       final refreshed = state.asData?.value ?? current;
       state = AsyncData(refreshed.copyWith(lastTask: task));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -495,7 +495,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           latest.copyWith(
             movieLoadingMore: movies ? false : null,
             episodeLoadingMore: movies ? null : false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }
@@ -605,7 +605,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         state = AsyncData(
           latest.copyWith(
             loadingSections: stillLoading,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }
@@ -631,6 +631,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     try {
       final seriesPage = await _api.seriesByTypePage(
         seriesType: section == MovieSection.anime ? 'ANIME' : 'TV',
+        // 关键词必须下发到 SQL 侧：本地只过滤已缓存的一页，搜不到未加载的剧集。
+        keyword: _searchKeyword,
       );
       if (!ref.mounted || _sectionLoadGenerations[section] != generation) {
         return;
@@ -680,7 +682,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         state = AsyncData(
           latest.copyWith(
             loadingSections: stillLoading,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }
@@ -714,7 +716,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
       // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
       _safe(
-        () => _api.seriesByTypePage(seriesType: 'TV'),
+        () => _api.seriesByTypePage(seriesType: 'TV', keyword: _searchKeyword),
         MediaPage<MovieSeries>(
           items: const <MovieSeries>[],
           page: 0,
@@ -725,7 +727,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         partialErrors,
       ),
       _safe(
-        () => _api.seriesByTypePage(seriesType: 'ANIME'),
+        () => _api.seriesByTypePage(seriesType: 'ANIME', keyword: _searchKeyword),
         MediaPage<MovieSeries>(
           items: const <MovieSeries>[],
           page: 0,
@@ -776,7 +778,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     try {
       return await call();
     } on Exception catch (e) {
-      partialErrors.add(describeUserFacingError(e).message);
+      partialErrors.add(userFacingErrorText(e));
       return fallback;
     }
   }

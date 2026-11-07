@@ -51,9 +51,15 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
         this.imageAnalysisGateway = imageAnalysisGateway;
     }
 
-    /** @return 是否启用照片图像分析 */
+    /**
+     * @return 是否启用照片图像分析
+     *
+     * <p>缺省必须与 {@code V002__builtin_catalog.sql} 的 {@code photo.ai.enabled=false}
+     * 基线一致：配置行缺失（新库未跑迁移、测试环境裁剪）时默认开启会让系统在没有任何
+     * 管理员意图的情况下向视觉侧车派发高负载推理任务。</p>
+     */
     public boolean isAiEnabled() {
-        return booleanConfig(PHOTO_AI_ENABLED, true);
+        return booleanConfig(PHOTO_AI_ENABLED, false);
     }
 
     /** @return AI 服务地址 */

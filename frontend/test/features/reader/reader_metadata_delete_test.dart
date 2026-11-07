@@ -173,11 +173,13 @@ void main() {
     await _drainFeedbackToast(tester);
   });
 
-  testWidgets('删除失败时回显服务端原因而不是通用重试提示', (tester) async {
+  testWidgets('删除失败时回显具体原因而不是通用重试提示', (tester) async {
     final controller =
         _RecordingReaderCenterController()
           ..deleteFailure = const AppException(
-            code: '6001',
+            // 英文界面下未知数字码会收敛成通用文案，这里用已登记的业务码验证
+            // 「具体原因」链路：共享书库的删除会被后端判为无权限。
+            code: 'FORBIDDEN',
             message: '阅读条目不存在或无权删除',
           );
 
@@ -192,7 +194,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('阅读条目不存在或无权删除'), findsOneWidget);
+    expect(
+      find.textContaining('Not allowed to perform this action'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Delete failed'), findsNothing);
     await _drainFeedbackToast(tester);
   });

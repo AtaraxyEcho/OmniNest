@@ -71,7 +71,7 @@ class MusicArtistAlbumsController extends Notifier<MusicArtistAlbumsState> {
       final latest = state;
       state = latest.copyWith(
         loadingArtistIds: {...latest.loadingArtistIds}..remove(artistId),
-        errorMessage: describeUserFacingError(error).message,
+        errorMessage: userFacingErrorText(error),
       );
     }
   }

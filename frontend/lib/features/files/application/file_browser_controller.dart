@@ -235,7 +235,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
     if (current == null) {
       return;
     }
-    final described = describeUserFacingError(error);
+    final described = localizedUserFacingError(error);
     state = AsyncData(
       current.copyWith(
         lastActionError: FileBrowserActionError(

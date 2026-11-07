@@ -89,7 +89,7 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
       );
     } on Exception catch (error) {
       return const MusicHistoryState().copyWith(
-        errorMessage: describeUserFacingError(error).message,
+        errorMessage: userFacingErrorText(error),
       );
     }
   }
@@ -137,7 +137,7 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
         state = AsyncData(
           latest.copyWith(
             loadingMore: false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }

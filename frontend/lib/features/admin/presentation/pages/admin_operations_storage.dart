@@ -244,7 +244,7 @@ Future<void> _toggleStorageLocation(
       showOmniFeedback(
         context,
         l10n.adminLoadFailed(
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
         ),
         severity: OmniFeedbackSeverity.error,
       );
@@ -271,7 +271,7 @@ Future<void> _deleteStorageLocation(
       showOmniFeedback(
         context,
         l10n.adminLoadFailed(
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
         ),
         severity: OmniFeedbackSeverity.error,
       );

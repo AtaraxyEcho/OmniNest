@@ -430,7 +430,7 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = describeUserFacingError(error).message);
+        setState(() => _errorMessage = userFacingErrorText(error));
       }
     } finally {
       if (mounted) {

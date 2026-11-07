@@ -80,7 +80,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
     } on Exception catch (error) {
       final latest = state.asData?.value;
       if (latest == null) return;
-      final message = describeUserFacingError(error).message;
+      final message = userFacingErrorText(error);
       state = AsyncData(
         favorites
             ? latest.copyWith(
@@ -133,7 +133,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
       if (latest == null || latest.tab != tab || latest.searchQuery != query) {
         return;
       }
-      final message = describeUserFacingError(error).message;
+      final message = userFacingErrorText(error);
       state = AsyncData(
         tab == PhotoTab.favorites
             ? latest.copyWith(favoritePageError: message)
@@ -197,7 +197,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
       if (latest != null) {
         state = AsyncData(
           latest.copyWith(
-            timelinePageError: describeUserFacingError(e).message,
+            timelinePageError: userFacingErrorText(e),
           ),
         );
       }
@@ -245,7 +245,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
         state = AsyncData(
           latest.copyWith(
             isLoadingMoreTimeline: false,
-            timelinePageError: describeUserFacingError(e).message,
+            timelinePageError: userFacingErrorText(e),
           ),
         );
       }
@@ -305,7 +305,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
         state = AsyncData(
           latest.copyWith(
             isLoadingRelationGraph: false,
-            relationGraphError: describeUserFacingError(e).message,
+            relationGraphError: userFacingErrorText(e),
           ),
         );
       }
@@ -354,7 +354,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
         state = AsyncData(
           latest.copyWith(
             isLoadingGroups: false,
-            groupPageError: describeUserFacingError(e).message,
+            groupPageError: userFacingErrorText(e),
           ),
         );
       }
@@ -397,7 +397,7 @@ mixin PhotoCenterCollectionLoaders on AsyncNotifier<PhotoCenterState> {
         state = AsyncData(
           latest.copyWith(
             isLoadingMoreGroups: false,
-            groupPageError: describeUserFacingError(e).message,
+            groupPageError: userFacingErrorText(e),
           ),
         );
       }

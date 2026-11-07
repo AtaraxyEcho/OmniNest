@@ -383,7 +383,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         currentTask.copyWith(
           status: 'FAILED',
           messageCode: FileUploadTaskMessageCode.failed,
-          message: describeUserFacingError(error).displayMessage,
+          message: userFacingErrorDisplayText(error),
         ),
       );
     }

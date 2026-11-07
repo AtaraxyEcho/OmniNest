@@ -81,7 +81,6 @@ public class ReaderBookshelfService {
                 throw exception;
             }
         }
-        recordBookshelfEvent(ownerUserId, readerItemId, true);
         log.info("添加到书架: userId={}, itemId={}", ownerUserId, readerItemId);
     }
 
@@ -95,17 +94,25 @@ public class ReaderBookshelfService {
     }
 
     /**
-     * 在独立新事务里落这一行。
+     * 在独立新事务里落这一行并写同步事件。
      *
      * <p>PostgreSQL 命中 {@code uniq_reader_bookshelf_owner_item} 后会把当前事务置为 aborted 态，
      * 同一事务里的后续语句一律报 "current transaction is aborted"；并发双加时的存在性回查必须换
      * 一个事务，否则本应返回既成事实的分支会变成 500。
+     *
+     * <p>同步事件必须与实体处于同一独立事务：{@code UserSyncEventRecorder} 是
+     * {@code Propagation.MANDATORY}，在 {@code template.execute(...)} 之外调用会因当前线程
+     * 没有活跃事务抛 {@code IllegalTransactionStateException}，把一次正常加书架变成 500。
+     * 并发撞唯一键时整个新事务回滚，事件由抢到插入的线程负责，不会双发。</p>
      */
     private void saveInNewTransaction(ReaderBookshelf entry) {
         TransactionTemplate template = new TransactionTemplate(
                 transactionTemplate.getTransactionManager());
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        template.execute(status -> bookshelfRepository.saveAndFlush(entry));
+        template.executeWithoutResult(status -> {
+            bookshelfRepository.saveAndFlush(entry);
+            recordBookshelfEvent(entry.getOwnerUserId(), entry.getReaderItemId(), true);
+        });
     }
 
     /**

@@ -292,7 +292,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     final l10n = AppLocalizations.of(context);
     final errorMessage =
         shareState.hasError
-            ? describeUserFacingError(shareState.error!, l10n: l10n).message
+            ? userFacingErrorText(shareState.error!, l10n: l10n)
             : null;
     if (hosted) {
       return _HostedCreateSection(

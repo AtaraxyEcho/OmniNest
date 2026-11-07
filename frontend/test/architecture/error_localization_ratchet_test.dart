@@ -13,30 +13,44 @@ import 'package:flutter_test/flutter_test.dart';
 /// 2. 取 `.code` 做分支的稳定错误码；
 /// 3. 已交给 `localizeUserFacing(...)` 按 code 再映射的。
 ///
-/// 其余展示层调用点必须传 `l10n:`。2026-11-03 实测 49 处已全部补完，计数归零，
-/// 因此这是硬约束而不是棘轮：新增一处不传 `l10n:` 的展示层调用就直接判失败。
+/// 有 `BuildContext` 的展示层（`presentation/` 与 `core/`）必须传 `l10n:`；
+/// 没有上下文的 `application/` 层必须改用 `userFacingErrorText` /
+/// `userFacingErrorDisplayText`，它们按当前 UI 语言解析。两个集合都按 0 处
+/// 违例收紧，新增一处违规就直接判失败。
 void main() {
   const unlocalizedDisplayCeiling = 0;
+  const directTextExtractionCeiling = 0;
 
   String normalize(String path) => path.replaceAll(r'\', '/');
 
-  List<File> presentationFiles() {
+  List<File> dartFiles(Iterable<String> pathMarkers) {
     return Directory('lib')
         .listSync(recursive: true)
         .whereType<File>()
-        .where(
-          (f) =>
-              f.path.endsWith('.dart') &&
-              normalize(f.path).contains('/presentation/'),
-        )
+        .where((f) => f.path.endsWith('.dart'))
+        .where((f) {
+          final path = normalize(f.path);
+          if (path.contains('/app/l10n/') ||
+              path.endsWith('core/errors/error_message.dart')) {
+            return false;
+          }
+          return pathMarkers.any(path.contains);
+        })
         .toList();
   }
 
-  test('展示层用户可见错误必须本地化，违例数只降不升', () {
+  /// 有 BuildContext 的层：展示组件与 core 内嵌组件。
+  List<File> contextAwareFiles() =>
+      dartFiles(const ['/presentation/', '/core/']);
+
+  /// 无 BuildContext 的控制器层。
+  List<File> applicationFiles() => dartFiles(const ['/application/']);
+
+  test('有上下文的展示层必须传 l10n，违例数只降不升', () {
     final offenders = <String>[];
     final marker = 'describeUserFacingError(';
 
-    for (final file in presentationFiles()) {
+    for (final file in contextAwareFiles()) {
       final source = file.readAsStringSync();
       if (!source.contains(marker)) {
         continue;
@@ -97,6 +111,43 @@ void main() {
           '展示层出现未本地化的用户可见错误（基线 $unlocalizedDisplayCeiling 处），'
           '英文用户会看到服务端中文。新增调用请传 l10n:，'
           '或改用签名强制传入本地化实例的 errorReason。\n'
+          '${offenders.join('\n')}',
+    );
+  });
+
+  test('控制器层取展示文案必须走 userFacingErrorText，违例数只降不升', () {
+    final offenders = <String>[];
+    final marker = 'describeUserFacingError(';
+    // 直接取 message/displayMessage 会把服务端中文写进 state.errorMessage。
+    final extraction = RegExp(r'^\s*\.(message|displayMessage)\b');
+
+    for (final file in applicationFiles()) {
+      final source = file.readAsStringSync();
+      if (!source.contains(marker)) {
+        continue;
+      }
+      for (var found = source.indexOf(marker);
+          found >= 0;
+          found = source.indexOf(marker, found + marker.length)) {
+        final end = _matchingParen(source, found + marker.length - 1);
+        final after = source.substring(
+          end + 1,
+          (end + 24).clamp(0, source.length),
+        );
+        if (extraction.hasMatch(after)) {
+          final line = source.substring(0, found).split('\n').length;
+          offenders.add('${normalize(file.path)}:$line');
+        }
+      }
+    }
+
+    expect(
+      offenders.length,
+      lessThanOrEqualTo(directTextExtractionCeiling),
+      reason:
+          '控制器层直接取 describeUserFacingError(...).message 会绕过 UI 语言，'
+          '英文界面下仍显示中文。请改用 userFacingErrorText(error)，'
+          '需要保留数字错误码后缀时用 userFacingErrorDisplayText(error)。\n'
           '${offenders.join('\n')}',
     );
   });

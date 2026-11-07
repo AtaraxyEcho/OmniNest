@@ -22,6 +22,7 @@ import com.omninest.modules.file.dto.ExternalStorageConnectorDto;
 import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -60,6 +61,7 @@ public class ExternalStorageService {
     private final RcloneGateway rcloneGateway;
     private final StorageExternalAccountRepository accountRepository;
     private final StorageImportTaskRepository importTaskRepository;
+    private final FileIngressItemRepository ingressItemRepository;
     private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRecordService taskRecordService;
@@ -406,6 +408,13 @@ public class ExternalStorageService {
             if (task == null || isFinishedImportStatus(task.getStatus())) {
                 return;
             }
+            // 取消可能落在执行线程已经退出（RETRY_WAIT 或 Worker 中断）的时刻：那种情况下
+            // 没有任何线程会再捕获 ImportCancelledException 去结算，预留只能在这里收口。
+            // 按已真正入库的字节结算，未写入的差额随结算一并释放。
+            storageQuotaService.settleReservation(
+                    "EXTERNAL_IMPORT",
+                    task.getId(),
+                    ingressItemRepository.sumImportedBytesByTaskId(task.getId()));
             task.setStatus(ImportTaskStatus.CANCELLED.getValue());
             importTaskRepository.save(task);
             taskRecordService.markCancelled(systemTaskId(task));

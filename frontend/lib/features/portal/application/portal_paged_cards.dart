@@ -107,7 +107,7 @@ abstract class PortalPagedListController<T>
         state = AsyncData(
           latest.copyWith(
             loadingMore: false,
-            errorMessage: describeUserFacingError(error).message,
+            errorMessage: userFacingErrorText(error),
           ),
         );
       }

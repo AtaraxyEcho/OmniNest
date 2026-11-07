@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.lang.reflect.Type;
 import java.util.List;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -21,6 +22,9 @@ public final class JsonSupport {
     private static final JsonMapper MAPPER = JsonMapper.builder()
             .changeDefaultPropertyInclusion(value -> value
                     .withValueInclusion(JsonInclude.Include.NON_NULL))
+            // 与 Web 边界（SerializeConfig）保持同一反序列化容错：Jackson 3 默认把
+            // 缺席的基本类型当错误，任务载荷与 Redis 缓存里的旧格式报文会整条读取失败。
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
             .build();
 
     private JsonSupport() {

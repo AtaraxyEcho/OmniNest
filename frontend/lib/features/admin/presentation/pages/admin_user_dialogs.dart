@@ -116,7 +116,7 @@ class _BatchQuotaDialogState extends ConsumerState<_BatchQuotaDialog> {
         setState(
           () =>
               _errorMessage =
-                  describeUserFacingError(error, l10n: l10n).message,
+                  userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {
@@ -248,7 +248,7 @@ class _EditQuotaDialogState extends ConsumerState<_EditQuotaDialog> {
         setState(
           () =>
               _errorMessage =
-                  describeUserFacingError(error, l10n: l10n).message,
+                  userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {
@@ -374,7 +374,7 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
         setState(
           () =>
               _errorMessage =
-                  describeUserFacingError(error, l10n: l10n).message,
+                  userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {
@@ -543,7 +543,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
         setState(
           () =>
               _errorMessage =
-                  describeUserFacingError(error, l10n: l10n).message,
+                  userFacingErrorText(error, l10n: l10n),
         );
       }
     } finally {

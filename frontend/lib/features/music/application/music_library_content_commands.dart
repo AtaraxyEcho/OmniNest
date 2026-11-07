@@ -41,7 +41,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       if (latest != null && latest.tracksLoadingMore) {
         _replaceState(latest.copyWith(tracksLoadingMore: false));
       }
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
     }
   }
 
@@ -70,7 +70,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       _mergeTrackDetail(detail);
       return detail;
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       return known;
     }
   }
@@ -110,7 +110,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       );
       await refresh();
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -160,7 +160,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -180,7 +180,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       await _refreshTaskState();
       return submission;
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -213,7 +213,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       _replaceState(live.copyWith(playlists: [playlist, ...live.playlists]));
       return playlist;
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -259,7 +259,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -284,7 +284,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -321,7 +321,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -347,7 +347,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -680,7 +680,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         ),
       );
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }

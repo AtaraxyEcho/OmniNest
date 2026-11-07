@@ -34,19 +34,30 @@ public record ConfigHistoryDto(
     /**
      * 从 ConfigHistory 实体转换为 DTO，支持敏感值掩码。
      *
+     * <p>只掩码真正有内容的敏感值：{@code null} 表示「该项当时不存在」，空串表示
+     * 「管理员把它清空了」。两者都按 {@code MASK} 呈现会让审计记录无法区分
+     * 「设置了新密钥」与「撤销了密钥」，而空串本身不泄露任何信息。</p>
+     *
      * @param history   历史记录实体
-     * @param sensitive 是否为敏感配置项，若为 true 则掩码 oldValue 和 newValue
+     * @param sensitive 是否为敏感配置项，若为 true 则掩码非空的 oldValue 和 newValue
      * @return DTO 实例
      */
     public static ConfigHistoryDto from(ConfigHistory history, boolean sensitive) {
         return new ConfigHistoryDto(
                 history.getId(),
                 history.getConfigKey(),
-                sensitive ? MASK : history.getOldValue(),
-                sensitive ? MASK : history.getNewValue(),
+                maskIfPresent(history.getOldValue(), sensitive),
+                maskIfPresent(history.getNewValue(), sensitive),
                 history.getChangedBy(),
                 history.getChangeReason(),
                 history.getCreatedAt()
         );
+    }
+
+    private static String maskIfPresent(String value, boolean sensitive) {
+        if (!sensitive || value == null || value.isEmpty()) {
+            return value;
+        }
+        return MASK;
     }
 }

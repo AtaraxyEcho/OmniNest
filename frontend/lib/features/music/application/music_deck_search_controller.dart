@@ -149,10 +149,10 @@ class MusicDeckSearchController extends Notifier<MusicDeckSearchState> {
               .toList(growable: false);
         } on DioException catch (error) {
           if (!CancelToken.isCancel(error)) {
-            failures[platform] = describeUserFacingError(error).message;
+            failures[platform] = userFacingErrorText(error);
           }
         } on Exception catch (error) {
-          failures[platform] = describeUserFacingError(error).message;
+          failures[platform] = userFacingErrorText(error);
         } finally {
           if (identical(_cancelTokens[platform], token)) {
             _cancelTokens.remove(platform);

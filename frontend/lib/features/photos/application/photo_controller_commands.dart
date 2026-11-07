@@ -86,7 +86,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       ref.invalidate(photoTagsProvider);
       ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -99,7 +99,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       ref.invalidate(photoTagsProvider);
       ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -176,7 +176,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await _repo.revertToVersion(photoId, versionId);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -187,7 +187,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await _repo.revertToOriginal(photoId);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -290,7 +290,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     try {
       return await _repo.reanalyzeLibrary();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -303,7 +303,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await refresh();
       await loadTrashPage(force: true);
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -322,7 +322,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
         );
       }
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -361,7 +361,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       state = AsyncData(
         next.copyWith(
           isLoadingTrash: false,
-          trashPageError: describeUserFacingError(e).message,
+          trashPageError: userFacingErrorText(e),
         ),
       );
     }
@@ -402,7 +402,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       state = AsyncData(
         next.copyWith(
           isLoadingMoreTrash: false,
-          trashPageError: describeUserFacingError(e).message,
+          trashPageError: userFacingErrorText(e),
         ),
       );
     }
@@ -458,7 +458,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await refresh();
       return album;
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -469,7 +469,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await _repo.deleteAlbum(albumId);
       await refresh();
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -484,7 +484,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await refresh();
       ref.invalidate(photoAlbumDetailProvider(albumId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -519,7 +519,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await refresh();
       ref.invalidate(photoAlbumDetailProvider(albumId));
     } on Exception catch (e) {
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -698,7 +698,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
             ref.mounted &&
             epoch == _importRefreshEpoch &&
             generation == _refreshGeneration) {
-          _setError(describeUserFacingError(error).message);
+          _setError(userFacingErrorText(error));
         }
       }
     }
@@ -772,7 +772,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
         _removePhotosFromTrash(<String>{photoId});
         unawaited(loadTrashPage(force: true));
       }
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -797,7 +797,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
         _removePhotosFromTrash(<String>{photoId});
         unawaited(loadTrashPage(force: true));
       }
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }
@@ -827,7 +827,7 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       if (_isPhotoTrashGoneError(e)) {
         unawaited(loadTrashPage(force: true));
       }
-      _setError(describeUserFacingError(e).message);
+      _setError(userFacingErrorText(e));
       rethrow;
     }
   }

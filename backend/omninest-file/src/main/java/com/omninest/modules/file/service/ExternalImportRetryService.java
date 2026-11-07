@@ -7,8 +7,10 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.ImportTaskStatus;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
@@ -37,8 +39,10 @@ public class ExternalImportRetryService {
     private static final int MAX_RETRIES = 3;
 
     private final StorageImportTaskRepository importTaskRepository;
+    private final FileIngressItemRepository ingressItemRepository;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final StorageQuotaService storageQuotaService;
     private final NotificationPublisher notificationService;
 
     /**
@@ -113,18 +117,32 @@ public class ExternalImportRetryService {
     }
 
     /**
-     * 死信收口时把业务行也落到失败终态并退还预留，避免停留在传输中。
+     * 死信收口时把业务行也落到失败终态并结算预留，避免停留在传输中。
+     *
+     * <p>执行侧 {@code markFailed}/{@code markCancelled} 都会先按实际入库字节结算，
+     * 但死信路径由消息重试耗尽触发，此时执行线程早已退出，没有人再碰这条预留；
+     * 漏掉结算会让 {@code EXTERNAL_IMPORT} 的预留锁死到 24 小时过期。</p>
      */
     private void markTaskRowFailed(UUID importTaskId, String errorSummary) {
         importTaskRepository.findById(importTaskId)
                 .filter(task -> !ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus()))
                 .filter(task -> !ImportTaskStatus.FAILED.getValue().equals(task.getStatus()))
                 .ifPresent(task -> {
+                    // 共享空间导入不建个人预留，settle 在无预留行时是空操作。
+                    storageQuotaService.settleReservation(
+                            "EXTERNAL_IMPORT", task.getId(), importedBytes(task.getId()));
                     task.setStatus(ImportTaskStatus.FAILED.getValue());
                     task.setSpeedBytes(0L);
                     task.setErrorSummary(errorSummary);
                     importTaskRepository.save(task);
                 });
+    }
+
+    /**
+     * 该导入任务已真正落库的字节数：结算退还没写入的部分，已入库的仍需计入用量。
+     */
+    private long importedBytes(UUID importTaskId) {
+        return ingressItemRepository.sumImportedBytesByTaskId(importTaskId);
     }
 
     private void notifyFailed(UUID importTaskId, String errorSummary) {

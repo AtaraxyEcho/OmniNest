@@ -166,7 +166,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
           _emitState(
             latest.copyWith(
               isExternalBrowseLoading: false,
-              externalBrowseError: describeUserFacingError(error).message,
+              externalBrowseError: userFacingErrorText(error),
             ),
           );
         }

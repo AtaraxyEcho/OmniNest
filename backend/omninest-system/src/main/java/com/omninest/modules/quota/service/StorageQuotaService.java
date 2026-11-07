@@ -72,14 +72,20 @@ public class StorageQuotaService {
     /**
      * 结算来源预留。
      *
+     * <p>定期结算才是主上传链路（普通上传晋升、外部导入、壁纸上传）真正把字节记进
+     * {@code used_bytes} 的地方，因此配额阈值告警必须挂在这里，只挂 {@code incrementUsage}
+     * 会让用户"正常上传占满空间却永远收不到预警"。</p>
+     *
      * @param sourceType 来源类型
      * @param sourceId 来源 ID
      * @param committedBytes 实际使用字节数
      */
     public void settleReservation(String sourceType, UUID sourceId, long committedBytes) {
         reservationService.settle(sourceType, sourceId, committedBytes);
-        reservationService.ownerUserId(sourceType, sourceId)
-                .ifPresent(this::evictProfileCacheAfterCommit);
+        reservationService.ownerUserId(sourceType, sourceId).ifPresent(userId -> {
+            evictProfileCacheAfterCommit(userId);
+            userAccountQuery.findById(userId).ifPresent(owner -> notifyQuotaStatus(userId, owner));
+        });
     }
 
     /**
@@ -90,6 +96,9 @@ public class StorageQuotaService {
      */
     public void releaseReservation(String sourceType, UUID sourceId) {
         reservationService.release(sourceType, sourceId);
+        // 预留占用会出现在用户资料里，释放后不淘汰缓存会让配额页面在 TTL 内继续显示旧占用。
+        reservationService.ownerUserId(sourceType, sourceId)
+                .ifPresent(this::evictProfileCacheAfterCommit);
     }
 
     /**
@@ -117,10 +126,15 @@ public class StorageQuotaService {
     /**
      * 回收一批过期预留。
      *
+     * <p>过期回收同样改动了用户的 reserved_bytes，必须同步淘汰资料缓存。</p>
+     *
      * @return 回收数量
      */
     public int reclaimExpiredReservations() {
-        return reservationService.reclaimExpired();
+        StorageQuotaReservationService.ReclaimedReservations reclaimed =
+                reservationService.reclaimExpiredWithOwners();
+        reclaimed.ownerUserIds().forEach(this::evictProfileCacheAfterCommit);
+        return reclaimed.count();
     }
 
     /**

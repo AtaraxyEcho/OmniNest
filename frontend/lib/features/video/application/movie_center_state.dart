@@ -170,6 +170,7 @@ class MovieCenterState {
       _filterAndSortSeries(animeSeries);
 
   List<MovieSeries> _filterAndSortSeries(List<MovieSeries> source) {
+    final query = searchQuery.trim().toLowerCase();
     var result = source.toList();
     if (selectedGenres.isNotEmpty) {
       result =
@@ -203,7 +204,19 @@ class MovieCenterState {
         return bd.compareTo(ad);
       }),
     };
-    return _sortSeries(result);
+    result = _sortSeries(result);
+    if (query.isEmpty) {
+      return result;
+    }
+    // 与服务端 q 检索同口径，保证已缓存页即时过滤的结果与翻页回来的数据一致。
+    return result
+        .where(
+          (series) =>
+              series.title.toLowerCase().contains(query) ||
+              (series.originalTitle ?? '').toLowerCase().contains(query) ||
+              (series.overview ?? '').toLowerCase().contains(query),
+        )
+        .toList();
   }
 
   List<MovieSeries> _sortSeries(List<MovieSeries> items) {

@@ -16,8 +16,10 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.ImportTaskStatus;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,19 +40,28 @@ class ExternalImportRetryServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("70000000-0000-0000-0000-000000000003");
 
     private StorageImportTaskRepository importTaskRepository;
+    private FileIngressItemRepository ingressItemRepository;
     private TaskRecordService taskRecordService;
     private TaskDispatchService taskDispatchService;
+    private StorageQuotaService storageQuotaService;
     private NotificationPublisher notificationService;
     private ExternalImportRetryService service;
 
     @BeforeEach
     void setUp() {
         importTaskRepository = Mockito.mock(StorageImportTaskRepository.class);
+        ingressItemRepository = Mockito.mock(FileIngressItemRepository.class);
         taskRecordService = Mockito.mock(TaskRecordService.class);
         taskDispatchService = Mockito.mock(TaskDispatchService.class);
+        storageQuotaService = Mockito.mock(StorageQuotaService.class);
         notificationService = Mockito.mock(NotificationPublisher.class);
         service = new ExternalImportRetryService(
-                importTaskRepository, taskRecordService, taskDispatchService, notificationService);
+                importTaskRepository,
+                ingressItemRepository,
+                taskRecordService,
+                taskDispatchService,
+                storageQuotaService,
+                notificationService);
         when(importTaskRepository.findById(IMPORT_TASK_ID)).thenReturn(Optional.of(task()));
     }
 
@@ -94,6 +105,7 @@ class ExternalImportRetryServiceTest {
     @DisplayName("重试耗尽后转死信，并把业务行从执行中状态收口为失败")
     void exhaustedRetriesDeadLetterAndCloseBusinessRow() {
         when(taskRecordService.retryCount(SYSTEM_TASK_ID)).thenReturn(3);
+        when(ingressItemRepository.sumImportedBytesByTaskId(IMPORT_TASK_ID)).thenReturn(1024L);
 
         service.handleFailure(event(), new IllegalStateException("依赖持续不可用"));
 
@@ -102,6 +114,9 @@ class ExternalImportRetryServiceTest {
         ArgumentCaptor<StorageImportTask> saved = ArgumentCaptor.forClass(StorageImportTask.class);
         Mockito.verify(importTaskRepository).save(saved.capture());
         assertThat(saved.getValue().getStatus()).isEqualTo(ImportTaskStatus.FAILED.getValue());
+        // 死信路径没有执行线程再结算预留：必须在这里按已入库字节收口，否则配额锁死 24 小时。
+        Mockito.verify(storageQuotaService)
+                .settleReservation("EXTERNAL_IMPORT", IMPORT_TASK_ID, 1024L);
         Mockito.verify(notificationService).notifyOrLog(
                 eq(OWNER_ID), eq("TASK_FAILED"), anyString(), anyString(), any());
     }

@@ -270,11 +270,11 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 json.path("windDir").asString(null),
                 json.path("pressure").asString(null),
                 json.path("visibility").asString(null),
-                json.path("uvIndex").asInt(),
+                asNullableInt(json, "uvIndex"),
                 json.path("sunrise").asString(null),
                 json.path("sunset").asString(null),
-                json.path("aqi").asInt(),
-                json.path("pm2p5").asInt(),
+                asNullableInt(json, "aqi"),
+                asNullableInt(json, "pm2p5"),
                 json.path("aqiCategory").asString(null),
                 json.path("updateTime").asString(null),
                 json.path("healthAdvice").asString(""),
@@ -309,6 +309,21 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
             ));
         }
         return List.copyOf(items);
+    }
+
+    /**
+     * 读取可缺失的整型指标：字段缺席或显式为 null 时返回 null。
+     *
+     * <p>天气上游不保证返回紫外线与空气质量，缺失语义是「无数据」而不是「指数 0」。
+     * 用 {@code asInt()} 兜底会把缓存命中后的响应篡改成「紫外线 0 / AQI 0（优）」，
+     * 前端据此给出错误的户外建议。</p>
+     */
+    private Integer asNullableInt(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        return value.asInt();
     }
 
     private List<WeatherDto.DailyForecast> parseDaily(JsonNode array) {

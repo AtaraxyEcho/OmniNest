@@ -96,7 +96,7 @@ class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
         _loading = false;
         _loadingMore = false;
         _error = l10n.filesLoadFailed(
-          describeUserFacingError(error, l10n: l10n).message,
+          userFacingErrorText(error, l10n: l10n),
         );
       });
     }

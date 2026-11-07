@@ -8,9 +8,11 @@ import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.quota.domain.StorageQuotaReservation;
 import com.omninest.modules.quota.repository.StorageQuotaReservationRepository;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -259,12 +261,26 @@ public class StorageQuotaReservationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int reclaimExpired() {
+        return reclaimExpiredWithOwners().count();
+    }
+
+    /**
+     * 有界回收过期预留，并返回受影响用户。
+     *
+     * <p>调用方需要按用户淘汰资料缓存：预留占用体现在用户资料里，回收后不淘汰会让
+     * 配额页面在缓存 TTL 内继续显示已经释放的占用。</p>
+     *
+     * @return 回收数量与涉及的归属用户（去重）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ReclaimedReservations reclaimExpiredWithOwners() {
         List<StorageQuotaReservation> expired = reservationRepository
                 .findByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
                         RESERVED,
                         Instant.now(),
                         PageRequest.of(0, RECLAIM_BATCH_SIZE)
                 );
+        Set<UUID> reclaimedOwners = new LinkedHashSet<>();
         int reclaimedCount = 0;
         for (StorageQuotaReservation reservation : expired) {
             if (reservation.isQuotaApplied()
@@ -278,9 +294,19 @@ public class StorageQuotaReservationService {
             }
             reservation.setStatus(EXPIRED);
             reservationRepository.save(reservation);
+            reclaimedOwners.add(reservation.getOwnerUserId());
             reclaimedCount++;
         }
-        return reclaimedCount;
+        return new ReclaimedReservations(reclaimedCount, List.copyOf(reclaimedOwners));
+    }
+
+    /**
+     * 过期预留回收结果：数量用于日志与指标，归属用户用于淘汰资料缓存。
+     *
+     * @param count 回收的预留条数
+     * @param ownerUserIds 涉及的归属用户（去重）
+     */
+    public record ReclaimedReservations(int count, List<UUID> ownerUserIds) {
     }
 
     private String normalizeSourceType(String sourceType) {

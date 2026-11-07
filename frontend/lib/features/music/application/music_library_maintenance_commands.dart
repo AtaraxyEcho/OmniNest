@@ -18,7 +18,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       );
       _replaceState(refreshed);
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -53,7 +53,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       );
       await refresh();
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -87,7 +87,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       _replaceState(live.copyWith(tracks: nextTracks));
       return updated;
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }
@@ -107,7 +107,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       );
       _replaceState(refreshed);
     } on Exception catch (error) {
-      _setError(describeUserFacingError(error).message);
+      _setError(userFacingErrorText(error));
       rethrow;
     }
   }

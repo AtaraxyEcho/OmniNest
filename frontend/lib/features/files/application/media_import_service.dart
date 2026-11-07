@@ -316,6 +316,7 @@ class MediaImportService {
         result,
         fileName: fileName,
         parentId: parentId,
+        spaceType: spaceType,
       );
       return ImportedMediaFile(
         fileName: fileName,
@@ -490,6 +491,7 @@ class MediaImportService {
     FileUploadCompleteResult result, {
     required String fileName,
     required String? parentId,
+    required String? spaceType,
   }) async {
     if (!result.isScanning) {
       final fileNodeId = result.fileNodeId;
@@ -500,6 +502,7 @@ class MediaImportService {
       final recovered = await _resolvePromotedNode(
         fileName: fileName,
         parentId: parentId,
+        spaceType: spaceType,
         timeout: const Duration(seconds: 15),
       );
       if (recovered != null) {
@@ -515,6 +518,7 @@ class MediaImportService {
       final recovered = await _resolvePromotedNode(
         fileName: fileName,
         parentId: parentId,
+        spaceType: spaceType,
         timeout: const Duration(seconds: 15),
       );
       if (recovered != null) {
@@ -542,6 +546,7 @@ class MediaImportService {
       final recovered = await _resolvePromotedNode(
         fileName: fileName,
         parentId: parentId,
+        spaceType: spaceType,
         timeout: Duration.zero,
       );
       if (recovered != null) {
@@ -576,6 +581,7 @@ class MediaImportService {
     final resolved = await findImportedNode(
       parentId: parentId,
       fileName: fileName,
+      spaceType: spaceType,
       timeout: const Duration(minutes: 2),
     );
     if (resolved == null) {
@@ -597,6 +603,7 @@ class MediaImportService {
   Future<String?> _resolvePromotedNode({
     required String fileName,
     required String? parentId,
+    required String? spaceType,
     required Duration timeout,
   }) async {
     if (kDebugMode) {
@@ -608,24 +615,33 @@ class MediaImportService {
     return findImportedNode(
       parentId: parentId,
       fileName: fileName,
+      spaceType: spaceType,
       timeout: timeout,
     );
   }
 
   /// 在目标目录按文件名轮询查找晋升后的文件节点。
   ///
+  /// [spaceType] 必须是会话所属空间：共享空间目录的 UUID 交给个人空间接口会被后端
+  /// 判成 404（`FILE_NOT_FOUND`），轮询会一路空转到超时。
+  ///
   /// 供导入队列在扫描等待异常时自愈：后端晋升与自动导入链完成即能找回。
   Future<String?> findImportedNode({
     required String? parentId,
     required String fileName,
+    String? spaceType,
     Duration timeout = const Duration(minutes: 5),
   }) async {
+    final shared = (spaceType ?? 'PERSONAL').toUpperCase() == 'SHARED';
     final deadline = DateTime.now().add(timeout);
     var attempted = false;
     while (!attempted || DateTime.now().isBefore(deadline)) {
       attempted = true;
       try {
-        final nodes = await _fileApi.listFiles(parentId: parentId);
+        final nodes =
+            shared
+                ? await _fileApi.listSharedSpaceFiles(parentId: parentId)
+                : await _fileApi.listFiles(parentId: parentId);
         for (final node in nodes) {
           if (!node.isFolder && node.name == fileName) {
             return node.id;

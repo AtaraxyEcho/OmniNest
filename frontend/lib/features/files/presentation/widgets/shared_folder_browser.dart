@@ -134,7 +134,7 @@ class _SharedFolderBrowserState extends ConsumerState<SharedFolderBrowser> {
       return const AppLoading();
     }
     if (state.hasError) {
-      final message = describeUserFacingError(state.error!, l10n: l10n).message;
+      final message = userFacingErrorText(state.error!, l10n: l10n);
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

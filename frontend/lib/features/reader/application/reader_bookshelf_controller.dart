@@ -91,7 +91,7 @@ class ReaderBookshelfController extends AsyncNotifier<ReaderBookshelfState> {
       return ReaderBookshelfState.fromPage(first);
     } on Exception catch (e) {
       return ReaderBookshelfState(
-        errorMessage: describeUserFacingError(e).message,
+        errorMessage: userFacingErrorText(e),
       );
     }
   }

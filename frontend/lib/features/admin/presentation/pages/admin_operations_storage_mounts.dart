@@ -66,7 +66,7 @@ class _AdminTrustedMountsSectionState
       showOmniFeedback(
         context,
         '${l10n.adminMountLibraryProvisionFailed}: '
-        '${describeUserFacingError(error, l10n: l10n).message}',
+        '${userFacingErrorText(error, l10n: l10n)}',
         severity: OmniFeedbackSeverity.error,
       );
     } finally {
@@ -102,7 +102,7 @@ class _AdminTrustedMountsSectionState
         final lastError =
             result.lastError == null
                 ? ''
-                : ' · ${describeUserFacingError(Exception(result.lastError), l10n: l10n).message}';
+                : ' · ${userFacingErrorText(Exception(result.lastError), l10n: l10n)}';
         showOmniFeedback(
           context,
           '${l10n.adminMountLibraryScanAllPartial(result.success, result.failed)}$lastError',

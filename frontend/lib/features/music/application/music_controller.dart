@@ -8,6 +8,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/errors/user_facing_error_locale.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
@@ -390,7 +391,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     try {
       return await call();
     } on Exception catch (e) {
-      _partialErrors.add(describeUserFacingError(e).message);
+      _partialErrors.add(userFacingErrorText(e));
       return fallback;
     }
   }
@@ -433,7 +434,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     if (current == null) {
       return;
     }
-    final message = describeUserFacingError(error).message;
+    final message = userFacingErrorText(error);
     _queuePersistenceErrorMessage = message;
     state = AsyncData(current.copyWith(errorMessage: message));
   }

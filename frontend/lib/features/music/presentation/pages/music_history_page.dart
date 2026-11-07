@@ -53,7 +53,7 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
           error:
               (error, stackTrace) => _hostedHistoryFailure(
                 context,
-                describeUserFacingError(error, l10n: l10n).message,
+                userFacingErrorText(error, l10n: l10n),
                 l10n,
               ),
           data: (state) {
@@ -101,7 +101,7 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error:
               (error, stackTrace) => _HistoryFailure(
-                message: describeUserFacingError(error, l10n: l10n).message,
+                message: userFacingErrorText(error, l10n: l10n),
               ),
           data: (state) {
             if (state.errorMessage != null) {

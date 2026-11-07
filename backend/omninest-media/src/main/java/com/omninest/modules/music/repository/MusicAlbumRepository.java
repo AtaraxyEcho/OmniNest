@@ -178,6 +178,11 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
     /**
      * 批量重算专辑曲目数与总时长，单条 SQL 覆盖一组专辑。
      *
+     * <p>统计口径与「活动曲目」相关查询（{@code findTop12ActiveByOwnerUserId}、
+     * {@code searchVisibleActiveAlbums}）一致：只计 {@code file_nodes.is_deleted = false}
+     * 的曲目。回收站里的音频仍留在 {@code music_tracks}，不排除就会让专辑卡片显示
+     * 已被删掉的曲目数与虚高时长，与专辑详情里的曲目列表对不上。</p>
+     *
      * @param ownerUserId 所有者用户 ID
      * @param albumIds 专辑 ID 集合
      * @return 更新的行数
@@ -187,10 +192,16 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
             UPDATE omni.music_albums album
             SET track_count = (
                     SELECT COUNT(*)::int FROM omni.music_tracks track
-                    WHERE track.owner_user_id = :ownerUserId AND track.album_id = album.id),
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.album_id = album.id
+                      AND fn.is_deleted = false),
                 total_duration = COALESCE((
                     SELECT SUM(track.duration_seconds) FROM omni.music_tracks track
-                    WHERE track.owner_user_id = :ownerUserId AND track.album_id = album.id), 0)::int,
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.album_id = album.id
+                      AND fn.is_deleted = false), 0)::int,
                 updated_at = now()
             WHERE album.owner_user_id = :ownerUserId
               AND album.id IN (:albumIds)
