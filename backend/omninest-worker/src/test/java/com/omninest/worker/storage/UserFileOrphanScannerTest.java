@@ -64,10 +64,11 @@ class UserFileOrphanScannerTest {
                 fileObjectReferenceQuery,
                 fileIngressObjectReferenceQuery,
                 redisUtil,
+                redisUtil,
                 properties
         );
         Mockito.lenient().when(objectStorageBuckets.userFiles()).thenReturn(BUCKET);
-        Mockito.when(redisUtil.newLockToken()).thenReturn("lock-token");
+        Mockito.when(redisUtil.newToken()).thenReturn("lock-token");
         Mockito.when(redisUtil.tryLock(LOCK, "lock-token", Duration.ofMinutes(30))).thenReturn(true);
         Mockito.lenient().when(redisUtil.unlock(LOCK, "lock-token")).thenReturn(true);
     }

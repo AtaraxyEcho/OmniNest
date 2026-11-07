@@ -64,16 +64,13 @@ class PhotoAdminServiceTest {
     private final PhotoItemRepository photoItemRepository = mock(PhotoItemRepository.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final PhotoFileDetector fileDetector = mock(PhotoFileDetector.class);
-    private final PhotoInputGuard inputGuard = mock(PhotoInputGuard.class);
     private final PhotoSourceFileService sourceFileService = mock(PhotoSourceFileService.class);
-    private final PhotoExifExtractor exifExtractor = mock(PhotoExifExtractor.class);
+    private final PhotoImportPreparer photoImportPreparer = mock(PhotoImportPreparer.class);
     private final PhotoThumbnailService thumbnailService = mock(PhotoThumbnailService.class);
     private final NotificationPublisher notificationService = mock(NotificationPublisher.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final PhotoRawPreviewService rawPreviewService = mock(PhotoRawPreviewService.class);
-    private final PhotosRuntimeConfigService photosRuntimeConfigService = mock(PhotosRuntimeConfigService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
-    private final PhotoGeoService photoGeoService = mock(PhotoGeoService.class);
     private final PhotoAiTaskService photoAiTaskService = mock(PhotoAiTaskService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskHeartbeatRunner taskHeartbeatRunner = mock(TaskHeartbeatRunner.class);
@@ -87,16 +84,13 @@ class PhotoAdminServiceTest {
             photoItemRepository,
             fileMetadataQueryService,
             fileDetector,
-            inputGuard,
             sourceFileService,
-            exifExtractor,
+            photoImportPreparer,
             thumbnailService,
             notificationService,
             taskDispatchService,
             rawPreviewService,
-            photosRuntimeConfigService,
             fileQueryService,
-            photoGeoService,
             photoAiTaskService,
             taskRecordService,
             taskHeartbeatRunner,

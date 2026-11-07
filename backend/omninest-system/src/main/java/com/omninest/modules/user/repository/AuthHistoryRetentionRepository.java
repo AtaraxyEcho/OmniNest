@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 认证历史表保留清理所需的窄仓储接口。
@@ -19,6 +20,10 @@ import org.springframework.data.repository.query.Param;
  * <p>三张表随登录、登出、同端互斥与角色变更持续增长，且每次受保护请求都要查
  * {@code auth_session_revocations}，不能无限膨胀。按"先取一批 ID、再按 ID 删"的
  * 方式分批提交，避免一次性大删除长时间持锁。</p>
+ *
+ * <p>三个 {@code @Modifying} 删除方法必须自带 {@code @Transactional}：清理服务刻意
+ * 不声明外层事务（否则数百批会合并成一个巨型事务），而自定义 {@code @Modifying}
+ * 查询不像 {@code SimpleJpaRepository} 内置方法那样自备事务拦截。</p>
  *
  * @author OmniNest
  */
@@ -42,6 +47,7 @@ public interface AuthHistoryRetentionRepository
      * @return 删除行数
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("delete from SessionRevocationEntity r where r.id in :ids")
     int deleteRevocationsByIds(@Param("ids") Collection<UUID> ids);
 
@@ -62,6 +68,7 @@ public interface AuthHistoryRetentionRepository
      * @return 删除行数
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("delete from AuthActiveSession s where s.id in :ids")
     int deleteSessionsByIds(@Param("ids") Collection<UUID> ids);
 
@@ -82,6 +89,7 @@ public interface AuthHistoryRetentionRepository
      * @return 删除行数
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("delete from AuthLoginAudit a where a.id in :ids")
     int deleteLoginAuditByIds(@Param("ids") Collection<UUID> ids);
 }

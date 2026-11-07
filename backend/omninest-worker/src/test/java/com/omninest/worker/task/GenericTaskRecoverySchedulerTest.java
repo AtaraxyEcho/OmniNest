@@ -15,6 +15,7 @@ import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
+import com.omninest.worker.support.DomainTaskFailureConverger;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,8 @@ class GenericTaskRecoverySchedulerTest {
     private TaskRedispatchService taskRedispatchService;
     private DistributedLock distributedLock;
     private GenericTaskRecoveryScheduler scheduler;
+    /** 用例只验证调度裁决，领域收敛以空实现参与即可。 */
+    private final DomainTaskFailureConverger converger = new DomainTaskFailureConverger(List.of());
 
     private static final UUID TASK = UUID.randomUUID();
     private static final UUID SECOND_TASK = UUID.randomUUID();
@@ -52,6 +55,7 @@ class GenericTaskRecoverySchedulerTest {
         scheduler = new GenericTaskRecoveryScheduler(
                 taskRecordService, distributedLock,
                 taskDispatchService, taskRedispatchService,
+                converger,
                 new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class)));
         ReflectionTestUtils.setField(scheduler, "staleHeartbeatSeconds", 600L);
         ReflectionTestUtils.setField(scheduler, "stuckDispatchSeconds", 1800L);

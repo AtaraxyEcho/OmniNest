@@ -57,11 +57,11 @@ class ExternalImportRetryServiceTest {
         notificationService = Mockito.mock(NotificationPublisher.class);
         service = new ExternalImportRetryService(
                 importTaskRepository,
-                ingressItemRepository,
                 taskRecordService,
                 taskDispatchService,
-                storageQuotaService,
-                notificationService);
+                notificationService,
+                new ExternalImportTaskStatusService(
+                        importTaskRepository, ingressItemRepository, storageQuotaService));
         when(importTaskRepository.findById(IMPORT_TASK_ID)).thenReturn(Optional.of(task()));
     }
 

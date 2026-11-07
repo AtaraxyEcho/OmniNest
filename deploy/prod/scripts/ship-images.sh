@@ -49,20 +49,33 @@ if [ -z "$target" ]; then
 fi
 
 read_env_value() {
-    sed -n "s/^$1=//p" "$SCRIPT_DIR/../.env" 2>/dev/null | tail -n 1
+    # .env 可能在 Windows 上编辑过：CRLF 会让读出的值末尾带 \r，
+    # 拼出的镜像名 docker 一定找不到。
+    sed -n "s/^$1=//p" "$SCRIPT_DIR/../.env" 2>/dev/null | tail -n 1 | tr -d '\r'
 }
 if [ -z "$tag" ]; then
     tag="$(read_env_value OMNINEST_IMAGE_TAG)"
     tag="${tag:-0.1.0}"
 fi
 
-images="omninest/backend:${tag} omninest/nginx:${tag} omninest-netease-music-api:${tag}"
+# 镜像名与 docker-compose.yml 的 ${OMNINEST_*_IMAGE:-默认值} 同口径：
+# 管理员自定义仓库前缀后，硬编码名称会指向根本不存在的镜像。
+backend_image="$(read_env_value OMNINEST_BACKEND_IMAGE)"
+nginx_image="$(read_env_value OMNINEST_NGINX_IMAGE)"
+netease_image="$(read_env_value OMNINEST_NETEASE_IMAGE)"
+sidecar_image="$(read_env_value OMNINEST_VISION_SIDECAR_IMAGE)"
+backend_image="${backend_image:-omninest/backend}"
+nginx_image="${nginx_image:-omninest/nginx}"
+netease_image="${netease_image:-omninest-netease-music-api}"
+sidecar_image="${sidecar_image:-omninest-vision-sidecar}"
+
+images="${backend_image}:${tag} ${nginx_image}:${tag} ${netease_image}:${tag}"
 if [ "$include_vision_sidecar" = "true" ]; then
-    images="$images omninest-vision-sidecar:${tag}"
-elif docker image inspect "omninest-vision-sidecar:${tag}" >/dev/null 2>&1; then
+    images="$images ${sidecar_image}:${tag}"
+elif docker image inspect "${sidecar_image}:${tag}" >/dev/null 2>&1; then
     # 显式开关优先；未指定时只要本机存在该镜像就一并转运，
     # 避免离线目标机启用 photo-ai profile 时才发现缺少侧车镜像。
-    images="$images omninest-vision-sidecar:${tag}"
+    images="$images ${sidecar_image}:${tag}"
 fi
 if [ "$include_minio" = "true" ]; then
     minio_image="$(grep -oE 'minio/minio:[A-Za-z0-9._-]+' "$SCRIPT_DIR/../docker-compose.yml" | head -n 1)"
@@ -87,9 +100,29 @@ if [ "$dry_run" = "true" ]; then
     exit 0
 fi
 
+# POSIX sh 没有 pipefail：`docker save` 中途失败（磁盘满、守护进程异常）时，
+# 管道右端仍可能以 0 结束并打印"转运完成"。用状态文件取回左端真实退出码。
+status_file="${TMPDIR:-/tmp}/omninest-ship-images.$$.status"
+rm -f "$status_file"
+set +e
 if [ -n "$key" ]; then
-    docker save $images | gzip | ssh -i "$key" "$target" 'gunzip | docker load'
+    { docker save $images; echo $? > "$status_file"; } \
+        | gzip | ssh -i "$key" "$target" 'gunzip | docker load'
+    transfer_status=$?
 else
-    docker save $images | gzip | ssh "$target" 'gunzip | docker load'
+    { docker save $images; echo $? > "$status_file"; } \
+        | gzip | ssh "$target" 'gunzip | docker load'
+    transfer_status=$?
+fi
+set -e
+save_status="$(cat "$status_file" 2>/dev/null || echo 1)"
+rm -f "$status_file"
+if [ "$save_status" != "0" ]; then
+    echo "错误: docker save 失败（退出码 ${save_status}），目标机镜像不完整" >&2
+    exit 1
+fi
+if [ "$transfer_status" != "0" ]; then
+    echo "错误: 传输或目标机 docker load 失败（退出码 ${transfer_status}）" >&2
+    exit 1
 fi
 echo "转运完成。"

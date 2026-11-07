@@ -5,7 +5,8 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.storage.ObjectStorageObject;
 import com.omninest.common.storage.ObjectStoragePage;
-import com.omninest.common.util.RedisUtil;
+import com.omninest.common.cache.ExpiringKeyValueStore;
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.file.service.FileIngressObjectReferenceQuery;
 import com.omninest.modules.file.service.FileObjectReferenceQuery;
 import java.time.Duration;
@@ -50,7 +51,8 @@ public class UserFileOrphanScanner {
     private final ObjectStorageClient objectStorageClient;
     private final FileObjectReferenceQuery fileObjectReferenceQuery;
     private final FileIngressObjectReferenceQuery fileIngressObjectReferenceQuery;
-    private final RedisUtil redisUtil;
+    private final DistributedLock distributedLock;
+    private final ExpiringKeyValueStore cursorStore;
     private final UserFileOrphanScanProperties properties;
 
     /**
@@ -96,14 +98,14 @@ public class UserFileOrphanScanner {
      */
     public UserFileOrphanScanResult scanOnce() {
         validateProperties();
-        String lockToken = redisUtil.newLockToken();
-        if (!redisUtil.tryLock(LOCK_KEY, lockToken, properties.getLockTtl())) {
+        String lockToken = distributedLock.newToken();
+        if (!distributedLock.tryLock(LOCK_KEY, lockToken, properties.getLockTtl())) {
             return UserFileOrphanScanResult.skipped();
         }
         try {
             return scanLocked();
         } finally {
-            if (!redisUtil.unlock(LOCK_KEY, lockToken)) {
+            if (!distributedLock.unlock(LOCK_KEY, lockToken)) {
                 log.warn("原件对象孤儿扫描锁释放失败");
             }
         }
@@ -114,7 +116,7 @@ public class UserFileOrphanScanner {
         if (bucket == null || bucket.isBlank()) {
             throw new IllegalStateException("原件存储桶名称不能为空");
         }
-        String continuationToken = normalizeToken(redisUtil.get(CURSOR_KEY));
+        String continuationToken = normalizeToken(cursorStore.get(CURSOR_KEY));
         Instant cutoff = Instant.now().minus(properties.getMinimumAge());
         long scannedObjects = 0;
         long eligibleObjects = 0;
@@ -216,10 +218,10 @@ public class UserFileOrphanScanner {
 
     private void saveCursor(String continuationToken) {
         if (continuationToken == null) {
-            redisUtil.delete(CURSOR_KEY);
+            cursorStore.delete(CURSOR_KEY);
             return;
         }
-        redisUtil.set(CURSOR_KEY, continuationToken, properties.getCursorTtl());
+        cursorStore.set(CURSOR_KEY, continuationToken, properties.getCursorTtl());
     }
 
     private String normalizeToken(String continuationToken) {

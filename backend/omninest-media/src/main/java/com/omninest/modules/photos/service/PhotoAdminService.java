@@ -35,15 +35,8 @@ import jakarta.annotation.PostConstruct;
 import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.PushbackInputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
@@ -96,16 +89,13 @@ public class PhotoAdminService {
     private final PhotoItemRepository photoItemRepository;
     private final FileMetadataQueryService fileMetadataQueryService;
     private final PhotoFileDetector fileDetector;
-    private final PhotoInputGuard inputGuard;
     private final PhotoSourceFileService sourceFileService;
-    private final PhotoExifExtractor exifExtractor;
+    private final PhotoImportPreparer photoImportPreparer;
     private final PhotoThumbnailService thumbnailService;
     private final NotificationPublisher notificationService;
     private final TaskDispatchService taskDispatchService;
     private final PhotoRawPreviewService rawPreviewService;
-    private final PhotosRuntimeConfigService photosRuntimeConfigService;
     private final FileQueryService fileQueryService;
-    private final PhotoGeoService photoGeoService;
     private final PhotoAiTaskService photoAiTaskService;
     private final TaskRecordService taskRecordService;
     private final TaskHeartbeatRunner taskHeartbeatRunner;
@@ -266,6 +256,9 @@ public class PhotoAdminService {
 
     /**
      * 导入一页图片文件；仍保持逐文件独立事务与有限并发。
+     *
+     * <p>事务边界由 {@link #importPhotoFile} 自己收口：远程读取与派生写入在事务外，
+     * 只有实体落库与任务登记进短事务。</p>
      */
     private void importScanPage(
             UUID ownerUserId,
@@ -278,9 +271,7 @@ public class PhotoAdminService {
                     .<Future<?>>map(file -> executor.submit(() -> {
                         scanPermits.acquireUninterruptibly();
                         try {
-                            transactionTemplate.executeWithoutResult(status ->
-                                    importPhotoFile(ownerUserId, file)
-                            );
+                            importPhotoFile(ownerUserId, file);
                             importedCounter.incrementAndGet();
                         } catch (Exception fileEx) {
                             log.warn("单个文件导入失败，跳过: fileNodeId={}, error={}",
@@ -321,21 +312,28 @@ public class PhotoAdminService {
      * 导入单张照片（供自动导入调用）。
      * 查找 FileNode 并调用内部导入逻辑，幂等安全（已导入则跳过）。
      *
+     * <p>不能再声明 {@code @Transactional}：方法体里的原图下载与 RAW 预览会在
+     * 持有连接的情况下再申请 {@code REQUIRES_NEW} 连接，上传高峰时同样会拖垮
+     * Hikari 池。失效事件仍与照片行同事务提交。</p>
+     *
      * @param ownerUserId 当前用户 ID
      * @param fileNodeId 文件节点 ID
      */
-    @Transactional(rollbackFor = Exception.class)
     public void importSinglePhoto(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = fileMetadataQueryService.findActiveById(fileNodeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
-        importPhotoFile(ownerUserId, file);
-        syncEventService.invalidate(
-                ownerUserId,
-                SyncScope.PHOTOS,
-                "PHOTO_LIBRARY",
-                Map.of("source", "UPLOAD", "fileNodeId", fileNodeId.toString())
-        );
-        invalidateDashboardCache(ownerUserId);
+        validatePhotoFormat(file);
+        PhotoImportPreparer.PreparedPhotoImport prepared = preparePhotoIfAbsent(ownerUserId, file);
+        transactionTemplate.executeWithoutResult(status -> {
+            persistPhotoImport(ownerUserId, file, prepared);
+            syncEventService.invalidate(
+                    ownerUserId,
+                    SyncScope.PHOTOS,
+                    "PHOTO_LIBRARY",
+                    Map.of("source", "UPLOAD", "fileNodeId", fileNodeId.toString())
+            );
+            invalidateDashboardCache(ownerUserId);
+        });
     }
 
     /**
@@ -365,130 +363,81 @@ public class PhotoAdminService {
                 });
     }
 
+    /**
+     * 导入单个图片文件。
+     *
+     * <p>两段式：{@link PhotoImportPreparer} 在事务外完成对象存储下载、EXIF 解析、
+     * RAW 预览生成与逆地理编码；{@link #persistPhotoImport} 在短事务里只写实体与
+     * 投递任务。合成一段会把连接池钉死——RAW 预览走 {@code REQUIRES_NEW}，必须在
+     * 已持有外层连接的情况下再申请第二条，扫描并发 3~4 时 worker 仅有的 6 条连接
+     * 会全部卡在"等第二条连接"上。</p>
+     */
     private void importPhotoFile(UUID ownerUserId, FileDescriptor file) {
-        if ("webp".equals(fileDetector.extension(file.name()))) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "当前 Photos 不支持 WebP 文件");
+        validatePhotoFormat(file);
+        PhotoImportPreparer.PreparedPhotoImport prepared = preparePhotoIfAbsent(ownerUserId, file);
+        transactionTemplate.executeWithoutResult(status ->
+                persistPhotoImport(ownerUserId, file, prepared));
+    }
+
+    /**
+     * 查询已导入状态，仅在缺失时才做事务外预计算。
+     *
+     * @return 待落库结果；{@code null} 表示该文件已导入
+     */
+    private PhotoImportPreparer.PreparedPhotoImport preparePhotoIfAbsent(
+            UUID ownerUserId,
+            FileDescriptor file
+    ) {
+        if (photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id()).isPresent()) {
+            return null;
         }
-        var existing = photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id());
-        if (existing.isPresent()) {
+        return photoImportPreparer.prepare(ownerUserId, file);
+    }
+
+    /**
+     * 在短事务内落库并登记后续任务。
+     *
+     * @param prepared 事务外预计算结果；{@code null} 表示已导入，仅做封面自愈
+     */
+    private void persistPhotoImport(
+            UUID ownerUserId,
+            FileDescriptor file,
+            PhotoImportPreparer.PreparedPhotoImport prepared
+    ) {
+        if (prepared == null) {
             // 历史无封面条目（如内容与扩展名不符曾被旧校验拒绝）在重扫时
             // 补投缩略图任务自愈，避免永久占位。
-            PhotoItem present = existing.get();
-            if (present.getCoverFileId() == null && file.currentObjectId() != null) {
-                filePostProcessingTaskService.enqueueThumbnailIfAbsent(
-                        thumbnailEvent(file, ownerUserId));
-            }
+            photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id())
+                    .filter(present -> present.getCoverFileId() == null && file.currentObjectId() != null)
+                    .ifPresent(present -> filePostProcessingTaskService.enqueueThumbnailIfAbsent(
+                            thumbnailEvent(file, ownerUserId)));
             return;
         }
-        PhotoItem photo = new PhotoItem();
-        photo.setId(UUID.randomUUID());
-        photo.setOwnerUserId(ownerUserId);
-        photo.setFileNodeId(file.id());
-        photo.setTitle(PhotoAdminSupport.titleFromFileName(file.name()));
-        photo.setFormat(fileDetector.extension(file.name()));
-        // RAW 预览需要真实文件，保留暂存路径；常规图片流式读取，
-        // EXIF 提取与内容哈希共用一次下载，封面交给缩略图任务异步生成回填。
-        boolean raw = fileDetector.isRaw(file.name());
-        String contentHash;
-        String motionKind = null;
-        PhotoExifExtractor.ExifData exif;
-        if (raw) {
-            try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
-                    ownerUserId,
-                    file.id()
-            )) {
-                photo.setFileSize(source.sizeBytes());
-                try (InputStream input = Files.newInputStream(source.path())) {
-                    exif = exifExtractor.extract(input);
-                }
-                inputGuard.validateDimensions(exif.width(), exif.height());
-                applyExif(photo, exif);
-                applyLocation(photo);
-                if (!fileDetector.isDecodable(file.name())) {
-                    photo.setCoverFileId(rawPreviewService.createPreview(
-                            ownerUserId, photo.getId(), source.path()));
-                }
-                contentHash = computeSha256(source.path());
-            } catch (IOException exception) {
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
-            }
-        } else {
-            try (FileContentStream content = fileQueryService.openReadableFileContent(ownerUserId, file.id());
-                 DigestInputStream digestInput = new DigestInputStream(content.inputStream(), sha256Digest())) {
-                photo.setFileSize(file.sizeBytes());
-                // 先取头部魔数归一化 format：入口按声明 MIME 收件，扩展名
-                // 可能与真实内容不符，后续处理与展示都以魔数为准。
-                // pushback 仅是摘录流的包装，不拥有底层流生命周期：
-                // 关闭它会连带关闭 digestInput，破坏后续尾部扫描与哈希。
-                byte[] head = digestInput.readNBytes(CONTENT_PEEK_BYTES);
-                String detectedFormat = inputGuard.detectContentFormat(head);
-                if (detectedFormat != null) {
-                    photo.setFormat(detectedFormat);
-                }
-                PushbackInputStream pushback = new PushbackInputStream(
-                        digestInput, CONTENT_PEEK_BYTES);
-                pushback.unread(head, 0, head.length);
-                exif = exifExtractor.extract(pushback);
-                inputGuard.validateDimensions(exif.width(), exif.height());
-                applyExif(photo, exif);
-                applyLocation(photo);
-                // 流式哈希同时维护 4KB 尾部环形缓冲，供三星 SEF trailer 扫描，零额外 IO。
-                byte[] tail = new byte[PhotoMotionTrailerScanner.TAIL_WINDOW_BYTES];
-                byte[] chunk = new byte[READ_CHUNK_BYTES];
-                int tailFilled = 0;
-                int read;
-                while ((read = digestInput.read(chunk)) != -1) {
-                    tailFilled = appendTail(tail, tailFilled, chunk, read);
-                }
-                contentHash = HexFormat.of().formatHex(digestInput.getMessageDigest().digest());
-                motionKind = resolveMotionKind(file.name(), exif.motion(), tail, tailFilled);
-                if (motionKind != null) {
-                    Map<String, Object> motion = new HashMap<>();
-                    motion.put("kind", motionKind);
-                    if (exif.motion().microVideoOffset() != null) {
-                        motion.put("offsetBytes", exif.motion().microVideoOffset());
-                    }
-                    photo.getProviderMetadata().put("motion", motion);
-                    photo.setMotionState(PhotoMotionVideoService.STATE_DETECTED);
-                }
-            } catch (IOException exception) {
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
-            }
+        // 同一文件被并发导入时以先落库者为准：预计算在事务外完成，
+        // 期间可能有另一条路径已经写入，这里再复核一次避免撞唯一键。
+        if (photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id()).isPresent()) {
+            return;
         }
-        photo.setMetadataStatus(exif.hasAnyValue()
-                ? MetadataStatus.MATCHED.getValue()
-                : MetadataStatus.PENDING.getValue());
-        photo.getProviderMetadata().put("contentHash", contentHash);
-
+        PhotoItem photo = prepared.photo();
         photoItemRepository.save(photo);
-
-        UUID savedPhotoId = photo.getId();
-        if (!raw && file.currentObjectId() != null) {
+        if (prepared.enqueuePostProcessing()) {
             // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
             filePostProcessingTaskService.enqueueThumbnailIfAbsent(
                     thumbnailEvent(file, ownerUserId));
-            if (motionKind != null) {
+            if (prepared.motionKind() != null) {
                 // 动态照片补投运动视频提取任务（含 active-task 去重）。
                 filePostProcessingTaskService.enqueuePhotoMotionIfAbsent(
                         thumbnailEvent(file, ownerUserId));
             }
         }
-
-        if (photosRuntimeConfigService.isAiEnabled()) {
-            photoAiTaskService.queueSingleAnalysis(ownerUserId, savedPhotoId);
+        if (prepared.aiAnalysisEnabled()) {
+            photoAiTaskService.queueSingleAnalysis(ownerUserId, photo.getId());
         }
     }
 
-    private void applyLocation(PhotoItem photo) {
-        if (photo.getGpsLatitude() == null || photo.getGpsLongitude() == null) {
-            return;
-        }
-        Map<String, Object> geoInfo = photoGeoService.reverseGeocode(
-                photo.getGpsLatitude(),
-                photo.getGpsLongitude()
-        );
-        if (!geoInfo.isEmpty()) {
-            photo.setGpsLocation(geoInfo);
+    private void validatePhotoFormat(FileDescriptor file) {
+        if ("webp".equals(fileDetector.extension(file.name()))) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "当前 Photos 不支持 WebP 文件");
         }
     }
 
@@ -514,86 +463,6 @@ public class PhotoAdminService {
                 file.sizeBytes(),
                 Instant.now()
         );
-    }
-
-    /** 新建 SHA-256 摘要器。 */
-    private MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 算法不可用", exception);
-        }
-    }
-
-    /** 动态照片检测的流式读取块大小。 */
-    private static final int READ_CHUNK_BYTES = 8192;
-
-    /** 内容魔数探测的头部字节数，与 PhotoInputGuard 的魔数表保持一致。 */
-    private static final int CONTENT_PEEK_BYTES = 16;
-
-    /**
-     * 把本次读取的字节追加进尾部环形缓冲，保留最近的窗口字节。
-     *
-     * @param tail 尾部缓冲
-     * @param tailFilled 缓冲中的有效字节数
-     * @param chunk 本次读取的数据
-     * @param length 本次读取的有效长度
-     * @return 更新后的有效字节数
-     */
-    private int appendTail(byte[] tail, int tailFilled, byte[] chunk, int length) {
-        if (length >= tail.length) {
-            System.arraycopy(chunk, length - tail.length, tail, 0, tail.length);
-            return tail.length;
-        }
-        int overflow = tailFilled + length - tail.length;
-        if (overflow > 0) {
-            System.arraycopy(tail, overflow, tail, 0, tailFilled - overflow);
-            tailFilled -= overflow;
-        }
-        System.arraycopy(chunk, 0, tail, tailFilled, length);
-        return tailFilled + length;
-    }
-
-    /**
-     * 解析动态照片类型：优先 XMP（GCamera 新旧标准），未命中时扫描三星 SEF trailer。
-     * 仅对 JPEG 生效，RAW/HEIC 等格式不做检测。
-     */
-    private String resolveMotionKind(
-            String fileName,
-            PhotoExifExtractor.MotionInfo motionInfo,
-            byte[] tail,
-            int tailFilled
-    ) {
-        String extension = fileDetector.extension(fileName);
-        if (!"jpg".equals(extension) && !"jpeg".equals(extension)) {
-            return null;
-        }
-        if (motionInfo.detected()) {
-            return motionInfo.microVideo() ? "MICRO_VIDEO" : "MOTION_PHOTO";
-        }
-        if (PhotoMotionTrailerScanner.hasSefTrailer(tail, tailFilled)) {
-            return "SEF_TRAILER";
-        }
-        return null;
-    }
-
-    private void applyExif(PhotoItem photo, PhotoExifExtractor.ExifData exif) {
-        photo.setWidth(exif.width());
-        photo.setHeight(exif.height());
-        photo.setOrientation(exif.orientation());
-        photo.setDateTaken(exif.dateTaken());
-        photo.setCameraMake(exif.cameraMake());
-        photo.setCameraModel(exif.cameraModel());
-        photo.setAperture(exif.aperture());
-        photo.setShutterSpeed(exif.shutterSpeed());
-        photo.setIso(exif.iso());
-        photo.setFocalLength(exif.focalLength());
-        photo.setGpsLatitude(exif.gpsLatitude());
-        photo.setGpsLongitude(exif.gpsLongitude());
-        photo.setFlash(exif.flash());
-        photo.setWhiteBalance(exif.whiteBalance());
-        photo.setMeteringMode(exif.meteringMode());
-        photo.setLensModel(exif.lensModel());
     }
 
     /**
@@ -766,16 +635,4 @@ public class PhotoAdminService {
         return coverFileId;
     }
 
-    private String computeSha256(Path file) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (InputStream input = Files.newInputStream(file);
-                 DigestInputStream digestInput = new DigestInputStream(input, digest)) {
-                digestInput.transferTo(OutputStream.nullOutputStream());
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 算法不可用", exception);
-        }
-    }
 }

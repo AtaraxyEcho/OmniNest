@@ -9,6 +9,7 @@ import com.omninest.modules.music.event.MusicScrapeEvent;
 import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.worker.support.DomainTaskFailureConverger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class MusicTaskRetryService {
 
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final DomainTaskFailureConverger domainFailureConverger;
 
     /**
      * 处理音乐扫描失败。
@@ -43,6 +45,7 @@ public class MusicTaskRetryService {
     @Transactional(rollbackFor = Exception.class)
     public void handleScanFailure(MusicScanEvent event, Throwable exception) {
         handleFailure(
+                SCAN_TASK_TYPE,
                 event.jobId(),
                 QueueNames.MUSIC_SCAN_ROUTING_KEY,
                 event,
@@ -59,6 +62,7 @@ public class MusicTaskRetryService {
     @Transactional(rollbackFor = Exception.class)
     public void handleScrapeFailure(MusicScrapeEvent event, Throwable exception) {
         handleFailure(
+                SCRAPE_TASK_TYPE,
                 event.jobId(),
                 QueueNames.MUSIC_SCRAPE_ROUTING_KEY,
                 event,
@@ -83,9 +87,15 @@ public class MusicTaskRetryService {
                 Instant.now(),
                 "WORKER_HEARTBEAT_TIMEOUT"
         );
-        if (recovery.recovered() && !recovery.deadLetter()) {
-            enqueueRetry(taskId, QueueNames.MUSIC_SCAN_ROUTING_KEY, event, recovery.nextRetryAt());
+        if (!recovery.recovered()) {
+            return;
         }
+        if (recovery.deadLetter()) {
+            // 心跳恢复判死信后必须同步收敛音乐扫描行，否则前端永远看到"扫描中"。
+            domainFailureConverger.converge(SCAN_TASK_TYPE, taskId, "WORKER_HEARTBEAT_TIMEOUT");
+            return;
+        }
+        enqueueRetry(taskId, QueueNames.MUSIC_SCAN_ROUTING_KEY, event, recovery.nextRetryAt());
     }
 
     /**
@@ -105,12 +115,18 @@ public class MusicTaskRetryService {
                 Instant.now(),
                 "WORKER_HEARTBEAT_TIMEOUT"
         );
-        if (recovery.recovered() && !recovery.deadLetter()) {
-            enqueueRetry(taskId, QueueNames.MUSIC_SCRAPE_ROUTING_KEY, event, recovery.nextRetryAt());
+        if (!recovery.recovered()) {
+            return;
         }
+        if (recovery.deadLetter()) {
+            domainFailureConverger.converge(SCRAPE_TASK_TYPE, taskId, "WORKER_HEARTBEAT_TIMEOUT");
+            return;
+        }
+        enqueueRetry(taskId, QueueNames.MUSIC_SCRAPE_ROUTING_KEY, event, recovery.nextRetryAt());
     }
 
     private void handleFailure(
+            String taskType,
             UUID taskId,
             String routingKey,
             Object event,
@@ -120,6 +136,8 @@ public class MusicTaskRetryService {
         String stackSummary = StackSummaries.summarize(exception);
         if (isNonRetryable(exception)) {
             taskRecordService.markDeadLetter(taskId, errorSummary, stackSummary);
+            // 死信后领域行也要收敛：前端轮询的是 music_scan_jobs，不是 sys_tasks。
+            domainFailureConverger.converge(taskType, taskId, errorSummary);
             log.warn("音乐任务因业务错误进入死信终态: taskId={}, errorType={}", taskId, errorSummary);
             return;
         }
@@ -127,6 +145,7 @@ public class MusicTaskRetryService {
         int currentRetries = taskRecordService.retryCount(taskId);
         if (currentRetries >= MAX_RETRIES) {
             taskRecordService.markDeadLetter(taskId, errorSummary, stackSummary);
+            domainFailureConverger.converge(taskType, taskId, errorSummary);
             log.error("音乐任务达到最大重试次数并进入死信: taskId={}, retryCount={}, errorType={}",
                     taskId, currentRetries, errorSummary);
             return;

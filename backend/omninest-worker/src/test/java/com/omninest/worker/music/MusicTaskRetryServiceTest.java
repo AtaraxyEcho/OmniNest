@@ -13,7 +13,9 @@ import com.omninest.modules.music.event.MusicScanEvent;
 import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.worker.support.DomainTaskFailureConverger;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -37,9 +39,12 @@ class MusicTaskRetryServiceTest {
     @Mock
     private TaskDispatchService taskDispatchService;
 
+    /** 用例只验证重试裁决，领域收敛以空实现参与即可。 */
+    private final DomainTaskFailureConverger converger = new DomainTaskFailureConverger(List.of());
+
     @Test
     void transientScanFailureIsDelayedAndRepublished() {
-        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService);
+        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService, converger);
         MusicScanEvent event = new MusicScanEvent(TASK_ID, OWNER_ID);
         when(taskRecordService.retryCount(TASK_ID)).thenReturn(0);
         when(taskRecordService.markRetryWait(eq(TASK_ID), anyString(), any(Instant.class))).thenReturn(1);
@@ -58,7 +63,7 @@ class MusicTaskRetryServiceTest {
 
     @Test
     void fourthFailureMovesTaskToDeadLetterWithoutRepublish() {
-        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService);
+        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService, converger);
         when(taskRecordService.retryCount(TASK_ID)).thenReturn(3);
 
         service.handleScanFailure(
@@ -72,7 +77,7 @@ class MusicTaskRetryServiceTest {
 
     @Test
     void staleScanTaskIsRequeuedFromPersistedPayload() {
-        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService);
+        MusicTaskRetryService service = new MusicTaskRetryService(taskRecordService, taskDispatchService, converger);
         Instant cutoff = Instant.parse("2026-08-17T08:00:00Z");
         Instant nextRetryAt = cutoff.plusSeconds(60);
         when(taskRecordService.taskPayload(TASK_ID)).thenReturn(Map.of(

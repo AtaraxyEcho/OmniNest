@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 审计日志保留清理所需的窄仓储接口。
@@ -35,10 +36,16 @@ public interface AuditLogRetentionRepository extends Repository<AuditLog, UUID> 
     /**
      * 批量删除指定审计日志。
      *
+     * <p>自定义 {@code @Modifying} 方法不像 {@code SimpleJpaRepository} 的
+     * {@code deleteById} 那样自带事务拦截：调用方未处于事务中时，
+     * Jakarta Persistence 会直接抛 {@code TransactionRequiredException}。
+     * 清理任务刻意按批短事务提交，因此事务边界必须落在本方法上。</p>
+     *
      * @param ids 审计日志标识
      * @return 删除记录数
      */
     @Modifying
+    @Transactional
     @Query("delete from AuditLog log where log.id in :ids")
     int deleteByIds(@Param("ids") Collection<UUID> ids);
 }

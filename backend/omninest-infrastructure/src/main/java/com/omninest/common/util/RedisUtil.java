@@ -1,5 +1,6 @@
 package com.omninest.common.util;
 
+import com.omninest.common.cache.ExpiringKeyValueStore;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.json.JsonSupport;
@@ -32,7 +33,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwnershipRegistry {
+public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwnershipRegistry,
+        ExpiringKeyValueStore {
     public static final String UNLOCK_SCRIPT = """
             if redis.call('get', KEYS[1]) == ARGV[1] then
               return redis.call('del', KEYS[1])

@@ -4,13 +4,9 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
-import com.omninest.modules.file.domain.ImportTaskStatus;
-import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
-import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
-import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
@@ -39,11 +35,10 @@ public class ExternalImportRetryService {
     private static final int MAX_RETRIES = 3;
 
     private final StorageImportTaskRepository importTaskRepository;
-    private final FileIngressItemRepository ingressItemRepository;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
-    private final StorageQuotaService storageQuotaService;
     private final NotificationPublisher notificationService;
+    private final ExternalImportTaskStatusService taskStatusService;
 
     /**
      * 按异常类型决定终止、延后重投或转入死信。
@@ -58,6 +53,9 @@ public class ExternalImportRetryService {
         String stackSummary = StackSummaries.summarize(exception);
         if (!isTransient(exception)) {
             taskRecordService.markFailed(systemTaskId, errorSummary, stackSummary);
+            // 业务行必须同步收敛：否则 sys_tasks 已是 FAILED，storage_import_tasks
+            // 会永久停在 SCANNING，并一直占着外导配额预占。
+            markTaskRowFailed(event.taskId(), errorSummary);
             notifyFailed(event.taskId(), errorSummary);
             log.warn("外部存储导入因业务错误终止: taskId={}, error={}", event.taskId(), errorSummary);
             return;
@@ -124,25 +122,7 @@ public class ExternalImportRetryService {
      * 漏掉结算会让 {@code EXTERNAL_IMPORT} 的预留锁死到 24 小时过期。</p>
      */
     private void markTaskRowFailed(UUID importTaskId, String errorSummary) {
-        importTaskRepository.findById(importTaskId)
-                .filter(task -> !ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus()))
-                .filter(task -> !ImportTaskStatus.FAILED.getValue().equals(task.getStatus()))
-                .ifPresent(task -> {
-                    // 共享空间导入不建个人预留，settle 在无预留行时是空操作。
-                    storageQuotaService.settleReservation(
-                            "EXTERNAL_IMPORT", task.getId(), importedBytes(task.getId()));
-                    task.setStatus(ImportTaskStatus.FAILED.getValue());
-                    task.setSpeedBytes(0L);
-                    task.setErrorSummary(errorSummary);
-                    importTaskRepository.save(task);
-                });
-    }
-
-    /**
-     * 该导入任务已真正落库的字节数：结算退还没写入的部分，已入库的仍需计入用量。
-     */
-    private long importedBytes(UUID importTaskId) {
-        return ingressItemRepository.sumImportedBytesByTaskId(importTaskId);
+        taskStatusService.markFailed(importTaskId, errorSummary);
     }
 
     private void notifyFailed(UUID importTaskId, String errorSummary) {

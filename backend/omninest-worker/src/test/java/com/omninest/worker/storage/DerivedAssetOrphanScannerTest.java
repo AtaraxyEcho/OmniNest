@@ -58,10 +58,11 @@ class DerivedAssetOrphanScannerTest {
                 readerPageAssetReferenceQuery,
                 List.of(),
                 redisUtil,
+                redisUtil,
                 properties
         );
         Mockito.lenient().when(objectStorageBuckets.derivedAssets()).thenReturn(BUCKET);
-        Mockito.when(redisUtil.newLockToken()).thenReturn("lock-token");
+        Mockito.when(redisUtil.newToken()).thenReturn("lock-token");
         Mockito.when(redisUtil.tryLock(
                 "omninest:maintenance:derived-orphan-scan:lock",
                 "lock-token",

@@ -149,11 +149,39 @@ public class ReaderImportService {
         ReaderPdfMetadataService.PdfMetadata pdfMetadata = pdfMetadataNeeded
                 ? pdfMetadataService.extract(fileNode)
                 : null;
+        // 已有条目被显式改成漫画且缺内容指纹时，整本哈希同样要在事务外算：
+        // 留在 applyExplicitComicOverride 里就是拿着行锁读整本对象存储。
+        String existingComicContentHash =
+                needsExistingComicHash(existingItem, ownerUserId, contentKindOverride)
+                        ? computeSha256Stream(fileNode)
+                        : null;
         ContentProbe effectiveProbe = probe;
         ReaderPdfMetadataService.PdfMetadata effectivePdfMetadata = pdfMetadata;
+        String effectiveExistingComicHash = existingComicContentHash;
         return transactionTemplate.execute(status -> importInTransaction(
                 ownerUserId, fileNodeId, fileNode, fileType, forceImport, contentKindOverride,
-                effectiveProbe, effectivePdfMetadata));
+                effectiveProbe, effectivePdfMetadata, effectiveExistingComicHash));
+    }
+
+    /**
+     * 判断既有条目是否需要在事务外补算内容指纹。
+     *
+     * @return 需要整本哈希时返回 true
+     */
+    private boolean needsExistingComicHash(
+            ReaderItem existing,
+            UUID ownerUserId,
+            String contentKindOverride
+    ) {
+        if (existing == null || !existing.getOwnerUserId().equals(ownerUserId)) {
+            return false;
+        }
+        String normalized = normalizeContentKindOverride(contentKindOverride);
+        if (!CONTENT_KIND_COMIC.equals(normalized)
+                || normalized.equalsIgnoreCase(existing.getContentKind())) {
+            return false;
+        }
+        return existing.getContentHash() == null || existing.getContentHash().isBlank();
     }
 
     /**
@@ -274,7 +302,8 @@ public class ReaderImportService {
             boolean forceImport,
             String contentKindOverride,
             ContentProbe probe,
-            ReaderPdfMetadataService.PdfMetadata pdfMetadata) {
+            ReaderPdfMetadataService.PdfMetadata pdfMetadata,
+            String existingComicContentHash) {
         ReaderItem existing = findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType());
         if (existing != null) {
             // 条目归属固定为文件所有者；成员复用共享条目时只加入自己的书架，
@@ -284,7 +313,8 @@ public class ReaderImportService {
                         ownerUserId,
                         fileNodeId,
                         existing,
-                        contentKindOverride);
+                        contentKindOverride,
+                        existingComicContentHash);
                 if (FILE_TYPE_PDF.equals(fileType)) {
                     // 内容替换后重写页数与封面，避免派生元数据陈旧；提取已在事务外完成。
                     applyPdfMetadata(existing, fileNode, pdfMetadata, true);
@@ -388,13 +418,15 @@ public class ReaderImportService {
      * @param fileNodeId 文件节点 ID
      * @param existing 已存在条目
      * @param contentKindOverride 用户显式指定的内容形态
+     * @param precomputedContentHash 事务外算好的内容指纹，可为 null
      * @return 原条目或完成漫画升级后的条目
      */
     private ReaderItem applyExplicitComicOverride(
             UUID ownerUserId,
             UUID fileNodeId,
             ReaderItem existing,
-            String contentKindOverride) {
+            String contentKindOverride,
+            String precomputedContentHash) {
         String normalizedOverride = normalizeContentKindOverride(contentKindOverride);
         if (normalizedOverride == null || normalizedOverride.equalsIgnoreCase(existing.getContentKind())) {
             return existing;
@@ -411,7 +443,10 @@ public class ReaderImportService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "条目不存在"));
         String contentHash = lockedItem.getContentHash();
         if (contentHash == null || contentHash.isBlank()) {
-            contentHash = computeSha256Stream(fileNode);
+            // 优先用事务外算好的指纹；兜底路径只在预计算结果缺失的竞态下走到。
+            contentHash = precomputedContentHash != null && !precomputedContentHash.isBlank()
+                    ? precomputedContentHash
+                    : computeSha256Stream(fileNode);
             lockedItem.setContentHash(contentHash);
         }
         lockedItem.setItemType(fileType);

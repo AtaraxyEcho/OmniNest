@@ -1,6 +1,7 @@
 package com.omninest.worker.reader;
 
 import com.omninest.common.concurrency.DistributedLock;
+import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,21 +10,23 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
  * 漫画解析任务心跳超时恢复调度器。
  *
+ * <p>运行角色统一由 {@link ConditionalOnSchedulerRuntime} 裁决，与其余恢复/清理调度器
+ * 同口径：dev 与单实例部署默认开启内嵌调度器，
+ * {@code reader.comic-parser.consume-in-api} 只决定 API 进程是否消费解析消息，
+ * 不再单独放大到"是否实例化恢复调度器"。</p>
+ *
  * @author OmniNest
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnExpression("'${omninest.runtime.role:api}' == 'scheduler' || "
-        + "('${omninest.runtime.role:api}' == 'api' && "
-        + "(${omninest.runtime.embedded-scheduler-enabled:false} || ${reader.comic-parser.consume-in-api:false}))")
+@ConditionalOnSchedulerRuntime
 public class ComicParseRecoveryScheduler {
 
     /** 多实例部署下同一批超时任务只能由一个实例重投。 */

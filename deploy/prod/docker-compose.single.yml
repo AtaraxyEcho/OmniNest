@@ -19,6 +19,9 @@ services:
       OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED: "true"
       # 单实例没有独立 scheduler，必须同时内嵌调度器
       OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED: "true"
+      # 与三角色模式的 backend-worker 同口径：4C4G 主机上 FFmpeg 转码/探测并发必须收敛到 1，
+      # 否则内嵌 Worker 会沿用更高默认值把内存顶穿。
+      OMNINEST_WORKER_MEDIA_CONCURRENCY: "1"
       # 单实例同时运行 API、Scheduler 与内嵌 Worker（PDF/漫画/缩略图/媒体后处理），
       # 堆必须高于纯 API 的 512m；容器上限同步抬高，给 Metaspace 与原生内存留余量。
       JAVA_OPTS: ${JAVA_OPTS_API_SINGLE:--Xms256m -Xmx768m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}

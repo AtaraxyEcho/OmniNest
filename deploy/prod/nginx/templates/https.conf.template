@@ -143,10 +143,10 @@ server {
     # add_header 在 location 级不继承 server 级，两处必须写全。
     location = ${OMNINEST_WEB_BASE_PATH}index.html {
         add_header Cache-Control "no-cache";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
-        add_header X-Content-Type-Options "nosniff";
-        add_header X-Frame-Options "SAMEORIGIN";
-        add_header Referrer-Policy "strict-origin-when-cross-origin";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
         add_header X-Permitted-Cross-Domain-Policies "none" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -155,7 +155,7 @@ server {
 
     location = ${OMNINEST_WEB_BASE_PATH}flutter_service_worker.js {
         add_header Cache-Control "no-cache";
-        add_header X-Content-Type-Options "nosniff";
+        add_header X-Content-Type-Options "nosniff" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
@@ -164,14 +164,14 @@ server {
     # flutter_bootstrap.js 内嵌 service worker 版本号，version.json 是构建版本清单。
     location = ${OMNINEST_WEB_BASE_PATH}flutter_bootstrap.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
-        add_header X-Content-Type-Options "nosniff";
+        add_header X-Content-Type-Options "nosniff" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
     location = ${OMNINEST_WEB_BASE_PATH}version.json {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
-        add_header X-Content-Type-Options "nosniff";
+        add_header X-Content-Type-Options "nosniff" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
@@ -180,10 +180,10 @@ server {
     # 否则发版后深链仍返回旧 index.html。
     location ~* \.(?:js|css|wasm|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|otf)$ {
         add_header Cache-Control "public, max-age=3600";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
-        add_header X-Content-Type-Options "nosniff";
-        add_header X-Frame-Options "SAMEORIGIN";
-        add_header Referrer-Policy "strict-origin-when-cross-origin";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
         add_header X-Permitted-Cross-Domain-Policies "none" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -192,10 +192,10 @@ server {
 
     location / {
         add_header Cache-Control "no-cache";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
-        add_header X-Content-Type-Options "nosniff";
-        add_header X-Frame-Options "SAMEORIGIN";
-        add_header Referrer-Policy "strict-origin-when-cross-origin";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
         add_header X-Permitted-Cross-Domain-Policies "none" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;

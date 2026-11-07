@@ -309,7 +309,7 @@ Future<void> _showVersionsDialog({
               final navigator = Navigator.of(ctx);
               // file_selector 的 XFile 在 Web 下没有 path 但可流式读取，与常规
               // 上传走同一条链路；FilePicker 取 path 在 Web 会静默失败。
-              final picked = await openFile();
+              final picked = await FilePick.openSingleFile();
               if (picked == null || !context.mounted) {
                 return;
               }
@@ -411,7 +411,7 @@ Future<void> _pickAndUploadFiles(
   BuildContext context,
   FileBrowserController controller,
 ) async {
-  final files = await openFiles();
+  final files = await FilePick.openMultipleFiles();
   if (files.isEmpty || !context.mounted) {
     return;
   }

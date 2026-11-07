@@ -5,17 +5,6 @@
 # 前置：先 docker compose down 停止全部服务，恢复后 up -d。
 set -eu
 
-# 解析备份目录的宿主机路径：Git Bash 下 pwd 返回 /d/...，Docker Desktop 无法解析；
-# 优先使用 pwd -W 的 Windows 盘符路径，Linux 环境自动回退到 pwd。
-host_pwd() {
-    cd "$1"
-    if pwd -W >/dev/null 2>&1; then
-        pwd -W
-    else
-        pwd
-    fi
-}
-
 BACKUP_DIR="${1:?用法: restore.sh <备份目录>}"
 COMPOSE_FILE="docker-compose.yml"
 
@@ -104,6 +93,21 @@ fi
 
 # 直接挂载命名卷：docker compose down 之后容器已不存在，
 # --volumes-from 会因找不到容器而在第一步失败。
+#
+# 容器内先解到卷内暂存目录，解包成功后才清空目标并搬回：归档损坏或口令错误时
+# 目标卷保持原样，不会出现"删干净了但没解开"的半恢复。同卷 mv 不额外占用空间。
+RESTORE_INTO_VOLUME_SCRIPT='set -e
+staging=/data/.omninest-restore
+rm -rf "$staging"
+mkdir -p "$staging"
+tar xzf - -C "$staging"
+find /data -mindepth 1 -maxdepth 1 ! -name .omninest-restore -exec rm -rf {} \;
+for entry in "$staging"/* "$staging"/.[!.]* "$staging"/..?*; do
+  [ -e "$entry" ] || continue
+  mv "$entry" /data/
+done
+rmdir "$staging"'
+
 restore_volume() {
     volume="$1"
     archive="$2"
@@ -114,11 +118,28 @@ restore_volume() {
             return 0
         fi
         docker volume create "${PROJECT_NAME}_${volume}" >/dev/null
-        # 解密流直接交给容器内 tar：宿主机不落明文中间文件。
-        openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-            -pass env:BACKUP_PASSPHRASE -in "${BACKUP_DIR}/${enc_archive}" \
+        # POSIX sh 没有 pipefail：左侧 openssl 的退出码必须用状态文件取回，
+        # 否则解密失败会被右侧 docker 的 0 掩盖成"恢复成功"。
+        status_file="${TMPDIR:-/tmp}/omninest-restore-decrypt.$$.status"
+        rm -f "${status_file}"
+        set +e
+        { openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -pass env:BACKUP_PASSPHRASE -in "${BACKUP_DIR}/${enc_archive}"
+          echo $? > "${status_file}"; } \
             | docker run --rm -i -v "${PROJECT_NAME}_${volume}:/data" alpine \
-                sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar xzf - -C /data'
+                sh -c "${RESTORE_INTO_VOLUME_SCRIPT}"
+        extract_status=$?
+        set -e
+        decrypt_status="$(cat "${status_file}" 2>/dev/null || echo 1)"
+        rm -f "${status_file}"
+        if [ "${decrypt_status}" != "0" ]; then
+            echo "错误: 解密 ${enc_archive} 失败（退出码 ${decrypt_status}），${volume} 保持原状" >&2
+            return 1
+        fi
+        if [ "${extract_status}" != "0" ]; then
+            echo "错误: 解包 ${enc_archive} 失败，${volume} 未完成恢复" >&2
+            return 1
+        fi
         return 0
     fi
     if [ ! -f "${BACKUP_DIR}/${archive}" ]; then
@@ -126,10 +147,8 @@ restore_volume() {
         return 0
     fi
     docker volume create "${PROJECT_NAME}_${volume}" >/dev/null
-    docker run --rm \
-        -v "${PROJECT_NAME}_${volume}:/data" \
-        -v "$(host_pwd "${BACKUP_DIR}"):/backup:ro" alpine \
-        sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar xzf "/backup/$1" -C /data' -- "${archive}"
+    docker run --rm -i -v "${PROJECT_NAME}_${volume}:/data" alpine \
+        sh -c "${RESTORE_INTO_VOLUME_SCRIPT}" < "${BACKUP_DIR}/${archive}"
 }
 
 echo "[1/6] 恢复 MinIO 数据卷..."
@@ -160,13 +179,34 @@ echo "[4/6] 重建数据库 ${POSTGRES_DB}..."
 docker compose -f "${COMPOSE_FILE}" exec -T postgres \
     sh -c 'dropdb --if-exists -U "$1" "$2" && createdb -U "$1" "$2"' -- "${POSTGRES_USER}" "${POSTGRES_DB}"
 if [ "${ENCRYPTED_BACKUP}" = "true" ]; then
-    openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-        -pass env:BACKUP_PASSPHRASE -in "${BACKUP_DIR}/postgres.dump.enc" \
+    # 解密与导入同样要分别取退出码：任何一端失败都必须中止，
+    # 不能以管道右端的 0 掩盖左端的解密失败。
+    status_file="${TMPDIR:-/tmp}/omninest-restore-decrypt.$$.status"
+    rm -f "${status_file}"
+    set +e
+    { openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+        -pass env:BACKUP_PASSPHRASE -in "${BACKUP_DIR}/postgres.dump.enc"
+      echo $? > "${status_file}"; } \
         | docker compose -f "${COMPOSE_FILE}" exec -T postgres \
-            pg_restore -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" --no-owner --no-privileges
+            pg_restore -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+                --no-owner --no-privileges --exit-on-error --single-transaction
+    restore_status=$?
+    set -e
+    decrypt_status="$(cat "${status_file}" 2>/dev/null || echo 1)"
+    rm -f "${status_file}"
+    if [ "${decrypt_status}" != "0" ]; then
+        echo "错误: 解密 postgres.dump.enc 失败（退出码 ${decrypt_status}）" >&2
+        exit 1
+    fi
+    if [ "${restore_status}" != "0" ]; then
+        echo "错误: pg_restore 失败（退出码 ${restore_status}），数据库未完整恢复" >&2
+        exit 1
+    fi
 else
+    # 默认行为会跳过失败对象并以 0 结束：半恢复的库看起来"恢复成功"。
     docker compose -f "${COMPOSE_FILE}" exec -T postgres \
-        pg_restore -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" --no-owner --no-privileges \
+        pg_restore -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+            --no-owner --no-privileges --exit-on-error --single-transaction \
         < "${BACKUP_DIR}/postgres.dump"
 fi
 

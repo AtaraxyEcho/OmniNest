@@ -1,5 +1,4 @@
 package com.omninest.modules.music.service;
-import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
@@ -9,14 +8,12 @@ import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.processing.TempStagingPort;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
-import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.file.service.FileQueryService;
@@ -43,14 +40,12 @@ import com.omninest.modules.reader.service.TxtContentDecoder;
 import com.omninest.modules.user.service.UserDirectoryQueryService;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -99,14 +94,9 @@ public class MusicAdminService {
     /** 扫描分页大小：每批处理完即释放。 */
     private static final int SCAN_PAGE_SIZE = 500;
 
-    /** 派生封面存储的资源类型与资产类型，与手动上传共用同一前缀。 */
-    private static final String COVER_RESOURCE_TYPE = "MUSIC_COVER";
-    private static final String COVER_ASSET_TYPE = "COVER";
-
     /** 超过该字节数的内嵌封面维持内联，避免为罕见大图在扫描流程写对象存储。 */
 
 
-    private final MediaProcessingLimitsProperties processingLimits;
     private final MusicScanJobRepository scanJobRepository;
     private final MusicTrackRepository trackRepository;
     private final MusicAlbumRepository albumRepository;
@@ -123,11 +113,11 @@ public class MusicAdminService {
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
-    private final DerivedAssetStorageService derivedAssetStorageService;
     private final MusicCoverRetentionService coverRetentionService;
     private final TxtContentDecoder txtContentDecoder;
     private final UserDirectoryQueryService userDirectoryQueryService;
-    private final TempStagingPort tempStagingPort;
+    private final MusicCoverAssetStore coverAssetStore;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -210,8 +200,12 @@ public class MusicAdminService {
             try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
                 session = new ScanSession(
                         jobId, ownerUserId, lyricFilesByBasePath, ioPermits, ioExecutor, totalCandidates);
-                scanOwnedAudioPages(session);
-                scanSharedAudioPages(session);
+                // 全量扫描动辄数十分钟，逐批 updateProgress 的心跳粒度撑不住恢复调度器的
+                // stale 阈值；独立心跳线程只刷新 heartbeat_at，进度仍由扫描本身推进。
+                try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(jobId)) {
+                    scanOwnedAudioPages(session);
+                    scanSharedAudioPages(session);
+                }
             }
             imported = session.imported;
 
@@ -255,19 +249,42 @@ public class MusicAdminService {
                     Map.of("jobId", jobId.toString()));
         } catch (Exception e) {
             log.error("音乐扫描失败: jobId={}", jobId, e);
-            job.setStatus(TaskStatus.FAILED.getValue());
-            job.setMessage("音乐扫描失败: " + e.getMessage());
+            // 瞬态失败且还有重试额度时不写终态：领域行留"等待重试"，sys_tasks 交给
+            // MusicTaskRetryService 置 RETRY_WAIT。此前无条件写 FAILED（终态）会让
+            // 重试消息被状态守卫丢掉，同时用户看到一次网络抖动就是"扫描失败"。
+            boolean terminal = isNonRetryable(e) || taskRecordService.hasExhaustedRetries(jobId);
+            job.setStatus(terminal ? TaskStatus.FAILED.getValue() : TaskStatus.RUNNING.getValue());
+            job.setMessage(terminal
+                    ? "音乐扫描失败: " + e.getMessage()
+                    : "音乐扫描失败，等待重试: " + e.getMessage());
             scanJobRepository.save(job);
-            // 发送失败通知
-            notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
-                    "音乐扫描失败", "扫描失败: " + e.getMessage(),
-                    Map.of("jobId", jobId.toString()));
+            if (terminal) {
+                // 失败通知只发一次：重试期间由重试服务在死信终态统一收口。
+                notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
+                        "音乐扫描失败", "扫描失败: " + e.getMessage(),
+                        Map.of("jobId", jobId.toString()));
+            }
             if (e instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
             throw new IllegalStateException("音乐扫描失败", e);
         }
         scanJobRepository.save(job);
+    }
+
+    /**
+     * 明确的业务错误没有重试价值；网络、依赖不可用与未分类运行时异常都按瞬时故障处理。
+     */
+    private boolean isNonRetryable(Throwable exception) {
+        if (!(exception instanceof BusinessException businessException)) {
+            return false;
+        }
+        return switch (businessException.errorCode()) {
+            case PARAM_ERROR, BAD_REQUEST, VALIDATION_FAILED, NOT_FOUND, TASK_NOT_FOUND,
+                    FORBIDDEN, FILE_NOT_FOUND, MUSIC_PLATFORM_NOT_CONNECTED,
+                    MUSIC_PLATFORM_AUTH_EXPIRED -> true;
+            default -> false;
+        };
     }
 
     /**
@@ -325,7 +342,8 @@ public class MusicAdminService {
                 return;
             }
             List<Future<PrefetchedAudio>> futures = chunk.stream()
-                    .map(file -> ioExecutor.submit(() -> prefetchAudio(file, lyricFilesByBasePath, ioPermits)))
+                    .map(file -> ioExecutor.submit(() ->
+                            prefetchAudio(file, ownerUserId, lyricFilesByBasePath, ioPermits)))
                     .toList();
             // 单线程顺序入库：artist/album 缓存与同名唯一键都不能并发写。
             for (Future<PrefetchedAudio> future : futures) {
@@ -561,12 +579,14 @@ public class MusicAdminService {
     /**
      * 导入单个音频文件（供自动导入调用）。
      * 查找 FileNode 和同目录同名 .lrc 歌词文件，调用内部导入逻辑。
+     *
+     * <p>标签解析、歌词读取与内嵌封面上传都在事务外完成，事务内只写曲目与目录实体：
+     * 封面走 {@code REQUIRES_NEW}，留在大事务里会额外占一条连接。</p>
      */
-    @Transactional(rollbackFor = Exception.class)
     public void importSingleAudioFile(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = fileMetadataQueryService.findActiveById(fileNodeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
-        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        UUID catalogOwnerId = catalogOwnerId(file, ownerUserId);
         // 查找同目录同名 .lrc 歌词文件（以文件所有者目录为准，共享文件由上传者持有）
         String baseName = titleFromFileName(file.name());
         FileDescriptor sidecarLyrics = fileMetadataQueryService
@@ -575,19 +595,44 @@ public class MusicAdminService {
                 .filter(node -> isLrcFile(node) && titleFromFileName(node.name()).equals(baseName))
                 .findFirst()
                 .orElse(null);
-        importAudioFile(catalogOwnerId, file, sidecarLyrics);
-        // 单曲导入改变音乐仪表盘统计与最近列表，需失效缓存。
-        readThroughCache.invalidate("omninest:dashboard:music:" + catalogOwnerId);
-        syncEventService.invalidate(
-                catalogOwnerId,
-                SyncScope.MUSIC,
-                "MUSIC_LIBRARY",
-                Map.of("source", "SINGLE_IMPORT")
-        );
+        PrefetchedAudio prefetched;
+        try {
+            prefetched = prefetchAudio(file, ownerUserId, sidecarLyrics, new Semaphore(1));
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "音频元数据读取失败");
+        }
+        transactionTemplate.executeWithoutResult(status -> {
+            importPrefetchedAudio(ownerUserId, prefetched);
+            // 单曲导入改变音乐仪表盘统计与最近列表，需失效缓存。
+            readThroughCache.invalidate("omninest:dashboard:music:" + catalogOwnerId);
+            syncEventService.invalidate(
+                    catalogOwnerId,
+                    SyncScope.MUSIC,
+                    "MUSIC_LIBRARY",
+                    Map.of("source", "SINGLE_IMPORT")
+            );
+        });
     }
 
     private void importAudioFile(UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics) {
-        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        try {
+            importPrefetchedAudio(ownerUserId, prefetchAudio(file, ownerUserId, sidecarLyrics, new Semaphore(1)));
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "音频元数据读取失败");
+        }
+    }
+
+    /**
+     * 在事务内把预取结果写成曲目实体。
+     *
+     * @param ownerUserId 触发导入的用户（扫描者或上传者）
+     * @param prefetched 事务外预取的标签、歌词与封面
+     */
+    private void importPrefetchedAudio(UUID ownerUserId, PrefetchedAudio prefetched) {
+        FileDescriptor file = prefetched.file();
+        MusicMetadataExtractor.Metadata metadata = prefetched.metadata();
+        String lyricsRaw = prefetched.lyricsRaw();
+        UUID catalogOwnerId = catalogOwnerId(file, ownerUserId);
         var existingTrack = trackRepository.findByFileNodeId(file.id());
         // 单曲导入同样受所有者边界与手动精修保护，避免自动导入冲掉用户编辑。
         if (!catalogOwnerId.equals(ownerUserId) && existingTrack.isPresent()) {
@@ -612,8 +657,6 @@ public class MusicAdminService {
         }
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
-        MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
-        String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(sidecarLyrics));
 
         // 文件名解析兜底：当 ID3/Vorbis 标签缺失时，从文件名提取 title/artist/album
         MusicFileNameGuess fileNameGuess = parseFileName(file.name());
@@ -647,7 +690,7 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        storeEmbeddedCover(catalogOwnerId, track, file, metadata.coverDataUrl());
+        applyPrefetchedCover(track, prefetched);
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
         catalogService.refreshStatistics(catalogOwnerId, previousArtistId, previousAlbumId, track);
@@ -657,17 +700,46 @@ public class MusicAdminService {
      * 带缓存的音频文件导入。使用 artist/album 缓存减少 DB 查询，
      * 收集受影响的 ID 用于后续批量刷新统计。
      */
+    /**
+     * 扫描路径的预取入口：按目录基名匹配旁挂歌词后委托核心预取。
+     */
     private PrefetchedAudio prefetchAudio(
             FileDescriptor file,
+            UUID scannerUserId,
             Map<String, FileDescriptor> lyricFilesByBasePath,
             Semaphore ioPermits
     ) throws IOException {
-        FileDescriptor sidecarLyrics = lyricFilesByBasePath.get(basePathKey(file.normalizedPath()));
+        return prefetchAudio(
+                file,
+                scannerUserId,
+                lyricFilesByBasePath.get(basePathKey(file.normalizedPath())),
+                ioPermits);
+    }
+
+    /**
+     * 事务外预取标签、歌词与内嵌封面。
+     *
+     * @param file 音频文件节点
+     * @param scannerUserId 触发导入的用户（曲目归属优先取文件所有者）
+     * @param sidecarLyrics 同目录同名歌词文件，可为 null
+     * @param ioPermits 预取并发闸门
+     * @return 预取结果
+     */
+    private PrefetchedAudio prefetchAudio(
+            FileDescriptor file,
+            UUID scannerUserId,
+            FileDescriptor sidecarLyrics,
+            Semaphore ioPermits
+    ) throws IOException {
         ioPermits.acquireUninterruptibly();
         try {
             MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
             String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(sidecarLyrics));
-            return new PrefetchedAudio(file, metadata, lyricsRaw);
+            // 内嵌封面必须在这里落成派生资产：入库阶段已处于短事务内，
+            // DerivedAssetStorageService.store 走 REQUIRES_NEW 会再要一条连接。
+            UUID coverFileId = coverAssetStore.storeEmbeddedCoverAsset(
+                    catalogOwnerId(file, scannerUserId), file, metadata.coverDataUrl());
+            return new PrefetchedAudio(file, metadata, lyricsRaw, coverFileId);
         } finally {
             ioPermits.release();
         }
@@ -676,7 +748,8 @@ public class MusicAdminService {
     private record PrefetchedAudio(
             FileDescriptor file,
             MusicMetadataExtractor.Metadata metadata,
-            String lyricsRaw
+            String lyricsRaw,
+            UUID coverFileId
     ) {
     }
 
@@ -769,7 +842,7 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        storeEmbeddedCover(catalogOwnerId, track, file, metadata.coverDataUrl());
+        applyPrefetchedCover(track, prefetched);
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
 
@@ -789,116 +862,35 @@ public class MusicAdminService {
     }
 
     /**
-     * 把音频内嵌封面落成派生资产并回填 coverFileId，成功后移除内联地址。
+     * 曲目归属固定为文件所有者：共享空间文件被成员扫描时也由上传者持有，
+     * 否则"谁先扫谁拥有"会让非所有者获得元数据写权限，且与唯一约束冲突。
+     */
+    private UUID catalogOwnerId(FileDescriptor file, UUID fallbackUserId) {
+        return file.ownerUserId() != null ? file.ownerUserId() : fallbackUserId;
+    }
+
+    /**
+     * 把预取阶段已资产化的封面回填到曲目，失败时回落内联地址。
      *
      * <p>内联 data URL 会随曲目列表与播放队列快照整段进出（单条几百 KB），是曲库首屏
-     * 与重启恢复的主要载荷来源；资产化后列表只剩稳定 API 路径，列表位还能用派生缩略图。
-     * 存储键以音频文件节点为资源标识，重复扫描命中同一 normalizedPath 复用节点，不新增对象。
-     * 地址形态不认识、超限或存储失败时保留内联，展示不回退。</p>
+     * 与重启恢复的主要载荷来源；资产化后列表只剩稳定 API 路径。上传发生在事务外的
+     * {@link #storeEmbeddedCoverAsset}，这里只做字段写入。</p>
      */
-    private void storeEmbeddedCover(
-            UUID ownerUserId,
-            MusicTrack track,
-            FileDescriptor sourceFile,
-            String coverDataUrl
-    ) {
-        if (coverDataUrl == null || coverDataUrl.isBlank()) {
-            return;
-        }
+    private void applyPrefetchedCover(MusicTrack track, PrefetchedAudio prefetched) {
+        String coverDataUrl = prefetched.metadata().coverDataUrl();
         if (track.getCoverFileId() != null) {
             // 已有封面文件时列表不会用到内联地址，直接清掉这份冗余字节。
             track.getProviderMetadata().remove("coverDataUrl");
             return;
         }
-        EmbeddedCover cover = parseEmbeddedCover(coverDataUrl);
-        if (cover == null || !storeCoverAsset(ownerUserId, track, sourceFile, cover)) {
-            track.getProviderMetadata().put("coverDataUrl", coverDataUrl);
+        if (prefetched.coverFileId() != null) {
+            track.setCoverFileId(prefetched.coverFileId());
+            track.getProviderMetadata().remove("coverDataUrl");
             return;
         }
-        track.getProviderMetadata().remove("coverDataUrl");
-    }
-
-    private boolean storeCoverAsset(
-            UUID ownerUserId,
-            MusicTrack track,
-            FileDescriptor sourceFile,
-            EmbeddedCover cover
-    ) {
-        Path staged = null;
-        try {
-            staged = tempStagingPort.createTempFile(
-                    "music-cover", "omninest-music-cover-", "." + cover.extension());
-            Files.write(staged, cover.bytes());
-            track.setCoverFileId(derivedAssetStorageService.store(
-                    ownerUserId,
-                    COVER_RESOURCE_TYPE,
-                    sourceFile.id(),
-                    COVER_ASSET_TYPE,
-                    "cover." + cover.extension(),
-                    cover.mimeType(),
-                    staged
-            ));
-            return true;
-        } catch (IOException | RuntimeException ex) {
-            log.warn("音乐内嵌封面资产化失败，保留内联地址: fileNodeId={}, errorType={}",
-                    sourceFile.id(), ex.getClass().getSimpleName());
-            return false;
-        } finally {
-            deleteQuietly(staged);
+        if (coverDataUrl != null && !coverDataUrl.isBlank()) {
+            track.getProviderMetadata().put("coverDataUrl", coverDataUrl);
         }
-    }
-
-    private EmbeddedCover parseEmbeddedCover(String coverDataUrl) {
-        int comma = coverDataUrl.indexOf(',');
-        if (comma <= 0) {
-            return null;
-        }
-        String header = coverDataUrl.substring(0, comma).toLowerCase(Locale.ROOT);
-        if (!header.startsWith("data:image/") || !header.endsWith(";base64")) {
-            return null;
-        }
-        String mimeType = header.substring("data:".length(), header.length() - ";base64".length());
-        String extension = coverExtension(mimeType);
-        if (extension == null) {
-            return null;
-        }
-        String payload = coverDataUrl.substring(comma + 1);
-        long maxBytes = processingLimits.getMaxEmbeddedCoverBytes();
-        long maxEncodedChars = (maxBytes / 3L + 1L) * 4L;
-        if (payload.isEmpty() || payload.length() > maxEncodedChars) {
-            return null;
-        }
-        byte[] bytes;
-        try {
-            bytes = Base64.getDecoder().decode(payload);
-        } catch (IllegalArgumentException ex) {
-            log.warn("音乐内嵌封面 base64 解码失败: errorType={}", ex.getClass().getSimpleName());
-            return null;
-        }
-        if (bytes.length == 0 || bytes.length > maxBytes) {
-            return null;
-        }
-        return new EmbeddedCover(mimeType, extension, bytes);
-    }
-
-    private String coverExtension(String mimeType) {
-        return switch (mimeType) {
-            case "image/jpeg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/gif" -> "gif";
-            case "image/webp" -> "webp";
-            default -> null;
-        };
-    }
-
-    private void deleteQuietly(Path file) {
-        tempStagingPort.deleteQuietly(file);
-    }
-
-    /**
-     * 解码后的内嵌封面：MIME、派生文件名后缀与原始字节。
-     */
-    private record EmbeddedCover(String mimeType, String extension, byte[] bytes) {
     }
 
     /**

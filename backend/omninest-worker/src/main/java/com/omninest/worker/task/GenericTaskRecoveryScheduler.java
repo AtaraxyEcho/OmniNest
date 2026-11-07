@@ -8,6 +8,7 @@ import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
+import com.omninest.worker.support.DomainTaskFailureConverger;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -89,6 +90,7 @@ public class GenericTaskRecoveryScheduler {
     private final DistributedLock distributedLock;
     private final TaskDispatchService taskDispatchService;
     private final TaskRedispatchService taskRedispatchService;
+    private final DomainTaskFailureConverger domainFailureConverger;
     private final TransactionTemplate transactionTemplate;
 
     @Value("${omninest.task.stale-heartbeat-seconds:600}")
@@ -165,7 +167,13 @@ public class GenericTaskRecoveryScheduler {
                         Instant.now(),
                         "WORKER_HEARTBEAT_TIMEOUT"
                 );
-                if (!recovery.recovered() || recovery.deadLetter()) {
+                if (!recovery.recovered()) {
+                    return;
+                }
+                if (recovery.deadLetter()) {
+                    // 裁决为死信后必须同步收敛领域表：前端轮询的是业务接口，
+                    // 只改 sys_tasks 会让照片/导入任务永远停在 RUNNING/SCANNING。
+                    domainFailureConverger.converge(taskType, taskId, "WORKER_HEARTBEAT_TIMEOUT");
                     return;
                 }
                 republishOriginalMessage(taskId, taskType, recovery.nextRetryAt());
@@ -186,6 +194,7 @@ public class GenericTaskRecoveryScheduler {
         TaskDispatchService.TaskDispatchRoute route = taskDispatchService.latestRoute(taskId).orElse(null);
         if (route == null) {
             taskRecordService.markDeadLetter(taskId, "WORKER_HEARTBEAT_TIMEOUT:OUTBOX_MISSING");
+            domainFailureConverger.converge(taskType, taskId, "WORKER_HEARTBEAT_TIMEOUT:OUTBOX_MISSING");
             log.warn("通用任务无 Outbox 记录可重投，转入死信: taskType={}, taskId={}", taskType, taskId);
             return;
         }

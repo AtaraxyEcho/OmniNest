@@ -25,7 +25,9 @@ import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskHeartbeatRunner;
 import com.omninest.modules.task.service.TaskRecordService;
+import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -37,7 +39,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 音乐元数据刮削服务，负责候选查询、手动应用和批量异步刮削。
@@ -70,15 +75,30 @@ public class MusicScrapeService {
     private final List<MusicMetadataProvider> metadataProviders;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final TaskHeartbeatRunner taskHeartbeatRunner;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactionTemplate;
+
+    /**
+     * 初始化短事务模板：手动应用候选时封面下载在事务外，字段写入在事务内。
+     */
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    }
 
     /**
      * 查询单个曲目的元数据候选。
+     *
+     * <p>不声明事务：{@code provider.search} 是带 1 req/s 限流的公网请求，
+     * 放在只读事务里会整段占住一条数据库连接。曲目按 id 读取即为完整实体，
+     * 批量刮削路径本来也是在无事务状态下调用同一方法。</p>
      *
      * @param ownerUserId 所属用户 ID
      * @param trackId 曲目 ID
      * @return 刮削候选列表
      */
-    @Transactional(readOnly = true)
     public List<MusicScrapeCandidateDto> candidates(UUID ownerUserId, UUID trackId) {
         log.info("查询刮削候选: trackId={}", trackId);
         MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
@@ -88,15 +108,31 @@ public class MusicScrapeService {
     /**
      * 手动应用指定元数据候选。
      *
+     * <p>封面下载（公网拉取 + {@code REQUIRES_NEW} 落派生资产）必须在写事务之外完成，
+     * 否则一次手动应用会长时间持有连接并额外申请第二条。</p>
+     *
      * @param ownerUserId 所属用户 ID
      * @param trackId 曲目 ID
      * @param request 候选应用请求
      * @return 更新后的曲目 DTO
      */
-    @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto applyCandidate(UUID ownerUserId, UUID trackId, MusicScrapeApplyRequest request) {
         log.info("手动应用刮削结果: trackId={}, provider={}", trackId, request.provider());
         MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
+        UUID coverFileId = request.coverUrl() == null || request.coverUrl().isBlank()
+                ? null
+                : storeRemoteCover(ownerUserId, trackId, request.coverUrl());
+        return transactionTemplate.execute(status ->
+                applyCandidateInTransaction(ownerUserId, track, request, coverFileId));
+    }
+
+    private MusicTrackDto applyCandidateInTransaction(
+            UUID ownerUserId,
+            MusicTrack track,
+            MusicScrapeApplyRequest request,
+            UUID coverFileId
+    ) {
+        UUID trackId = track.getId();
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
 
@@ -151,10 +187,48 @@ public class MusicScrapeService {
         trackRepository.save(track);
 
         // 手动应用候选的意图就是纠错：允许替换旧封面并按引用回收旧资产。
-        downloadCover(ownerUserId, track, request.coverUrl(), true, null);
+        applyDownloadedCover(track, coverFileId);
 
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
         return musicLibraryService.toTrackDto(track, isFavorite(ownerUserId, trackId));
+    }
+
+    /**
+     * 事务外下载封面并落成派生资产。
+     *
+     * @return 派生封面文件节点 ID；地址为空或下载失败时返回 {@code null}
+     */
+    private UUID storeRemoteCover(UUID ownerUserId, UUID trackId, String coverUrl) {
+        try {
+            return derivedAssetStorageService.storeRemote(new DerivedAssetRequest(
+                    ownerUserId,
+                    coverUrl.trim(),
+                    ResourceType.MUSIC_TRACK.getValue(),
+                    trackId,
+                    AssetType.POSTER.getValue(),
+                    "cover-" + trackId + ".jpg",
+                    "image/jpeg",
+                    SpaceType.PERSONAL
+            ));
+        } catch (RuntimeException ex) {
+            log.warn("[封面下载失败] trackId={}, errorType={}",
+                    trackId, ex.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * 在事务内把已下载封面回填到曲目，并按引用回收被替换的旧资产。
+     */
+    private void applyDownloadedCover(MusicTrack track, UUID coverFileId) {
+        if (coverFileId == null) {
+            return;
+        }
+        UUID previousCoverFileId = track.getCoverFileId();
+        applyCoverFileId(track, coverFileId);
+        if (previousCoverFileId != null && !previousCoverFileId.equals(coverFileId)) {
+            releaseCoverQuietly(track.getOwnerUserId(), previousCoverFileId);
+        }
     }
 
     /**
@@ -236,7 +310,10 @@ public class MusicScrapeService {
         int failed = 0;
         int visited = 0;
 
-        try {
+        // 逐曲目刮削要走 1 req/s 限流的公网查询与封面下载，处理 20 首就可能超过
+        // 恢复调度器的 stale 阈值；独立心跳线程只刷新 heartbeat_at，
+        // 进度仍由 updateScrapeProgress 按批推进。
+        try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(taskId)) {
             Set<UUID> favoriteTrackIds = Set.copyOf(
                     favoriteRepository.findFavoriteTrackIdsByOwnerUserId(ownerUserId));
 
@@ -317,18 +394,41 @@ public class MusicScrapeService {
                     Map.of("jobId", job.getId().toString(), "matched", matched));
         } catch (RuntimeException ex) {
             log.error("音乐刮削任务失败: jobId={}", jobId, ex);
+            // 与扫描同口径：瞬态失败且仍可重试时不写终态，交 MusicTaskRetryService
+            // 置 RETRY_WAIT；否则一次网络抖动就会让重试消息被终态守卫丢掉。
+            boolean terminal = isNonRetryable(ex) || taskRecordService.hasExhaustedRetries(taskId);
             // 失败路径按 id 重新加载最新版本实体后再写终态，避免此前保存抛出的
             // 乐观锁异常在收尾时二次抛出、使任务行永久停留在 RUNNING。
             MusicScanJob failedJob = scanJobRepository.findById(jobId).orElse(job);
-            failedJob.setStatus(TaskStatus.FAILED.getValue());
-            failedJob.setMessage("音乐刮削失败: " + ex.getMessage());
+            failedJob.setStatus(terminal ? TaskStatus.FAILED.getValue() : TaskStatus.RUNNING.getValue());
+            failedJob.setMessage(terminal
+                    ? "音乐刮削失败: " + ex.getMessage()
+                    : "音乐刮削失败，等待重试: " + ex.getMessage());
             failedJob.setDetails(scrapeDetails(force, processed, matched, skipped, unmatched, failed));
             scanJobRepository.save(failedJob);
-            notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
-                    "音乐刮削失败", "刮削失败: " + ex.getMessage(),
-                    Map.of("jobId", job.getId().toString()));
+            if (terminal) {
+                // 失败通知只在终态发一次：重试期间由重试服务在死信终态统一收口。
+                notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
+                        "音乐刮削失败", "刮削失败: " + ex.getMessage(),
+                        Map.of("jobId", job.getId().toString()));
+            }
             throw ex;
         }
+    }
+
+    /**
+     * 明确的业务错误没有重试价值；网络、依赖不可用与未分类运行时异常都按瞬时故障处理。
+     */
+    private boolean isNonRetryable(Throwable exception) {
+        if (!(exception instanceof BusinessException businessException)) {
+            return false;
+        }
+        return switch (businessException.errorCode()) {
+            case PARAM_ERROR, BAD_REQUEST, VALIDATION_FAILED, NOT_FOUND, TASK_NOT_FOUND,
+                    FORBIDDEN, FILE_NOT_FOUND, MUSIC_PLATFORM_NOT_CONNECTED,
+                    MUSIC_PLATFORM_AUTH_EXPIRED -> true;
+            default -> false;
+        };
     }
 
     private MusicScanJob updateScrapeProgress(

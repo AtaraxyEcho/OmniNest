@@ -1,8 +1,16 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' as selector;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+
+/// 平台文件对象的类型出口。
+///
+/// presentation 只允许通过本文件认识文件对象与选择器分组：`XFile`/`XTypeGroup`
+/// 由插件包定义，直接 import 插件会让平台分支重新泄漏到 UI 层。这里只重导出类型，
+/// 真正的选择动作仍走 [FilePick] 与各 feature 的 application 层选择器。
+export 'package:file_selector/file_selector.dart' show XFile, XTypeGroup;
 
 /// 平台文件选择的唯一出口。
 ///
@@ -58,6 +66,16 @@ abstract final class FilePick {
     );
     return picked.map(PickedFile._fromPlatformFile).toList(growable: false);
   }
+
+  /// 选择一个文件（不限定类型）。
+  ///
+  /// 这条出口走 file_selector 而不是 file_picker：Web 端浏览器只给 Blob 句柄、
+  /// 没有本地路径，file_picker 取 path 会静默失败；返回的 [XFile] 可按流读取，
+  /// 与上传链路一致。
+  static Future<XFile?> openSingleFile() => selector.openFile();
+
+  /// 选择多个文件（不限定类型）。
+  static Future<List<XFile>> openMultipleFiles() => selector.openFiles();
 }
 
 /// 一次选择结果里的单个文件。

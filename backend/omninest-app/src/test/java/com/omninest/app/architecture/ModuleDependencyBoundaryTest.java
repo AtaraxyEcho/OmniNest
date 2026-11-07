@@ -481,6 +481,12 @@ class ModuleDependencyBoundaryTest {
             violations.add("SYSTEM_REDIS_UTIL " + relativePath + " -> com.omninest.common.util.RedisUtil");
         }
 
+        // Worker 与 file/system/media 同属业务模块，同样只能依赖端口；
+        // 此前只扫了 file/system/media，worker 里的直接注入得以长期漏检。
+        if (module.equals("omninest-worker") && REDIS_UTIL_IMPORT_PATTERN.matcher(content).find()) {
+            violations.add("WORKER_REDIS_UTIL " + relativePath + " -> com.omninest.common.util.RedisUtil");
+        }
+
         if (module.equals("omninest-media")
                 && REDIS_UTIL_IMPORT_PATTERN.matcher(content).find()
                 && !relativePath.contains("/infrastructure/")) {

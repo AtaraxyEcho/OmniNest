@@ -10,12 +10,12 @@ import com.omninest.modules.user.repository.AuditLogRetentionRepository;
 import com.omninest.modules.user.repository.AuthHistoryRetentionRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.IntSupplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import com.omninest.modules.task.runtime.ConditionalOnSchedulerRuntime;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,22 +54,48 @@ public class SystemHistoryRetentionService {
         int batchSize = Math.max(1, Math.min(properties.getBatchSize(), 5000));
         int maximumBatches = Math.max(1, Math.min(properties.getMaximumBatches(), 100));
         Instant now = Instant.now();
+        List<String> failedSteps = new ArrayList<>();
 
-        int deletedTasks = cleanupTasks(now, batchSize, maximumBatches);
-        int deletedDispatches = cleanupDispatches(now, batchSize, maximumBatches);
-        int deletedPurgeEntries = cleanupPurgeEntries(now, batchSize, maximumBatches);
-        int deletedAuditLogs = cleanupAuditLogs(now, batchSize, maximumBatches);
-        int deletedConfigHistories = cleanupConfigHistories(now, batchSize, maximumBatches);
-        int deletedNotifications = cleanupNotifications(now, batchSize, maximumBatches);
-        int deletedRevocations = cleanupSessionRevocations(now, batchSize, maximumBatches);
-        int deletedSessions = cleanupExpiredSessions(now, batchSize, maximumBatches);
-        int deletedLoginAudits = cleanupLoginAudits(now, batchSize, maximumBatches);
+        int deletedTasks = runStep("tasks", failedSteps, () -> cleanupTasks(now, batchSize, maximumBatches));
+        int deletedDispatches =
+                runStep("dispatches", failedSteps, () -> cleanupDispatches(now, batchSize, maximumBatches));
+        int deletedPurgeEntries =
+                runStep("purgeEntries", failedSteps, () -> cleanupPurgeEntries(now, batchSize, maximumBatches));
+        int deletedAuditLogs =
+                runStep("auditLogs", failedSteps, () -> cleanupAuditLogs(now, batchSize, maximumBatches));
+        int deletedConfigHistories =
+                runStep("configHistories", failedSteps, () -> cleanupConfigHistories(now, batchSize, maximumBatches));
+        int deletedNotifications =
+                runStep("notifications", failedSteps, () -> cleanupNotifications(now, batchSize, maximumBatches));
+        int deletedRevocations =
+                runStep("sessionRevocations", failedSteps, () -> cleanupSessionRevocations(now, batchSize, maximumBatches));
+        int deletedSessions =
+                runStep("expiredSessions", failedSteps, () -> cleanupExpiredSessions(now, batchSize, maximumBatches));
+        int deletedLoginAudits =
+                runStep("loginAudits", failedSteps, () -> cleanupLoginAudits(now, batchSize, maximumBatches));
         log.info("系统历史保留清理完成: deletedTasks={}, deletedDispatches={}, deletedPurgeEntries={}, "
                         + "deletedAuditLogs={}, deletedConfigHistories={}, deletedNotifications={}, "
-                        + "deletedRevocations={}, deletedSessions={}, deletedLoginAudits={}",
+                        + "deletedRevocations={}, deletedSessions={}, deletedLoginAudits={}, failedSteps={}",
                 deletedTasks, deletedDispatches, deletedPurgeEntries,
                 deletedAuditLogs, deletedConfigHistories, deletedNotifications,
-                deletedRevocations, deletedSessions, deletedLoginAudits);
+                deletedRevocations, deletedSessions, deletedLoginAudits, failedSteps);
+    }
+
+    /**
+     * 执行单个清理步骤并隔离异常。
+     *
+     * <p>9 个步骤写的是互相独立的表：任何一张表（例如约束冲突、锁超时或事务缺失）
+     * 出错都不该让后面几张表永远等不到清理，因此逐步兜住 {@link RuntimeException}。</p>
+     */
+    private int runStep(String stepName, List<String> failedSteps, IntSupplier step) {
+        try {
+            return step.getAsInt();
+        } catch (RuntimeException exception) {
+            failedSteps.add(stepName);
+            log.warn("历史清理步骤失败，继续后续步骤: step={}, errorType={}, message={}",
+                    stepName, exception.getClass().getSimpleName(), exception.getMessage());
+            return 0;
+        }
     }
 
     /**

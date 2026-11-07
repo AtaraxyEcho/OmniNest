@@ -31,7 +31,7 @@ class MediaPathBoundaryTest {
     /** 允许直接使用 Path/Files 的暂存、派生处理与路径安全类。 */
     private static final Set<String> ALLOWED_PATH_SOURCES = Set.of(
             "omninest-media/src/main/java/com/omninest/modules/music/service/MusicCoverThumbnailService.java",
-            "omninest-media/src/main/java/com/omninest/modules/music/service/MusicAdminService.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/service/MusicCoverAssetStore.java",
             "omninest-media/src/main/java/com/omninest/modules/video/service/VideoTranscodeService.java",
             "omninest-media/src/main/java/com/omninest/modules/video/service/TranscodeExecutionService.java",
             "omninest-media/src/main/java/com/omninest/modules/video/service/VideoProbeService.java",
@@ -42,7 +42,7 @@ class MediaPathBoundaryTest {
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoThumbnailService.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoEditService.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoRawPreviewService.java",
-            "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoAdminService.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoImportPreparer.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoBatchService.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoAiService.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoMotionVideoService.java",

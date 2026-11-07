@@ -346,7 +346,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
       await _pickAndRestartStaleUpload(context, item, controller, l10n);
       return;
     }
-    final picked = await openFile();
+    final picked = await FilePick.openSingleFile();
     if (picked == null || !context.mounted) {
       return;
     }
@@ -386,7 +386,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
     FileBrowserController controller,
     AppLocalizations l10n,
   ) async {
-    final picked = await openFile();
+    final picked = await FilePick.openSingleFile();
     if (picked == null || !context.mounted) {
       return;
     }

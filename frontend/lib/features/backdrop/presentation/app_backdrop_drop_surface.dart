@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 /// 背景设置面板的系统文件拖放层,把拖入的文件转交给上传入口。
 ///

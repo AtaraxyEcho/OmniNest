@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface ContentAssetRepository extends JpaRepository<ContentAsset, UUID> {
 
@@ -20,6 +21,11 @@ public interface ContentAssetRepository extends JpaRepository<ContentAsset, UUID
      * （{@code resource_type, resource_id, asset_type} where {@code is_primary}）。
      * 先查后插在并发刮削同一资源时会撞唯一键并抛 500，且冲突发生在事务内时
      * 后续写入整体回滚，重试同一条消息会反复失败。</p>
+     *
+     * <p>必须自带 {@code @Transactional}：调用方会在子虚拟线程里直接调用本方法
+     * （{@code TransactionSynchronizationManager} 基于 ThreadLocal，父线程的事务
+     * 不会传播过去），自定义 {@code @Modifying} 查询又没有内置的事务拦截，
+     * 缺注解时执行期必定 {@code TransactionRequiredException}。</p>
      *
      * @param id 新行标识；冲突时保留原行 id
      * @param ownerUserId 所属用户
@@ -35,6 +41,7 @@ public interface ContentAssetRepository extends JpaRepository<ContentAsset, UUID
      * @return 插入或更新的行数
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query(value = """
             INSERT INTO omni.content_assets (
                 id, owner_user_id, resource_type, resource_id, asset_type, file_node_id,

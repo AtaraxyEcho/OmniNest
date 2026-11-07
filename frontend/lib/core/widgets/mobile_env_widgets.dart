@@ -189,10 +189,13 @@ Future<bool> showMobileConfirmSheet(
   bool destructive = false,
 }) async {
   final l10n = MaterialLocalizations.of(context);
+  // 弹窗挂在 Root Navigator 上，builder 重建时底层页面可能已因实时刷新被卸载；
+  // 预先取出 env，避免在 builder 内解引用失效的 context。
+  final env = context.env;
   final result = await showModalBottomSheet<bool>(
     context: context,
     useRootNavigator: true,
-    backgroundColor: context.env.sheetSolid,
+    backgroundColor: env.sheetSolid,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -213,7 +216,7 @@ Future<bool> showMobileConfirmSheet(
                     color:
                         destructive
                             ? StatusTintColors.dangerFill
-                            : context.env.accentInk.withValues(alpha: 0.08),
+                            : env.accentInk.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(17),
                   ),
                   child: OmniIcon(
@@ -221,8 +224,8 @@ Future<bool> showMobileConfirmSheet(
                     size: 22,
                     color:
                         destructive
-                            ? context.env.statusDanger
-                            : context.env.accentInk,
+                            ? env.statusDanger
+                            : env.accentInk,
                   ),
                 ),
                 const SizedBox(height: 13),
@@ -236,7 +239,7 @@ Future<bool> showMobileConfirmSheet(
                     fontSize: 23,
                     height: 1.0,
                     fontWeight: FontWeight.w400,
-                    color: context.env.ink,
+                    color: env.ink,
                   ),
                 ),
                 const SizedBox(height: 7),
@@ -246,7 +249,7 @@ Future<bool> showMobileConfirmSheet(
                   style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
                     height: 1.55,
-                    color: context.env.inkMuted,
+                    color: env.inkMuted,
                   ),
                 ),
                 const SizedBox(height: 17),
@@ -255,8 +258,8 @@ Future<bool> showMobileConfirmSheet(
                     Expanded(
                       child: _MobileConfirmButton(
                         label: cancelLabel ?? l10n.cancelButtonLabel,
-                        background: context.env.line07,
-                        foreground: context.env.ink,
+                        background: env.line07,
+                        foreground: env.ink,
                         onTap: () => Navigator.of(sheetContext).pop(false),
                       ),
                     ),
@@ -267,11 +270,11 @@ Future<bool> showMobileConfirmSheet(
                         background:
                             destructive
                                 ? StatusTintColors.dangerInk
-                                : context.env.actionFill,
+                                : env.actionFill,
                         foreground:
                             destructive
                                 ? _dangerForeground
-                                : context.env.actionFillInk,
+                                : env.actionFillInk,
                         onTap: () => Navigator.of(sheetContext).pop(true),
                       ),
                     ),

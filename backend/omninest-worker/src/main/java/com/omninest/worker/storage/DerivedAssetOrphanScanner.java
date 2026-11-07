@@ -5,7 +5,8 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.storage.ObjectStorageObject;
 import com.omninest.common.storage.ObjectStoragePage;
-import com.omninest.common.util.RedisUtil;
+import com.omninest.common.cache.ExpiringKeyValueStore;
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.modules.file.service.DerivedObjectReferenceQuery;
 import com.omninest.modules.file.service.FileObjectReferenceQuery;
 import com.omninest.modules.reader.service.ReaderPageAssetReferenceQuery;
@@ -43,7 +44,8 @@ public class DerivedAssetOrphanScanner {
     private final ReaderPageAssetReferenceQuery readerPageAssetReferenceQuery;
     /** 额外派生对象引用源；FileObject 已单独注入，这里放其余 SPI 实现。 */
     private final List<DerivedObjectReferenceQuery> derivedObjectReferenceQueries;
-    private final RedisUtil redisUtil;
+    private final DistributedLock distributedLock;
+    private final ExpiringKeyValueStore cursorStore;
     private final DerivedAssetOrphanScanProperties properties;
 
     /**
@@ -85,14 +87,14 @@ public class DerivedAssetOrphanScanner {
      */
     public DerivedAssetOrphanScanResult scanOnce() {
         validateProperties();
-        String lockToken = redisUtil.newLockToken();
-        if (!redisUtil.tryLock(LOCK_KEY, lockToken, properties.getLockTtl())) {
+        String lockToken = distributedLock.newToken();
+        if (!distributedLock.tryLock(LOCK_KEY, lockToken, properties.getLockTtl())) {
             return DerivedAssetOrphanScanResult.skipped();
         }
         try {
             return scanLocked();
         } finally {
-            if (!redisUtil.unlock(LOCK_KEY, lockToken)) {
+            if (!distributedLock.unlock(LOCK_KEY, lockToken)) {
                 log.warn("派生对象孤儿扫描锁释放失败");
             }
         }
@@ -103,7 +105,7 @@ public class DerivedAssetOrphanScanner {
         if (bucket == null || bucket.isBlank()) {
             throw new IllegalStateException("派生资源存储桶名称不能为空");
         }
-        String continuationToken = normalizeToken(redisUtil.get(CURSOR_KEY));
+        String continuationToken = normalizeToken(cursorStore.get(CURSOR_KEY));
         Instant cutoff = Instant.now().minus(properties.getMinimumAge());
         long scannedObjects = 0;
         long eligibleObjects = 0;
@@ -201,10 +203,10 @@ public class DerivedAssetOrphanScanner {
 
     private void saveCursor(String continuationToken) {
         if (continuationToken == null) {
-            redisUtil.delete(CURSOR_KEY);
+            cursorStore.delete(CURSOR_KEY);
             return;
         }
-        redisUtil.set(CURSOR_KEY, continuationToken, properties.getCursorTtl());
+        cursorStore.set(CURSOR_KEY, continuationToken, properties.getCursorTtl());
     }
 
     private String normalizeToken(String continuationToken) {

@@ -1,8 +1,10 @@
 package com.omninest.modules.music.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -15,6 +17,8 @@ import static org.mockito.Mockito.when;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
@@ -50,6 +54,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 class MusicScrapeServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
@@ -89,6 +95,7 @@ class MusicScrapeServiceTest {
             mock(DerivedAssetStorageService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final MusicScrapeService scrapeService = new MusicScrapeService(
             trackRepository,
             favoriteRepository,
@@ -100,12 +107,16 @@ class MusicScrapeServiceTest {
             derivedAssetStorageService,
             List.of(metadataProvider),
             taskRecordService,
-            taskDispatchService
+            taskDispatchService,
+            mock(com.omninest.modules.task.service.TaskHeartbeatRunner.class),
+            transactionManager
     );
 
     @BeforeEach
     void setUpTaskClaim() {
+        scrapeService.initTransactionTemplate();
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
     }
 
     @Test
@@ -269,10 +280,33 @@ class MusicScrapeServiceTest {
             assertThat(expected.getMessage()).isEqualTo("存储层不可用");
         }
 
-        // 失败收尾必须按 id 重新加载最新实体后写终态，保证任务行不停留在 RUNNING。
+        // 失败收尾必须按 id 重新加载最新实体后再写状态。
         verify(scanJobRepository, times(2)).findById(jobId);
-        assertThat(savedStatuses).containsExactly(TaskStatus.RUNNING.getValue(), TaskStatus.FAILED.getValue());
+        // 瞬态失败且仍有重试额度：领域行保持运行中并标注等待重试，
+        // sys_tasks 交给重试服务置 RETRY_WAIT。写 FAILED（终态）会让重试消息被状态守卫丢掉。
+        assertThat(savedStatuses).containsExactly(TaskStatus.RUNNING.getValue(), TaskStatus.RUNNING.getValue());
+        assertThat(job.getMessage()).contains("等待重试");
         verify(taskRecordService, never()).markCompleted(any(UUID.class), any());
+    }
+
+    @Test
+    void executeScrapeLibraryBusinessErrorWritesTerminalFailure() {
+        UUID jobId = UUID.fromString("70000000-0000-0000-0000-000000000003");
+        MusicScanJob job = queuedJob(jobId);
+        when(scanJobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        doAnswer(invocation -> invocation.getArgument(0))
+                .when(scanJobRepository).save(any(MusicScanJob.class));
+        when(trackRepository.countVisibleByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID))
+                .thenThrow(new BusinessException(ErrorCode.PARAM_ERROR, "参数错误"));
+
+        assertThatThrownBy(() -> scrapeService.executeScrapeLibrary(jobId, OWNER_ID, false))
+                .isInstanceOf(BusinessException.class);
+
+        // 业务错误没有重试价值：领域行直接收口为 FAILED 并只发一条失败通知。
+        assertThat(job.getStatus()).isEqualTo(TaskStatus.FAILED.getValue());
+        verify(notificationService).notifyOrLog(
+                eq(OWNER_ID), eq("TASK_FAILED"), anyString(), anyString(), any());
     }
 
     private MusicScanJob queuedJob(UUID jobId) {

@@ -92,7 +92,7 @@ class MusicAdminServiceTest {
             mock(MusicCoverRetentionService.class);
     private final com.omninest.modules.reader.service.TxtContentDecoder txtContentDecoder =
             mock(com.omninest.modules.reader.service.TxtContentDecoder.class);
-    private final MusicAdminService adminService = new MusicAdminService(new MediaProcessingLimitsProperties(),
+    private final MusicAdminService adminService = new MusicAdminService(
             scanJobRepository,
             trackRepository,
             albumRepository,
@@ -109,11 +109,15 @@ class MusicAdminServiceTest {
             syncEventService,
             readThroughCache,
             transactionManager,
-            derivedAssetStorageService,
             coverRetentionService,
             txtContentDecoder,
             mock(com.omninest.modules.user.service.UserDirectoryQueryService.class),
-            new TestTempStagingPort()
+            new MusicCoverAssetStore(
+                    trackRepository,
+                    derivedAssetStorageService,
+                    new MediaProcessingLimitsProperties(),
+                    new TestTempStagingPort()),
+            mock(com.omninest.modules.task.service.TaskHeartbeatRunner.class)
     );
 
     MusicAdminServiceTest() {

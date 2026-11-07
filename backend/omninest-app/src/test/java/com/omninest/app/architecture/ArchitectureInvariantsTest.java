@@ -415,8 +415,24 @@ class ArchitectureInvariantsTest {
     private static final Pattern TRANSACTIONAL_FIELD =
             Pattern.compile("private final ([A-Za-z0-9_]+)(?:<[^>]*>)?\\s+([a-z][A-Za-z0-9_]*)\\s*;");
 
-    private static final Pattern TRANSACTIONAL_METHOD_DECLARATION =
-            Pattern.compile("^\\s{4}(?:public|protected)\\s+(?:static\\s+)?[\\w<>\\[\\],.? ]+\\s+(\\w+)\\s*\\(.*$");
+    /** 含私有方法的方法声明：事务内的调用链要能沿私有辅助方法继续追。 */
+    private static final Pattern DECLARED_METHOD =
+            Pattern.compile("^\\s{4}(?:public|protected|private)\\s+(?:static\\s+)?"
+                    + "[\\w<>\\[\\],.? ]+\\s+(\\w+)\\s*\\(.*$");
+
+    /** 编程式事务根：{@code transactionTemplate.execute*} 的 lambda 体同样处于事务中。 */
+    private static final Pattern TRANSACTION_TEMPLATE_ROOT =
+            Pattern.compile("transactionTemplate\\.execute(?:WithoutResult)?\\s*\\(");
+
+    /** 本类方法调用（只对确实声明在本类里的名字做传递展开）。 */
+    private static final Pattern LOCAL_CALL = Pattern.compile("\\b([a-z][A-Za-z0-9_]*)\\s*\\(");
+
+    /** 事务提交后回调的两种包装形态。 */
+    private static final Pattern COMMIT_CALLBACK_OPENER =
+            Pattern.compile("new TransactionSynchronization\\s*\\(\\s*\\)\\s*\\{");
+
+    private static final Pattern DEFERRED_RUNNABLE_OPENER =
+            Pattern.compile("Runnable\\s+\\w+\\s*=\\s*\\(\\s*\\)\\s*->\\s*\\{");
 
     /**
      * 远程内容读写不得落在数据库事务内。
@@ -426,8 +442,13 @@ class ArchitectureInvariantsTest {
      * 并发任务这样叠加就会一起卡在连接池上。鉴权与定位查询留在各自的短事务里，
      * 取流、上传与删除必须在事务之外发起。</p>
      *
-     * <p>判据是“方法确实处于事务中”：方法级 {@code @Transactional} 优先，写了
+     * <p>判据是"方法确实处于事务中"：方法级 {@code @Transactional} 优先，写了
      * {@code NOT_SUPPORTED} 视为已显式挂起；没有方法级注解时才继承类级注解。</p>
+     *
+     * <p>只判定事务方法体内的直接调用会漏掉两种真实形态：一是
+     * {@code @Transactional} 方法调用本类私有辅助方法、远程 IO 写在辅助方法里；
+     * 二是编程式事务 {@code transactionTemplate.execute} 的 lambda 体。这里对前者按
+     * 本类方法调用图做传递展开，对后者把 lambda 体当作事务根节点。</p>
      */
     @Test
     @DisplayName("远程内容 IO 必须落在数据库事务之外")
@@ -463,29 +484,176 @@ class ArchitectureInvariantsTest {
 
         String relativePath = relative(file);
         boolean classTransactional = classLevelTransaction(lines);
+        Map<String, Integer> methodIndexes = declaredMethods(lines);
+        if (methodIndexes.isEmpty()) {
+            return List.of();
+        }
+
+        // 事务根：方法级/类级 @Transactional，以及把 body 包进 transactionTemplate 的方法。
+        List<String> roots = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : methodIndexes.entrySet()) {
+            if (isTransactionalMethod(lines, entry.getValue(), classTransactional)
+                    || methodBody(lines, entry.getValue()).contains("transactionTemplate.execute")) {
+                roots.add(entry.getKey());
+            }
+        }
+
         List<String> violations = new ArrayList<>();
-        for (int index = 0; index < lines.size(); index++) {
-            Matcher declaration = TRANSACTIONAL_METHOD_DECLARATION.matcher(lines.get(index));
-            if (!declaration.matches()) {
+        Set<String> visited = new HashSet<>();
+        List<String> pending = new ArrayList<>(roots);
+        while (!pending.isEmpty()) {
+            String method = pending.remove(pending.size() - 1);
+            if (!visited.add(method)) {
                 continue;
             }
-            List<String> annotations = precedingAnnotations(lines, index);
-            boolean methodTransactional = annotations.stream().anyMatch(value -> value.startsWith("@Transactional"));
-            boolean suspended = annotations.stream()
-                    .anyMatch(value -> value.startsWith("@Transactional") && value.contains("NOT_SUPPORTED"));
-            boolean inTransaction = methodTransactional ? !suspended : classTransactional;
-            if (!inTransaction) {
-                continue;
-            }
+            int index = methodIndexes.get(method);
             String body = methodBody(lines, index);
-            for (String pattern : banned) {
-                Matcher matcher = Pattern.compile(pattern).matcher(body);
-                if (matcher.find()) {
-                    violations.add(relativePath + "#" + declaration.group(1) + " -> " + matcher.group());
+            List<String> transactionalBodies = new ArrayList<>();
+            if (isTransactionalMethod(lines, index, classTransactional)) {
+                transactionalBodies.add(stripCommitCallbacks(body));
+            }
+            transactionTemplateBodies(body).stream()
+                    .map(ArchitectureInvariantsTest::stripCommitCallbacks)
+                    .forEach(transactionalBodies::add);
+            for (String transactionalBody : transactionalBodies) {
+                for (String pattern : banned) {
+                    Matcher matcher = Pattern.compile(pattern).matcher(transactionalBody);
+                    if (matcher.find()) {
+                        violations.add(relativePath + "#" + method + " -> " + matcher.group());
+                    }
+                }
+                Matcher calls = LOCAL_CALL.matcher(transactionalBody);
+                while (calls.find()) {
+                    String callee = calls.group(1);
+                    if (methodIndexes.containsKey(callee) && !visited.contains(callee)) {
+                        pending.add(callee);
+                    }
                 }
             }
         }
         return violations;
+    }
+
+    /**
+     * 事务方法判定：方法级注解优先，缺省继承类级注解。
+     */
+    private static boolean isTransactionalMethod(
+            List<String> lines,
+            int declarationIndex,
+            boolean classTransactional
+    ) {
+        List<String> annotations = precedingAnnotations(lines, declarationIndex);
+        boolean methodTransactional = annotations.stream()
+                .anyMatch(value -> value.startsWith("@Transactional"));
+        boolean suspended = annotations.stream()
+                .anyMatch(value -> value.startsWith("@Transactional") && value.contains("NOT_SUPPORTED"));
+        return methodTransactional ? !suspended : classTransactional;
+    }
+
+    /**
+     * 提取 {@code transactionTemplate.execute*} 的 lambda 体。
+     *
+     * <p>块体按大括号配对截取；表达式体取到语句分号，覆盖
+     * {@code executeWithoutResult(status -> helper(...))} 这类写法。</p>
+     */
+    private static List<String> transactionTemplateBodies(String body) {
+        List<String> blocks = new ArrayList<>();
+        Matcher matcher = TRANSACTION_TEMPLATE_ROOT.matcher(body);
+        while (matcher.find()) {
+            int arrow = body.indexOf("->", matcher.end());
+            if (arrow < 0) {
+                continue;
+            }
+            int blockStart = body.indexOf('{', arrow);
+            int statementEnd = body.indexOf(';', arrow);
+            if (blockStart >= 0 && (statementEnd < 0 || blockStart < statementEnd)) {
+                blocks.add(balancedBlock(body, blockStart));
+            } else if (statementEnd > 0) {
+                blocks.add(body.substring(arrow, statementEnd));
+            }
+        }
+        return blocks;
+    }
+
+    /**
+     * 从指定大括号开始截取配对块。
+     */
+    private static String balancedBlock(String text, int blockStart) {
+        int depth = 0;
+        for (int index = blockStart; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '{') {
+                depth++;
+            } else if (character == '}') {
+                depth--;
+                if (depth == 0) {
+                    return text.substring(blockStart, index + 1);
+                }
+            }
+        }
+        return text.substring(blockStart);
+    }
+
+    /**
+     * 去掉提交后回调里的代码：事务同步回调与延迟 Runnable 都在提交之后执行，
+     * 那一刻连接已经归还，里面的对象删除不属于"事务内远程 IO"。
+     *
+     * <p>这是本闸门唯一的有意豁免，因此只剔除回调包装本身（
+     * {@code new TransactionSynchronization() {...}} 与
+     * {@code Runnable x = () -> {...}}），同一方法里其余的即时远程调用仍会被检查。</p>
+     */
+    private static String stripCommitCallbacks(String body) {
+        String stripped = removeBlocksAfter(body, COMMIT_CALLBACK_OPENER);
+        return removeBlocksAfter(stripped, DEFERRED_RUNNABLE_OPENER);
+    }
+
+    private static String removeBlocksAfter(String text, Pattern opener) {
+        StringBuilder result = new StringBuilder();
+        int cursor = 0;
+        Matcher matcher = opener.matcher(text);
+        while (matcher.find(cursor)) {
+            int braceStart = text.indexOf('{', matcher.end() - 1);
+            if (braceStart < 0) {
+                break;
+            }
+            result.append(text, cursor, matcher.start());
+            cursor = blockEnd(text, braceStart);
+        }
+        result.append(text.substring(cursor));
+        return result.toString();
+    }
+
+    /**
+     * 返回与起始大括号配对的下一个位置（右括号之后）。
+     */
+    private static int blockEnd(String text, int braceStart) {
+        int depth = 0;
+        for (int index = braceStart; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '{') {
+                depth++;
+            } else if (character == '}') {
+                depth--;
+                if (depth == 0) {
+                    return index + 1;
+                }
+            }
+        }
+        return text.length();
+    }
+
+    /**
+     * 收集本类声明的方法名 → 声明行号。
+     */
+    private static Map<String, Integer> declaredMethods(List<String> lines) {
+        Map<String, Integer> methods = new HashMap<>();
+        for (int index = 0; index < lines.size(); index++) {
+            Matcher declaration = DECLARED_METHOD.matcher(lines.get(index));
+            if (declaration.matches()) {
+                methods.put(declaration.group(1), index);
+            }
+        }
+        return methods;
     }
 
     /** 类级 {@code @Transactional}：注解写在文件首列，紧跟在类型声明之前。 */
