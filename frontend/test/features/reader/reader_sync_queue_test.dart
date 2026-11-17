@@ -1,0 +1,776 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
+import 'package:omninest/core/security/offline_text_cipher.dart';
+import 'package:omninest/core/storage/local_database.dart';
+import 'package:omninest/features/reader/data/reader_api.dart';
+import 'package:omninest/features/reader/application/reader_data_manager.dart';
+import 'package:omninest/features/reader/data/reader_local_storage.dart';
+import 'package:omninest/features/reader/data/reader_sync_queue.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
+import '../../support/test_offline_cipher.dart';
+
+class MockReaderApi extends Mock implements ReaderApi {}
+
+void main() {
+  late LocalDatabase db;
+  late ReaderLocalStorage storage;
+  late MockReaderApi api;
+  late OfflineTextCipher cipher;
+
+  setUp(() {
+    db = LocalDatabase(NativeDatabase.memory());
+    cipher = createTestOfflineCipher();
+    storage = ReaderLocalStorage(db, textCipher: cipher, userId: 'user-1');
+    api = MockReaderApi();
+    ReaderSyncQueue.init(db, textCipher: cipher, userId: 'user-1');
+  });
+
+  tearDown(() async {
+    await db.close();
+  });
+
+  test('flush replaces local bookmark id with server bookmark id', () async {
+    final createdAt = DateTime(2026, 6, 30);
+    await storage.saveBookmark(
+      ReaderBookmark(
+        id: 'local-1',
+        readerItemId: 'item-1',
+        charOffset: 120,
+        progressPercent: 0.12,
+        note: 'note',
+        createdAt: createdAt,
+      ),
+    );
+    await ReaderSyncQueue.enqueueBookmarkCreate(
+      localId: 'local-1',
+      itemId: 'item-1',
+      charOffset: 120,
+      progressPercent: 0.12,
+      note: 'note',
+    );
+    when(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        charOffset: 120,
+        progressPercent: 0.12,
+        note: 'note',
+        clientOperationId: 'local-1',
+      ),
+    ).thenAnswer(
+      (_) async => ReaderBookmark(
+        id: 'server-1',
+        readerItemId: 'item-1',
+        charOffset: 120,
+        progressPercent: 0.12,
+        note: 'note',
+        createdAt: createdAt,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final bookmarks = await storage.loadBookmarks('item-1');
+    expect(bookmarks, hasLength(1));
+    expect(bookmarks.single.id, 'server-1');
+    verify(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        charOffset: 120,
+        progressPercent: 0.12,
+        note: 'note',
+        clientOperationId: 'local-1',
+      ),
+    ).called(1);
+    // 同步成功后的 reader 操作（含明文 payload）会被清理，不留本地副本
+    final operations = await db.select(db.syncOperations).get();
+    expect(operations, isEmpty);
+  });
+
+  test('书签章节归属随队列补传并在落库时保留', () async {
+    final createdAt = DateTime(2026, 6, 30);
+    await storage.saveBookmark(
+      ReaderBookmark(
+        id: 'local-chapter',
+        readerItemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        createdAt: createdAt,
+      ),
+    );
+    await ReaderSyncQueue.enqueueBookmarkCreate(
+      localId: 'local-chapter',
+      itemId: 'item-1',
+      chapterId: 't1280',
+      charOffset: 640,
+      progressPercent: 0.3,
+    );
+    when(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        note: null,
+        clientOperationId: 'local-chapter',
+      ),
+    ).thenAnswer(
+      (_) async => ReaderBookmark(
+        id: 'server-chapter',
+        readerItemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        createdAt: createdAt,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        note: null,
+        clientOperationId: 'local-chapter',
+      ),
+    ).called(1);
+    final bookmarks = await storage.loadBookmarks('item-1');
+    expect(bookmarks.single.chapterId, 't1280');
+    expect(bookmarks.single.charOffset, 640);
+  });
+
+  test(
+    'annotation loading merges remote data with pending local records',
+    () async {
+      final manager = ReaderDataManager(api: api, localStorage: storage);
+      final pending = await manager.createAnnotation(
+        itemId: 'item-annotations',
+        chapterId: 'chapter_2',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'pending',
+      );
+      final remote = ReaderAnnotation(
+        id: 'annotation-server',
+        readerItemId: 'item-annotations',
+        startOffset: 30,
+        endOffset: 40,
+        highlightText: 'remote',
+        color: '#FFEB3B',
+        createdAt: DateTime(2026, 7, 18),
+      );
+      when(
+        () => api.annotations('item-annotations'),
+      ).thenAnswer((_) async => [remote]);
+
+      final result = await manager.loadAnnotations('item-annotations');
+
+      expect(result.map((annotation) => annotation.id), {
+        'annotation-server',
+        pending.id,
+      });
+      final cached = await storage.loadAnnotations('item-annotations');
+      expect(cached, hasLength(2));
+      expect(
+        cached
+            .singleWhere((annotation) => annotation.id == pending.id)
+            .chapterId,
+        'chapter_2',
+      );
+    },
+  );
+
+  test('annotation sync preserves chapter ownership', () async {
+    final createdAt = DateTime(2026, 7, 31);
+    // 本地优先：离线创建的记录先落本地库，队列回包才有可替换的那一行。
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'local-annotation',
+        readerItemId: 'item-annotations',
+        chapterId: 'chapter_3',
+        startOffset: 15,
+        endOffset: 30,
+        highlightText: 'chapter text',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationCreate(
+      localId: 'local-annotation',
+      itemId: 'item-annotations',
+      chapterId: 'chapter_3',
+      startOffset: 15,
+      endOffset: 30,
+      highlightText: 'chapter text',
+    );
+    when(
+      () => api.createAnnotation(
+        itemId: 'item-annotations',
+        chapterId: 'chapter_3',
+        startOffset: 15,
+        endOffset: 30,
+        highlightText: 'chapter text',
+        color: '#FFEB3B',
+        clientOperationId: 'local-annotation',
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'server-annotation',
+        readerItemId: 'item-annotations',
+        chapterId: 'chapter_3',
+        startOffset: 15,
+        endOffset: 30,
+        highlightText: 'chapter text',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.createAnnotation(
+        itemId: 'item-annotations',
+        chapterId: 'chapter_3',
+        startOffset: 15,
+        endOffset: 30,
+        highlightText: 'chapter text',
+        color: '#FFEB3B',
+        clientOperationId: 'local-annotation',
+      ),
+    ).called(1);
+    final cached = await storage.loadAnnotations('item-annotations');
+    expect(cached.single.chapterId, 'chapter_3');
+  });
+
+  test('annotation update 携带本地版本并回写服务端新版本', () async {
+    final createdAt = DateTime(2026, 8, 1);
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'annotation-versioned',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '旧备注',
+        version: 3,
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'annotation-versioned',
+      note: '新备注',
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-versioned',
+        note: '新备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'annotation-versioned',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '新备注',
+        version: 4,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateAnnotation(
+        'annotation-versioned',
+        note: '新备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).called(1);
+    final cached = await storage.loadAnnotationById('annotation-versioned');
+    expect(cached?.version, 4);
+  });
+
+  test('annotation update 收到版本冲突后取回远端版本重试一次', () async {
+    final createdAt = DateTime(2026, 8, 2);
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'annotation-conflict',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '本地备注',
+        version: 3,
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'annotation-conflict',
+      note: '本地备注',
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 3,
+      ),
+    ).thenThrow(
+      const AppException(code: AppErrorCodes.conflict, message: '已被其他设备修改'),
+    );
+    when(() => api.annotations('item-annotations')).thenAnswer(
+      (_) async => [
+        ReaderAnnotation(
+          id: 'annotation-conflict',
+          readerItemId: 'item-annotations',
+          startOffset: 10,
+          endOffset: 20,
+          highlightText: 'highlight',
+          color: '#FFEB3B',
+          createdAt: createdAt,
+          note: '远端备注',
+          version: 7,
+        ),
+      ],
+    );
+    when(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 7,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'annotation-conflict',
+        readerItemId: 'item-annotations',
+        startOffset: 10,
+        endOffset: 20,
+        highlightText: 'highlight',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+        note: '本地备注',
+        version: 8,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    // 冲突重试仍是本地内容覆盖，只是先经过一次显式的版本确认。
+    verify(
+      () => api.updateAnnotation(
+        'annotation-conflict',
+        note: '本地备注',
+        color: null,
+        expectedVersion: 7,
+      ),
+    ).called(1);
+    final cached = await storage.loadAnnotationById('annotation-conflict');
+    expect(cached?.version, 8);
+    expect(cached?.note, '本地备注');
+  });
+
+  test('note update 携带本地版本并回写服务端新版本', () async {
+    final createdAt = DateTime(2026, 8, 3);
+    await storage.saveNote(
+      ReaderNote(
+        id: 'note-versioned',
+        readerItemId: 'item-notes',
+        content: '旧内容',
+        createdAt: createdAt,
+        version: 2,
+      ),
+    );
+    await ReaderSyncQueue.enqueueNoteUpdate(
+      noteId: 'note-versioned',
+      content: '新内容',
+    );
+    when(
+      () => api.updateNote(
+        'note-versioned',
+        title: null,
+        content: '新内容',
+        expectedVersion: 2,
+      ),
+    ).thenAnswer(
+      (_) async => ReaderNote(
+        id: 'note-versioned',
+        readerItemId: 'item-notes',
+        content: '新内容',
+        createdAt: createdAt,
+        version: 3,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final cached = await storage.loadNoteById('note-versioned');
+    expect(cached?.version, 3);
+  });
+
+  test('enqueueProgress 取代同书旧的进度行，保留其它书', () async {
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 100,
+      progressPercent: 0.1,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+    );
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-2',
+      charOffset: 200,
+      progressPercent: 0.2,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+    );
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.9,
+      readingMode: 'scroll',
+      chapterId: 'chapter_2',
+    );
+
+    final rows = await db.select(db.syncOperations).get();
+    final progressRows =
+        rows.where((row) => row.type == ReaderSyncQueue.opProgress).toList();
+    // 服务端进度是 last-write-wins：旧行重放只会用过期位置覆盖新位置，
+    // 且离线期间每次失败都留下一行，重放时对同一本书逐条发 PUT。
+    expect(progressRows, hasLength(2));
+    final item1 = <Map<String, dynamic>>[];
+    for (final row in progressRows) {
+      final payload =
+          jsonDecode(await cipher.decrypt('user-1', row.payload))
+              as Map<String, dynamic>;
+      if (payload['itemId'] == 'item-1') {
+        item1.add(payload);
+      }
+    }
+    expect(item1, hasLength(1));
+    expect(item1.single['charOffset'], 900);
+  });
+
+  test('flush 清理重试耗尽的进度失败行，保留笔记失败行', () async {
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
+            type: ReaderSyncQueue.opProgress,
+            payload:
+                '{"itemId":"item-1","charOffset":100,"progressPercent":0.1,"readingMode":"scroll"}',
+            status: const Value('failed'),
+            retryCount: const Value(3),
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
+            type: ReaderSyncQueue.opNoteUpdate,
+            payload: '{"noteId":"note-1","content":"草稿"}',
+            status: const Value('failed'),
+            retryCount: const Value(3),
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final rows = await db.select(db.syncOperations).get();
+    // 进度有本地行为真值，耗尽重试的失败行只是噪声；
+    // 笔记/批注本地即真值，必须留着重试或对用户可见。
+    expect(rows.map((row) => row.type), [ReaderSyncQueue.opNoteUpdate]);
+  });
+
+  test('flush 在笔记积压超过一批时仍先上报进度', () async {
+    for (var index = 0; index < 60; index++) {
+      await db
+          .into(db.syncOperations)
+          .insert(
+            SyncOperationsCompanion.insert(
+              userId: const Value('user-1'),
+              type: ReaderSyncQueue.opNoteUpdate,
+              payload:
+                  '{"noteId":"note-$index","title":null,"content":"草稿 $index"}',
+              createdAt: DateTime(2026, 6, 1).add(Duration(minutes: index)),
+            ),
+          );
+    }
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 4000,
+      progressPercent: 0.4,
+      readingMode: 'scroll',
+      chapterId: 'chapter_2',
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 4000,
+        progressPercent: 0.4,
+        readingMode: 'scroll',
+        chapterId: 'chapter_2',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+        clientUpdatedAt: null,
+      ),
+    ).called(1);
+  });
+
+  test('flush ignores non reader operations in shared sync table', () async {
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
+            type: 'file.favorite',
+            payload: '{"fileId":"file-1"}',
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final operations = await db.select(db.syncOperations).get();
+    expect(operations.single.status, 'pending');
+    verifyNever(
+      () => api.updateProgress(
+        itemId: any(named: 'itemId'),
+        charOffset: any(named: 'charOffset'),
+        progressPercent: any(named: 'progressPercent'),
+        readingMode: any(named: 'readingMode'),
+        chapterId: any(named: 'chapterId'),
+      ),
+    );
+  });
+
+  test('flush syncs comic progress anchor fields', () async {
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'comic-1',
+      charOffset: 12,
+      progressPercent: 0.4,
+      readingMode: 'scroll',
+      chapterId: 'chapter-a',
+      pageId: 'page-12',
+      pageIndex: 12,
+      pageFingerprint: 'fingerprint-12',
+      sourceId: 'source-1',
+      sourcePageIndex: 8,
+      catalogKey: 'volume-1/chapter-a',
+      manifestVersion: 3,
+      intraPageOffset: 0.35,
+    );
+    when(
+      () => api.updateProgress(
+        itemId: 'comic-1',
+        charOffset: 12,
+        progressPercent: 0.4,
+        readingMode: 'scroll',
+        chapterId: 'chapter-a',
+        pageId: 'page-12',
+        pageIndex: 12,
+        pageFingerprint: 'fingerprint-12',
+        sourceId: 'source-1',
+        sourcePageIndex: 8,
+        catalogKey: 'volume-1/chapter-a',
+        manifestVersion: 3,
+        intraPageOffset: 0.35,
+        clientUpdatedAt: null,
+      ),
+    ).thenAnswer((_) async {});
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateProgress(
+        itemId: 'comic-1',
+        charOffset: 12,
+        progressPercent: 0.4,
+        readingMode: 'scroll',
+        chapterId: 'chapter-a',
+        pageId: 'page-12',
+        pageIndex: 12,
+        pageFingerprint: 'fingerprint-12',
+        sourceId: 'source-1',
+        sourcePageIndex: 8,
+        catalogKey: 'volume-1/chapter-a',
+        manifestVersion: 3,
+        intraPageOffset: 0.35,
+        clientUpdatedAt: null,
+      ),
+    ).called(1);
+    // 同步成功后的 reader 操作（含明文 payload）会被清理，不留本地副本
+    final operations = await db.select(db.syncOperations).get();
+    expect(operations, isEmpty);
+  });
+
+  test('deleting local bookmark cancels unsynced create operation', () async {
+    final manager = ReaderDataManager(api: api, localStorage: storage);
+
+    final bookmark = await manager.createBookmark(
+      itemId: 'item-1',
+      charOffset: 80,
+      progressPercent: 0.08,
+      note: 'draft',
+    );
+    await manager.deleteBookmark(bookmark.id);
+    await ReaderSyncQueue.flush(api: api);
+
+    final bookmarks = await storage.loadBookmarks('item-1');
+    expect(bookmarks, isEmpty);
+    final operations = await db.select(db.syncOperations).get();
+    expect(operations, isEmpty);
+    verifyNever(
+      () => api.createBookmark(
+        itemId: any(named: 'itemId'),
+        charOffset: any(named: 'charOffset'),
+        progressPercent: any(named: 'progressPercent'),
+        note: any(named: 'note'),
+        clientOperationId: any(named: 'clientOperationId'),
+      ),
+    );
+  });
+
+  test('flush marks malformed reader operation as failed', () async {
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            userId: const Value('user-1'),
+            type: ReaderSyncQueue.opProgress,
+            payload: '{"itemId":',
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final operations = await db.select(db.syncOperations).get();
+    expect(operations.single.status, 'failed');
+    expect(operations.single.retryCount, 1);
+    verifyNever(
+      () => api.updateProgress(
+        itemId: any(named: 'itemId'),
+        charOffset: any(named: 'charOffset'),
+        progressPercent: any(named: 'progressPercent'),
+        readingMode: any(named: 'readingMode'),
+        chapterId: any(named: 'chapterId'),
+      ),
+    );
+  });
+
+  test('离线补传保留进度的记录时刻', () async {
+    // 服务端围栏比的是"这条进度何时记录"，补传若换成发送时刻，离线一小时的
+    // 旧读数就会反过来赢过在线设备刚写入的位置。
+    final reportedAt = DateTime.utc(2026, 10, 8, 1, 2, 3);
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.3,
+      readingMode: 'page',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: reportedAt,
+    );
+    when(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 900,
+        progressPercent: 0.3,
+        readingMode: 'page',
+        chapterId: 'chapter_1',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+        clientUpdatedAt: reportedAt,
+      ),
+    ).thenAnswer((_) async {});
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 900,
+        progressPercent: 0.3,
+        readingMode: 'page',
+        chapterId: 'chapter_1',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+        clientUpdatedAt: reportedAt,
+      ),
+    ).called(1);
+  });
+
+  test('旧记录时刻的入队不得顶掉队列里更新的进度', () async {
+    final newer = DateTime.utc(2026, 10, 8, 3, 0);
+    final older = DateTime.utc(2026, 10, 8, 1, 0);
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.6,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: newer,
+    );
+    // 慢请求超时后才失败的那一条：记录时刻更早，却最后一个入队。
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 300,
+      progressPercent: 0.2,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: older,
+    );
+
+    final rows = await db.select(db.syncOperations).get();
+    expect(
+      rows.where((row) => row.type == ReaderSyncQueue.opProgress),
+      hasLength(1),
+      reason: '同一本书仍然只保留一条，但留下的必须是记录时刻更新的那条',
+    );
+    final payload =
+        jsonDecode(await cipher.decrypt('user-1', rows.single.payload))
+            as Map<String, dynamic>;
+    expect(payload['charOffset'], 900);
+  });
+}

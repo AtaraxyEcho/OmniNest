@@ -1,0 +1,149 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/environment.dart';
+import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/features/profile/data/me_api.dart';
+
+void main() {
+  test('修改密码发送当前密码和新密码', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await api.changePassword(
+      oldPassword: 'current-password',
+      newPassword: 'new-password',
+    );
+
+    expect(adapter.lastMethod, 'PUT');
+    expect(adapter.lastPath, '/me/password');
+    expect(adapter.lastData, {
+      'oldPassword': 'current-password',
+      'newPassword': 'new-password',
+    });
+  });
+
+  test('关闭两步验证接受 Void 响应（data 为空不再报响应格式错误）', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await api.twoFactorDisable(password: 'correct-password', code: '123456');
+
+    expect(adapter.lastMethod, 'POST');
+    expect(adapter.lastPath, '/me/2fa/disable');
+    expect(adapter.lastData, {
+      'password': 'correct-password',
+      'code': '123456',
+    });
+  });
+
+  test('更新资料走 PATCH /me 并仅携带提供的字段', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await api.updateMe(displayName: 'New Name');
+
+    expect(adapter.lastMethod, 'PATCH');
+    expect(adapter.lastPath, '/me');
+    expect(adapter.lastData, {'displayName': 'New Name'});
+  });
+
+  test('会话列表解析 current 标记', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    adapter.nextBody = {
+      'code': 200,
+      'message': 'success',
+      'data': [
+        {
+          'id': 'session-current',
+          'clientPlatform': 'web',
+          'ipAddress': '192.168.1.108',
+          'issuedAt': '2026-09-28T09:00:00Z',
+          'expiresAt': '2026-10-28T09:00:00Z',
+          'lastActiveAt': '2026-09-28T09:30:00Z',
+          'createdAt': '2026-09-28T09:00:00Z',
+          'current': true,
+        },
+        {
+          'id': 'session-other',
+          'clientPlatform': 'android',
+          'ipAddress': '192.168.1.142',
+          'issuedAt': '2026-09-27T09:00:00Z',
+          'expiresAt': '2026-10-27T09:00:00Z',
+          'lastActiveAt': '2026-09-28T07:30:00Z',
+          'createdAt': '2026-09-27T09:00:00Z',
+        },
+      ],
+    };
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    final sessions = await api.getSessions();
+
+    expect(sessions, hasLength(2));
+    expect(sessions.first.current, isTrue);
+    expect(sessions.last.current, isFalse);
+  });
+}
+
+class _CapturingHttpClientAdapter implements HttpClientAdapter {
+  String? lastMethod;
+  String? lastPath;
+  Object? lastData;
+  Object? nextBody;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    lastMethod = options.method;
+    lastPath = options.path;
+    lastData = options.data;
+    final body = nextBody ?? {'code': 200, 'message': 'success', 'data': null};
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}

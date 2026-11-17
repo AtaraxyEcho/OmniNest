@@ -1,0 +1,747 @@
+part of 'file_browser_page.dart';
+
+class _FileSectionBody extends StatelessWidget {
+  const _FileSectionBody({super.key, required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (state.section) {
+      FileManagerSection.allFiles ||
+      FileManagerSection.sharedSpace ||
+      FileManagerSection.recent ||
+      FileManagerSection.favorites ||
+      FileManagerSection.recycleBin => _FileNodeWorkspace(state: state),
+      FileManagerSection.sharedWithMe => _SharedWithMeWorkspace(state: state),
+      // 合并分享页：我的创建 / 全部链接（管理员）双作用域；
+      // shareManagement 旧入口重定向到同一页面。
+      FileManagerSection.myShares ||
+      FileManagerSection.shareManagement => _ShareWorkspace(
+        title: AppLocalizations.of(context).filesMyShares,
+        subtitle: FileManagerSection.myShares.descriptionOf(
+          AppLocalizations.of(context),
+        ),
+        shares: state.shareScopeAll ? state.shareLinks : state.myShares,
+        managementMode: state.shareScopeAll,
+        state: state,
+      ),
+      FileManagerSection.storageStats =>
+        MobileShellScope.isHosted(context)
+            ? _HostedStorageStatsPage(stats: state.storageStats)
+            : _FileNodeWorkspace(state: state),
+      FileManagerSection.uploadQueue => _UploadQueueWorkspace(state: state),
+      FileManagerSection.externalStorage => _ExternalStorageWorkspace(
+        state: state,
+      ),
+      FileManagerSection.importTasks => _ImportTasksWorkspace(state: state),
+    };
+  }
+}
+
+class _FileNodeWorkspace extends ConsumerWidget {
+  const _FileNodeWorkspace({required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final recycle = state.section == FileManagerSection.recycleBin;
+    final actionsEnabled = !state.isBusy;
+    final isNarrow = MediaQuery.sizeOf(context).width < 900;
+    final hostedNarrow = isNarrow && MobileShellScope.isHosted(context);
+
+    if (isNarrow) {
+      return Stack(
+        children: [
+          FileDropUploadSurface(
+            enabled:
+                state.section == FileManagerSection.allFiles && actionsEnabled,
+            onFilesDropped: (files) => _uploadFiles(context, controller, files),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (state.section == FileManagerSection.allFiles &&
+                    !MobileShellScope.isHosted(context)) ...[
+                  Row(
+                    children: [
+                      Expanded(child: _Breadcrumbs(state: state)),
+                      _FileFilterButton(state: state),
+                      _FileViewToggleButton(state: state),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                const SizedBox(height: 10),
+                if (state.section == FileManagerSection.allFiles &&
+                    state.inlineUploadTasks.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _InlineUploadQueueCard(
+                    tasks: state.inlineUploadTasks,
+                    onOpenQueue:
+                        () => unawaited(
+                          _runFileAction(
+                            context,
+                            () => controller.loadSection(
+                              FileManagerSection.uploadQueue,
+                            ),
+                          ),
+                        ),
+                  ),
+                ],
+                // 样例 FeaturePage 四页（最近/收藏）的计数在页头副题，正文
+                // 不再挂工位计数眉标条；目录与回收站等分区保留计数条。
+                if (hostedNarrow && !state.section.isSampleFeaturePage)
+                  Builder(
+                    builder: (context) {
+                      final total = _sectionTotalCount(state);
+                      if (total == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return _HostedSectionMetaRow(
+                        text: AppLocalizations.of(
+                          context,
+                        ).filesHostedItemCount(total),
+                      );
+                    },
+                  ),
+                Expanded(
+                  child: _FileViewSwitcher(
+                    state: state,
+                    narrow: true,
+                    actionsEnabled: actionsEnabled,
+                    recycle: recycle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (state.hasSelection)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _MobileStickyBatchBar(state: state),
+            ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return _StatsRow(state: state, maxWidth: constraints.maxWidth);
+          },
+        ),
+        const SizedBox(height: 14),
+        _BreadcrumbActionStrip(state: state, actionsEnabled: actionsEnabled),
+        // 全部列表分区（最近/收藏/回收站/共享空间等）统一提供分类筛选 +
+        // 排序条，与全部文件同语言，避免各分区工具能力不一致。
+        const SizedBox(height: 10),
+        _CategoryFilterBar(state: state, actionsEnabled: actionsEnabled),
+        if (state.section == FileManagerSection.allFiles &&
+            state.inlineUploadTasks.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _InlineUploadQueueCard(
+            tasks: state.inlineUploadTasks,
+            onOpenQueue:
+                () => unawaited(
+                  _runFileAction(
+                    context,
+                    () =>
+                        controller.loadSection(FileManagerSection.uploadQueue),
+                  ),
+                ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Expanded(
+          child: FileDropUploadSurface(
+            enabled:
+                state.section == FileManagerSection.allFiles && actionsEnabled,
+            onFilesDropped: (files) => _uploadFiles(context, controller, files),
+            child: Column(
+              children: [
+                if (state.viewMode == FileBrowserViewMode.grid) ...[
+                  _GridBatchToolbar(state: state),
+                  const SizedBox(height: 12),
+                ] else if (state.hasSelection) ...[
+                  _TableBatchBar(state: state),
+                  const SizedBox(height: 12),
+                ],
+                Expanded(
+                  child: _FileViewSwitcher(
+                    state: state,
+                    narrow: false,
+                    actionsEnabled: actionsEnabled,
+                    recycle: recycle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 托管窄屏分区的计数（总数），供眉标行本地化。
+int? _sectionTotalCount(FileBrowserState state) {
+  return switch (state.section) {
+    FileManagerSection.allFiles ||
+    FileManagerSection.sharedSpace => state.fileTotalElements,
+    FileManagerSection.recent => state.recentMeta.totalElements,
+    FileManagerSection.favorites => state.favoritesMeta.totalElements,
+    FileManagerSection.recycleBin => state.recycleMeta.totalElements,
+    _ => null,
+  };
+}
+
+/// 面包屑与顶部操作条：左侧目录路径，右侧 上传 / 新建文件夹 / 视图切换，
+/// 底部 1px 细线收束（模板 Breadcrumb & Top Action Strip）。
+class _BreadcrumbActionStrip extends ConsumerWidget {
+  const _BreadcrumbActionStrip({
+    required this.state,
+    required this.actionsEnabled,
+  });
+
+  final FileBrowserState state;
+  final bool actionsEnabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final isAllFiles = state.section == FileManagerSection.allFiles;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.filesColors.outlineVariant),
+        ),
+      ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(child: _Breadcrumbs(state: state)),
+          if (isAllFiles) ...[
+            FilesActionButton(
+              label: l10n.filesUploadFile,
+              icon: Icons.upload_file_rounded,
+              variant: FilesActionButtonVariant.primary,
+              onPressed:
+                  actionsEnabled
+                      ? () => _pickAndUploadFiles(context, controller)
+                      : null,
+            ),
+            const SizedBox(width: 8),
+            FilesActionButton(
+              label: l10n.filesNewFolder,
+              icon: Icons.create_new_folder_outlined,
+              onPressed:
+                  actionsEnabled
+                      ? () => controller.beginFolderCreation(
+                        dedupeFolderName(
+                          l10n.filesNewFolderDefault,
+                          state.files,
+                        ),
+                      )
+                      : null,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 1,
+              height: 20,
+              color: context.filesColors.outlineVariant,
+            ),
+            const SizedBox(width: 8),
+          ],
+          FilesToolbarSegmented<FileBrowserViewMode>(
+            height: 28,
+            selected: state.viewMode,
+            onSelected:
+                actionsEnabled
+                    ? controller.setViewMode
+                    : (_) {
+                      // 禁用态不响应。
+                    },
+            segments: [
+              FilesToolbarSegment(
+                value: FileBrowserViewMode.list,
+                tooltip: l10n.filesToolbarTableView,
+                icon: Icons.format_list_bulleted,
+              ),
+              FilesToolbarSegment(
+                value: FileBrowserViewMode.grid,
+                tooltip: l10n.filesToolbarGridView,
+                icon: Icons.grid_view_rounded,
+              ),
+            ],
+          ),
+          if (MediaQuery.sizeOf(context).width >=
+                  FilesInspectorAdaptive.dockMinWidth &&
+              FilesInspectorAdaptive.sectionHasFileList(state.section)) ...[
+            const SizedBox(width: 8),
+            FilesToolbarIconButton(
+              tooltip: l10n.filesToggleInspector,
+              icon: Icons.view_sidebar_outlined,
+              active: state.inspectorOpen,
+              onPressed:
+                  () => controller.setInspectorOpen(!state.inspectorOpen),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 分类筛选条：全部/图片/视频/音频/文档/小说/漫画/压缩包 chips（带计数），
+/// 右侧排序小链接（模板 Category Filter Bar）。
+class _CategoryFilterBar extends ConsumerWidget {
+  const _CategoryFilterBar({required this.state, required this.actionsEnabled});
+
+  final FileBrowserState state;
+  final bool actionsEnabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final counts = <FileBrowserFileCategory, int>{
+      // 计数取未过滤的分区原始列表：选中某个分类后其余胶囊不该全部归零，
+      // "全部"也不该退化成当前分类的条数。
+      // `folders` 是桌面工具栏专用的前端分类，移动端不出现这颗胶囊。
+      for (final category in _mobileCategories)
+        category:
+            category == FileBrowserFileCategory.all
+                ? state.sectionNodes.length
+                : state.sectionNodes
+                    .where((node) => _categoryOfNode(node) == category)
+                    .length,
+    };
+    final sortByLabel = switch (state.sortBy) {
+      FileBrowserSortBy.name => l10n.filesSortName,
+      FileBrowserSortBy.updatedAt => l10n.filesSortTime,
+      FileBrowserSortBy.size => l10n.filesSortSize,
+    };
+    return Row(
+      children: [
+        Expanded(
+          // 窄窗口下 chips 溢出：悬停区域时纵向滚轮驱动横向滚动。
+          child: HoverHorizontalScroll(
+            child: Row(
+              children: [
+                for (final category in _mobileCategories) ...[
+                  _CategoryCapsule(
+                    label: '${category.labelOf(l10n)} (${counts[category]})',
+                    icon: category.icon,
+                    isActive: state.fileCategory == category,
+                    enabled: actionsEnabled,
+                    onTap:
+                        () => unawaited(
+                          _runFileAction(
+                            context,
+                            () => controller.setFileCategory(category),
+                          ),
+                        ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        _SortCycleButton(
+          label: sortByLabel,
+          enabled: actionsEnabled,
+          onTap: () => controller.setSortBy(_nextSortBy(state.sortBy)),
+        ),
+      ],
+    );
+  }
+}
+
+FileBrowserSortBy _nextSortBy(FileBrowserSortBy current) {
+  return switch (current) {
+    FileBrowserSortBy.name => FileBrowserSortBy.updatedAt,
+    FileBrowserSortBy.updatedAt => FileBrowserSortBy.size,
+    FileBrowserSortBy.size => FileBrowserSortBy.name,
+  };
+}
+
+/// 移动端分类胶囊的顺序。
+///
+/// 刻意手写而不是遍历 `.values`：`folders` 是桌面工具栏专用的前端分类，
+/// 移动端模板里没有这颗胶囊，用 `.values` 会把它顺带渲染出来。
+const List<FileBrowserFileCategory> _mobileCategories = [
+  FileBrowserFileCategory.all,
+  FileBrowserFileCategory.image,
+  FileBrowserFileCategory.video,
+  FileBrowserFileCategory.audio,
+  FileBrowserFileCategory.document,
+  FileBrowserFileCategory.novel,
+  FileBrowserFileCategory.comic,
+  FileBrowserFileCategory.archive,
+  FileBrowserFileCategory.other,
+];
+
+/// 客户端近似分类（委托共享实现，供筛选计数复用）。
+FileBrowserFileCategory _categoryOfNode(FileNode node) {
+  return switch (fileCategoryOfNode(node)) {
+    FileCategoryLabel.all => FileBrowserFileCategory.all,
+    FileCategoryLabel.image => FileBrowserFileCategory.image,
+    FileCategoryLabel.video => FileBrowserFileCategory.video,
+    FileCategoryLabel.audio => FileBrowserFileCategory.audio,
+    FileCategoryLabel.document => FileBrowserFileCategory.document,
+    FileCategoryLabel.novel => FileBrowserFileCategory.novel,
+    FileCategoryLabel.comic => FileBrowserFileCategory.comic,
+    FileCategoryLabel.archive => FileBrowserFileCategory.archive,
+    FileCategoryLabel.other => FileBrowserFileCategory.other,
+  };
+}
+
+/// 排序小链接：点击轮换排序字段（模板 排序: 修改时间 ↓ 形态）。
+class _SortCycleButton extends StatefulWidget {
+  const _SortCycleButton({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  State<_SortCycleButton> createState() => _SortCycleButtonState();
+}
+
+class _SortCycleButtonState extends State<_SortCycleButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.filesColors;
+    final foreground = _hovering ? colors.onSurface : colors.onSurfaceVariant;
+    final l10n = AppLocalizations.of(context);
+    return Tooltip(
+      message: l10n.filesSortBy,
+      child: MouseRegion(
+        cursor:
+            widget.enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: GestureDetector(
+          onTap: widget.enabled ? widget.onTap : null,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${l10n.filesSortBy}:',
+                style: TextStyle(
+                  fontSize: AppTypography.labelMedium,
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  decoration: _hovering ? TextDecoration.underline : null,
+                  fontSize: AppTypography.labelMedium,
+                  fontWeight: FontWeight.w600,
+                  color: foreground,
+                ),
+              ),
+              Icon(Icons.arrow_downward, size: 12, color: foreground),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 视图切换容器：180ms 淡入微移，起点 0.35 opacity 消除黑白闪现。
+class _FileViewSwitcher extends ConsumerWidget {
+  const _FileViewSwitcher({
+    required this.state,
+    required this.narrow,
+    required this.actionsEnabled,
+    required this.recycle,
+  });
+
+  final FileBrowserState state;
+  final bool narrow;
+  final bool actionsEnabled;
+  final bool recycle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    // 后台（实时触发）刷新不切换 loading 占位符：内容原地换新，
+    // 消除自操作与他端变更带来的“闪烁刷新”。
+    final showLoading =
+        state.isBusy &&
+        !state.backgroundRefresh &&
+        state.section == FileManagerSection.allFiles;
+    final child =
+        showLoading
+            ? KeyedSubtree(
+              key: const ValueKey('_loading'),
+              child: _buildLoadingPlaceholder(context),
+            )
+            : KeyedSubtree(
+              key: ValueKey(
+                '${state.spaceType}_${state.parentId}_${state.viewMode.name}_$narrow',
+              ),
+              child: _buildFileView(context, ref, controller),
+            );
+    return AnimatedSwitcher(
+      duration: MotionToken.resolve(context, MotionToken.pageSwitch),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: excludeExitingSemanticsStack,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: Tween(begin: 0.35, end: 1.0).animate(animation),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.012),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: _withFilePagination(context, controller, child),
+    );
+  }
+
+  /// 加载占位符，空间切换时显示。
+  Widget _buildLoadingPlaceholder(BuildContext context) {
+    final c = context.filesColors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: c.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              AppLocalizations.of(context).importUploading,
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                color: c.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileView(
+    BuildContext context,
+    WidgetRef ref,
+    FileBrowserController controller,
+  ) {
+    // 最近使用与我的收藏是样例里的 FeaturePage：正文只有 `.feature-list` 一种行。
+    // 工位列表带勾选框、工具行与分页条，稿子里没有这些，托管态一律换样例行。
+    if (narrow &&
+        MobileShellScope.isHosted(context) &&
+        state.section.isSampleFeaturePage) {
+      return _HostedFeatureFileList(
+        state: state,
+        actionsEnabled: actionsEnabled,
+      );
+    }
+    final favorites = state.section == FileManagerSection.favorites;
+    final actions = _buildFileNodeActions(
+      context,
+      ref,
+      controller,
+      recycle: recycle,
+      favorites: favorites,
+    );
+    // 托管移动工作区固定行列表（样例 FolderView 无卡片视图），同时
+    // 规避窄屏网格的高度换算显示问题。
+    final effectiveViewMode =
+        MobileShellScope.isHosted(context)
+            ? FileBrowserViewMode.list
+            : state.viewMode;
+
+    if (!narrow && effectiveViewMode == FileBrowserViewMode.list) {
+      return FileTableView(
+        files: state.visibleNodes,
+        showingRecycleBin: recycle,
+        enabled: actionsEnabled,
+        actions: actions,
+        sortBy: state.sortBy,
+        sortAscending: state.sortAscending,
+        onSortByChanged: actionsEnabled ? controller.setSortBy : null,
+        onToggleSortAscending:
+            actionsEnabled ? controller.toggleSortAscending : null,
+        selectedFileIds: state.selectedFileIds,
+        inspectedFileId: state.inspectedFileId,
+        selectionActive: state.hasSelection,
+        showingFavorites: favorites,
+        favoriteIds: state.favoriteIdSet,
+        draftFolderName: state.draftFolderName,
+        onDraftFolderSubmit:
+            actionsEnabled ? controller.commitFolderCreation : null,
+        onDraftFolderCancel: controller.cancelFolderCreation,
+        onToggleSelectAll:
+            actionsEnabled && state.visibleNodes.isNotEmpty
+                ? () {
+                  state.selectedFileIds.length >= state.visibleNodes.length
+                      ? controller.clearSelection()
+                      : controller.selectAll();
+                }
+                : null,
+      );
+    }
+    if (effectiveViewMode == FileBrowserViewMode.grid) {
+      return FileGrid(
+        files: state.visibleNodes,
+        showingRecycleBin: recycle,
+        enabled: actionsEnabled,
+        actions: actions,
+        selectedFileIds: state.selectedFileIds,
+        inspectedFileId: state.inspectedFileId,
+        selectionActive: state.hasSelection,
+        showingFavorites: favorites,
+        favoriteIds: state.favoriteIdSet,
+        draftFolderName: state.draftFolderName,
+        onDraftFolderSubmit:
+            actionsEnabled ? controller.commitFolderCreation : null,
+        onDraftFolderCancel: controller.cancelFolderCreation,
+      );
+    }
+    return FileList(
+      files: state.visibleNodes,
+      showingRecycleBin: recycle,
+      enabled: actionsEnabled,
+      actions: actions,
+      selectedFileIds: state.selectedFileIds,
+      inspectedFileId: state.inspectedFileId,
+      selectionActive: state.hasSelection,
+      favoriteIds: state.favoriteIdSet,
+      showingFavorites: favorites,
+      draftFolderName: state.draftFolderName,
+      onDraftFolderSubmit:
+          actionsEnabled ? controller.commitFolderCreation : null,
+      onDraftFolderCancel: controller.cancelFolderCreation,
+    );
+  }
+
+  Widget _withFilePagination(
+    BuildContext context,
+    FileBrowserController controller,
+    Widget child,
+  ) {
+    // 按分区分派分页条：主列表（全部文件/共享空间）与最近/收藏/回收站
+    // 三分区各自携带分页元数据；跳页即按目标页重拉当前分区。分页条
+    // 与子页/Admin 一致常驻渲染：单页时仅导航钮禁用，总数与每页条数
+    // 始终可见。各分区默认与候选统一为组件默认（10/20/50/100）。
+    // 第四项是已载入条数：托管态续载守卫只认它，不认 totalPages——后端
+    // 最近/收藏列表整表返回却按 size 折算页数，totalPages 会虚高。
+    final (meta, onPage, onPageSize, loadedCount) = switch (state.section) {
+      FileManagerSection.allFiles || FileManagerSection.sharedSpace => (
+        FilesSubPageMeta(
+          page: state.filePage,
+          size: state.filePageSize,
+          totalElements: state.fileTotalElements,
+          totalPages: state.fileTotalPages,
+        ),
+        (int page) => controller.goToFilePage(page),
+        (int size) => controller.setFilePageSize(size),
+        state.files.length,
+      ),
+      FileManagerSection.recent => (
+        state.recentMeta,
+        (int page) => controller.showRecentFiles(page: page),
+        (int size) => controller.showRecentFiles(page: 0, size: size),
+        state.recentFiles.length,
+      ),
+      FileManagerSection.favorites => (
+        state.favoritesMeta,
+        (int page) => controller.showFavoriteFiles(page: page),
+        (int size) => controller.showFavoriteFiles(page: 0, size: size),
+        state.favoriteFiles.length,
+      ),
+      FileManagerSection.recycleBin => (
+        state.recycleMeta,
+        (int page) => controller.showRecycleBin(page: page),
+        (int size) => controller.showRecycleBin(page: 0, size: size),
+        state.recycleBin.length,
+      ),
+      _ => (null, null, null, 0),
+    };
+    if (meta == null) {
+      return child;
+    }
+    // 移动壳层：无感续载——滚动近底自动追加下一页，不渲染「加载更多」按钮。
+    // 主列表与次分区统一走 loadMore* 追加语义（此前的次分区页翻转会把手上
+    // 正在看的条目整页换掉）；页翻转只留给桌面工位分页条的跳页。
+    if (MobileShellScope.isHosted(context)) {
+      final Future<void> Function() loadNextPage = switch (state.section) {
+        FileManagerSection.allFiles ||
+        FileManagerSection.sharedSpace => () => controller.loadMoreFiles(),
+        FileManagerSection.recent => () => controller.loadMoreRecentFiles(),
+        FileManagerSection.favorites =>
+          () => controller.loadMoreFavoriteFiles(),
+        _ => () => controller.loadMoreRecycleBin(),
+      };
+      return NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.depth != 0 ||
+              notification.metrics.axis != Axis.vertical ||
+              notification.metrics.extentAfter >= 420 ||
+              loadedCount >= meta.totalElements ||
+              meta.page + 1 >= meta.totalPages ||
+              state.isBusy) {
+            return false;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            unawaited(_runFileAction(context, loadNextPage));
+          });
+          return false;
+        },
+        child: child,
+      );
+    }
+    return Column(
+      children: [
+        Expanded(child: child),
+        WorkstationPaginationBar(
+          currentPage: meta.page,
+          totalPages: meta.totalPages,
+          totalElements: meta.totalElements,
+          rowsPerPage: meta.size,
+          busy: state.isBusy,
+          onPageChanged:
+              (page) => unawaited(_runFileAction(context, () => onPage!(page))),
+          onRowsPerPageChanged:
+              (size) =>
+                  unawaited(_runFileAction(context, () => onPageSize!(size))),
+        ),
+      ],
+    );
+  }
+}

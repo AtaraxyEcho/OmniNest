@@ -1,0 +1,217 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+
+/// 阅读条目封面：真实封面整卡纯净渲染；无封面（含封面拉取失败回退）时
+/// 按条目标题生成纸感配色封面。
+///
+/// 生成封面参考编辑风设计：深色底 + 左侧书脊线 + 顶部“文/漫”字标 + 衬线标题。
+/// 真实封面上不再叠加任何生成封面元素，标题与作者由卡片下方的文字区承载。
+enum ReaderCoverSize { grid, small, row, large }
+
+class ReaderBookCover extends StatefulWidget {
+  const ReaderBookCover({
+    required this.item,
+    required this.size,
+    this.zoomOnHover = false,
+    super.key,
+  });
+
+  final ReaderItem item;
+  final ReaderCoverSize size;
+
+  /// 悬停时封面图内容放大（Photos 照片卡同构的裁切缩放）：画幅钉死、
+  /// 只放大内部像素；生成封面（无真实封面）不缩放。
+  final bool zoomOnHover;
+
+  @override
+  State<ReaderBookCover> createState() => _ReaderBookCoverState();
+}
+
+class _ReaderBookCoverState extends State<ReaderBookCover> {
+  bool _hovered = false;
+
+  /// 生成封面配色对（底色, 强调色），按标题哈希稳定选择。
+  static const List<(Color, Color)> _palettes =
+      ReaderGeneratedCoverColors.palettes;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final size = widget.size;
+    final palette = _palettes[item.title.hashCode.abs() % _palettes.length];
+    final generated = _GeneratedCoverChrome(
+      item: item,
+      size: size,
+      background: palette.$1,
+      accent: palette.$2,
+    );
+    if (!item.hasCover) {
+      return generated;
+    }
+    // 加载中与拉取失败时退化为生成封面观感，避免空白卡片。
+    final image = AuthCoverImage(
+      itemId: item.id,
+      coverUrl: item.coverUrl,
+      fit: BoxFit.cover,
+      fallback: generated,
+    );
+    if (!widget.zoomOnHover) {
+      return image;
+    }
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: ClipRect(
+        child: AnimatedScale(
+          // 内容裁切缩放：封面画幅不动，放大只作用于内部像素。
+          scale:
+              _hovered && !MediaQuery.disableAnimationsOf(context) ? 1.05 : 1.0,
+          duration: MotionToken.normal,
+          curve: MotionToken.curve,
+          child: image,
+        ),
+      ),
+    );
+  }
+}
+
+/// 无封面条目的生成式封面：书脊线 + 顶部字标 + 底部标题作者。
+class _GeneratedCoverChrome extends StatelessWidget {
+  const _GeneratedCoverChrome({
+    required this.item,
+    required this.size,
+    required this.background,
+    required this.accent,
+  });
+
+  final ReaderItem item;
+  final ReaderCoverSize size;
+  final Color background;
+  final Color accent;
+
+  static const Color _coverText = ReaderGeneratedCoverColors.coverText;
+
+  bool get _showTitle => size != ReaderCoverSize.row;
+
+  bool get _showAuthor =>
+      size == ReaderCoverSize.grid || size == ReaderCoverSize.large;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLarge = size == ReaderCoverSize.large;
+    return DecoratedBox(
+      decoration: BoxDecoration(color: background),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 左侧书脊线
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 3,
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: accent.withValues(alpha: 0.55)),
+            ),
+          ),
+          // 顶部“文/漫”字标带
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                size == ReaderCoverSize.row ? 6 : 8,
+                size == ReaderCoverSize.row ? 3 : 7,
+                6,
+                size == ReaderCoverSize.row ? 3 : 5,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: accent.withValues(alpha: 0.35)),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                item.isComic
+                    ? AppLocalizations.of(context).readerCoverBadgeComic
+                    : AppLocalizations.of(context).readerCoverBadgeText,
+                style: TextStyle(
+                  color: _coverText.withValues(alpha: 0.55),
+                  fontSize: size == ReaderCoverSize.row ? 7 : 8,
+                  height: 1,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          // 底部标题与作者
+          if (_showTitle)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  size == ReaderCoverSize.row ? 6 : 8,
+                  2,
+                  6,
+                  size == ReaderCoverSize.row ? 4 : 8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isLarge)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        height: 1,
+                        color: _coverText.withValues(alpha: 0.2),
+                      ),
+                    Text(
+                      item.title,
+                      maxLines: size == ReaderCoverSize.row ? 1 : 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _coverText,
+                        fontSize: coverTitleFontSize,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (_showAuthor && item.authorName?.isNotEmpty == true) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        item.authorName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _coverText.withValues(alpha: 0.6),
+                          fontSize: coverAuthorFontSize,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  double get coverTitleFontSize => switch (size) {
+    ReaderCoverSize.large => 14,
+    ReaderCoverSize.grid => 10,
+    ReaderCoverSize.small => 9,
+    ReaderCoverSize.row => 8,
+  };
+
+  double get coverAuthorFontSize => size == ReaderCoverSize.large ? 11 : 8;
+}

@@ -1,0 +1,853 @@
+import 'package:dio/dio.dart';
+import 'package:omninest/core/device/playback_device_identity.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
+import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/network/retry_interceptor.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
+
+class MusicApi {
+  const MusicApi(this.apiClient);
+
+  final ApiClient apiClient;
+
+  Future<MusicDashboard> dashboard() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/dashboard',
+    );
+    return MusicDashboard.fromJson(parseData(response.data));
+  }
+
+  Future<MusicSearchResult> search(String keyword) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/search',
+      queryParameters: {'q': keyword, 'type': 'all'},
+    );
+    return MusicSearchResult.fromJson(parseData(response.data));
+  }
+
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/tracks',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
+  }
+
+  /// 单曲完整投影（含歌词）。列表接口不带歌词，播放前按需取词。
+  Future<MusicTrack> trackDetail(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}',
+    );
+    return MusicTrack.fromJson(parseData(response.data));
+  }
+
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/albums',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
+    );
+    return _parsePage(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+  }
+
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
+    );
+    return _parsePage(response.data, MusicArtist.fromJson, '艺术家列表格式不正确');
+  }
+
+  Future<List<MusicTrack>> favorites() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/favorites',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '收藏歌曲格式不正确');
+  }
+
+  Future<List<MusicTrack>> recent() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/recent',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '最近播放格式不正确');
+  }
+
+  Future<List<MusicRecentEntry>> recentItems() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/recent-items',
+    );
+    return _parseList(response.data, MusicRecentEntry.fromJson, '最近播放列表格式不正确');
+  }
+
+  Future<MusicPagedResult<MusicPlayHistoryEntry>> playHistory({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/history',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(
+      response.data,
+      MusicPlayHistoryEntry.fromJson,
+      '播放历史格式不正确',
+    );
+  }
+
+  Future<List<MusicPlaylist>> playlists() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/playlists',
+    );
+    return _parseList(response.data, MusicPlaylist.fromJson, '歌单列表格式不正确');
+  }
+
+  Future<MusicPlaylist> createPlaylist({
+    required String name,
+    String? description,
+    String? coverFileId,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/playlists',
+      data: {
+        'name': name,
+        'description': description,
+        if (coverFileId != null) 'coverFileId': coverFileId,
+      },
+    );
+    return MusicPlaylist.fromJson(parseData(response.data));
+  }
+
+  Future<MusicPlaylist> updatePlaylist({
+    required String playlistId,
+    required String name,
+    String? description,
+    String? coverFileId,
+    bool clearCover = false,
+  }) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}',
+      data: {
+        'name': name,
+        'description': description,
+        if (coverFileId != null) 'coverFileId': coverFileId,
+        if (clearCover) 'clearCover': true,
+      },
+    );
+    return MusicPlaylist.fromJson(parseData(response.data));
+  }
+
+  Future<void> deletePlaylist(String playlistId) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除歌单失败');
+  }
+
+  Future<List<MusicTrack>> playlistTracks(String playlistId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
+  }
+
+  /// 分页获取歌单曲目：详情列表滚动加载；播放全量仍走 [playlistTracks]。
+  Future<MusicPagedResult<MusicTrack>> playlistTracksPage(
+    String playlistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
+  }
+
+  /// 获取专辑内全部曲目（碟号、音轨号排序）。
+  Future<List<MusicTrack>> albumTracks(String albumId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/albums/${Uri.encodeComponent(albumId)}/tracks',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+  }
+
+  /// 分页获取专辑内曲目：详情列表滚动加载；播放全量仍走 [albumTracks]。
+  Future<MusicPagedResult<MusicTrack>> albumTracksPage(
+    String albumId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/albums/${Uri.encodeComponent(albumId)}/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+  }
+
+  /// 获取歌手内全部曲目（专辑名、碟号、音轨号排序）。
+  Future<List<MusicTrack>> artistTracks(String artistId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/${Uri.encodeComponent(artistId)}/tracks',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+  }
+
+  /// 分页获取歌手内曲目：详情列表滚动加载；播放全量仍走 [artistTracks]。
+  Future<MusicPagedResult<MusicTrack>> artistTracksPage(
+    String artistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/${Uri.encodeComponent(artistId)}/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+  }
+
+  Future<MusicPlaylist> addPlaylistItems(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
+      data: {'trackIds': trackIds},
+    );
+    return MusicPlaylist.fromJson(parseData(response.data));
+  }
+
+  Future<MusicPlaylist> removePlaylistItems(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
+      data: {'trackIds': trackIds},
+    );
+    return MusicPlaylist.fromJson(parseData(response.data));
+  }
+
+  Future<MusicPlaybackPlan> playbackPlan(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}/playback-plan',
+    );
+    return _resolvePlaybackPlan(parsePlaybackPlan(parseData(response.data)));
+  }
+
+  /// 收藏曲目（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
+  Future<void> favorite(String trackId) async {
+    apiClient.requirePermission(activityWritePermission);
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}/favorite',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏失败');
+  }
+
+  /// 取消收藏曲目（用户主动写）：无能力时抛 FORBIDDEN。
+  Future<void> removeFavorite(String trackId) async {
+    apiClient.requirePermission(activityWritePermission);
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}/favorite',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '取消收藏失败');
+  }
+
+  Future<TaskSubmission> deleteTrack(
+    String trackId, {
+    bool cascade = false,
+  }) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}',
+      queryParameters: {'cascade': cascade},
+    );
+    return TaskSubmission.fromJson(parseData(response.data));
+  }
+
+  Future<void> updateTrack({
+    required String trackId,
+    String? title,
+    String? artistName,
+    String? albumTitle,
+    String? genre,
+    String? lyricsRaw,
+    String? coverFileId,
+    bool clearCover = false,
+    String? coverUrl,
+    bool restoreOriginal = false,
+  }) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}',
+      data: {
+        if (title != null) 'title': title,
+        if (artistName != null) 'artistName': artistName,
+        if (albumTitle != null) 'albumTitle': albumTitle,
+        if (genre != null) 'genre': genre,
+        if (lyricsRaw != null) 'lyricsRaw': lyricsRaw,
+        if (coverFileId != null) 'coverFileId': coverFileId,
+        if (clearCover) 'clearCover': true,
+        if (coverUrl != null) 'coverUrl': coverUrl,
+        if (restoreOriginal) 'restoreOriginal': true,
+      },
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '更新曲目元数据失败');
+  }
+
+  Future<String> uploadCover({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/covers',
+      data: formData,
+    );
+    final data = parseData(response.data);
+    return data['fileId'] as String;
+  }
+
+  /// 记录曲目播放历史（自动写回）：无能力时静默 no-op。
+  Future<void> recordPlayHistory(String trackId, {int playDuration = 0}) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/tracks/${Uri.encodeComponent(trackId)}/play-history',
+      data: {'playDuration': playDuration},
+    );
+    parseEnvelope(response.data);
+  }
+
+  /// 记录可播放对象播放历史（自动写回）：无能力时静默 no-op。
+  Future<void> recordPlayableHistory({
+    required String playableKey,
+    required String title,
+    required String artistName,
+    required String albumTitle,
+    required String coverUrl,
+    required int? durationSeconds,
+
+    int playDuration = 0,
+  }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/play-history',
+      data: <String, dynamic>{
+        'playableKey': playableKey,
+        'playDuration': playDuration,
+        'title': title,
+        'artistName': artistName,
+        'albumTitle': albumTitle,
+        'coverUrl': coverUrl,
+        'durationSeconds': durationSeconds,
+      },
+    );
+    parseEnvelope(response.data);
+  }
+
+  Future<MusicTrack?> lastPlayed() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/last-played',
+    );
+    final envelope = parseEnvelope(response.data);
+    final data = envelope['data'];
+    if (data is! Map<String, dynamic>) return null;
+    return MusicTrack.fromJson(data);
+  }
+
+  Future<MusicPlaybackQueueSnapshot> playbackQueue() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/playback-queue',
+    );
+    return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
+  }
+
+  /// 保存播放队列并返回服务端规范化结果（含服务端时间戳）。
+  ///
+  /// 自动写回：无 `activity:write` 时不发网络，直接返回传入的本地快照，
+  /// 防止拦截器兜底 reject 冒泡到队列持久化层。
+  Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return snapshot;
+    }
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/music/playback-queue',
+      data: snapshot.toJson(),
+    );
+    return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
+  }
+
+  /// 获取指定可播放对象的跨设备进度。
+  Future<MusicPlaybackProgress?> playbackProgress(String playableKey) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/progress',
+      queryParameters: {'playableKey': playableKey},
+    );
+    final data = parseEnvelope(response.data)['data'];
+    if (data == null) {
+      return null;
+    }
+    if (data is! Map) {
+      throw const AppException(
+        code: 'INVALID_RESPONSE',
+        message: '音乐播放进度格式不正确',
+      );
+    }
+    return MusicPlaybackProgress.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// 保存本地或在线音乐的跨设备进度（自动写回）。
+  ///
+  /// 无 `activity:write` 时返回传入的本地进度，不触发网络，
+  /// 离线重放队列据此正常出队且不污染本地缓存。
+  Future<MusicPlaybackProgress> savePlaybackProgress(
+    MusicPlaybackProgress progress,
+  ) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return progress;
+    }
+    final deviceId = await PlaybackDeviceIdentity.getOrCreate();
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/music/progress',
+      data: {...progress.toSaveJson(), 'deviceId': deviceId},
+    );
+    return MusicPlaybackProgress.fromJson(parseData(response.data));
+  }
+
+  /// 获取音频流重定向 URL（302）。
+  String streamUrl(String trackId) {
+    return '${apiClient.dio.options.baseUrl}/music/stream/'
+        '${Uri.encodeComponent(trackId)}';
+  }
+
+  Future<MusicScanJob> createScanJob() async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/scan',
+    );
+    return MusicScanJob.fromJson(parseData(response.data));
+  }
+
+  Future<MusicScanJob> scanJobStatus(String jobId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/scan/${Uri.encodeComponent(jobId)}/status',
+    );
+    return MusicScanJob.fromJson(parseData(response.data));
+  }
+
+  Future<List<MusicScrapeCandidate>> scrapeCandidates(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/scrape-candidates',
+    );
+    return _parseList(
+      response.data,
+      MusicScrapeCandidate.fromJson,
+      '音乐刮削候选格式不正确',
+    );
+  }
+
+  Future<MusicTrack> applyScrapeCandidate(
+    String trackId,
+    MusicScrapeCandidate candidate,
+  ) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/scrape/apply',
+      data: candidate.toApplyJson(),
+    );
+    return MusicTrack.fromJson(parseData(response.data));
+  }
+
+  Future<MusicScanJob> scrapeLibrary({bool force = false}) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/music/scrape',
+      data: {'force': force},
+    );
+    return MusicScanJob.fromJson(parseData(response.data));
+  }
+
+  /// 查询指定艺术家下的活动专辑列表。
+  Future<List<MusicAlbum>> artistAlbums(String artistId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/${Uri.encodeComponent(artistId)}/albums',
+    );
+    return _parseList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+  }
+
+  /// 按当前曲目的艺术家/标题/专辑搜索在线歌词候选。
+  Future<MusicLyricsResult?> searchLyrics(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/lyrics/search',
+    );
+    final envelope = parseEnvelope(response.data);
+    final data = envelope['data'];
+    if (data is! Map) {
+      return null;
+    }
+    return MusicLyricsResult.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// 应用歌词文本到指定曲目并返回更新后的曲目。
+  Future<MusicTrack> applyLyrics(
+    String trackId,
+    String lyrics, {
+    String? lyricsTranslation,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/music/tracks/${Uri.encodeComponent(trackId)}/lyrics/apply',
+      data: {'lyrics': lyrics, 'lyricsTranslation': lyricsTranslation},
+    );
+    return MusicTrack.fromJson(parseData(response.data));
+  }
+
+  /// 在线搜索（网易云）
+  Future<List<OnlineTrack>> onlineSearch(
+    String query, {
+    int limit = 20,
+    String? platform,
+    CancelToken? cancelToken,
+  }) async {
+    final params = <String, String>{'q': query, 'limit': limit.toString()};
+    if (platform != null) params['platform'] = platform;
+    final resp = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/online/search',
+      queryParameters: params,
+      cancelToken: cancelToken,
+    );
+    final envelope = parseEnvelope(resp.data);
+    final list = envelope['data'] is List ? envelope['data'] as List : [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(OnlineTrack.fromJson)
+        .toList();
+  }
+
+  /// 获取在线播放URL
+  Future<MusicPlaybackPlan> onlinePlaybackPlan(
+    String platform,
+    String songId, {
+
+    String quality = 'exhigh',
+  }) async {
+    final params = <String, String>{
+      'platform': platform,
+      'songId': songId,
+      'quality': quality,
+    };
+
+    final resp = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/online/playback-plan',
+      queryParameters: params,
+    );
+    return _resolvePlaybackPlan(parsePlaybackPlan(parseData(resp.data)));
+  }
+
+  /// 获取在线平台连接状态和能力
+  Future<List<MusicPlatformStatus>> musicPlatforms() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms',
+    );
+    return _parseList(
+      response.data,
+      MusicPlatformStatus.fromJson,
+      '平台状态列表格式不正确',
+    );
+  }
+
+  /// 获取在线平台歌单
+  Future<MusicPagedResult<OnlinePlaylist>> platformPlaylists(
+    String platform, {
+    int page = 0,
+    int size = 100,
+    bool refresh = false,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/playlists',
+      queryParameters: _listQuery(page, size, refresh),
+    );
+    return _parsePage(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
+  }
+
+  /// 获取在线平台歌单曲目
+  Future<MusicPagedResult<OnlineTrack>> platformPlaylistTracks(
+    String platform,
+    String playlistId, {
+    int page = 0,
+    int size = 200,
+    bool refresh = false,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/playlists/${Uri.encodeComponent(playlistId)}/tracks',
+      queryParameters: _listQuery(page, size, refresh),
+    );
+    return _parsePage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
+  }
+
+  /// 获取在线平台喜欢歌曲
+  Future<MusicPagedResult<OnlineTrack>> platformLikedTracks(
+    String platform, {
+    int page = 0,
+    int size = 1000,
+    bool refresh = false,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/liked-tracks',
+      queryParameters: _listQuery(page, size, refresh),
+    );
+    return _parsePage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
+  }
+
+  /// 平台列表查询参数；refresh 只在用户显式刷新时下发，让后端跳过短期缓存回源。
+  Map<String, dynamic> _listQuery(int page, int size, bool refresh) {
+    return <String, dynamic>{
+      'page': page,
+      'size': size,
+      if (refresh) 'refresh': true,
+    };
+  }
+
+  /// 获取外部平台每日推荐歌曲。
+  Future<DailyRecommendedTracks> platformDailyRecommendedTracks(
+    String platform,
+  ) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/recommendations/daily-tracks',
+    );
+    return DailyRecommendedTracks.fromJson(parseData(response.data));
+  }
+
+  /// 获取外部平台歌词（原文、独立译文与逐字载荷）。
+  Future<MusicPlatformLyrics?> platformTrackLyrics(
+    String platform,
+    String songId,
+  ) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/tracks/${Uri.encodeComponent(songId)}/lyrics',
+    );
+    final data = parseData(response.data);
+    final synced = data['syncedLyrics']?.toString();
+    final plain = data['plainLyrics']?.toString();
+    final translated = data['translatedLyrics']?.toString();
+    final primary =
+        synced != null && synced.trim().isNotEmpty
+            ? synced
+            : (plain != null && plain.trim().isNotEmpty ? plain : null);
+    if (primary == null) {
+      return null;
+    }
+    // 逐字是可选载荷：后端在平台不提供（或附加接口失败）时为 null，
+    // 在此统一归一为空，调用方只判断 null。
+    return MusicPlatformLyrics(
+      lyrics: primary,
+      translation: _nonBlank(translated),
+      words: _nonBlank(data['wordLyrics']?.toString()),
+    );
+  }
+
+  static String? _nonBlank(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// 生成网易云 QR 登录
+  Future<QrLoginSession> createNeteaseQrLogin() async {
+    final resp = await apiClient.dio.post<Map<String, dynamic>>(
+      '/music/platforms/netease/login-sessions',
+    );
+    return QrLoginSession.fromJson(parseData(resp.data));
+  }
+
+  /// 轮询网易云 QR 登录状态
+  Future<QrLoginStatus> checkNeteaseQrLogin(String key) async {
+    final resp = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/platforms/netease/login-sessions/${Uri.encodeComponent(key)}',
+    );
+    return QrLoginStatus.fromJson(parseData(resp.data));
+  }
+
+  /// 平台登出
+  ///
+  /// 标记为"服务端错误不重试"：断开连接是用户已确认的一次性动作，服务端 5xx 时
+  /// 重试注定失败，却会把等待时间放大为退避之和（默认 2 次重试共 1s + 2s）。
+  Future<void> platformLogout(String platform) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/music/platforms/${Uri.encodeComponent(platform)}/connection',
+      options: Options(extra: <String, dynamic>{skipServerErrorRetryKey: true}),
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '断开平台连接失败');
+  }
+
+  /// 获取平台登录信息。
+  ///
+  /// 未绑定（401 / 平台未连接 / userId 为空）返回 null；
+  /// 网络或其他失败抛出 [AppException]，由上层区分「未连接」与「请求失败」。
+  Future<PlatformUserInfo?> platformInfo(String platform) async {
+    try {
+      final resp = await apiClient.dio.get<Map<String, dynamic>>(
+        '/music/platform/${Uri.encodeComponent(platform)}/info',
+      );
+      final data = parseData(resp.data);
+      if (data['userId'] == null || data['userId'].toString().isEmpty) {
+        return null;
+      }
+      return PlatformUserInfo.fromJson(data);
+    } on AppException catch (error) {
+      // 平台未连接/授权过期由业务码 5003/5004 表达，HTTP 层是 400；
+      // validateStatus < 500 使其不会落进 DioException 分支。
+      final errorName = error.details['errorName']?.toString();
+      if (error.code == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          error.code == 'MUSIC_PLATFORM_AUTH_EXPIRED' ||
+          errorName == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          errorName == 'MUSIC_PLATFORM_AUTH_EXPIRED') {
+        return null;
+      }
+      rethrow;
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      final errorName = _backendErrorName(error);
+      if (statusCode == 401 ||
+          errorName == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          errorName == 'MUSIC_PLATFORM_AUTH_EXPIRED') {
+        return null;
+      }
+      if (error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.transformTimeout) {
+        throw AppException(
+          code: 'NETWORK_ERROR',
+          message: '网络请求失败',
+          details: {'platform': platform, 'cause': error.message},
+        );
+      }
+      throw AppException(
+        code: 'MUSIC_PLATFORM_INFO_FAILED',
+        message: '获取平台登录信息失败',
+        details: {'platform': platform, 'cause': error.message},
+      );
+    }
+  }
+
+  static String? _backendErrorName(DioException error) {
+    final data = error.response?.data;
+    if (data is Map) {
+      return data['errorName']?.toString();
+    }
+    return null;
+  }
+
+  static MusicPlaybackPlan parsePlaybackPlan(Map<String, dynamic> data) {
+    return MusicPlaybackPlan.fromJson(data);
+  }
+
+  MusicPlaybackPlan _resolvePlaybackPlan(MusicPlaybackPlan plan) {
+    return plan.copyWith(url: _resolvePlayableUrl(plan.url));
+  }
+
+  String _resolvePlayableUrl(String url) {
+    if (url.isEmpty) {
+      return url;
+    }
+    // 后端下发的可播地址可能是 `/api/v1/...` 根相对路径，也可能是省略前缀的
+    // `/music/stream/...`；统一由解析器区分，且保留子路径部署前缀。
+    return resolveServerApiUrl(apiClient.dio.options.baseUrl, url);
+  }
+
+  Map<String, dynamic> parseData(Map<String, dynamic>? body) {
+    final envelope = parseEnvelope(body);
+    final data = envelope['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const AppException(code: 'INVALID_RESPONSE', message: '音乐响应格式不正确');
+    }
+    return data;
+  }
+
+  Map<String, dynamic> parseEnvelope(Map<String, dynamic>? body) {
+    if (body == null) {
+      throw const AppException(code: 'EMPTY_RESPONSE', message: '服务端没有返回音乐结果');
+    }
+    final code = body['code'];
+    if (code != 200) {
+      final errorName = body['errorName']?.toString();
+      throw AppException(
+        code: errorName ?? code?.toString() ?? 'MUSIC_ERROR',
+        message: body['message']?.toString() ?? '音乐操作失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          if (code != null) 'code': code.toString(),
+        },
+      );
+    }
+    return body;
+  }
+
+  MusicPagedResult<T> _parsePage<T>(
+    Map<String, dynamic>? body,
+    T Function(Map<String, dynamic>) mapper,
+    String errorMessage,
+  ) {
+    final data = parseEnvelope(body)['data'];
+    if (data is! Map) {
+      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
+    }
+    final rawItems = data['items'];
+    if (rawItems is! List) {
+      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
+    }
+    return MusicPagedResult<T>(
+      items:
+          rawItems
+              .whereType<Map>()
+              .map((item) => mapper(Map<String, dynamic>.from(item)))
+              .toList(),
+      page: _asIntOrNull(data['page']),
+      size: _asIntOrNull(data['size']),
+      totalElements: _asIntOrNull(data['totalElements']),
+    );
+  }
+
+  int _asIntOrNull(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return 0;
+  }
+
+  List<T> _parseList<T>(
+    Map<String, dynamic>? body,
+    T Function(Map<String, dynamic>) mapper,
+    String errorMessage,
+  ) {
+    final data = parseEnvelope(body)['data'];
+    if (data is! List) {
+      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
+    }
+    return data
+        .whereType<Map>()
+        .map((item) => mapper(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+}

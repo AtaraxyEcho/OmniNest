@@ -1,0 +1,183 @@
+package com.omninest.modules.photos.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.omninest.modules.file.service.ResourceShareLinkService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.photos.domain.PhotoAlbum;
+import com.omninest.modules.photos.domain.PhotoItem;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDetailDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
+import com.omninest.modules.photos.repository.PhotoAlbumFirstCoverProjection;
+import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
+import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoItemRepository;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
+@ExtendWith(MockitoExtension.class)
+class PhotoAlbumServiceTest {
+
+    private static final UUID OWNER = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID ALBUM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID PHOTO_1 = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID PHOTO_2 = UUID.fromString("30000000-0000-0000-0000-000000000002");
+
+    @Mock
+    private PhotoAlbumRepository albumRepository;
+    @Mock
+    private PhotoAlbumItemRepository albumItemRepository;
+    @Mock
+    private PhotoItemRepository photoItemRepository;
+    @Mock
+    private PhotoLibraryService libraryService;
+    @Mock
+    private PhotoDtoAssembler photoDtoAssembler;
+    @Mock
+    private ResourceShareLinkService resourceShareLinkService;
+    @Mock
+    private MediaSyncEventService syncEventService;
+
+    @InjectMocks
+    private PhotoAlbumService service;
+
+    private PhotoAlbum album() {
+        PhotoAlbum album = new PhotoAlbum();
+        album.setId(ALBUM_ID);
+        album.setOwnerUserId(OWNER);
+        album.setName("Trip");
+        album.setPhotoCount(2);
+        return album;
+    }
+
+    private PhotoItemDto photoDto(UUID id) {
+        PhotoItem item = new PhotoItem();
+        item.setId(id);
+        item.setFileNodeId(id);
+        item.setTitle("t");
+        item.setFormat("JPEG");
+        item.setFileSize(1L);
+        item.setMetadataStatus("READY");
+        return PhotoItemDto.fromEntity(item, null, false, List.of());
+    }
+
+    @Test
+    void albumDetail_returnsOnlyFirstPageOfPhotos() {
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album()));
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+                .thenReturn(List.of(PHOTO_1));
+        when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1)))
+                .thenReturn(List.of(photoDto(PHOTO_1)));
+
+        PhotoAlbumDetailDto detail = service.albumDetail(OWNER, ALBUM_ID);
+
+        assertThat(detail.photos()).hasSize(1);
+        assertThat(detail.album().photoCount()).isEqualTo(2);
+    }
+
+    @Test
+    void albumPhotosPage_preservesAlbumOrderAndTotal() {
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album()));
+        when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(2L);
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+                .thenReturn(List.of(PHOTO_1, PHOTO_2));
+        when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1, PHOTO_2)))
+                .thenReturn(List.of(photoDto(PHOTO_2), photoDto(PHOTO_1)));
+
+        Page<PhotoItemDto> page = service.albumPhotosPage(OWNER, ALBUM_ID, 0, 50);
+
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getContent()).extracting(PhotoItemDto::id)
+                .containsExactly(PHOTO_1, PHOTO_2);
+    }
+
+    @Test
+    void albumPhotosPageCountsOnlyActivePhotos() {
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album()));
+        when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(1L);
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+                .thenReturn(List.of(PHOTO_1));
+        when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1)))
+                .thenReturn(List.of(photoDto(PHOTO_1)));
+
+        Page<PhotoItemDto> page = service.albumPhotosPage(OWNER, ALBUM_ID, 0, 50);
+
+        // 照片进回收站不删相册关联：总数与分页都必须走活动口径，否则总数虚高、末页留洞。
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        verify(albumItemRepository, never()).countByAlbumId(ALBUM_ID);
+        verify(albumItemRepository, never()).findPhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class));
+    }
+
+    @Test
+    void listAlbumsPageResolvesFallbackCoversInOneBatchQuery() {
+        PhotoAlbum second = album();
+        second.setId(UUID.fromString("20000000-0000-0000-0000-000000000002"));
+        second.setName("Second");
+        when(photoDtoAssembler.resolveDownloadUrls(eq(OWNER), any())).thenReturn(Map.of());
+        PageRequest pageable = PageRequest.of(0, 2);
+        when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))
+                .thenReturn(new PageImpl<>(List.of(album(), second), pageable, 2));
+        PhotoAlbumFirstCoverProjection fallbackCover = mock(PhotoAlbumFirstCoverProjection.class);
+        when(fallbackCover.getAlbumId()).thenReturn(ALBUM_ID);
+        when(fallbackCover.getCoverFileId()).thenReturn(UUID.randomUUID());
+        when(albumItemRepository.findFirstActiveCoverFileIdsByAlbumIds(any()))
+                .thenReturn(List.of(fallbackCover));
+
+        Page<PhotoAlbumDto> page = service.listAlbumsPage(OWNER, 0, 2);
+
+        assertThat(page.getContent()).hasSize(2);
+        verify(albumItemRepository).findFirstActiveCoverFileIdsByAlbumIds(any());
+        verify(albumItemRepository, never())
+                .findActivePhotoIdsByAlbumId(any(), any());
+        // 封面地址按页批量签发：逐相册一次文件查询与签名会随相册数放大。
+        verify(photoDtoAssembler, times(1)).resolveDownloadUrls(eq(OWNER), any());
+    }
+
+    @Test
+    void deleteAlbumRevokesPublicShareLinks() {
+        PhotoAlbum album = album();
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album));
+        when(albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(OWNER, ALBUM_ID))
+                .thenReturn(List.of());
+
+        service.deleteAlbum(OWNER, ALBUM_ID);
+
+        verify(resourceShareLinkService).revokeAll(ALBUM_ID);
+        verify(albumRepository).delete(album);
+    }
+
+    @Test
+    void listAlbumsPage_mapsSliceAndKeepsRepositoryTotal() {
+        var pageable = PageRequest.of(1, 2);
+        when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))
+                .thenReturn(new PageImpl<>(List.of(album()), pageable, 5));
+
+        Page<PhotoAlbumDto> page = service.listAlbumsPage(OWNER, 1, 2);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent()).extracting(PhotoAlbumDto::name).containsExactly("Trip");
+        assertThat(page.getTotalElements()).isEqualTo(5);
+    }
+}

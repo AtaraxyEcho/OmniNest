@@ -1,0 +1,432 @@
+package com.omninest.common.ai;
+
+import com.omninest.common.ai.ImageAnalysisGateway.BoundingBox;
+import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
+import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
+import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.json.JsonSupport;
+import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
+import tools.jackson.databind.JsonNode;
+
+/**
+ * 图像分析侧车服务 HTTP 客户端。
+ *
+ * <p>图片请求落临时文件后由 JDK HTTP 客户端按文件流式发送，响应按配置限制最大字节数；
+ * 避免为 multipart 再在堆内拼一份与图片等大的请求体。</p>
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Component
+public class AiSidecarClient implements ImageAnalysisGateway {
+
+    private static final int BUFFER_SIZE = 8192;
+    private static final int MAX_ERROR_SUMMARY_CHARS = 512;
+    private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
+    private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
+    private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
+    private static final String SIDECAR_NONCE_HEADER = "X-OmniNest-Nonce";
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
+    /** 与侧车 {@code SIGNATURE_PROTOCOL} 对齐；不一致说明只升级了一侧。 */
+    private static final String EXPECTED_SIGNATURE_PROTOCOL = "v3";
+
+    private final AiSidecarProperties properties;
+    private final TempStagingPort tempStagingPort;
+    private final SafeUrlValidator safeUrlValidator;
+    private final HttpClient httpClient;
+    private final Object pipelineVersionLock = new Object();
+    private volatile PipelineVersionCache pipelineVersionCache;
+
+    /**
+     * 创建图像分析侧车客户端。
+     *
+     * @param properties 图像分析侧车配置
+     * @param tempStagingPort 受控临时目录端口，multipart 缓冲不得落在系统临时目录
+     * @param safeUrlValidator 出站地址解析校验器
+     */
+    public AiSidecarClient(
+            AiSidecarProperties properties,
+            TempStagingPort tempStagingPort,
+            SafeUrlValidator safeUrlValidator
+    ) {
+        this.properties = properties;
+        this.tempStagingPort = tempStagingPort;
+        this.safeUrlValidator = safeUrlValidator;
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
+        log.info("AiSidecarClient 初始化: endpoint={}", properties.getEndpoint());
+    }
+
+    /**
+     * 返回允许发送到图像分析侧车的最大图片字节数。
+     *
+     * @return 最大图片字节数
+     */
+    @Override
+    public long maxImageBytes() {
+        return properties.getMaxImageBytes();
+    }
+
+    @Override
+    public String fetchRemotePipelineVersion(String endpoint, int timeoutSeconds) {
+        String normalizedEndpoint;
+        try {
+            normalizedEndpoint = requireEndpoint(endpoint);
+        } catch (RuntimeException exception) {
+            // 版本号只用于界面展示，地址缺失或不可用时应返回空而不是让调用方失败。
+            log.warn("图像分析侧车地址校验未通过，跳过版本探测: errorType={}",
+                    exception.getClass().getSimpleName());
+            return null;
+        }
+        long now = System.currentTimeMillis();
+        PipelineVersionCache cached = pipelineVersionCache;
+        if (cached != null
+                && cached.endpoint().equals(normalizedEndpoint)
+                && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+            return cached.version();
+        }
+        synchronized (pipelineVersionLock) {
+            cached = pipelineVersionCache;
+            now = System.currentTimeMillis();
+            if (cached != null
+                    && cached.endpoint().equals(normalizedEndpoint)
+                    && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+                return cached.version();
+            }
+            String version = probePipelineVersion(normalizedEndpoint, timeoutSeconds);
+            pipelineVersionCache = new PipelineVersionCache(
+                    normalizedEndpoint,
+                    version,
+                    System.currentTimeMillis()
+            );
+            return version;
+        }
+    }
+
+    @Override
+    public ContentAnalysis analyzeContent(
+            byte[] imageBytes,
+            String filename,
+            String hint,
+            boolean skipOcr,
+            String endpoint,
+            int timeoutSeconds
+    ) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new IllegalArgumentException("图像分析输入不能为空");
+        }
+        if (imageBytes.length > properties.getMaxImageBytes()) {
+            throw new IllegalArgumentException("图像分析输入大小超出限制");
+        }
+        String normalizedEndpoint = requireEndpoint(endpoint);
+        URI uri = UriComponentsBuilder.fromUriString(normalizedEndpoint)
+                .path("/analyze-content")
+                .queryParam("hint", hint == null || hint.isBlank() ? "AUTO" : hint)
+                .queryParam("skipOcr", skipOcr)
+                .build()
+                .encode()
+                .toUri();
+        String responseBody = sendMultipart(uri, imageBytes, safeFilename(filename), timeoutSeconds);
+        return parseContentAnalysis(JsonSupport.readTree(responseBody));
+    }
+
+    private String probePipelineVersion(String endpoint, int timeoutSeconds) {
+        try {
+            // /ready 是无需鉴权的探针端点，不再携带静态令牌，避免凭据无谓出现在探测链路。
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(requireEndpoint(endpoint) + "/ready"))
+                    .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 30)))
+                    .GET()
+                    .build();
+            String responseBody = sendRequest(request);
+            JsonNode probe = JsonSupport.readTree(responseBody);
+            String protocol = probe.path("signatureProtocol").asString(null);
+            if (protocol != null && !EXPECTED_SIGNATURE_PROTOCOL.equals(protocol.trim())) {
+                // 签名协议是两侧共同契约：这里只告警不拒绝，混跑时服务仍可用、
+                // 日志直接指出该升级哪一侧，比启动即失败更适合自托管。
+                log.error("图像分析侧车签名协议不匹配: sidecar={}, backend={}",
+                        protocol, EXPECTED_SIGNATURE_PROTOCOL);
+            }
+            String version = probe.path("pipelineVersion").asString(null);
+            return version == null || version.isBlank() ? null : version.trim();
+        } catch (RuntimeException exception) {
+            log.warn("侧车流水线版本探测失败: endpoint={}, errorType={}",
+                    endpoint, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private ContentAnalysis parseContentAnalysis(JsonNode object) {
+        List<ContentObservation> observations = new ArrayList<>();
+        for (JsonNode observation : object.path("observations")) {
+            String namespace = observation.path("namespace").asString(null);
+            String code = observation.path("code").asString(null);
+            float confidence = (float) observation.path("confidence").asDouble();
+            if (namespace == null || namespace.isBlank()
+                    || code == null || code.isBlank()
+                    || !Float.isFinite(confidence)) {
+                continue;
+            }
+            observations.add(new ContentObservation(
+                    namespace,
+                    code,
+                    confidence,
+                    observation.path("source").asString(null),
+                    parseBoundingBoxes(observation.path("boxes"))
+            ));
+        }
+        List<String> semanticTags = new ArrayList<>();
+        for (JsonNode tag : object.path("semanticTags")) {
+            String value = tag.asString(null);
+            if (value != null && !value.isBlank()) {
+                semanticTags.add(value.trim());
+            }
+        }
+        String ocrText = object.path("ocrText").asString(null);
+        if (ocrText != null && ocrText.isBlank()) {
+            ocrText = null;
+        }
+        return new ContentAnalysis(
+                Math.max(1, object.path("schemaVersion").asInt()),
+                object.path("pipelineVersion").asString(null),
+                object.path("ocrPipelineVersion").asString(null),
+                observations,
+                semanticTags,
+                ocrText
+        );
+    }
+
+    private List<BoundingBox> parseBoundingBoxes(JsonNode boxesArray) {
+        if (!boxesArray.isArray()) {
+            return List.of();
+        }
+        List<BoundingBox> boxes = new ArrayList<>();
+        for (JsonNode box : boxesArray) {
+            float x = (float) box.path("x").asDouble();
+            float y = (float) box.path("y").asDouble();
+            float width = (float) box.path("width").asDouble();
+            float height = (float) box.path("height").asDouble();
+            if (Float.isFinite(x) && Float.isFinite(y)
+                    && Float.isFinite(width) && Float.isFinite(height)
+                    && width > 0 && height > 0) {
+                boxes.add(new BoundingBox(x, y, width, height));
+            }
+        }
+        return List.copyOf(boxes);
+    }
+
+    private String sendMultipart(URI uri, byte[] imageBytes, String filename, int timeoutSeconds) {
+        String boundary = "----OmniNest" + UUID.randomUUID().toString().replace("-", "");
+        Path multipartFile = null;
+        try {
+            multipartFile = tempStagingPort.createTempFile("ai-sidecar", "omninest-sidecar-", ".multipart");
+            writeMultipart(multipartFile, boundary, imageBytes, filename);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 600)))
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .headers(authHeaders("POST", uri.getPath(), uri.getRawQuery()))
+                    .POST(HttpRequest.BodyPublishers.ofFile(multipartFile))
+                    .build();
+            return sendRequest(request);
+        } catch (IOException exception) {
+            throw new IllegalStateException("图像分析侧车调用失败", exception);
+        } finally {
+            tempStagingPort.deleteQuietly(multipartFile);
+        }
+    }
+
+    private void writeMultipart(Path target, String boundary, byte[] imageBytes, String filename)
+            throws IOException {
+        try (OutputStream output = Files.newOutputStream(target)) {
+            writeUtf8(output, "--" + boundary + "\r\n");
+            writeUtf8(output, "Content-Disposition: form-data; name=\"image\"; filename=\""
+                    + filename + "\"\r\n");
+            writeUtf8(output, "Content-Type: application/octet-stream\r\n\r\n");
+            output.write(imageBytes);
+            writeUtf8(output, "\r\n--" + boundary + "--\r\n");
+        }
+    }
+
+    private void writeUtf8(OutputStream output, String value) throws IOException {
+        output.write(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String sendRequest(HttpRequest request) {
+        try {
+            HttpResponse<InputStream> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofInputStream()
+            );
+            String responseBody;
+            try (InputStream body = response.body()) {
+                responseBody = readBoundedUtf8(body, properties.getMaxResponseBytes());
+            }
+            requireSuccessfulResponse(response.statusCode(), responseBody);
+            return responseBody;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("图像分析侧车调用被中断", exception);
+        } catch (IllegalStateException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("图像分析侧车调用失败", exception);
+        }
+    }
+
+    /**
+     * 生成推理请求的认证头：秒级时间戳 + 方法/路径/查询串 + 一次性 nonce 的 HMAC。
+     *
+     * <p>只发签名，不发主密钥：后端与侧车之间默认是明文 HTTP，把共享密钥放进请求头
+     * 会让 HMAC「密钥不出进程」的意义消失。签名不覆盖 multipart 请求体，避免为几十 MB
+     * 图片再做一遍哈希；nonce 由侧车在时间窗口内去重，截获的签名无法重放，路径与查询串
+     * 绑定阻止把推理签名挪用到其他接口。</p>
+     */
+    private String[] authHeaders(String method, String path, String query) {
+        String secret = requireSecret();
+        long timestamp = Instant.now().getEpochSecond();
+        String nonce = UUID.randomUUID().toString();
+        // 与侧车同口径：查询串也进签名，防止同一路径上的分析参数被中间人改写。
+        String canonical = timestamp + "\n" + method + "\n" + path + "\n"
+                + (query == null ? "" : query) + "\n" + nonce;
+        String signature;
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
+            signature = HexFormat.of().formatHex(
+                    mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("图像分析侧车请求签名失败", exception);
+        }
+        return new String[]{
+                SIDECAR_TIMESTAMP_HEADER, Long.toString(timestamp),
+                SIDECAR_SIGNATURE_HEADER, signature,
+                SIDECAR_NONCE_HEADER, nonce
+        };
+    }
+
+    private String requireSecret() {
+        String secret = properties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("图像分析侧车认证密钥未配置");
+        }
+        return secret;
+    }
+
+    private String requireEndpoint(String endpoint) {
+        String normalizedEndpoint = normalizeEndpoint(endpoint);
+        if (normalizedEndpoint.isEmpty()) {
+            throw new IllegalArgumentException("图像分析侧车地址不能为空");
+        }
+        URI parsed;
+        try {
+            parsed = URI.create(normalizedEndpoint);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("图像分析侧车地址格式无效");
+        }
+        // 统一走 OutboundEndpointRules：只允许 http/https、禁止用户信息与元数据主机，
+        // 并按自建端点档位复核主机（放行环回与内网，拒绝链路本地/多播/保留段）。
+        // 只查 host 会放过 file: 等协议与 user:pass@ 形式，拼接 /ready 后来源也会错位。
+        OutboundEndpointRules.requireConfiguredEndpoint(normalizedEndpoint, parsed, safeUrlValidator);
+        if (parsed.getRawQuery() != null || parsed.getRawFragment() != null) {
+            throw new IllegalArgumentException("图像分析侧车地址不允许包含查询参数或片段");
+        }
+        return normalizedEndpoint;
+    }
+
+    private String normalizeEndpoint(String endpoint) {
+        if (endpoint == null) {
+            return "";
+        }
+        String normalized = endpoint.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String safeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "image.jpg";
+        }
+        String sanitized = filename.replaceAll("[\\r\\n\\\"\\\\/]", "_").trim();
+        return sanitized.isEmpty() ? "image.jpg" : sanitized;
+    }
+
+    private void requireSuccessfulResponse(int statusCode, String responseBody) {
+        if (statusCode < 400) {
+            return;
+        }
+        String responseSummary = summarizeErrorResponse(responseBody);
+        if (statusCode == 401) {
+            // 签名协议是后端与侧车的共同契约：401 几乎只出现在两侧版本不一致时，
+            // 这里点明排查方向，避免被当成"密钥错误"排查半天。
+            log.warn("图像分析侧车拒绝签名，后端与侧车可能不是同一版本: {}",
+                    responseSummary.isEmpty() ? "no-detail" : responseSummary);
+        }
+        throw new IllegalStateException(
+                "图像分析侧车调用失败，状态码=" + statusCode
+                        + (responseSummary.isEmpty() ? "" : "，响应摘要=" + responseSummary)
+        );
+    }
+
+    private String readBoundedUtf8(InputStream input, int maxBytes) throws IOException {
+        if (maxBytes <= 0) {
+            throw new IllegalStateException("图像分析响应大小限制无效");
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.min(maxBytes, BUFFER_SIZE));
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int totalRead = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            totalRead += read;
+            if (totalRead > maxBytes) {
+                throw new IllegalStateException("图像分析侧车响应超过大小限制");
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toString(StandardCharsets.UTF_8);
+    }
+
+    private String summarizeErrorResponse(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "";
+        }
+        String normalized = responseBody.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_ERROR_SUMMARY_CHARS) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_ERROR_SUMMARY_CHARS);
+    }
+
+    private record PipelineVersionCache(String endpoint, String version, long fetchedAtMillis) {
+    }
+}

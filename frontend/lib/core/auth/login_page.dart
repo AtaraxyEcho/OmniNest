@@ -1,0 +1,491 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
+import 'package:omninest/app/theme/mobile_app_theme.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/auth/login_page_controller.dart';
+import 'package:omninest/core/auth/redirect_target.dart';
+import 'package:omninest/core/auth/login_two_factor_panel.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/widgets/workbench_panel.dart';
+
+/// 登录入参长度上界：与后端建号/注册/改密校验一致（用户名 80、口令
+/// 8-64 个字符）。超界口令永远无法通过认证，在输入源头即截断。
+const int _loginUsernameMaxLength = 80;
+const int _loginPasswordMaxLength = 64;
+
+class LoginPage extends ConsumerStatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  ConsumerState<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final completed = await ref
+        .read(loginPageControllerProvider.notifier)
+        .submit(
+          username: _usernameController.text.trim(),
+          password: _passwordController.text,
+        );
+    if (!mounted || !completed) {
+      return;
+    }
+    context.go(_redirectLocation() ?? '/portal');
+  }
+
+  void _onTwoFactorLoginSucceeded() {
+    if (!mounted) {
+      return;
+    }
+    context.go(_redirectLocation() ?? '/portal');
+  }
+
+  String? _errorText(LoginPageError? error, AppLocalizations l10n) {
+    return switch (error) {
+      null => null,
+      LoginPageMessage(:final text) => text,
+      LoginPageConnectionError() => l10n.loginConnectionError,
+      LoginPageRequestError() => l10n.loginRequestFailed,
+      LoginPageGenericError() => l10n.loginFailed,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 920;
+        // 原生移动端为样例玻璃卡形态：暗底 + 玻璃卡（Web 登录多为
+        // 同源已配置场景，保持工位面板不变）。
+        final mobileForm = !isWide && isMobilePlatform;
+        // 登录页挂在根 Navigator 上，取不到壳层的极性注册：不自己按外观设置
+        // 解析一档，浅态下整页会停在暗底，样例的登录卡在浅态是纸面玻璃。
+        final rootTheme = Theme.of(context);
+        final palette = mobileEnvPaletteFor(rootTheme);
+        final shellTheme = (palette.brightness == Brightness.light
+                ? MobileAppTheme.resolve(rootTheme)
+                : rootTheme)
+            .withEnvPalette(palette);
+        final content = Stack(
+          children: [
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isWide ? 56 : 20,
+                    vertical: 28,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1180),
+                    child:
+                        isWide
+                            ? Row(
+                              children: [
+                                const Expanded(child: _BrandPanel()),
+                                const SizedBox(width: 48),
+                                SizedBox(width: 420, child: _buildAuthCard()),
+                              ],
+                            )
+                            : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const _BrandPanel(compact: true),
+                                const SizedBox(height: 28),
+                                _buildAuthCard(),
+                              ],
+                            ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+        return Scaffold(
+          backgroundColor:
+              mobileForm ? palette.stage : rootTheme.scaffoldBackgroundColor,
+          body: mobileForm ? Theme(data: shellTheme, child: content) : content,
+        );
+      },
+    );
+  }
+
+  Widget _buildAuthCard() {
+    final loginState = ref.watch(loginPageControllerProvider);
+    final challenge = loginState.challenge;
+    if (challenge != null) {
+      return LoginTwoFactorPanel(
+        challenge: challenge,
+        onLoginSucceeded: _onTwoFactorLoginSucceeded,
+        onBackToLogin:
+            () =>
+                ref.read(loginPageControllerProvider.notifier).exitChallenge(),
+      );
+    }
+    return _LoginFormCard(
+      formKey: _formKey,
+      usernameController: _usernameController,
+      passwordController: _passwordController,
+      obscurePassword: _obscurePassword,
+      submitting: loginState.submitting,
+      errorMessage: _errorText(loginState.error, AppLocalizations.of(context)),
+      hasRedirect: _redirectLocation() != null,
+      onTogglePassword: _togglePassword,
+      onSubmit: _submit,
+    );
+  }
+
+  void _togglePassword() {
+    setState(() => _obscurePassword = !_obscurePassword);
+  }
+
+  String? _redirectLocation() {
+    // 与路由守卫共用同一判据：反斜杠、控制字符与内部状态页一律拒绝。
+    return safeRedirectTarget(
+      GoRouterState.of(context).uri.queryParameters['redirect'],
+    );
+  }
+}
+
+class _BrandPanel extends StatelessWidget {
+  const _BrandPanel({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const BrandLogo(size: 56, radius: 16),
+        SizedBox(height: compact ? 20 : 32),
+        Text(
+          'OmniNest',
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+            fontSize: compact ? 40 : 56,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Text(
+            l10n.loginSubtitle,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.55,
+            ),
+          ),
+        ),
+        if (!compact) ...[
+          const SizedBox(height: 36),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _FeaturePill(
+                icon: Icons.movie_creation_outlined,
+                label: l10n.loginFeatureMedia,
+              ),
+              _FeaturePill(
+                icon: Icons.menu_book_outlined,
+                label: l10n.loginFeatureReader,
+              ),
+              _FeaturePill(
+                icon: Icons.folder_outlined,
+                label: l10n.loginFeatureFiles,
+              ),
+              _FeaturePill(
+                icon: Icons.admin_panel_settings_outlined,
+                label: l10n.loginFeatureAdmin,
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainer.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginFormCard extends StatelessWidget {
+  const _LoginFormCard({
+    required this.formKey,
+    required this.usernameController,
+    required this.passwordController,
+    required this.obscurePassword,
+    required this.submitting,
+    required this.errorMessage,
+    required this.hasRedirect,
+    required this.onTogglePassword,
+    required this.onSubmit,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController usernameController;
+  final TextEditingController passwordController;
+  final bool obscurePassword;
+  final bool submitting;
+  final String? errorMessage;
+  final bool hasRedirect;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // 原生移动端（窄幅）换样例玻璃卡：圆角 26 + 环境实底 + 发丝描边；
+    // 桌面与 Web 保持工位面板。
+    final mobileForm =
+        isMobilePlatform && MediaQuery.sizeOf(context).width < 920;
+    final usernameField = TextFormField(
+      controller: usernameController,
+      keyboardType: TextInputType.text,
+      // 用户名区分大小写，禁用移动端自动首字母大写与联想替换。
+      textCapitalization: TextCapitalization.none,
+      enableSuggestions: false,
+      textInputAction: TextInputAction.next,
+      maxLength: _loginUsernameMaxLength,
+      autofillHints: const [AutofillHints.username],
+      decoration: InputDecoration(
+        labelText: l10n.loginUsername,
+        prefixIcon: const Icon(Icons.person_outline_rounded),
+        counterText: '',
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return l10n.loginUsernameHint;
+        }
+        return null;
+      },
+    );
+    final passwordField = TextFormField(
+      controller: passwordController,
+      obscureText: obscurePassword,
+      textInputAction: TextInputAction.done,
+      maxLength: _loginPasswordMaxLength,
+      autofillHints: const [AutofillHints.password],
+      onFieldSubmitted: (_) => onSubmit(),
+      decoration: InputDecoration(
+        labelText: l10n.loginPassword,
+        prefixIcon: const Icon(Icons.lock_outline_rounded),
+        counterText: '',
+        suffixIcon: Semantics(
+          tooltip:
+              obscurePassword ? l10n.loginShowPassword : l10n.loginHidePassword,
+          child: IconButton(
+            tooltip: null,
+            onPressed: onTogglePassword,
+            icon: Icon(
+              obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+          ),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return l10n.loginPasswordHint;
+        }
+        return null;
+      },
+    );
+    final cardChild = Form(
+      key: formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            l10n.loginWelcome,
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.loginDescription,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (hasRedirect) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.subdirectory_arrow_right_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    l10n.loginRedirectHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 28),
+          // 与安装向导同策略：两个字段编入同一自动填充组，系统与浏览器
+          // 按“用户名 + 口令”成对填充，不单独提示口令。
+          AutofillGroup(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                usernameField,
+                const SizedBox(height: 16),
+                passwordField,
+              ],
+            ),
+          ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 18),
+            _ErrorBanner(message: errorMessage!),
+          ],
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: submitting ? null : onSubmit,
+            icon:
+                submitting
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.login_rounded),
+            label: Text(submitting ? l10n.loginSigningIn : l10n.loginSignIn),
+          ),
+          // 首启/换服入口：仅原生端（/server-setup 在 Web 同源推导下不可达）。
+          if (isMobilePlatform) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: () => context.push('/server-setup'),
+              icon: const Icon(Icons.dns_rounded, size: 16),
+              label: Text(l10n.loginSetupNewServer),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!mobileForm) {
+      return WorkbenchPanel(
+        padding: const EdgeInsets.all(28),
+        shadow: true,
+        child: cardChild,
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.env.sheetSolid,
+          borderRadius: BorderRadius.all(Radius.circular(26)),
+          border: Border.fromBorderSide(BorderSide(color: context.env.line13)),
+        ),
+        child: Padding(padding: const EdgeInsets.all(24), child: cardChild),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.34),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              color: Theme.of(context).colorScheme.error,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

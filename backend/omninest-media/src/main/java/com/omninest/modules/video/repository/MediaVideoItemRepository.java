@@ -1,0 +1,510 @@
+package com.omninest.modules.video.repository;
+
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.video.domain.MediaVideoItem;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, UUID> {
+    long countByLibrarySourceId(UUID librarySourceId);
+
+    // 库列表查询：排除派生版本（sourceVideoItemId IS NULL = 仅原始条目）
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            order by i.updatedAt desc
+            """)
+    List<MediaVideoItem> findReadableOriginalsByMediaType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    Page<MediaVideoItem> findReadableOriginalsByMediaType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType,
+            @Param("metadataStatus") String metadataStatus,
+            Pageable pageable
+    );
+
+    /**
+     * 分页检索可读的原始视频条目，按标题模糊匹配。
+     *
+     * <p>库内搜索必须覆盖全库而不是已加载分页，故关键词在 SQL 侧过滤：
+     * {@code titlePattern} 由调用方归一化为小写 {@code %关键词%}，为空时不参与过滤。
+     * 标题取元数据标题（影片 → 分集 → 文件名），与 {@code VideoItemDtoConverter}
+     * 及不可用媒体投影的 {@code coalesce} 口径一致，未识别元数据的条目仍可按文件名搜到。
+     *
+     * @param requesterUserId 请求用户 ID
+     * @param librarySourceIds 用户可读的服务器媒体库 ID
+     * @param mediaType 媒体类型
+     * @param metadataStatus 元数据状态过滤，可为空
+     * @param titlePattern 标题模糊匹配串，可为空
+     * @param pageable 分页参数
+     * @return 匹配的视频条目分页
+     */
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            left join MediaMovie movie on i.movieId = movie.id
+            left join MediaTvEpisode episode on i.episodeId = episode.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
+              and (:titlePattern is null
+                   or lower(coalesce(movie.title, episode.title, file.name)) like :titlePattern escape '\\')
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    Page<MediaVideoItem> searchReadableOriginalsByMediaType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType,
+            @Param("metadataStatus") String metadataStatus,
+            @Param("titlePattern") String titlePattern,
+            Pageable pageable
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            order by i.updatedAt desc
+            """)
+    List<MediaVideoItem> findReadableOriginals(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    Page<MediaVideoItem> findReadableOriginals(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            Pageable pageable
+    );
+
+    @Query("""
+            select count(i) from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    long countReadableOriginalsByMediaType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType
+    );
+
+    @Query("""
+            select count(i) from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.metadataStatus = :metadataStatus
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    long countReadableOriginalsByMetadataStatus(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("metadataStatus") String metadataStatus
+    );
+
+    @Query("""
+            select count(distinct i.seriesId) from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.seriesId is not null
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    long countReadableOriginalSeries(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.updatedAt > :updatedAt
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            order by i.updatedAt desc
+            """)
+    List<MediaVideoItem> findReadableOriginalsUpdatedAfter(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("updatedAt") Instant updatedAt
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.ownerUserId = :ownerUserId and i.seriesId = :seriesId
+              and i.sourceVideoItemId is null and file.deleted = false
+            order by i.seasonNumber asc, i.episodeNumber asc
+            """)
+    List<MediaVideoItem> findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAscEpisodeNumberAsc(@Param("ownerUserId") UUID ownerUserId, @Param("seriesId") UUID seriesId);
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.seriesId = :seriesId
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            order by i.seasonNumber asc, i.episodeNumber asc
+            """)
+    List<MediaVideoItem> findReadableBySeriesId(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("seriesId") UUID seriesId
+    );
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.seriesId = :seriesId
+              and i.seasonNumber = :seasonNumber
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            order by i.episodeNumber asc
+            """)
+    List<MediaVideoItem> findReadableBySeriesIdAndSeasonNumber(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("seriesId") UUID seriesId,
+            @Param("seasonNumber") Integer seasonNumber
+    );
+
+    @Query("""
+            select item from MediaVideoItem item
+            join FileNode file on item.fileNodeId = file.id
+            where item.id = :id and item.ownerUserId = :ownerUserId and file.deleted = false
+            """)
+    Optional<MediaVideoItem> findByIdAndOwnerUserId(
+            @Param("id") UUID id,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
+    Optional<MediaVideoItem> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
+
+    /**
+     * 按文件节点查询业务行。
+     *
+     * <p>{@code media_video_items} 上 {@code UNIQUE(file_node_id)} 保证一个文件只有一行，
+     * 行 owner 是文件所有者；跨用户可见（共享空间、公共影视库）时必须用本方法定位，
+     * 按 (请求者, 文件) 查会查不到既有行并尝试插入，直接撞唯一索引。</p>
+     *
+     * @param fileNodeId 文件节点 ID
+     * @return 视频业务行
+     */
+    Optional<MediaVideoItem> findByFileNodeId(UUID fileNodeId);
+
+    // 版本列表查询：仅原始条目（排除派生版本如 AUDIO_ONLY、H265）
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.ownerUserId = :ownerUserId and i.movieId = :movieId
+              and i.sourceVideoItemId is null and file.deleted = false
+            """)
+    List<MediaVideoItem> findOriginalsByOwnerUserIdAndMovieId(@Param("ownerUserId") UUID ownerUserId, @Param("movieId") UUID movieId);
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.ownerUserId = :ownerUserId and i.episodeId = :episodeId
+              and i.sourceVideoItemId is null and file.deleted = false
+            """)
+    List<MediaVideoItem> findOriginalsByOwnerUserIdAndEpisodeId(@Param("ownerUserId") UUID ownerUserId, @Param("episodeId") UUID episodeId);
+
+    List<MediaVideoItem> findByOwnerUserIdAndFileNodeIdIn(UUID ownerUserId, Collection<UUID> fileNodeIds);
+
+    /**
+     * 按 fileNodeId 查询所有视频条目（不限 ownerUserId，共享空间清理用）。
+     */
+    List<MediaVideoItem> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.id in :ids and i.ownerUserId = :ownerUserId and file.deleted = false
+            """)
+    List<MediaVideoItem> findAllByIdInAndOwnerUserId(@Param("ids") Collection<UUID> ids, @Param("ownerUserId") UUID ownerUserId);
+
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.id in :ids
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    List<MediaVideoItem> findReadableByIds(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("ids") Collection<UUID> ids
+    );
+
+    /**
+     * 一次算出多个系列各季的条目数，供孤立季清理批量裁决。
+     *
+     * <p>逐季 count 在 50 系列 × 8 季的场景下会打出 400 次单行查询；口径与主曲库一致，
+     * 派生版本行（{@code sourceVideoItemId} 非空）不计入。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param seriesIds 系列 ID 集合
+     * @return 各季条目数；没有任何条目的季不会出现在结果里
+     */
+    @Query("""
+            select i.seriesId as seriesId, i.seasonNumber as seasonNumber, count(i) as itemCount
+            from MediaVideoItem i
+            where i.ownerUserId = :ownerUserId and i.seriesId in :seriesIds and i.sourceVideoItemId is null
+            group by i.seriesId, i.seasonNumber
+            """)
+    List<SeasonItemCountProjection> countItemsBySeason(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds
+    );
+
+    /** 某一季的条目数投影。 */
+    interface SeasonItemCountProjection {
+        UUID getSeriesId();
+
+        Integer getSeasonNumber();
+
+        Long getItemCount();
+    }
+
+    Optional<MediaVideoItem> findByOwnerUserIdAndSourceVideoItemIdAndVideoCodec(UUID ownerUserId, UUID sourceVideoItemId, String videoCodec);
+
+    Optional<MediaVideoItem> findByOwnerUserIdAndSourceVideoItemIdAndAudioCodec(UUID ownerUserId, UUID sourceVideoItemId, String audioCodec);
+
+    Optional<MediaVideoItem> findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(UUID ownerUserId, UUID sourceVideoItemId, String versionLabel);
+
+    @Query("""
+            select item from MediaVideoItem item
+            join FileNode file on item.fileNodeId = file.id
+            where item.ownerUserId = :ownerUserId
+              and item.sourceVideoItemId in :sourceVideoItemIds
+              and file.deleted = false
+            order by item.updatedAt desc
+            """)
+    List<MediaVideoItem> findReadableDerivedVersionsBySources(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("sourceVideoItemIds") Collection<UUID> sourceVideoItemIds);
+
+    long countByOwnerUserIdAndMovieId(UUID ownerUserId, UUID movieId);
+
+    /**
+     * 批量查询有视频条目的 movieId 集合（避免孤立清理 N+1）。
+     */
+    @Query("""
+            SELECT DISTINCT i.movieId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId AND i.movieId IN :movieIds
+            """)
+    List<UUID> findMovieIdsWithItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("movieIds") Collection<UUID> movieIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 movieId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.movieId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.movieId IN :movieIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findMovieIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("movieIds") Collection<UUID> movieIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 episodeId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.episodeId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.episodeId IN :episodeIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findEpisodeIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("episodeIds") Collection<UUID> episodeIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 seriesId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.seriesId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.seriesId IN :seriesIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findSeriesIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍有条目的（剧集, 季）组合。
+     */
+    @Query("""
+            SELECT DISTINCT i.seriesId, i.seasonNumber FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.seriesId IN :seriesIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<Object[]> findSeasonKeysWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询有视频条目的 episodeId 集合（避免孤立清理 N+1）。
+     */
+    @Query("SELECT DISTINCT i.episodeId FROM MediaVideoItem i WHERE i.ownerUserId = :ownerUserId AND i.episodeId IN :episodeIds")
+    List<UUID> findEpisodeIdsWithItems(@Param("ownerUserId") UUID ownerUserId, @Param("episodeIds") Collection<UUID> episodeIds);
+
+    /**
+     * 批量查询有视频条目的 seriesId 集合（避免孤立清理 N+1）。
+     */
+    @Query("SELECT DISTINCT i.seriesId FROM MediaVideoItem i WHERE i.ownerUserId = :ownerUserId AND i.seriesId IN :seriesIds")
+    List<UUID> findSeriesIdsWithItems(@Param("ownerUserId") UUID ownerUserId, @Param("seriesIds") Collection<UUID> seriesIds);
+
+    @Query("""
+            select item.id as videoItemId,
+                   item.fileNodeId as fileNodeId,
+                   item.librarySourceId as librarySourceId,
+                   coalesce(movie.title, episode.title, file.name) as title,
+                   ref.availabilityStatus as availabilityStatus,
+                   ref.missingSince as missingSince,
+                   ref.missingConfirmations as missingConfirmations
+              from MediaVideoItem item
+              join FileNode file on item.fileNodeId = file.id
+              join FileContentRef ref on item.fileNodeId = ref.fileNodeId
+              left join MediaMovie movie on item.movieId = movie.id
+              left join MediaTvEpisode episode on item.episodeId = episode.id
+             where item.librarySourceId in :librarySourceIds
+               and file.deleted = false
+               and ref.availabilityStatus <> 'AVAILABLE'
+             order by ref.missingSince desc, item.updatedAt desc
+            """)
+    Page<UnavailableMediaProjection> findUnavailableLocalMediaByLibrarySourceIds(
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            Pageable pageable
+    );
+
+    /** 不可用本地媒体列表投影。 */
+    interface UnavailableMediaProjection {
+        UUID getVideoItemId();
+
+        UUID getFileNodeId();
+
+        UUID getLibrarySourceId();
+
+        String getTitle();
+
+        String getAvailabilityStatus();
+
+        Instant getMissingSince();
+
+        int getMissingConfirmations();
+    }
+}

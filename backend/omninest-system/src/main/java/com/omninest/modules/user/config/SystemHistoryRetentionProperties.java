@@ -1,0 +1,51 @@
+package com.omninest.modules.user.config;
+
+import java.time.Duration;
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+/**
+ * 系统任务与审计日志保留策略配置。
+ *
+ * @author OmniNest
+ */
+@Data
+@ConfigurationProperties(prefix = "omninest.history-retention")
+public class SystemHistoryRetentionProperties {
+
+    private boolean enabled = true;
+
+    private Duration taskMaximumAge = Duration.ofDays(30);
+
+    private Duration auditMaximumAge = Duration.ofDays(365);
+
+    private Duration configMaximumAge = Duration.ofDays(365);
+
+    /**
+     * Outbox 投递记录保留时长。默认与任务记录一致：更短会让只剩事件子载荷的
+     * 任务类型失去原样重放能力。
+     */
+    private Duration dispatchMaximumAge = Duration.ofDays(30);
+
+    /**
+     * 文件物理删除条目保留时长（仅清理成功终态）。
+     */
+    private Duration purgeEntryMaximumAge = Duration.ofDays(30);
+
+    private int configMinimumVersions = 20;
+
+    /**
+     * 已读站内通知保留时长。未读通知不参与清理。
+     */
+    private Duration notificationMaximumAge = Duration.ofDays(90);
+
+    /**
+     * 会话撤销记录与过期会话行的保留时长。默认 35 天，覆盖刷新令牌 30 天有效期再留缓冲：
+     * 窗口之外的记录不会再被任何令牌引用。
+     */
+    private Duration credentialHistoryMaximumAge = Duration.ofDays(35);
+
+    private int batchSize = 500;
+
+    private int maximumBatches = 20;
+}

@@ -1,0 +1,248 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/connectivity_listener.dart';
+import 'package:omninest/app/environment_providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/network/session_gate.dart';
+import 'package:omninest/core/preferences/user_preferences_api.dart';
+import 'package:omninest/core/preferences/preference_sync_service.dart';
+import 'package:omninest/core/storage/local_database.dart';
+import 'package:omninest/core/storage/local_database_provider.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
+import 'package:omninest/core/storage/sync_queue.dart';
+import 'package:omninest/features/files/application/media_import_service.dart';
+import 'package:omninest/features/files/data/file_providers.dart';
+import 'package:omninest/features/music/data/music_api.dart';
+import 'package:omninest/features/music/data/music_cover_cache.dart';
+import 'package:omninest/features/music/data/music_progress_repository.dart';
+import 'package:omninest/features/notifications/data/notification_email_admin_api.dart';
+import 'package:omninest/features/notifications/data/notification_type_api.dart';
+import 'package:omninest/features/profile/data/me_api.dart';
+import 'package:omninest/features/reader/application/reader_local_progress.dart';
+import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
+import 'package:omninest/features/reader/data/reader_sync_queue.dart';
+import 'package:omninest/features/reader/data/reader_api.dart';
+import 'package:omninest/features/reader/data/reader_image_cache.dart';
+import 'package:omninest/features/reader/data/reader_image_repository.dart';
+import 'package:omninest/features/reader/data/reader_image_repository_base.dart';
+import 'package:omninest/features/reader/data/reader_local_progress.dart';
+import 'package:omninest/features/reader/data/reader_local_storage.dart';
+import 'package:omninest/core/log/dev_log.dart';
+
+final apiClientProvider = Provider<ApiClient>((ref) {
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment == null) {
+    throw StateError('服务器地址未配置');
+  }
+  final sessionStore = ref.watch(authSessionStoreProvider);
+  Set<String> readPermissions() =>
+      ref.read(authSessionProvider).value?.user?.permissions ??
+      const <String>{};
+  final apiClient = ApiClient(
+    environment,
+    sessionStore: sessionStore,
+    refreshSession:
+        () => ref.read(authSessionProvider.notifier).refreshSession(),
+    readPermissions: readPermissions,
+    sessionGate: ref.watch(sessionGateProvider),
+  );
+  // 自动写回缺 activity/preference 写权限时静默跳过，不发网络；
+  // 用户主动写由 API 预检抛 FORBIDDEN，后端 @PreAuthorize 兜底。
+  apiClient.dio.interceptors.insert(
+    0,
+    CapabilityGateInterceptor(readPermissions: readPermissions),
+  );
+  // 封面专域缓存的下载客户端与 ApiClient 同生命周期，重建时刷新引用。
+  MusicCoverCache.configure(apiClient.dio);
+  // 服务器切换会让 Provider 重建，旧客户端的连接池与拦截器必须随之关闭；
+  // 新客户端已在重建时重新注册，不会误关当前实例。
+  ref.onDispose(() => apiClient.dio.close(force: true));
+  return apiClient;
+});
+
+/// 分享链接基址解析器。
+///
+/// 每次解析都实时读取服务器下发的对外 Web 地址（omninest.setup.web-base-url），
+/// 配置热修改后下一次分享创建即生效；未配置或读取失败时按平台语义回退
+/// （Web 用浏览器当前 origin，原生端退化为 API origin，仅本机可用）。
+/// 不做会话级缓存，避免未配置的空结果或旧配置被长期固定。
+class WebShareBaseUrlResolver {
+  const WebShareBaseUrlResolver(this._ref);
+
+  final Ref _ref;
+
+  Future<String> resolve() async {
+    final environment = _ref.read(appEnvironmentProvider);
+    if (environment == null) {
+      throw StateError('服务器地址未配置');
+    }
+    try {
+      final serverBase = await _ref.read(meApiProvider).webShareBaseUrl();
+      if (serverBase != null && serverBase.isNotEmpty) {
+        return serverBase;
+      }
+    } on Exception {
+      // 服务器读取失败不阻断分享：回退客户端推导基址。
+    }
+    return environment.effectiveWebBaseUrl;
+  }
+}
+
+final webShareBaseUrlResolverProvider = Provider<WebShareBaseUrlResolver>((
+  ref,
+) {
+  return WebShareBaseUrlResolver(ref);
+});
+
+final userPreferencesApiProvider = Provider<UserPreferencesApi>((ref) {
+  return UserPreferencesApi(ref.watch(apiClientProvider));
+});
+
+final preferenceSyncServiceProvider = Provider<PreferenceSyncService>((ref) {
+  return PreferenceSyncService(api: ref.watch(userPreferencesApiProvider));
+});
+
+final notificationTypeApiProvider = Provider<NotificationTypeApi>((ref) {
+  return NotificationTypeApi(ref.watch(apiClientProvider));
+});
+
+final notificationEmailAdminApiProvider = Provider<NotificationEmailAdminApi>((
+  ref,
+) {
+  return NotificationEmailAdminApi(ref.watch(apiClientProvider));
+});
+
+final meApiProvider = Provider<MeApi>((ref) {
+  return MeApi(ref.watch(apiClientProvider));
+});
+
+final mediaImportServiceProvider = Provider<MediaImportService>((ref) {
+  return MediaImportService(
+    ref.watch(fileApiProvider),
+    TaskApi(ref.watch(apiClientProvider)),
+  );
+});
+
+final globalMusicApiProvider = Provider<MusicApi>((ref) {
+  return MusicApi(ref.watch(apiClientProvider));
+});
+
+/// 通用离线操作队列，按当前登录账号归属。
+///
+/// 音乐与文件域的操作行都落在这张共享表上，归属必须在入队时定下来；
+/// 会话未解析完时取上一次已解析的身份，不退回匿名，避免造出无人认领的行。
+final syncQueueProvider = Provider<SyncQueue>((ref) {
+  final userId = ref.watch(
+    authSessionProvider.select((session) => session.value?.user?.id),
+  );
+  return SyncQueue(ref.watch(localDatabaseProvider), userId: userId);
+});
+
+final globalMusicProgressRepositoryProvider = Provider<MusicProgressRepository>(
+  (ref) {
+    final userId = ref.watch(
+      authSessionProvider.select((session) => session.value?.user?.id),
+    );
+    return MusicProgressRepository(
+      database: ref.watch(localDatabaseProvider),
+      syncQueue: ref.watch(syncQueueProvider),
+      api: ref.watch(globalMusicApiProvider),
+      userId: userId,
+    );
+  },
+);
+
+final globalReaderApiProvider = Provider<ReaderApi>((ref) {
+  return ReaderApi(ref.watch(apiClientProvider));
+});
+
+/// 初始化依赖 LocalDatabase 的静态工具类。
+/// 必须在应用启动时读取一次，确保 ReaderLocalProgress / ReaderSyncQueue / ReaderImageCache 可用。
+final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
+  final db = ref.watch(localDatabaseProvider);
+  final userId = ref.watch(
+    authSessionProvider.select((session) => session.value?.user?.id),
+  );
+  final localStorage = ReaderLocalStorage(
+    db,
+    textCipher: ref.watch(offlineColumnCipherProvider),
+    userId: userId,
+  );
+  final imageRepository = createReaderImageRepository(
+    database: db,
+    userId: userId,
+  );
+  ReaderLocalProgress.init(
+    DatabaseReaderLocalProgressStore(db, userId: userId),
+  );
+  ReaderSyncQueue.init(
+    db,
+    textCipher: ref.watch(offlineColumnCipherProvider),
+    userId: userId,
+  );
+  if (userId != null && userId.isNotEmpty) {
+    // 冷启动恢复会话前队列以空账号落库；拿到真实账号后立即认领，
+    // 否则这些操作既不会被重放，也不会在登出时被清理。
+    unawaited(db.claimAnonymousOperations(userId));
+  }
+  // Web 的崩溃备份按账号分键：换号后不能读到上一个账号留下的那份位置。
+  ReaderProgressBackupWeb.setUserId(userId);
+  ReaderImageCache.init(imageRepository);
+
+  // 启动时自动清理过期缓存（不阻塞启动）
+  unawaited(_autoCleanExpiredCache(localStorage, imageRepository));
+
+  return db;
+});
+
+/// 全局网络恢复监听器，用于重放离线同步队列。
+final connectivityListenerProvider = Provider<ConnectivityListener>((ref) {
+  final listener = ConnectivityListener(
+    syncQueue: ref.watch(syncQueueProvider),
+    fileApi: ref.watch(fileApiProvider),
+    musicApi: ref.watch(globalMusicApiProvider),
+    musicProgressRepository: ref.watch(globalMusicProgressRepositoryProvider),
+    readerApi: ref.watch(globalReaderApiProvider),
+  );
+  listener.start();
+  ref.onDispose(listener.stop);
+  return listener;
+});
+
+/// 应用级在线状态，供全局壳层显示离线反馈。
+final appOnlineStatusProvider = StreamProvider<bool>((ref) async* {
+  final listener = ref.watch(connectivityListenerProvider);
+  final current = listener.isOnline;
+  if (current != null) {
+    yield current;
+  }
+  yield* listener.onlineStream;
+});
+
+/// 离线同步重放失败事件：出现新增失败时携带待重试数量，供根部提示。
+final syncReplayFailuresProvider = StreamProvider<int>((ref) {
+  final listener = ref.watch(connectivityListenerProvider);
+  return listener.replayFailureStream;
+});
+
+/// 启动时自动清理超过 30 天未访问的章节和图片缓存。
+Future<void> _autoCleanExpiredCache(
+  ReaderLocalStorage localStorage,
+  ReaderImageRepository imageRepository,
+) async {
+  try {
+    await localStorage.cleanOldChapters(maxAgeDays: 30);
+    await imageRepository.cleanOld(maxAgeDays: 30);
+    if (kDebugMode) {
+      devLog('CacheCleanup: expired cache cleaned');
+    }
+  } on Exception catch (e) {
+    if (kDebugMode) {
+      devLog('CacheCleanup: auto-clean failed: $e');
+    }
+  }
+}

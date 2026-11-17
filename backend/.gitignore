@@ -1,0 +1,34 @@
+# Maven
+target/
+**/target/
+
+# Local runtime configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs and runtime dumps
+logs/*
+!logs/.gitkeep
+*.log
+*.pid
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.factorypath
+
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+

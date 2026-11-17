@@ -1,0 +1,717 @@
+package com.omninest.modules.file.service;
+
+import com.omninest.common.json.JsonSupport;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.rclone.RcloneGateway;
+import com.omninest.modules.file.config.ExternalStorageImportProperties;
+import com.omninest.modules.file.domain.ExternalStorageStatus;
+import com.omninest.modules.file.domain.ImportSourceKind;
+import com.omninest.modules.file.domain.ImportTaskStatus;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.domain.StorageExternalAccount;
+import com.omninest.modules.file.domain.StorageImportTask;
+import com.omninest.modules.file.domain.StorageRemoteMetadataCache;
+import com.omninest.modules.file.dto.CreateImportTaskRequest;
+import com.omninest.modules.file.dto.ExternalFileItemDto;
+import com.omninest.modules.file.dto.ExternalFileListDto;
+import com.omninest.modules.file.dto.ExternalStorageTestResultDto;
+import com.omninest.modules.file.dto.ExternalSpaceDto;
+import com.omninest.modules.file.dto.ExternalStorageConnectorDto;
+import com.omninest.modules.file.dto.ImportTaskDto;
+import com.omninest.modules.file.event.ExternalImportRequestedEvent;
+import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
+import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
+import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import tools.jackson.core.type.TypeReference;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 外部存储核心服务。
+ * <p>
+ * 管理 rclone remote 生命周期，提供浏览、文件操作和导入任务管理。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ExternalStorageService {
+
+    /** 远端目录列举的短暂缓存窗口，只用于翻页复用，不承担强一致语义。 */
+    private static final Duration BROWSE_CACHE_TTL = Duration.ofSeconds(60);
+
+    private final RcloneGateway rcloneGateway;
+    private final StorageExternalAccountRepository accountRepository;
+    private final StorageImportTaskRepository importTaskRepository;
+    private final FileIngressItemRepository ingressItemRepository;
+    private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository;
+    private final TaskDispatchService taskDispatchService;
+    private final TaskRecordService taskRecordService;
+    private final ExternalStorageCredentialService externalStorageCredentialService;
+    private final SharedSpaceService sharedSpaceService;
+    private final ExternalStorageImportProperties importProperties;
+    private final ExternalStorageOAuthService oauthService;
+    private final ExternalStorageEndpointGuard endpointGuard;
+    private final StorageQuotaService storageQuotaService;
+    private final TransactionTemplate transactionTemplate;
+
+    // ========== Remote 生命周期 ==========
+
+    /**
+     * 激活外部存储 remote：解密凭证并转换为 rclone 参数后执行 config/create。
+     * OAuth 类连接器在此时把规范化凭据组装为 rclone 认可的 token JSON blob。
+     */
+    public void activateRemote(StorageExternalAccount account) {
+        String remoteName = toRemoteName(account);
+        Map<String, String> params = buildRcloneParameters(account);
+        String rcloneType = toRcloneType(account.getProvider());
+        rcloneGateway.createRemote(remoteName, rcloneType, params);
+        log.info("外部存储 remote 已激活: accountId={}", account.getId());
+    }
+
+    /**
+     * 停用外部存储 remote：rclone config/delete。
+     */
+    public void deactivateRemote(StorageExternalAccount account) {
+        String remoteName = toRemoteName(account);
+        try {
+            rcloneGateway.deleteRemote(remoteName);
+            log.info("外部存储 remote 已停用: accountId={}", account.getId());
+        } catch (Exception e) {
+            log.warn("停用 remote 失败（可能已不存在）: accountId={}", account.getId(), e);
+        }
+    }
+
+    // ========== 浏览 ==========
+
+    /**
+     * 浏览外部存储目录。
+     * DB 查询在 findAccount 内完成，rclone 网络 IO 在事务外执行。
+     */
+    public ExternalFileListDto browse(UUID ownerUserId, UUID accountId, String path) {
+        return browse(ownerUserId, accountId, path, 0, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 分页浏览外部存储目录：网盘单目录条目可达数千，前端子表分页消费。
+     *
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     */
+    public ExternalFileListDto browse(UUID ownerUserId, UUID accountId, String path, int page, int size) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+        prepareUsableRemote(account);
+        String fs = resolveFs(account);
+        String remote = normalizePath(path);
+
+        try {
+            List<ExternalFileItemDto> items = listDirectoryCached(account.getId(), fs, remote);
+            int total = items.size();
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.max(size, 1);
+            int from = (int) Math.min((long) safePage * safeSize, total);
+            int to = (int) Math.min((long) from + safeSize, total);
+            // 无分页入口会传入 Integer.MAX_VALUE：32 位下 total + safeSize - 1 会溢出成负数。
+            int totalPages = total == 0 ? 0 : (int) (((long) total + safeSize - 1) / safeSize);
+            return new ExternalFileListDto(
+                    items.subList(from, to),
+                    path,
+                    safePage,
+                    safeSize,
+                    total,
+                    totalPages
+            );
+        } catch (IllegalStateException e) {
+            String message = e.getMessage();
+            if (message != null && message.contains("directory not found")) {
+                log.warn("远程目录不存在: accountId={}", accountId);
+                return new ExternalFileListDto(List.of(), path);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 列举远端目录并复用 60 秒内的快照。
+     *
+     * <p>分页只在内存切片，翻页若每次都向 rclone 全量列举，单目录数千条时
+     * 每页都会重复付出一次远端往返。缓存只是翻页复用，过期后照常回源。</p>
+     */
+    private List<ExternalFileItemDto> listDirectoryCached(UUID accountId, String fs, String remote) {
+        Instant now = Instant.now();
+        try {
+            var cached = remoteMetadataCacheRepository
+                    .findFirstByExternalAccountIdAndRemotePathOrderByCachedAtDesc(accountId, remote);
+            if (cached.isPresent() && cached.get().getExpiresAt().isAfter(now)) {
+                return JsonSupport.listFrom(cached.get().getMetadataJson(), ExternalFileItemDto.class);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("读取外部目录缓存失败，回退远端列举: accountId={}", accountId, exception);
+        }
+
+        List<ExternalFileItemDto> items = rcloneGateway.listDirectory(fs, remote, false).stream()
+                .map(entry -> new ExternalFileItemDto(
+                        entry.name(),
+                        joinRemotePath(remote, entry.name()),
+                        entry.directory(),
+                        entry.sizeBytes(),
+                        entry.modifiedAt(),
+                        entry.mimeType(),
+                        entry.hash()
+                ))
+                .toList();
+        try {
+            remoteMetadataCacheRepository.deleteByExternalAccountIdAndRemotePath(accountId, remote);
+            StorageRemoteMetadataCache cache = new StorageRemoteMetadataCache();
+            cache.setExternalAccountId(accountId);
+            cache.setRemotePath(remote);
+            cache.setMetadataJson(JsonSupport.toJson(items));
+            cache.setCachedAt(now);
+            cache.setExpiresAt(now.plus(BROWSE_CACHE_TTL));
+            remoteMetadataCacheRepository.save(cache);
+        } catch (RuntimeException exception) {
+            log.warn("写入外部目录缓存失败，本次仍返回远端结果: accountId={}", accountId, exception);
+        }
+        return items;
+    }
+
+    /**
+     * 获取外部存储空间使用情况。
+     * DB 查询在 findAccount 内完成，rclone 网络 IO 在事务外执行。
+     */
+    public ExternalSpaceDto getSpaceUsage(UUID ownerUserId, UUID accountId) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+        prepareUsableRemote(account);
+        String fs = resolveFs(account);
+
+        RcloneGateway.SpaceUsage usage = rcloneGateway.querySpaceUsage(fs);
+        return new ExternalSpaceDto(
+                usage.totalBytes(),
+                usage.usedBytes(),
+                usage.freeBytes(),
+                usage.trashedBytes()
+        );
+    }
+
+    /**
+     * 获取 remote 文件系统信息。
+     * DB 查询在 findAccount 内完成，rclone 网络 IO 在事务外执行。
+     */
+    public Map<String, Object> getFsInfo(UUID ownerUserId, UUID accountId) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+        prepareUsableRemote(account);
+        String fs = resolveFs(account);
+
+        return rcloneGateway.queryFileSystemInfo(fs);
+    }
+
+    // ========== 连接健康 ==========
+
+    /**
+     * 列出连接器目录。
+     * OAuth 类连接器附带实例级应用配置状态，供前端在创建前给出可执行引导。
+     *
+     * @return 连接器列表
+     */
+    public List<ExternalStorageConnectorDto> listConnectors() {
+        return List.of(
+                connector("WEBDAV", "WebDAV", "PASSWORD", "AVAILABLE"),
+                connector("S3", "S3", "ACCESS_KEY", "AVAILABLE"),
+                oauthConnector("ONEDRIVE", "OneDrive"),
+                oauthConnector("GDRIVE", "Google Drive"),
+                oauthConnector("DROPBOX", "Dropbox")
+        );
+    }
+
+    private ExternalStorageConnectorDto connector(
+            String code, String displayName, String authMode, String availability) {
+        return new ExternalStorageConnectorDto(
+                code, displayName, authMode, availability, true);
+    }
+
+    private ExternalStorageConnectorDto oauthConnector(String code, String displayName) {
+        boolean configured = oauthService.findAppCredentials(code).isPresent();
+        return new ExternalStorageConnectorDto(
+                code, displayName, "OAUTH2", "OAUTH", configured);
+    }
+
+    /**
+     * 测试外部存储连通性（list 根目录）。
+     * 业务异常消息直接透出，避免把"未配置 OAuth 应用"等可修复原因
+     * 掩盖成统一的连接失败话术。
+     * 与 browse 一致：DB 读写经仓库自身事务，rclone 网络 IO 不占用数据库事务。
+     *
+     * @param ownerUserId 所有者
+     * @param accountId 账户 ID
+     * @return 测试结果
+     */
+    public ExternalStorageTestResultDto testConnection(
+            UUID ownerUserId,
+            UUID accountId
+    ) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+        try {
+            prepareUsableRemote(account);
+            rcloneGateway.listDirectory(resolveFs(account), "", false);
+            account.setLastErrorCode(null);
+            account.setLastCheckedAt(Instant.now());
+            accountRepository.save(account);
+            return new ExternalStorageTestResultDto(
+                    true, null, "连接正常", account.getLastCheckedAt());
+        } catch (RuntimeException exception) {
+            String code = "CONNECTION_FAILED";
+            String message = exception instanceof BusinessException businessException
+                    ? businessException.getMessage()
+                    : "无法连接远程存储，请检查地址与凭据";
+            account.setLastErrorCode(code);
+            account.setLastCheckedAt(Instant.now());
+            accountRepository.save(account);
+            log.warn("外部存储连接测试失败: accountId={}", accountId, exception);
+            return new ExternalStorageTestResultDto(
+                    false, code, message, account.getLastCheckedAt());
+        }
+    }
+
+    // ========== 导入任务 ==========
+
+    /**
+     * 创建导入任务：外部存储 → MinIO。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param accountId 外部存储账户 ID
+     * @param request 导入任务请求
+     * @return 已创建的导入任务
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ImportTaskDto createImportTask(UUID ownerUserId, UUID accountId, CreateImportTaskRequest request) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+
+        String fileName = extractFileName(request.sourcePath());
+        SpaceType resolvedSpace = resolveSpaceType(request.spaceType());
+        String spaceType = resolvedSpace.getValue();
+        String sourceKind = resolveSourceKind(request.sourceKind()).getValue();
+        ensureImportTargetAllowed(ownerUserId, resolvedSpace);
+        ensureImportSizeWithinGuard(request);
+        UUID systemTaskId = UUID.randomUUID();
+        StorageImportTask task = new StorageImportTask();
+        task.setId(UUID.randomUUID());
+        task.setTaskId(systemTaskId);
+        task.setOwnerUserId(ownerUserId);
+        task.setExternalAccountId(accountId);
+        task.setSourcePath(request.sourcePath());
+        task.setSourceKind(sourceKind);
+        task.setTargetParentId(request.targetParentId());
+        task.setSpaceType(spaceType);
+        task.setFileName(fileName);
+        task.setStatus(ImportTaskStatus.QUEUED.getValue());
+        taskRecordService.createQueuedTask(
+                systemTaskId,
+                ownerUserId,
+                "EXTERNAL_IMPORT",
+                QueueNames.EXTERNAL_IMPORT_ROUTING_KEY,
+                Map.of(
+                        "importTaskId", task.getId().toString(),
+                        "externalAccountId", accountId.toString(),
+                        "sourcePath", request.sourcePath(),
+                        "sourceKind", sourceKind,
+                        "targetParentId", request.targetParentId() == null ? "" : request.targetParentId().toString(),
+                        "spaceType", spaceType
+                )
+        );
+        StorageImportTask saved = importTaskRepository.save(task);
+
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                systemTaskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.EXTERNAL_IMPORT_ROUTING_KEY,
+                new ExternalImportRequestedEvent(saved.getId())
+        );
+        log.info("外部存储导入任务已提交: taskId={}", saved.getId());
+
+        return toImportTaskDto(saved);
+    }
+
+    /**
+     * 列出用户的导入任务。
+     */
+    @Transactional(readOnly = true)
+    public List<ImportTaskDto> listImportTasks(UUID ownerUserId) {
+        return importTaskRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
+                .stream()
+                .map(this::toImportTaskDto)
+                .toList();
+    }
+
+    /**
+     * 取消或删除导入任务。
+     * <p>
+     * 运行中的任务：先停止 rclone job（网络调用在事务外），再将任务标记为 CANCELLED。
+     * 已结束的任务（COMPLETED / FAILED / CANCELLED）：从数据库中删除记录。
+     */
+    public void cancelImportTask(UUID ownerUserId, UUID taskId) {
+        ImportCancellation cancellation = transactionTemplate.execute(status -> {
+            StorageImportTask task = importTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "导入任务不存在"));
+            String taskStatus = task.getStatus();
+            if (isFinishedImportStatus(taskStatus)) {
+                // 在途 Worker 尚未结算时，删除任务行会让它再也结算不了（requireTask 抛错进 DLQ），
+                // 预留停留在 RESERVED。删除前无条件释放：对已结算/已过期的预留是空操作。
+                storageQuotaService.releaseReservation("EXTERNAL_IMPORT", taskId);
+                importTaskRepository.delete(task);
+                log.info("导入任务已删除: taskId={}", taskId);
+                return null;
+            }
+            // RUNNING 仅用于兼容历史行；当前执行器只会写 SCANNING/TRANSFERRING/IMPORTING，
+            // 只判 RUNNING 会让传输中的任务依赖 Worker 的下一次轮询（约 2 秒）才停。
+            boolean rcloneActive = ImportTaskStatus.SCANNING.getValue().equals(taskStatus)
+                    || ImportTaskStatus.TRANSFERRING.getValue().equals(taskStatus)
+                    || ImportTaskStatus.RUNNING.getValue().equals(taskStatus);
+            return new ImportCancellation(rcloneActive ? task.getRcloneJobId() : null);
+        });
+        if (cancellation == null) {
+            return;
+        }
+        if (cancellation.rcloneJobId() != null) {
+            try {
+                rcloneGateway.stopJob(cancellation.rcloneJobId());
+            } catch (Exception e) {
+                log.warn("停止 rclone job 失败: jobId={}", cancellation.rcloneJobId(), e);
+            }
+        }
+        transactionTemplate.executeWithoutResult(status -> {
+            StorageImportTask task = importTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
+                    .orElse(null);
+            if (task == null || isFinishedImportStatus(task.getStatus())) {
+                return;
+            }
+            // 取消可能落在执行线程已经退出（RETRY_WAIT 或 Worker 中断）的时刻：那种情况下
+            // 没有任何线程会再捕获 ImportCancelledException 去结算，预留只能在这里收口。
+            // 按已真正入库的字节结算，未写入的差额随结算一并释放。
+            storageQuotaService.settleReservation(
+                    "EXTERNAL_IMPORT",
+                    task.getId(),
+                    ingressItemRepository.sumImportedBytesByTaskId(task.getId()));
+            task.setStatus(ImportTaskStatus.CANCELLED.getValue());
+            importTaskRepository.save(task);
+            taskRecordService.markCancelled(systemTaskId(task));
+        });
+        log.info("导入任务已取消: taskId={}", taskId);
+    }
+
+    private boolean isFinishedImportStatus(String status) {
+        return ImportTaskStatus.COMPLETED.getValue().equals(status)
+                || ImportTaskStatus.FAILED.getValue().equals(status)
+                || ImportTaskStatus.CANCELLED.getValue().equals(status);
+    }
+
+    /**
+     * 取消计划：rclone job 需要在事务外停止。
+     */
+    private record ImportCancellation(Integer rcloneJobId) {
+    }
+
+    // ========== 内部方法 ==========
+
+    /**
+     * 确保远程可用：先复核端点安全策略（拦截历史遗留的不安全地址），再刷新 OAuth token，最后确保 rclone remote 存在。
+     * token 发生刷新时强制重建 remote，使 rclone 侧拿到最新凭据。
+     */
+    public void prepareUsableRemote(StorageExternalAccount account) {
+        validateEndpointSafety(account);
+        boolean tokenRefreshed = maybeRefreshOAuthToken(account);
+        ensureRemoteActivated(account, tokenRefreshed);
+    }
+
+    /**
+     * 使用前复核外部存储端点安全策略。
+     * 创建/更新入口已做同样校验；此处拦截校验上线前已入库的历史账户，阻断其继续发起内网请求。
+     */
+    void validateEndpointSafety(StorageExternalAccount account) {
+        String provider = normalizedProvider(account);
+        if (isOAuthProvider(provider)) {
+            return;
+        }
+        endpointGuard.validate(provider, decryptCredentials(account));
+    }
+
+    private boolean maybeRefreshOAuthToken(StorageExternalAccount account) {
+        if (!isOAuthProvider(normalizedProvider(account))) {
+            return false;
+        }
+        return oauthService.ensureAccessToken(account).refreshed();
+    }
+
+    /**
+     * 确保 rclone remote 已创建。
+     * config/listremotes 返回的名称带尾冒号，两种形式都视为存在。
+     *
+     * @param account 外部存储账户
+     * @param recreate 是否无视存在性强制重建
+     */
+    private void ensureRemoteActivated(StorageExternalAccount account, boolean recreate) {
+        String remoteName = toRemoteName(account);
+        if (!recreate) {
+            try {
+                List<String> remotes = rcloneGateway.listRemoteNames();
+                if (remotes.contains(remoteName) || remotes.contains(remoteName + ":")) {
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("检查 remote 列表失败，尝试重新激活: {}", remoteName, e);
+            }
+        }
+        activateRemote(account);
+    }
+
+    private String normalizedProvider(StorageExternalAccount account) {
+        return account.getProvider() == null
+                ? ""
+                : account.getProvider().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isOAuthProvider(String provider) {
+        return ExternalStorageProviders.isOAuth(provider);
+    }
+
+    /**
+     * 将账户凭据转换为 rclone config/create 参数。
+     * 口令类连接器的存储结构本身就是 rclone 参数，直接透传；
+     * OAuth 类连接器存储的是 OmniNest 规范化 token，需要重新组装。
+     */
+    private Map<String, String> buildRcloneParameters(StorageExternalAccount account) {
+        Map<String, String> flat = decryptCredentials(account);
+        String provider = normalizedProvider(account);
+        if (!isOAuthProvider(provider)) {
+            return flat;
+        }
+        return buildOAuthRcloneParameters(provider, flat);
+    }
+
+    /**
+     * 组装 OAuth 连接器的 rclone 参数。
+     * rclone 的 drive 与 onedrive 后端支持自定义 client_id/client_secret，
+     * 一并下发以便 rclone 在 token 过期时具备自刷新能力；dropbox 后端
+     * 不支持自定义应用，只下发 token。
+     */
+    private Map<String, String> buildOAuthRcloneParameters(String provider, Map<String, String> flat) {
+        Map<String, Object> token = new LinkedHashMap<>();
+        appendIfPresent(token, "access_token", flat);
+        appendIfPresent(token, "token_type", flat);
+        appendIfPresent(token, "refresh_token", flat);
+        appendIfPresent(token, "expiry", flat);
+        Map<String, String> params = new LinkedHashMap<>();
+        if (!token.isEmpty()) {
+            params.put("token", JsonSupport.toJson(token));
+        }
+        if ("ONEDRIVE".equals(provider) || "GDRIVE".equals(provider) || "GOOGLE_DRIVE".equals(provider)) {
+            oauthService.findAppCredentials(provider).ifPresent(app -> {
+                params.put("client_id", app.clientId());
+                params.put("client_secret", app.clientSecret());
+            });
+        }
+        return params;
+    }
+
+    private void appendIfPresent(Map<String, Object> token, String key, Map<String, String> source) {
+        String value = source.get(key);
+        if (value != null && !value.isBlank()) {
+            token.put(key, value);
+        }
+    }
+
+    /**
+     * 根据 account ID 生成 rclone remote 名称。
+     */
+    String toRemoteName(StorageExternalAccount account) {
+        return "omni-" + account.getId().toString().replace("-", "").substring(0, 8);
+    }
+
+    /**
+     * 解析 rclone 文件系统标识。
+     */
+    String resolveFs(StorageExternalAccount account) {
+        return toRemoteName(account) + ":";
+    }
+
+    /**
+     * 解密外部存储凭证，返回 rclone 参数 map。
+     */
+    private Map<String, String> decryptCredentials(StorageExternalAccount account) {
+        String plaintextJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
+        try {
+            Map<String, Object> json = JsonSupport.fromJson(
+                    plaintextJson, new TypeReference<Map<String, Object>>() {});
+            return json.entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> e.getValue() == null ? "" : e.getValue().toString()
+                    ));
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "凭证格式无效，无法解析");
+        }
+    }
+
+    /**
+     * 将 OmniNest provider 名映射为 rclone type。
+     */
+    private String toRcloneType(String provider) {
+        return switch (provider.toUpperCase()) {
+            case "S3", "MINIO" -> "s3";
+            case "WEBDAV" -> "webdav";
+            case "ONEDRIVE" -> "onedrive";
+            case "GDRIVE", "GOOGLE_DRIVE" -> "drive";
+            case "DROPBOX" -> "dropbox";
+            // 存量阿里云盘账户：rclone 主线无 alipan 后端，给出可执行的处置指引。
+            case "ALIYUN_DRIVE" -> throw new BusinessException(
+                    ErrorCode.PARAM_ERROR, "阿里云盘连接器已下架，请删除该连接后改用其他远程类型");
+            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的外部存储类型");
+        };
+    }
+
+    private void ensureImportTargetAllowed(UUID ownerUserId, SpaceType spaceType) {
+        if (spaceType == SpaceType.SHARED) {
+            sharedSpaceService.requireSharedWrite(ownerUserId);
+        }
+    }
+
+    private void ensureImportSizeWithinGuard(CreateImportTaskRequest request) {
+        // 体积在 Worker 获知 totalSize 后由 ensureImportBytesAllowed / ensureSingleFileAllowed 校验。
+    }
+
+    /**
+     * 按体积阈值拒绝导入（Worker 侧在获知 totalSize 后调用）。
+     *
+     * @param totalBytes 预估或实际总字节
+     */
+    public void ensureImportBytesAllowed(long totalBytes) {
+        long maxTotal = importProperties.getMaxTotalBytes();
+        if (maxTotal > 0 && totalBytes > maxTotal) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "导入总量超过限制，请改用本地媒体目录或减小导入范围");
+        }
+    }
+
+    /**
+     * 拒绝超大单文件导入。
+     *
+     * @param fileBytes 单文件字节数
+     */
+    public void ensureSingleFileAllowed(long fileBytes) {
+        long maxFile = importProperties.getMaxFileBytes();
+        if (maxFile > 0 && fileBytes > maxFile) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "单文件超过导入大小限制，请将大体积内容放入本地媒体目录");
+        }
+    }
+
+    private StorageExternalAccount findAccount(UUID ownerUserId, UUID accountId) {
+        return accountRepository.findByIdAndOwnerUserId(accountId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
+    }
+
+    private void ensureActive(StorageExternalAccount account) {
+        if (!ExternalStorageStatus.ACTIVE.getValue().equals(account.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "外部存储账户已禁用");
+        }
+    }
+
+    /**
+     * 拼接远端相对路径：非递归列举只返回条目名，二级目录必须带上父级前缀，
+     * 否则再次浏览或导入会被当成根目录下的同名条目。
+     */
+    private String joinRemotePath(String remote, String name) {
+        return remote == null || remote.isBlank() ? name : remote + "/" + name;
+    }
+
+    private String normalizePath(String path) {
+        if (path == null || path.isBlank() || path.equals("/")) {
+            return "";
+        }
+        String normalized = path.startsWith("/") ? path.substring(1) : path;
+        normalized = normalized.endsWith("/") ? normalized.substring(0, normalized.length() - 1) : normalized;
+        if (normalized.contains("..")) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "路径不允许包含 ..");
+        }
+        return normalized;
+    }
+
+    private String extractFileName(String sourcePath) {
+        String normalized = normalizePath(sourcePath);
+        int lastSlash = normalized.lastIndexOf('/');
+        return lastSlash < 0 ? normalized : normalized.substring(lastSlash + 1);
+    }
+
+    private ImportTaskDto toImportTaskDto(StorageImportTask task) {
+        return new ImportTaskDto(
+                task.getId(),
+                task.getTaskId(),
+                task.getExternalAccountId(),
+                task.getSourcePath(),
+                task.getSourceKind(),
+                task.getFileName(),
+                task.getTotalBytes(),
+                task.getTransferredBytes(),
+                task.getSpeedBytes(),
+                task.getTotalFiles(),
+                task.getCompletedFiles(),
+                task.getCurrentFileName(),
+                task.getStatus(),
+                task.getErrorSummary(),
+                task.getCompletedFileId(),
+                task.getCreatedAt(),
+                task.getUpdatedAt()
+        );
+    }
+
+    private ImportSourceKind resolveSourceKind(String sourceKind) {
+        try {
+            return ImportSourceKind.fromValue(
+                    sourceKind == null || sourceKind.isBlank()
+                            ? ImportSourceKind.FILE.getValue()
+                            : sourceKind
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "导入源类型不合法");
+        }
+    }
+
+    private SpaceType resolveSpaceType(String spaceType) {
+        try {
+            return SpaceType.fromValue(
+                    spaceType == null || spaceType.isBlank()
+                            ? SpaceType.PERSONAL.getValue()
+                            : spaceType
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "空间类型不合法");
+        }
+    }
+
+    private UUID systemTaskId(StorageImportTask task) {
+        return task.getTaskId() == null ? task.getId() : task.getTaskId();
+    }
+}

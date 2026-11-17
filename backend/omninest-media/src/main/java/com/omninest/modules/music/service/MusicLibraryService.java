@@ -1,0 +1,957 @@
+package com.omninest.modules.music.service;
+
+import com.omninest.common.access.SharedSpaceAccessQuery;
+import com.omninest.common.api.PageClamps;
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.util.LikePatterns;
+import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.service.FilePurgeOrigin;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.music.config.MusicLibraryProperties;
+import com.omninest.modules.music.domain.MusicAlbum;
+import com.omninest.modules.music.domain.MusicArtist;
+import com.omninest.modules.music.domain.MusicFavorite;
+import com.omninest.modules.music.domain.MusicPlayHistory;
+import com.omninest.modules.music.domain.MusicTrack;
+import com.omninest.modules.music.dto.MusicDtos.MusicAlbumDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicArtistDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicDashboardDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryRequest;
+import com.omninest.modules.music.dto.MusicDtos.MusicRecentItemDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryDto;
+import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
+import com.omninest.modules.music.dto.MusicDtos.MusicSearchResultDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicTrackDto;
+import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
+import com.omninest.modules.music.repository.MusicAlbumRepository;
+import com.omninest.modules.music.repository.MusicArtistRepository;
+import com.omninest.modules.music.repository.MusicFavoriteRepository;
+import com.omninest.modules.music.repository.MusicPlayHistoryRepository;
+import com.omninest.modules.music.repository.MusicTrackRepository;
+import com.omninest.modules.music.service.platform.MusicPlatform;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 提供本地音乐曲库查询、收藏、历史和资源转换能力。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class MusicLibraryService {
+    /** 曲库三端点允许的动态排序字段白名单。 */
+    private static final Set<String> TRACK_SORT_FIELDS = Set.of("title", "artistName", "updatedAt");
+    private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "title");
+    private static final Set<String> ARTIST_SORT_FIELDS = Set.of("name");
+
+    private final MusicTrackRepository trackRepository;
+    private final MusicAlbumRepository albumRepository;
+    private final MusicArtistRepository artistRepository;
+    private final MusicFavoriteRepository favoriteRepository;
+    private final MusicPlayHistoryRepository playHistoryRepository;
+    private final FileDeletionService fileDeletionService;
+    private final FileQueryService fileQueryService;
+    private final FileLifecycleGuard fileLifecycleGuard;
+    private final ReadThroughCache readThroughCache;
+    private final MediaSyncEventService syncEventService;
+    private final MusicLibraryProperties musicLibraryProperties;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
+
+    private Duration playHistoryRetention() {
+        int days = musicLibraryProperties.getHistoryRetentionDays();
+        return Duration.ofDays(Math.max(1, days));
+    }
+
+    /**
+     * 曲库查询的共享空间范围。
+     *
+     * <p>共享空间总开关关闭或角色缺少 CAN_BROWSE 时返回 {@code null}，仓储只查个人曲目，
+     * 避免列表还能看到共享音乐、点开却被文件守卫拒绝。</p>
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 可浏览时返回 SHARED，否则返回 null
+     */
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
+    }
+
+    @Transactional(readOnly = true)
+    public MusicDashboardDto dashboard(UUID ownerUserId) {
+        String cacheKey = "omninest:dashboard:music:" + ownerUserId;
+        return readThroughCache.getOrLoad(cacheKey, Duration.ofMinutes(3),
+                () -> loadDashboard(ownerUserId),
+                MusicDashboardDto.class);
+    }
+
+    /**
+     * 从数据库加载音乐仪表盘数据。
+     *
+     * <p>计数与“最近更新/高频”榜单必须与列表页使用同一可见性口径（个人 + 共享），
+     * 否则共享空间音乐在歌曲/专辑标签页可见，首页却显示 0 首 0 张。</p>
+     */
+    private MusicDashboardDto loadDashboard(UUID ownerUserId) {
+        SpaceType sharedType = sharedVisibility(ownerUserId);
+        Pageable top12 = PageRequest.of(0, 12);
+        return new MusicDashboardDto(
+                trackRepository.countVisibleToUser(ownerUserId, sharedType),
+                albumRepository.countVisibleActive(ownerUserId, sharedType),
+                artistRepository.countVisibleActive(ownerUserId, sharedType),
+                playHistoryRepository.countByOwnerUserId(ownerUserId),
+                toTrackSummaryDtos(ownerUserId, trackRepository.findTopVisibleByUpdatedAtDesc(
+                        ownerUserId, sharedType, top12)),
+                albumRepository.findTopVisibleActiveByUpdatedAtDesc(ownerUserId, sharedType, top12).stream()
+                        .map(this::toAlbumDto)
+                        .toList(),
+                artistRepository.findTopVisibleActiveByTrackCountDesc(ownerUserId, sharedType, top12).stream()
+                        .map(this::toArtistDto)
+                        .toList()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MusicTrackDto> tracks(UUID ownerUserId, int page, int size, String sort) {
+        Page<MusicTrack> result = trackRepository.findTracksVisibleToUser(
+                ownerUserId,
+                sharedVisibility(ownerUserId),
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                        resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
+        return new PageImpl<>(
+                toTrackSummaryDtos(ownerUserId, result.getContent()),
+                result.getPageable(),
+                result.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MusicAlbumDto> albums(UUID ownerUserId, int page, int size, String sort) {
+        return albumRepository
+                .findVisibleActiveAlbums(
+                        ownerUserId,
+                        sharedVisibility(ownerUserId),
+                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                                resolveSort(sort, ALBUM_SORT_FIELDS, Sort.by(Sort.Direction.DESC, "updatedAt"))))
+                .map(this::toAlbumDto);
+    }
+
+    /**
+     * 查询用户专辑内全部曲目，用于播放队列按来源全量重建。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param albumId 专辑 ID
+     * @return 专辑曲目，按碟号、音轨号排序
+     */
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> albumTracks(UUID ownerUserId, UUID albumId) {
+        MusicAlbum album = requireVisibleAlbum(ownerUserId, albumId);
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleAlbumTracks(
+                ownerUserId, sharedVisibility(ownerUserId), album.getId()));
+    }
+
+    /**
+     * 分页查询专辑曲目，供详情列表滚动加载；播放队列按来源重建仍走全量端点。
+     */
+    @Transactional(readOnly = true)
+    public Page<MusicTrackDto> albumTracksPage(UUID ownerUserId, UUID albumId, int page, int size) {
+        MusicAlbum album = requireVisibleAlbum(ownerUserId, albumId);
+        Page<MusicTrack> trackPage = trackRepository.findVisibleAlbumTracksPage(
+                ownerUserId, sharedVisibility(ownerUserId), album.getId(), trackPageRequest(page, size));
+        return new PageImpl<>(
+                toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
+                trackPage.getPageable(),
+                trackPage.getTotalElements()
+        );
+    }
+
+    /**
+     * 查询用户歌手内全部曲目，用于播放队列按来源全量重建。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param artistId 歌手 ID
+     * @return 歌手曲目，按专辑名、碟号、音轨号排序
+     */
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> artistTracks(UUID ownerUserId, UUID artistId) {
+        MusicArtist artist = requireVisibleArtist(ownerUserId, artistId);
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleArtistTracks(
+                ownerUserId, sharedVisibility(ownerUserId), artist.getId()));
+    }
+
+    /**
+     * 分页查询艺术家曲目，供详情列表滚动加载；播放队列按来源重建仍走全量端点。
+     */
+    @Transactional(readOnly = true)
+    public Page<MusicTrackDto> artistTracksPage(UUID ownerUserId, UUID artistId, int page, int size) {
+        MusicArtist artist = requireVisibleArtist(ownerUserId, artistId);
+        Page<MusicTrack> trackPage = trackRepository.findVisibleArtistTracksPage(
+                ownerUserId, sharedVisibility(ownerUserId), artist.getId(), trackPageRequest(page, size));
+        return new PageImpl<>(
+                toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
+                trackPage.getPageable(),
+                trackPage.getTotalElements()
+        );
+    }
+
+    /// 曲目分页请求：排序由各分页查询自带，此处只钳制页码与页长。
+    private Pageable trackPageRequest(int page, int size) {
+        return PageRequest.of(Math.max(page, 0), Math.max(size, 1));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MusicArtistDto> artists(UUID ownerUserId, int page, int size, String sort) {
+        return artistRepository
+                .findVisibleActiveArtists(
+                        ownerUserId,
+                        sharedVisibility(ownerUserId),
+                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                                resolveSort(sort, ARTIST_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "name"))))
+                .map(this::toArtistDto);
+    }
+
+    /**
+     * 专辑详情放行判据：本人名下，或共享空间内存在可见曲目；其余按不存在处理防枚举。
+     */
+    private MusicAlbum requireVisibleAlbum(UUID userId, UUID albumId) {
+        MusicAlbum album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
+        if (album.getOwnerUserId().equals(userId)) {
+            return album;
+        }
+        SpaceType sharedType = sharedVisibility(userId);
+        if (sharedType != null && trackRepository.existsVisibleAlbumTrack(userId, sharedType, albumId)) {
+            return album;
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在");
+    }
+
+    /**
+     * 歌手详情放行判据：本人名下，或共享空间内存在可见曲目；其余按不存在处理防枚举。
+     */
+    private MusicArtist requireVisibleArtist(UUID userId, UUID artistId) {
+        MusicArtist artist = artistRepository.findById(artistId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
+        if (artist.getOwnerUserId().equals(userId)) {
+            return artist;
+        }
+        SpaceType sharedType = sharedVisibility(userId);
+        if (sharedType != null && trackRepository.existsVisibleArtistTrack(userId, sharedType, artistId)) {
+            return artist;
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在");
+    }
+
+    /**
+     * 将逗号分隔的排序参数解析为受白名单约束的 Sort，非法字段回退默认排序。
+     */
+    private Sort resolveSort(String sort, Set<String> allowedFields, Sort fallback) {
+        if (sort == null || sort.isBlank()) {
+            return fallback;
+        }
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        if (!allowedFields.contains(field)) {
+            return fallback;
+        }
+        Sort.Direction direction = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return Sort.by(direction, field);
+    }
+
+    /**
+     * 查询指定艺术家下至少包含一个活动曲目的专辑，按更新时间倒序。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param artistId 艺术家 ID
+     * @return 专辑列表
+     */
+    @Transactional(readOnly = true)
+    public List<MusicAlbumDto> artistAlbums(UUID ownerUserId, UUID artistId) {
+        return albumRepository.findVisibleActiveAlbumsByArtist(
+                        ownerUserId, sharedVisibility(ownerUserId), artistId).stream()
+                .map(this::toAlbumDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> favorites(UUID ownerUserId) {
+        List<UUID> trackIds = favoriteRepository.findFavoriteTrackIdsByOwnerUserId(ownerUserId);
+        if (trackIds.isEmpty()) {
+            return List.of();
+        }
+        return toTrackSummaryDtos(ownerUserId, orderByPreferred(trackIds,
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds)));
+    }
+
+    /**
+     * 按期望顺序重排查询结果：批量可见性查询只保证命中集合，不保证返回次序，
+     * 收藏与最近播放这类列表必须以用户动作时间排序。
+     */
+    private static List<MusicTrack> orderByPreferred(List<UUID> preferredIds, List<MusicTrack> tracks) {
+        Map<UUID, MusicTrack> index = tracks.stream()
+                .collect(Collectors.toMap(MusicTrack::getId, track -> track, (first, second) -> first));
+        return preferredIds.stream()
+                .map(index::get)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> recent(UUID ownerUserId) {
+        List<UUID> trackIds = playHistoryRepository
+                .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                        ownerUserId,
+                        Instant.now().minus(playHistoryRetention())
+                )
+                .stream()
+                .map(MusicPlayHistory::getTrackId)
+                .filter(trackId -> trackId != null)
+                .distinct()
+                .toList();
+        if (trackIds.isEmpty()) {
+            return List.of();
+        }
+        return toTrackSummaryDtos(ownerUserId, orderByPreferred(trackIds,
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds)));
+    }
+
+    /**
+     * 查询本地和在线音乐的统一最近播放列表。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 按最后播放时间倒序排列的去重列表
+     */
+    @Transactional(readOnly = true)
+    public List<MusicRecentItemDto> recentItems(UUID ownerUserId) {
+        LinkedHashMap<String, MusicPlayHistory> latestByKey = new LinkedHashMap<>();
+        for (MusicPlayHistory history : playHistoryRepository
+                .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                        ownerUserId,
+                        Instant.now().minus(playHistoryRetention())
+                )) {
+            latestByKey.putIfAbsent(history.getPlayableKey(), history);
+        }
+        if (latestByKey.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> localTrackIds = latestByKey.values().stream()
+                .map(MusicPlayHistory::getTrackId)
+                .filter(trackId -> trackId != null)
+                .toList();
+        Map<UUID, MusicTrack> localTracks = trackRepository
+                .findTracksVisibleToUserByIds(ownerUserId, sharedVisibility(ownerUserId), localTrackIds)
+                .stream()
+                .collect(Collectors.toMap(MusicTrack::getId, track -> track));
+        Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, localTrackIds);
+        List<MusicRecentItemDto> results = new ArrayList<>();
+        for (MusicPlayHistory history : latestByKey.values()) {
+            if (history.getTrackId() != null) {
+                MusicTrack track = localTracks.get(history.getTrackId());
+                if (track != null) {
+                    results.add(new MusicRecentItemDto(
+                            history.getPlayableKey(),
+                            toTrackSummaryDto(track, favoriteTrackIds.contains(track.getId())),
+                            null,
+                            history.getPlayedAt()
+                    ));
+                }
+                continue;
+            }
+            results.add(new MusicRecentItemDto(
+                    history.getPlayableKey(),
+                    null,
+                    toOnlineTrackDto(history),
+                    history.getPlayedAt()
+            ));
+        }
+        return List.copyOf(results);
+    }
+
+    @Transactional(readOnly = true)
+    public MusicSearchResultDto search(UUID ownerUserId, String keyword) {
+        String trimmed = keyword == null ? "" : keyword.trim();
+        if (trimmed.isEmpty()) {
+            return new MusicSearchResultDto(List.of(), List.of(), List.of());
+        }
+        // 查询词是字面量文本：仓储用 concat 拼模式，所以这里只转义不包裹，
+        // 并且三条查询都要声明 escape 符。
+        String normalized = LikePatterns.escapeSpecials(trimmed);
+        return new MusicSearchResultDto(
+                toTrackSummaryDtos(ownerUserId, trackRepository.searchVisibleToUser(
+                        ownerUserId,
+                        sharedVisibility(ownerUserId),
+                        normalized,
+                        PageRequest.of(0, 20)
+                )),
+                albumRepository
+                        .searchVisibleActiveAlbums(
+                                ownerUserId,
+                                sharedVisibility(ownerUserId),
+                                normalized
+                        )
+                        .stream()
+                        .map(this::toAlbumDto)
+                        .toList(),
+                artistRepository
+                        .searchVisibleActiveArtists(
+                                ownerUserId,
+                                sharedVisibility(ownerUserId),
+                                normalized
+                        )
+                        .stream()
+                        .map(this::toArtistDto)
+                        .toList()
+        );
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MusicTrackDto favorite(UUID ownerUserId, UUID trackId) {
+        log.info("收藏曲目: trackId={}, userId={}", trackId, ownerUserId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        boolean created = favoriteRepository.findByOwnerUserIdAndTrackId(ownerUserId, trackId).isEmpty();
+        if (created) {
+            MusicFavorite favorite = new MusicFavorite();
+            favorite.setOwnerUserId(ownerUserId);
+            favorite.setTrackId(trackId);
+            favoriteRepository.save(favorite);
+            recordTrackEvent(ownerUserId, track, SyncAction.UPDATED, Map.of("favorite", true));
+        }
+        return toTrackDto(track, true);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MusicTrackDto removeFavorite(UUID ownerUserId, UUID trackId) {
+        log.info("取消收藏: trackId={}, userId={}", trackId, ownerUserId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        favoriteRepository.deleteByOwnerUserIdAndTrackId(ownerUserId, trackId);
+        recordTrackEvent(ownerUserId, track, SyncAction.UPDATED, Map.of("favorite", false));
+        return toTrackDto(track, false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void recordPlayHistory(UUID ownerUserId, UUID trackId, MusicPlayHistoryRequest request) {
+        log.debug("记录播放历史: trackId={}, userId={}", trackId, ownerUserId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(ownerUserId);
+        history.setTrackId(trackId);
+        history.setPlayableKey("local:" + trackId);
+        history.setTitle(track.getTitle());
+        history.setArtistName(track.getArtistName());
+        history.setAlbumTitle(track.getAlbumTitle());
+        history.setDurationSeconds(track.getDurationSeconds());
+        history.setPlayDuration(request == null ? null : request.playDuration());
+        history.setPlayedAt(Instant.now());
+        savePlayHistory(ownerUserId, history);
+    }
+
+    /**
+     * 记录本地或在线音乐播放历史。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param request 类型化播放历史请求
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void recordPlayHistory(UUID ownerUserId, RecordMusicPlayHistoryRequest request) {
+        String playableKey = request.playableKey().trim();
+        if (playableKey.startsWith("local:")) {
+            recordLocalHistory(ownerUserId, playableKey, request);
+            return;
+        }
+        if (playableKey.startsWith("online:")) {
+            recordOnlineHistory(ownerUserId, playableKey, request);
+            return;
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR, "音乐播放键格式不正确");
+    }
+
+    /**
+     * 分页查询用户播放历史，按播放时间倒序。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param page 页码
+     * @param size 每页数量
+     * @return 播放历史分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MusicPlayHistoryDto> playHistory(UUID ownerUserId, int page, int size) {
+        Instant cutoff = Instant.now().minus(playHistoryRetention());
+        var result = playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                ownerUserId,
+                cutoff,
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size))
+        );
+        // 本地历史行写入时不存封面引用，按曲目实时解析（一次批量，避免逐行查询）。
+        Map<UUID, MusicTrack> localTracks = localTracksByIds(ownerUserId, result.getContent());
+        return result.map(history -> new MusicPlayHistoryDto(
+                history.getPlayableKey(),
+                history.getTitle(),
+                history.getArtistName(),
+                history.getAlbumTitle(),
+                historyCoverUrl(history, localTracks),
+                history.getDurationSeconds(),
+                history.getPlayDuration(),
+                history.getPlatform(),
+                history.getExternalSongId(),
+                history.getPlayedAt()
+        ));
+    }
+
+    private Map<UUID, MusicTrack> localTracksByIds(UUID ownerUserId, List<MusicPlayHistory> histories) {
+        List<UUID> trackIds = histories.stream()
+                .map(MusicPlayHistory::getTrackId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (trackIds.isEmpty()) {
+            return Map.of();
+        }
+        return trackRepository.findTracksVisibleToUserByIds(ownerUserId, sharedVisibility(ownerUserId), trackIds)
+                .stream()
+                .collect(Collectors.toMap(MusicTrack::getId, track -> track));
+    }
+
+    /**
+     * 历史行封面取值：本地行从曲目实时解析（曲目可能已更换封面），
+     * 曲目已删除或在线行保留存量值（在线行为 CDN 地址，本地行为空）。
+     */
+    private String historyCoverUrl(MusicPlayHistory history, Map<UUID, MusicTrack> localTracks) {
+        if (history.getTrackId() == null) {
+            return history.getCoverUrl();
+        }
+        MusicTrack track = localTracks.get(history.getTrackId());
+        return track == null ? history.getCoverUrl() : coverUrlForTrack(track);
+    }
+
+    @Transactional(readOnly = true)
+    public MusicTrackDto getLastPlayed(UUID ownerUserId) {
+        return playHistoryRepository
+                .findFirstByOwnerUserIdAndTrackIdIsNotNullOrderByPlayedAtDesc(ownerUserId)
+                .flatMap(history -> trackRepository
+                        .findTracksVisibleToUserByIds(
+                                ownerUserId, sharedVisibility(ownerUserId), List.of(history.getTrackId()))
+                        .stream()
+                        .findFirst())
+                .map(track -> toTrackDto(
+                        track,
+                        favoriteRepository.existsByOwnerUserIdAndTrackId(ownerUserId, track.getId())
+                ))
+                .orElse(null);
+    }
+
+    private void recordLocalHistory(
+            UUID ownerUserId,
+            String playableKey,
+            RecordMusicPlayHistoryRequest request
+    ) {
+        UUID trackId;
+        try {
+            trackId = UUID.fromString(playableKey.substring("local:".length()));
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "本地音乐播放键格式不正确");
+        }
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(ownerUserId);
+        history.setTrackId(trackId);
+        history.setPlayableKey("local:" + trackId);
+        history.setTitle(track.getTitle());
+        history.setArtistName(track.getArtistName());
+        history.setAlbumTitle(track.getAlbumTitle());
+        history.setDurationSeconds(track.getDurationSeconds());
+        history.setPlayDuration(request.playDuration());
+        history.setPlayedAt(Instant.now());
+        savePlayHistory(ownerUserId, history);
+    }
+
+    private void recordOnlineHistory(
+            UUID ownerUserId,
+            String playableKey,
+            RecordMusicPlayHistoryRequest request
+    ) {
+        String[] segments = playableKey.split(":", 3);
+        if (segments.length != 3 || segments[2].isBlank()
+                || request.title() == null || request.title().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "在线音乐播放历史参数不正确");
+        }
+        MusicPlatform platform = MusicPlatform.fromApiValue(segments[1]);
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(ownerUserId);
+        history.setPlayableKey("online:" + platform.apiValue() + ":" + segments[2]);
+        history.setPlatform(platform.apiValue());
+        history.setExternalSongId(segments[2]);
+        history.setTitle(request.title().trim());
+        history.setArtistName(trimToNull(request.artistName()));
+        history.setAlbumTitle(trimToNull(request.albumTitle()));
+        history.setCoverUrl(trimToNull(request.coverUrl()));
+        history.setDurationSeconds(request.durationSeconds());
+        history.setMediaMid(trimToNull(request.mediaMid()));
+        history.setPlayDuration(request.playDuration());
+        history.setPlayedAt(Instant.now());
+        savePlayHistory(ownerUserId, history);
+    }
+
+    private void savePlayHistory(UUID ownerUserId, MusicPlayHistory history) {
+        playHistoryRepository.save(history);
+        // 播放历史改变音乐仪表盘的历史计数与最近播放列表，需失效缓存。
+        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.MUSIC,
+                "MUSIC_PLAY_HISTORY",
+                history.getPlayableKey(),
+                SyncAction.UPDATED,
+                history.getVersion(),
+                Map.of()
+        );
+    }
+
+    /**
+     * 清理全部用户过期的音乐播放历史。
+     *
+     * <p>过期清理由调度器统一执行，不再挂在每次记录播放历史的事务里，
+     * 避免单曲记录路径反复执行全表范围的删除。</p>
+     *
+     * @return 删除条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int cleanupExpiredPlayHistory() {
+        int deleted = playHistoryRepository.deleteAllExpiredHistory(
+                Instant.now().minus(playHistoryRetention()));
+        if (deleted > 0) {
+            log.info("已清理过期音乐播放历史: count={}", deleted);
+        }
+        return deleted;
+    }
+
+    private OnlineTrackDto toOnlineTrackDto(MusicPlayHistory history) {
+        Map<String, Object> extra = history.getMediaMid() == null
+                ? Map.of()
+                : Map.of("mediaMid", history.getMediaMid());
+        return new OnlineTrackDto(
+                history.getPlatform(),
+                history.getExternalSongId(),
+                history.getTitle(),
+                fallback(history.getArtistName(), "Unknown Artist"),
+                fallback(history.getAlbumTitle(), "Unknown Album"),
+                history.getCoverUrl(),
+                history.getDurationSeconds(),
+                null,
+                // 缩略图尺寸规则属于图片来源平台，播放历史只保留原始封面地址。
+                extra,
+                null
+        );
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public UUID deleteTrack(UUID ownerUserId, UUID trackId) {
+        return deleteTrack(ownerUserId, trackId, false);
+    }
+
+    /**
+     * 创建本地音乐曲目永久删除任务。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param trackId 曲目 ID
+     * @param cascade 是否允许级联清理其他业务引用
+     * @return 任务 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UUID deleteTrack(UUID ownerUserId, UUID trackId, boolean cascade) {
+        log.info("删除音乐曲目: trackId={}, userId={}", trackId, ownerUserId);
+        MusicTrack track = requireTrack(ownerUserId, trackId);
+        UUID taskId = fileDeletionService.deletePermanently(
+                ownerUserId,
+                track.getFileNodeId(),
+                cascade,
+                new FilePurgeOrigin("MUSIC", trackId),
+                null
+        );
+        log.info("音乐曲目永久删除任务已创建: taskId={}, trackId={}, userId={}",
+                taskId, trackId, ownerUserId);
+        return taskId;
+    }
+
+    @Transactional(readOnly = true)
+    public MusicTrack requireTrack(UUID ownerUserId, UUID trackId) {
+        return trackRepository.findByIdAndOwnerUserId(trackId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
+    }
+
+    /**
+     * 读取曲目：所有者本人，或共享空间内可读该文件的成员。
+     *
+     * <p>写操作（元数据、删除）仍走 {@link #requireTrack}，只有所有者可修改；
+     * 列表已按共享空间放行，详情/收藏/播放历史必须用同一口径，否则家庭共享的
+     * 曲目会在列表可见、点开 404。</p>
+     */
+    @Transactional(readOnly = true)
+    public MusicTrack requireReadableTrack(UUID requesterUserId, UUID trackId) {
+        MusicTrack track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
+        if (track.getOwnerUserId().equals(requesterUserId)) {
+            return track;
+        }
+        try {
+            fileLifecycleGuard.requireReadable(requesterUserId, track.getFileNodeId());
+            return track;
+        } catch (BusinessException exception) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在");
+        }
+    }
+
+    public MusicTrackDto toTrackDto(MusicTrack track, boolean favorite) {
+        return new MusicTrackDto(
+                track.getId(),
+                track.getFileNodeId(),
+                track.getTitle(),
+                fallback(track.getArtistName(), "Unknown Artist"),
+                fallback(track.getAlbumTitle(), "Unknown Album"),
+                track.getDurationSeconds(),
+                track.getFormat(),
+                track.getBitrate(),
+                track.getSampleRate(),
+                track.getFileSize(),
+                track.getLyricsRaw(),
+                track.getLyricsTranslation(),
+                track.getGenre(),
+                coverUrlForTrack(track),
+                favorite,
+                track.getUpdatedAt(),
+                track.getHue(),
+                MusicMetadataService.manualCoverUrl(track),
+                MusicMetadataService.hasManualOverride(track)
+        );
+    }
+
+    /**
+     * 列表投影：不携带歌词大字段，播放或详情接口再按需取词。
+     *
+     * @param track 曲目实体
+     * @param favorite 是否已收藏
+     * @return 轻量曲目 DTO
+     */
+    public MusicTrackDto toTrackSummaryDto(MusicTrack track, boolean favorite) {
+        return new MusicTrackDto(
+                track.getId(),
+                track.getFileNodeId(),
+                track.getTitle(),
+                fallback(track.getArtistName(), "Unknown Artist"),
+                fallback(track.getAlbumTitle(), "Unknown Album"),
+                track.getDurationSeconds(),
+                track.getFormat(),
+                track.getBitrate(),
+                track.getSampleRate(),
+                track.getFileSize(),
+                null,
+                null,
+                track.getGenre(),
+                coverUrlForTrack(track),
+                favorite,
+                track.getUpdatedAt(),
+                track.getHue(),
+                MusicMetadataService.manualCoverUrl(track),
+                MusicMetadataService.hasManualOverride(track)
+        );
+    }
+
+    /**
+     * 查询单曲完整投影（含歌词），供播放前补拉与详情展示。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param trackId 曲目 ID
+     * @return 含歌词的曲目 DTO
+     */
+    @Transactional(readOnly = true)
+    public MusicTrackDto getTrack(UUID ownerUserId, UUID trackId) {
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        boolean favorite = favoriteRepository.existsByOwnerUserIdAndTrackId(ownerUserId, trackId);
+        return toTrackDto(track, favorite);
+    }
+
+    /**
+     * 本地曲目封面解析链：封面文件稳定 API 路径优先，缺省回退提供方
+     * 元数据（内嵌数据地址、外部链接）。
+     *
+     * @param track 曲目实体
+     * @return 封面地址，无可用来源时为空值
+     */
+    private String coverUrlForTrack(MusicTrack track) {
+        String manualCoverUrl = MusicMetadataService.manualCoverUrl(track);
+        if (manualCoverUrl != null && !manualCoverUrl.isBlank()) {
+            return manualCoverUrl;
+        }
+        return firstText(
+                resolveCoverApiPath(track.getCoverFileId()),
+                firstText(
+                        metadataText(track.getProviderMetadata(), "coverDataUrl"),
+                        metadataText(track.getProviderMetadata(), "coverUrl")
+                )
+        );
+    }
+
+    /**
+     * 批量转列表 DTO，并按当前用户回查收藏标记。
+     *
+     * <p>歌单等非曲库入口也需要这一口径，否则调用方只能把收藏状态写死成 false。</p>
+     */
+    public List<MusicTrackDto> toTrackSummaryDtos(UUID ownerUserId, List<MusicTrack> tracks) {
+        Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, tracks.stream().map(MusicTrack::getId).toList());
+        return tracks.stream()
+                .map(track -> toTrackSummaryDto(track, favoriteTrackIds.contains(track.getId())))
+                .toList();
+    }
+
+    private Set<UUID> favoriteTrackIds(UUID ownerUserId, Collection<UUID> trackIds) {
+        if (trackIds.isEmpty()) {
+            return Set.of();
+        }
+        return favoriteRepository.findByOwnerUserIdAndTrackIdIn(ownerUserId, trackIds).stream()
+                .map(MusicFavorite::getTrackId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private MusicAlbumDto toAlbumDto(MusicAlbum album) {
+        return new MusicAlbumDto(
+                album.getId(),
+                album.getTitle(),
+                fallback(album.getArtistName(), "Various Artists"),
+                firstText(
+                        resolveCoverApiPath(album.getCoverFileId()),
+                        metadataText(album.getProviderMetadata(), "coverUrl")
+                ),
+                album.getReleaseDate(),
+                album.getTotalDuration(),
+                album.getTrackCount(),
+                album.getUpdatedAt()
+        );
+    }
+
+    private MusicArtistDto toArtistDto(MusicArtist artist) {
+        return new MusicArtistDto(
+                artist.getId(),
+                artist.getName(),
+                firstText(
+                        resolveCoverApiPath(artist.getAvatarFileId()),
+                        metadataText(artist.getProviderMetadata(), "avatarUrl")
+                ),
+                artist.getTrackCount(),
+                artist.getAlbumCount(),
+                artist.getUpdatedAt()
+        );
+    }
+
+    /**
+     * 为音乐封面文件创建可直接渲染的短期下载地址。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param fileId 封面文件标识
+     * @return 短期下载地址，解析失败时返回空值
+     */
+    public String resolveCoverUrl(UUID ownerUserId, UUID fileId) {
+        if (ownerUserId == null || fileId == null) {
+            return null;
+        }
+        try {
+            return fileQueryService.createDownloadUrlAs(ownerUserId, fileId).downloadUrl();
+        } catch (RuntimeException ex) {
+            log.debug("音乐封面 URL 解析失败: fileId={}, message={}", fileId, ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 解析本地封面文件的稳定鉴权 API 路径，用于内嵌渲染场景。
+     *
+     * <p>路径不含签名与过期时间，客户端可按稳定 URL 缓存；访问时由
+     * 音乐封面端点校验归属并流式回源。签名 URL（{@link #resolveCoverUrl}）
+     * 保留给真正的下载语义，Photos 相册封面仍在使用该方法。
+     *
+     * @param fileId 封面文件标识
+     * @return 稳定 API 路径，文件标识为空时返回空值
+     */
+    public String resolveCoverApiPath(UUID fileId) {
+        if (fileId == null) {
+            return null;
+        }
+        return "/api/v1/music/covers/" + fileId;
+    }
+
+    private String fallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String firstText(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second == null || second.isBlank() ? null : second;
+    }
+
+    private String metadataText(Map<String, Object> metadata, String key) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        Object value = metadata.get(key);
+        if (value != null) {
+            return String.valueOf(value);
+        }
+        Object nested = metadata.get("musicbrainz");
+        if (nested instanceof Map<?, ?> nestedMap) {
+            Object nestedValue = nestedMap.get(key);
+            return nestedValue == null ? null : String.valueOf(nestedValue);
+        }
+        return null;
+    }
+
+    private void recordTrackEvent(
+            UUID ownerUserId,
+            MusicTrack track,
+            SyncAction action,
+            Map<String, Object> hints
+    ) {
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.MUSIC,
+                "MUSIC_TRACK",
+                track.getId().toString(),
+                action,
+                track.getVersion(),
+                hints
+        );
+    }
+}

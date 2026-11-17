@@ -1,0 +1,700 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/widgets/app_empty_state.dart';
+import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/domain/photo_album.dart';
+import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+
+part 'photo_album_detail_page_hosted.dart';
+
+/// 相册详情页面
+class PhotoAlbumDetailPage extends ConsumerWidget {
+  const PhotoAlbumDetailPage({required this.albumId, super.key});
+
+  final String albumId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detailAsync = ref.watch(photoAlbumDetailProvider(albumId));
+    final hosted = photosHostedForm(context);
+    // 托管形态由页面自补 scope：本路由未经 MobileHostedRoute 包裹。
+    return PhotoHostedScope(
+      child: Scaffold(
+        backgroundColor:
+            hosted ? Colors.transparent : context.photosColors.surface,
+        body: detailAsync.when(
+          data:
+              (detail) => _AlbumDetailBody(
+                album: detail.album,
+                photos: detail.photos,
+                albumId: albumId,
+              ),
+          error:
+              (error, stackTrace) =>
+                  hosted
+                      ? _HostedAlbumError(
+                        message:
+                            describeUserFacingError(
+                              error,
+                              l10n: AppLocalizations.of(context),
+                            ).displayMessage,
+                        onRetry:
+                            () => ref.invalidate(
+                              photoAlbumDetailProvider(albumId),
+                            ),
+                      )
+                      : AppErrorView(
+                        message:
+                            describeUserFacingError(
+                              error,
+                              l10n: AppLocalizations.of(context),
+                            ).displayMessage,
+                        onRetry:
+                            () => ref.invalidate(
+                              photoAlbumDetailProvider(albumId),
+                            ),
+                      ),
+          loading:
+              () => hosted ? const _HostedAlbumLoading() : const AppLoading(),
+        ),
+      ),
+    );
+  }
+}
+
+class _AlbumDetailBody extends ConsumerStatefulWidget {
+  const _AlbumDetailBody({
+    required this.album,
+    required this.photos,
+    required this.albumId,
+  });
+
+  final PhotoAlbum album;
+  final List<PhotoItem> photos;
+  final String albumId;
+
+  @override
+  ConsumerState<_AlbumDetailBody> createState() => _AlbumDetailBodyState();
+}
+
+class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
+  late List<PhotoItem> _photos;
+  int _page = 0;
+  bool _isLoadingMore = false;
+  Object? _loadMoreError;
+
+  /// 分页世代号：请求在途时相册被切换或详情被刷新，旧响应必须整份丢弃，
+  /// 否则它会把旧页数据拼进新列表并把 _page 覆写回旧值。
+  int _loadGeneration = 0;
+
+  /// 服务端已无更多数据：photoCount 是统计值，去重或口径差异都可能让
+  /// 「列表长度 < 统计值」恒成立，只靠它判断会触底死循环请求。
+  bool _reachedEnd = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _photos = List<PhotoItem>.of(widget.photos);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AlbumDetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 详情 Provider 刷新（增删照片后）以服务端首页为准并重置分页。
+    if (oldWidget.albumId != widget.albumId ||
+        !identical(oldWidget.photos, widget.photos)) {
+      _loadGeneration++;
+      _reachedEnd = false;
+      _photos = List<PhotoItem>.of(widget.photos);
+      _page = 0;
+      _isLoadingMore = false;
+      _loadMoreError = null;
+    }
+  }
+
+  bool get _hasMore => !_reachedEnd && _photos.length < widget.album.photoCount;
+
+  Future<void> _loadMorePhotos() async {
+    if (_isLoadingMore || !_hasMore) {
+      return;
+    }
+    final generation = _loadGeneration;
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreError = null;
+    });
+    try {
+      final nextPage = _page + 1;
+      final result = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .listAlbumPhotos(albumId: widget.albumId, page: nextPage);
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      final existingIds = _photos.map((photo) => photo.id).toSet();
+      setState(() {
+        _page = result.page;
+        final added = [
+          for (final photo in result.items)
+            if (existingIds.add(photo.id)) photo,
+        ];
+        _photos = [..._photos, ...added];
+        // 空页或整页都是已见过的 ID 都说明再翻也不会前进，停止触底请求。
+        _reachedEnd = result.items.isEmpty || added.isEmpty;
+        _isLoadingMore = false;
+      });
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreError = error;
+      });
+    }
+  }
+
+  /// 进入候选照片选择页；返回后刷新详情，无论是否新增都以服务端数据为准。
+  Future<void> _openAlbumPhotoPicker() async {
+    await context.push('/photos/albums/${widget.albumId}/add');
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(photoAlbumDetailProvider(widget.albumId));
+  }
+
+  /// 打开查看器：浏览范围 = 当前已加载的相册照片序列。
+  void _openPhotoViewer(PhotoItem photo) {
+    ref
+        .read(photoBrowseScopeProvider.notifier)
+        .set(_photos, PhotoBrowseSource.album, sourceKey: widget.album.id);
+    context.push('/photos/${photo.id}');
+  }
+
+  /// 以相册当前序列启动沉浸幻灯片。
+  void _startSlideshow() {
+    final photos = _photos;
+    if (photos.isEmpty) {
+      return;
+    }
+    // 声明影集来源：缺省会被按全库语义处理，播放列表在 build 时
+    // 被全库照片整体替换，越出影集范围。
+    context.push(
+      '/photos/slideshow',
+      extra: {
+        'photos': photos,
+        'initialIndex': 0,
+        'source': PhotoBrowseSource.album,
+        'sourceKey': widget.albumId,
+      },
+    );
+  }
+
+  /// 滚动到底部时预取下一页。
+  bool _handleGridScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical ||
+        notification.metrics.extentAfter >= 480) {
+      return false;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadMorePhotos());
+    });
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return buildHostedAlbumDetail(context);
+    }
+    final photos = _photos;
+    final album = widget.album;
+    final albumId = widget.albumId;
+    return Column(
+      children: [
+        // 顶部栏
+        _AlbumTopBar(
+          album: album,
+          onBack: () => context.popOrGo('/photos'),
+          onDelete: () => _confirmDelete(context, ref),
+          onSlideshow: _startSlideshow,
+          onShare: () => _showShareDialog(context, ref, albumId),
+          onAddPhotos: () => unawaited(_openAlbumPhotoPicker()),
+        ),
+        // 照片网格
+        Expanded(
+          child:
+              photos.isEmpty
+                  ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppEmptyState(
+                          message:
+                              AppLocalizations.of(context).photosAlbumEmpty,
+                          icon: Icons.photo_library_outlined,
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed: () => unawaited(_openAlbumPhotoPicker()),
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: Text(
+                            AppLocalizations.of(context).photosAddPhotos,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                  : NotificationListener<ScrollNotification>(
+                    onNotification: _handleGridScrollNotification,
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                          sliver: SliverLayoutBuilder(
+                            builder: (context, constraints) {
+                              final columns =
+                                  constraints.crossAxisExtent >= 1600
+                                      ? 7
+                                      : constraints.crossAxisExtent >= 1300
+                                      ? 6
+                                      : constraints.crossAxisExtent >= 1000
+                                      ? 5
+                                      : constraints.crossAxisExtent >= 700
+                                      ? 4
+                                      : constraints.crossAxisExtent >= 500
+                                      ? 3
+                                      : 2;
+                              return SliverGrid.builder(
+                                itemCount:
+                                    photos.length +
+                                    1 +
+                                    (_isLoadingMore || _loadMoreError != null
+                                        ? 1
+                                        : 0),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      crossAxisSpacing: 8,
+                                      mainAxisSpacing: 8,
+                                      childAspectRatio: 1,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  if (index == 0) {
+                                    return _AddPhotoTile(
+                                      onTap:
+                                          () => unawaited(
+                                            _openAlbumPhotoPicker(),
+                                          ),
+                                    );
+                                  }
+                                  if (index == photos.length + 1) {
+                                    return Center(
+                                      child:
+                                          _isLoadingMore
+                                              ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                              : TextButton(
+                                                onPressed:
+                                                    () => unawaited(
+                                                      _loadMorePhotos(),
+                                                    ),
+                                                child: Text(
+                                                  AppLocalizations.of(
+                                                    context,
+                                                  ).photosOperationFailed,
+                                                ),
+                                              ),
+                                    );
+                                  }
+                                  final photo = photos[index - 1];
+                                  return PhotoGridTile(
+                                    key: ValueKey(photo.id),
+                                    photo: photo,
+                                    onTap: () => _openPhotoViewer(photo),
+                                    onLongPress:
+                                        () => _confirmRemoveFromAlbum(
+                                          context,
+                                          ref,
+                                          photo,
+                                        ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await _confirmAlbumAction(
+      context,
+      title: l10n.photosDeleteAlbumTitle,
+      body: l10n.photosDeleteAlbumConfirm(widget.album.name),
+      confirmLabel: l10n.photosDelete,
+      destructive: true,
+    );
+    if (confirmed && context.mounted) {
+      try {
+        await ref
+            .read(photoCenterControllerProvider.notifier)
+            .deleteAlbum(widget.albumId);
+        if (context.mounted) {
+          context.pop();
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeletedAlbum(widget.album.name),
+            severity: OmniFeedbackSeverity.success,
+          );
+        }
+      } on Exception catch (error) {
+        if (context.mounted) {
+          showOmniFeedback(
+            context,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosDeleteFailed,
+              error,
+            ),
+            severity: OmniFeedbackSeverity.error,
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showShareDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String albumId,
+  ) async {
+    // 先加载现有分享链接
+    List<PhotoShareLink> shares = [];
+    try {
+      shares = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .listAlbumShares(albumId);
+    } on Exception catch (error) {
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
+
+    if (!context.mounted) return;
+
+    final result = await showPhotoShareDialog(
+      context,
+      title: AppLocalizations.of(context).photosShareAlbum,
+      shares: shares,
+      onRevoke:
+          (shareId) => ref
+              .read(photoCenterControllerProvider.notifier)
+              .revokeAlbumShare(shareId),
+      onRevokeAll:
+          () => ref
+              .read(photoCenterControllerProvider.notifier)
+              .revokeAllAlbumShares(albumId),
+      shareUrlOf: (share) async {
+        final baseUrl =
+            await ref.read(webShareBaseUrlResolverProvider).resolve();
+        return '$baseUrl/#/shared/photos/${share.token}';
+      },
+    );
+
+    if (!context.mounted) return;
+    if (result == null) return;
+    // 密码留空 = 显式创建无密码链接。
+    final (password, expiryOption) = result;
+    final expiresAt = resolveShareExpiry(expiryOption);
+
+    try {
+      final link = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createAlbumShare(
+            albumId,
+            password: password.isEmpty ? null : password,
+            expiresAt: expiresAt,
+          );
+      if (!context.mounted) return;
+      final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
+      if (!context.mounted) return;
+      // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取
+      // 服务器下发的对外 Web 地址，未配置时回退到客户端推导值。
+      final shareUrl = '$baseUrl/#/shared/photos/${link.token}';
+      // 令牌只在创建响应里回传明文：创建后立即复制，避免用户只剩一个一闪而过的提示。
+      final copied = await copyTextToClipboard(shareUrl);
+      if (!context.mounted) return;
+      showOmniFeedback(
+        context,
+        copied
+            ? AppLocalizations.of(context).filesCopiedClipboard
+            : AppLocalizations.of(context).photosShareLinkCreated(shareUrl),
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception catch (error) {
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          failureToast(
+            AppLocalizations.of(context),
+            AppLocalizations.of(context).photosShareLinkFailed,
+            error,
+          ),
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmRemoveFromAlbum(
+    BuildContext context,
+    WidgetRef ref,
+    PhotoItem photo,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await _confirmAlbumAction(
+      context,
+      title: l10n.photosRemoveFromAlbum,
+      body: l10n.photosRemoveFromAlbumConfirm(photo.title),
+      confirmLabel: l10n.photosRemove,
+    );
+    if (confirmed && context.mounted) {
+      try {
+        await ref
+            .read(photoCenterControllerProvider.notifier)
+            .removePhotoFromAlbum(albumId: widget.albumId, photoId: photo.id);
+        // 页面可能在等待期间被关闭，ref 失效前先终止。
+        if (!context.mounted) return;
+        // 刷新相册详情
+        ref.invalidate(photoAlbumDetailProvider(widget.albumId));
+        if (context.mounted) {
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosRemovedFromAlbum(photo.title),
+            severity: OmniFeedbackSeverity.success,
+          );
+        }
+      } on Exception catch (error) {
+        if (context.mounted) {
+          showOmniFeedback(
+            context,
+            failureToast(
+              AppLocalizations.of(context),
+              AppLocalizations.of(context).photosOperationFailed,
+              error,
+            ),
+            severity: OmniFeedbackSeverity.error,
+          );
+        }
+      }
+    }
+  }
+}
+
+/// 相册详情顶部栏
+/// 网格首格的“添加照片”卡片，点击进入候选照片选择页。
+class _AddPhotoTile extends StatelessWidget {
+  const _AddPhotoTile({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.photosColors.surfaceContainerHigh.withValues(
+            alpha: 0.55,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: context.photosColors.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 28,
+              color: context.photosColors.onSurfaceVariant,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              AppLocalizations.of(context).photosAddPhotos,
+              style: TextStyle(
+                color: context.photosColors.onSurfaceVariant,
+                fontSize: AppTypography.bodySmall,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AlbumTopBar extends StatelessWidget {
+  const _AlbumTopBar({
+    required this.album,
+    required this.onBack,
+    required this.onDelete,
+    required this.onSlideshow,
+    required this.onShare,
+    required this.onAddPhotos,
+  });
+
+  final PhotoAlbum album;
+  final VoidCallback onBack;
+  final VoidCallback onDelete;
+  final VoidCallback onSlideshow;
+  final VoidCallback onShare;
+  final VoidCallback onAddPhotos;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.photosColors.surfaceContainer.withValues(alpha: 0.70),
+        border: Border(
+          bottom: BorderSide(
+            color: context.photosColors.outlineVariant.withValues(alpha: 0.32),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: AppLocalizations.of(context).photosBack,
+                  onPressed: onBack,
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: context.photosColors.onSurface,
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        album.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.photosColors.onSurface,
+                          fontSize: AppTypography.titleMedium,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        AppLocalizations.of(
+                          context,
+                        ).photosAlbumPhotoCountLabel(album.photoCount),
+                        style: TextStyle(
+                          color: context.photosColors.onSurfaceVariant,
+                          fontSize: AppTypography.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: AppLocalizations.of(context).photosAddPhotos,
+                  onPressed: onAddPhotos,
+                  icon: Icon(
+                    Icons.add_photo_alternate_outlined,
+                    color: context.photosColors.onSurfaceVariant,
+                  ),
+                ),
+                IconButton(
+                  tooltip: AppLocalizations.of(context).photosSlideshow,
+                  onPressed: onSlideshow,
+                  icon: Icon(
+                    Icons.slideshow_outlined,
+                    color: context.photosColors.onSurfaceVariant,
+                  ),
+                ),
+                IconButton(
+                  tooltip: AppLocalizations.of(context).photosShareAlbum,
+                  onPressed: onShare,
+                  icon: Icon(
+                    Icons.share_outlined,
+                    color: context.photosColors.onSurfaceVariant,
+                  ),
+                ),
+                IconButton(
+                  tooltip:
+                      AppLocalizations.of(context).photosDeleteAlbumTooltip,
+                  onPressed: onDelete,
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    color: context.photosColors.danger,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

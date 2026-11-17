@@ -1,0 +1,422 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/appearance/application/appearance_controller.dart';
+import 'package:omninest/app/app_min_width_guard.dart';
+import 'package:omninest/app/browser_theme_color_binding.dart';
+import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/desktop_tray_locale_binding.dart';
+import 'package:omninest/app/desktop/desktop_shell.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
+import 'package:omninest/app/phone_form_factor.dart';
+import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/router.dart';
+import 'package:omninest/app/scoped_search_registration.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/offline_banner.dart';
+import 'package:omninest/core/widgets/top_bar_search_focus.dart';
+import 'package:omninest/app/session/session_reset_coordinator.dart';
+import 'package:omninest/app/app_scroll_behavior.dart';
+import 'package:omninest/app/sync/app_sync_coordinator.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
+import 'package:omninest/core/window/desktop_close_action.dart';
+import 'package:omninest/core/window/window_chrome_controller.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_host.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
+import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/search/search_ui.dart';
+import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
+import 'package:omninest/core/deep_link/deep_link_service.dart';
+import 'package:omninest/core/notifications/notification_tap_binding.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
+import 'package:omninest/features/tasks/application/task_notification_service.dart';
+
+class OmniNestApp extends ConsumerStatefulWidget {
+  const OmniNestApp({super.key});
+
+  @override
+  ConsumerState<OmniNestApp> createState() => _OmniNestAppState();
+}
+
+class _OmniNestAppState extends ConsumerState<OmniNestApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 全局搜索的内容档来源在此登记：只有组合根可以同时看到所有业务模块。
+    registerScopedSearchSources();
+    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 初始化本地数据库单例（确保 ReaderLocalProgress / ReaderSyncQueue 可用）
+    ref.watch(localDatabaseInitProvider);
+    // 删除旧版明文离线缓存，确保升级后不依赖用户再次打开对应模块。
+    ref.watch(offlineDataInitializationProvider);
+    // 启动网络恢复监听器，重放文件、音乐和阅读离线同步队列
+    ref.watch(connectivityListenerProvider);
+    // 离线同步出现新增失败时全局提示一次；恢复后自动重试，不打断操作。
+    ref.listen(syncReplayFailuresProvider, (_, next) {
+      final count = next.asData?.value;
+      if (count == null || count <= 0 || !mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).syncReplayPendingWarning(count),
+        severity: OmniFeedbackSeverity.warning,
+      );
+    });
+    // 启动单一实时连接及持久失效记录的定向刷新分发。
+    ref.watch(appSyncCoordinatorProvider);
+    final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(appearanceControllerProvider);
+    final fontScalePreset = ref.watch(fontScaleControllerProvider);
+    final languageCode = ref.watch(localeControllerProvider);
+
+    // 通知复用实时同步连接，仅用于副作用。
+    ref.watch(notificationRealtimeSubscriptionProvider);
+    // 任务终态系统通知：监听任务列表并按偏好发送系统通知。
+    ref.watch(taskSystemNotificationBindingProvider);
+    // 桌面托盘菜单文案跟随应用语言刷新（Web/移动端为空实现）。
+    ref.watch(desktopTrayLocaleBindingProvider);
+    // 登出或换号时重置全部常驻业务 provider，防止跨账号残留缓存。
+    ref.watch(sessionResetCoordinatorProvider);
+    // omninest:// 深链：接住冷启动与运行期链接并落位白名单路由。
+    ref.watch(deepLinkServiceProvider);
+    // 系统通知点击：把通知栏 tap 落位到通知中心。
+    ref.watch(systemNotificationTapBindingProvider);
+
+    final app = MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'OmniNest',
+      theme: OmniNestTheme.light(),
+      darkTheme: OmniNestTheme.dark(),
+      themeMode: themeMode,
+      themeAnimationDuration: MotionToken.resolveForPlatform(MotionToken.fast),
+      scrollBehavior: const OmniNestScrollBehavior(),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh'), Locale('en')],
+      locale: Locale(languageCode),
+      routerConfig: router,
+      builder: (context, child) {
+        // 认证门控：登出瞬间路由 gate 经 listenable 转发，其页面替换晚于
+        // 渲染帧，旧受保护页面会闪现一帧。此处按「已确定未认证 + 当前
+        // 路径非公开」在根 builder 同帧遮挡，先于路由替换生效。
+        final session = ref.watch(authSessionProvider);
+        final sessionValue = session.asData?.value;
+        final definitelySignedOut =
+            sessionValue != null && !sessionValue.isAuthenticated;
+        return UnauthenticatedRenderGate(
+          // 监听 routerDelegate：redirect 完成后 delegate 同步更新
+          // currentConfiguration 并 notify。routeInformationProvider 的
+          // value 回报走 post-frame 且不 notify，不能用来解除遮挡。
+          routeListenable: router.routerDelegate,
+          shouldGate:
+              () =>
+                  definitelySignedOut &&
+                  gatesUnauthenticatedRender(
+                    isAuthenticated: false,
+                    path: router.routerDelegate.currentConfiguration.uri.path,
+                  ),
+          child: BrowserThemeColorBinding(
+            child: _buildRouterContent(context, child, fontScalePreset),
+          ),
+        );
+      },
+    );
+    // 全局瞬时反馈宿主：独立于 ScaffoldMessenger 的顶部居中 Overlay，
+    // 配置（对齐、限宽、堆叠上限）统一由 core 反馈门面提供。
+    return ToastificationWrapper(config: omniFeedbackToastConfig, child: app);
+  }
+
+  /// 根 builder 的正常内容（路由子树外的缩放、通知与桌面宽度护栏）。
+  Widget _buildRouterContent(
+    BuildContext context,
+    Widget? child,
+    FontScalePreset fontScalePreset,
+  ) {
+    final mediaQuery = MediaQuery.of(context);
+    final systemScaler = mediaQuery.textScaler;
+    final rootTheme = Theme.of(context);
+    final mobileForm = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: mediaQuery.size.width,
+    );
+    // 系统栏样式必须跟随壳层实际极性：壳层在浅色根主题且无壁纸时是纸面基底，
+    // 沿用"移动形态一律暗图标"会让浅色图标压在浅底上不可读。
+    final envPalette = mobileEnvPaletteFor(rootTheme);
+    final overlayDark =
+        mobileForm
+            ? envPalette.brightness == Brightness.dark
+            : rootTheme.brightness == Brightness.dark;
+    // 桌面端不挂应用级壁纸宿主：桌面壳自己画环境光（模糊封面 + 色场），
+    // 而托管模块页的底是透明的，壁纸宿主一旦留在内容区里就会从页面底下
+    // 透出来——用户看到的"默认壁纸"正是这一层。移动形态仍保留宿主。
+    Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor:
+            mobileForm ? envPalette.stage : rootTheme.colorScheme.surface,
+        statusBarIconBrightness:
+            overlayDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            overlayDark ? Brightness.light : Brightness.dark,
+      ),
+      child:
+          mobileForm
+              ? AppBackdropHost(child: child ?? const SizedBox.shrink())
+              : child ?? const SizedBox.shrink(),
+    );
+    // 应用字体档位根部生效。缩放一律经 ComposedScaler：跟随系统档位时
+    // （preset.scale == null）也要吃到 ComposedScaler.maxScale 封顶，
+    // 且 scaler 类型不随档位翻转变化，整棵路由子树不会因此重挂
+    // （丢失滚动状态并打断背景视频会话）。
+    final effectiveScaler = ComposedScaler(
+      systemScaler,
+      fontScalePreset.scale ?? 1,
+    );
+    content = MediaQuery(
+      data: mediaQuery.copyWith(textScaler: effectiveScaler),
+      child: content,
+    );
+    // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
+    // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
+    // 设备例外，让它们直接走模块窄屏布局。
+    final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
+    // 桌面/Web 走统一壳：标题栏 + 侧栏 + 内容 + 详情坞 + 常驻播放条挂在
+    // Router 之上，换模块只替换内容区。移动形态完全不构造壳层。
+    // 离线横幅由壳层自己在标题栏下渲染，这里不再叠第二份。
+    //
+    // standalone 页面直接走轻量主题宿主，避免在 Router 外再包一层 Overlay；
+    // 它仍会在原生桌面绘制无边框窗口 chrome，但不会创建工作区。
+    final authenticated =
+        ref.watch(authSessionProvider).asData?.value.isAuthenticated ?? false;
+    if (!mobileForm) {
+      final router = ref.read(appRouterProvider);
+      final standaloneRoute =
+          desktopShellModeForPath(
+            router.routerDelegate.currentConfiguration.uri.path,
+          ) ==
+          DesktopShellMode.standalone;
+      if (standaloneRoute) {
+        content = TooltipVisibility(
+          visible: false,
+          child: DesktopThemeScope(child: content),
+        );
+      } else if (authenticated) {
+        content = DesktopShellHost(router: router, child: content);
+      } else {
+        content = DesktopThemeScope(child: content);
+      }
+    } else {
+      final router = ref.read(appRouterProvider);
+      final standaloneRoute =
+          desktopShellModeForPath(
+            router.routerDelegate.currentConfiguration.uri.path,
+          ) ==
+          DesktopShellMode.standalone;
+      if (standaloneRoute) {
+        content = TooltipVisibility(visible: false, child: content);
+      }
+    }
+    // 离线横幅放在最小宽度护栏之外：护栏会让内容横向滚动，横幅要始终铺满可见
+    // 视口，否则窄窗下它会跟着内容一起滚出屏幕。
+    final layered = mobileForm ? OfflineBannerLayer(child: content) : content;
+    return FontScaleScope(
+      // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
+      // 会与实际渲染字号在超大无障碍档位下分叉。
+      systemScaler: ComposedScaler(systemScaler, 1),
+      child: NotificationForegroundToast(
+        child: DeviceFormFactorListener(
+          child: DesktopFormMinWidth(
+            mobileForm: mobileForm,
+            hoverCapable: hoverCapable,
+            child: layered,
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _handleGlobalKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return false;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.f11) {
+      _toggleGlobalFullscreen();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      _openSearch();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyF &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      // Ctrl/Cmd+F 聚焦当前页顶栏搜索框；仅命中时消费（web 端随之阻断
+      // 浏览器原生查找），未命中放行到焦点树，保留 Reader 书内查找等
+      // 既有焦树级绑定与浏览器查找兜底。
+      return TopBarSearchFocusRegistry.instance.focusActiveTarget();
+    }
+    return false;
+  }
+
+  /// Ctrl/Cmd+K 打开全局搜索浮层；仅在明确未认证时拦截。
+  ///
+  /// 桌面统一壳有自己的命令面板（跨模块查找 + 命令执行），同一个快捷键
+  /// 在桌面走面板、在移动形态走既有搜索浮层，不出现两套竞争入口。
+  void _openSearch() {
+    final session = ref.read(authSessionProvider).asData?.value;
+    if (session != null && !session.isAuthenticated) {
+      return;
+    }
+    final navigatorContext = desktopCloseNavigatorKey.currentContext ?? context;
+    if (!navigatorContext.mounted) {
+      return;
+    }
+    final mobileForm = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: MediaQuery.sizeOf(navigatorContext).width,
+    );
+    if (!mobileForm) {
+      ref.read(desktopShellProvider.notifier).toggleCommandPalette();
+      return;
+    }
+    unawaited(showGlobalSearchDialog(navigatorContext));
+  }
+
+  void _toggleGlobalFullscreen() {
+    if (kIsWeb) {
+      fs.toggleFullscreen();
+      return;
+    }
+    unawaited(
+      ref.read(windowChromeControllerProvider.notifier).toggleFullscreen(),
+    );
+  }
+}
+
+/// 根 builder 的未认证渲染门控：与 router 的公开路径口径保持一致
+/// （登录/安装/引导/分享页公开），其余路径在已确定未认证时不渲染。
+@visibleForTesting
+bool gatesUnauthenticatedRender({
+  required bool isAuthenticated,
+  required String path,
+}) {
+  if (isAuthenticated) {
+    return false;
+  }
+  return !(path == '/login' ||
+      path == '/setup' ||
+      path == '/server-setup' ||
+      path == '/boot' ||
+      path.startsWith('/shared/photos/') ||
+      path.startsWith('/s/'));
+}
+
+/// 未认证渲染遮挡层。
+///
+/// 门控时必须保留 [child]（Router）在树上：若直接丢弃 child，Router 会
+/// dispose，refreshListenable 触发的 redirect 无法执行，路径永不更新，
+/// 遮罩将永久停在加载页。用不透明层遮挡旧受保护页画面，child 始终挂在
+/// 同一 Stack 槽位，门控开关不会重挂路由子树。
+///
+/// [routeListenable] 通常为 GoRouter.routerDelegate。delegate 可能在子树
+/// 构建过程中 notify，因此状态刷新一律延到帧后，避免构建期 markNeedsBuild。
+class UnauthenticatedRenderGate extends StatefulWidget {
+  const UnauthenticatedRenderGate({
+    super.key,
+    required this.shouldGate,
+    required this.routeListenable,
+    required this.child,
+  });
+
+  final bool Function() shouldGate;
+  final Listenable routeListenable;
+  final Widget child;
+
+  @override
+  State<UnauthenticatedRenderGate> createState() =>
+      _UnauthenticatedRenderGateState();
+}
+
+class _UnauthenticatedRenderGateState extends State<UnauthenticatedRenderGate> {
+  bool _refreshScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.routeListenable.addListener(_onRouteChanged);
+  }
+
+  @override
+  void didUpdateWidget(UnauthenticatedRenderGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeListenable != widget.routeListenable) {
+      oldWidget.routeListenable.removeListener(_onRouteChanged);
+      widget.routeListenable.addListener(_onRouteChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.routeListenable.removeListener(_onRouteChanged);
+    super.dispose();
+  }
+
+  void _onRouteChanged() {
+    if (!mounted || _refreshScheduled) {
+      return;
+    }
+    _refreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        if (widget.shouldGate())
+          ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: const Center(child: AppLoading()),
+          ),
+      ],
+    );
+  }
+}

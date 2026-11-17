@@ -1,0 +1,712 @@
+import 'package:omninest/core/theme/motion_token.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/router.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/command_palette_colors.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/music/application/music_portal_integration.dart';
+import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/domain/reader_dashboard.dart';
+import 'package:omninest/features/search/application/search_controller.dart';
+import 'package:omninest/features/search/application/search_history_store.dart';
+import 'package:omninest/features/search/domain/search_result.dart';
+import 'package:omninest/features/search/presentation/theme/search_overlay_colors.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
+import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+
+part 'global_search_overlay_panels.dart';
+
+/// Ctrl+K 全局搜索命令面板。按 OmniNest Command Palette 设计稿复刻（浅/深主题）。
+bool _globalSearchOpen = false;
+
+Future<void> showGlobalSearchDialog(BuildContext context) async {
+  if (_globalSearchOpen) {
+    return;
+  }
+  _globalSearchOpen = true;
+  try {
+    await showWorkstationDialog<void>(
+      context: context,
+      barrierColor: SearchOverlayColors.barrier,
+      builder: (context) => const _CommandPaletteDialog(),
+    );
+  } finally {
+    _globalSearchOpen = false;
+  }
+}
+
+enum _PaletteTab { all, video, music, book, photo, file, command }
+
+extension on _PaletteTab {
+  bool matches(String type) => switch (this) {
+    _PaletteTab.all => true,
+    _PaletteTab.video => type == 'video',
+    _PaletteTab.music => type == 'music',
+    _PaletteTab.book => type == 'book',
+    _PaletteTab.photo => type == 'photo',
+    _PaletteTab.file => type == 'file',
+    _PaletteTab.command => type == 'command',
+  };
+}
+
+class _Hit {
+  const _Hit({
+    required this.title,
+    required this.subtitle,
+    required this.type,
+    required this.route,
+    this.thumbnailUrl,
+    this.readerItemId,
+    this.musicTrackId,
+    this.progress,
+    this.trailing,
+  });
+
+  final String title;
+  final String subtitle;
+  final String type;
+  final String? route;
+  final String? thumbnailUrl;
+
+  /// 阅读封面是鉴权接口，不能直接交给 Image.network 当 URL 用。
+  final String? readerItemId;
+
+  /// 音乐命中在跳转后按曲目 ID 起播，避免只落到音乐首页。
+  final String? musicTrackId;
+  final double? progress;
+  final String? trailing;
+}
+
+class _CommandPaletteDialog extends ConsumerStatefulWidget {
+  const _CommandPaletteDialog();
+
+  @override
+  ConsumerState<_CommandPaletteDialog> createState() =>
+      _CommandPaletteDialogState();
+}
+
+class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
+  /// 搜索历史按账号隔离：同一设备切换账号不能看到上一个人的搜索词。
+  String get _recentQueriesKey {
+    final userId = ref.read(authSessionProvider).value?.user?.id;
+    return 'search.recent_queries.v2.${userId ?? 'anonymous'}';
+  }
+
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  _PaletteTab _tab = _PaletteTab.all;
+  int _highlight = 0;
+  final List<String> _recentQueries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRecentQueries());
+  }
+
+  Future<void> _loadRecentQueries() async {
+    // 存储键要跨异步边界使用，必须在 await 之前取好：getter 内的 ref.read
+    // 若排在 await 之后，面板已关闭时就会命中已卸载的 Widget。
+    final storageKey = _recentQueriesKey;
+    // store 在 await 之前取好：面板关闭后回包时不能再碰 ref。
+    final store = ref.read(searchHistoryStoreProvider);
+    final saved = await store.load(storageKey);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _recentQueries
+        ..clear()
+        ..addAll(saved);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _go(String? route) {
+    final GoRouter router =
+        GoRouter.maybeOf(context) ?? ref.read(appRouterProvider);
+    Navigator.of(context).pop();
+    if (route != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        router.go(route);
+      });
+    }
+  }
+
+  void _remember(String query) {
+    final q = query.trim();
+    if (q.isEmpty) {
+      return;
+    }
+    // 命中跳转先记历史再 pop 本面板，写盘回调可能落在卸载之后：
+    // 存储键与待写列表都在 pop 前定格，回调只碰 SharedPreferences，不碰 ref/context。
+    final storageKey = _recentQueriesKey;
+    // 与上面同理：写盘回调可能落在卸载之后，store 必须在 pop 前取出。
+    final store = ref.read(searchHistoryStoreProvider);
+    _recentQueries
+      ..remove(q)
+      ..insert(0, q);
+    if (_recentQueries.length > 8) {
+      _recentQueries.removeRange(8, _recentQueries.length);
+    }
+    unawaited(
+      _persistRecentQueries(store, storageKey, List<String>.from(_recentQueries)),
+    );
+  }
+
+  Future<void> _persistRecentQueries(
+    SearchHistoryStore store,
+    String storageKey,
+    List<String> snapshot,
+  ) async {
+    try {
+      await store.save(storageKey, snapshot);
+    } on Exception catch (error) {
+      devLog('搜索历史写入失败: ${error.runtimeType}');
+    }
+  }
+
+  /// 激活一条命中：历史词回填搜索框，其它目标先补齐上下文再跳转。
+  void _activateHit(_Hit hit, String query) {
+    if (hit.trailing == 'query') {
+      _controller.text = hit.title;
+      ref.read(searchQueryProvider.notifier).updateQuery(hit.title);
+      setState(() => _highlight = 0);
+      return;
+    }
+    final trackId = hit.musicTrackId;
+    if (trackId != null && trackId.isNotEmpty) {
+      // 先起播再跳页：音乐页无需再按搜索词重新定位。
+      unawaited(ref.read(musicPortalActionsProvider).playTrackById(trackId));
+    }
+    _remember(query);
+    _go(hit.route);
+  }
+
+  List<_Hit> _buildHits({
+    required MovieDashboard? dashboard,
+    required ReaderDashboard? reader,
+    required PhotoDashboard? photos,
+    required MusicPortalSnapshot? music,
+    required List<FileNode>? files,
+    required List<SearchResult>? api,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    final query = _controller.text.trim();
+    final hits = <_Hit>[];
+
+    if (query.isEmpty) {
+      for (final q in _recentQueries) {
+        hits.add(
+          _Hit(
+            title: q,
+            subtitle: l10n.searchHint,
+            type: 'command',
+            route: null,
+            trailing: 'query',
+          ),
+        );
+      }
+    }
+
+    if (dashboard != null) {
+      for (final item in dashboard.recentlyAdded) {
+        hits.add(_videoHit(item, section: l10n.videoSectionRecent));
+      }
+      for (final item in dashboard.continueWatching) {
+        final prog =
+            item.durationSeconds > 0
+                ? (item.positionSeconds / item.durationSeconds).clamp(0.0, 1.0)
+                : (item.progressPercent / 100.0).clamp(0.0, 1.0);
+        hits.add(
+          _Hit(
+            title: item.title,
+            subtitle: l10n.videoSectionContinueWatching,
+            type: 'video',
+            route: moviePlayRoute(item.id),
+            thumbnailUrl: item.posterUrl,
+            progress: prog,
+          ),
+        );
+      }
+    }
+
+    if (reader != null) {
+      for (final item in reader.continueReading) {
+        hits.add(
+          _Hit(
+            title: item.title,
+            subtitle: l10n.videoSectionContinueWatching,
+            type: 'book',
+            route: '/reader/items/${item.id}',
+            readerItemId: item.id,
+          ),
+        );
+      }
+      for (final item in reader.recentItems) {
+        hits.add(
+          _Hit(
+            title: item.title,
+            subtitle: l10n.searchGroupBook,
+            type: 'book',
+            route: '/reader/items/${item.id}',
+            readerItemId: item.id,
+          ),
+        );
+      }
+    }
+
+    if (photos != null) {
+      for (final item in photos.recentPhotos) {
+        hits.add(
+          _Hit(
+            title: item.title,
+            subtitle: l10n.searchGroupPhoto,
+            type: 'photo',
+            route: '/photos/${item.id}',
+            thumbnailUrl: item.coverUrl,
+          ),
+        );
+      }
+    }
+
+    if (music != null) {
+      for (final track in music.recentTracks) {
+        hits.add(
+          _Hit(
+            title: track.title,
+            subtitle: track.artistName,
+            type: 'music',
+            route: '/music',
+            musicTrackId: track.id,
+            thumbnailUrl: track.listCoverUrl ?? track.coverUrl,
+          ),
+        );
+      }
+    }
+
+    if (files != null) {
+      for (final node in files) {
+        hits.add(
+          _Hit(
+            title: node.name,
+            subtitle: l10n.searchGroupFile,
+            type: 'file',
+            route: '/files/preview/${node.id}',
+          ),
+        );
+      }
+    }
+
+    for (final item in api ?? const <SearchResult>[]) {
+      hits.add(
+        _Hit(
+          title: item.title,
+          subtitle: item.subtitle,
+          type: item.type,
+          route: switch (item.type) {
+            'file' => '/files/preview/${item.id}',
+            'book' => '/reader/items/${item.id}',
+            // 分集进剧集详情选集；禁止用分集 id 打开影片详情。
+            'video' => movieDetailRouteFromIds(
+              videoItemId: item.id,
+              seriesId: item.seriesId,
+            ),
+            'photo' => '/photos/${item.id}',
+            'music' => '/music',
+            _ => null,
+          },
+          readerItemId: item.type == 'book' ? item.id : null,
+          musicTrackId: item.type == 'music' ? item.id : null,
+          thumbnailUrl: item.type == 'book' ? null : item.thumbnailUrl,
+        ),
+      );
+    }
+
+    hits.addAll(_commands(l10n));
+    // 本地看板与远端搜索会命中同一实体；按类型与实体唯一 ID 去重，
+    // 避免同一部电影/同一本书出现两三次。音乐命中的 route 恒为 '/music'，
+    // 只用 route+标题会把不同歌手的同名歌曲误吞。
+    final deduped = <_Hit>[];
+    final seen = <String>{};
+    for (final hit in hits) {
+      final identity = hit.musicTrackId ?? hit.readerItemId ?? hit.route ?? '';
+      final key = '${hit.type}|$identity|${hit.title}';
+      if (seen.add(key)) {
+        deduped.add(hit);
+      }
+    }
+    return deduped;
+  }
+
+  _Hit _videoHit(MovieVideoItem item, {required String section}) {
+    return _Hit(
+      title: item.title,
+      subtitle: section,
+      type: 'video',
+      route: movieDetailRoute(item),
+      thumbnailUrl: item.posterImageUrl,
+    );
+  }
+
+  /// Tab / Shift+Tab 循环切换筛选页签，越界回绕。
+  void _cycleTab(int delta) {
+    final tabs = _PaletteTab.values;
+    final next = (_tab.index + delta) % tabs.length;
+    if (tabs[next] == _tab) {
+      return;
+    }
+    setState(() {
+      _tab = tabs[next];
+      _highlight = 0;
+    });
+  }
+
+  /// 数字键 1~7 直达对应页签；返回是否消费了这次按键。
+  ///
+  /// 必须带 Alt/Ctrl/Meta：搜索词本身经常包含年份、卷号与格式数字，
+  /// 裸数字不能从输入框手里抢走。
+  bool _selectTabByDigit(LogicalKeyboardKey key) {
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isAltPressed &&
+        !keyboard.isControlPressed &&
+        !keyboard.isMetaPressed) {
+      return false;
+    }
+    const digits = <LogicalKeyboardKey>[
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+    ];
+    final index = digits.indexOf(key);
+    if (index < 0 || index >= _PaletteTab.values.length) {
+      return false;
+    }
+    if (_PaletteTab.values[index] == _tab) {
+      return true;
+    }
+    setState(() {
+      _tab = _PaletteTab.values[index];
+      _highlight = 0;
+    });
+    return true;
+  }
+
+  List<_Hit> _commands(AppLocalizations l10n) {
+    return [
+      _Hit(
+        title: l10n.portalDockFiles,
+        subtitle: l10n.searchGroupFile,
+        type: 'command',
+        route: '/files',
+      ),
+      _Hit(
+        title: l10n.portalDockMusic,
+        subtitle: l10n.searchGroupMusic,
+        type: 'command',
+        route: '/music',
+      ),
+      _Hit(
+        title: l10n.portalDockMovies,
+        subtitle: l10n.searchGroupVideo,
+        type: 'command',
+        route: '/video',
+      ),
+      _Hit(
+        title: l10n.searchGroupBook,
+        subtitle: l10n.searchGroupBook,
+        type: 'command',
+        route: '/reader',
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final p = context.commandPaletteColors;
+    final dashboard = ref.watch(portalMovieDashboardProvider).asData?.value;
+    final query = _controller.text.trim();
+    final all = _buildHits(
+      dashboard: dashboard,
+      reader: ref.watch(portalReaderDashboardProvider).asData?.value,
+      photos: ref.watch(portalPhotoDashboardProvider).asData?.value,
+      music: ref.watch(portalMusicSnapshotProvider).asData?.value,
+      files: ref.watch(portalRecentFilesProvider).asData?.value,
+      api: ref.watch(searchResultsProvider).asData?.value,
+    );
+    final visible = all.where((h) => _tab.matches(h.type)).toList();
+    final q = query.toLowerCase();
+    final filtered =
+        query.isEmpty
+            ? visible
+            : visible
+                .where(
+                  (h) =>
+                      h.title.toLowerCase().contains(q) ||
+                      h.subtitle.toLowerCase().contains(q),
+                )
+                .toList();
+    final highlight = _highlight.clamp(
+      0,
+      filtered.isEmpty ? 0 : filtered.length - 1,
+    );
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          Navigator.of(context).pop();
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) {
+            return KeyEventResult.ignored;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.tab) {
+            // 页签切换在空结果时也要可用：换页签正是恢复手段。
+            _cycleTab(HardwareKeyboard.instance.isShiftPressed ? -1 : 1);
+            return KeyEventResult.handled;
+          }
+          if (_selectTabByDigit(event.logicalKey)) {
+            return KeyEventResult.handled;
+          }
+          if (filtered.isEmpty) {
+            return KeyEventResult.ignored;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            setState(() => _highlight = (_highlight + 1) % filtered.length);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            setState(
+              () =>
+                  _highlight =
+                      (_highlight - 1 + filtered.length) % filtered.length,
+            );
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            final hit = filtered[_highlight.clamp(0, filtered.length - 1)];
+            _activateHit(hit, query);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.fromLTRB(16, 48, 16, 32),
+          elevation: 0,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780, maxHeight: 640),
+            child: Container(
+              decoration: BoxDecoration(
+                color: p.surface,
+                border: Border.all(color: p.border),
+                borderRadius: BorderRadius.circular(p.isDark ? 4 : 8),
+                boxShadow:
+                    p.panelShadow
+                        ? [
+                          BoxShadow(
+                            color: SearchOverlayColors.hintTile,
+                            blurRadius: 36,
+                            offset: const Offset(0, 12),
+                          ),
+                          BoxShadow(
+                            color: SearchOverlayColors.hintTileSoft,
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                        : const [],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _searchBar(p, l10n),
+                  _filterBar(p, l10n),
+                  Flexible(
+                    child:
+                        filtered.isEmpty
+                            ? _buildEmptyState(p, l10n, query)
+                            : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                12,
+                              ),
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final hit = filtered[index];
+                                if (hit.progress != null) {
+                                  return _buildMediaCard(
+                                    context,
+                                    p,
+                                    hit,
+                                    selected: index == highlight,
+                                    onTap: () {
+                                      _activateHit(hit, query);
+                                    },
+                                  );
+                                }
+                                return _buildListRow(
+                                  context,
+                                  p,
+                                  hit,
+                                  selected: index == highlight,
+                                  onTap: () {
+                                    _activateHit(hit, query);
+                                  },
+                                );
+                              },
+                            ),
+                  ),
+                  _buildPaletteFooter(p, l10n),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 设计稿 Top Search Input Bar：h-56 / px-20 / icon-22 / text-15 / ESC kbd。
+  Widget _searchBar(CommandPaletteColors p, AppLocalizations l10n) {
+    return Material(
+      color: p.surface,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: p.hairline)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search_rounded, size: 22, color: p.icon),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  textAlignVertical: TextAlignVertical.center,
+                  cursorColor: p.accent,
+                  cursorWidth: 1.5,
+                  cursorHeight: 20,
+                  cursorRadius: Radius.zero,
+                  keyboardType: TextInputType.webSearch,
+                  textInputAction: TextInputAction.search,
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyLarge,
+                    height: 1.0,
+                    color: p.ink,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    isDense: true,
+                    isCollapsed: true,
+                    filled: false,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: l10n.searchPaletteHint,
+                    hintStyle: TextStyle(
+                      color: p.inkPlaceholder,
+                      fontSize: AppTypography.bodyLarge,
+                      height: 1.0,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  onChanged: (_) {
+                    ref
+                        .read(searchQueryProvider.notifier)
+                        .updateQuery(_controller.text);
+                    setState(() => _highlight = 0);
+                  },
+                  onSubmitted: (value) {
+                    final hits = filteredSafe();
+                    if (hits.isEmpty) {
+                      return;
+                    }
+                    final index = _highlight.clamp(0, hits.length - 1);
+                    _activateHit(hits[index], value);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            _Kbd(label: 'ESC', p: p, muted: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterBar(CommandPaletteColors p, AppLocalizations l10n) {
+    return _buildFilterBar(
+      p,
+      l10n,
+      selected: _tab,
+      onSelect: (tab) {
+        setState(() {
+          _tab = tab;
+          _highlight = 0;
+        });
+      },
+    );
+  }
+
+  List<_Hit> filteredSafe() {
+    final all = _buildHits(
+      dashboard: ref.read(portalMovieDashboardProvider).asData?.value,
+      reader: ref.read(portalReaderDashboardProvider).asData?.value,
+      photos: ref.read(portalPhotoDashboardProvider).asData?.value,
+      music: ref.read(portalMusicSnapshotProvider).asData?.value,
+      files: ref.read(portalRecentFilesProvider).asData?.value,
+      api: ref.read(searchResultsProvider).asData?.value,
+    );
+    final query = _controller.text.trim().toLowerCase();
+    return all
+        .where((h) => _tab.matches(h.type))
+        .where(
+          (h) =>
+              query.isEmpty ||
+              h.title.toLowerCase().contains(query) ||
+              h.subtitle.toLowerCase().contains(query),
+        )
+        .toList();
+  }
+}

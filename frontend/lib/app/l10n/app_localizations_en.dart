@@ -1,0 +1,15340 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
+class AppLocalizationsEn extends AppLocalizations {
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
+
+  @override
+  String get appName => 'OmniNest';
+
+  @override
+  String get mobileNavHome => 'Home';
+
+  @override
+  String get mobileNavFiles => 'Files';
+
+  @override
+  String get mobileNavMusic => 'Music';
+
+  @override
+  String get mobileNavVisual => 'Visual';
+
+  @override
+  String get mobileNavReader => 'Reading';
+
+  @override
+  String get mobileOfflineBanner =>
+      'You are offline. Some actions are unavailable.';
+
+  @override
+  String get fullscreenEnterShortcut => 'Full screen (F11)';
+
+  @override
+  String get fullscreenExitShortcut => 'Exit full screen (F11)';
+
+  @override
+  String get portalImmersiveModeEnter => 'Immersive mode';
+
+  @override
+  String get portalImmersiveModeExit => 'Exit immersive mode';
+
+  @override
+  String get searchTitle => 'Search';
+
+  @override
+  String get searchHint => 'Search files, books, videos…';
+
+  @override
+  String get searchEmptyQuery => 'Enter keywords to start searching';
+
+  @override
+  String get searchEmptyResult => 'No matching results found';
+
+  @override
+  String get searchFailed => 'Search failed';
+
+  @override
+  String get searchScopeAll => 'All';
+
+  @override
+  String get searchGroupFile => 'Files';
+
+  @override
+  String get searchGroupBook => 'Books';
+
+  @override
+  String get searchGroupVideo => 'Videos';
+
+  @override
+  String get searchGroupMusic => 'Music';
+
+  @override
+  String get searchGroupPhoto => 'Photos';
+
+  @override
+  String get searchGroupCommand => 'Commands';
+
+  @override
+  String get searchPaletteHint =>
+      'Search media, music, books, files, or type a command…';
+
+  @override
+  String get searchFooterNavigate => 'Navigate';
+
+  @override
+  String get searchFooterSelect => 'Select';
+
+  @override
+  String get searchFooterFilter => 'Filter';
+
+  @override
+  String get searchFooterClose => 'Close';
+
+  @override
+  String tasksTimeMinutesAgo(Object count) {
+    return '$count min ago';
+  }
+
+  @override
+  String tasksTimeHoursAgo(Object count) {
+    return '$count hr ago';
+  }
+
+  @override
+  String tasksTimeDaysAgo(Object count) {
+    return '$count days ago';
+  }
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String settingsLoadFailed(Object error) {
+    return 'Failed to load: $error';
+  }
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsThemeSystem => 'System';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsLanguageChinese => 'Chinese';
+
+  @override
+  String get settingsLanguageEnglish => 'English';
+
+  @override
+  String get settingsNotification => 'Notifications';
+
+  @override
+  String get settingsNotificationEnable => 'Enable notifications';
+
+  @override
+  String get settingsNotificationEnableHint => 'Receive push notifications';
+
+  @override
+  String get settingsEmailNotification => 'Email notifications';
+
+  @override
+  String get settingsEmailNotificationHint =>
+      'Receive important notifications via email';
+
+  @override
+  String get settingsSyncOffline => 'Sync and offline';
+
+  @override
+  String get settingsSyncOfflineHint =>
+      'Manage online sync status and offline content';
+
+  @override
+  String get settingsSecurity => 'Security and devices';
+
+  @override
+  String get settingsSecurityHint => 'Manage your password and active sessions';
+
+  @override
+  String get settingsAbout => 'About OmniNest';
+
+  @override
+  String get settingsAboutHint => 'Version 0.1.0';
+
+  @override
+  String get setupTitle => 'Initial Setup';
+
+  @override
+  String get setupSubtitle =>
+      'Create the super administrator account for this OmniNest instance.';
+
+  @override
+  String get setupUnavailableTitle => 'Setup is not ready';
+
+  @override
+  String get setupUnavailableMessage =>
+      'Configure OMNINEST_SETUP_TOKEN with at least 32 characters on the server, then restart the backend.';
+
+  @override
+  String get setupToken => 'Setup token';
+
+  @override
+  String get setupTokenHint => 'Enter the setup token configured on the server';
+
+  @override
+  String get setupInstanceName => 'Instance name';
+
+  @override
+  String get setupInstanceNameRequired => 'Enter an instance name';
+
+  @override
+  String get setupDefaultLocale => 'Default locale';
+
+  @override
+  String get setupDefaultTimezone => 'Default time zone';
+
+  @override
+  String get setupDisplayName => 'Display name';
+
+  @override
+  String get setupEmail => 'Email (optional)';
+
+  @override
+  String get setupConfirmPassword => 'Confirm password';
+
+  @override
+  String get setupPasswordLength =>
+      'The super administrator password must be between 8 and 64 characters and at most 72 UTF-8 bytes';
+
+  @override
+  String get setupTwoFactorSection => 'Two-Factor Verification';
+
+  @override
+  String get setupTwoFactorHint =>
+      'This deployment requires two-factor verification for the super administrator: scan the QR code with an authenticator app and enter the 6-digit code to finish setup.';
+
+  @override
+  String get setupTwoFactorGenerate => 'Generate QR code';
+
+  @override
+  String get setupTwoFactorRegenerate => 'Regenerate secret';
+
+  @override
+  String get setupTwoFactorGenerateFirst =>
+      'Generate the two-factor QR code and enter the verification code first';
+
+  @override
+  String get setupTwoFactorGoLogin => 'Backup codes saved, continue to sign in';
+
+  @override
+  String get setupPasswordMismatch => 'Passwords do not match';
+
+  @override
+  String get setupCreateAdmin => 'Create super administrator';
+
+  @override
+  String get setupRetryStatus => 'Check again';
+
+  @override
+  String get setupStatusFailed => 'Unable to read setup status';
+
+  @override
+  String get setupCreateFailed => 'Failed to create super administrator';
+
+  @override
+  String get setupAdminCreated => 'Super administrator created';
+
+  @override
+  String get setupAutoLoginFailed =>
+      'Super administrator created, but automatic sign-in failed. Please sign in manually.';
+
+  @override
+  String get setupSecureNotice =>
+      'The setup token is only used for initialization and is not stored on this device.';
+
+  @override
+  String get setupLanguageSelector => 'Language';
+
+  @override
+  String get setupLanguageChineseSimplified => '中文（简体）';
+
+  @override
+  String get setupTwoFactorOptional => 'Optional';
+
+  @override
+  String get setupTwoFactorRequired => 'Required';
+
+  @override
+  String get setupTwoFactorOptionalHint =>
+      'You can enable two-factor authentication now by scanning the QR code and verifying a 6-digit code. You can also skip it and enable it later.';
+
+  @override
+  String get setupDisplayNameRequired => 'Enter a display name.';
+
+  @override
+  String get setupUsernameInvalid =>
+      'Use 3–32 characters: lowercase letters, digits, . _ -, starting with a letter.';
+
+  @override
+  String get setupPasswordStrengthWeak => 'Weak';
+
+  @override
+  String get setupPasswordStrengthFair => 'Fair';
+
+  @override
+  String get setupPasswordStrengthGood => 'Good';
+
+  @override
+  String get setupPasswordStrengthStrong => 'Strong';
+
+  @override
+  String get setupSectionInstance => 'Instance';
+
+  @override
+  String get setupSectionAdmin => 'Administrator account';
+
+  @override
+  String get setupFeatureFiles => 'Files · multi-provider storage';
+
+  @override
+  String get setupFeatureMedia => 'Video · music · photos';
+
+  @override
+  String get setupFeatureReader => 'Reader · offline sync';
+
+  @override
+  String get adminSearchHint => 'Search…';
+
+  @override
+  String get adminNoMatch => 'No matching data found.';
+
+  @override
+  String get adminClearFilters => 'Clear filters';
+
+  @override
+  String get notificationTitle => 'Notifications';
+
+  @override
+  String notificationTitleWithCount(Object count) {
+    return 'Notifications ($count)';
+  }
+
+  @override
+  String get notificationNoTitle => 'No title';
+
+  @override
+  String get notificationLoadFailed => 'Failed to load notifications';
+
+  @override
+  String get notificationEmpty => 'No notifications';
+
+  @override
+  String get notificationEmptyHint => 'New notifications will appear here';
+
+  @override
+  String get coreSignOutConfirmTitle => 'Sign out?';
+
+  @override
+  String get coreSignOutConfirmMessage =>
+      'You will need to sign in again to continue.';
+
+  @override
+  String get notificationForegroundToastView => 'View';
+
+  @override
+  String get notificationForegroundToastToggle =>
+      'In-app new notification toasts';
+
+  @override
+  String get notificationForegroundToastToggleSubtitle =>
+      'Show a lightweight toast when a notification arrives';
+
+  @override
+  String get notificationQuietHours => 'Do Not Disturb';
+
+  @override
+  String get profileNotificationEmail => 'Email notifications';
+
+  @override
+  String get profileNotificationEmailHint =>
+      'Receive notifications by email; requires the administrator to enable the mail channel';
+
+  @override
+  String get notificationQuietHoursHint =>
+      'Suppress toasts and sounds during this period';
+
+  @override
+  String get notificationQuietHoursStart => 'Start';
+
+  @override
+  String get notificationQuietHoursEnd => 'End';
+
+  @override
+  String get notificationContentHidden => 'New notification';
+
+  @override
+  String get notificationFilterAllLabel => 'All';
+
+  @override
+  String get notificationFilterUnreadLabel => 'Unread';
+
+  @override
+  String get notificationMarkAllRead => 'Mark all read';
+
+  @override
+  String get notificationMarkAllReadFailed =>
+      'Failed to mark all as read. Try again.';
+
+  @override
+  String get notificationMarkReadFailed => 'Failed to mark as read. Try again.';
+
+  @override
+  String get notificationDelete => 'Delete notification';
+
+  @override
+  String get notificationClearAll => 'Clear notifications';
+
+  @override
+  String get notificationClearConfirmTitle => 'Clear all notifications?';
+
+  @override
+  String get notificationClearConfirmMessage =>
+      'This permanently deletes every notification for the current account.';
+
+  @override
+  String get notificationDeleteFailed =>
+      'Failed to delete notification. Try again.';
+
+  @override
+  String get notificationClearFailed =>
+      'Failed to clear notifications. Try again.';
+
+  @override
+  String get notificationTypeCompleted => 'Done';
+
+  @override
+  String get notificationTypeFailed => 'Failed';
+
+  @override
+  String get notificationTypeShare => 'Share';
+
+  @override
+  String get notificationTypeTaskCompleted => 'Task Completed';
+
+  @override
+  String get notificationTypeTaskCompletedDesc =>
+      'Async task completed successfully';
+
+  @override
+  String get notificationTypeTaskFailed => 'Task Failed';
+
+  @override
+  String get notificationTypeTaskFailedDesc => 'Async task execution failed';
+
+  @override
+  String get notificationTypeShareAccess => 'Share Access';
+
+  @override
+  String get notificationTypeShareAccessDesc =>
+      'Someone accessed your share link';
+
+  @override
+  String get notificationTypeSystemMessage => 'System Message';
+
+  @override
+  String get notificationTypeSystemMessageDesc => 'System-level notification';
+
+  @override
+  String get notificationTypeMetadataScrape => 'Metadata Scrape';
+
+  @override
+  String get notificationTypeMetadataScrapeDesc =>
+      'Media metadata scraping completed';
+
+  @override
+  String get notificationTypeShareVisited => 'Share Visited';
+
+  @override
+  String get notificationTypeShareVisitedDesc => 'Your share link was visited';
+
+  @override
+  String get notificationTypeStorageWarning => 'Storage Warning';
+
+  @override
+  String get notificationTypeStorageWarningDesc =>
+      'Storage usage is running high';
+
+  @override
+  String get notificationTypeNewDeviceLogin => 'New Device Login';
+
+  @override
+  String get notificationTypeNewDeviceLoginDesc => 'New device login detected';
+
+  @override
+  String get notificationTypePasswordChanged => 'Password Changed';
+
+  @override
+  String get notificationTypePasswordChangedDesc =>
+      'Account password was changed';
+
+  @override
+  String get notificationTypeSecurityThreat => 'Security Threat';
+
+  @override
+  String get notificationTypeSecurityThreatDesc =>
+      'Suspicious file upload activity detected';
+
+  @override
+  String get notificationTypeSecurityScanFailed => 'Security Scan Failed';
+
+  @override
+  String get notificationTypeSecurityScanFailedDesc =>
+      'A file failed the security scan and was quarantined';
+
+  @override
+  String get notificationTypesHeader => 'Notification Types';
+
+  @override
+  String get notificationEmailTestTitle => 'Test email';
+
+  @override
+  String get notificationEmailTestSubtitle =>
+      'Send a test email with the current SMTP settings to verify the configuration.';
+
+  @override
+  String get notificationEmailTestAction => 'Send test email';
+
+  @override
+  String get notificationEmailTestConfirm =>
+      'This sends a test email using the current SMTP settings. Continue?';
+
+  @override
+  String get notificationEmailTestRecipient => 'Recipient (optional)';
+
+  @override
+  String get notificationEmailTestRecipientHint =>
+      'Leave empty to send to the current admin\'s address';
+
+  @override
+  String get notificationEmailTestSent => 'Test email sent';
+
+  @override
+  String get notificationTypeAdminTitle => 'Notification type management';
+
+  @override
+  String get notificationTypeAdminSubtitle =>
+      'Enable or disable notification types globally; disabled types are not delivered to any user.';
+
+  @override
+  String get notificationTypeAdminEmpty => 'No notification types.';
+
+  @override
+  String get notificationTypeAdminConfirm => 'Change';
+
+  @override
+  String get notificationTypeAdminUpdated => 'Notification type updated';
+
+  @override
+  String notificationTypeAdminToggleConfirm(String label, String state) {
+    return 'Set \"$label\" to $state?';
+  }
+
+  @override
+  String get notificationTypeAdminStateEnabled => 'enabled';
+
+  @override
+  String get notificationTypeAdminStateDisabled => 'disabled';
+
+  @override
+  String get notificationTimeNow => 'Just now';
+
+  @override
+  String notificationTimeMinutes(Object n) {
+    return '$n min';
+  }
+
+  @override
+  String notificationTimeHours(Object n) {
+    return '$n hr';
+  }
+
+  @override
+  String notificationTimeDays(Object n) {
+    return '$n days';
+  }
+
+  @override
+  String get profileTitle => 'Profile';
+
+  @override
+  String get profileBackTooltip => 'Back to Portal';
+
+  @override
+  String get profileAvatarFormatError =>
+      'Only JPG, PNG, WebP formats are supported';
+
+  @override
+  String get profileAvatarSizeError => 'Avatar size cannot exceed 5MB';
+
+  @override
+  String get profileAvatarSuccess => 'Avatar updated successfully';
+
+  @override
+  String get profileAvatarFailed => 'Avatar upload failed, please retry';
+
+  @override
+  String get profileEditAvatar => 'Change avatar';
+
+  @override
+  String get profileUnknownUser => 'Unknown';
+
+  @override
+  String get profileEmailNotSet => 'Email not set';
+
+  @override
+  String get profileRole => 'Role';
+
+  @override
+  String get profileRoleSuperAdmin => 'Super Admin';
+
+  @override
+  String get envSheetSubtitle => 'The photo behind everything';
+
+  @override
+  String get envSheetLibrary => 'YOUR LIBRARY';
+
+  @override
+  String get envSheetBehavior => 'BEHAVIOR';
+
+  @override
+  String get envSheetLive => 'Live environment';
+
+  @override
+  String get envSheetLiveSub => 'Blur and dim follow the active space';
+
+  @override
+  String get envSheetActive => 'ACTIVE';
+
+  @override
+  String get envSheetUpload => 'Upload image';
+
+  @override
+  String get envSheetEmpty => 'No environment images yet';
+
+  @override
+  String get profileGroupAppearance => 'APPEARANCE';
+
+  @override
+  String get profileGroupSecurity => 'SECURITY';
+
+  @override
+  String get profileGroupServer => 'SERVER';
+
+  @override
+  String get profileGroupAbout => 'ABOUT';
+
+  @override
+  String get profileRowAccountInfo => 'Account info';
+
+  @override
+  String get profileAccountSubtitle => 'Avatar · name · email';
+
+  @override
+  String get profileRowChangePassword => 'Change password';
+
+  @override
+  String get profileRowTwoFactor => 'Two-factor';
+
+  @override
+  String get profileRowSessions => 'Devices & sessions';
+
+  @override
+  String get profileSessionsCurrent => 'This device';
+
+  @override
+  String get profileSessionsRevoke => 'Revoke';
+
+  @override
+  String get profileSessionsEmpty => 'No other active sessions';
+
+  @override
+  String get profileSaveChanges => 'Save Changes';
+
+  @override
+  String get profileResetChanges => 'Reset';
+
+  @override
+  String get profileDisplayNameField => 'Display name';
+
+  @override
+  String get profileEmailField => 'Email';
+
+  @override
+  String get profileChangeAvatar => 'Change avatar';
+
+  @override
+  String get profileThemeLabel => 'Theme';
+
+  @override
+  String get profileLanguageLabel => 'Language';
+
+  @override
+  String get profileFontScaleLabel => 'Font scale';
+
+  @override
+  String get profileServerAddress => 'Server address';
+
+  @override
+  String get profileSwitchServer => 'Switch server';
+
+  @override
+  String get envSheetClearAll => 'Clear all images';
+
+  @override
+  String get envSheetSeparate => 'Separate images per device';
+
+  @override
+  String get envSheetSeparateSub => 'Pick a backdrop for each device class';
+
+  @override
+  String get envSheetUploadHint => 'JPG / PNG / WEBP and short videos';
+
+  @override
+  String get profileRowEnvironment => 'Backdrop library';
+
+  @override
+  String get profileRowTheme => 'Theme & appearance';
+
+  @override
+  String get profileRowNotifications => 'Notifications';
+
+  @override
+  String get profileRowSecurity => 'Password · 2FA · devices';
+
+  @override
+  String get profileRowServer => 'Server info';
+
+  @override
+  String get profileRowAbout => 'About OmniNest';
+
+  @override
+  String get profileFooterTag =>
+      'OmniNest · self-hosted media for one household';
+
+  @override
+  String get profileRoleAdmin => 'Admin';
+
+  @override
+  String get profileRoleMember => 'Member';
+
+  @override
+  String get profileUnreadNotifications => 'Unread notifications';
+
+  @override
+  String get profileLastLogin => 'Last login';
+
+  @override
+  String get profileToday => 'Today';
+
+  @override
+  String get profileAccountStatus => 'Account status';
+
+  @override
+  String get profileStatusNormal => 'Active';
+
+  @override
+  String get profileAccountInfo => 'Account Info';
+
+  @override
+  String get profileSectionAccount => 'Account';
+
+  @override
+  String get profileSectionAppearance => 'Appearance & language';
+
+  @override
+  String get profileSectionNotifications => 'Notifications';
+
+  @override
+  String get profileSectionSecurity => 'Security & devices';
+
+  @override
+  String get profileSectionAbout => 'About';
+
+  @override
+  String get profileManageBackdrop => 'Manage background';
+
+  @override
+  String get profileUsername => 'Username';
+
+  @override
+  String get profileEmail => 'Email';
+
+  @override
+  String get profileUserId => 'User ID';
+
+  @override
+  String get profileChangePassword => 'Change Password';
+
+  @override
+  String get profileChangePasswordSubtitle => 'Update your account password';
+
+  @override
+  String get profileWeatherCity => 'Weather City';
+
+  @override
+  String get profileWeatherCityHint =>
+      'Set the weather display city, leave empty to use GPS or system default';
+
+  @override
+  String get profileWeatherCityPlaceholder =>
+      'Enter city name, e.g. Beijing, Shanghai';
+
+  @override
+  String get profileWeatherCitySave => 'Save';
+
+  @override
+  String get profileWeatherCityNotSet => 'Not set (GPS / System default)';
+
+  @override
+  String profileWeatherCitySaveFailed(Object error) {
+    return 'Failed to save city preference: $error';
+  }
+
+  @override
+  String get profileNotificationSettings => 'Notification Settings';
+
+  @override
+  String get profileNotificationMasterSwitch => 'Master Switch';
+
+  @override
+  String get profileNotificationMasterSwitchHint =>
+      'Disable to stop all notifications';
+
+  @override
+  String get profileNotificationTypesLoadFailed =>
+      'Failed to load notification types';
+
+  @override
+  String get profileNotificationSaveFailed =>
+      'Failed to save notification preferences. Try again.';
+
+  @override
+  String get profileNotificationSound => 'Sound';
+
+  @override
+  String get profileNotificationSoundHint => 'Play sound on notification';
+
+  @override
+  String get profileNotificationPreview => 'Notification Preview';
+
+  @override
+  String get profileNotificationPreviewHint =>
+      'Show message content in notifications';
+
+  @override
+  String profileNotificationTypes(Object count) {
+    return 'Notification Types ($count)';
+  }
+
+  @override
+  String profileLoadFailed(Object error) {
+    return 'Failed to load: $error';
+  }
+
+  @override
+  String get profileSessionManagement => 'Session Management';
+
+  @override
+  String get profileSessionManagementSubtitle =>
+      'View and manage current login sessions';
+
+  @override
+  String get profileActiveSessions => 'Active Sessions';
+
+  @override
+  String get profileNoSessions => 'No active sessions';
+
+  @override
+  String get profileSessionDevice => 'Device';
+
+  @override
+  String get profileSessionIp => 'IP Address';
+
+  @override
+  String get profileSessionLastActive => 'Last Active';
+
+  @override
+  String get profileSessionExpires => 'Expires';
+
+  @override
+  String get profileRevokeSession => 'Revoke Session';
+
+  @override
+  String get profileRevokeSessionConfirm => 'Revoke Session?';
+
+  @override
+  String get profileRevokeSessionMessage =>
+      'The device will be forcibly signed out and will need to sign in again.';
+
+  @override
+  String get profileSessionRevoked => 'Session revoked';
+
+  @override
+  String get profileSessionRevokeFailed => 'Revocation failed, please retry';
+
+  @override
+  String get profileSessionsLoadFailed => 'Failed to load sessions';
+
+  @override
+  String get profileSessionCurrentDevice => 'Current Device';
+
+  @override
+  String get changePasswordOldPassword => 'Current Password';
+
+  @override
+  String get changePasswordNewPassword => 'New Password';
+
+  @override
+  String get changePasswordEnterNew => 'Please enter new password';
+
+  @override
+  String get changePasswordMinLength =>
+      'Password must be at least 8 characters';
+
+  @override
+  String get changePasswordMaxLength =>
+      'Password must be at most 64 characters and 72 UTF-8 bytes';
+
+  @override
+  String get changePasswordConfirmNew => 'Confirm New Password';
+
+  @override
+  String get loginTwoFactorTitle => 'Two-Factor Verification';
+
+  @override
+  String get loginTwoFactorSubtitle =>
+      'Enter the 6-digit code from your authenticator app to sign in';
+
+  @override
+  String get loginTwoFactorCodeLabel => 'Verification code';
+
+  @override
+  String get loginTwoFactorCodeHint => 'Enter the 6-digit code';
+
+  @override
+  String get loginTwoFactorUseBackupHint =>
+      'You can also enter a one-time backup code (XXXX-XXXX)';
+
+  @override
+  String get loginTwoFactorVerifyAndSignIn => 'Verify and sign in';
+
+  @override
+  String get loginTwoFactorBackToLogin => 'Back to sign in';
+
+  @override
+  String get twoFactorEnrollTitle => 'Set Up Two-Factor Verification';
+
+  @override
+  String get twoFactorEnrollSubtitle =>
+      'Your role requires two-factor verification. Complete setup to continue';
+
+  @override
+  String get twoFactorEnrollPasswordLabel => 'Login password';
+
+  @override
+  String get twoFactorEnrollPasswordHint => 'Enter your login password';
+
+  @override
+  String get twoFactorEnrollContinue => 'Next: scan QR code';
+
+  @override
+  String get twoFactorEnrollScanHint =>
+      'Scan the QR code with your authenticator app, or copy the secret to add it manually';
+
+  @override
+  String get twoFactorEnrollSecretLabel => 'Copy secret';
+
+  @override
+  String get twoFactorEnrollConfirmCode => 'Confirm and enable';
+
+  @override
+  String get twoFactorEnrollBackupTitle => 'Backup codes';
+
+  @override
+  String get twoFactorEnrollBackupHint =>
+      'These one-time backup codes are shown only once. Save them to recover access if you lose your authenticator.';
+
+  @override
+  String get twoFactorEnrollBackupSavedCheck => 'I have saved the backup codes';
+
+  @override
+  String get twoFactorEnrollSavedAndFinish => 'Finish and sign in';
+
+  @override
+  String get twoFactorCopied => 'Copied to clipboard';
+
+  @override
+  String get twoFactorCopyCodes => 'Copy all backup codes';
+
+  @override
+  String get twoFactorDisableHint =>
+      'After disabling, sign-in will no longer require a verification code.';
+
+  @override
+  String get profileTwoFactorTitle => 'Two-Factor Verification';
+
+  @override
+  String get profileTwoFactorSubtitle =>
+      'Protect sign-in with one-time verification codes';
+
+  @override
+  String get profileTwoFactorEnabled => 'Enabled';
+
+  @override
+  String get profileTwoFactorDisabled => 'Not enabled';
+
+  @override
+  String get profileTwoFactorRequiredBadge =>
+      'Required for your role but not enabled yet';
+
+  @override
+  String get profileTwoFactorEnableAction => 'Enable';
+
+  @override
+  String get profileTwoFactorDisableAction => 'Disable';
+
+  @override
+  String get profileTwoFactorDisableConfirm => 'Disable it';
+
+  @override
+  String get profileTwoFactorLoadFailed => 'Failed to load status';
+
+  @override
+  String get changePasswordMismatch => 'Passwords do not match';
+
+  @override
+  String get changePasswordCancel => 'Cancel';
+
+  @override
+  String get changePasswordConfirm => 'Confirm';
+
+  @override
+  String get changePasswordSuccess => 'Password changed successfully';
+
+  @override
+  String get changePasswordWrongOld => 'Incorrect current password';
+
+  @override
+  String get changePasswordFailed => 'Password change failed, please retry';
+
+  @override
+  String changePasswordEnterField(Object field) {
+    return 'Please enter $field';
+  }
+
+  @override
+  String get loginWelcome => 'Welcome Back';
+
+  @override
+  String get loginDescription => 'Sign in with your OmniNest account.';
+
+  @override
+  String get loginSubtitle =>
+      'Consolidate family media, reading, files, and automation tasks into one stable personal space.';
+
+  @override
+  String get loginRedirectHint =>
+      'You\'ll be redirected to your requested page after signing in';
+
+  @override
+  String get loginFeatureMedia => 'Media Center';
+
+  @override
+  String get loginFeatureReader => 'Book Library';
+
+  @override
+  String get loginFeatureFiles => 'File Manager';
+
+  @override
+  String get loginFeatureAdmin => 'Admin Console';
+
+  @override
+  String get loginUsername => 'Username';
+
+  @override
+  String get loginUsernameHint => 'Please enter username';
+
+  @override
+  String get loginPassword => 'Password';
+
+  @override
+  String get loginShowPassword => 'Show password';
+
+  @override
+  String get loginHidePassword => 'Hide password';
+
+  @override
+  String get loginPasswordHint => 'Please enter password';
+
+  @override
+  String get loginSigningIn => 'Signing in...';
+
+  @override
+  String get loginSetupNewServer => 'Set up a new server';
+
+  @override
+  String get loginSignIn => 'Sign In';
+
+  @override
+  String get loginFailed => 'Login failed, please try again later';
+
+  @override
+  String get loginConnectionError =>
+      'Cannot connect to backend, please confirm the service is running';
+
+  @override
+  String get loginRequestFailed =>
+      'Login request failed, please check your account or network';
+
+  @override
+  String get coreRetry => 'Retry';
+
+  @override
+  String get coreStartupFailed => 'Startup failed';
+
+  @override
+  String get coreStartupFailedHint =>
+      'A runtime dependency could not be initialized. Retry, then check the local media components and application logs if the problem continues.';
+
+  @override
+  String get coreCancel => 'Cancel';
+
+  @override
+  String get coreConfirm => 'Confirm';
+
+  @override
+  String get coreSave => 'Save';
+
+  @override
+  String get coreClose => 'Close';
+
+  @override
+  String get coreBack => 'Back';
+
+  @override
+  String get coreBackToPortal => 'Back to Portal';
+
+  @override
+  String get coreDelete => 'Delete';
+
+  @override
+  String get coreClear => 'Clear';
+
+  @override
+  String get coreUnknownDate => 'Unknown date';
+
+  @override
+  String get coreUndetermined => 'Undetermined';
+
+  @override
+  String get videoSubtitleLangZh => 'Chinese';
+
+  @override
+  String get videoSubtitleLangEn => 'English';
+
+  @override
+  String get videoSubtitleLangJa => 'Japanese';
+
+  @override
+  String get videoSubtitleLangKo => 'Korean';
+
+  @override
+  String get videoSubtitleLangUnd => 'Undetermined';
+
+  @override
+  String get coreChooseDate => 'Choose date';
+
+  @override
+  String get corePlay => 'Play';
+
+  @override
+  String get corePause => 'Pause';
+
+  @override
+  String get corePrevious => 'Previous';
+
+  @override
+  String get coreNext => 'Next';
+
+  @override
+  String get coreShowPassword => 'Show password';
+
+  @override
+  String get coreHidePassword => 'Hide password';
+
+  @override
+  String get coreSearchHint => 'Search…';
+
+  @override
+  String get coreProfile => 'Profile';
+
+  @override
+  String get coreStorage => 'Storage';
+
+  @override
+  String get coreAdmin => 'Admin';
+
+  @override
+  String get coreSignOut => 'Sign Out';
+
+  @override
+  String get coreMenu => 'Menu';
+
+  @override
+  String get coreMore => 'More actions';
+
+  @override
+  String get coreTheme => 'Theme';
+
+  @override
+  String get coreThemeLight => 'Light';
+
+  @override
+  String get coreThemeDark => 'Dark';
+
+  @override
+  String get coreLanguage => 'Language';
+
+  @override
+  String get coreRoleSuperAdmin => 'Admin';
+
+  @override
+  String get coreRoleAdmin => 'Mod';
+
+  @override
+  String get coreRoleMember => 'Member';
+
+  @override
+  String get filesAllFiles => 'All Files';
+
+  @override
+  String get filesRecent => 'Recent';
+
+  @override
+  String get filesFavorites => 'Favorites';
+
+  @override
+  String get filesRecycleBin => 'Recycle Bin';
+
+  @override
+  String get filesSharedWithMe => 'Shared With Me';
+
+  @override
+  String get filesMyShares => 'My Shares';
+
+  @override
+  String get filesShareManagement => 'Share Link Management';
+
+  @override
+  String get filesStorageStats => 'Storage Statistics';
+
+  @override
+  String get filesUploadQueue => 'Upload Queue';
+
+  @override
+  String get filesExternalStorage => 'External Storage';
+
+  @override
+  String get filesImportTasks => 'Import Tasks';
+
+  @override
+  String get filesAllFilesDesc =>
+      'Browse root or specified directory to manage folders, files and paths.';
+
+  @override
+  String get filesRecentDesc =>
+      'View recently opened or downloaded files sorted by access time.';
+
+  @override
+  String get filesFavoritesDesc =>
+      'View starred files in one place, ideal for frequently used materials.';
+
+  @override
+  String get filesRecycleBinDesc =>
+      'View soft-deleted files, supports restore or permanent delete.';
+
+  @override
+  String get filesSharedWithMeDesc =>
+      'View files shared to your account by other users.';
+
+  @override
+  String get filesMySharesDesc => 'View share links created by you.';
+
+  @override
+  String get filesShareManagementDesc =>
+      'Manage active, expired or revoked share links.';
+
+  @override
+  String get filesStorageStatsDesc =>
+      'View capacity, quota, file type distribution and space usage.';
+
+  @override
+  String get filesUploadQueueDesc =>
+      'View multipart upload sessions, resume progress and upload status.';
+
+  @override
+  String get filesUploadQueueEmptyTitle => 'Nothing is uploading';
+
+  @override
+  String get filesUploadQueueEmptyMessage =>
+      'Start an upload from any folder; progress and failure reasons stay here.';
+
+  @override
+  String get filesUploadQueueSummaryActive => 'Active';
+
+  @override
+  String get filesUploadQueueSummaryCompleted => 'Completed';
+
+  @override
+  String get filesUploadQueueSummaryFailed => 'Failed';
+
+  @override
+  String get filesSharesEmptyTitle => 'No share links yet';
+
+  @override
+  String get filesSharesEmptyMessage =>
+      'Long-press a file and choose Share; links and their access state show up here.';
+
+  @override
+  String get filesStorageEmptyTitle => 'Storage stats unavailable';
+
+  @override
+  String get filesStorageEmptyMessage =>
+      'Stats are aggregated by the server; retry once the network is back.';
+
+  @override
+  String get filesStorageRetry => 'Reload';
+
+  @override
+  String get filesStorageQuotaTitle => 'Quota usage';
+
+  @override
+  String get filesStorageQuotaUnlimited => 'No quota limit';
+
+  @override
+  String get filesStorageSummaryFiles => 'Files';
+
+  @override
+  String get filesStorageSummaryFolders => 'Folders';
+
+  @override
+  String get filesStorageSummaryUsed => 'Used';
+
+  @override
+  String get filesStorageTypeDistribution => 'Type distribution';
+
+  @override
+  String filesUploadQueueLoadMore(String loaded, String total) {
+    return 'Load more ($loaded of $total)';
+  }
+
+  @override
+  String get filesExternalStorageDesc =>
+      'Manage OneDrive, WebDAV and other third-party storage mounts.';
+
+  @override
+  String get filesImportTasksDesc =>
+      'View external storage file import progress, supports cancelling queued tasks.';
+
+  @override
+  String filesHostedItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesSharedWithMeEmptyTitle => 'Nobody has shared files with you';
+
+  @override
+  String get filesSharedWithMeEmptyMessage =>
+      'Files others share with your account are listed here and open straight into preview.';
+
+  @override
+  String get filesExternalEmptyTitle => 'No storage mounted';
+
+  @override
+  String get filesExternalEmptyMessage =>
+      'Add a OneDrive, WebDAV or other source to browse and import files here.';
+
+  @override
+  String get filesExternalCredentialsMissing => 'Credentials missing';
+
+  @override
+  String get filesExternalOAuthSuccess => 'Storage authorization completed.';
+
+  @override
+  String get filesExternalOAuthFailed =>
+      'Storage authorization failed. Please try again.';
+
+  @override
+  String get filesExternalBrowseFailedTitle =>
+      'Cannot read the mount directory';
+
+  @override
+  String get filesExternalBrowseEmptyMessage =>
+      'This directory has nothing to browse.';
+
+  @override
+  String get filesImportEmptyTitle => 'No import tasks';
+
+  @override
+  String get filesImportEmptyMessage =>
+      'Import a file from external storage and its progress is listed here.';
+
+  @override
+  String get filesHomeWorkspaceTools => 'Workspace tools';
+
+  @override
+  String filesHomeShortcutMountsOnline(int online, int total) {
+    return '$online of $total mounts online';
+  }
+
+  @override
+  String filesHomeShortcutTasksActive(int count) {
+    return '$count tasks running';
+  }
+
+  @override
+  String filesHomeShortcutUploadRemaining(String size) {
+    return '$size still to upload';
+  }
+
+  @override
+  String filesShareExpiryDays(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get filesSharedSpace => 'Shared Space';
+
+  @override
+  String get filesSharedSpaceDesc => 'All users shared file space';
+
+  @override
+  String get filesSharedSpaceUsage => 'Shared Space Usage';
+
+  @override
+  String get filesSharedSpaceEmpty => 'No files in shared space';
+
+  @override
+  String get filesMoveToShared => 'Move to Shared Space';
+
+  @override
+  String get filesMoveToSharedConfirm => 'Move to Shared Space';
+
+  @override
+  String filesMoveToSharedMessage(Object name) {
+    return 'Move \"$name\" to shared space? All users will see it.';
+  }
+
+  @override
+  String get filesMoveToSharedSuccess => 'Moved to shared space';
+
+  @override
+  String get filesMoveToPersonal => 'Move to Personal Space';
+
+  @override
+  String get filesMoveToPersonalConfirm => 'Move to Personal Space';
+
+  @override
+  String filesMoveToPersonalMessage(Object name) {
+    return 'Move \"$name\" to personal space?';
+  }
+
+  @override
+  String get filesMoveToPersonalLabel => 'Move back';
+
+  @override
+  String get filesMoveToPersonalSuccess => 'Moved back to personal space';
+
+  @override
+  String get filesMoveSpaceFailed =>
+      'Space migration failed. Please try again later.';
+
+  @override
+  String get filesCount => 'files';
+
+  @override
+  String get filesCategoryAll => 'All';
+
+  @override
+  String get filesCategoryFolder => 'Folders';
+
+  @override
+  String get filesCategoryImage => 'Images';
+
+  @override
+  String get filesCategoryVideo => 'Videos';
+
+  @override
+  String get filesCategoryAudio => 'Audio';
+
+  @override
+  String get filesCategoryDocument => 'Documents';
+
+  @override
+  String get filesCategoryNovel => 'Novels';
+
+  @override
+  String get filesCategoryComic => 'Comics';
+
+  @override
+  String get filesCategoryArchive => 'Archives';
+
+  @override
+  String get filesCategoryOther => 'Other';
+
+  @override
+  String get filesGroupFiles => 'Files';
+
+  @override
+  String get filesGroupSharing => 'Sharing';
+
+  @override
+  String get filesGroupTransfer => 'Transfers';
+
+  @override
+  String get filesGroupStorage => 'Storage';
+
+  @override
+  String get filesNavFiles => 'Files';
+
+  @override
+  String get filesNavRecent => 'Recent';
+
+  @override
+  String get filesNavShared => 'Shared';
+
+  @override
+  String get filesNavRecycleBin => 'Recycle Bin';
+
+  @override
+  String get filesOpenFileMenu => 'Open file menu';
+
+  @override
+  String get filesSearch => 'Search';
+
+  @override
+  String get filesRefresh => 'Refresh';
+
+  @override
+  String get filesSearchFiles => 'Search Files';
+
+  @override
+  String get filesSearchHint => 'Enter filename, path or type';
+
+  @override
+  String get filesStorageUsage => 'Storage Usage';
+
+  @override
+  String get filesWaitingStats => 'Waiting for statistics';
+
+  @override
+  String get filesUnlimited => 'Unlimited';
+
+  @override
+  String get filesUnlimitedQuota => 'Unlimited quota';
+
+  @override
+  String filesUsedPercent(Object percent, Object remaining) {
+    return '$percent% used · $remaining remaining';
+  }
+
+  @override
+  String filesUsedOf(Object total, Object used) {
+    return '$used / $total';
+  }
+
+  @override
+  String get filesStorageSpace => 'Storage Space';
+
+  @override
+  String get filesFolders => 'Folders';
+
+  @override
+  String get filesFiles => 'Files';
+
+  @override
+  String get filesCapacity => 'Capacity';
+
+  @override
+  String get filesCurrentView => 'Current View';
+
+  @override
+  String get filesCurrentViewTotal => 'Current View Total';
+
+  @override
+  String get filesSoftDeleted => 'Soft Deleted Files';
+
+  @override
+  String get filesColumnName => 'Name';
+
+  @override
+  String get filesColumnModified => 'Modified';
+
+  @override
+  String get filesColumnSharedAt => 'Shared at';
+
+  @override
+  String get filesColumnExpiresAt => 'Expires at';
+
+  @override
+  String paginationTotal(Object count) {
+    return '$count total';
+  }
+
+  @override
+  String paginationRange(Object start, Object end) {
+    return '$start-$end';
+  }
+
+  @override
+  String get paginationFirst => 'First page';
+
+  @override
+  String get paginationPrev => 'Previous page';
+
+  @override
+  String get paginationNext => 'Next page';
+
+  @override
+  String get paginationLast => 'Last page';
+
+  @override
+  String get paginationJumpTo => 'Jump to';
+
+  @override
+  String get paginationRows => 'Rows';
+
+  @override
+  String get paginationRowsPerPage => 'Rows per page';
+
+  @override
+  String get filesColumnSize => 'Size';
+
+  @override
+  String get filesColumnUpdatedAt => 'Updated';
+
+  @override
+  String get filesColumnCreatedAt => 'Created';
+
+  @override
+  String get filesImportFileCount => 'Files';
+
+  @override
+  String get filesColumnType => 'Type';
+
+  @override
+  String get filesColumnFormat => 'Format';
+
+  @override
+  String get filesColumnStatus => 'Status';
+
+  @override
+  String get filesTaskCancel => 'Cancel Task';
+
+  @override
+  String get filesImportSpeed => 'Speed';
+
+  @override
+  String get filesStatusRunning => 'Running';
+
+  @override
+  String get filesStatusCompleted => 'Completed';
+
+  @override
+  String get filesImportCancelConfirm => 'Cancel import task?';
+
+  @override
+  String get filesImportCancelMessage =>
+      'The running import pipeline will be aborted.';
+
+  @override
+  String get filesShareLink => 'Share Link';
+
+  @override
+  String get filesShareAccess => 'Access';
+
+  @override
+  String get filesShareRemaining => 'Remaining';
+
+  @override
+  String get filesShareExpires => 'Expires';
+
+  @override
+  String get filesShareCreated => 'Created';
+
+  @override
+  String get filesShareExtract => 'Extract Code';
+
+  @override
+  String get filesMetricSharedOwners => 'Share Owners';
+
+  @override
+  String get filesMetricSharedItems => 'Shared Items';
+
+  @override
+  String get filesMetricSharedSize => 'Total Size';
+
+  @override
+  String get filesMetricTotalShares => 'Total Links';
+
+  @override
+  String get filesMetricActiveShares => 'Active Links';
+
+  @override
+  String get filesMetricExpiredShares => 'Expired';
+
+  @override
+  String get filesMetricRevokedShares => 'Revoked';
+
+  @override
+  String get filesSharePublic => 'Public';
+
+  @override
+  String get filesSharePermanent => 'Permanent';
+
+  @override
+  String get filesShareExpiredShort => 'Inactive';
+
+  @override
+  String get filesOpViewShare => 'View share';
+
+  @override
+  String get filesOpRevoke => 'Revoke';
+
+  @override
+  String get filesMetricUploading => 'Uploading';
+
+  @override
+  String get filesMetricQueued => 'Queued';
+
+  @override
+  String get filesMetricCompleted => 'Completed';
+
+  @override
+  String get filesMetricFailed => 'Failed';
+
+  @override
+  String get filesMetricMounts => 'Mounts';
+
+  @override
+  String get filesMetricReady => 'Credentials Ready';
+
+  @override
+  String get filesMetricAbnormal => 'Abnormal';
+
+  @override
+  String get filesOpBrowse => 'Browse';
+
+  @override
+  String get filesOpUnmount => 'Unmount';
+
+  @override
+  String get filesOpConfig => 'Configure';
+
+  @override
+  String get filesTaskSource => 'Source';
+
+  @override
+  String get filesProgress => 'Progress';
+
+  @override
+  String get filesStatusFilterAll => 'All';
+
+  @override
+  String get filesInspectorTitle => 'File Details';
+
+  @override
+  String get filesColumnUploader => 'Uploader';
+
+  @override
+  String get filesNewFolderDefault => 'New Folder';
+
+  @override
+  String get filesToolbarTableView => 'Table View';
+
+  @override
+  String get filesToolbarGridView => 'Grid View';
+
+  @override
+  String get filesToggleInspector => 'Details Panel';
+
+  @override
+  String get filesInspectorTabOverview => 'Overview';
+
+  @override
+  String get filesInspectorTabVersions => 'Versions';
+
+  @override
+  String get filesInspectorTabActivity => 'Activity';
+
+  @override
+  String get filesInspectorEmptyHint =>
+      'Select an item to inspect its technical details';
+
+  @override
+  String get filesInspectorPath => 'Path';
+
+  @override
+  String get filesInspectorNode => 'Node';
+
+  @override
+  String get filesInspectorExactBytes => 'Exact bytes';
+
+  @override
+  String get filesInspectorResolution => 'Resolution';
+
+  @override
+  String get filesInspectorDuration => 'Duration';
+
+  @override
+  String get filesInspectorMime => 'MIME';
+
+  @override
+  String get filesInspectorSpace => 'Space';
+
+  @override
+  String get filesInspectorNoVersions => 'No version history';
+
+  @override
+  String get filesEmpty => 'No files';
+
+  @override
+  String get filesRecycleBinEmpty => 'Recycle bin is empty';
+
+  @override
+  String get filesCameraTakePhoto => 'Take Photo & Upload';
+
+  @override
+  String get filesCameraRecordVideo => 'Record Video & Upload';
+
+  @override
+  String filesCameraCaptureFailed(Object error) {
+    return 'Camera unavailable: $error';
+  }
+
+  @override
+  String get filesUploadFile => 'Upload File';
+
+  @override
+  String get filesDropToUpload => 'Drop files here to upload';
+
+  @override
+  String filesUploadProcessing(Object count, Object progress) {
+    return 'Processing $count files · Progress $progress';
+  }
+
+  @override
+  String get filesViewAll => 'View All';
+
+  @override
+  String get filesCollapseQueue => 'Collapse upload queue';
+
+  @override
+  String get filesExpandQueue => 'Expand upload queue';
+
+  @override
+  String filesMoreInQueue(Object count) {
+    return '$count more tasks in upload queue';
+  }
+
+  @override
+  String get filesSortBy => 'Sort By';
+
+  @override
+  String get filesSortName => 'Name';
+
+  @override
+  String get filesSortTime => 'Time';
+
+  @override
+  String get filesSortSize => 'Size';
+
+  @override
+  String get filesNewFolder => 'New Folder';
+
+  @override
+  String get filesCreate => 'Create';
+
+  @override
+  String get filesFolderName => 'Folder Name';
+
+  @override
+  String get filesRename => 'Rename';
+
+  @override
+  String get filesSave => 'Save';
+
+  @override
+  String get filesFileName => 'Filename';
+
+  @override
+  String get filesFolder => 'Folder';
+
+  @override
+  String get filesMoveToRecycleBin => 'Move to Recycle Bin';
+
+  @override
+  String get filesPurge => 'Permanently Delete';
+
+  @override
+  String get filesCopyToEllipsis => 'Copy to…';
+
+  @override
+  String filesCopiedFile(Object name) {
+    return 'Copied \"$name\"';
+  }
+
+  @override
+  String get filesCopyFailed => 'Copy failed';
+
+  @override
+  String get filesMoveToEllipsis => 'Move to…';
+
+  @override
+  String get filesDownload => 'Download';
+
+  @override
+  String get filesShare => 'Share';
+
+  @override
+  String get filesOpen => 'Open';
+
+  @override
+  String get filesPreview => 'Preview';
+
+  @override
+  String get filesPreviewFullscreen => 'Fullscreen';
+
+  @override
+  String get filesPreviewExitFullscreen => 'Exit fullscreen';
+
+  @override
+  String get filesRestore => 'Restore';
+
+  @override
+  String get filesMoreActions => 'More Actions';
+
+  @override
+  String get filesMoreSections => 'More Sections';
+
+  @override
+  String get filesFilterSort => 'Sort & Filter';
+
+  @override
+  String get filesSwitchView => 'Switch View';
+
+  @override
+  String get filesFileActions => 'File Actions';
+
+  @override
+  String filesDeleteConfirmTitle(Object name) {
+    return 'Move to Recycle Bin?';
+  }
+
+  @override
+  String filesDeleteConfirmMessage(Object name) {
+    return '\"$name\" will be removed from the file list and associated records in video, music and other modules will be cleaned up.';
+  }
+
+  @override
+  String filesPurgeConfirmTitle(Object name) {
+    return 'Permanently Delete?';
+  }
+
+  @override
+  String filesPurgeConfirmMessage(Object name) {
+    return '\"$name\" will be permanently deleted from the recycle bin. This action cannot be undone.';
+  }
+
+  @override
+  String filesFolderItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesShareManageEntry => 'Manage share links';
+
+  @override
+  String filesSelectedCount(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get filesSelectAll => 'Select All';
+
+  @override
+  String get filesDeselect => 'Deselect';
+
+  @override
+  String get filesBatchRestore => 'Batch Restore';
+
+  @override
+  String get filesBatchPurge => 'Batch Purge';
+
+  @override
+  String get filesBatchMove => 'Batch Move';
+
+  @override
+  String get filesBatchDelete => 'Batch Delete';
+
+  @override
+  String get filesBatchAddFavorite => 'Batch Favorite';
+
+  @override
+  String get filesBatchRemoveFavorite => 'Batch Unfavorite';
+
+  @override
+  String get filesAddFavorite => 'Favorite';
+
+  @override
+  String get filesRemoveFavorite => 'Unfavorite';
+
+  @override
+  String get filesBatchRestoreTitle => 'Batch Restore?';
+
+  @override
+  String filesBatchRestoreMessage(Object count) {
+    return 'Will restore $count selected files.';
+  }
+
+  @override
+  String get filesBatchPurgeTitle => 'Batch Permanently Delete?';
+
+  @override
+  String filesBatchPurgeMessage(Object count) {
+    return '$count selected files will be permanently deleted. This action cannot be undone.';
+  }
+
+  @override
+  String get filesBatchDeleteTitle => 'Batch Move to Recycle Bin?';
+
+  @override
+  String filesBatchDeleteMessage(Object count) {
+    return '$count selected files will be moved to the recycle bin.';
+  }
+
+  @override
+  String get filesDownloadLinkCopied => 'Download link copied to clipboard';
+
+  @override
+  String get filesDownloadOpened => 'Opened the download in a new tab';
+
+  @override
+  String get filesDownloadSaved => 'File saved to this device';
+
+  @override
+  String get filesDownloadFailed => 'Failed to get download link';
+
+  @override
+  String filesMovedFile(Object name) {
+    return 'Moved \"$name\"';
+  }
+
+  @override
+  String filesMovedCount(Object count) {
+    return 'Moved $count files';
+  }
+
+  @override
+  String filesUploadComplete(Object count) {
+    return '$count files uploaded';
+  }
+
+  @override
+  String filesUploadBatchSummary(
+    Object completed,
+    Object conflicts,
+    Object failed,
+    Object paused,
+  ) {
+    return '$completed uploaded, $conflicts conflicted, $failed failed, $paused paused';
+  }
+
+  @override
+  String get filesSelectTargetFolder => 'Select Target Folder';
+
+  @override
+  String get filesRootDirectory => 'Root Directory';
+
+  @override
+  String get filesGoToParent => 'Go to parent folder';
+
+  @override
+  String get filesFolderEmpty => 'This folder is empty';
+
+  @override
+  String filesShareItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesSharedFolderRoot => 'Shared folder root';
+
+  @override
+  String filesMoveToFolder(Object name) {
+    return 'Move to \"$name\"';
+  }
+
+  @override
+  String get filesStatusQueued => 'Queued';
+
+  @override
+  String get filesStatusUploading => 'Uploading';
+
+  @override
+  String get filesStatusPaused => 'Paused';
+
+  @override
+  String get filesStatusFailed => 'Failed';
+
+  @override
+  String get filesStatusCancelled => 'Cancelled';
+
+  @override
+  String get filesStatusCancelling => 'Cancelling';
+
+  @override
+  String get filesNewTask => 'New Task';
+
+  @override
+  String get filesCancelTask => 'Cancel Task';
+
+  @override
+  String get filesTaskEnded => 'Task Ended';
+
+  @override
+  String get filesNoExternalStorage => 'No external storage';
+
+  @override
+  String get filesAddMount => 'Add Mount';
+
+  @override
+  String get filesEdit => 'Edit';
+
+  @override
+  String get filesBrowseRemote => 'Browse Remote Files';
+
+  @override
+  String get filesDisableMount => 'Disable Mount';
+
+  @override
+  String get filesDisableMountConfirm => 'Disable External Mount?';
+
+  @override
+  String filesDisableMountMessage(Object name) {
+    return '\"$name\" will no longer participate in file mount and sync.';
+  }
+
+  @override
+  String get filesDeleteMount => 'Delete Mount';
+
+  @override
+  String get filesDeleteMountConfirm => 'Delete External Mount?';
+
+  @override
+  String filesDeleteMountMessage(Object name) {
+    return 'Will permanently delete \"$name\" and its rclone configuration. This action cannot be undone.';
+  }
+
+  @override
+  String get filesCloseBrowse => 'Close Browse';
+
+  @override
+  String get filesDirectoryEmpty => 'This directory is empty';
+
+  @override
+  String get filesEnterFolder => 'Enter Folder';
+
+  @override
+  String get filesImportFile => 'Import This File';
+
+  @override
+  String get filesImportFolder => 'Import Entire Folder';
+
+  @override
+  String get filesImportConfirm => 'Import External Content?';
+
+  @override
+  String filesImportMessage(Object name) {
+    return 'Import \"$name\" to current file directory.';
+  }
+
+  @override
+  String get filesImportSizeGuardHint =>
+      'Very large files may be rejected; put 4K originals in the local media library instead.';
+
+  @override
+  String get filesTestConnection => 'Test connection';
+
+  @override
+  String get filesAuthorizeAccount => 'Authorize';
+
+  @override
+  String get filesAuthorizeHint =>
+      'Open this link in a browser to finish authorization. The dialog stays open until you confirm here.';
+
+  @override
+  String get filesOAuthCompleted => 'I\'ve completed authorization';
+
+  @override
+  String get filesImport => 'Import';
+
+  @override
+  String get filesNoImportTasks => 'No import tasks';
+
+  @override
+  String get filesCancelImportConfirm => 'Cancel Import Task?';
+
+  @override
+  String filesCancelImportMessage(Object name) {
+    return '\"$name\" import will be cancelled.';
+  }
+
+  @override
+  String get filesDeleteRecord => 'Delete Record';
+
+  @override
+  String get filesDeleteImportConfirm => 'Delete Import Record?';
+
+  @override
+  String filesDeleteImportMessage(Object name) {
+    return '\"$name\" import record will be deleted.';
+  }
+
+  @override
+  String get filesNoSharedFiles => 'No shared files';
+
+  @override
+  String filesFromUser(Object userId) {
+    return 'From $userId';
+  }
+
+  @override
+  String get filesLongTerm => 'Long term';
+
+  @override
+  String get filesHasExpiry => 'Has expiry';
+
+  @override
+  String get filesShareMgmt => 'Share Management';
+
+  @override
+  String get filesShareMgmtDesc =>
+      'Manage share links created by you. Revocable.';
+
+  @override
+  String get filesNoShareLinks => 'No share links';
+
+  @override
+  String filesLoadFailed(Object error) {
+    return 'Failed to load: $error';
+  }
+
+  @override
+  String get filesAccessUnlimited => 'Unlimited';
+
+  @override
+  String get filesShareActive => 'Active';
+
+  @override
+  String get filesShareScopeMine => 'Mine';
+
+  @override
+  String get filesShareScopeAll => 'All links';
+
+  @override
+  String get filesShareRevoked => 'Revoked';
+
+  @override
+  String get filesShareExpired => 'Expired';
+
+  @override
+  String get filesShareExhausted => 'Exhausted';
+
+  @override
+  String get filesRevokeShare => 'Revoke Share';
+
+  @override
+  String get filesRevokeShareConfirm => 'Revoke Share?';
+
+  @override
+  String filesRevokeShareMessage(Object name) {
+    return '\"$name\" share link will be invalidated. People with the link can no longer access.';
+  }
+
+  @override
+  String get filesClose => 'Close';
+
+  @override
+  String get filesWaitingUpload => 'Waiting to upload';
+
+  @override
+  String get filesDirectUploading => 'Direct uploading';
+
+  @override
+  String get filesMultipartUploading => 'Multipart uploading';
+
+  @override
+  String get filesUploadPausedMsg => 'Paused, can resume';
+
+  @override
+  String get filesUploadPausePending => 'Stopping the current transfer';
+
+  @override
+  String get filesResumingUpload => 'Resuming upload';
+
+  @override
+  String get filesUploadPurgingConflict =>
+      'Cleaning up the conflicting item in trash';
+
+  @override
+  String get filesUploadRetrying => 'Cleanup complete. Retrying upload';
+
+  @override
+  String get filesUploadDone => 'Upload complete';
+
+  @override
+  String get filesUploadScanPending =>
+      'Upload complete. Security scan in progress; the file will appear once it passes.';
+
+  @override
+  String filesUploadedParts(Object current, Object total) {
+    return 'Uploaded $current/$total parts';
+  }
+
+  @override
+  String get filesCleanupConflict => 'Clean up same-name file in recycle bin?';
+
+  @override
+  String get filesCleanupMessage =>
+      'Same-name file exists in recycle bin. Will auto re-upload after cleanup.';
+
+  @override
+  String get filesCleanupAndRetry => 'Clean up and retry';
+
+  @override
+  String get filesDeleteUploadTask => 'Delete Upload Task?';
+
+  @override
+  String get filesDeleteUploadTaskMessage =>
+      'The upload task will be removed from the queue. Unfinished server sessions will be cancelled.';
+
+  @override
+  String get filesCancelUploadSessionTitle => 'Cancel Upload Session?';
+
+  @override
+  String get filesCancelUploadSessionMessage =>
+      'The server-side multipart upload will be cancelled and unfinished parts will be discarded.';
+
+  @override
+  String get filesRebindUpload => 'Resume from original file';
+
+  @override
+  String get filesRebindUploadNameMismatch =>
+      'The selected file name differs from the original task. Continue with this file?';
+
+  @override
+  String get filesRebindUploadSizeMismatch =>
+      'The selected file size does not match the upload session.';
+
+  @override
+  String get filesRebindUploadRestart => 'Upload again';
+
+  @override
+  String get filesRebindUploadExpired =>
+      'This upload session has expired or failed and can\'t be resumed. The selected file will be uploaded again to the original location, and the old session will be released.';
+
+  @override
+  String get filesRebindUploadRestartMismatch =>
+      'The selected file\'s name or size differs from the original task. Upload it again to the original location?';
+
+  @override
+  String get filesDeleteTask => 'Delete Task';
+
+  @override
+  String get filesEditExternalStorage => 'Edit External Storage';
+
+  @override
+  String get filesAddExternalStorage => 'Add External Storage';
+
+  @override
+  String get externalStorageSpace => 'Space Usage';
+
+  @override
+  String get externalMkdir => 'Create Directory';
+
+  @override
+  String get externalMkdirHint => 'Enter directory path, e.g. /photos/2024';
+
+  @override
+  String get externalDeleteFile => 'Delete';
+
+  @override
+  String get externalRenameFile => 'Rename';
+
+  @override
+  String get externalDeleteConfirm =>
+      'Delete this remote file? This cannot be undone.';
+
+  @override
+  String externalSpaceUsedOf(Object used, Object total) {
+    return '$used / $total';
+  }
+
+  @override
+  String get filesStorageType => 'Storage Type';
+
+  @override
+  String get filesDisplayName => 'Display Name';
+
+  @override
+  String get filesDisplayNameHint => 'e.g. My Cloud Storage';
+
+  @override
+  String get filesConnectionCredentials => 'Connection Credentials';
+
+  @override
+  String get filesExistingSecretPreserved =>
+      'Passwords, secrets, and tokens are never returned. Leave them blank to keep the saved values.';
+
+  @override
+  String get filesKeepExistingSecretHint =>
+      'Leave blank to keep the saved value';
+
+  @override
+  String get filesOAuthAppMissing =>
+      'This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.';
+
+  @override
+  String get filesS3Provider => 'S3 Provider';
+
+  @override
+  String get filesEndpointRequired => 'Endpoint (required)';
+
+  @override
+  String get filesEndpoint => 'Endpoint';
+
+  @override
+  String get filesEndpointHint => 'e.g. http://omninest-minio:9000';
+
+  @override
+  String get filesRegion => 'Region';
+
+  @override
+  String get filesRegionHint => 'e.g. us-east-1 (optional)';
+
+  @override
+  String get filesServiceType => 'Service Type';
+
+  @override
+  String get filesWebdavUrl => 'WebDAV URL';
+
+  @override
+  String get filesUsername => 'Username';
+
+  @override
+  String get filesPasswordOrApp => 'Password / App Password';
+
+  @override
+  String get filesDirectoryPath => 'Directory Path';
+
+  @override
+  String get filesClientIdOptional => 'Client ID (optional)';
+
+  @override
+  String get filesClientSecretOptional => 'Client Secret (optional)';
+
+  @override
+  String get filesUnknownStorageType => 'Unknown Storage Type';
+
+  @override
+  String get filesAdvancedOptions => 'Advanced Options';
+
+  @override
+  String get filesMaxAccessCount => 'Max Access Count';
+
+  @override
+  String get filesNoLimit => 'No limit';
+
+  @override
+  String get filesExpiryTime => 'Expiry Time';
+
+  @override
+  String get filesNeverExpire => 'Never expire';
+
+  @override
+  String get filesCreateShareLink => 'Create Share Link';
+
+  @override
+  String get filesCreateFailed => 'Creation failed';
+
+  @override
+  String get filesSetPassword => 'Set Password';
+
+  @override
+  String get filesPasswordRequired => 'Password required to access';
+
+  @override
+  String get filesNoPasswordAnyone => 'No password, anyone can access';
+
+  @override
+  String get filesRandomGenerate => 'Random';
+
+  @override
+  String get filesCustomPassword => 'Custom Password';
+
+  @override
+  String get filesEnterPassword => 'Enter password';
+
+  @override
+  String get filesEnterCustomPassword => 'Please enter custom password';
+
+  @override
+  String get filesCopiedClipboard => 'Copied to clipboard';
+
+  @override
+  String get clipboardCopyFailed =>
+      'Copy failed, please select and copy manually';
+
+  @override
+  String get filesPasswordLabel => 'Password';
+
+  @override
+  String filesSharePasswordLabel(Object password) {
+    return 'Password: $password';
+  }
+
+  @override
+  String get filesShareCopyLink => 'Copy share link';
+
+  @override
+  String get filesShareCopyPassword => 'Copy access code';
+
+  @override
+  String get filesCopyLinkWithPassword => 'Copy link (with password)';
+
+  @override
+  String get filesShareLinkUnrecoverable =>
+      'This link address can no longer be shown; revoke and create a new share';
+
+  @override
+  String get filesShareEditSettings => 'Share settings';
+
+  @override
+  String get filesAllowDownloads => 'Allow downloads';
+
+  @override
+  String get filesAllowDownloadsSubtitle => 'Visitors can save the file';
+
+  @override
+  String get filesOriginalQuality => 'Original quality';
+
+  @override
+  String get filesOriginalQualitySubtitle =>
+      'Otherwise a web-sized copy is served';
+
+  @override
+  String get filesIncludeLocation => 'Include location';
+
+  @override
+  String get filesIncludeLocationSubtitle => 'Keep GPS data in the shared copy';
+
+  @override
+  String get filesDownloadsDisabled =>
+      'The owner disabled downloads and saving';
+
+  @override
+  String get filesShareSaveSettings => 'Save settings';
+
+  @override
+  String get filesShareSettingsSaved => 'Share settings updated';
+
+  @override
+  String get filesSharePasswordKeepHint =>
+      'Leave blank to keep the current password';
+
+  @override
+  String get filesSharePasswordClear => 'Remove password';
+
+  @override
+  String get filesCopyLinkOnly => 'Copy link only';
+
+  @override
+  String get filesCopyLink => 'Copy Link';
+
+  @override
+  String get filesCannotLoadImage => 'Cannot load image';
+
+  @override
+  String get filesImageLoadFailed => 'Image load failed';
+
+  @override
+  String get filesCannotGetImageUrl => 'Cannot get image URL';
+
+  @override
+  String get filesCannotLoadVideo => 'Cannot load video';
+
+  @override
+  String get filesCannotGetVideoUrl => 'Cannot get video URL';
+
+  @override
+  String get filesCannotLoadAudio => 'Cannot load audio';
+
+  @override
+  String get filesCannotGetAudioUrl => 'Cannot get audio URL';
+
+  @override
+  String get filesCannotLoadFile => 'Cannot load file';
+
+  @override
+  String get filesCannotGetFileUrl => 'Cannot get file URL';
+
+  @override
+  String get filesPdfDownloadHint =>
+      'This PDF could not be opened online. Download it to view.';
+
+  @override
+  String get filesAccessKeyId => 'Access Key ID';
+
+  @override
+  String get filesSecretAccessKey => 'Secret Access Key';
+
+  @override
+  String get filesOauthTokenJson => 'OAuth Token JSON';
+
+  @override
+  String get filesType => 'Type';
+
+  @override
+  String get filesUnknown => 'Unknown';
+
+  @override
+  String get filesSizeLabel => 'Size';
+
+  @override
+  String get filesPath => 'Path';
+
+  @override
+  String get filesShareAccessError => 'Cannot access share link';
+
+  @override
+  String get filesRetry => 'Retry';
+
+  @override
+  String get filesSavedToMyFiles => 'File saved to my files';
+
+  @override
+  String get filesFileExists => 'File already exists';
+
+  @override
+  String get filesGotIt => 'Got it';
+
+  @override
+  String filesSaveFailed(Object message) {
+    return 'Save failed: $message';
+  }
+
+  @override
+  String get filesPasswordAccess => 'This share requires password access';
+
+  @override
+  String get filesEnterSharePassword => 'Enter share password to view the file';
+
+  @override
+  String get filesAccess => 'Access';
+
+  @override
+  String get filesSaveToMyFiles => 'Save to my files';
+
+  @override
+  String get filesSaveWholeSharedFolder => 'Save the entire shared folder';
+
+  @override
+  String get filesDelete => 'Delete';
+
+  @override
+  String get filesCancel => 'Cancel';
+
+  @override
+  String get filesConfirm => 'Confirm';
+
+  @override
+  String get filesOpenTooltip => 'Open';
+
+  @override
+  String filesConflictMsg(Object name) {
+    return 'A file with the same name \"$name\" exists in the recycle bin. Clean up and retry.';
+  }
+
+  @override
+  String get filesStatusConflict => 'Conflict';
+
+  @override
+  String get filesStatusPending => 'Queued';
+
+  @override
+  String get filesUploadOrigin => 'Origin';
+
+  @override
+  String get filesUploadOriginLocal => 'Local';
+
+  @override
+  String get filesUploadOriginServer => 'Server';
+
+  @override
+  String get filesUploadPartsUnit => 'parts';
+
+  @override
+  String get filesStatusCreated => 'Created';
+
+  @override
+  String get filesLocalUpload => 'Local Upload';
+
+  @override
+  String filesUploadTaskCount(Object count) {
+    return '$count tasks';
+  }
+
+  @override
+  String get filesNoLocalUpload => 'No local uploads';
+
+  @override
+  String get filesFailedTasks => 'Failed Tasks';
+
+  @override
+  String get filesNoFailedTasks => 'No failed tasks';
+
+  @override
+  String get filesNoUploadTasks => 'No upload tasks';
+
+  @override
+  String get filesPauseUpload => 'Pause Upload';
+
+  @override
+  String get filesResumeUpload => 'Resume Upload';
+
+  @override
+  String get filesCleanAndRetry => 'Clean up and retry';
+
+  @override
+  String get filesImportQueued => 'Queued';
+
+  @override
+  String get filesImportScanning => 'Scanning source content';
+
+  @override
+  String get filesImportTransferring => 'Transferring from external storage';
+
+  @override
+  String get filesImportWriting => 'Writing to the file library';
+
+  @override
+  String get filesImportWaitingWorker => 'Waiting for the background worker';
+
+  @override
+  String filesImportFileProgress(int completed, int total) {
+    return '$completed/$total files completed';
+  }
+
+  @override
+  String filesImportCurrentFile(Object name) {
+    return 'Current: $name';
+  }
+
+  @override
+  String get filesImportRunning => 'Importing';
+
+  @override
+  String get filesImportCancelling => 'Cancelling';
+
+  @override
+  String get filesImportCancelled => 'Cancelled';
+
+  @override
+  String get filesS3Compatible => 'S3 Compatible Storage';
+
+  @override
+  String get filesAliyunDrive => 'Aliyun Drive';
+
+  @override
+  String get filesLocalStorage => 'Local Directory';
+
+  @override
+  String get portalSearch => 'Search';
+
+  @override
+  String get portalOpenReadingItem => 'Open Reading';
+
+  @override
+  String get portalOpenPhoto => 'View Photo';
+
+  @override
+  String get portalEnterSystem => 'Enter System';
+
+  @override
+  String get portalVisualCompactTitle =>
+      'Desktop Portal switched to one column';
+
+  @override
+  String get portalVisualCompactBody =>
+      'The current window is narrow, so content covers and status information are stacked.';
+
+  @override
+  String get portalVisualEyebrowRecentContent => 'Recent Content';
+
+  @override
+  String get portalVisualEyebrowCompact => 'OmniNest Portal';
+
+  @override
+  String get portalVisualStatusTitle => 'Needs Attention';
+
+  @override
+  String get portalVisualLastReadingLocation => 'Last reading position';
+
+  @override
+  String get portalVisualSync => 'Sync';
+
+  @override
+  String get portalFileManager => 'File Manager';
+
+  @override
+  String get portalFileManagerSubtitle =>
+      'Network storage, folders, recycle bin and object preview.';
+
+  @override
+  String get portalMovieCenter => 'Media Library';
+
+  @override
+  String get portalMovieCenterSubtitle =>
+      'Manage movies, TV series, and anime with metadata sync and direct playback.';
+
+  @override
+  String get portalReaderCenter => 'Reader Center';
+
+  @override
+  String get portalReaderCenterSubtitle =>
+      'Books, comics, and reading progress continuation.';
+
+  @override
+  String get portalMusic => 'Music';
+
+  @override
+  String get portalMusicSubtitle =>
+      'Lossless music, play queue and playlist management.';
+
+  @override
+  String get portalPhotos => 'Photos';
+
+  @override
+  String get portalPhotosSubtitle => 'Albums, auto backup and memory timeline.';
+
+  @override
+  String get portalAdmin => 'Manage';
+
+  @override
+  String get portalAdminSubtitle =>
+      'User permissions, system config, tasks and status.';
+
+  @override
+  String get portalDescriptionAdmin =>
+      'Switch between media, reading, files and system admin from one entry; each subsystem has its own workspace.';
+
+  @override
+  String get portalDescriptionMember =>
+      'Switch between media, reading and file management from one entry; each subsystem has its own workspace.';
+
+  @override
+  String get portalNoFiles => 'No files';
+
+  @override
+  String get portalNoPlayHistory => 'No play history';
+
+  @override
+  String get portalNoReadingHistory => 'No reading history';
+
+  @override
+  String get portalNoPhotos => 'No photos';
+
+  @override
+  String photosSlideshowPosition(Object index, Object total) {
+    return '$index of $total';
+  }
+
+  @override
+  String portalPhotoCount(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String portalAlbumCount(Object count) {
+    return '$count albums';
+  }
+
+  @override
+  String portalMovieBadge(Object count) {
+    return '$count movies';
+  }
+
+  @override
+  String portalReaderBadge(Object count) {
+    return '$count reading';
+  }
+
+  @override
+  String portalMusicBadge(Object count) {
+    return '$count tracks';
+  }
+
+  @override
+  String portalPhotoBadge(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get portalRelativeNow => 'Just now';
+
+  @override
+  String portalRelativeMinutes(Object n) {
+    return '$n min ago';
+  }
+
+  @override
+  String portalRelativeHours(Object n) {
+    return '$n hr ago';
+  }
+
+  @override
+  String get portalRelativeYesterday => 'Yesterday';
+
+  @override
+  String portalRelativeDays(Object n) {
+    return '$n days ago';
+  }
+
+  @override
+  String portalRelativeMonths(Object n) {
+    return '$n months ago';
+  }
+
+  @override
+  String portalRelativeYears(Object n) {
+    return '$n years ago';
+  }
+
+  @override
+  String get portalStorageTitle => 'Storage';
+
+  @override
+  String portalStorageUnlimited(Object used) {
+    return '$used GiB / Unlimited';
+  }
+
+  @override
+  String get portalTaskRunning => 'Running';
+
+  @override
+  String get portalTaskQueued => 'Queued';
+
+  @override
+  String get portalTaskFailed => 'Failed';
+
+  @override
+  String get portalNowPlaying => 'Now Playing';
+
+  @override
+  String get portalNoPlayRecord => 'No play record';
+
+  @override
+  String get portalImmersivePlayback => 'Immersive playback';
+
+  @override
+  String get portalExitImmersivePlayback => 'Exit immersive playback';
+
+  @override
+  String get portalMusicVisualizerSeek => 'Playback progress';
+
+  @override
+  String get portalMusicVisualizerVolume => 'Volume';
+
+  @override
+  String get portalMusicVisualizerEdit => 'Edit visuals';
+
+  @override
+  String get portalMusicVisualizerSave => 'Save visuals';
+
+  @override
+  String get portalMusicVisualizerResetDefault => 'Restore defaults';
+
+  @override
+  String get portalMusicVisualizerLyrics => 'Lyrics';
+
+  @override
+  String get musicVisualizerLyricMode => 'Lyric layout';
+
+  @override
+  String get musicVisualizerLyricModeScroll => 'Scrolling lyrics';
+
+  @override
+  String get musicVisualizerLyricModeMultiline => 'Multi-line lyrics';
+
+  @override
+  String get portalMusicVisualizerPlayer => 'Player';
+
+  @override
+  String get portalMusicVisualizerCurrentFont => 'Current line size';
+
+  @override
+  String get portalMusicVisualizerInactiveOpacity => 'Inactive opacity';
+
+  @override
+  String get portalMusicVisualizerVisibleLines => 'Visible lines';
+
+  @override
+  String get musicVisualizerLyricCurrentColor => 'Current line color';
+
+  @override
+  String get musicVisualizerLyricInactiveColor => 'Other lines color';
+
+  @override
+  String get musicVisualizerLyricFontSize => 'Lyric size';
+
+  @override
+  String get musicVisualizerUnitLines => 'lines';
+
+  @override
+  String musicLyricSemanticsCurrent(Object text) {
+    return 'Current lyric: $text';
+  }
+
+  @override
+  String get musicVisualizerLyricTranslation => 'Show translation';
+
+  @override
+  String get musicVisualizerLyricKaraokeFill => 'Word-by-word fill';
+
+  @override
+  String get musicVisualizerLyricFocusAnchor => 'Focus line position';
+
+  @override
+  String get musicVisualizerLyricFocusBand => 'Focus band';
+
+  @override
+  String get musicVisualizerActiveBackground => 'Active line backdrop';
+
+  @override
+  String get musicVisualizerLyricTimeTag => 'Active line time tag';
+
+  @override
+  String get musicVisualizerActiveFontScale => 'Active lyric size';
+
+  @override
+  String get musicVisualizerInactiveFontScale => 'Inactive lyric size';
+
+  @override
+  String get musicLyricBackToCurrent => 'Back to current';
+
+  @override
+  String get musicLyricCopied => 'Lyric line copied';
+
+  @override
+  String get musicLyricCopyLine => 'Copy lyric';
+
+  @override
+  String get musicLyricDelayLater => 'Delay lyrics by 0.1s';
+
+  @override
+  String get musicLyricAdvanceEarlier => 'Advance lyrics by 0.1s';
+
+  @override
+  String get musicLyricOffsetLater => 'Delay lyrics by 0.2s';
+
+  @override
+  String get musicLyricOffsetEarlier => 'Advance lyrics by 0.2s';
+
+  @override
+  String get musicLyricOffsetReset => 'Reset lyric offset';
+
+  @override
+  String musicLyricOffsetDelayed(Object seconds) {
+    return 'Delayed by ${seconds}s';
+  }
+
+  @override
+  String musicLyricOffsetAdvanced(Object seconds) {
+    return 'Advanced by ${seconds}s';
+  }
+
+  @override
+  String get musicVisualizerDeckToggle => 'Show cover deck';
+
+  @override
+  String get musicLyricSyncBadge => 'Synced lyrics';
+
+  @override
+  String get musicSeekBack10 => 'Back 10 seconds';
+
+  @override
+  String get musicSeekForward10 => 'Forward 10 seconds';
+
+  @override
+  String get musicVisualizerLyricStyle => 'Lyric style';
+
+  @override
+  String get musicVisualizerLyricBreathing => 'Lyric breathing';
+
+  @override
+  String get musicVisualizerLyricLineSpacing => 'Line spacing';
+
+  @override
+  String get musicVisualizerLayout => 'Desktop layout';
+
+  @override
+  String get musicVisualizerLayoutLyricsLeft => 'Lyrics left';
+
+  @override
+  String get musicVisualizerLayoutLyricsCenter => 'Lyrics centered';
+
+  @override
+  String get musicVisualizerLayoutLyricsRight => 'Lyrics right';
+
+  @override
+  String get musicVisualizerColorHue => 'Hue';
+
+  @override
+  String get musicVisualizerColorPreset => 'Preset colors';
+
+  @override
+  String get musicVisualizerColorTheme => 'Theme colors';
+
+  @override
+  String get musicVisualizerColorCustom => 'Custom color';
+
+  @override
+  String musicVisualizerColorCustomStop(Object stop) {
+    return 'Custom color · $stop';
+  }
+
+  @override
+  String get musicVisualizerColorHex => 'HEX value';
+
+  @override
+  String get musicVisualizerColorResetDefault => 'Reset to default';
+
+  @override
+  String get musicVisualizerColorPaintMode => 'Paint';
+
+  @override
+  String get musicVisualizerColorPaintSolid => 'Solid';
+
+  @override
+  String get musicVisualizerColorPaintGradient => 'Vertical gradient';
+
+  @override
+  String get musicVisualizerColorPaintStops => 'Gradient ends';
+
+  @override
+  String get musicVisualizerColorPaintTop => 'Top';
+
+  @override
+  String get musicVisualizerColorPaintBottom => 'Bottom';
+
+  @override
+  String get portalMusicVisualizerProgressControl => 'Progress bar';
+
+  @override
+  String get musicVisualizerPlayerVisible => 'Show bottom player';
+
+  @override
+  String get musicVisualizerGroupDesktop => 'Desktop immersive';
+
+  @override
+  String get musicVisualizerGroupMobileLyrics => 'Mobile lyric style';
+
+  @override
+  String get musicVisualizerScopeDesktop => 'Desktop';
+
+  @override
+  String get musicVisualizerScopeMobile => 'Mobile';
+
+  @override
+  String get musicVisualizerScopeAll => 'All devices';
+
+  @override
+  String get portalReading => 'Reading';
+
+  @override
+  String get portalNoReadingBook => 'No books being read';
+
+  @override
+  String get portalRecentPhotos => 'Recent Photos';
+
+  @override
+  String portalNewPhotoCount(Object count) {
+    return '$count new photos';
+  }
+
+  @override
+  String get portalQuickUpload => 'Upload';
+
+  @override
+  String get portalQuickDownload => 'Download';
+
+  @override
+  String get portalQuickNew => 'New';
+
+  @override
+  String get portalQuickActions => 'Quick actions';
+
+  @override
+  String get portalQuickSearch => 'Search';
+
+  @override
+  String get portalQuickScan => 'Scan';
+
+  @override
+  String get portalQuickPlay => 'Play';
+
+  @override
+  String get portalMobileGreetingMorning => 'Good morning';
+
+  @override
+  String get portalMobileGreetingAfternoon => 'Good afternoon';
+
+  @override
+  String get portalMobileGreetingEvening => 'Good evening';
+
+  @override
+  String get portalMobileContinueUsing => 'Continue';
+
+  @override
+  String get portalMobileNoContinue => 'Nothing waiting to resume';
+
+  @override
+  String get portalMobileSystemSummary => 'System summary';
+
+  @override
+  String get portalMobileSyncOnline => 'Sync service online';
+
+  @override
+  String get portalMobileSyncOffline => 'Offline, waiting to sync';
+
+  @override
+  String portalMobileStorageUsed(Object used) {
+    return '$used used';
+  }
+
+  @override
+  String get portalMobileViewAll => 'View all';
+
+  @override
+  String get portalContinueWatching => 'Continue Watching';
+
+  @override
+  String get portalNoWatchingContent => 'No content being watched';
+
+  @override
+  String get portalPressBackAgain => 'Press back again to exit';
+
+  @override
+  String get portalLoadMovieFailed => 'Failed to load media library info';
+
+  @override
+  String get portalLoadMusicFailed => 'Failed to load music info';
+
+  @override
+  String get portalLoadStorageFailed => 'Failed to load storage info';
+
+  @override
+  String get portalLoadReadingFailed => 'Failed to load reading info';
+
+  @override
+  String get portalLoadPhotoFailed => 'Failed to load photo info';
+
+  @override
+  String get portalDockFiles => 'Files';
+
+  @override
+  String get portalDockMovies => 'Media';
+
+  @override
+  String get portalDockMusic => 'Music';
+
+  @override
+  String get portalDockPhotos => 'Photos';
+
+  @override
+  String get portalDockReading => 'Reading';
+
+  @override
+  String get portalWeatherTitle => 'Weather';
+
+  @override
+  String get portalWeatherUpdated => 'Updated';
+
+  @override
+  String get portalWeatherDisconnected => 'Disconnected';
+
+  @override
+  String portalWeatherFeelsLike(Object text, Object feelsLike) {
+    return '$text · Feels like $feelsLike°';
+  }
+
+  @override
+  String portalWeatherSunrise(Object time) {
+    return 'Sunrise $time';
+  }
+
+  @override
+  String portalWeatherSunset(Object time) {
+    return 'Sunset $time';
+  }
+
+  @override
+  String get portalWeatherConfigApiKey => 'Please configure API Key';
+
+  @override
+  String get portalWeatherWeeklyStats => 'Weekly Stats';
+
+  @override
+  String get portalWeatherStatReading => 'Reading';
+
+  @override
+  String get portalWeatherStatPlaying => 'Playing';
+
+  @override
+  String get portalWeatherStatPhotos => 'Photos';
+
+  @override
+  String get portalWeatherUnknown => 'Unknown';
+
+  @override
+  String get portalWeatherLoading => 'Loading';
+
+  @override
+  String get portalWeatherDefaultLocation => 'Beijing';
+
+  @override
+  String get portalWeatherTipMask => 'Poor air quality, wear a mask';
+
+  @override
+  String get portalWeatherTipRain => 'Rain expected, bring an umbrella';
+
+  @override
+  String get portalWeatherTipIce => 'Roads may be slippery, watch your step';
+
+  @override
+  String get portalWeatherTipUV => 'Strong UV, protect from sun';
+
+  @override
+  String get portalWeatherTipCold => 'Feels cold, dress warmly';
+
+  @override
+  String get portalWeatherTipHot => 'Hot weather, stay hydrated';
+
+  @override
+  String get portalWeatherTipFog => 'Foggy, drive safely';
+
+  @override
+  String get portalWeatherTipNice =>
+      'Nice weather, great for outdoor activities';
+
+  @override
+  String get portalWeatherHumidity => 'Humidity';
+
+  @override
+  String get portalWeatherWind => 'Wind';
+
+  @override
+  String get portalWeatherVisibility => 'Visibility';
+
+  @override
+  String get portalWeatherPressure => 'Pressure';
+
+  @override
+  String get portalWeatherUV => 'UV Index';
+
+  @override
+  String get portalWeatherPrecip => 'Precip';
+
+  @override
+  String get portalWeatherAdvice => 'Advice';
+
+  @override
+  String get portalWeatherSunriseLabel => 'Sunrise';
+
+  @override
+  String get portalWeatherSunsetLabel => 'Sunset';
+
+  @override
+  String get portalWeatherForecastHourly => 'Hourly';
+
+  @override
+  String get portalWeatherForecastWeekly => '7-Day';
+
+  @override
+  String get portalWeatherForecastToday => 'Today';
+
+  @override
+  String get portalWeatherForecastNow => 'Now';
+
+  @override
+  String get portalWeatherForecastEmpty => 'No forecast data';
+
+  @override
+  String get portalWeatherDebugTooltip => 'Debug weather visuals';
+
+  @override
+  String get portalWeatherDebugLive => 'Live weather';
+
+  @override
+  String get portalWeatherDebugDawn => 'Dawn';
+
+  @override
+  String get portalWeatherDebugSunny => 'Sunny';
+
+  @override
+  String get portalWeatherDebugSunnyNight => 'Clear night';
+
+  @override
+  String get portalWeatherDebugDusk => 'Dusk';
+
+  @override
+  String get portalWeatherDebugPartlyCloudy => 'Partly cloudy';
+
+  @override
+  String get portalWeatherDebugPartlyCloudyNight => 'Partly cloudy night';
+
+  @override
+  String get portalWeatherDebugCloudy => 'Cloudy';
+
+  @override
+  String get portalWeatherDebugCloudyNight => 'Cloudy night';
+
+  @override
+  String get portalWeatherDebugLightRain => 'Light rain';
+
+  @override
+  String get portalWeatherDebugLightRainLeft => 'Light rain left';
+
+  @override
+  String get portalWeatherDebugHeavyRain => 'Heavy rain';
+
+  @override
+  String get portalWeatherDebugHeavyRainRight => 'Heavy rain right';
+
+  @override
+  String get portalWeatherDebugRainNight => 'Night rain';
+
+  @override
+  String get portalWeatherDebugStorm => 'Storm';
+
+  @override
+  String get portalWeatherDebugLightSnow => 'Light snow';
+
+  @override
+  String get portalWeatherDebugHeavySnow => 'Heavy snow';
+
+  @override
+  String get portalWeatherDebugSnowNight => 'Night snow';
+
+  @override
+  String get portalWeatherDebugFog => 'Fog';
+
+  @override
+  String get portalWeatherDebugHaze => 'Haze';
+
+  @override
+  String get portalWeatherDebugDust => 'Dust';
+
+  @override
+  String get portalWeatherDebugHeat => 'Heat';
+
+  @override
+  String get portalWeatherDebugCold => 'Cold';
+
+  @override
+  String get portalWeatherDebugTimeDawn => 'Dawn';
+
+  @override
+  String get portalWeatherDebugTimeDay => 'Day';
+
+  @override
+  String get portalWeatherDebugTimeDusk => 'Dusk';
+
+  @override
+  String get portalWeatherDebugTimeNight => 'Night';
+
+  @override
+  String get portalLocalBackdropShort => 'Backdrops';
+
+  @override
+  String get portalLocalBackdropTitle => 'Backdrops';
+
+  @override
+  String get portalLocalBackdropSubtitle =>
+      'Your backdrop library is synced to your account and shared across Web, desktop, and mobile. The bundled wallpaper also works offline.';
+
+  @override
+  String get portalLocalBackdropLoadFailed => 'Failed to load backdrops';
+
+  @override
+  String get portalLocalBackdropAddFiles => 'Add backdrops';
+
+  @override
+  String get portalLocalBackdropScanDirectory => 'Scan folder';
+
+  @override
+  String get portalLocalBackdropUploading => 'Uploading…';
+
+  @override
+  String get portalLocalBackdropDropHint => 'Drop files to upload backdrops';
+
+  @override
+  String portalLocalBackdropUploadFailedNames(Object titles) {
+    return 'Failed to upload: $titles';
+  }
+
+  @override
+  String get portalLocalBackdropDeleteFailed =>
+      'Delete failed. Please try again later.';
+
+  @override
+  String get portalLocalBackdropQuotaExceeded =>
+      'Backdrop count or storage quota exceeded';
+
+  @override
+  String get portalLocalBackdropUnsupportedFormat =>
+      'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported';
+
+  @override
+  String get portalLocalBackdropWebUnsupportedBadge => 'No web playback';
+
+  @override
+  String portalLocalBackdropWebUnsupportedNotice(Object title) {
+    return '\"$title\" uses a video codec the browser may not play; desktop is unaffected';
+  }
+
+  @override
+  String get portalLocalBackdropFileTooLarge => 'Backdrop file is too large';
+
+  @override
+  String get portalLocalBackdropScanUnavailable =>
+      'Security scanning is unavailable, upload blocked';
+
+  @override
+  String get portalLocalBackdropMalwareDetected =>
+      'Malware detected, upload rejected';
+
+  @override
+  String get portalLocalBackdropRateLimited =>
+      'Uploading too frequently, please try again later';
+
+  @override
+  String get portalLocalBackdropClearAll => 'Clear all';
+
+  @override
+  String get portalLocalBackdropClearAllTitle => 'Remove all backdrops?';
+
+  @override
+  String get portalLocalBackdropClearAllMessage =>
+      'Your backdrop assets will be removed from the server library on all devices. The bundled wallpaper stays available offline.';
+
+  @override
+  String get portalLocalBackdropClearAllConfirm => 'Remove';
+
+  @override
+  String portalLocalBackdropCount(Object count) {
+    return '$count backdrops';
+  }
+
+  @override
+  String get portalLocalBackdropEmpty =>
+      'No backdrops yet. Add videos, GIFs, or images and they will sync to all your devices.';
+
+  @override
+  String get portalLocalBackdropFilterEmpty => 'No backdrops in this category';
+
+  @override
+  String get portalLocalBackdropEmptyScan =>
+      'No usable backdrop files found. MP4, WEBM, MOV, M4V, GIF, JPG, PNG, and WEBP are supported.';
+
+  @override
+  String get portalLocalBackdropScanFailed =>
+      'Scan failed. Check folder permissions.';
+
+  @override
+  String get portalLocalBackdropMissing => 'File missing';
+
+  @override
+  String get portalLocalBackdropProcessing => 'Processing';
+
+  @override
+  String get portalLocalBackdropProcessingVideo =>
+      'Processing (videos take 1-2 minutes)';
+
+  @override
+  String get portalLocalBackdropFailed => 'Unavailable';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmTitle => 'Remove this backdrop?';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmMessage =>
+      'It will be deleted from the server library and disappear on all devices.';
+
+  @override
+  String portalLocalBackdropClearPartial(int removed, int failed) {
+    return 'Cleared $removed item(s); $failed failed.';
+  }
+
+  @override
+  String get portalLocalBackdropRemove => 'Remove backdrop';
+
+  @override
+  String get portalLocalBackdropEnable => 'Enable backdrop';
+
+  @override
+  String get portalLocalBackdropEnableHint =>
+      'Used by Portal and Music. The bundled wallpaper also works offline.';
+
+  @override
+  String get portalLocalBackdropSeparateDevices =>
+      'Separate desktop and mobile';
+
+  @override
+  String get portalLocalBackdropSeparateDevicesHint =>
+      'Off uses one shared selection. On keeps a separate backdrop for each device class.';
+
+  @override
+  String get portalLocalBackdropCurrentDesktop =>
+      'Currently configuring the desktop backdrop';
+
+  @override
+  String get portalLocalBackdropCurrentMobile =>
+      'Currently configuring the mobile backdrop';
+
+  @override
+  String get portalLocalBackdropFit => 'Display mode';
+
+  @override
+  String get portalLocalBackdropFitCover => 'Fill';
+
+  @override
+  String get portalLocalBackdropFitContain => 'Fit';
+
+  @override
+  String get portalLocalBackdropFitFill => 'Stretch';
+
+  @override
+  String get portalLocalBackdropAlignment => 'Crop anchor';
+
+  @override
+  String get portalLocalBackdropAlignTop => 'Top';
+
+  @override
+  String get portalLocalBackdropAlignCenter => 'Center';
+
+  @override
+  String get portalLocalBackdropAlignBottom => 'Bottom';
+
+  @override
+  String get portalLocalBackdropClearVideoCache => 'Clear video cache';
+
+  @override
+  String get portalLocalBackdropFilterAll => 'All';
+
+  @override
+  String get portalLocalBackdropFilterJpeg => 'JPG';
+
+  @override
+  String get portalLocalBackdropFilterPng => 'PNG';
+
+  @override
+  String get portalLocalBackdropFilterWebp => 'WEBP';
+
+  @override
+  String get portalLocalBackdropFilterGif => 'GIF';
+
+  @override
+  String get portalLocalBackdropFilterMp4 => 'MP4';
+
+  @override
+  String get portalLocalBackdropFilterWebm => 'WEBM';
+
+  @override
+  String get portalLocalBackdropFilterMov => 'MOV';
+
+  @override
+  String get portalLocalBackdropFilterM4v => 'M4V';
+
+  @override
+  String get portalLocalBackdropDim => 'Dim';
+
+  @override
+  String get portalLocalBackdropBlur => 'Blur';
+
+  @override
+  String get portalLocalBackdropVideoMuted => 'Mute video';
+
+  @override
+  String get portalLocalBackdropRetryPlayback => 'Retry playback';
+
+  @override
+  String get portalLocalBackdropLocalOnly =>
+      'Backdrop paths are stored only in SQLite on this device. Use short loops with common codecs; playback pauses when the page is hidden or the app enters the background. Web uses the default theme backdrop.';
+
+  @override
+  String get adminOpenMenu => 'Open admin menu';
+
+  @override
+  String get adminStorageOverview => 'Storage Overview';
+
+  @override
+  String adminPercentUsed(Object percent) {
+    return '$percent% used';
+  }
+
+  @override
+  String get adminTopBarPortal => 'Portal';
+
+  @override
+  String get adminShellTitle => 'OmniNest Admin';
+
+  @override
+  String get adminShellSubtitle => 'Central Console';
+
+  @override
+  String get adminRolePillLabel => 'Admin';
+
+  @override
+  String get adminRoleSuperAdmin => 'Super Admin';
+
+  @override
+  String get adminRoleAdmin => 'Admin';
+
+  @override
+  String get adminRoleMember => 'Member';
+
+  @override
+  String get adminRoleGuest => 'Guest';
+
+  @override
+  String get adminUserStatusActive => 'Active';
+
+  @override
+  String get adminUserStatusDisabled => 'Disabled';
+
+  @override
+  String adminStorageUsed(Object size) {
+    return 'Used $size';
+  }
+
+  @override
+  String adminStorageFileCount(Object count) {
+    return '$count files';
+  }
+
+  @override
+  String adminOverviewTasksTotal(Object count) {
+    return '$count tasks';
+  }
+
+  @override
+  String get adminLoadMemory => 'MEM';
+
+  @override
+  String get adminLoadDisk => 'DISK';
+
+  @override
+  String get adminLoadJvm => 'JVM';
+
+  @override
+  String adminMonitoringStepMinutes(Object minutes) {
+    return '${minutes}min step';
+  }
+
+  @override
+  String get adminSystemMonitoring => 'System Monitoring';
+
+  @override
+  String get adminMonitoringSubtitle =>
+      'View service status, resource usage, component health, alerts and admin operation records.';
+
+  @override
+  String get adminRunning => 'Running';
+
+  @override
+  String adminAttentionItems(Object count) {
+    return '$count items to watch';
+  }
+
+  @override
+  String get adminServiceStatus => 'Service Status';
+
+  @override
+  String adminUptime(Object uptime) {
+    return 'Uptime $uptime';
+  }
+
+  @override
+  String get adminComponents => 'Components';
+
+  @override
+  String get adminAlerts => 'Alerts';
+
+  @override
+  String get adminSystemCpu => 'System CPU';
+
+  @override
+  String get adminMemory => 'Memory';
+
+  @override
+  String get adminDiskUsage => 'Disk Usage';
+
+  @override
+  String get adminDataDirectoryDisk => 'Data directory disk';
+
+  @override
+  String get adminRequests => 'Requests';
+
+  @override
+  String get adminComponentHealth => 'Component Health';
+
+  @override
+  String get adminComponentHealthSubtitle =>
+      'Current snapshot of database, Redis, RabbitMQ, MinIO and index components.';
+
+  @override
+  String get adminMiddlewareTopologyTitle =>
+      'Middleware & Infrastructure Topology';
+
+  @override
+  String adminChartTipCompleted(Object count) {
+    return 'Completed $count';
+  }
+
+  @override
+  String adminChartTipFailed(Object count) {
+    return 'Failed $count';
+  }
+
+  @override
+  String adminChartTipRunning(Object count) {
+    return 'Running $count';
+  }
+
+  @override
+  String get adminNoComponentHealth => 'No component health data.';
+
+  @override
+  String get adminRecentAlerts => 'Recent System Alerts';
+
+  @override
+  String get adminRecentAlertsSubtitle =>
+      'Generated by snapshot rules, can be connected to real alert table later.';
+
+  @override
+  String get adminNoAlerts => 'No system alerts.';
+
+  @override
+  String get adminRecentOperations => 'Recent Operations';
+
+  @override
+  String get adminRecentOperationsSubtitle =>
+      'From audit logs, useful for troubleshooting config and admin actions.';
+
+  @override
+  String get adminNoOperations => 'No admin operation records.';
+
+  @override
+  String get adminTrendCharts => 'Real-time Trend Charts';
+
+  @override
+  String get adminTrendChartsSubtitle =>
+      'Currently showing 55-minute sampling trends, can be replaced with real time-series storage later.';
+
+  @override
+  String get adminNoTrendData => 'No trend data.';
+
+  @override
+  String get adminLogCenter => 'Log Center';
+
+  @override
+  String get adminLogCenterSubtitle =>
+      'Unified view of operation audit and login logs.';
+
+  @override
+  String adminAuditCount(Object count) {
+    return '$count audit records';
+  }
+
+  @override
+  String get adminTabAudit => 'Operation Audit';
+
+  @override
+  String get adminTabLoginLog => 'Login Log';
+
+  @override
+  String get adminRecentAudit => 'Recent Audit';
+
+  @override
+  String get adminRecentAuditSubtitle =>
+      'From audit_logs, sorted by creation time descending.';
+
+  @override
+  String get adminServiceInspect => 'Inspect';
+
+  @override
+  String get adminUserColumn => 'User';
+
+  @override
+  String get adminUserQuotaUsageColumn => 'Quota Usage';
+
+  @override
+  String get adminUserCreatedAtColumn => 'Created';
+
+  @override
+  String get adminUserTwoFactorColumn => '2FA';
+
+  @override
+  String adminUserPermissionsCount(int count) {
+    return '$count permissions';
+  }
+
+  @override
+  String get adminUserProtected => 'PROTECTED';
+
+  @override
+  String get adminUserProtectedTooltip =>
+      'Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.';
+
+  @override
+  String get adminUserDisableConfirmTitle => 'Disable account';
+
+  @override
+  String adminUserDisableConfirmMessage(Object name) {
+    return 'Disable $name? The account will be signed out and denied login until re-enabled.';
+  }
+
+  @override
+  String get adminUserEnableConfirmTitle => 'Enable account';
+
+  @override
+  String adminUserEnableConfirmMessage(Object name) {
+    return 'Enable $name? The account will be allowed to sign in again.';
+  }
+
+  @override
+  String get adminDeleteUser => 'Delete user';
+
+  @override
+  String adminDeleteUserConfirmMessage(Object name) {
+    return 'Permanently delete $name. Only empty accounts with no content ownership can be deleted; type the username to confirm.';
+  }
+
+  @override
+  String get adminResetTwoFactor => 'Reset two-factor';
+
+  @override
+  String get adminResetTwoFactorSuccess =>
+      'Two-factor reset. All sessions of this user were ended.';
+
+  @override
+  String adminResetTwoFactorConfirmMessage(Object name) {
+    return 'Clear $name\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.';
+  }
+
+  @override
+  String get adminEditRolesHint =>
+      'Assign one or more system roles. Changing roles immediately updates the user\'s permissions and visible menus.';
+
+  @override
+  String get adminCreateRole => 'New custom role';
+
+  @override
+  String get adminRolePermissionsSaved => 'Role permissions updated';
+
+  @override
+  String get adminRoleCode => 'Role code';
+
+  @override
+  String get adminRoleCodeRule =>
+      'Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).';
+
+  @override
+  String get adminRoleDisplayName => 'Display name';
+
+  @override
+  String get adminRoleDescription => 'Description';
+
+  @override
+  String get adminRoleBaseTemplate => 'Permission template';
+
+  @override
+  String get adminRoleTemplateNone => 'Empty permission set (configure later)';
+
+  @override
+  String get adminRoleTemplateMember => 'Clone ROLE_MEMBER baseline';
+
+  @override
+  String get adminRoleTemplateAdmin => 'Clone ROLE_ADMIN baseline';
+
+  @override
+  String get adminRoleNameRequired => 'Display name is required';
+
+  @override
+  String get adminRoleDelete => 'Delete role';
+
+  @override
+  String adminRoleDeleteConfirmMessage(Object code, Object name) {
+    return 'Delete role $name ($code)? Roles still bound to users cannot be deleted.';
+  }
+
+  @override
+  String get adminRoleSuperAdminLocked =>
+      'SUPER_ADMIN holds every permission and is read-only by design.';
+
+  @override
+  String adminRolePermissionSummary(Object count, Object modules) {
+    return '$count permissions granted across $modules modules';
+  }
+
+  @override
+  String get adminRoleBuiltinTag => 'Built-in';
+
+  @override
+  String get adminRoleCustomTag => 'Custom';
+
+  @override
+  String get adminPermissionMatrixTitle => 'Business module permission matrix';
+
+  @override
+  String get adminPermissionMatrixSubtitle =>
+      'Derived from the permission catalog grouped by module; open a role to edit its bindings.';
+
+  @override
+  String adminPermissionSelectedCount(Object selected, Object total) {
+    return '$selected / $total permissions selected';
+  }
+
+  @override
+  String get adminPermissionSelectAll => 'Select all';
+
+  @override
+  String get adminPermissionClear => 'Clear';
+
+  @override
+  String get adminPermissionGroupToggle => 'Toggle group';
+
+  @override
+  String get adminPermissionToggleModule => 'Collapse / expand module';
+
+  @override
+  String get adminModuleActivity => 'Activity';
+
+  @override
+  String get adminModulePreference => 'Preference';
+
+  @override
+  String get adminModuleProfile => 'Profile';
+
+  @override
+  String get adminModuleFile => 'File';
+
+  @override
+  String get adminModuleMedia => 'Media';
+
+  @override
+  String get adminModulePhoto => 'Photo';
+
+  @override
+  String get adminModuleBackdrop => 'Backdrop';
+
+  @override
+  String get adminModuleTask => 'Task';
+
+  @override
+  String get adminModuleSystem => 'System';
+
+  @override
+  String get adminServiceColumn => 'Service';
+
+  @override
+  String get adminStatusColumn => 'Status';
+
+  @override
+  String get adminLatencyColumn => 'Latency';
+
+  @override
+  String get adminViewAllAuditLogs => 'View all audit logs';
+
+  @override
+  String get adminAutoRefresh => 'Live refresh';
+
+  @override
+  String get adminThroughputTrend => 'Task Throughput Trend';
+
+  @override
+  String get adminThroughputTrendSubtitle =>
+      'Completed and failed task throughput for this week (Mon-Sun).';
+
+  @override
+  String get adminLoadStateNormal => 'Normal';
+
+  @override
+  String get adminLoadStateWarning => 'Warning';
+
+  @override
+  String get adminLoadStateCritical => 'Critical';
+
+  @override
+  String get adminFailedCount => 'Failed';
+
+  @override
+  String get adminNoAuditLogs => 'No audit logs.';
+
+  @override
+  String get adminNoLoginLogs => 'No login logs.';
+
+  @override
+  String adminLoadFailed(Object error) {
+    return 'Load failed: $error';
+  }
+
+  @override
+  String get adminLoginLog => 'Login Log';
+
+  @override
+  String get adminLoginLogSubtitle =>
+      'From auth_login_audit, records all login attempts.';
+
+  @override
+  String get adminLoginSuccess => 'Success';
+
+  @override
+  String get adminLoginFailed => 'Failed';
+
+  @override
+  String get adminLoginPendingTwoFactor => 'Pending 2FA';
+
+  @override
+  String get adminFilterAction => 'Action';
+
+  @override
+  String get adminFilterStatus => 'Status';
+
+  @override
+  String get adminFilterPlatform => 'Platform';
+
+  @override
+  String get adminFilterRetention => 'Retention';
+
+  @override
+  String get adminCleanup => 'Clean up';
+
+  @override
+  String adminRetentionDays(Object days) {
+    return 'Keep $days days';
+  }
+
+  @override
+  String get adminCleanupConfirmTitle => 'Confirm cleanup';
+
+  @override
+  String get adminCleanupConfirmMessage =>
+      'Records outside the retention period will be deleted permanently.';
+
+  @override
+  String adminCleanupCompleted(Object count) {
+    return 'Cleaned up $count records';
+  }
+
+  @override
+  String get adminBackgroundTasks => 'Background Tasks';
+
+  @override
+  String get adminBackgroundTasksSubtitle =>
+      'Track indexing, transcoding, sync, backup and cleanup tasks.';
+
+  @override
+  String get adminTotalTasks => 'Total Tasks';
+
+  @override
+  String get adminRecentTasks => 'Recent tasks';
+
+  @override
+  String get adminRunningTasks => 'Running';
+
+  @override
+  String get adminExecuting => 'Executing';
+
+  @override
+  String get adminFailedTasks => 'Failed';
+
+  @override
+  String get adminRetryable => 'Retryable';
+
+  @override
+  String get adminTaskList => 'Task List';
+
+  @override
+  String get adminTaskStatusRunning => 'Running';
+
+  @override
+  String get adminTaskStatusCompleted => 'Completed';
+
+  @override
+  String get adminTaskStatusDlq => 'Dead letter';
+
+  @override
+  String get adminTaskErrorSummary => 'Error summary';
+
+  @override
+  String get adminTaskUpdatedAt => 'Updated at';
+
+  @override
+  String get adminTaskCreatedAt => 'Created at';
+
+  @override
+  String get adminTaskRetryCount => 'Retries';
+
+  @override
+  String get adminTaskIdColumn => 'Task ID';
+
+  @override
+  String get adminTaskName => 'Task name';
+
+  @override
+  String get adminTaskOwner => 'Owner';
+
+  @override
+  String get adminTaskExecutionStatus => 'Status';
+
+  @override
+  String get adminTaskListSubtitle =>
+      'Failed, cancelled and DLQ status support re-queue.';
+
+  @override
+  String get adminNoBackgroundTasks => 'No background tasks.';
+
+  @override
+  String get adminNotSet => 'Not set';
+
+  @override
+  String get adminProgress => 'Progress';
+
+  @override
+  String get adminRetry => 'Retry';
+
+  @override
+  String get adminRoleManagement => 'Role Management';
+
+  @override
+  String get adminRoleManagementSubtitle =>
+      'Maintain roles, permission sets and resource access boundaries.';
+
+  @override
+  String adminPermissionCount(Object count) {
+    return '$count permissions';
+  }
+
+  @override
+  String get adminRoles => 'Roles';
+
+  @override
+  String get adminSystemRoles => 'System roles';
+
+  @override
+  String get adminPermissionBindings => 'Permission Bindings';
+
+  @override
+  String get adminRolePermissions => 'Role permissions';
+
+  @override
+  String get adminPermissionModules => 'Permission Modules';
+
+  @override
+  String get adminBusinessDomains => 'Business domains';
+
+  @override
+  String get adminRolePermissionsTitle => 'Role Permissions';
+
+  @override
+  String get adminRolePermissionsSubtitle =>
+      'Built-in roles cannot be deleted, SUPER_ADMIN permissions maintained by system.';
+
+  @override
+  String get adminNoRoles => 'No role data.';
+
+  @override
+  String adminPermissionCountInline(Object count) {
+    return '$count permissions';
+  }
+
+  @override
+  String get adminConfigurePermissions => 'Configure Permissions';
+
+  @override
+  String adminConfigureRolePermissions(Object name) {
+    return 'Configure $name Permissions';
+  }
+
+  @override
+  String get adminSecurityWarning => 'Security Warning';
+
+  @override
+  String get adminSecurityWarningMessage =>
+      'Only grant permissions that are actually needed. Over-privileged roles may lead to unauthorized data access or system misuse.';
+
+  @override
+  String get adminConfigCenter => 'Config Center';
+
+  @override
+  String get adminConfigCenterSubtitle =>
+      'Manage business policies and external service integrations.';
+
+  @override
+  String get adminConfigRefresh => 'Refresh settings';
+
+  @override
+  String adminConfigGroupItemCount(int count) {
+    return '$count settings';
+  }
+
+  @override
+  String get adminConfigGroupMedia => 'Media Import';
+
+  @override
+  String get adminConfigGroupReader => 'Reader';
+
+  @override
+  String get adminConfigGroupMusic => 'Music';
+
+  @override
+  String get adminConfigGroupPhotos => 'Photos and Backup';
+
+  @override
+  String get adminConfigGroupStorage => 'Storage and Shared Space';
+
+  @override
+  String get adminConfigGroupUpload => 'Upload';
+
+  @override
+  String get adminConfigGroupSecurity => 'Security';
+
+  @override
+  String get adminConfigGroupAuth => 'Authentication';
+
+  @override
+  String get adminConfigGroupWeather => 'Weather';
+
+  @override
+  String get adminConfigGroupBackdrop => 'Backdrop Library';
+
+  @override
+  String get adminConfigGroupSystem => 'System';
+
+  @override
+  String get adminConfigGroupOther => 'Other Settings';
+
+  @override
+  String get adminConfigProviderPhotoAi => 'Image analysis';
+
+  @override
+  String get adminConfigProviderMusicBrainz => 'MusicBrainz';
+
+  @override
+  String get adminConfigProviderTmdb => 'TMDB';
+
+  @override
+  String get adminConfigProviderGoogleBooks => 'Google Books';
+
+  @override
+  String get adminConfigProviderOpenLibrary => 'Open Library';
+
+  @override
+  String get adminConfigProviderNetease => 'NetEase Cloud Music';
+
+  @override
+  String get adminConfigProviderQWeather => 'QWeather';
+
+  @override
+  String get adminConfigManage => 'Manage';
+
+  @override
+  String get adminConfigSecretConfigured =>
+      'Sensitive credential configured; its value is never shown';
+
+  @override
+  String get adminConfigNeedsSetup => 'Not configured';
+
+  @override
+  String adminConfigCurrentValue(Object value) {
+    return 'Current value: $value';
+  }
+
+  @override
+  String get adminConfigClearCredential => 'Clear credential';
+
+  @override
+  String get adminConfigClearCredentialConfirm =>
+      'The related integration will stop working after this credential is cleared. Continue?';
+
+  @override
+  String get adminConfigCredentialClearedReason =>
+      'Integration credential cleared by administrator';
+
+  @override
+  String get adminConfigMediaAutoImport =>
+      'Automatically import discovered media';
+
+  @override
+  String get adminConfigDefaultQuota => 'Default quota for new users';
+
+  @override
+  String get adminConfigQuotaWarning => 'Quota warning threshold';
+
+  @override
+  String get adminConfigSharedSpace => 'Shared space';
+
+  @override
+  String get adminConfigSharedSpaceLimit => 'Shared space capacity limit';
+
+  @override
+  String get adminConfigLocalMedia => 'Local read-only media';
+
+  @override
+  String get adminConfigWeather => 'Weather feature';
+
+  @override
+  String get adminConfigMusicBrainzEnabled => 'Enable MusicBrainz';
+
+  @override
+  String get adminConfigTmdbEnabled => 'Enable TMDB';
+
+  @override
+  String get adminConfigTmdbApiKey => 'TMDB API Key';
+
+  @override
+  String get adminConfigTmdbAccessToken => 'TMDB Access Token';
+
+  @override
+  String get adminConfigTmdbLanguage => 'Metadata language';
+
+  @override
+  String get adminConfigTmdbAdult => 'Include adult content';
+
+  @override
+  String get adminConfigPhotoAiEnabled => 'Enable image analysis';
+
+  @override
+  String get adminConfigNeteaseEnabled => 'Enable NetEase Cloud Music';
+
+  @override
+  String get adminConfigQWeatherProjectId => 'Project ID';
+
+  @override
+  String get adminConfigQWeatherCredentialId => 'Credential ID';
+
+  @override
+  String get adminConfigQWeatherPrivateKey => 'Ed25519 private key';
+
+  @override
+  String get adminConfigTmdbTimeout => 'TMDB request timeout';
+
+  @override
+  String get adminConfigTmdbStrategy => 'TMDB search strategy';
+
+  @override
+  String get adminConfigTmdbLimit => 'TMDB result limit';
+
+  @override
+  String get adminConfigMediaTranscode => 'Enable media transcoding';
+
+  @override
+  String get adminConfigReaderGoogleBooksEnabled => 'Enable Google Books';
+
+  @override
+  String get adminConfigReaderGoogleBooksUrl => 'Google Books service URL';
+
+  @override
+  String get adminConfigReaderGoogleBooksLanguage => 'Google Books language';
+
+  @override
+  String get adminConfigReaderGoogleBooksLimit => 'Google Books result limit';
+
+  @override
+  String get adminConfigReaderGoogleBooksTimeout =>
+      'Google Books request timeout';
+
+  @override
+  String get adminConfigReaderGoogleBooksApiKey => 'Google Books API Key';
+
+  @override
+  String get adminConfigReaderOpenLibraryEnabled => 'Enable Open Library';
+
+  @override
+  String get adminConfigReaderOpenLibraryUrl => 'Open Library service URL';
+
+  @override
+  String get adminConfigReaderOpenLibraryLanguage => 'Open Library language';
+
+  @override
+  String get adminConfigReaderAutoImport => 'Enable reader auto-import';
+
+  @override
+  String get adminConfigMusicBrainzBaseUrl => 'MusicBrainz service URL';
+
+  @override
+  String get adminConfigMusicAutoImport => 'Enable music auto-import';
+
+  @override
+  String get adminConfigMusicBrainzUserAgent => 'MusicBrainz User-Agent';
+
+  @override
+  String get adminConfigMusicBrainzCoverUrl => 'MusicBrainz cover service URL';
+
+  @override
+  String get adminConfigMusicOnlineEnabled => 'Enable online music';
+
+  @override
+  String get adminConfigTmdbBaseUrl => 'TMDB service URL';
+
+  @override
+  String get adminConfigPhotoAiEndpoint => 'Image analysis service URL';
+
+  @override
+  String get adminConfigNeteaseBaseUrl => 'NetEase Music service URL';
+
+  @override
+  String get adminConfigNeteaseHosts => 'NetEase playback hosts';
+
+  @override
+  String get adminConfigQWeatherBaseUrl => 'QWeather service URL';
+
+  @override
+  String get adminConfigWeatherLocation => 'Weather location';
+
+  @override
+  String get adminConfigPhotoAiTimeout => 'Image analysis request timeout';
+
+  @override
+  String get adminConfigPhotoGeoRate => 'Photo geocoding rate';
+
+  @override
+  String get adminConfigUploadRateEnabled => 'Enable upload rate limiting';
+
+  @override
+  String get adminConfigSecurityRateLimit => 'Default security rate limit';
+
+  @override
+  String get adminConfigClamavEnabled => 'Enable ClamAV';
+
+  @override
+  String get adminConfigClamavHost => 'ClamAV host';
+
+  @override
+  String get adminConfigClamavPort => 'ClamAV port';
+
+  @override
+  String get adminConfigUnlimited => 'Unlimited';
+
+  @override
+  String get adminConfigUnlimitedDescription =>
+      'No capacity check is applied when unlimited is selected.';
+
+  @override
+  String get adminConfigQuotaUnlimitedDescription =>
+      'Enter a value directly, or move the slider to the far right or enable unlimited to remove the cap.';
+
+  @override
+  String get adminConfigQuotaSliderUnlimited => 'Far right: unlimited';
+
+  @override
+  String get adminConfigQuotaSliderMinimum => '1 GB';
+
+  @override
+  String get adminConfigQuotaInvalid =>
+      'Enter a quota greater than 0 GB, or enable unlimited.';
+
+  @override
+  String get adminConfigQuotaWholeGb =>
+      'The default user quota must be a whole number of GB.';
+
+  @override
+  String get adminConfigEndpointDescription =>
+      'Base address used by server requests; adjust it for your deployment.';
+
+  @override
+  String get adminConfigWeatherLocationDescription =>
+      'City, coordinates, or a provider-specific location identifier used for weather queries.';
+
+  @override
+  String get adminConfigUnknownItem => 'Unknown setting';
+
+  @override
+  String get adminConfigLogRetentionEnabled => 'Log retention cleanup';
+
+  @override
+  String get adminConfigLogRetentionDays => 'Log retention days';
+
+  @override
+  String get adminConfigLogRetentionPaths => 'Log retention scan paths';
+
+  @override
+  String get adminConfigLogRetentionEnabledDescription =>
+      'Automatically cleans archived logs and temporary files based on retention days.';
+
+  @override
+  String get adminConfigLogRetentionDaysDescription =>
+      'Maximum number of days archived logs and temporary files are kept.';
+
+  @override
+  String get adminConfigLogRetentionPathsDescription =>
+      'Comma-separated paths relative to the runtime directory included in retention cleanup.';
+
+  @override
+  String get adminConfigPhotoGeoOffline => 'Offline reverse geocoding';
+
+  @override
+  String get adminConfigPhotoGeoOfflineDescription =>
+      'Resolve photo coordinates into place names using the local GeoNames dataset.';
+
+  @override
+  String get adminConfigPhotoGeoNominatim => 'Online geocoding fallback';
+
+  @override
+  String get adminConfigPhotoGeoNominatimDescription =>
+      'Fall back to the Nominatim online service when offline matching misses.';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistance => 'Nearest-city max distance';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistanceDescription =>
+      'Maximum trusted distance in km to the nearest city (0 disables the limit).';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSize => 'GeoNames import batch size';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSizeDescription =>
+      'Number of rows written per batch while importing GeoNames data.';
+
+  @override
+  String get adminConfigPhotoGeoImportAuto => 'Auto GeoNames import';
+
+  @override
+  String get adminConfigPhotoGeoImportAutoDescription =>
+      'Trigger the GeoNames import automatically at startup when no dataset is published and files are present.';
+
+  @override
+  String get adminConfigQuarantineRetentionDays => 'Quarantine retention days';
+
+  @override
+  String get adminConfigQuarantineRetentionDaysDescription =>
+      'Days quarantined objects are kept before automatic cleanup.';
+
+  @override
+  String get adminConfigClamavTimeout => 'Scan timeout';
+
+  @override
+  String get adminConfigClamavTimeoutDescription =>
+      'Per-file virus scan time limit in milliseconds; exceeding it is reported as incomplete.';
+
+  @override
+  String get adminConfigTwoFactorRequiredRoles => 'Mandatory 2FA roles';
+
+  @override
+  String get adminConfigTwoFactorRequiredRolesDescription =>
+      'Comma-separated role codes required to enable two-factor authentication; empty means optional for everyone.';
+
+  @override
+  String get adminConfigBackdropMaxImageBytes => 'Backdrop image size limit';
+
+  @override
+  String get adminConfigBackdropMaxImageBytesDescription =>
+      'Maximum size of a single backdrop image, entered in MB and stored as bytes.';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytes => 'Backdrop video size limit';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytesDescription =>
+      'Maximum size of a single backdrop video, entered in MB and stored as bytes.';
+
+  @override
+  String get adminConfigMbInvalid => 'Enter a size limit of at least 1 MB.';
+
+  @override
+  String get adminConfigBackdropMaxAssets => 'Backdrop asset count limit';
+
+  @override
+  String get adminConfigBackdropMaxAssetsDescription =>
+      'Maximum number of backdrop assets kept per user.';
+
+  @override
+  String get adminConfigBackdropUploadRate => 'Backdrop upload rate limit';
+
+  @override
+  String get adminConfigBackdropUploadRateDescription =>
+      'Backdrop uploads allowed per user each hour.';
+
+  @override
+  String get adminConfigAppVersionLatest => 'Latest client version';
+
+  @override
+  String get adminConfigAppVersionLatestDescription =>
+      'Latest client version number; empty means every client is up to date.';
+
+  @override
+  String get adminConfigAppVersionReleaseNotes => 'Release notes URL';
+
+  @override
+  String get adminConfigAppVersionReleaseNotesDescription =>
+      'Link to the release notes of the current version.';
+
+  @override
+  String get adminConfigAppVersionDownloadUrl => 'Installer download URL';
+
+  @override
+  String get adminConfigAppVersionDownloadUrlDescription =>
+      'Link to the client installer download page.';
+
+  @override
+  String get adminConfigMediaAutoImportDescription =>
+      'Allows discovered titles to enter the media import flow according to Media rules.';
+
+  @override
+  String get adminConfigDefaultQuotaDescription =>
+      'Storage assigned to newly created users, in GB.';
+
+  @override
+  String get adminConfigQuotaWarningDescription =>
+      'Shows a capacity warning when usage reaches this percentage.';
+
+  @override
+  String get adminConfigSharedSpaceDescription =>
+      'Controls whether users can access the shared space.';
+
+  @override
+  String get adminConfigSharedSpaceLimitDescription =>
+      'Limits the total capacity available to the shared space.';
+
+  @override
+  String get adminConfigLocalMediaDescription =>
+      'Can only disable local media authorized at deployment; it cannot expand mount access.';
+
+  @override
+  String get adminConfigWeatherDescription =>
+      'Controls whether clients can request weather data.';
+
+  @override
+  String get adminConfigProviderToggleDescription =>
+      'Controls whether this integration may be used.';
+
+  @override
+  String get adminConfigCredentialDescription =>
+      'Used for server-side authentication and never shown again after saving.';
+
+  @override
+  String get adminConfigProviderIdentifierDescription =>
+      'Project or credential identifier supplied by the external service console.';
+
+  @override
+  String get adminConfigTmdbLanguageDescription =>
+      'Preferred language for titles, descriptions, and image metadata returned by TMDB.';
+
+  @override
+  String get adminConfigTmdbAdultDescription =>
+      'Search results may include adult content when enabled.';
+
+  @override
+  String get adminConfigInternalNumericDescription =>
+      'Internal request or result bound used by this provider.';
+
+  @override
+  String get adminConfigTmdbStrategyDescription =>
+      'Controls the normalized and fallback queries used for TMDB matching.';
+
+  @override
+  String get adminConfigMediaTranscodeDescription =>
+      'Allows the media pipeline to generate playback derivatives.';
+
+  @override
+  String get adminConfigReaderAutoImportDescription =>
+      'Allows recognized reader files to enter the import flow automatically.';
+
+  @override
+  String get adminConfigMusicAutoImportDescription =>
+      'Allows recognized music files to enter the import flow automatically.';
+
+  @override
+  String get adminConfigPhotoGeoRateDescription =>
+      'Maximum geocoding requests permitted per second.';
+
+  @override
+  String get adminConfigUploadRateDescription =>
+      'Controls whether upload traffic is subject to the server rate policy.';
+
+  @override
+  String get adminConfigSecurityRateLimitDescription =>
+      'Default request limit applied by security controls.';
+
+  @override
+  String get adminConfigMusicBrainzUserAgentDescription =>
+      'Identification string sent with MusicBrainz requests.';
+
+  @override
+  String get adminConfigHostSuffixesDescription =>
+      'Comma-separated host suffixes accepted for provider media requests.';
+
+  @override
+  String get adminConfigItems => 'Config Items';
+
+  @override
+  String get adminAllConfigs => 'All configs';
+
+  @override
+  String get adminHotUpdate => 'Hot Update';
+
+  @override
+  String get adminEffectiveImmediately => 'Effective immediately';
+
+  @override
+  String get adminRestartRequired => 'Restart Required';
+
+  @override
+  String get adminEffectiveAfterRestart => 'Effective after restart';
+
+  @override
+  String get adminConfigItemList => 'Config Items';
+
+  @override
+  String get adminConfigItemListSubtitle =>
+      'Settings take effect by hot update, on the next task, or after restart.';
+
+  @override
+  String get adminNoConfigItems => 'No config items.';
+
+  @override
+  String get adminAllCategories => 'All Categories';
+
+  @override
+  String get adminAllScopes => 'All Scopes';
+
+  @override
+  String get adminHotReload => 'Hot Reload';
+
+  @override
+  String get adminNextTask => 'Next Task';
+
+  @override
+  String get adminNeedsRestart => 'Needs Restart';
+
+  @override
+  String get adminEdit => 'Edit';
+
+  @override
+  String get adminConfigValue => 'Config Value';
+
+  @override
+  String get adminSensitiveValuePlaceholder =>
+      'Enter a new sensitive value; the current value is never displayed';
+
+  @override
+  String get adminShowValue => 'Show value';
+
+  @override
+  String get adminHideValue => 'Hide value';
+
+  @override
+  String get adminChangeReason => 'Change Reason';
+
+  @override
+  String get adminTrue => 'True';
+
+  @override
+  String get adminFalse => 'False';
+
+  @override
+  String get adminConfigHistory => 'Change History';
+
+  @override
+  String get adminNoConfigHistory => 'No change history';
+
+  @override
+  String get adminRollback => 'Rollback';
+
+  @override
+  String get adminNoReason => 'No reason';
+
+  @override
+  String get adminDlq => 'Dead Letter Queue';
+
+  @override
+  String get adminDlqSubtitle =>
+      'Failed tasks exhausted retries — re-queue manually';
+
+  @override
+  String get adminDlqMetricHint => 'Retries exhausted; manual action needed';
+
+  @override
+  String get adminDlqEmptyHealthy => 'No dead letter tasks — queue is healthy';
+
+  @override
+  String get adminNoDlqTasks => 'No DLQ tasks';
+
+  @override
+  String get adminNoErrorSummary => 'No error summary';
+
+  @override
+  String get adminStorageManagement => 'Storage Management';
+
+  @override
+  String get adminListEmpty => 'No data. Try adjusting the filters.';
+
+  @override
+  String adminListPageOf(Object current, Object total) {
+    return 'Page $current of $total';
+  }
+
+  @override
+  String get adminListActions => 'Actions';
+
+  @override
+  String get adminListIndex => '#';
+
+  @override
+  String adminListSelectedCount(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get adminListSelectAll => 'Select all';
+
+  @override
+  String get adminListExpandFilters => 'Expand filters';
+
+  @override
+  String get adminListCollapseFilters => 'Collapse filters';
+
+  @override
+  String get adminListSortAsc => 'Ascending';
+
+  @override
+  String get adminListSortDesc => 'Descending';
+
+  @override
+  String get adminListExportCsv => 'Export CSV';
+
+  @override
+  String get adminLibrarySourcesSection => 'Video library sources';
+
+  @override
+  String get statusHealthHealthy => 'Healthy';
+
+  @override
+  String get statusHealthAvailable => 'Available';
+
+  @override
+  String get statusHealthUnavailable => 'Unavailable';
+
+  @override
+  String get statusScopePersonal => 'Personal space';
+
+  @override
+  String get statusScopeShared => 'Shared space';
+
+  @override
+  String get statusProviderLocalFilesystem => 'Local filesystem';
+
+  @override
+  String get statusProviderMinio => 'Object storage';
+
+  @override
+  String get statusManagementManaged => 'Managed';
+
+  @override
+  String get statusScanReady => 'Ready';
+
+  @override
+  String get statusScanDiscovering => 'Discovering';
+
+  @override
+  String get statusScanApplying => 'Applying';
+
+  @override
+  String get statusScanFailed => 'Failed';
+
+  @override
+  String get statusScanCancelled => 'Cancelled';
+
+  @override
+  String get statusScanPaused => 'Paused';
+
+  @override
+  String get statusScanPartial => 'Partially applied';
+
+  @override
+  String get statusScanQueued => 'Queued';
+
+  @override
+  String get statusPhaseDiscovery => 'Discovery phase';
+
+  @override
+  String get statusPhaseReview => 'Review phase';
+
+  @override
+  String get statusPhaseApply => 'Apply phase';
+
+  @override
+  String get adminLibrarySourceAdd => 'Add library source';
+
+  @override
+  String get adminLibrarySourcesEmpty =>
+      'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.';
+
+  @override
+  String get adminLibrarySourcesSubtitle =>
+      'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.';
+
+  @override
+  String get adminMountLibraryScanAll => 'Scan all';
+
+  @override
+  String adminMountLibraryScanAllSuccess(int count) {
+    return 'Discovery scan started for $count library sources';
+  }
+
+  @override
+  String adminMountLibraryScanAllPartial(int success, int failed) {
+    return 'Started $success scans, $failed failed';
+  }
+
+  @override
+  String get adminLibraryAdvancedAdd => 'Advanced: add library source';
+
+  @override
+  String get adminMountLibraryScanAllHint =>
+      'Run discovery for movie, TV, and anime library sources together';
+
+  @override
+  String get adminMountLibraryProvisionSuccess =>
+      'Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.';
+
+  @override
+  String adminLibrarySourceCountLabel(int count) {
+    return '$count total';
+  }
+
+  @override
+  String get adminLibrarySourceManaged => 'Mount catalog';
+
+  @override
+  String get adminLibrarySourceCustom => 'Custom';
+
+  @override
+  String adminListRangeLabel(Object start, Object end, Object total) {
+    return '$start–$end of $total';
+  }
+
+  @override
+  String get adminLibraryReviewSubtitle =>
+      'Pick a source to review the scan results and apply them.';
+
+  @override
+  String get adminStorageStatusHealthy => 'Healthy';
+
+  @override
+  String get adminStorageFilterAll => 'All';
+
+  @override
+  String get adminStorageFilterEnabled => 'Enabled';
+
+  @override
+  String get adminStorageFilterDisabled => 'Disabled';
+
+  @override
+  String get adminStorageFilterUnhealthy => 'Unhealthy';
+
+  @override
+  String get adminStorageEmptyList => 'No storage locations match the filter';
+
+  @override
+  String get adminStorageDetailHint =>
+      'Select a storage location to view details';
+
+  @override
+  String get adminStorageStatusDisabled => 'Disabled';
+
+  @override
+  String get adminStorageDisableConfirmTitle => 'Disable storage location';
+
+  @override
+  String adminStorageDisableConfirmBody(Object name) {
+    return 'Scanning and media access stop for \"$name\" until you enable it again.';
+  }
+
+  @override
+  String get adminStorageDisableAction => 'Disable';
+
+  @override
+  String get adminStorageEnableAction => 'Enable';
+
+  @override
+  String get adminStorageDeleteConfirmTitle => 'Delete storage location';
+
+  @override
+  String adminStorageDeleteConfirmBody(Object name) {
+    return 'This permanently removes the \"$name\" registration. Imported content is not affected.';
+  }
+
+  @override
+  String get adminStorageDeleteAction => 'Delete';
+
+  @override
+  String get adminStorageFieldPath => 'Path';
+
+  @override
+  String get adminStorageFieldScope => 'Scope';
+
+  @override
+  String get adminStorageFieldProvider => 'Provider';
+
+  @override
+  String get adminStorageFieldManagement => 'Management';
+
+  @override
+  String get adminStorageFieldNode => 'Node';
+
+  @override
+  String get adminStorageParentDir => 'Up one level';
+
+  @override
+  String get adminStorageManagementSubtitle =>
+      'Manage MinIO buckets and local media locations; use local locations for 4K playback.';
+
+  @override
+  String get adminBucketConfig => 'Bucket Config';
+
+  @override
+  String get adminMinioBuckets => 'MinIO Buckets';
+
+  @override
+  String get adminRecentRecords => 'Recent records';
+
+  @override
+  String get adminWaitingToExecute => 'Waiting to execute';
+
+  @override
+  String get adminObjectBuckets => 'Object Buckets';
+
+  @override
+  String get adminObjectBucketsSubtitle => 'From backend MinIO config.';
+
+  @override
+  String get adminNoBucketConfig => 'No bucket config.';
+
+  @override
+  String get adminExternalStorageIntegration => 'External Storage';
+
+  @override
+  String get adminExternalStorageSubtitle =>
+      'Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.';
+
+  @override
+  String get adminOAuthAppsTitle => 'OAuth apps';
+
+  @override
+  String get adminOAuthAppsSubtitle =>
+      'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.';
+
+  @override
+  String get adminOAuthRedirectHint =>
+      'Must exactly match the redirect URI registered in the provider console; usually this site\'s callback URL.';
+
+  @override
+  String get adminNoOAuthApps => 'No OAuth apps configured yet.';
+
+  @override
+  String get adminNewConnection => 'New Connection';
+
+  @override
+  String get adminType => 'Type';
+
+  @override
+  String get adminExternalStorageClientId => 'Client ID';
+
+  @override
+  String get adminExternalStorageClientSecret => 'Client Secret';
+
+  @override
+  String get adminExternalStorageRedirectUri => 'Redirect URI';
+
+  @override
+  String get adminLocalMount => 'Local (rclone) account';
+
+  @override
+  String get adminDisplayNameLabel => 'Display Name';
+
+  @override
+  String get adminCredentialsJson => 'Credentials JSON';
+
+  @override
+  String get adminEnterDisplayName => 'Please enter display name';
+
+  @override
+  String get adminCreatingLabel => 'Creating';
+
+  @override
+  String get adminConnections => 'Connections';
+
+  @override
+  String get adminExternalSources => 'External sources';
+
+  @override
+  String get adminEnabled => 'Enabled';
+
+  @override
+  String get adminSyncable => 'Syncable';
+
+  @override
+  String get adminDisabled => 'Disabled';
+
+  @override
+  String get adminPausedSync => 'Paused sync';
+
+  @override
+  String get adminConnectionList => 'Connection List';
+
+  @override
+  String get adminConnectionListSubtitle =>
+      'Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.';
+
+  @override
+  String get adminExternalStorageOwner => 'Owner';
+
+  @override
+  String get adminNoExternalStorage => 'No external storage connections.';
+
+  @override
+  String get adminDeactivate => 'Deactivate';
+
+  @override
+  String get adminActivate => 'Activate';
+
+  @override
+  String get adminSessionManagement => 'Session Management';
+
+  @override
+  String get adminSessionStatusActive => 'Active';
+
+  @override
+  String get adminSessionStatusRevoked => 'Force-signed out';
+
+  @override
+  String get adminSessionStatusExpired => 'Expired';
+
+  @override
+  String get adminSessionDetailTitle => 'Session details';
+
+  @override
+  String get adminSessionFieldDeviceId => 'Device ID';
+
+  @override
+  String get adminSessionDeviceName => 'Device name';
+
+  @override
+  String get adminSessionLoginTime => 'Signed in at';
+
+  @override
+  String get adminSessionExpiresAt => 'Expires at';
+
+  @override
+  String get adminSessionLastActive => 'Last active at';
+
+  @override
+  String get adminSessionIp => 'IP address';
+
+  @override
+  String get adminAuditActorColumn => 'Actor';
+
+  @override
+  String get adminAuditActorIdColumn => 'Account ID';
+
+  @override
+  String get adminLoginClientColumn => 'Client';
+
+  @override
+  String get adminResourceType => 'Resource type';
+
+  @override
+  String get adminLogContent => 'Description';
+
+  @override
+  String get adminLogTime => 'Time';
+
+  @override
+  String get adminConfigDescription => 'Description';
+
+  @override
+  String get adminStorageOpenDetail => 'Details';
+
+  @override
+  String get adminStorageColumnType => 'Type';
+
+  @override
+  String get adminStorageMountsSection =>
+      'Underlying storage locations (read-only)';
+
+  @override
+  String get adminTrustedMountsTitle => 'Trusted mounts';
+
+  @override
+  String get adminTrustedMountsSubtitle =>
+      'Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.';
+
+  @override
+  String get adminTrustedMountsEmpty =>
+      'No mounts registered in deployment config';
+
+  @override
+  String get adminMountLibraryEnable => 'Enable media library';
+
+  @override
+  String get adminMountLibraryEnableHint =>
+      'Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.';
+
+  @override
+  String get adminMountLibraryEnableHintOff =>
+      'Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.';
+
+  @override
+  String get adminMountLibraryAutoImport => 'Auto-import after scan';
+
+  @override
+  String get adminMountLibraryAutoImportHint =>
+      'On: matched files join the library after scan. Off: review and import from Library Sources first.';
+
+  @override
+  String get adminMountLibraryStatusOff => 'Disabled';
+
+  @override
+  String get adminMountLibraryStatusOn => 'Enabled';
+
+  @override
+  String get adminMountLibraryStatusPartial => 'Incomplete';
+
+  @override
+  String get adminMountLibraryCatalogLabel => 'Folders';
+
+  @override
+  String get adminMountLibraryCatalogMovie => 'Movie';
+
+  @override
+  String get adminMountLibraryCatalogTv => 'TV';
+
+  @override
+  String get adminMountLibraryCatalogAnime => 'Anime';
+
+  @override
+  String adminMountLibraryPartialHint(int count) {
+    return 'Only $count/3 type libraries exist. Turn on Enable media library to create the missing ones.';
+  }
+
+  @override
+  String get adminMountLibraryProvisionFailed =>
+      'Failed to configure mount media library';
+
+  @override
+  String adminLibraryOrphanLocation(Object count) {
+    return '$count mount location(s) no longer referenced by any library source. Clean them up in the list above.';
+  }
+
+  @override
+  String get adminLibraryCleanupOrphan => 'Clean up mount location';
+
+  @override
+  String get adminLibraryColumnName => 'Name';
+
+  @override
+  String get adminLibraryColumnLocation => 'Location · Root';
+
+  @override
+  String get adminLibraryColumnVisibility => 'Visibility';
+
+  @override
+  String get adminLibraryColumnHealth => 'Health';
+
+  @override
+  String get adminLibraryColumnScanStatus => 'Scan status';
+
+  @override
+  String get adminLibraryColumnLastScan => 'Last scan';
+
+  @override
+  String get adminLibraryManageInfoSection => 'Library info';
+
+  @override
+  String get adminLibraryManageReviewSection => 'Discovery & review';
+
+  @override
+  String adminLibraryLastScanSummary(
+    Object found,
+    Object created,
+    Object missing,
+  ) {
+    return 'Found $found · Created $created · Missing $missing';
+  }
+
+  @override
+  String get adminLibraryScanNever => 'Never scanned';
+
+  @override
+  String get adminLibraryDeleteSourceTitle => 'Delete library source';
+
+  @override
+  String adminLibraryDeleteSourceBody(Object name) {
+    return 'Delete library source \"$name\"? This cannot be undone.';
+  }
+
+  @override
+  String get adminLibraryAccessTitle => 'Access management';
+
+  @override
+  String get adminStorageColumnName => 'Name';
+
+  @override
+  String get adminStorageColumnMountKey => 'Mount key';
+
+  @override
+  String get adminStorageColumnRoot => 'Root';
+
+  @override
+  String get adminStorageColumnHealth => 'Health';
+
+  @override
+  String get adminLibraryDiscoverUpdates => 'Discover updates';
+
+  @override
+  String get adminConfigGroupColumn => 'Group';
+
+  @override
+  String get adminBatchRevokeSessions => 'Force sign out selected';
+
+  @override
+  String get adminBatchRetryTasks => 'Retry selected';
+
+  @override
+  String get adminBatchCancelTasks => 'Cancel selected';
+
+  @override
+  String adminBatchCancelConfirmMessage(Object count) {
+    return 'This will cancel $count queued or retry-waiting tasks; running tasks are unaffected. Failed items are skipped.';
+  }
+
+  @override
+  String adminBatchDiscardConfirmMessage(Object count) {
+    return 'This will permanently discard $count dead-letter tasks; discarded tasks cannot be retried. Failed items are skipped.';
+  }
+
+  @override
+  String get adminBatchClearSelection => 'Clear selection';
+
+  @override
+  String adminBatchCompleted(Object success, Object failed) {
+    return 'Batch finished: $success succeeded, $failed failed';
+  }
+
+  @override
+  String get adminBatchConfirmTitle => 'Confirm batch operation';
+
+  @override
+  String adminBatchConfirmMessage(Object count) {
+    return 'This applies to $count selected items one by one; failed items are skipped.';
+  }
+
+  @override
+  String get adminCsvExported => 'Current page exported';
+
+  @override
+  String get adminLoginFailureReason => 'Failure reason';
+
+  @override
+  String get adminSessionRevokeReason => 'Revoke reason';
+
+  @override
+  String get adminSessionManagementSubtitle =>
+      'View all user active sessions, supports forced logout.';
+
+  @override
+  String get adminActiveSessions => 'active';
+
+  @override
+  String get adminRevokedSessions => 'revoked';
+
+  @override
+  String get adminActiveSessionCount => 'Active Sessions';
+
+  @override
+  String get adminCurrentOnlineDevices => 'Currently online devices';
+
+  @override
+  String get adminRevokedCount => 'Revoked';
+
+  @override
+  String get adminBeenKicked => 'Been kicked out';
+
+  @override
+  String get adminSessionList => 'Session List';
+
+  @override
+  String get adminSessionListSubtitle => 'Sorted by creation time descending.';
+
+  @override
+  String get adminNoSessions => 'No session records.';
+
+  @override
+  String get adminConfirmKick => 'Confirm Kick';
+
+  @override
+  String adminConfirmKickMessage(Object device) {
+    return 'Are you sure to revoke this session? Device: $device';
+  }
+
+  @override
+  String get adminRevokeSession => 'Kick Session';
+
+  @override
+  String get adminRevokedLabel => 'revoked';
+
+  @override
+  String get adminSessionAllStatuses => 'All statuses';
+
+  @override
+  String get adminSessionActiveOnly => 'Active only';
+
+  @override
+  String get adminSessionRevokedOnly => 'Revoked only';
+
+  @override
+  String get adminSessionExpiredOnly => 'Expired only';
+
+  @override
+  String get adminExpiredLabel => 'Expired';
+
+  @override
+  String get adminCurrentPage => 'Current page';
+
+  @override
+  String get adminFilterTaskType => 'Task type';
+
+  @override
+  String adminPageIndicator(Object page, Object totalPages) {
+    return 'Page $page / $totalPages';
+  }
+
+  @override
+  String adminTotalCount(Object count) {
+    return 'Total $count';
+  }
+
+  @override
+  String get adminPreviousPage => 'Previous page';
+
+  @override
+  String get adminNextPage => 'Next page';
+
+  @override
+  String get adminUserManagement => 'User Management';
+
+  @override
+  String get adminUserManagementSubtitle =>
+      'Manage accounts, status, quota and role assignment.';
+
+  @override
+  String get adminAccountList => 'Account List';
+
+  @override
+  String get adminAccountListSubtitle =>
+      'Filter accounts by username, nickname, email and role.';
+
+  @override
+  String get adminCreateUser => 'Create User';
+
+  @override
+  String get adminSearchUsers => 'Search username, nickname or email';
+
+  @override
+  String get adminAll => 'All';
+
+  @override
+  String get adminNoMatchingUsers => 'No matching users.';
+
+  @override
+  String get adminNoUsers => 'No users yet.';
+
+  @override
+  String adminLoadMore(Object loaded, Object total) {
+    return 'Load more (loaded $loaded / $total)';
+  }
+
+  @override
+  String get adminTotalUsers => 'Total Users';
+
+  @override
+  String get adminDatabaseAccounts => 'Database accounts';
+
+  @override
+  String get adminSuperAdmin => 'Super Admin';
+
+  @override
+  String get adminHighestPrivilege => 'Highest privilege';
+
+  @override
+  String get adminSystemMaintenance => 'System maintenance';
+
+  @override
+  String get adminMemberGuest => 'Member / Guest';
+
+  @override
+  String get adminBusinessAccess => 'Business access';
+
+  @override
+  String get adminSuperAdminDisableNote => 'Cannot be disabled';
+
+  @override
+  String get adminAssignableRoles => 'Assignable roles';
+
+  @override
+  String adminQuotaUsedBytes(Object size) {
+    return 'Used $size';
+  }
+
+  @override
+  String get adminNotSetEmail => 'Email not set';
+
+  @override
+  String get adminDisable => 'Disable';
+
+  @override
+  String get adminRole => 'Role';
+
+  @override
+  String get adminQuota => 'Quota';
+
+  @override
+  String get adminUnlimited => 'Unlimited';
+
+  @override
+  String get adminBatchQuota => 'Batch Set Quota';
+
+  @override
+  String get adminDeselect => 'Deselect';
+
+  @override
+  String adminSelectedUsers(Object count) {
+    return '$count users selected';
+  }
+
+  @override
+  String adminBatchSetStorageQuota(Object count) {
+    return 'Batch Set Storage Quota ($count users)';
+  }
+
+  @override
+  String get adminBatchDisableUsers => 'Batch disable';
+
+  @override
+  String get adminBatchEnableUsers => 'Batch enable';
+
+  @override
+  String adminBatchDisableConfirmMessage(Object count) {
+    return 'This will disable $count users: all their sessions are revoked immediately and they cannot sign in until re-enabled. Failed items are skipped.';
+  }
+
+  @override
+  String adminBatchEnableConfirmMessage(Object count) {
+    return 'This will enable $count users, restoring their ability to sign in. Failed items are skipped.';
+  }
+
+  @override
+  String get adminBatchQuotaHint =>
+      'Will set the same storage quota for all selected users. Super admins and users with insufficient space will be skipped.';
+
+  @override
+  String get adminQuotaGib => 'Quota (GiB)';
+
+  @override
+  String get adminQuotaHint => 'e.g. 50';
+
+  @override
+  String get adminSaving => 'Saving';
+
+  @override
+  String get adminSave => 'Save';
+
+  @override
+  String get adminValidQuotaRequired => 'Please enter a valid quota value';
+
+  @override
+  String get adminNoUsersSelected => 'No users selected';
+
+  @override
+  String adminUsersQuotaUpdated(Object count) {
+    return 'Updated storage quota for $count users';
+  }
+
+  @override
+  String adminEditQuota(Object name) {
+    return 'Adjust Storage Quota for $name';
+  }
+
+  @override
+  String adminCurrentUsage(Object used, Object quota) {
+    return 'Current usage: $used / $quota';
+  }
+
+  @override
+  String get adminNewQuotaGib => 'New Quota (GiB)';
+
+  @override
+  String adminQuotaMinError(Object used) {
+    return 'New quota cannot be less than current used space ($used GiB)';
+  }
+
+  @override
+  String adminEditRoles(Object name) {
+    return 'Adjust Roles for $name';
+  }
+
+  @override
+  String get adminSelectAtLeastOneRole => 'Please select at least one role';
+
+  @override
+  String get adminCreating => 'Creating';
+
+  @override
+  String get adminCreate => 'Create';
+
+  @override
+  String get adminUsername => 'Username';
+
+  @override
+  String get adminEnterUsername => 'Please enter username';
+
+  @override
+  String get adminDisplayName => 'Display Name';
+
+  @override
+  String get adminEmail => 'Email';
+
+  @override
+  String get adminInitialPassword => 'Initial Password';
+
+  @override
+  String get adminEnterInitialPassword => 'Please enter initial password';
+
+  @override
+  String get adminPasswordMinChars => 'Password must be at least 8 characters';
+
+  @override
+  String get adminPasswordMaxChars => 'Password must be at most 24 characters';
+
+  @override
+  String get adminRoleLabel => 'Role';
+
+  @override
+  String get adminConsole => 'Admin Console';
+
+  @override
+  String get adminConsoleSubtitle =>
+      'Key metrics of users, permissions, runtime status and storage capacity.';
+
+  @override
+  String get adminAccountOverview => 'Account Overview';
+
+  @override
+  String get adminActive => 'Active';
+
+  @override
+  String get adminPermissionModel => 'Permission Model';
+
+  @override
+  String adminPermissionBindingsCount(Object count) {
+    return '$count permission bindings';
+  }
+
+  @override
+  String get adminTasks => 'Tasks';
+
+  @override
+  String get adminRunningLabel => 'Running';
+
+  @override
+  String get adminQueued => 'Queued';
+
+  @override
+  String get adminCompleted => 'Completed';
+
+  @override
+  String get adminNeedAttention => 'Need attention';
+
+  @override
+  String get adminStorageAssets => 'Storage Assets';
+
+  @override
+  String adminFilesFolders(Object files, Object folders) {
+    return '$files files · $folders folders';
+  }
+
+  @override
+  String get adminObjects => 'Objects';
+
+  @override
+  String get adminTaskThroughput7d => 'Task Throughput (7D)';
+
+  @override
+  String get adminOverviewThroughputTrend =>
+      'Task Throughput Trend (Last 7 Days)';
+
+  @override
+  String get adminGrowthPanelTitle => 'Activity & Storage Growth';
+
+  @override
+  String get adminGrowthPanelSubtitle =>
+      'Daily user growth and storage growth from analytics.';
+
+  @override
+  String get adminUserGrowthLabel => 'User Growth';
+
+  @override
+  String get adminStorageGrowthLabel => 'Storage Growth';
+
+  @override
+  String adminFilesFoldersObjects(
+    Object files,
+    Object folders,
+    Object objects,
+  ) {
+    return '$files files · $folders folders · $objects objects';
+  }
+
+  @override
+  String get adminHealthy => 'Healthy';
+
+  @override
+  String get adminFiles => 'Files';
+
+  @override
+  String get adminFolders => 'Folders';
+
+  @override
+  String get adminExternalStorageLabel => 'External Storage';
+
+  @override
+  String get adminWarning => 'Warning';
+
+  @override
+  String get adminActivityChart => 'Activity Chart';
+
+  @override
+  String get adminActivityChartSubtitle =>
+      'Admin-side trend view generated from current system statistics.';
+
+  @override
+  String get adminHealthStatus => 'Health Status';
+
+  @override
+  String get adminHealthStatusSubtitle =>
+      'Health status from admin aggregation endpoint.';
+
+  @override
+  String get adminUserLabel => 'Users';
+
+  @override
+  String get adminTaskLabel => 'Tasks';
+
+  @override
+  String get adminStorageLabel => 'Storage';
+
+  @override
+  String get adminObjectsLabel => 'objects';
+
+  @override
+  String get adminSystemLoad => 'System Load';
+
+  @override
+  String get adminHotConfig => 'Hot Config';
+
+  @override
+  String get adminRestartItems => 'Restart Items';
+
+  @override
+  String get adminStatusEnabled => 'Enabled';
+
+  @override
+  String get adminStatusDisabled => 'Disabled';
+
+  @override
+  String get adminGroupOverview => 'Overview';
+
+  @override
+  String get adminGroupOperations => 'Operations';
+
+  @override
+  String get adminGroupIdentity => 'Identity & Permissions';
+
+  @override
+  String get adminGroupConfiguration => 'System Config';
+
+  @override
+  String get adminGroupStorage => 'Storage';
+
+  @override
+  String get adminNavOverview => 'Console Home';
+
+  @override
+  String get adminNavMonitoring => 'System Monitor';
+
+  @override
+  String get adminNavLogs => 'Log Center';
+
+  @override
+  String get adminNavTasks => 'Background Tasks';
+
+  @override
+  String get adminNavSessions => 'Session Management';
+
+  @override
+  String get adminNavUsers => 'User Management';
+
+  @override
+  String get adminNavRoles => 'Role Management';
+
+  @override
+  String get adminNavConfig => 'Config Center';
+
+  @override
+  String get adminNavStorage => 'Storage Management';
+
+  @override
+  String get adminNavExternalStorage => 'External Storage';
+
+  @override
+  String get adminNavMaintenance => 'Maintenance';
+
+  @override
+  String get adminMaintenanceTitle => 'Maintenance & audit';
+
+  @override
+  String get adminMaintenanceSubtitle =>
+      'One place for site-wide shares, photo geo data and unavailable media sources.';
+
+  @override
+  String get adminMaintenanceNoPermission =>
+      'Your role has no maintenance panels available.';
+
+  @override
+  String get adminMaintenanceConfirm => 'Run';
+
+  @override
+  String get adminMaintenanceSharesTitle => 'Site-wide share audit';
+
+  @override
+  String get adminMaintenanceSharesSubtitle =>
+      'Review active share links created by any user and how often they were opened.';
+
+  @override
+  String get adminMaintenanceSharesEmpty => 'No share links.';
+
+  @override
+  String get adminMaintenanceSharesResource => 'Resource';
+
+  @override
+  String get adminMaintenanceSharesOwner => 'Owner';
+
+  @override
+  String get adminMaintenanceSharesStatus => 'Status';
+
+  @override
+  String get adminMaintenanceSharesAccess => 'Accesses';
+
+  @override
+  String get adminMaintenanceSharesCreated => 'Created';
+
+  @override
+  String get adminMaintenanceSharesExpires => 'Expires';
+
+  @override
+  String get adminMaintenanceShareStatusActive => 'Active';
+
+  @override
+  String get adminMaintenanceShareStatusDisabled => 'Disabled';
+
+  @override
+  String get adminMaintenanceShareStatusExpired => 'Expired';
+
+  @override
+  String get adminMaintenancePhotoTitle => 'Photo geo data';
+
+  @override
+  String get adminMaintenancePhotoSubtitle =>
+      'Import GeoNames data, reload the index, backfill photo locations and rescan motion photos.';
+
+  @override
+  String get adminMaintenanceGeoImport => 'Import dataset';
+
+  @override
+  String get adminMaintenanceGeoReload => 'Reload index';
+
+  @override
+  String get adminMaintenanceGeoBackfill => 'Backfill locations';
+
+  @override
+  String get adminMaintenanceMotionRescan => 'Rescan motion photos';
+
+  @override
+  String get adminMaintenanceGeoConfirmImport =>
+      'This reads the dump files from the server\'s shared directory and creates a background import task. Continue?';
+
+  @override
+  String get adminMaintenanceGeoConfirmReload =>
+      'This reloads this instance\'s in-memory index from the published dataset. Continue?';
+
+  @override
+  String get adminMaintenanceGeoConfirmBackfill =>
+      'This creates a background backfill task for photos with coordinates but no place name. Continue?';
+
+  @override
+  String get adminMaintenanceMotionConfirm =>
+      'This rescans previously imported decodable JPEGs for motion-photo markers and extracts their videos. Continue?';
+
+  @override
+  String get adminMaintenanceGeoDumpDate => 'Dump date';
+
+  @override
+  String get adminMaintenanceGeoDumpDateHint => 'e.g. 2026-01-01';
+
+  @override
+  String get adminMaintenanceGeoDumpDateRequired => 'Enter the dump date';
+
+  @override
+  String get adminMaintenanceGeoSourceHash => 'Source hash (optional)';
+
+  @override
+  String get adminMaintenanceGeoBatchSize => 'Batch size (optional)';
+
+  @override
+  String adminMaintenanceGeoTaskCreated(String taskId) {
+    return 'Task created: $taskId';
+  }
+
+  @override
+  String adminMaintenanceMotionTaskCreated(String taskId) {
+    return 'Motion photo rescan task created: $taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoTaskReused(String taskId) {
+    return 'Reused the active backfill task: $taskId';
+  }
+
+  @override
+  String adminMaintenanceGeoReloaded(String version) {
+    return 'Reloaded dataset: $version';
+  }
+
+  @override
+  String get adminMaintenanceGeoReloadedEmpty =>
+      'Reloaded (no published dataset yet)';
+
+  @override
+  String get adminMaintenanceUnavailableTitle => 'Unavailable media';
+
+  @override
+  String get adminMaintenanceUnavailableSubtitle =>
+      'Entries that are missing or unreadable in local media libraries.';
+
+  @override
+  String get adminMaintenanceUnavailableEmpty => 'No unavailable entries.';
+
+  @override
+  String get adminMaintenanceUnavailableName => 'Title';
+
+  @override
+  String get adminMaintenanceUnavailableStatus => 'Status';
+
+  @override
+  String get adminMaintenanceUnavailableSince => 'Missing since';
+
+  @override
+  String get adminMaintenanceUnavailableConfirmations => 'Confirmations';
+
+  @override
+  String get adminSharedSpaceMatrixTitle => 'Shared space capability matrix';
+
+  @override
+  String get adminSharedSpaceMatrixSubtitle =>
+      'Configure browse, upload, download, delete, move and folder creation per role. Changes apply immediately.';
+
+  @override
+  String get adminSharedSpaceMatrixSave => 'Save matrix';
+
+  @override
+  String adminSharedSpaceMatrixConfirm(String count) {
+    return 'This updates shared space capabilities for $count roles. Continue?';
+  }
+
+  @override
+  String get adminSharedSpaceMatrixSaved => 'Shared space capabilities updated';
+
+  @override
+  String get adminSharedSpaceMatrixEmpty => 'No roles to configure.';
+
+  @override
+  String get adminSharedSpaceRole => 'Role';
+
+  @override
+  String get adminSharedSpaceCapabilityBrowse => 'Browse';
+
+  @override
+  String get adminSharedSpaceCapabilityUpload => 'Upload';
+
+  @override
+  String get adminSharedSpaceCapabilityDownload => 'Download';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteOwn => 'Delete own';
+
+  @override
+  String get adminSharedSpaceCapabilityDeleteAny => 'Delete any';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveTo => 'Move in';
+
+  @override
+  String get adminSharedSpaceCapabilityMoveFrom => 'Move out';
+
+  @override
+  String get adminSharedSpaceCapabilityCreateFolder => 'New folder';
+
+  @override
+  String get adminOverviewTitle => 'Admin Console';
+
+  @override
+  String get adminOverviewSubtitle =>
+      'Key metrics of users, permissions, runtime status and storage capacity.';
+
+  @override
+  String get adminMonitoringTitle => 'System Monitor';
+
+  @override
+  String get adminMonitoringSubtitle2 =>
+      'View health checks, service metrics, node status and alerts.';
+
+  @override
+  String get adminLogsTitle => 'Log Center';
+
+  @override
+  String get adminLogsSubtitle =>
+      'Unified view of application logs, error logs and login audit.';
+
+  @override
+  String get adminTasksTitle => 'Background Tasks';
+
+  @override
+  String get adminTasksSubtitle =>
+      'Track indexing, transcoding, sync, backup and cleanup tasks.';
+
+  @override
+  String get adminSectionForbidden =>
+      'You do not have permission to open this admin section.';
+
+  @override
+  String get adminSessionsTitle => 'Session Management';
+
+  @override
+  String get adminSessionsSubtitle =>
+      'View and manage user active sessions, supports forced logout.';
+
+  @override
+  String get adminUsersTitle => 'User Management';
+
+  @override
+  String get adminUsersSubtitle =>
+      'Manage accounts, status, quota and role assignment.';
+
+  @override
+  String get adminRolesTitle => 'Role Management';
+
+  @override
+  String get adminRolesSubtitle =>
+      'Maintain roles, permission sets and resource access boundaries.';
+
+  @override
+  String get adminConfigTitle => 'Config Center';
+
+  @override
+  String get adminConfigSubtitle =>
+      'Manage system config items, feature flags and hot update release status.';
+
+  @override
+  String get adminStorageTitle => 'Storage Management';
+
+  @override
+  String get adminStorageSubtitle =>
+      'Manage MinIO buckets, capacity, and index maintenance.';
+
+  @override
+  String get adminExternalStorageTitle => 'External Storage';
+
+  @override
+  String get adminRefresh => 'Refresh';
+
+  @override
+  String get adminOverviewAutoRefresh => 'Auto refresh';
+
+  @override
+  String get adminOverviewRefreshOff => 'Off';
+
+  @override
+  String get adminOverviewRefresh30s => '30s';
+
+  @override
+  String get adminOverviewRefresh5m => '5m';
+
+  @override
+  String get adminRecalculate => 'Recalculate';
+
+  @override
+  String adminRecalculateDone(Object count) {
+    return 'Updated storage for $count users';
+  }
+
+  @override
+  String get adminApiResponseFormat => 'Admin response format is incorrect';
+
+  @override
+  String get adminNoResponse => 'Server did not return admin result';
+
+  @override
+  String get adminUserListFormat => 'User list format is incorrect';
+
+  @override
+  String get adminUserResponseFormat => 'User response format is incorrect';
+
+  @override
+  String get adminNoUserResult => 'Server did not return user result';
+
+  @override
+  String get adminUserOperationFailed => 'User operation failed';
+
+  @override
+  String get adminConsoleResponseFormat =>
+      'Admin console response format is incorrect';
+
+  @override
+  String get adminNoConsoleResult =>
+      'Server did not return admin console result';
+
+  @override
+  String get adminConsoleLoadFailed => 'Admin console load failed';
+
+  @override
+  String get adminNoDetailDiagnostics => 'No detailed diagnostics available';
+
+  @override
+  String get readerNavBookshelf => 'Bookshelf';
+
+  @override
+  String get readerNavLibrary => 'Library';
+
+  @override
+  String get readerNavStats => 'Stats';
+
+  @override
+  String get readerNavManage => 'Manage';
+
+  @override
+  String get readerAdminModuleTitle => 'Reader management';
+
+  @override
+  String get readerAdminModuleSubtitle => 'Imports, pending files and metadata';
+
+  @override
+  String get toolsReaderAdminDetail => 'Import queue and metadata management';
+
+  @override
+  String get readerShelfEmpty =>
+      'Your shelf is empty. Add books from the library.';
+
+  @override
+  String get readerShelfEmptyHint =>
+      'Browse the library and add books to your shelf.';
+
+  @override
+  String get readerStatsActivity => 'Reading Activity';
+
+  @override
+  String get readerStatsTitle => 'Statistics';
+
+  @override
+  String get adminHistoryEmpty => 'No reading sessions yet.';
+
+  @override
+  String get readerStatsLast14 => 'Last 14 days';
+
+  @override
+  String get readerStatsCompleted => 'Completed';
+
+  @override
+  String get readerStatsInProgress => 'In Progress';
+
+  @override
+  String get readerStatsInLibrary => 'In Library';
+
+  @override
+  String get readerStatsBooksRead => 'Books Read';
+
+  @override
+  String get readerStatsDayUnit => 'days';
+
+  @override
+  String get readerDetailInfo => 'About';
+
+  @override
+  String get readerDetailChapters => 'Chapters';
+
+  @override
+  String get readerDetailAnnotations => 'Annotations';
+
+  @override
+  String get readerDetailBookmarks => 'Bookmarks';
+
+  @override
+  String get readerDetailProgress => 'Progress';
+
+  @override
+  String get readerDetailComplete => 'Complete';
+
+  @override
+  String get readerDetailType => 'Type';
+
+  @override
+  String get readerDetailLanguage => 'Language';
+
+  @override
+  String get readerDetailAdded => 'Added';
+
+  @override
+  String get readerDetailLastRead => 'Last read';
+
+  @override
+  String get readerDetailWords => 'Words';
+
+  @override
+  String get readerDetailMinRead => 'min read';
+
+  @override
+  String get readerDetailEditMeta => 'Edit metadata';
+
+  @override
+  String get readerDetailReparse => 'Reparse';
+
+  @override
+  String get readerDetailNoAnn => 'No annotations yet.';
+
+  @override
+  String get readerDetailNoBm => 'No bookmarks yet.';
+
+  @override
+  String get readerNavComics => 'Comics';
+
+  @override
+  String get readerSegmentAll => 'All';
+
+  @override
+  String get readerSegmentBooks => 'Books';
+
+  @override
+  String get readerSegmentComics => 'Comics';
+
+  @override
+  String get readerNavBookmarks => 'Bookmarks';
+
+  @override
+  String get readerNavFavorites => 'Favorites';
+
+  @override
+  String get readerManageHint =>
+      'Management tools visible to super admins only';
+
+  @override
+  String get readerSearchHint => 'Search book titles, authors…';
+
+  @override
+  String get readerSearch => 'Search';
+
+  @override
+  String get readerThemeLight => 'Light';
+
+  @override
+  String get readerThemeEyeCare => 'Eye Care';
+
+  @override
+  String get readerThemeDark => 'Dark';
+
+  @override
+  String get readerThemeGreen => 'Green';
+
+  @override
+  String get readerSettingsTitle => 'Reading Settings';
+
+  @override
+  String get readerReadingMode => 'Reading Mode';
+
+  @override
+  String get readerModeScroll => 'Scroll';
+
+  @override
+  String get readerModePage => 'Page';
+
+  @override
+  String get readerModeBook => 'Book';
+
+  @override
+  String get readerModeSwipe => 'Swipe';
+
+  @override
+  String readerChapterPagePosition(int current, int total) {
+    return 'Ch. page $current/$total';
+  }
+
+  @override
+  String readerProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get readerFontSize => 'Font Size';
+
+  @override
+  String get readerLineHeight => 'Line Height';
+
+  @override
+  String get readerFontFamily => 'Font';
+
+  @override
+  String get readerFontSerif => 'Serif';
+
+  @override
+  String get readerFontSans => 'Sans';
+
+  @override
+  String get readerFontSystem => 'System';
+
+  @override
+  String get readerTheme => 'Theme';
+
+  @override
+  String get readerImmersiveMode => 'Immersive mode';
+
+  @override
+  String get readerVolumeKeyPaging => 'Volume keys turn pages';
+
+  @override
+  String get readerFollowBookTypesetting => 'Follow the book\'s typography';
+
+  @override
+  String get readerFollowBookTypesettingHint =>
+      'Takes this book\'s first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.';
+
+  @override
+  String get readerPreviousPage => 'Previous page';
+
+  @override
+  String get readerNextPage => 'Next page';
+
+  @override
+  String get readerPreviousChapter => 'Previous chapter';
+
+  @override
+  String get readerReadAloud => 'Read aloud';
+
+  @override
+  String get readerShortcutsTitle => 'Keyboard shortcuts';
+
+  @override
+  String get readerShortcutNavigation => 'Reading navigation';
+
+  @override
+  String get readerShortcutTurnPage => 'Turn a page or move one viewport';
+
+  @override
+  String get readerShortcutContents => 'Open or close contents';
+
+  @override
+  String get readerShortcutBookmark => 'Add or remove bookmark';
+
+  @override
+  String get readerShortcutSearch => 'Search the current chapter';
+
+  @override
+  String get readerShortcutAnnotations => 'Open annotations and notes';
+
+  @override
+  String get readerShortcutSelectionHighlight =>
+      'While text is selected: 1-5 sets the highlight color, N removes an overlapping highlight';
+
+  @override
+  String get readerShortcutImmersive => 'Toggle immersive mode';
+
+  @override
+  String get readerShortcutFullscreen => 'Toggle fullscreen';
+
+  @override
+  String get readerShortcutTypography => 'Adjust or reset typography';
+
+  @override
+  String get readerShortcutClose => 'Close the current panel or go back';
+
+  @override
+  String get readerShortcutMode => 'Switch comic reading mode';
+
+  @override
+  String get readerSearchCurrentChapter => 'Search current chapter';
+
+  @override
+  String get readerSearchInBook => 'Search in book';
+
+  @override
+  String get readerSearchInBookHint => 'Type at least 2 letters';
+
+  @override
+  String get readerSearchIncomplete => 'Some chapters could not be searched';
+
+  @override
+  String get readerNoSearchResults => 'No matching content found';
+
+  @override
+  String readerSearchResultCount(int count) {
+    return '$count matches';
+  }
+
+  @override
+  String readerImagesNotLoaded(int count) {
+    return '$count images not loaded';
+  }
+
+  @override
+  String get readerImagesNotLoadedHint =>
+      'This chapter exceeded the per-chapter image budget; the text is unaffected';
+
+  @override
+  String readerReadingProgress(int percent) {
+    return 'Reading progress $percent%';
+  }
+
+  @override
+  String readerBookChapterPosition(int current, int total, int percent) {
+    return 'Ch. $current/$total · $percent%';
+  }
+
+  @override
+  String get readerResetTypography => 'Reset typography';
+
+  @override
+  String get readerComicModePage => 'Page mode';
+
+  @override
+  String get readerComicModeScroll => 'Scroll mode';
+
+  @override
+  String get readerComicFullWidth =>
+      'Use all available width in continuous mode';
+
+  @override
+  String get readerComicFullWidthHint =>
+      'Turn off to limit page width on desktop and avoid excessive upscaling';
+
+  @override
+  String readerComicContentWidth(int width) {
+    return 'Content width: $width px';
+  }
+
+  @override
+  String readerComicPageGap(int gap) {
+    return 'Page spacing: $gap px';
+  }
+
+  @override
+  String get readerComicImageLoadFailed => 'Comic page failed to load';
+
+  @override
+  String get readerComicImageDecodeFailed => 'Comic page failed to decode';
+
+  @override
+  String get readerStatsToday => 'Today';
+
+  @override
+  String get readerStatsWeek => 'This week';
+
+  @override
+  String get readerStatsStreak => 'Streak';
+
+  @override
+  String get readerStatsThisWeek => 'this week';
+
+  @override
+  String get readerStatsCurrent => 'current';
+
+  @override
+  String readerStatsDayCount(int days) {
+    return '${days}d';
+  }
+
+  @override
+  String get readerStatsBooks => 'Books';
+
+  @override
+  String get readerStatsHoursTitle => 'Hours';
+
+  @override
+  String readerStatsMinutes(Object count) {
+    return '$count min';
+  }
+
+  @override
+  String readerStatsHoursMinutes(Object hours, Object minutes) {
+    return '${hours}h ${minutes}m';
+  }
+
+  @override
+  String readerStatsHours(Object hours) {
+    return '${hours}h';
+  }
+
+  @override
+  String readerStatsDays(Object count) {
+    return '${count}d';
+  }
+
+  @override
+  String get readerNoContent => 'No content';
+
+  @override
+  String get readerTtsPlay => 'Play';
+
+  @override
+  String get readerTtsPause => 'Pause';
+
+  @override
+  String get readerTtsStop => 'Stop';
+
+  @override
+  String get readerAlreadyFirstChapter => 'Already at the first chapter';
+
+  @override
+  String get readerChapterSwitching => 'Switching chapter, please wait…';
+
+  @override
+  String readerSyncRemoteProgress(String percent) {
+    return 'Another device is at $percent of this chapter — tap to go';
+  }
+
+  @override
+  String get readerAlreadyLastChapter => 'Already at the last chapter';
+
+  @override
+  String get readerRestoringProgress => 'Restoring reading position…';
+
+  @override
+  String get readerReturnToProgress => 'Return to last position';
+
+  @override
+  String get readerReturn => 'Return';
+
+  @override
+  String get readerBookmarkRemoved => 'Bookmark removed';
+
+  @override
+  String get readerBookmarkAdded => 'Bookmark added';
+
+  @override
+  String get readerBookmarkFailed => 'Bookmark operation failed';
+
+  @override
+  String get readerHighlightAdded => 'Highlight added';
+
+  @override
+  String get readerAddAnnotation => 'Add Annotation';
+
+  @override
+  String get readerAnnotationHint => 'Enter your notes...';
+
+  @override
+  String get readerAddBookmark => 'Add bookmark';
+
+  @override
+  String get readerRemoveBookmark => 'Remove bookmark';
+
+  @override
+  String get readerChapterList => 'Chapter List';
+
+  @override
+  String get readerOperationFailed =>
+      'Operation failed, please try again later';
+
+  @override
+  String get readerOperationSubmitted => 'Operation submitted';
+
+  @override
+  String get readerChapterLoadFailed =>
+      'The chapter could not be loaded. Please try again.';
+
+  @override
+  String get readerChapterNeedsNetwork =>
+      'This chapter is not cached for offline reading. Connect to the network and try again.';
+
+  @override
+  String get readerChapterNeedsReparse =>
+      'The chapter text no longer matches this book. Reparse it in the book details and try again.';
+
+  @override
+  String get readerChapterUnsupportedEncoding =>
+      'This chapter uses a text encoding that can\'t be decoded here. Convert the book to UTF-8 and import it again.';
+
+  @override
+  String get readerRemoveFavorite => 'Remove from favorites';
+
+  @override
+  String get readerAddFavorite => 'Add to favorites';
+
+  @override
+  String get readerReadComic => 'Read Comic';
+
+  @override
+  String get readerNoPages => 'No pages available';
+
+  @override
+  String get readerContinueReading => 'Continue Reading';
+
+  @override
+  String get readerNavNotes => 'Notes';
+
+  @override
+  String get readerStartReading => 'Start Reading';
+
+  @override
+  String get readerAddedToBookshelf => 'Added to Bookshelf';
+
+  @override
+  String get readerAddToBookshelf => 'Add to Bookshelf';
+
+  @override
+  String get readerNoDescription => 'No description';
+
+  @override
+  String get readerNoChapters =>
+      'No chapters yet, wait for parsing or re-parse the book';
+
+  @override
+  String get readerDescription => 'Description';
+
+  @override
+  String get readerCollapse => 'Collapse';
+
+  @override
+  String get readerExpand => 'Expand';
+
+  @override
+  String get readerExpandFull => 'Show full text';
+
+  @override
+  String readerChapterListCount(Object count) {
+    return 'Chapter List ($count chapters)';
+  }
+
+  @override
+  String readerTotalPages(Object count) {
+    return '$count pages total';
+  }
+
+  @override
+  String readerPageCount(Object count) {
+    return '$count pages';
+  }
+
+  @override
+  String readerViewAllChapters(Object count) {
+    return 'View all $count chapters';
+  }
+
+  @override
+  String get readerPageInfo => 'Page Info';
+
+  @override
+  String get readerTableOfContents => 'Table of Contents';
+
+  @override
+  String readerTotalChapters(Object count) {
+    return '$count chapters total';
+  }
+
+  @override
+  String readerChapterPosition(int current, int total) {
+    return 'Ch. $current/$total';
+  }
+
+  @override
+  String get readerNowReading => 'Reading now';
+
+  @override
+  String get readerDeleteCollection => 'Delete Collection';
+
+  @override
+  String readerCollectionCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get readerCollectionEmpty => 'No books in this collection';
+
+  @override
+  String get readerCollectionEmptyHint =>
+      'Long press a book on the bookshelf to add it to a collection.';
+
+  @override
+  String get readerConfirmDeleteCollection => 'Delete collection';
+
+  @override
+  String readerConfirmDeleteCollectionMsg(Object name) {
+    return 'Are you sure you want to delete \"$name\"? Books in the collection will not be deleted.';
+  }
+
+  @override
+  String readerDeletedCollection(Object name) {
+    return 'Deleted \"$name\"';
+  }
+
+  @override
+  String readerDeleteFailed(Object error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String get readerNoChanges => 'No changes made';
+
+  @override
+  String get readerMetadataSaved => 'Metadata saved';
+
+  @override
+  String readerSaveFailed(Object error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get readerEditMetadata => 'Edit Metadata';
+
+  @override
+  String get readerSave => 'Save';
+
+  @override
+  String get readerLabelTitle => 'Title';
+
+  @override
+  String get readerLabelAuthor => 'Author';
+
+  @override
+  String get readerLabelType => 'Type';
+
+  @override
+  String get readerTypeBook => 'Book';
+
+  @override
+  String get readerTypeComic => 'Comic';
+
+  @override
+  String get readerTypeManga => 'Manga';
+
+  @override
+  String get readerLabelSeries => 'Series name';
+
+  @override
+  String get readerLabelVolume => 'Volume number';
+
+  @override
+  String get readerVolumeNumberInvalid => 'Enter a volume number from 1 to 999';
+
+  @override
+  String get readerLabelCoverUrl => 'Cover image URL';
+
+  @override
+  String get readerLabelCoverUrlHint => 'Leave empty to use the library cover';
+
+  @override
+  String get readerInvalidCoverUrl => 'Enter a valid HTTP or HTTPS URL';
+
+  @override
+  String get readerRestoreOriginalMetadata => 'Restore original metadata';
+
+  @override
+  String get readerMetadataRestored => 'Original metadata restored';
+
+  @override
+  String get readerLabelDescription => 'Description';
+
+  @override
+  String get readerLabelPublisher => 'Publisher';
+
+  @override
+  String get readerLabelReleaseDate => 'Release Date';
+
+  @override
+  String get readerLabelRating => 'Rating (0-10)';
+
+  @override
+  String get readerLabelGenres => 'Genre Tags (comma separated)';
+
+  @override
+  String get readerLabelSerialStatus => 'Serial Status';
+
+  @override
+  String get readerStatusOngoing => 'Ongoing';
+
+  @override
+  String get readerStatusCompleted => 'Completed';
+
+  @override
+  String get readerStatusUnknown => 'Unknown';
+
+  @override
+  String get readerSelectFromFile => 'Select from Files';
+
+  @override
+  String get readerUploadCover => 'Upload New Cover';
+
+  @override
+  String get readerNoImageFiles =>
+      'No image files available in the file system';
+
+  @override
+  String get readerSelectCoverImage => 'Select Cover Image';
+
+  @override
+  String get readerUnknownFile => 'Unknown file';
+
+  @override
+  String get readerCoverUpdated => 'Cover updated';
+
+  @override
+  String get readerCoverTooLarge => 'Cover images must be 12 MB or smaller';
+
+  @override
+  String readerOperationFailedError(Object error) {
+    return 'Operation failed: $error';
+  }
+
+  @override
+  String get readerCoverUploaded => 'Cover uploaded';
+
+  @override
+  String readerUploadFailed(Object error) {
+    return 'Upload failed: $error';
+  }
+
+  @override
+  String readerPageInfoFormat(Object current, Object total) {
+    return 'Page $current / $total pages';
+  }
+
+  @override
+  String readerPageNumber(Object page) {
+    return 'Page $page';
+  }
+
+  @override
+  String readerWordCount(Object count) {
+    return '$count characters';
+  }
+
+  @override
+  String readerWordCountWan(Object count) {
+    return '$count × 10,000 words';
+  }
+
+  @override
+  String get readerRetry => 'Retry';
+
+  @override
+  String get readerRtl => 'Right to Left (RTL)';
+
+  @override
+  String get readerLtr => 'Left to Right (LTR)';
+
+  @override
+  String get readerChapterListBtn => 'Chapter List';
+
+  @override
+  String get readerPrevChapter => 'Previous Chapter';
+
+  @override
+  String get readerNextChapter => 'Next Chapter';
+
+  @override
+  String get readerClose => 'Close';
+
+  @override
+  String readerDeletedItem(Object name) {
+    return 'Deleted \"$name\"';
+  }
+
+  @override
+  String get readerDeleteItemFailed => 'Delete failed, please try again later';
+
+  @override
+  String get readerRemovedFromBookshelf => 'Removed from bookshelf';
+
+  @override
+  String get readerSearchBooksHint => 'Search book titles, authors…';
+
+  @override
+  String readerCollectionCreated(Object name) {
+    return 'Collection \"$name\" created';
+  }
+
+  @override
+  String get readerCreateFailed => 'Create failed, please try again later';
+
+  @override
+  String readerImportSuccess(Object name) {
+    return '\"$name\" imported successfully';
+  }
+
+  @override
+  String get readerImportFailed => 'Import failed, please try again later';
+
+  @override
+  String readerImportFailedWithReason(Object name, Object reason) {
+    return 'Failed to import $name: $reason';
+  }
+
+  @override
+  String get readerImportNoReadableFiles => 'No readable files selected';
+
+  @override
+  String get readerImportFromFile => 'Import from device';
+
+  @override
+  String get readerImporting => 'Importing...';
+
+  @override
+  String get readerImportTypeTitle => 'Choose EPUB import type';
+
+  @override
+  String get readerImportTypeDesc =>
+      'Fixed-layout or image-based EPUB files can be imported as comics. Text EPUB files should usually be imported as books.';
+
+  @override
+  String get readerImportNovel => 'Book';
+
+  @override
+  String get readerImportLiterature => 'Literature';
+
+  @override
+  String get readerImportAcademic => 'Academic';
+
+  @override
+  String get readerImportTechnical => 'Technical';
+
+  @override
+  String get readerImportPoetry => 'Poetry';
+
+  @override
+  String get readerImportEssay => 'Essay';
+
+  @override
+  String get readerImportComic => 'Comic';
+
+  @override
+  String get readerPendingImport => 'Pending Import';
+
+  @override
+  String get readerImportCandidatesTruncated =>
+      'Some importable files are hidden because the list is too long';
+
+  @override
+  String readerPendingImportCount(Object count) {
+    return '$count files';
+  }
+
+  @override
+  String get readerPendingImportDesc =>
+      'These files have been uploaded but not yet imported to the Reader Center. EPUB files can be imported as books or comics.';
+
+  @override
+  String get readerNoPendingImport => 'No files pending import';
+
+  @override
+  String get readerNoPendingImportHint =>
+      'After uploading EPUB, CBZ and other reading files, they will appear here. Already imported files won\'t be shown again.';
+
+  @override
+  String get readerReparse => 'Re-parse';
+
+  @override
+  String get readerReparseDesc =>
+      'Re-parse cover, metadata and chapters for imported content. Useful when parsing was incomplete or new parsing capabilities have been added.';
+
+  @override
+  String get readerNoImportedContent => 'No imported content';
+
+  @override
+  String get readerNoImportedContentHint =>
+      'After importing books, you can re-parse them here.';
+
+  @override
+  String get readerNoFileNode => 'This entry has no file node, cannot re-parse';
+
+  @override
+  String readerReparseSuccess(Object name) {
+    return '\"$name\" re-parsed successfully';
+  }
+
+  @override
+  String readerComicReparseStarted(Object name) {
+    return '\"$name\" re-parse has started. Refresh later to view the status.';
+  }
+
+  @override
+  String get readerReparseFailed => 'Re-parse failed, please try again later';
+
+  @override
+  String get readerComicImportStatusTitle => 'Comic Parse Status';
+
+  @override
+  String readerComicImportStatusValue(Object status) {
+    return 'Current status: $status';
+  }
+
+  @override
+  String readerComicSourceCount(Object count) {
+    return '$count sources';
+  }
+
+  @override
+  String readerComicCatalogCount(Object count) {
+    return '$count catalog entries';
+  }
+
+  @override
+  String get readerComicCatalogPreview => 'Catalog Structure';
+
+  @override
+  String get readerComicPagePreview => 'Page Preview';
+
+  @override
+  String get readerComicCatalogPending =>
+      'Catalog parsing is still in progress. Refresh later to view the result.';
+
+  @override
+  String get readerComicPagesPending =>
+      'Pages are still being parsed. Refresh later to view previews.';
+
+  @override
+  String get readerComicImportPending => 'Waiting to parse';
+
+  @override
+  String get readerComicImportParsing => 'Parsing';
+
+  @override
+  String get readerComicImportReady => 'Ready';
+
+  @override
+  String get readerComicImportPartialFailed => 'Partially Failed';
+
+  @override
+  String get readerComicImportFailed => 'Parse Failed';
+
+  @override
+  String get readerComicEmptyTitle => 'No comics yet';
+
+  @override
+  String get readerComicEmptyHint =>
+      'Import a CBZ, ZIP, or image-based EPUB to start reading.';
+
+  @override
+  String get readerComicParsingMessage => 'The comic is being parsed…';
+
+  @override
+  String get readerComicPartialFailedMessage =>
+      'Some sources failed to parse. Retry or remove the failed sources.';
+
+  @override
+  String get readerComicFailedMessage =>
+      'Parsing failed. Retry the failed source.';
+
+  @override
+  String get readerComicSources => 'Sources';
+
+  @override
+  String readerComicRetryCount(Object count) {
+    return 'Retried $count times';
+  }
+
+  @override
+  String get readerRefreshFailed => 'Refresh failed, please try again later';
+
+  @override
+  String get readerCoverBadgeComic => 'C';
+
+  @override
+  String get readerCoverBadgeText => 'T';
+
+  @override
+  String get readerDone => 'Done';
+
+  @override
+  String get readerUnsupportedLink => 'This link is not supported yet';
+
+  @override
+  String get readerUnknownAuthor => 'Unknown author';
+
+  @override
+  String get readerUnknownBook => 'Unknown book';
+
+  @override
+  String get readerReadingReport => 'Reading Report';
+
+  @override
+  String readerWeeklyHours(Object hours) {
+    return 'Read $hours hours this week';
+  }
+
+  @override
+  String get readerContinueBtn => 'Continue Reading';
+
+  @override
+  String get readerBookshelfSection => 'Bookshelf';
+
+  @override
+  String get readerViewAll => 'View all';
+
+  @override
+  String readerBookCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String readerContinueCount(Object count) {
+    return '$count continue';
+  }
+
+  @override
+  String get readerRefresh => 'Refresh';
+
+  @override
+  String get readerAddBook => 'Add Book';
+
+  @override
+  String get readerImportQueued =>
+      'File uploaded. Import is running in the background...';
+
+  @override
+  String get readerImportQueuedShort => 'Waiting to upload';
+
+  @override
+  String get readerImportRegistering => 'Adding to library';
+
+  @override
+  String get readerCancelImport => 'Stop import';
+
+  @override
+  String get readerImportCancelled => 'Import cancelled';
+
+  @override
+  String get readerMetadataManagement => 'Metadata Management';
+
+  @override
+  String get readerMetadataDesc =>
+      'Manually edit metadata for books/comics, including title, author, description, cover, etc. Visible to super admins only.';
+
+  @override
+  String get readerNoBookEntries => 'No book entries';
+
+  @override
+  String get readerNoBookEntriesHint =>
+      'Import books to manage their metadata here.';
+
+  @override
+  String get readerStatusPending => 'Pending';
+
+  @override
+  String get readerStatusFailed => 'Failed';
+
+  @override
+  String get readerStatusManual => 'Manual';
+
+  @override
+  String get readerStatusMatched => 'Matched';
+
+  @override
+  String get readerEdit => 'Edit';
+
+  @override
+  String get readerScrapeQueue => 'Scrape Queue';
+
+  @override
+  String get readerScrapeQueueDesc =>
+      'Entries missing metadata (description, rating, genre, etc.) can be manually scraped. Visible to super admins only.';
+
+  @override
+  String get readerAllMetadataComplete => 'All entries have complete metadata';
+
+  @override
+  String get readerScrapeHint =>
+      'Newly imported books will be automatically scraped. You can also manually retry from the detail page.';
+
+  @override
+  String readerScrapeSubmitted(Object id) {
+    return 'Scrape task submitted: $id…';
+  }
+
+  @override
+  String get readerScrapeSubmitFailed =>
+      'Scrape task submission failed, please try again later';
+
+  @override
+  String get readerSubmitting => 'Submitting…';
+
+  @override
+  String get readerBatchScrape => 'Batch Scrape';
+
+  @override
+  String readerBatchScrapeResult(Object success, Object total) {
+    return 'Submitted $success / $total scrape tasks';
+  }
+
+  @override
+  String get readerSubmittingLabel => 'Submitting';
+
+  @override
+  String get readerScrapeLabel => 'Scrape';
+
+  @override
+  String get readerRemoveFromBookshelf => 'Remove from Bookshelf';
+
+  @override
+  String get readerDeleteBook => 'Delete Book';
+
+  @override
+  String get readerDeleteBookHint =>
+      'Permanently delete the book and its source file';
+
+  @override
+  String get readerDeleteSource => 'Delete source';
+
+  @override
+  String readerConfirmDeleteSource(Object name) {
+    return 'Delete source \"$name\"? Its parsed pages will be removed from this comic, while the original file remains in Files.';
+  }
+
+  @override
+  String get readerConfirmDelete => 'Confirm Permanent Deletion';
+
+  @override
+  String readerConfirmDeleteMsg(Object name) {
+    return 'Permanently delete \"$name\"? Both the library entry and the source file will be removed. This cannot be undone.';
+  }
+
+  @override
+  String readerFieldRequired(Object field) {
+    return '$field cannot be empty';
+  }
+
+  @override
+  String get readerInvalidRating => 'Rating must be a number from 0 to 10';
+
+  @override
+  String get readerInvalidReleaseDate => 'Release date must use YYYY-MM-DD';
+
+  @override
+  String get readerHistory => 'History';
+
+  @override
+  String get readerImports => 'Imports';
+
+  @override
+  String get readerGroupPersonal => 'Personal';
+
+  @override
+  String get readerGroupTools => 'Tools';
+
+  @override
+  String get readerGroupManagement => 'Management';
+
+  @override
+  String readerPercentRead(Object percent) {
+    return '$percent% read';
+  }
+
+  @override
+  String readerSectionNotAvailable(Object section) {
+    return '$section not yet available';
+  }
+
+  @override
+  String get readerSectionNotAvailableHint =>
+      'This entry has been reserved and will be connected to an independent content page later.';
+
+  @override
+  String get readerNoBookmarks => 'No bookmarks yet';
+
+  @override
+  String get readerNoBookmarksHint =>
+      'Add bookmarks while reading to quickly jump back here later.';
+
+  @override
+  String get readerEmptyHint => 'No content here yet';
+
+  @override
+  String get readerEmptyHintDesc =>
+      'Supports EPUB, TXT, CBZ, ZIP, and PDF. Imported books appear on the bookshelf automatically.';
+
+  @override
+  String get readerImportBooks => 'Import books';
+
+  @override
+  String get readerHighlight => 'Highlight';
+
+  @override
+  String get readerHighlightColor => 'Highlight color';
+
+  @override
+  String get readerHighlightColorYellow => 'Yellow highlight';
+
+  @override
+  String get readerHighlightColorGreen => 'Green highlight';
+
+  @override
+  String get readerHighlightColorBlue => 'Blue highlight';
+
+  @override
+  String get readerHighlightColorPink => 'Pink highlight';
+
+  @override
+  String get readerHighlightColorGray => 'Gray highlight';
+
+  @override
+  String get readerAnnotate => 'Annotate';
+
+  @override
+  String get readerRemoveHighlight => 'Remove highlight';
+
+  @override
+  String get readerRemoveAnnotation => 'Remove annotation';
+
+  @override
+  String get readerCopy => 'Copy';
+
+  @override
+  String get readerAnnotations => 'Annotations';
+
+  @override
+  String readerAnnotationCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count annotations',
+      zero: 'No annotations',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readerNoAnnotations => 'No annotations yet';
+
+  @override
+  String get readerEditAnnotation => 'Edit annotation';
+
+  @override
+  String get readerDeleteAnnotation => 'Delete annotation';
+
+  @override
+  String get readerAnnotationDeleted => 'Annotation deleted';
+
+  @override
+  String get readerUndo => 'Undo';
+
+  @override
+  String get readerDeleteAnnotationNoteConfirm =>
+      'This annotation contains a note. Delete it?';
+
+  @override
+  String get readerSearchAnnotations => 'Search annotations';
+
+  @override
+  String get readerSearchAnnotationsHint => 'Search annotations...';
+
+  @override
+  String get readerThisChapter => 'This chapter';
+
+  @override
+  String get readerAllChapters => 'All chapters';
+
+  @override
+  String get readerPageTransition => 'Page Transition';
+
+  @override
+  String get readerTransitionSlide => 'Slide';
+
+  @override
+  String get readerTransitionCover => 'Cover';
+
+  @override
+  String get readerTransitionFade => 'Fade';
+
+  @override
+  String get readerTransitionScroll => 'Vertical';
+
+  @override
+  String get videoSectionMovies => 'Movies';
+
+  @override
+  String get videoSectionTvShows => 'TV Shows';
+
+  @override
+  String get videoSectionAnime => 'Anime';
+
+  @override
+  String get videoSectionCollections => 'Collections';
+
+  @override
+  String get videoSectionRecent => 'Recently Added';
+
+  @override
+  String get videoSectionForYou => 'For you';
+
+  @override
+  String get videoSectionFilms => 'Films';
+
+  @override
+  String get videoSectionSeries => 'Series';
+
+  @override
+  String get videoMobileSortRecent => 'Recent';
+
+  @override
+  String get videoToggleOrientation => 'Rotate screen';
+
+  @override
+  String get videoMobileStatusFilter => 'Status filter';
+
+  @override
+  String get videoHostedFilmsEyebrow => 'RECENTLY ADDED';
+
+  @override
+  String get videoHostedContinueEyebrow => 'PICK UP WHERE YOU LEFT OFF';
+
+  @override
+  String videoHeroMinutesLeft(Object minutes) {
+    return '$minutes min left';
+  }
+
+  @override
+  String get videoHeroResume => 'Resume';
+
+  @override
+  String get videoHeroInfo => 'Info';
+
+  @override
+  String get videoSectionContinueWatching => 'Continue Watching';
+
+  @override
+  String get videoSectionFavorites => 'Favorites';
+
+  @override
+  String get videoSectionHistory => 'Watch History';
+
+  @override
+  String get videoSeriesFeatured => 'Featured';
+
+  @override
+  String get videoSectionMetadataManagement => 'Metadata';
+
+  @override
+  String get videoSectionLibraryScan => 'Media Library Management';
+
+  @override
+  String get videoSidebarGroupLibrary => 'Media Library';
+
+  @override
+  String get videoSidebarGroupMine => 'My Media';
+
+  @override
+  String get videoSidebarGroupManagement => 'Management Tools';
+
+  @override
+  String get videoRefreshTooltip => 'Refresh';
+
+  @override
+  String get videoBackToPortal => 'Portal home';
+
+  @override
+  String get videoBackToLibrary => 'Back to library';
+
+  @override
+  String get videoSearchMovies => 'Search Movies';
+
+  @override
+  String get videoSearchMovieHint => 'Enter movie name...';
+
+  @override
+  String get videoCancel => 'Cancel';
+
+  @override
+  String get videoSearch => 'Search';
+
+  @override
+  String get videoManageAdminOnly => 'Management tools visible to admins only';
+
+  @override
+  String get videoBrowse => 'Browse';
+
+  @override
+  String get videoMore => 'More';
+
+  @override
+  String get videoClose => 'Close';
+
+  @override
+  String get videoSearchLibraryHint => 'Search movie library...';
+
+  @override
+  String get videoMovieLibrary => 'Media Library';
+
+  @override
+  String get videoMovieLibrarySubtitle =>
+      'Browse movies, TV series, and anime with filters and categories.';
+
+  @override
+  String get videoAnimeLibrary => 'Anime Library';
+
+  @override
+  String get videoAnimeLibrarySubtitle =>
+      'Japanese anime organized by series, click to view details, season/episode list and direct playback.';
+
+  @override
+  String get videoRecentSubtitle =>
+      'Content added in the last 30 days is shown here.';
+
+  @override
+  String get videoFavoritesSubtitle =>
+      'Movies and TV shows starred by the current user are shown here.';
+
+  @override
+  String videoSeasonProgress(Object season, Object current, Object total) {
+    return 'Season $season - $current/$total episodes';
+  }
+
+  @override
+  String get videoDefaultVersion => 'Default Version';
+
+  @override
+  String get videoSelectVersion => 'Select Version';
+
+  @override
+  String get videoPlay => 'Play';
+
+  @override
+  String get videoFavorited => 'Favorited';
+
+  @override
+  String get videoFavorite => 'Favorite';
+
+  @override
+  String get videoSubtitle => 'Subtitles';
+
+  @override
+  String get videoAudio => 'Audio';
+
+  @override
+  String get videoItemPermanentlyDeleted =>
+      'Media item and source file permanently deleted';
+
+  @override
+  String get videoMetadataStatusComplete => 'Complete info';
+
+  @override
+  String get videoMetadataStatusNeedsWork => 'Needs organizing';
+
+  @override
+  String get videoMetadataStatusIssue => 'Has issues';
+
+  @override
+  String get videoDelete => 'Delete';
+
+  @override
+  String get videoDeleteItemTitle => 'Delete media item?';
+
+  @override
+  String videoDeleteItemMessage(Object title) {
+    return '\"$title\" and its source file will be permanently deleted. This cannot be undone.';
+  }
+
+  @override
+  String get videoSubtitleManagement => 'Subtitle Management';
+
+  @override
+  String get videoNoSubtitles => 'No subtitles available';
+
+  @override
+  String get videoSubtitleLoadFailed => 'Failed to load subtitle info';
+
+  @override
+  String get videoSubtitleDisplayFailed => 'Failed to load subtitles';
+
+  @override
+  String get videoUploading => 'Uploading...';
+
+  @override
+  String get videoUploadSubtitle => 'Upload Subtitle File';
+
+  @override
+  String get videoSubtitleUploaded => 'Subtitle uploaded successfully';
+
+  @override
+  String get videoDeleteSubtitleTitle => 'Delete Subtitle?';
+
+  @override
+  String videoDeleteSubtitleMessage(Object label) {
+    return 'Are you sure you want to delete subtitle \"$label\"?';
+  }
+
+  @override
+  String get videoSubtitleDeleted => 'Subtitle deleted';
+
+  @override
+  String get videoSubtitleLanguage => 'Subtitle Language';
+
+  @override
+  String get videoSubtitleLanguageHint => 'e.g. chi, eng, jpn';
+
+  @override
+  String get videoConfirm => 'Confirm';
+
+  @override
+  String get videoEmbedded => 'Embedded';
+
+  @override
+  String get videoExternal => 'External';
+
+  @override
+  String get videoDeleteSubtitleTooltip => 'Delete subtitle';
+
+  @override
+  String get videoAudioManagement => 'Audio Management';
+
+  @override
+  String get videoOriginalAudio => 'Original Audio';
+
+  @override
+  String get videoUnknown => 'Unknown';
+
+  @override
+  String get videoCompatibleAudioCache => 'Compatible Audio Cache';
+
+  @override
+  String get videoNotExtracted => 'Not extracted';
+
+  @override
+  String get videoLoadFailed => 'Load failed';
+
+  @override
+  String videoAudioIncompatibleNotice(Object codec) {
+    return 'Current audio codec $codec is incompatible with web browsers. After extracting compatible audio, the web player will use cached audio.';
+  }
+
+  @override
+  String get videoCompatibleAudioReady => 'Compatible audio ready';
+
+  @override
+  String get videoExtracting => 'Extracting...';
+
+  @override
+  String get videoExtractCompatibleAudio => 'Extract Compatible Audio';
+
+  @override
+  String get videoAudioExtractCreated => 'Audio extraction task created';
+
+  @override
+  String get videoCached => 'Cached';
+
+  @override
+  String get videoIncompatible => 'Incompatible';
+
+  @override
+  String get videoCompatible => 'Compatible';
+
+  @override
+  String get videoCast => 'Cast';
+
+  @override
+  String get videoCrew => 'Crew';
+
+  @override
+  String get videoMediaGallery => 'Media Gallery';
+
+  @override
+  String get videoTrailer => 'Trailer';
+
+  @override
+  String get videoTechnicalInfo => 'Technical Info';
+
+  @override
+  String get videoScrapeStatus => 'Scrape Status';
+
+  @override
+  String get videoNfoExport => 'NFO Export';
+
+  @override
+  String get videoExported => 'Exported';
+
+  @override
+  String get videoNotExported => 'Not exported';
+
+  @override
+  String get videoDetecting => 'Detecting...';
+
+  @override
+  String get videoContainerFormat => 'Container Format';
+
+  @override
+  String get videoDuration => 'Duration';
+
+  @override
+  String get videoType => 'Type';
+
+  @override
+  String get videoMatched => 'Matched';
+
+  @override
+  String get videoPendingScrape => 'Pending';
+
+  @override
+  String get videoSectionMovieAdmin => 'Movie management';
+
+  @override
+  String get videoMovieAdminSubtitle =>
+      'Manage metadata, scraping and transcoding for your library.';
+
+  @override
+  String get videoMovieAdminEmpty => 'No movies match the current filters.';
+
+  @override
+  String videoAdminLoadMore(Object loaded, Object total) {
+    return 'Load more ($loaded / $total)';
+  }
+
+  @override
+  String get videoLibraryFilterAll => 'All';
+
+  @override
+  String get videoPreviousPage => 'Previous page';
+
+  @override
+  String get videoNextPage => 'Next page';
+
+  @override
+  String get videoTaskProgressDialog => 'Task progress';
+
+  @override
+  String get videoSnackViewProgress => 'View progress';
+
+  @override
+  String get videoAdminLibrarySources => 'Library sources';
+
+  @override
+  String videoSeriesEpisodeCount(Object count) {
+    return '$count episodes';
+  }
+
+  @override
+  String get videoMatchFailed => 'Match Failed';
+
+  @override
+  String get videoManualEdit => 'Manual Edit';
+
+  @override
+  String get videoOverview => 'Overview';
+
+  @override
+  String get videoCollapse => 'Collapse';
+
+  @override
+  String get videoExpandAll => 'Expand All';
+
+  @override
+  String get videoRecommendations => 'Recommendations';
+
+  @override
+  String get videoWatchRecord => 'Watch Record';
+
+  @override
+  String get videoWatched => 'Watched';
+
+  @override
+  String get videoWatching => 'Watching';
+
+  @override
+  String get videoNoWatchRecord => 'No watch record';
+
+  @override
+  String videoLastPlayed(Object time) {
+    return 'Last played: $time';
+  }
+
+  @override
+  String get videoJustNow => 'Just now';
+
+  @override
+  String videoMinutesAgo(Object n) {
+    return '$n min ago';
+  }
+
+  @override
+  String videoHoursAgo(Object n) {
+    return '$n hr ago';
+  }
+
+  @override
+  String videoDaysAgo(Object n) {
+    return '$n days ago';
+  }
+
+  @override
+  String get videoHighRated => 'Top Rated';
+
+  @override
+  String get videoNewest => 'Newest Releases';
+
+  @override
+  String get videoViewMore => 'View More';
+
+  @override
+  String get videoContinueSubtitle =>
+      'Shows unfinished movies and TV shows, click card to resume playback.';
+
+  @override
+  String get videoNoContinueRecord => 'No continue watching records.';
+
+  @override
+  String get videoCollectionsSubtitle =>
+      'Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.';
+
+  @override
+  String videoCollectionItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get videoNewCollection => 'New Collection';
+
+  @override
+  String get videoAllMedia => 'All Media';
+
+  @override
+  String get videoCustomCollection => 'Custom Collection';
+
+  @override
+  String get videoCollectionName => 'Collection Name';
+
+  @override
+  String get videoDescription => 'Description';
+
+  @override
+  String get videoCreate => 'Create';
+
+  @override
+  String get videoCollectionNameEmpty => 'Collection name cannot be empty';
+
+  @override
+  String get videoCollectionCreated => 'Collection created';
+
+  @override
+  String get videoCollectionEmpty => 'Collection is empty';
+
+  @override
+  String get videoCollectionAddMovies => 'Add Movies';
+
+  @override
+  String get videoCollectionPickerTitle => 'Select Movies';
+
+  @override
+  String get videoCollectionPickerSearchHint => 'Search titles';
+
+  @override
+  String get videoCollectionAlreadyAdded => 'Already in collection';
+
+  @override
+  String get videoCollectionPickerEmpty => 'No matching movies';
+
+  @override
+  String videoLoadFailedWith(Object error) {
+    return 'Load failed: $error';
+  }
+
+  @override
+  String get videoRequestTimeout => 'Request timed out, please try again later';
+
+  @override
+  String get videoConnectionError =>
+      'Cannot connect to backend, please confirm the service is running';
+
+  @override
+  String get videoOperationCancelled => 'Operation cancelled';
+
+  @override
+  String get videoServerError =>
+      'Server response error, please try again later';
+
+  @override
+  String get videoCertificateError =>
+      'Certificate verification failed, please check service configuration';
+
+  @override
+  String get videoRequestFailed => 'Request failed, please try again later';
+
+  @override
+  String get videoOperationFailed => 'Operation failed, please try again later';
+
+  @override
+  String get videoProcessing => 'Processing';
+
+  @override
+  String get videoHistorySubtitle => 'Complete playback records.';
+
+  @override
+  String get videoClearHistory => 'Clear History';
+
+  @override
+  String get videoRemoveHistoryEntry => 'Remove from history';
+
+  @override
+  String get videoNoWatchHistory => 'No watch history.';
+
+  @override
+  String get videoMoreFilters => 'More Filters';
+
+  @override
+  String get videoGenre => 'Genre';
+
+  @override
+  String get videoYear => 'Year';
+
+  @override
+  String get videoRating => 'Rating';
+
+  @override
+  String get videoContentRating => 'Content rating';
+
+  @override
+  String get videoSort => 'Sort';
+
+  @override
+  String get videoClear => 'Clear';
+
+  @override
+  String get videoSortDateAdded => 'Date Added';
+
+  @override
+  String get videoSortReleaseDate => 'Release Date';
+
+  @override
+  String get videoSortTitle => 'Title';
+
+  @override
+  String get videoNoMediaItems => 'No media items here yet.';
+
+  @override
+  String get videoTaskSubmitted => 'Task Submitted';
+
+  @override
+  String get videoRetry => 'Retry';
+
+  @override
+  String get videoSubmitting => 'Submitting';
+
+  @override
+  String get videoEdit => 'Edit';
+
+  @override
+  String get videoNfo => 'NFO';
+
+  @override
+  String videoEpisodeStatus(Object count, Object status) {
+    return 'Series - $count episodes - $status';
+  }
+
+  @override
+  String get videoParse => 'Parse';
+
+  @override
+  String get videoTranscode => 'Video Transcode';
+
+  @override
+  String get videoAudioExtract => 'Audio Extract';
+
+  @override
+  String get videoNoTasks => 'No tasks.';
+
+  @override
+  String get videoMetadataScrape => 'Metadata Scrape';
+
+  @override
+  String get videoMediaScan => 'Media Scan';
+
+  @override
+  String get videoQueued => 'Queued';
+
+  @override
+  String get videoRunning => 'Running';
+
+  @override
+  String get videoCompleted => 'Completed';
+
+  @override
+  String get videoFailed => 'Failed';
+
+  @override
+  String get videoCancelled => 'Cancelled';
+
+  @override
+  String get videoDeadLetterQueue => 'Dead Letter Queue';
+
+  @override
+  String get videoIncrementalScan => 'Incremental Scan';
+
+  @override
+  String get videoScanning => 'Scanning';
+
+  @override
+  String get videoIncrementalScanComplete => 'Incremental scan complete';
+
+  @override
+  String get videoFullScan => 'Full Scan';
+
+  @override
+  String get videoFullScanComplete => 'Full scan complete';
+
+  @override
+  String videoNfoPreviewTitle(Object title) {
+    return 'NFO - $title';
+  }
+
+  @override
+  String get videoSeriesLibrary => 'Series Library';
+
+  @override
+  String get videoSeriesLibrarySubtitle =>
+      'TV series organized by series, click to view details, season/episode list and direct playback.';
+
+  @override
+  String get videoNoSeries => 'No series yet.';
+
+  @override
+  String get videoNoSeasonInfo => 'No season info';
+
+  @override
+  String get videoEpisodeList => 'Episode List';
+
+  @override
+  String videoSeasonTab(Object number) {
+    return 'Season $number';
+  }
+
+  @override
+  String get videoNoEpisodesInSeason => 'No episodes in this season';
+
+  @override
+  String get videoMediaCenter => 'Media Library';
+
+  @override
+  String videoSeasonLabel(Object number) {
+    return 'Season $number';
+  }
+
+  @override
+  String videoEpisodeLabel(Object number) {
+    return 'Episode $number';
+  }
+
+  @override
+  String get videoPreviousEpisode => 'Previous Episode';
+
+  @override
+  String get videoNextEpisode => 'Next Episode';
+
+  @override
+  String get videoTitleRequired => 'Title cannot be empty';
+
+  @override
+  String get videoMetadataSaved => 'Metadata saved';
+
+  @override
+  String get videoEditMetadataDesc =>
+      'Edit title, overview, poster and backdrop for display. Saving will lock to manual metadata.';
+
+  @override
+  String get videoCoverAssets => 'Cover Assets';
+
+  @override
+  String get videoPosterFileId => 'Poster File ID';
+
+  @override
+  String get videoBackdropFileId => 'Backdrop File ID';
+
+  @override
+  String get videoCoverIdHint =>
+      'Use file node ID to bind poster and backdrop; saving will immediately update Media Library display resources.';
+
+  @override
+  String get videoBrandVersion => 'Media Library v1.0';
+
+  @override
+  String get videoMetadataStatus => 'Metadata Status';
+
+  @override
+  String get videoManualLock => 'Manual Lock';
+
+  @override
+  String get videoPendingRecognition => 'Pending';
+
+  @override
+  String get videoRecognitionFailed => 'Recognition Failed';
+
+  @override
+  String get videoOriginalTitle => 'Original Title';
+
+  @override
+  String get videoReleaseDate => 'Release Date';
+
+  @override
+  String get videoRuntimeMinutes => 'Runtime (minutes)';
+
+  @override
+  String get videoOverviewLabel => 'Overview';
+
+  @override
+  String get videoSaveChanges => 'Save Changes';
+
+  @override
+  String get videoBackdrop => 'Backdrop';
+
+  @override
+  String get videoFillScreen => 'Fill Screen';
+
+  @override
+  String get videoOriginalAspectRatio => 'Original Aspect Ratio';
+
+  @override
+  String get videoCompatibleAudioNotice =>
+      'Using compatible audio stream. Tap the audio button at the bottom to switch audio source.';
+
+  @override
+  String get videoGotIt => 'Got it';
+
+  @override
+  String get videoSubtitleTrack => 'Subtitle Track';
+
+  @override
+  String get videoNoSubtitlesAvailable =>
+      'No subtitles available for this video';
+
+  @override
+  String get videoDisableSubtitles => 'Disable Subtitles';
+
+  @override
+  String get videoAudioTrack => 'Audio Track';
+
+  @override
+  String get videoCompatibleAudioAac => 'Compatible Audio (AAC Cache)';
+
+  @override
+  String get videoCompatibleAudioDesc =>
+      'Pre-processed AAC audio stream, compatible with all web browsers';
+
+  @override
+  String videoOriginalAudioLabel(Object codec) {
+    return 'Original Audio ($codec)';
+  }
+
+  @override
+  String get videoOriginalAudioDesc =>
+      'Real-time transcoded original audio, may require more processing time';
+
+  @override
+  String get videoPlaybackSpeed => 'Playback Speed';
+
+  @override
+  String get videoAspectRatio => 'Aspect Ratio';
+
+  @override
+  String get videoPlaybackSettings => 'Playback Settings';
+
+  @override
+  String get videoSubtitlesEnabled => 'Subtitles Enabled';
+
+  @override
+  String get videoSubtitlesOff => 'Off';
+
+  @override
+  String get videoSubtitlesOn => 'On';
+
+  @override
+  String get videoPlaybackInfo => 'Playback Info';
+
+  @override
+  String get videoInfoMode => 'Mode';
+
+  @override
+  String get videoInfoContainer => 'Container';
+
+  @override
+  String get videoInfoVideoCodec => 'Video Codec';
+
+  @override
+  String get videoInfoAudioCodec => 'Audio Codec';
+
+  @override
+  String get videoInfoAudioSource => 'Audio Source';
+
+  @override
+  String videoInfoSubtitleCount(Object count) {
+    return '$count tracks';
+  }
+
+  @override
+  String get videoInfoVolume => 'Volume';
+
+  @override
+  String get videoBackToDetail => 'Back to Detail';
+
+  @override
+  String videoStatusSubtitle(Object container, Object video, Object audio) {
+    return 'Current video is $container/$video/$audio, browser does not support direct playback, streaming via server transcoding. Seek precision is limited, use desktop client for precise seeking.';
+  }
+
+  @override
+  String videoLastPlayedTime(Object time) {
+    return 'Last played: $time';
+  }
+
+  @override
+  String get photosLoading => 'Loading...';
+
+  @override
+  String get photoThumbnailLoading => 'Loading thumbnail';
+
+  @override
+  String get photosTaskFailed => 'Task failed';
+
+  @override
+  String get photosTaskStatusRefreshFailed =>
+      'Unable to refresh task status. Retrying automatically';
+
+  @override
+  String photosProcessedItems(Object count) {
+    return '$count items completed';
+  }
+
+  @override
+  String photosHostedToolbarCount(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosHostedRecentTitle => 'Recent';
+
+  @override
+  String get photosHostedAlbumsEyebrow => 'MADE BY YOU';
+
+  @override
+  String get photosHostedMomentsEyebrow => 'THIS WEEK';
+
+  @override
+  String get photosHostedMomentsTitle => 'Moments worth keeping';
+
+  @override
+  String get photosDone => 'Done';
+
+  @override
+  String get photosRunInBackground => 'Run in background';
+
+  @override
+  String get photosSlideshow3s => '3s';
+
+  @override
+  String get photosSlideshow5s => '5s';
+
+  @override
+  String get photosSlideshow10s => '10s';
+
+  @override
+  String get photosTabHome => 'Home';
+
+  @override
+  String get photosTabFavorites => 'Favorites';
+
+  @override
+  String get photosTabTimeline => 'Timeline';
+
+  @override
+  String get photosTabAlbums => 'Albums';
+
+  @override
+  String get photosTabGroups => 'Groups';
+
+  @override
+  String get photosTabGraph => 'Graph';
+
+  @override
+  String get photosSurfaceLibrary => 'Library';
+
+  @override
+  String get photosSurfaceExplore => 'Explore';
+
+  @override
+  String get photosGraphKindAlbum => 'Albums';
+
+  @override
+  String get photosGraphKindTime => 'Time';
+
+  @override
+  String get photosGraphKindLocation => 'Places';
+
+  @override
+  String get photosGraphEmpty => 'No photo relationships are available yet.';
+
+  @override
+  String get photosGraphViewPhoto => 'View photo';
+
+  @override
+  String photosGraphPhotoCount(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosGroupByDate => 'Time';
+
+  @override
+  String get photosGroupByLocation => 'Places';
+
+  @override
+  String get photosGroupByFormat => 'Formats';
+
+  @override
+  String get photosGroupByTag => 'Tags';
+
+  @override
+  String get photosEditTypeRotate => 'Rotate';
+
+  @override
+  String get photosEditTypeCrop => 'Crop';
+
+  @override
+  String get photosEditTypeBrightness => 'Brightness';
+
+  @override
+  String get photosEditTypeContrast => 'Contrast';
+
+  @override
+  String get photosEditTypeFilter => 'Filter';
+
+  @override
+  String get photosImportCompletedNotVisible =>
+      'Import finished, but the photos are not visible in this list yet. Refresh later.';
+
+  @override
+  String get photosImportStillProcessing =>
+      'Photo import is still processing. Refresh the page later.';
+
+  @override
+  String get photosImportBackendFailed =>
+      'Photo import failed in the background. Check the task center for details.';
+
+  @override
+  String get photosSharedPoweredBy => 'Powered by OmniNest';
+
+  @override
+  String get photosTabMemories => 'Memories';
+
+  @override
+  String get photosClose => 'Close';
+
+  @override
+  String get photosDeletePhotoTitle => 'Permanently Delete Photo';
+
+  @override
+  String photosDeletePhotoConfirm(Object title) {
+    return '\"$title\" and its source file will be permanently deleted. This cannot be undone.';
+  }
+
+  @override
+  String get photosCancel => 'Cancel';
+
+  @override
+  String get photosDelete => 'Delete';
+
+  @override
+  String get photosDeletePermanently => 'Delete Permanently';
+
+  @override
+  String photosDeletedPhoto(Object title) {
+    return 'Permanently deleted \"$title\" and its source file';
+  }
+
+  @override
+  String get photosDeleteFailed => 'Delete failed, please try again later';
+
+  @override
+  String get photosDeleteAlbumTitle => 'Delete Album';
+
+  @override
+  String photosDeleteAlbumConfirm(Object name) {
+    return 'Are you sure you want to delete album \"$name\"? Photos in the album will not be deleted.';
+  }
+
+  @override
+  String photosDeletedAlbum(Object name) {
+    return 'Deleted album \"$name\"';
+  }
+
+  @override
+  String get photosNewAlbum => 'New Album';
+
+  @override
+  String get photosAlbumName => 'Album Name';
+
+  @override
+  String get photosAlbumNameHint => 'e.g. Travel Photos';
+
+  @override
+  String get photosAlbumDescription => 'Description (optional)';
+
+  @override
+  String get photosAlbumDescriptionHint => 'Briefly describe this album';
+
+  @override
+  String photosAlbumCreated(Object name) {
+    return 'Album \"$name\" created';
+  }
+
+  @override
+  String get photosCreateFailed => 'Creation failed, please try again later';
+
+  @override
+  String get photosCreate => 'Create';
+
+  @override
+  String get photosBackToPortal => 'Back to Portal';
+
+  @override
+  String get photosSearchPhotos => 'Search Photos';
+
+  @override
+  String get photosSearchHint => 'Search photos...';
+
+  @override
+  String get photosClear => 'Clear';
+
+  @override
+  String get photosSearch => 'Search';
+
+  @override
+  String get photosAll => 'All';
+
+  @override
+  String get photosNoFavorites => 'No favorite photos yet';
+
+  @override
+  String get photosNoFavoritesHint =>
+      'Tap the favorite button in photo details to add favorites.';
+
+  @override
+  String get photosRecentPhotos => 'Recent Photos';
+
+  @override
+  String get photosNoPhotos => 'No photos yet';
+
+  @override
+  String get photosNoPhotosHint =>
+      'Photos will appear here automatically after uploading.';
+
+  @override
+  String get photosAlbums => 'Albums';
+
+  @override
+  String get photosNoAlbums => 'No albums yet';
+
+  @override
+  String photosAlbumPhotoCount(Object count) {
+    return '$count';
+  }
+
+  @override
+  String get photosViewAll => 'View All';
+
+  @override
+  String photosViewAllMonth(Object count) {
+    return 'View all $count';
+  }
+
+  @override
+  String photosLoadMore(Object loaded, Object total) {
+    return 'Load more ($loaded / $total loaded)';
+  }
+
+  @override
+  String photosSelectedCount(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get photosTag => 'Tag';
+
+  @override
+  String get photosMove => 'Move';
+
+  @override
+  String get photosExportZip => 'Export ZIP';
+
+  @override
+  String get photosUpdateDate => 'Update date taken';
+
+  @override
+  String get photosSaveZip => 'Save ZIP';
+
+  @override
+  String get photosDownloadStarted => 'Download handed off to the browser';
+
+  @override
+  String photosArchiveSaved(Object path) {
+    return 'ZIP saved to $path';
+  }
+
+  @override
+  String get photosArchiveDownloadFailed =>
+      'ZIP download failed. Choose the same path to resume.';
+
+  @override
+  String get photosDownloadPhoto => 'Download original';
+
+  @override
+  String get photosDownloadFailed => 'Download failed, please try again later';
+
+  @override
+  String photosDownloadSaved(Object path) {
+    return 'Saved to $path';
+  }
+
+  @override
+  String get photosExportShared =>
+      'System share opened — save to Photos or another app';
+
+  @override
+  String get photosDownloadSourceUnavailable =>
+      'Original file is unavailable for download';
+
+  @override
+  String photosSlideshowBadge(int current, int total) {
+    return 'Slideshow · $current / $total';
+  }
+
+  @override
+  String get photosBatchAddTag => 'Batch Add Tags';
+
+  @override
+  String get photosTagName => 'Tag Name';
+
+  @override
+  String get photosTagNameHint => 'e.g. Travel';
+
+  @override
+  String get photosAdd => 'Add';
+
+  @override
+  String get photosTaskCreateFailed => 'Task creation failed';
+
+  @override
+  String get photosSelectPhotos => 'Select';
+
+  @override
+  String get photosMomentsSection => 'Moments worth keeping';
+
+  @override
+  String get photosSelectAlbum => 'Select Album';
+
+  @override
+  String get photosBatchDelete => 'Batch Delete';
+
+  @override
+  String photosBatchDeleteConfirm(Object count) {
+    return 'The selected $count photos and their source files will be permanently deleted. This cannot be undone.';
+  }
+
+  @override
+  String photosBatchDeleted(Object count) {
+    return 'Permanently deleted $count photos and their source files';
+  }
+
+  @override
+  String get photosDeselect => 'Deselect';
+
+  @override
+  String get photosNoTimelineData => 'No timeline data';
+
+  @override
+  String get photosNoTimelineHint =>
+      'Photos need capture time info to display timeline';
+
+  @override
+  String photosYear(Object year) {
+    return '$year';
+  }
+
+  @override
+  String get photosOperationFailed =>
+      'Operation failed, please try again later';
+
+  @override
+  String get photosImageLoadFailed => 'Image load failed';
+
+  @override
+  String get photosBack => 'Back';
+
+  @override
+  String get photosUnfavorite => 'Unfavorite';
+
+  @override
+  String get photosFavorite => 'Favorite';
+
+  @override
+  String get photosHideInfo => 'Hide Info';
+
+  @override
+  String get photosShowInfo => 'Show Info';
+
+  @override
+  String get photosEdit => 'Edit';
+
+  @override
+  String get photosSlideshow => 'Slideshow';
+
+  @override
+  String get photosSlideshowUnavailable => 'No consecutive photos to play here';
+
+  @override
+  String get photosAddToAlbum => 'Add to Album';
+
+  @override
+  String get photosPhotoInfo => 'Photo Info';
+
+  @override
+  String get photosBasicInfo => 'Basic Info';
+
+  @override
+  String get photosFormat => 'Format';
+
+  @override
+  String get photosFileSize => 'File Size';
+
+  @override
+  String get photosResolution => 'Resolution';
+
+  @override
+  String get photosDateTaken => 'Date Taken';
+
+  @override
+  String get photosCameraInfo => 'Camera Info';
+
+  @override
+  String get photosBrand => 'Brand';
+
+  @override
+  String get photosModel => 'Model';
+
+  @override
+  String get photosLens => 'Lens';
+
+  @override
+  String get photosAperture => 'Aperture';
+
+  @override
+  String get photosShutterSpeed => 'Shutter Speed';
+
+  @override
+  String get photosFocalLength => 'Focal Length';
+
+  @override
+  String get photosShootingParams => 'Shooting Parameters';
+
+  @override
+  String get photosFlash => 'Flash';
+
+  @override
+  String get photosWhiteBalance => 'White Balance';
+
+  @override
+  String get photosMeteringMode => 'Metering Mode';
+
+  @override
+  String get photosLocationInfo => 'Location Info';
+
+  @override
+  String get photosPlace => 'Place';
+
+  @override
+  String get photosCoordinates => 'Coordinates';
+
+  @override
+  String get photosAIRecognition => 'Image Analysis';
+
+  @override
+  String get photosAnalysisSubject => 'Subjects';
+
+  @override
+  String get photosAnalysisScene => 'Scenes';
+
+  @override
+  String get photosAnalysisStyle => 'Styles';
+
+  @override
+  String get photosOcrText => 'Text in Image (OCR)';
+
+  @override
+  String get photosCopyOcrText => 'Copy text';
+
+  @override
+  String get photosOcrTextCopied => 'Text copied';
+
+  @override
+  String get photosAiCategoryPerson => 'People';
+
+  @override
+  String get photosAiCategoryCat => 'Cats';
+
+  @override
+  String get photosAiCategoryDog => 'Dogs';
+
+  @override
+  String get photosAiCategoryAnimal => 'Animals';
+
+  @override
+  String get photosAiCategoryNature => 'Nature';
+
+  @override
+  String get photosAiCategoryArchitecture => 'Architecture';
+
+  @override
+  String get photosAiCategoryIndoor => 'Indoor';
+
+  @override
+  String get photosAiCategoryFood => 'Food';
+
+  @override
+  String get photosAiCategoryVehicle => 'Vehicles';
+
+  @override
+  String get photosAiCategoryPlant => 'Plants';
+
+  @override
+  String get photosAiCategorySport => 'Sports';
+
+  @override
+  String get photosAiCategoryNight => 'Night';
+
+  @override
+  String get photosAiCategoryArt => 'Art';
+
+  @override
+  String get photosAiCategoryDocument => 'Documents and screens';
+
+  @override
+  String get photosDescription => 'Description';
+
+  @override
+  String get photosDeleteTagFailed => 'Failed to delete tag';
+
+  @override
+  String get photosAddTag => 'Add Tag';
+
+  @override
+  String get photosTagNameInput => 'Enter tag name';
+
+  @override
+  String get photosAddTagFailed => 'Failed to add tag';
+
+  @override
+  String get photosNoAlbumsCreateFirst =>
+      'No albums yet, please create one first';
+
+  @override
+  String get photosAddedToAlbum => 'Added to album';
+
+  @override
+  String get photosAddFailed => 'Failed to add, please try again later';
+
+  @override
+  String get photosNoChanges => 'No changes made';
+
+  @override
+  String get photosEditSaved => 'Edit saved';
+
+  @override
+  String get photosRevertOriginal => 'Revert to original';
+
+  @override
+  String get photosRevertOriginalTitle => 'Revert to the original photo?';
+
+  @override
+  String get photosRevertOriginalBody =>
+      'This clears the current edit. You can still reapply edits from version history.';
+
+  @override
+  String get photosRevertOriginalDone => 'Original photo restored';
+
+  @override
+  String get photosSaveFailed => 'Save failed, please try again later';
+
+  @override
+  String get photosEditSourceUnavailable =>
+      'Original file is unavailable for editing';
+
+  @override
+  String get photosEditorCancel => 'Cancel';
+
+  @override
+  String get photosEditorUndo => 'Undo';
+
+  @override
+  String get photosEditorRedo => 'Redo';
+
+  @override
+  String get photosEditorDone => 'Done';
+
+  @override
+  String get photosEditorRemove => 'Remove';
+
+  @override
+  String get photosEditorBack => 'Back';
+
+  @override
+  String get photosEditorMore => 'More';
+
+  @override
+  String get photosEditorDoneLoadingMsg => 'Changes are being applied';
+
+  @override
+  String get photosEditorImportStateHistoryMsg => 'Initialize Editor';
+
+  @override
+  String get photosEditorLoadingDialogMsg => 'Please wait...';
+
+  @override
+  String get photosEditorCloseWarningTitle => 'Close Image Editor?';
+
+  @override
+  String get photosEditorCloseWarningMessage =>
+      'Are you sure you want to close the Image Editor? Your changes will not be saved.';
+
+  @override
+  String get photosEditorCloseWarningConfirm => 'OK';
+
+  @override
+  String get photosEditorPaintBottomNav => 'Paint';
+
+  @override
+  String get photosEditorPaintMoveAndZoom => 'Zoom';
+
+  @override
+  String get photosEditorPaintFreestyle => 'Freestyle';
+
+  @override
+  String get photosEditorPaintArrow => 'Arrow';
+
+  @override
+  String get photosEditorPaintLine => 'Line';
+
+  @override
+  String get photosEditorPaintRectangle => 'Rectangle';
+
+  @override
+  String get photosEditorPaintCircle => 'Circle';
+
+  @override
+  String get photosEditorPaintDashLine => 'Dash line';
+
+  @override
+  String get photosEditorPaintDashDotLine => 'Dash-dot line';
+
+  @override
+  String get photosEditorPaintHexagon => 'Hexagon';
+
+  @override
+  String get photosEditorPaintPolygon => 'Polygon';
+
+  @override
+  String get photosEditorPaintBlur => 'Blur';
+
+  @override
+  String get photosEditorPaintPixelate => 'Pixelate';
+
+  @override
+  String get photosEditorLineWidth => 'Line width';
+
+  @override
+  String get photosEditorEraser => 'Eraser';
+
+  @override
+  String get photosEditorToggleFill => 'Toggle fill';
+
+  @override
+  String get photosEditorChangeOpacity => 'Change opacity';
+
+  @override
+  String get photosEditorOpacity => 'Opacity';
+
+  @override
+  String get photosEditorColor => 'Color';
+
+  @override
+  String get photosEditorStrokeWidth => 'Stroke Width';
+
+  @override
+  String get photosEditorFill => 'Fill';
+
+  @override
+  String get photosEditorTextInputHint => 'Enter text';
+
+  @override
+  String get photosEditorTextBottomNav => 'Text';
+
+  @override
+  String get photosEditorTextAlign => 'Align text';
+
+  @override
+  String get photosEditorFontScale => 'Font scale';
+
+  @override
+  String get photosEditorTextBackgroundMode => 'Background mode';
+
+  @override
+  String get photosEditorCropBottomNav => 'Crop/ Rotate';
+
+  @override
+  String get photosEditorCropRotate => 'Rotate';
+
+  @override
+  String get photosEditorCropFlip => 'Flip';
+
+  @override
+  String get photosEditorCropTilt => 'Tilt';
+
+  @override
+  String get photosEditorCropTiltHorizontal => 'Horizontal';
+
+  @override
+  String get photosEditorCropTiltVertical => 'Vertical';
+
+  @override
+  String get photosEditorCropRatio => 'Ratio';
+
+  @override
+  String get photosEditorCropReset => 'Reset';
+
+  @override
+  String get photosEditorRatioFree => 'Free';
+
+  @override
+  String get photosEditorRatioOriginal => 'Original';
+
+  @override
+  String get photosEditorTuneBottomNav => 'Tune';
+
+  @override
+  String get photosEditorTuneBrightness => 'Brightness';
+
+  @override
+  String get photosEditorTuneContrast => 'Contrast';
+
+  @override
+  String get photosEditorTuneSaturation => 'Saturation';
+
+  @override
+  String get photosEditorTuneExposure => 'Exposure';
+
+  @override
+  String get photosEditorTuneHue => 'Hue';
+
+  @override
+  String get photosEditorTuneTemperature => 'Temperature';
+
+  @override
+  String get photosEditorTuneFade => 'Fade';
+
+  @override
+  String get photosEditorTuneTint => 'Tint';
+
+  @override
+  String get photosEditorFilterBottomNav => 'Filter';
+
+  @override
+  String get photosEditorFilterNone => 'No Filter';
+
+  @override
+  String get photosEditorBlurBottomNav => 'Blur';
+
+  @override
+  String get photosEditorEmojiBottomNav => 'Emoji';
+
+  @override
+  String get photosEditorEmojiSearch => 'Search';
+
+  @override
+  String get photosEditorEmojiRecent => 'Recent';
+
+  @override
+  String get photosEditorEmojiSmileys => 'Smileys & People';
+
+  @override
+  String get photosEditorEmojiAnimals => 'Animals & Nature';
+
+  @override
+  String get photosEditorEmojiFood => 'Food & Drink';
+
+  @override
+  String get photosEditorEmojiActivities => 'Activities';
+
+  @override
+  String get photosEditorEmojiTravel => 'Travel & Places';
+
+  @override
+  String get photosEditorEmojiObjects => 'Objects';
+
+  @override
+  String get photosEditorEmojiSymbols => 'Symbols';
+
+  @override
+  String get photosEditorEmojiFlags => 'Flags';
+
+  @override
+  String get photosEditorStickerBottomNav => 'Stickers';
+
+  @override
+  String get photosEditorLayerEdit => 'Edit';
+
+  @override
+  String get photosEditorLayerRotateScale => 'Rotate and Scale';
+
+  @override
+  String get photosRolledBack => 'Rolled back to specified version';
+
+  @override
+  String get photosRollbackFailed => 'Rollback failed';
+
+  @override
+  String photosEditTitle(Object title) {
+    return 'Edit - $title';
+  }
+
+  @override
+  String get photosVersionHistory => 'Version History';
+
+  @override
+  String get photosSave => 'Save';
+
+  @override
+  String get photosCropDragHint => 'Drag to select crop area';
+
+  @override
+  String get photosConfirmCrop => 'Confirm Crop';
+
+  @override
+  String get photosEditVersionHistory => 'Edit Version History';
+
+  @override
+  String get photosNoEditHistory => 'No edit history';
+
+  @override
+  String get photosRollback => 'Rollback';
+
+  @override
+  String get photosConfirm => 'Confirm';
+
+  @override
+  String photosPhotoCount(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosOpenPhotoPreview => 'Open full-size preview';
+
+  @override
+  String photosSharedAlbumAccessError(Object error) {
+    return 'Cannot access shared album: $error';
+  }
+
+  @override
+  String photosSharedAlbumLoadMoreFailed(Object message) {
+    return 'Failed to load more photos: $message';
+  }
+
+  @override
+  String get photosSharedAlbumPasswordRequired =>
+      'This album requires password access';
+
+  @override
+  String get photosSharedAlbumPasswordHint =>
+      'Enter share password to view album content';
+
+  @override
+  String get photosEnterPassword => 'Enter password';
+
+  @override
+  String get photosAccess => 'Access';
+
+  @override
+  String get photosAlbumEmpty => 'No photos in this album';
+
+  @override
+  String get photosAlbumEmptyHint =>
+      'Pick photos from your library to add to this album.';
+
+  @override
+  String get photosAddPhotos => 'Add photos';
+
+  @override
+  String photosPickerAddCount(Object count) {
+    return 'Add $count';
+  }
+
+  @override
+  String photosPickerAddSuccess(Object count) {
+    return 'Added $count photos';
+  }
+
+  @override
+  String get photosPickerNoCandidates => 'No photos available to add';
+
+  @override
+  String get photosSharePhoto => 'Share Photo';
+
+  @override
+  String get photosSharedItemPasswordRequired =>
+      'This share requires password access';
+
+  @override
+  String get photosLiveBadge => 'LIVE';
+
+  @override
+  String get photosLiveBadgeTooltip =>
+      'Tap to play the motion photo, long-press the photo for a quick preview';
+
+  @override
+  String get photosMotionPlayFailed => 'Failed to play motion video';
+
+  @override
+  String get photosShareEyebrow => 'SHARE';
+
+  @override
+  String get photosShareLinkEyebrow => 'LINK';
+
+  @override
+  String get photosShareCopy => 'Copy';
+
+  @override
+  String get photosShareCopied => '✓ Copied';
+
+  @override
+  String get photosShareToEyebrow => 'SHARE TO';
+
+  @override
+  String get photosShareToMessages => 'Messages';
+
+  @override
+  String get photosShareToMail => 'Mail';
+
+  @override
+  String get photosShareToInstagram => 'Instagram';
+
+  @override
+  String get photosShareToWeChat => 'WeChat';
+
+  @override
+  String get photosShareToQr => 'QR code';
+
+  @override
+  String get photosShareWeChatCopiedFallback =>
+      'Link copied. Paste it into WeChat to send.';
+
+  @override
+  String get photosShareOptionLocation => 'Include location';
+
+  @override
+  String get photosShareOptionOriginal => 'Original quality';
+
+  @override
+  String get photosShareOptionOriginalFull => 'Full resolution';
+
+  @override
+  String get photosShareLocationHidesOriginal =>
+      'To avoid EXIF location leaks, turning off location shares preview images only.';
+
+  @override
+  String get photosShareManage => 'Manage existing links';
+
+  @override
+  String get photosShareDone => 'Done';
+
+  @override
+  String get photosShareSettingsEyebrow => 'LINK SETTINGS';
+
+  @override
+  String get photosShareExpiryOption => 'Expiry';
+
+  @override
+  String get photosSharePasswordOption => 'Password protection';
+
+  @override
+  String get photosSharePasswordNone => 'Not set';
+
+  @override
+  String get photosSharePasswordOn => 'Enabled';
+
+  @override
+  String get photosShareCreatedHint => 'Link created and copied to clipboard';
+
+  @override
+  String get photosShareAlbum => 'Share Album';
+
+  @override
+  String get photosSharePassword => 'Access Password (optional)';
+
+  @override
+  String get photosSharePasswordHint => 'Leave empty for no password';
+
+  @override
+  String get photosShareExpiry => 'Expiry';
+
+  @override
+  String get photosShareExpiry1d => '1 day';
+
+  @override
+  String get photosShareExpiry7d => '7 days';
+
+  @override
+  String get photosShareExpiry30d => '30 days';
+
+  @override
+  String get photosShareExpiryNever => 'Never';
+
+  @override
+  String get photosExistingShareLinks => 'Existing Share Links';
+
+  @override
+  String get photosShareRevokeAll => 'Clear all';
+
+  @override
+  String get photosShareRevokeAllConfirmTitle => 'Clear share links';
+
+  @override
+  String get photosShareRevokeAllConfirmBody =>
+      'This revokes every active share link for this item; links already sent stop working immediately.';
+
+  @override
+  String photosShareRevokeAllDone(Object count) {
+    return 'Revoked $count links';
+  }
+
+  @override
+  String photosShareAccessCount(Object count) {
+    return 'Accessed $count times';
+  }
+
+  @override
+  String get photosShareLinkNoExpiry => 'Never expires';
+
+  @override
+  String get photosShareLinkExpired => 'Expired';
+
+  @override
+  String photosShareLinkExpiresOn(Object date) {
+    return 'Expires $date';
+  }
+
+  @override
+  String get photosShareCreating => 'Creating';
+
+  @override
+  String get photosCreateLink => 'Create Link';
+
+  @override
+  String get photosShareNoLinkYet => 'No link yet';
+
+  @override
+  String photosShareOtherLinksHint(Object count) {
+    return '$count other links';
+  }
+
+  @override
+  String get photosShareSummaryPassword => 'Password set';
+
+  @override
+  String photosShareLinkCreated(Object link) {
+    return 'Share link created: $link';
+  }
+
+  @override
+  String get photosShareLinkFailed => 'Failed to create share link';
+
+  @override
+  String get photosShareUpdateFailed => 'Failed to update share link';
+
+  @override
+  String get photosRemoveFromAlbum => 'Remove from Album';
+
+  @override
+  String photosRemoveFromAlbumConfirm(Object title) {
+    return 'Are you sure you want to remove \"$title\" from the album? The photo itself will not be deleted.';
+  }
+
+  @override
+  String get photosRemove => 'Remove';
+
+  @override
+  String photosRemovedFromAlbum(Object title) {
+    return 'Removed \"$title\" from album';
+  }
+
+  @override
+  String photosAlbumPhotoCountLabel(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosDeleteAlbumTooltip => 'Delete Album';
+
+  @override
+  String get photosAllPhotos => 'All Photos';
+
+  @override
+  String get photosNoGroupData => 'No group data';
+
+  @override
+  String get photosBrightness => 'Brightness';
+
+  @override
+  String get photosContrast => 'Contrast';
+
+  @override
+  String get photosCrop => 'Crop';
+
+  @override
+  String get photosRotate => 'Rotate';
+
+  @override
+  String get photosFilter => 'Filter';
+
+  @override
+  String get photosFilterOriginal => 'Original';
+
+  @override
+  String get photosFilterGrayscale => 'Grayscale';
+
+  @override
+  String get photosFilterSepia => 'Sepia';
+
+  @override
+  String get photosFilterBlur => 'Blur';
+
+  @override
+  String get photosFilterSharpen => 'Sharpen';
+
+  @override
+  String get musicDeckTitle => 'Music Space';
+
+  @override
+  String get musicDeckHome => 'Home';
+
+  @override
+  String get musicDeckLibrary => 'Library';
+
+  @override
+  String get musicDeckPlaylists => 'Playlists';
+
+  @override
+  String get musicDeckFavorites => 'Favorites';
+
+  @override
+  String get musicMute => 'Mute';
+
+  @override
+  String get musicUnmute => 'Unmute';
+
+  @override
+  String get musicDeckRecent => 'Recently played';
+
+  @override
+  String get musicDeckLocalManagement => 'Local resources';
+
+  @override
+  String get musicDeckMore => 'More';
+
+  @override
+  String get musicDeckSources => 'Sources';
+
+  @override
+  String get musicDeckSourceLocal => 'Local';
+
+  @override
+  String get musicDeckSourceNetease => 'NetEase';
+
+  @override
+  String get musicDailyRecommendationSection => 'Recommended today';
+
+  @override
+  String get musicDailyRecommendationTitle => 'Daily recommended tracks';
+
+  @override
+  String musicDailyRecommendationTrackCount(Object count) {
+    return '$count tracks · Updated daily';
+  }
+
+  @override
+  String get musicLibraryAlbumsEmptyTitle => 'No albums yet';
+
+  @override
+  String get musicLibraryAlbumsEmptyMessage =>
+      'Albums will appear here after importing local music or connecting an online platform.';
+
+  @override
+  String get musicLibraryArtistsEmptyTitle => 'No artists yet';
+
+  @override
+  String get musicLibraryArtistsEmptyMessage =>
+      'Artists will appear here after importing local music or connecting an online platform.';
+
+  @override
+  String get musicDailyRecommendationEmpty =>
+      'Today\'s recommendations are unavailable. Try again later.';
+
+  @override
+  String get musicDailyRecommendationLoadFailed =>
+      'Could not load daily recommendations. Try again.';
+
+  @override
+  String get musicDeckAccounts => 'Platform accounts';
+
+  @override
+  String get musicDeckManageAccounts => 'Manage platform accounts';
+
+  @override
+  String get musicDeckManage => 'Manage';
+
+  @override
+  String get musicLocalManagementSubtitle =>
+      'Manage local metadata, covers, lyrics, and storage scans.';
+
+  @override
+  String get musicStartScan => 'Scan storage';
+
+  @override
+  String get musicCreatePlaylist => 'New playlist';
+
+  @override
+  String get musicPlaylistName => 'Playlist name';
+
+  @override
+  String get musicPlaylistNameDuplicate =>
+      'A playlist with this name already exists.';
+
+  @override
+  String get musicPlaylistDescription => 'Description';
+
+  @override
+  String get musicCreate => 'Create';
+
+  @override
+  String get musicEditPlaylist => 'Edit playlist';
+
+  @override
+  String get musicDeletePlaylist => 'Delete playlist';
+
+  @override
+  String get musicDeleteLocalTrack => 'Delete local track';
+
+  @override
+  String get musicDeleteLocalTrackTitle => 'Permanently delete local track?';
+
+  @override
+  String musicDeleteLocalTrackMessage(Object title) {
+    return '\"$title\" and its source file will be permanently deleted. This cannot be undone.';
+  }
+
+  @override
+  String get musicDeleteLocalTrackSuccess => 'Local track permanently deleted';
+
+  @override
+  String get musicDeleteLocalTrackFailed =>
+      'Delete failed. Please try again later.';
+
+  @override
+  String get musicRemoveFromPlaylistSuccess => 'Removed from playlist';
+
+  @override
+  String get musicRemoveFromPlaylistFailed =>
+      'Failed to remove, please retry later';
+
+  @override
+  String get musicDeletePlaylistTitle => 'Delete this playlist?';
+
+  @override
+  String musicDeletePlaylistMessage(Object name) {
+    return 'Delete \"$name\"? Songs in the playlist will not be deleted.';
+  }
+
+  @override
+  String get musicPlaylistCoverPick => 'Choose cover';
+
+  @override
+  String get musicPlaylistCoverChange => 'Change cover';
+
+  @override
+  String get musicPlaylistCoverHint =>
+      'Uses the first song cover when no image is selected';
+
+  @override
+  String get musicPlaylistCoverTooLarge =>
+      'Cover image must be 8 MB or smaller';
+
+  @override
+  String musicPlaylistSaveFailed(Object error) {
+    return 'Could not save playlist: $error';
+  }
+
+  @override
+  String musicPlaylistDeleteFailed(Object error) {
+    return 'Could not delete playlist: $error';
+  }
+
+  @override
+  String get musicDeckConnectedSources => 'Connected sources';
+
+  @override
+  String get musicDeckSearchPrompt =>
+      'Enter at least two characters to filter by song, artist, or album';
+
+  @override
+  String get musicDeckNoSearchResults => 'No matching songs';
+
+  @override
+  String get musicDeckSelectTrack => 'Select a song to start listening';
+
+  @override
+  String get musicDeckPrevious => 'Previous';
+
+  @override
+  String get musicDeckNext => 'Next';
+
+  @override
+  String get musicDeckNowPlaying => 'Now playing';
+
+  @override
+  String get musicDeckLibraryReady => 'Library ready';
+
+  @override
+  String musicDeckLibrarySummary(Object trackCount, Object albumCount) {
+    return '$trackCount songs · $albumCount albums';
+  }
+
+  @override
+  String musicDeckTrackCount(Object count) {
+    return '$count songs';
+  }
+
+  @override
+  String get musicDeckContinueListening => 'Continue listening';
+
+  @override
+  String get musicDeckYourCollections => 'Your playlists';
+
+  @override
+  String get musicDeckRecentEmpty =>
+      'Recently played content will appear here after you play a song.';
+
+  @override
+  String get musicDeckPartialSourceFailure =>
+      'Some online sources are temporarily unavailable. Local music and other sources remain usable.';
+
+  @override
+  String get musicDeckLibrarySubtitle =>
+      'Browse local music and known songs from your connected accounts.';
+
+  @override
+  String get musicDeckPlaylistsSubtitle =>
+      'Local and connected-platform playlists share one organized space.';
+
+  @override
+  String get musicDeckFavoritesSubtitle =>
+      'Local favorites and liked songs from connected platforms.';
+
+  @override
+  String get musicDeckRecentSubtitle =>
+      'Continue with recently accessed local content.';
+
+  @override
+  String get musicDeckLocalPlaylist => 'Local playlist';
+
+  @override
+  String get musicDeckRetry => 'Retry';
+
+  @override
+  String get musicNavSongs => 'Songs';
+
+  @override
+  String get musicNavAlbums => 'Albums';
+
+  @override
+  String get musicNavArtists => 'Artists';
+
+  @override
+  String get musicNavPlaylists => 'Playlists';
+
+  @override
+  String get musicNavFavorites => 'Favorites';
+
+  @override
+  String get musicSearch => 'Search';
+
+  @override
+  String get musicSearchTitle => 'Search Music';
+
+  @override
+  String get musicSearchHint => 'Enter song name, artist or album';
+
+  @override
+  String get musicClose => 'Close';
+
+  @override
+  String get musicGotIt => 'Got it';
+
+  @override
+  String get musicPlaybackError =>
+      'Audio playback failed, the codec may not be supported';
+
+  @override
+  String get musicCancel => 'Cancel';
+
+  @override
+  String get musicSave => 'Save';
+
+  @override
+  String get musicSaving => 'Saving...';
+
+  @override
+  String get musicEdit => 'Edit';
+
+  @override
+  String get musicApply => 'Apply';
+
+  @override
+  String get musicApplying => 'Applying';
+
+  @override
+  String get musicNoLyrics => 'No lyrics';
+
+  @override
+  String get musicNowPlayingArtwork => 'Artwork';
+
+  @override
+  String get musicNowPlayingLyrics => 'Lyrics';
+
+  @override
+  String get musicNowPlayingAbout => 'About';
+
+  @override
+  String get musicEditDetailsLyrics => 'Edit details & lyrics';
+
+  @override
+  String get musicEditMetadata => 'Edit Metadata';
+
+  @override
+  String get musicEditTrack => 'Edit track';
+
+  @override
+  String get musicMetadataEyebrow => 'Metadata';
+
+  @override
+  String get musicTitleRequired => 'Title cannot be empty';
+
+  @override
+  String get musicMetadataSaved => 'Metadata saved';
+
+  @override
+  String get musicMetadataRestored => 'Original metadata restored';
+
+  @override
+  String get musicRestoreOriginal => 'Restore original';
+
+  @override
+  String get musicCoverUrlInvalid => 'Enter a valid HTTP or HTTPS image URL';
+
+  @override
+  String get musicMetadataScopeNote =>
+      'Changes apply to this library only. The original file is never modified.';
+
+  @override
+  String musicSaveFailed(Object error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get musicFieldTitle => 'Title';
+
+  @override
+  String get musicFieldArtist => 'Artist';
+
+  @override
+  String get musicFieldAlbum => 'Album';
+
+  @override
+  String get musicCoverImageUrl => 'Cover image URL';
+
+  @override
+  String get musicFieldDuration => 'Duration';
+
+  @override
+  String get musicFieldFormat => 'Format';
+
+  @override
+  String get musicFieldBitrate => 'Bitrate';
+
+  @override
+  String get musicFieldSampleRate => 'Sample rate';
+
+  @override
+  String get musicFieldFileSize => 'File size';
+
+  @override
+  String get musicFieldGenre => 'Genre';
+
+  @override
+  String get musicCoverImage => 'Cover Image';
+
+  @override
+  String musicCoverSelected(Object name) {
+    return 'Selected: $name';
+  }
+
+  @override
+  String get musicCoverPick => 'Select Cover Image';
+
+  @override
+  String get musicCoverRemove => 'Remove Cover';
+
+  @override
+  String get musicLyricsClear => 'Clear Lyrics';
+
+  @override
+  String get musicLyricsFile => 'Lyrics File';
+
+  @override
+  String get musicLyricsPick => 'Select Lyrics File (LRC / TXT / SRT / VTT)';
+
+  @override
+  String get musicLyricsEditHint =>
+      'One line per row. Lines are spread evenly over the track.';
+
+  @override
+  String musicLyricsLineCount(Object count) {
+    return '$count lines';
+  }
+
+  @override
+  String get musicLyricsEdited => 'Unsaved lyrics edits';
+
+  @override
+  String get musicCoverReadFailed => 'Could not read the selected cover image';
+
+  @override
+  String get musicLyricsTooLarge => 'Lyrics files must be 2 MB or smaller';
+
+  @override
+  String get musicLyricsReadFailed => 'Could not read the selected lyrics file';
+
+  @override
+  String musicAddToPlaylistSuccess(Object name) {
+    return 'Added to \"$name\"';
+  }
+
+  @override
+  String get musicAddToPlaylistFailed => 'Failed to add to playlist';
+
+  @override
+  String get musicScrapeMatch => 'Match Online';
+
+  @override
+  String get musicScrapeCandidatesTitle => 'Match Results';
+
+  @override
+  String get musicScrapeNoCandidates => 'No matching candidates found';
+
+  @override
+  String get musicScrapeApply => 'Apply';
+
+  @override
+  String get musicScrapeApplied => 'Matched metadata applied';
+
+  @override
+  String get musicScrapeLibrary => 'Rescrape Library';
+
+  @override
+  String get musicScrapeLibraryConfirmTitle => 'Rescrape entire library?';
+
+  @override
+  String get musicScrapeLibraryConfirmMessage =>
+      'Every local track will be re-matched online, including already scraped ones. Continue?';
+
+  @override
+  String get musicQualityHint =>
+      'Playback falls back automatically to tiers your connected platforms support';
+
+  @override
+  String get musicQualityUnsupported => 'Not supported by connected platforms';
+
+  @override
+  String get musicQualityTitle => 'Playback Quality';
+
+  @override
+  String get musicQualityJymaster => 'Master';
+
+  @override
+  String get musicQualityJyeffect => 'HD Surround';
+
+  @override
+  String get musicQualitySky => 'Immersive Surround';
+
+  @override
+  String get musicQualityDolby => 'Dolby Atmos';
+
+  @override
+  String get musicQualityHires => 'Hi-Res';
+
+  @override
+  String get musicQualityLossless => 'Lossless';
+
+  @override
+  String get musicQualityExhigh => 'Very High';
+
+  @override
+  String get musicQualityHigher => 'High';
+
+  @override
+  String get musicQualityStandard => 'Standard';
+
+  @override
+  String get musicPlatformLoginTitle => 'Platform Accounts';
+
+  @override
+  String get musicPlatformNeteaseName => 'Netease Cloud Music';
+
+  @override
+  String get musicPlatformNeteaseQrHint =>
+      'Scan the QR code with the Netease Cloud Music app to log in';
+
+  @override
+  String get musicPlatformQrGenerating => 'Generating QR code...';
+
+  @override
+  String get musicPlatformQrPreparing => 'Preparing QR code…';
+
+  @override
+  String get musicPlatformQrAction => 'Scan QR Login';
+
+  @override
+  String get musicPlatformAnonymousUser => 'User';
+
+  @override
+  String get musicPlatformVipBadge => 'VIP';
+
+  @override
+  String musicPlatformUserId(Object userId) {
+    return 'ID: $userId';
+  }
+
+  @override
+  String get musicPlatformLogout => 'Logout';
+
+  @override
+  String get musicPlatformLogoutBusy => 'Logging out…';
+
+  @override
+  String get musicPlatformLogoutConfirmTitle => 'Disconnect this account?';
+
+  @override
+  String get musicPlatformLogoutConfirmMessage =>
+      'The connection and its cached playlists will be removed, and tracks of this platform will be dropped from the play queue.';
+
+  @override
+  String get musicPlatformLogoutSuccess => 'Disconnected';
+
+  @override
+  String musicPlatformLogoutQueuePurged(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count queued track(s) from this platform were removed',
+      zero: 'No queued tracks needed removal',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get musicHistoryTitle => 'Play History';
+
+  @override
+  String get musicHistoryTrackUnavailable =>
+      'Track is no longer available in your library';
+
+  @override
+  String get musicHistoryEmpty => 'No plays in the last 7 days';
+
+  @override
+  String get musicHistoryLoadMore => 'Load More';
+
+  @override
+  String get musicHistoryToday => 'Today';
+
+  @override
+  String get musicHistoryYesterday => 'Yesterday';
+
+  @override
+  String get musicHistoryViewAll => 'View All';
+
+  @override
+  String get musicLyricsSearch => 'Search Lyrics';
+
+  @override
+  String get musicLyricsApply => 'Apply Lyrics';
+
+  @override
+  String get musicLyricsNoResult => 'No matching lyrics found';
+
+  @override
+  String get musicLyricsOnlineSource => 'Online lyrics';
+
+  @override
+  String get musicLyricsExisting => 'Existing lyrics (replaceable)';
+
+  @override
+  String get musicLyricsLoadFailed => 'Failed to load lyrics';
+
+  @override
+  String musicLyricsApplied(Object title) {
+    return 'Lyrics applied to \"$title\"';
+  }
+
+  @override
+  String get musicScanConfirmMessage =>
+      'Audio files in your music directories will be scanned into the library; existing files are skipped or updated.';
+
+  @override
+  String get musicScanPollTimeout =>
+      'The job is still running in the background; progress display has stopped. Refresh later to check.';
+
+  @override
+  String musicSelectionCount(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get musicSelectionSelectAll => 'Select All';
+
+  @override
+  String get musicSelectionExit => 'Exit selection';
+
+  @override
+  String musicBatchAddedToPlaylist(Object count, Object name) {
+    return 'Added $count tracks to \"$name\"';
+  }
+
+  @override
+  String musicBatchPartial(Object success, Object failed) {
+    return '$success succeeded, $failed failed';
+  }
+
+  @override
+  String musicBatchEnqueued(Object count) {
+    return 'Added $count tracks to the play queue';
+  }
+
+  @override
+  String get musicPlaybackSettings => 'Playback Settings';
+
+  @override
+  String get musicSleepTimer => 'Sleep Timer';
+
+  @override
+  String musicSleepMinutes(Object minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get musicSleepAfterCurrentTrack => 'After current track';
+
+  @override
+  String get musicSleepOff => 'Turn off timer';
+
+  @override
+  String musicSleepRemaining(Object minutes, Object seconds) {
+    return 'Pausing in $minutes:$seconds';
+  }
+
+  @override
+  String get musicPlaybackSpeed => 'Playback Speed';
+
+  @override
+  String get musicSpeedApplyHint =>
+      'Changes apply to the current track immediately';
+
+  @override
+  String get musicNavGenres => 'Genres';
+
+  @override
+  String get musicGenresEmpty =>
+      'No genre info on local tracks yet; add it in metadata editing';
+
+  @override
+  String get musicGenresPickHint => 'Pick a genre to browse its tracks';
+
+  @override
+  String get taskNotifyTitleCompleted => 'Task Completed';
+
+  @override
+  String get taskNotifyTitleFailed => 'Task Failed';
+
+  @override
+  String get profileTaskSystemNotifications => 'System Notifications';
+
+  @override
+  String get profileTaskSystemNotificationsHint =>
+      'Send a system notification when tasks complete or fail';
+
+  @override
+  String get settingsCheckUpdate => 'Check for Updates';
+
+  @override
+  String settingsCheckUpdateFailed(Object error) {
+    return 'Check for updates failed: $error';
+  }
+
+  @override
+  String get settingsAlreadyLatest => 'You are on the latest version';
+
+  @override
+  String settingsNewVersionFound(Object version) {
+    return 'New version $version available';
+  }
+
+  @override
+  String get settingsOpenDownloadPage => 'Open download page';
+
+  @override
+  String get filesOpRefresh => 'Refresh file list';
+
+  @override
+  String get filesOpSwitchSpace => 'Switch space';
+
+  @override
+  String get filesOpLoadRecent => 'Load recent files';
+
+  @override
+  String get filesOpLoadFavorites => 'Load favorite files';
+
+  @override
+  String get filesOpLoadRecycleBin => 'Load recycle bin';
+
+  @override
+  String get filesOpLoadShared => 'Load shared files';
+
+  @override
+  String get filesOpLoadSharedSpace => 'Load shared space';
+
+  @override
+  String get filesOpOpenSharedFolder => 'Open shared folder';
+
+  @override
+  String get filesOpNavigateSharedUp => 'Navigate up in shared space';
+
+  @override
+  String get filesOpMoveToSharedSpace => 'Move to shared space';
+
+  @override
+  String get filesOpMoveToPersonalSpace => 'Move to personal space';
+
+  @override
+  String get filesOpCreateSharedFolder => 'Create shared folder';
+
+  @override
+  String get filesOpDeleteSharedFile => 'Delete shared file';
+
+  @override
+  String get filesOpLoadMyShares => 'Load my shares';
+
+  @override
+  String get filesOpLoadShareLinks => 'Load share links';
+
+  @override
+  String get filesOpLoadStorageStats => 'Load storage stats';
+
+  @override
+  String get filesOpLoadUploadQueue => 'Load upload queue';
+
+  @override
+  String get filesOpLoadExternalStorage => 'Load external storage';
+
+  @override
+  String get filesOpOpenFolder => 'Open folder';
+
+  @override
+  String get filesOpNavigateToRoot => 'Navigate to root';
+
+  @override
+  String get filesOpChangeDirectory => 'Change directory';
+
+  @override
+  String get filesOpFilterFileType => 'Filter file type';
+
+  @override
+  String get filesOpCreateFolder => 'Create folder';
+
+  @override
+  String get filesOpRename => 'Rename file';
+
+  @override
+  String get filesOpCopy => 'Copy file';
+
+  @override
+  String get filesOpMove => 'Move file';
+
+  @override
+  String get filesOpMoveToRecycleBin => 'Move to recycle bin';
+
+  @override
+  String get filesOpRestore => 'Restore file';
+
+  @override
+  String get filesOpPurge => 'Delete permanently';
+
+  @override
+  String get filesOpAddFavorite => 'Add favorite';
+
+  @override
+  String get filesOpRemoveFavorite => 'Remove favorite';
+
+  @override
+  String get filesOpBatchMoveToRecycleBin => 'Move selection to recycle bin';
+
+  @override
+  String get filesOpBatchRestore => 'Restore selection';
+
+  @override
+  String get filesOpBatchPurge => 'Delete selection permanently';
+
+  @override
+  String get filesOpBatchMove => 'Move selection';
+
+  @override
+  String get filesOpBatchAddFavorite => 'Add selection to favorites';
+
+  @override
+  String get filesOpBatchRemoveFavorite => 'Remove selection from favorites';
+
+  @override
+  String get filesOpCreateShareLink => 'Create share link';
+
+  @override
+  String get filesOpRevokeShare => 'Revoke share';
+
+  @override
+  String get filesOpUpload => 'Upload files';
+
+  @override
+  String get filesOpResumeUpload => 'Resume upload';
+
+  @override
+  String get filesOpDeleteUploadTask => 'Delete upload task';
+
+  @override
+  String get filesOpAddExternalStorage => 'Add external storage';
+
+  @override
+  String get filesOpDisableExternalStorage => 'Disable external storage';
+
+  @override
+  String get filesOpDeleteMount => 'Delete mount';
+
+  @override
+  String get filesOpUpdateExternalStorage => 'Update external storage';
+
+  @override
+  String get filesOpBrowseRemoteDirectory => 'Browse remote directory';
+
+  @override
+  String get filesOpOpenRemoteSubdirectory => 'Open remote subdirectory';
+
+  @override
+  String get filesOpMkdirExternalStorage => 'Create remote folder';
+
+  @override
+  String get filesOpDeleteExternalFile => 'Delete remote file';
+
+  @override
+  String get filesOpRenameExternalFile => 'Rename remote file';
+
+  @override
+  String get filesOpCreateImportTask => 'Create import task';
+
+  @override
+  String get filesOpLoadImportTasks => 'Load import tasks';
+
+  @override
+  String get filesOpCancelImportTask => 'Cancel import task';
+
+  @override
+  String get filesOpDeleteImportTask => 'Delete import task';
+
+  @override
+  String get filesOpImportMedia => 'Import media';
+
+  @override
+  String get filesOpDeleteFile => 'Delete file';
+
+  @override
+  String get musicQueueTitle => 'Play Queue';
+
+  @override
+  String get musicQueueEmpty => 'Play queue is empty';
+
+  @override
+  String get musicQueueSourceLibrary => 'Local library';
+
+  @override
+  String get musicQueueClear => 'Clear Queue';
+
+  @override
+  String get musicPlayNext => 'Play Next';
+
+  @override
+  String get musicQueueReorderHint => 'Drag to reorder the queue';
+
+  @override
+  String get musicPlayNextAdded => 'Added to play queue';
+
+  @override
+  String get musicShuffle => 'Shuffle';
+
+  @override
+  String get musicPlayModeSequential => 'Sequential playback';
+
+  @override
+  String get musicRepeatOne => 'Loop Single';
+
+  @override
+  String get musicPlaylistsSubtitle => 'Manage your local playlists.';
+
+  @override
+  String get musicPlaylistsEmptyHint => 'Create playlists to manage them here.';
+
+  @override
+  String get musicOpenPlaylist => 'Open Playlist';
+
+  @override
+  String get musicPlaylistEmptyHint =>
+      'Add songs from the song list to see them here.';
+
+  @override
+  String get musicAlbumNoTracks => 'No tracks in this album.';
+
+  @override
+  String get musicArtistNoTracks => 'No tracks for this artist.';
+
+  @override
+  String get musicRemoveFromPlaylist => 'Remove from Playlist';
+
+  @override
+  String musicViewAll(Object count) {
+    return 'View All ($count)';
+  }
+
+  @override
+  String get musicPause => 'Pause';
+
+  @override
+  String get musicPlay => 'Play';
+
+  @override
+  String get musicNotPlaying => 'Not playing';
+
+  @override
+  String get musicRecommendedArtist => 'Recommended Artist';
+
+  @override
+  String get musicExploreMusic => 'Explore Music';
+
+  @override
+  String get musicPlayNow => 'Play Now';
+
+  @override
+  String get musicTrendingArtists => 'Trending Artists';
+
+  @override
+  String get musicViewAllSimple => 'View All';
+
+  @override
+  String get musicNoTracks => 'No tracks yet';
+
+  @override
+  String get musicTracksHint => 'Tracks will appear here after music scanning.';
+
+  @override
+  String get musicAddToPlaylist => 'Add to Playlist';
+
+  @override
+  String get musicUnfavorite => 'Unfavorite';
+
+  @override
+  String get musicFavorite => 'Favorite';
+
+  @override
+  String get musicNoAlbums => 'No albums yet';
+
+  @override
+  String get musicAlbumsHint =>
+      'Albums are automatically aggregated after music scanning.';
+
+  @override
+  String get musicAlbumsSubtitle => 'Browse your local music library by album.';
+
+  @override
+  String get musicArtistsSubtitle => 'Aggregate songs and albums by artist.';
+
+  @override
+  String get musicNoArtists => 'No artists yet';
+
+  @override
+  String get musicArtistsHint => 'Artists will appear after song tag parsing.';
+
+  @override
+  String musicSidebarViewAll(Object count) {
+    return 'View All ($count)';
+  }
+
+  @override
+  String get musicScanSubtitle =>
+      'Scan audio files in the file library, parse tags, albums, artists and covers.';
+
+  @override
+  String get musicNoScanTask => 'No new scan tasks.';
+
+  @override
+  String musicScanScannedFiles(Object count) {
+    return '$count files scanned';
+  }
+
+  @override
+  String get musicScanIdleHint => 'No scan has run yet.';
+
+  @override
+  String get musicScanStartConfirmMessage =>
+      'Scans the local music directories again and updates the library.';
+
+  @override
+  String musicScanStatus(
+    Object id,
+    Object status,
+    Object progress,
+    Object files,
+  ) {
+    return 'Task $id · $status · $progress% · $files files scanned';
+  }
+
+  @override
+  String get musicMetadataSubtitle =>
+      'Review song titles, artists, albums and quality tags.';
+
+  @override
+  String get musicNoMetadataHint =>
+      'After music scanning, you can complete MusicBrainz metadata here.';
+
+  @override
+  String get musicCandidate => 'Candidate';
+
+  @override
+  String get musicBrainzCandidates => 'MusicBrainz Candidates';
+
+  @override
+  String get musicCandidateFetchFailed => 'Failed to fetch candidates';
+
+  @override
+  String get musicNoCandidates => 'No candidates found';
+
+  @override
+  String get musicNoCandidatesHint =>
+      'Try improving the local title, artist or album, then retry.';
+
+  @override
+  String get photoRegenerateThumbnails => 'Regenerate Thumbnails';
+
+  @override
+  String get photoRegenerateQueued =>
+      'Thumbnail rebuild queued. Track progress in the task center.';
+
+  @override
+  String get photosActionFailed => 'Action failed. Try again later.';
+
+  @override
+  String get photoImportCandidates => 'Import Candidates';
+
+  @override
+  String get photoNoImportCandidates => 'No pending photos to import';
+
+  @override
+  String get importFiles => 'Import Files';
+
+  @override
+  String get importToPersonalSpace => 'Personal Space';
+
+  @override
+  String get importToSharedSpace => 'Shared Space';
+
+  @override
+  String get importSpaceSelectorTitle => 'Choose Import Destination';
+
+  @override
+  String get importSpaceSelectorDesc => 'Select where to import files';
+
+  @override
+  String get importPersonalSpaceDesc => 'Only you can see these files';
+
+  @override
+  String get importSharedSpaceDesc => 'All users can see these files';
+
+  @override
+  String get importUploading => 'Importing...';
+
+  @override
+  String importComplete(Object count) {
+    return '$count files imported successfully';
+  }
+
+  @override
+  String get importFailed => 'Import failed';
+
+  @override
+  String get importRefreshFailed =>
+      'Import completed, but the list could not be refreshed.';
+
+  @override
+  String importProcessing(Object count) {
+    return '$count files uploaded; processing is still in progress.';
+  }
+
+  @override
+  String importUnsupportedFormat(Object files, Object extensions) {
+    return 'Unsupported file format: $files. Supported formats: $extensions.';
+  }
+
+  @override
+  String get readerPortal => 'Portal';
+
+  @override
+  String get readerCenter => 'Reader Center';
+
+  @override
+  String get readerSortRecent => 'Recent';
+
+  @override
+  String get readerSortTitle => 'Title';
+
+  @override
+  String get readerTypeNovel => 'Novel';
+
+  @override
+  String get readerTypeLiterature => 'Literature';
+
+  @override
+  String get readerTypeAcademic => 'Academic';
+
+  @override
+  String get readerTypeTechnical => 'Technical';
+
+  @override
+  String get readerTypePoetry => 'Poetry';
+
+  @override
+  String get readerTypeEssay => 'Essay';
+
+  @override
+  String get readerNotStarted => 'Not started';
+
+  @override
+  String get readerUnknownTime => 'Unknown time';
+
+  @override
+  String readerChapterNumber(Object number) {
+    return 'Chapter $number';
+  }
+
+  @override
+  String readerProgressLabel(Object progress) {
+    return 'Progress $progress';
+  }
+
+  @override
+  String get readerRestoreProgress => 'Restore Reading Progress';
+
+  @override
+  String get readerRestoreProgressConfirm =>
+      'Restore to this version\'s reading progress? Current progress will be overwritten.';
+
+  @override
+  String get readerConfirmRestore => 'Restore';
+
+  @override
+  String get readerProgressRestored => 'Reading progress restored';
+
+  @override
+  String readerRestoreFailed(Object error) {
+    return 'Restore failed: $error';
+  }
+
+  @override
+  String get readerVersionHistory => 'Version History';
+
+  @override
+  String get readerNoVersionHistory => 'No version history';
+
+  @override
+  String get readerVersionHistoryHint =>
+      'Versions are automatically recorded when reading progress changes';
+
+  @override
+  String get readerRestoreThisVersion => 'Restore this version';
+
+  @override
+  String get videoImportSubtitle => 'Import subtitle file';
+
+  @override
+  String get videoImportedSubtitle => 'Imported subtitle';
+
+  @override
+  String get videoLocalSubtitle => 'Local subtitle';
+
+  @override
+  String get videoSubtitleImportSuccess => 'Subtitle loaded';
+
+  @override
+  String get videoSubtitleImportFailed => 'Unable to read the subtitle file';
+
+  @override
+  String get videoSubtitleFileTooLarge =>
+      'Subtitle files must be 2 MB or smaller';
+
+  @override
+  String get videoSubtitleNoCues =>
+      'No supported timed captions were found in this file';
+
+  @override
+  String videoAudioTrackNumber(int index) {
+    return 'Audio track $index';
+  }
+
+  @override
+  String videoLanguageTrackNumber(int index) {
+    return 'Language $index';
+  }
+
+  @override
+  String videoSubtitleTrackNumber(int index) {
+    return 'Subtitle track $index';
+  }
+
+  @override
+  String get videoMute => 'Mute';
+
+  @override
+  String get videoUnmute => 'Unmute';
+
+  @override
+  String get videoPause => 'Pause';
+
+  @override
+  String get videoEnterFullscreen => 'Enter fullscreen';
+
+  @override
+  String get videoExitFullscreen => 'Exit fullscreen';
+
+  @override
+  String videoSeekBackwardSeconds(int seconds) {
+    return 'Back ${seconds}s';
+  }
+
+  @override
+  String videoSeekForwardSeconds(int seconds) {
+    return 'Forward ${seconds}s';
+  }
+
+  @override
+  String get videoNoAudioTracks => 'No audio tracks available';
+
+  @override
+  String get videoSelectAudioTrack => 'Select audio track';
+
+  @override
+  String get videoNoLanguages => 'No languages available';
+
+  @override
+  String get videoSelectLanguage => 'Select language';
+
+  @override
+  String videoVolumeValue(int volume) {
+    return 'Volume $volume%';
+  }
+
+  @override
+  String videoVolumeMutedValue(int volume) {
+    return 'Volume $volume% (muted)';
+  }
+
+  @override
+  String videoSeasonEpisodeLabel(int season, int episode) {
+    return 'Season $season · Episode $episode';
+  }
+
+  @override
+  String get videoHeroFeatured => 'Featured';
+
+  @override
+  String get videoHeroMovie => 'Movie';
+
+  @override
+  String get videoHeroTv => 'TV';
+
+  @override
+  String get videoHeroWatchNow => 'Play now';
+
+  @override
+  String get videoHeroFallbackOverview => 'This local title is ready to play.';
+
+  @override
+  String get videoHeroCenterTitle => 'Media Library';
+
+  @override
+  String get videoHeroCenterSubtitle =>
+      'Select a title to view its details and start playback.';
+
+  @override
+  String get filePurgeDeleteTitle => 'Permanently delete?';
+
+  @override
+  String filePurgeDeleteMessage(String name) {
+    return 'Delete $name and its stored file? This action cannot be undone.';
+  }
+
+  @override
+  String get filePurgeImpactTitle => 'This file is still in use';
+
+  @override
+  String filePurgeImpactMessage(int fileCount, int referenceCount) {
+    return 'This operation affects $fileCount file nodes and $referenceCount references in other modules. Continue with cascade deletion?';
+  }
+
+  @override
+  String get filePurgeCascadeDelete => 'Delete all references';
+
+  @override
+  String get videoLocalLibrarySources => 'Local direct media libraries';
+
+  @override
+  String get videoLocalLibrarySourcesSubtitle =>
+      'Reference read-only deployment mounts directly; original movies are not copied to MinIO.';
+
+  @override
+  String get videoLibrarySourcesTitle => 'Media sources';
+
+  @override
+  String videoLibrarySourceCount(int count) {
+    return '$count sources';
+  }
+
+  @override
+  String get videoLibraryLoading => 'Loading media library';
+
+  @override
+  String get videoRefreshSources => 'Refresh media library sources';
+
+  @override
+  String get videoAddLibrarySource => 'Add source';
+
+  @override
+  String get videoEditLibrarySource => 'Edit source';
+
+  @override
+  String get videoStorageLocationUnavailable =>
+      'Storage locations could not be loaded';
+
+  @override
+  String get videoNoStorageLocation => 'No local storage location is available';
+
+  @override
+  String get videoNoStorageLocationHint =>
+      'Ask a system administrator to configure and enable a read-only local mount in Storage Management.';
+
+  @override
+  String get videoLoadSourcesFailed => 'Library sources could not be loaded';
+
+  @override
+  String get videoNoLibrarySources =>
+      'No local media library source has been configured.';
+
+  @override
+  String get videoLibraryType => 'Library type';
+
+  @override
+  String get videoLibraryTypeHint =>
+      'The type selects the scanner and hierarchy; existing sources cannot change it directly.';
+
+  @override
+  String get videoLibraryTypeMovie => 'Movie';
+
+  @override
+  String get videoLibraryTypeTvSeries => 'TV Series';
+
+  @override
+  String get videoLibraryTypeAnime => 'Anime';
+
+  @override
+  String get videoLibraryTypeRoot => 'Mixed root';
+
+  @override
+  String get videoStorageAvailable => 'Available';
+
+  @override
+  String get videoStorageUnavailable => 'Unavailable';
+
+  @override
+  String get videoStorageDisabled => 'Disabled';
+
+  @override
+  String get videoDeleteLibrarySource => 'Delete media source';
+
+  @override
+  String videoDeleteLibrarySourceConfirm(String name) {
+    return 'Delete source “$name”? Imported media is not deleted; deletion is rejected while media references remain.';
+  }
+
+  @override
+  String get videoDeleteLibrarySourceDone => 'Media source deleted';
+
+  @override
+  String get videoUnknownStorageLocation => 'Unknown storage location';
+
+  @override
+  String videoSourceScanSummary(int count, int created) {
+    return 'Last discovery found $count videos with $created awaiting review';
+  }
+
+  @override
+  String videoSourceMissingCount(int count) {
+    return '$count unavailable';
+  }
+
+  @override
+  String get videoSourceDisabled => 'Disabled';
+
+  @override
+  String get videoScanThisSource => 'Discover updates';
+
+  @override
+  String get videoReviewLibrarySource =>
+      'Review discoveries and add selected media';
+
+  @override
+  String get videoBrowseRelativeDirectory => 'Browse safe directories';
+
+  @override
+  String get videoChooseThisDirectory => 'Choose this directory';
+
+  @override
+  String get videoDirectoryRoot => 'Root directory';
+
+  @override
+  String get videoSourceFromMount => 'Direct from trusted mount';
+
+  @override
+  String get videoTrustedMountLabel => 'Trusted mount';
+
+  @override
+  String get videoNoTrustedMount => 'No trusted mount available';
+
+  @override
+  String get videoNoTrustedMountHint =>
+      'Register a mount in deployment config first and make sure it is available. The mount root is registered as a storage location automatically on creation.';
+
+  @override
+  String get videoBrowseMountDirectory => 'Browse mount directories';
+
+  @override
+  String get videoDiscoveryTitle => 'Discovery and import';
+
+  @override
+  String get videoReviewSelectionHint =>
+      'Select a series, season, or episode. Only confirmed selections are added to the library.';
+
+  @override
+  String get videoLocalDiscoveryTask => 'Local media discovery';
+
+  @override
+  String get videoLocalImportTask => 'Selected media import';
+
+  @override
+  String get videoAwaitingReview => 'Awaiting review';
+
+  @override
+  String get videoDiscoveryEmpty =>
+      'No discovery result yet. Discovering creates candidates without immediately adding them.';
+
+  @override
+  String get videoDiscoveryRunning =>
+      'Discovering media files. Leaving this screen does not stop the background task.';
+
+  @override
+  String get videoDiscoveryFailed =>
+      'Discovery failed. Check source health and try again.';
+
+  @override
+  String get videoDiscoveryCancelled =>
+      'The discovery or import task was cancelled.';
+
+  @override
+  String videoDiscoveryCandidates(int count) {
+    return '$count candidates';
+  }
+
+  @override
+  String videoDiscoverySelected(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String videoDiscoveryIssues(int count) {
+    return '$count issues';
+  }
+
+  @override
+  String get videoSelectAllCandidates => 'Select all';
+
+  @override
+  String get videoClearCandidateSelection => 'Clear selection';
+
+  @override
+  String get videoAddSelectedToLibrary => 'Add to media library';
+
+  @override
+  String get videoPauseImport => 'Pause import';
+
+  @override
+  String get videoCancelDiscovery => 'Cancel task';
+
+  @override
+  String get videoBackToParentNode => 'Back to parent';
+
+  @override
+  String get videoLoadTreeFailed => 'Candidate tree could not be loaded';
+
+  @override
+  String get videoNoCandidates => 'There are no candidates at this level.';
+
+  @override
+  String get videoCandidateExisting => 'Already in library';
+
+  @override
+  String get videoCandidateChanged => 'File changed';
+
+  @override
+  String get videoCandidateUnmatched => 'Unrecognized';
+
+  @override
+  String get videoCandidateNew => 'New candidate';
+
+  @override
+  String get videoUnavailableTitle => 'Unavailable items';
+
+  @override
+  String get videoLibraryRecordsExpand => 'Show more records';
+
+  @override
+  String get videoLibraryRecordsCollapse => 'Show fewer records';
+
+  @override
+  String get photosPrevPhoto => 'Previous photo';
+
+  @override
+  String get photosNextPhoto => 'Next photo';
+
+  @override
+  String photosViewerPosition(Object index, Object total) {
+    return '$index of $total';
+  }
+
+  @override
+  String photosViewerPositionTime(Object index, Object total, Object taken) {
+    return '$index of $total · $taken';
+  }
+
+  @override
+  String get videoUnavailableEmpty =>
+      'No local media is currently missing or unreadable.';
+
+  @override
+  String videoUnavailableCount(int count) {
+    return '$count items need attention';
+  }
+
+  @override
+  String get videoUnavailableLoadFailed =>
+      'Unavailable items could not be loaded';
+
+  @override
+  String get videoMissingPending => 'Awaiting missing confirmation';
+
+  @override
+  String get videoMissingConfirmed => 'File missing';
+
+  @override
+  String get videoFileUnavailable => 'File unavailable';
+
+  @override
+  String get videoSourceOffline => 'Source offline';
+
+  @override
+  String get videoSourceDegraded => 'Partially unavailable';
+
+  @override
+  String get videoSourceName => 'Source name';
+
+  @override
+  String get videoStorageLocation => 'Storage location';
+
+  @override
+  String get videoSelectLibrarySource => 'Select library source';
+
+  @override
+  String get videoNoAvailableStorageLocation => 'No storage location available';
+
+  @override
+  String get videoNoAvailableStorageLocationHint =>
+      'Add a local storage location and ensure it is enabled before creating a library source.';
+
+  @override
+  String get videoRelativeDirectory => 'Relative directory';
+
+  @override
+  String get videoRelativeDirectoryHint =>
+      'Enter a path within the storage location, for example Movies/4K';
+
+  @override
+  String get videoSourceEnabled => 'Enable this source';
+
+  @override
+  String get videoSourceRequiredFields =>
+      'Enter a source name and relative directory';
+
+  @override
+  String get videoNeverScanned => 'Never scanned';
+
+  @override
+  String get adminAddLocalStorageLocation => 'Add mount location';
+
+  @override
+  String get adminLocalStorageLocations => 'Local storage locations';
+
+  @override
+  String get adminReadOnlyMediaMounts => 'Read-only media mounts';
+
+  @override
+  String get adminLocalStorageLocationsSubtitle =>
+      'Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.';
+
+  @override
+  String get adminNoLocalStorageLocations =>
+      'No read-only local storage location has been configured.';
+
+  @override
+  String get adminDeleteLocalStorageLocation => 'Delete storage location';
+
+  @override
+  String get adminMountKey => 'Mount key';
+
+  @override
+  String get adminMountKeyHint =>
+      'Must match a key under file.local-media.mounts in application.yml';
+
+  @override
+  String get adminAutoCreateLibrarySource => 'Create video library source';
+
+  @override
+  String get adminAutoCreateLibrarySourceHint =>
+      'Automatically create a matching video library source after the mount location is created';
+
+  @override
+  String get adminRelativeRoot => 'Relative root';
+
+  @override
+  String get adminRelativeRootHint =>
+      'Enter a directory inside the mount; use . for the mount root';
+
+  @override
+  String get adminLocalStorageSecurityHint =>
+      'Absolute paths are supplied by deployment configuration; this screen can only select a relative directory in an approved mount.';
+
+  @override
+  String get adminLocalStorageRequiredFields =>
+      'Enter a name, mount key, and relative root';
+
+  @override
+  String get adminCancel => 'Cancel';
+
+  @override
+  String get photosTaskNotFound => 'This task is no longer available.';
+
+  @override
+  String get photosTaskMonitorTimedOut =>
+      'Status monitoring timed out. The background task may still be running.';
+
+  @override
+  String get photosRetryStatus => 'Retry status';
+
+  @override
+  String get musicQrLoginTitle => 'Netease Cloud Music login';
+
+  @override
+  String get musicQrLoginInstruction =>
+      'Open the Netease Cloud Music app and scan this QR code.';
+
+  @override
+  String get musicQrWaiting => 'Waiting for scan…';
+
+  @override
+  String get musicQrScanned => 'Scanned — confirm on your phone';
+
+  @override
+  String get musicQrConfirmedSyncing => 'Confirmed — syncing your library…';
+
+  @override
+  String get musicQrExpired =>
+      'The QR code expired. Start login again to get a new code.';
+
+  @override
+  String get musicQrStatusFailed =>
+      'Unable to refresh login status. Check the connection and retry.';
+
+  @override
+  String get musicQrRetry => 'Retry';
+
+  @override
+  String get musicQrRegenerate => 'Generate a new QR code';
+
+  @override
+  String musicQrUnknownStatus(String status) {
+    return 'Status: $status';
+  }
+
+  @override
+  String get videoLibraryOverviewTab => 'Overview';
+
+  @override
+  String get videoLibraryScanReviewTab => 'Scan and review';
+
+  @override
+  String get videoLibraryAccessTab => 'Access';
+
+  @override
+  String get videoLibraryVisibilityPrivate => 'Private';
+
+  @override
+  String get videoLibraryVisibilityPrivateHint =>
+      'Only the creator sees this library in media views. Administrators can still manage it here.';
+
+  @override
+  String get videoLibraryVisibilitySelected => 'Selected users';
+
+  @override
+  String get videoLibraryVisibilitySelectedHint =>
+      'Only the users selected below can browse and play this library.';
+
+  @override
+  String get videoLibraryVisibilityMembers => 'All members';
+
+  @override
+  String get videoLibraryVisibilityMembersHint =>
+      'Members and administrators with media read access are included. Guests are not included automatically.';
+
+  @override
+  String get videoLibraryAccessSearch => 'Search username or display name';
+
+  @override
+  String get videoLibraryAccessNoUsers => 'No matching users';
+
+  @override
+  String videoLibraryAccessSelectedCount(int count) {
+    return '$count users selected';
+  }
+
+  @override
+  String get videoLibraryAccessSave => 'Save access';
+
+  @override
+  String get videoLibraryAccessSaved => 'Access settings saved';
+
+  @override
+  String get videoLibraryAccessLoadFailed => 'Unable to load access settings';
+
+  @override
+  String get videoLibraryAccessUsersFailed => 'Unable to load users';
+
+  @override
+  String get videoLibrarySourceVisibilityLabel => 'Visibility';
+
+  @override
+  String get videoLibrarySourceLocationLabel => 'Storage location';
+
+  @override
+  String get videoLibrarySourcePathLabel => 'Relative folder';
+
+  @override
+  String get videoLibrarySourceTypeLabel => 'Media type';
+
+  @override
+  String get adminTrustedMountUnavailable =>
+      'No configured mount is available. Check application.yml or the environment variables, then restart the backend.';
+
+  @override
+  String get adminChooseRelativeFolder => 'Choose relative folder';
+
+  @override
+  String get adminUseCurrentFolder => 'Use current folder';
+
+  @override
+  String get adminOpenFolder => 'Open folder';
+
+  @override
+  String get adminNoSubfolders => 'This folder has no browsable subfolders';
+
+  @override
+  String readerComicCatalogItems(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get readerComicExpandAll => 'Expand all';
+
+  @override
+  String get readerComicCollapseAll => 'Collapse all';
+
+  @override
+  String get photosViewSwitch => 'Switch view';
+
+  @override
+  String get photosViewGridDay => 'Grid · By day';
+
+  @override
+  String get photosViewGridMonth => 'Grid · By month';
+
+  @override
+  String get photosViewTimeline => 'Timeline';
+
+  @override
+  String get photosGroupsTitle => 'Years & months';
+
+  @override
+  String get photosGroupsSubtitle => 'Browse your photo timeline';
+
+  @override
+  String get photosGroupsEmptyHint =>
+      'Months and photo counts appear here once you have photos.';
+
+  @override
+  String get photosViewGroups => 'Groups';
+
+  @override
+  String get photosToggleSelection => 'Toggle selection';
+
+  @override
+  String photosTrashSubtitle(Object count) {
+    return '$count items · automatically deleted after 30 days';
+  }
+
+  @override
+  String get photosEmptyTrash => 'Empty Trash';
+
+  @override
+  String get photosRestore => 'Restore';
+
+  @override
+  String get photosDeleteForever => 'Delete Forever';
+
+  @override
+  String get photosEmptyTrashConfirmTitle => 'Empty Trash?';
+
+  @override
+  String photosEmptyTrashConfirmBody(Object count) {
+    return 'All $count photos in the trash will be permanently deleted. This cannot be undone.';
+  }
+
+  @override
+  String get photosDeleteForeverConfirmTitle => 'Delete Forever?';
+
+  @override
+  String get photosDeleteForeverConfirmBody =>
+      'This photo will be permanently deleted. This cannot be undone.';
+
+  @override
+  String get photosMoveToTrashTitle => 'Move to Trash?';
+
+  @override
+  String photosMoveToTrashBody(Object count) {
+    return '$count photos will be moved to the Trash. You can restore them within 30 days.';
+  }
+
+  @override
+  String get photosMoveToTrashBodyOne =>
+      'This photo will be moved to the Trash. You can restore it within 30 days.';
+
+  @override
+  String get photosMoveToTrashAction => 'Move to Trash';
+
+  @override
+  String get photosTrashRestored => 'Photo restored';
+
+  @override
+  String get photosTrashPurged => 'Deleted permanently';
+
+  @override
+  String get photosTrashMoved => 'Moved to Trash';
+
+  @override
+  String get photosBackToPhotos => 'Back to Photos';
+
+  @override
+  String get photosPlay => 'Play';
+
+  @override
+  String get photosPause => 'Pause';
+
+  @override
+  String get photosFullscreen => 'Fullscreen';
+
+  @override
+  String get photosStripHide => 'HIDE';
+
+  @override
+  String get photosStripShow => 'STRIP';
+
+  @override
+  String get photosIso => 'ISO';
+
+  @override
+  String get photosTagsSelectHint => 'Select a tag to browse its photos';
+
+  @override
+  String photosTagsPhotoCount(int count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosLocationsBack => 'Back to Locations';
+
+  @override
+  String get photosLocationsUnknown => 'Unknown location';
+
+  @override
+  String get photosGeocodeUnavailable =>
+      'Could not resolve the photo location. Check the offline place database and try again.';
+
+  @override
+  String get photosDeleteShort => 'Delete';
+
+  @override
+  String get photosSaturation => 'Saturation';
+
+  @override
+  String get photosModuleDisplayName => 'Lightbox';
+
+  @override
+  String get photosSelectAll => 'Select all';
+
+  @override
+  String get photosDeselectAll => 'Deselect all';
+
+  @override
+  String get photosFrameNavPhotos => 'Photos';
+
+  @override
+  String get photosFrameNavLocations => 'Locations';
+
+  @override
+  String get photosFrameNavTags => 'Tags';
+
+  @override
+  String get photosFrameNavTrash => 'Trash';
+
+  @override
+  String get photosFrameLocationsEmpty => 'No locations yet';
+
+  @override
+  String get photosFrameLocationsEmptyHint =>
+      'Photos with location details will appear here';
+
+  @override
+  String get photosFrameTagsEmpty => 'No tags yet';
+
+  @override
+  String get photosFrameTagsEmptyHint => 'Photos you tag will appear here';
+
+  @override
+  String get photosFrameTrashEmpty => 'Trash is empty';
+
+  @override
+  String get photosFrameTrashEmptyHint =>
+      'Deleted photos stay here for 30 days';
+
+  @override
+  String photosFrameStatsPhotos(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String photosFrameStatsMeta(Object albums, Object trash) {
+    return '$albums albums · $trash in trash';
+  }
+
+  @override
+  String get photosInsightsTitle => 'Relationship insights';
+
+  @override
+  String get photosAlbumsManage => 'Manage albums';
+
+  @override
+  String get photosExpandAlbums => 'Show albums';
+
+  @override
+  String get photosScrollToTop => 'Back to top';
+
+  @override
+  String photosRelCooccur(Object count) {
+    return '$count co-occurring photos';
+  }
+
+  @override
+  String photosRelOthers(Object count) {
+    return '$count more';
+  }
+
+  @override
+  String photosRelRelated(Object name) {
+    return 'Related to \"$name\"';
+  }
+
+  @override
+  String get photosRelCooccurTitle => 'Related entities';
+
+  @override
+  String get photosRelHint =>
+      'Tap an entity to inspect relations; View all filters the library by that entity.';
+
+  @override
+  String videoRedesignItemsCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get videoRedesignStatusMatched => 'Matched';
+
+  @override
+  String get videoRedesignStatusPending => 'Pending';
+
+  @override
+  String get videoRedesignStatusFailed => 'Failed';
+
+  @override
+  String get videoRedesignFilterAll => 'All';
+
+  @override
+  String get videoRedesignFilterMatched => 'Complete info';
+
+  @override
+  String get videoRedesignFilterPending => 'Needs organizing';
+
+  @override
+  String get videoRedesignFilterFailed => 'Has issues';
+
+  @override
+  String get videoRedesignDetail => 'Detail';
+
+  @override
+  String get videoRedesignPlayNow => 'Play now';
+
+  @override
+  String get videoRedesignNoMatches => 'No matching items';
+
+  @override
+  String get videoRedesignAdjustFilters => 'Try adjusting the filters';
+
+  @override
+  String get videoRedesignSubMovies => 'Movies';
+
+  @override
+  String get videoRedesignSubTvShows => 'TV Series';
+
+  @override
+  String get videoRedesignSubAnime => 'Anime';
+
+  @override
+  String get videoRedesignSubCollections => 'Collections';
+
+  @override
+  String get videoRedesignSubRecent => 'Recently Added';
+
+  @override
+  String get videoRedesignSubContinue => 'Continue Watching';
+
+  @override
+  String get videoRedesignSubFavorites => 'Favorites';
+
+  @override
+  String get videoRedesignSubHistory => 'Watch History';
+
+  @override
+  String get videoRedesignSubAdmin => 'Library Management';
+
+  @override
+  String videoRedesignSearchHint(Object section) {
+    return 'Search $section…';
+  }
+
+  @override
+  String get videoRedesignNoFavorites => 'No favorites yet';
+
+  @override
+  String get videoRedesignNoFavoritesHint =>
+      'Tap the favorite button while playing';
+
+  @override
+  String get videoRedesignNoHistoryHint =>
+      'Your watch records will appear here';
+
+  @override
+  String get videoRedesignSubtitlesEn => 'Subtitles';
+
+  @override
+  String get videoRedesignUploadSubtitle => 'Upload subtitle';
+
+  @override
+  String get videoRedesignNoSubtitles => 'No subtitles';
+
+  @override
+  String get videoRedesignSubtitleEmbedded => 'Embedded';
+
+  @override
+  String get videoRedesignSubtitleExternal => 'External';
+
+  @override
+  String get videoRedesignVersions => 'Versions';
+
+  @override
+  String get videoRedesignVersionsEn => 'Versions';
+
+  @override
+  String get videoRedesignOriginalVersion => 'Original';
+
+  @override
+  String get videoRedesignLanguage => 'Language';
+
+  @override
+  String get videoRedesignConfirmUpload => 'Confirm upload';
+
+  @override
+  String get videoRedesignStatTotal => 'Total items';
+
+  @override
+  String get videoRedesignStatTotalEn => 'Total';
+
+  @override
+  String get fontScaleTitle => 'Font size';
+
+  @override
+  String get fontScaleFollowSystem => 'Follow system';
+
+  @override
+  String get fontScaleCompact => 'Compact';
+
+  @override
+  String get fontScaleStandard => 'Standard';
+
+  @override
+  String get fontScaleComfortable => 'Comfortable';
+
+  @override
+  String get fontScaleLarge => 'Large';
+
+  @override
+  String get fontScaleResetDefault => 'Reset to default';
+
+  @override
+  String get fontScalePreviewSample => 'Hello, OmniNest';
+
+  @override
+  String get videoDetailBack => 'BACK';
+
+  @override
+  String get videoDetailEdit => 'EDIT';
+
+  @override
+  String get videoDetailSave => 'SAVE';
+
+  @override
+  String get videoDetailPlay => 'PLAY';
+
+  @override
+  String get videoDetailContinueWatching => 'Continue';
+
+  @override
+  String get videoDetailPlayNextEpisode => 'Play next episode';
+
+  @override
+  String get videoDetailNoPlayableEpisode =>
+      'No playable episodes in this series';
+
+  @override
+  String get videoEpisodeFileMissing => 'File missing';
+
+  @override
+  String get videoEpisodeFileChanged => 'File changed';
+
+  @override
+  String get videoEpisodeSourceUnavailable => 'Source unavailable';
+
+  @override
+  String get videoEpisodeAvailable => 'Available';
+
+  @override
+  String get videoSubtitleEmbedded => 'Embedded';
+
+  @override
+  String get videoSubtitleExternal => 'External';
+
+  @override
+  String get videoEpisodeCheckLibrarySource => 'Check library source';
+
+  @override
+  String get videoProgressSyncDeferred =>
+      'Progress was not synced. It will retry when online.';
+
+  @override
+  String videoAutoplayCountdown(int seconds) {
+    return 'Next episode in ${seconds}s';
+  }
+
+  @override
+  String get readerTtsUnavailable =>
+      'Read aloud is unavailable. Check system TTS or try again later';
+
+  @override
+  String get videoEmptyImportMedia => 'Import media';
+
+  @override
+  String videoSearchScopeLoadedOnly(int count) {
+    return 'Filtering only $count loaded titles';
+  }
+
+  @override
+  String get videoSearchNoHitsLoadMore =>
+      'Not found in loaded results. Load more or clear filters';
+
+  @override
+  String get videoSeriesLoadMore => 'Load more';
+
+  @override
+  String videoSeriesLoadedCount(Object loaded, Object total) {
+    return '$loaded of $total series loaded';
+  }
+
+  @override
+  String get readerGoToLibrary => 'Go to library';
+
+  @override
+  String get readerSearchTruncated =>
+      'Showing first 60 matches only. Narrow your search';
+
+  @override
+  String get readerShortcutsTouchTitle => 'Touch gestures';
+
+  @override
+  String get readerShortcutTapSides => 'Tap left/right edges to turn pages';
+
+  @override
+  String get readerShortcutDragScroll => 'Drag to scroll content';
+
+  @override
+  String get videoContinueViewAll => 'View all';
+
+  @override
+  String videoEpisodeShortLabel(int season, int episode) {
+    return 'S${season}E$episode';
+  }
+
+  @override
+  String get videoDetailTabOverview => 'Overview';
+
+  @override
+  String get videoDetailTabVersions => 'Versions';
+
+  @override
+  String get videoDetailTabSubtitles => 'Subtitles';
+
+  @override
+  String get videoDetailCast => 'Cast';
+
+  @override
+  String get videoDetailDirector => 'DIR.';
+
+  @override
+  String get videoDetailNoVersions => 'No versions available.';
+
+  @override
+  String get videoDetailUploadSubtitle => 'UPLOAD SUBTITLE';
+
+  @override
+  String videoDetailSeasonCount(int count) {
+    return '$count seasons';
+  }
+
+  @override
+  String get videoDetailEpisodesHeader => 'EPISODES';
+
+  @override
+  String get videoMetaEditDetails => 'Edit details';
+
+  @override
+  String get videoMetaEyebrow => 'METADATA';
+
+  @override
+  String get videoMetaFieldTitle => 'Title';
+
+  @override
+  String get videoMetaFieldOriginalTitle => 'Original title';
+
+  @override
+  String get videoMetaFieldYear => 'Year';
+
+  @override
+  String get videoMetaFieldRuntimeMinutes => 'Runtime (minutes)';
+
+  @override
+  String get videoMetaFieldRuntime => 'Runtime';
+
+  @override
+  String get videoMetaFieldGenre => 'Genre';
+
+  @override
+  String get videoMetaFieldRating => 'Rating';
+
+  @override
+  String get videoMetaFieldCast => 'Cast';
+
+  @override
+  String get videoMetaCommaSeparated => 'Comma separated';
+
+  @override
+  String get videoMetaFieldPosterUrl => 'Poster image URL';
+
+  @override
+  String get videoMetaPosterUrlInvalid =>
+      'Enter a valid HTTP or HTTPS poster URL';
+
+  @override
+  String get videoMetaRuntimeInvalid =>
+      'Enter runtime as minutes or in the format 2h 14m';
+
+  @override
+  String get videoMetaFieldOverview => 'Overview';
+
+  @override
+  String get videoMetaFieldSynopsis => 'Synopsis';
+
+  @override
+  String get videoMetadataScopeNote =>
+      'Changes apply to this library only. The original file is never modified.';
+
+  @override
+  String get readerComicManifestLoadFailed =>
+      'Failed to load the comic manifest, please retry later';
+
+  @override
+  String readerComicParseFailedWithReason(Object reason) {
+    return 'Comic parsing failed: $reason';
+  }
+
+  @override
+  String get readerComicParseFailed =>
+      'Comic parsing failed, retry sources on the detail page';
+
+  @override
+  String readerComicPartialFailedWithReason(Object reason) {
+    return 'Some comic sources failed to parse: $reason';
+  }
+
+  @override
+  String get readerComicPartialFailed =>
+      'Some comic sources failed to parse, handle failed sources on the detail page';
+
+  @override
+  String get readerComicEmptyManifest =>
+      'Comic content is empty or the manifest has not been generated';
+
+  @override
+  String get readerComicEmpty => 'Comic content is empty';
+
+  @override
+  String get filesHomeLocations => 'Locations';
+
+  @override
+  String get filesHomeSections => 'Sections';
+
+  @override
+  String get filesHomePersonalSpaceHint => 'Your private files';
+
+  @override
+  String get filesHomeAllFilesHint => 'Browse all files and folders';
+
+  @override
+  String get filesHomeRecentHint => 'Recently added or changed';
+
+  @override
+  String get filesHomeFavoritesHint => 'Starred files';
+
+  @override
+  String get filesHomeTrashHint => 'Deleted items';
+
+  @override
+  String get errorInvalidResponse => 'Invalid response from server';
+
+  @override
+  String get errorEmptyResponse => 'Server returned no result';
+
+  @override
+  String get errorOperationFailed => 'Operation failed';
+
+  @override
+  String commonFailureWithReason(String label, String reason) {
+    return '$label: $reason';
+  }
+
+  @override
+  String get errorNetworkTimeout =>
+      'Request timed out. Check your network and try again';
+
+  @override
+  String get errorNetworkError => 'Network error. Please try again later';
+
+  @override
+  String get errorUnknown => 'Unknown error';
+
+  @override
+  String get errorPreferenceVersionConflict =>
+      'Preferences were updated elsewhere. Refresh and try again';
+
+  @override
+  String get errorDownloadTicketInvalid =>
+      'The download link is invalid. Please retry';
+
+  @override
+  String get errorDownloadRangeInvalid =>
+      'The server cannot resume this download. Please retry';
+
+  @override
+  String get errorDownloadTicketChanged =>
+      'The file has changed. Please download it again';
+
+  @override
+  String get errorDownloadIncomplete =>
+      'The download did not complete. Please retry';
+
+  @override
+  String get errorDownloadSizeMismatch =>
+      'The downloaded file size does not match. Please retry';
+
+  @override
+  String get errorDownloadDigestMismatch =>
+      'The downloaded file failed integrity verification. Please retry';
+
+  @override
+  String get errorBookDownloadTimeout =>
+      'Book download timed out. Please retry';
+
+  @override
+  String get errorBookDownloadFailed => 'Book download failed. Please retry';
+
+  @override
+  String get errorNeedPassword => 'Enter share password';
+
+  @override
+  String get errorPasswordInvalid => 'Incorrect password';
+
+  @override
+  String get errorOldPasswordInvalid => 'Incorrect current password';
+
+  @override
+  String get errorShareSessionInvalid => 'Invalid share session';
+
+  @override
+  String get errorUnnamedFile => 'Unnamed';
+
+  @override
+  String get errorUnnamedResource => 'Unnamed resource';
+
+  @override
+  String get errorUploadUrlMissing => 'Invalid upload URL';
+
+  @override
+  String get filesVersionUploadIncomplete => 'The new version was not uploaded';
+
+  @override
+  String get errorSecurityScanFailed =>
+      'Security scan did not finish. The file is kept; check the library later or import again.';
+
+  @override
+  String get errorOtherCategory => 'Other';
+
+  @override
+  String musicBatchFailedTitles(Object titles) {
+    return 'Failed: $titles';
+  }
+
+  @override
+  String get readerPdfTitle => 'PDF Reader';
+
+  @override
+  String get readerPdfLoadFailed => 'Failed to load PDF';
+
+  @override
+  String get readerPdfDataNotReady => 'PDF data is not ready';
+
+  @override
+  String readerPdfPageIndicator(Object page, Object total) {
+    return 'Page $page of $total';
+  }
+
+  @override
+  String get errorServiceUnavailable =>
+      'Service temporarily unavailable. Please try again later; files remain safely isolated';
+
+  @override
+  String get errorCannotConnect =>
+      'Cannot reach the backend. Check that the service is running or your network';
+
+  @override
+  String get errorRequestCancelled => 'Request cancelled';
+
+  @override
+  String get errorBadCertificate =>
+      'Backend certificate validation failed. Check service configuration';
+
+  @override
+  String errorServerCode(Object code) {
+    return 'Server returned error $code';
+  }
+
+  @override
+  String get errorRequestFailedRetry =>
+      'Request failed. Please try again later';
+
+  @override
+  String get errorWebPdfTooLarge =>
+      'Web reader supports PDF files up to 128 MiB';
+
+  @override
+  String get errorWebBookTooLarge =>
+      'Web reader supports EPUB or TXT files up to 32 MiB';
+
+  @override
+  String get errorFileNotFound => 'File not found';
+
+  @override
+  String get errorConflict => 'Conflict. Please refresh and try again';
+
+  @override
+  String get errorUnauthorized => 'Not signed in or session expired';
+
+  @override
+  String get errorForbidden => 'Not allowed to perform this action';
+
+  @override
+  String get errorDownloadPermissionRequired =>
+      'Downloading this file requires the download permission in the shared space';
+
+  @override
+  String get errorParamError => 'Invalid request parameters';
+
+  @override
+  String get errorBadRequest => 'The request could not be processed';
+
+  @override
+  String get errorRateLimited => 'Too many requests. Please try again later';
+
+  @override
+  String get errorDependencyUnavailable =>
+      'A required service is unavailable. Please try again later';
+
+  @override
+  String get errorRegistrationDisabled =>
+      'Registration is disabled on this server';
+
+  @override
+  String get errorInternalError => 'Server error. Please try again later';
+
+  @override
+  String get errorTaskStatusIllegal =>
+      'This task cannot be changed in its current state';
+
+  @override
+  String get errorTaskAlreadyCompleted => 'This task is already finished';
+
+  @override
+  String get errorTaskDependencyNotReady =>
+      'A dependent task has not finished yet';
+
+  @override
+  String get errorConfigNotFound => 'Configuration item not found';
+
+  @override
+  String get errorConfigValueInvalid => 'Invalid configuration value';
+
+  @override
+  String get errorFileUploadFailed => 'Upload failed. Please try again';
+
+  @override
+  String get errorFileSizeExceeded =>
+      'The file is larger than the allowed limit';
+
+  @override
+  String get errorFileQuotaExceeded => 'Not enough storage quota';
+
+  @override
+  String get errorFilePathInvalid => 'Invalid file path';
+
+  @override
+  String get errorFileObjectMissing => 'The file content is missing';
+
+  @override
+  String get errorFileSecurityRejected =>
+      'The file did not pass the security scan';
+
+  @override
+  String get errorMediaTranscodeFailed => 'Media conversion failed';
+
+  @override
+  String get errorMusicRecommendationUnavailable =>
+      'Recommendations are temporarily unavailable';
+
+  @override
+  String get errorMediaFormatUnsupported =>
+      'This media format is not supported';
+
+  @override
+  String get errorReadingProgressInvalid =>
+      'Reading progress could not be saved';
+
+  @override
+  String get errorChapterTextUnavailable => 'Chapter text is unavailable';
+
+  @override
+  String get errorBackdropUnsupportedFormat => 'Unsupported wallpaper format';
+
+  @override
+  String get errorBackdropQuotaExceeded => 'Wallpaper storage quota is full';
+
+  @override
+  String get errorBackdropFileTooLarge => 'The wallpaper file is too large';
+
+  @override
+  String get errorBackdropScanUnavailable =>
+      'Security scan is unavailable. Please try again later';
+
+  @override
+  String get errorBackdropMalwareDetected =>
+      'Malware detected, upload rejected';
+
+  @override
+  String get errorBackdropScanFailed =>
+      'The security scan failed, upload rejected';
+
+  @override
+  String get errorTwoFactorInvalidCode => 'Incorrect verification code';
+
+  @override
+  String get errorTwoFactorNotConfigured =>
+      'Two-factor verification is not set up yet';
+
+  @override
+  String get errorTwoFactorAlreadyEnabled =>
+      'Two-factor verification is already enabled';
+
+  @override
+  String get filesOpListVersions => 'View versions';
+
+  @override
+  String get filesOpRestoreVersion => 'Restore version';
+
+  @override
+  String get filesOpSaveVersion => 'Save as new version';
+
+  @override
+  String get filesVersionsTitle => 'File versions';
+
+  @override
+  String get filesVersionsEmpty => 'No history versions yet';
+
+  @override
+  String get filesVersionsRestore => 'Restore';
+
+  @override
+  String get filesVersionsCurrent => 'Current';
+
+  @override
+  String get filesVersionsRestored => 'Version restored';
+
+  @override
+  String get desktopCloseDialogTitle => 'Close OmniNest';
+
+  @override
+  String get desktopCloseDialogBody =>
+      'When minimized to the tray, OmniNest keeps running in the background and the window can be restored from the tray at any time.';
+
+  @override
+  String get desktopCloseDialogMinimize => 'Minimize to tray';
+
+  @override
+  String get desktopCloseDialogExit => 'Exit app';
+
+  @override
+  String get desktopCloseDialogRemember =>
+      'Remember my choice and don\'t ask again';
+
+  @override
+  String get desktopCloseBehaviorTitle => 'Window close behavior';
+
+  @override
+  String get desktopCloseBehaviorAsk => 'Ask every time';
+
+  @override
+  String get desktopCloseBehaviorExit => 'Exit directly';
+
+  @override
+  String get trayShowMainWindow => 'Show Main Window';
+
+  @override
+  String get trayQuit => 'Quit';
+
+  @override
+  String get serverSetupTitle => 'Connect to your OmniNest';
+
+  @override
+  String get serverSetupSubtitle =>
+      'Enter your self-hosted server address; first-time setup starts here';
+
+  @override
+  String get serverSetupAddressLabel => 'Server address';
+
+  @override
+  String get serverSetupAddressHint =>
+      'e.g. 192.168.1.10:8080 or https://nest.example.com';
+
+  @override
+  String get serverSetupAdvanced => 'Advanced options';
+
+  @override
+  String get serverSetupWsLabel => 'Realtime URL (optional)';
+
+  @override
+  String get serverSetupWsHint => 'Derived from the server address by default';
+
+  @override
+  String get serverSetupWebLabel => 'Share page URL (optional)';
+
+  @override
+  String get serverSetupWebHint => 'Derived from the server address by default';
+
+  @override
+  String get serverSetupConnect => 'Connect';
+
+  @override
+  String get serverSetupConnecting => 'Connecting…';
+
+  @override
+  String serverSetupWillConnect(String url) {
+    return 'Will connect to: $url';
+  }
+
+  @override
+  String get serverSetupHttpWarning =>
+      'This is a plaintext HTTP connection; HTTPS is recommended for public networks';
+
+  @override
+  String get serverSetupErrorInvalid =>
+      'The address could not be parsed, please check and retry';
+
+  @override
+  String get serverSetupErrorHttpsOnly =>
+      'This build only allows HTTPS server addresses';
+
+  @override
+  String get serverSetupErrorUnreachable =>
+      'Could not reach the server, check the address and network';
+
+  @override
+  String get serverSetupErrorTimeout =>
+      'Connection timed out, make sure the server is reachable';
+
+  @override
+  String get serverSetupErrorNotOmniNest =>
+      'The target is not an OmniNest server';
+
+  @override
+  String get serverSetupErrorRejected =>
+      'The server returned an unexpected status, check the address';
+
+  @override
+  String get profileSectionServer => 'Server & connection';
+
+  @override
+  String get serverPanelCurrent => 'Current server';
+
+  @override
+  String get serverPanelBadgeCustom => 'Custom';
+
+  @override
+  String get serverPanelBadgePreset => 'Preset (unmodified)';
+
+  @override
+  String get serverPanelBadgeUnconfigured => 'Not configured';
+
+  @override
+  String get serverPanelChange => 'Change server';
+
+  @override
+  String get serverPanelChangeTitle => 'Change server?';
+
+  @override
+  String get serverPanelChangeBody =>
+      'You will be signed out and local session data cleared, then re-enter the server address.';
+
+  @override
+  String get serverPanelChangeConfirm => 'Sign out & change';
+
+  @override
+  String get serverPanelChangeCancel => 'Cancel';
+
+  @override
+  String get adminAuditActionConfigUpdate => 'Config updated';
+
+  @override
+  String get adminAuditActionExternalStorageCreate =>
+      'External storage created';
+
+  @override
+  String get adminAuditActionExternalStorageStatusUpdate =>
+      'External storage status updated';
+
+  @override
+  String get adminAuditActionExternalStorageDelete =>
+      'External storage deleted';
+
+  @override
+  String get adminAuditActionQuotaUpdate => 'Quota updated';
+
+  @override
+  String get adminAuditActionRolePermissionsUpdate =>
+      'Role permissions updated';
+
+  @override
+  String get adminAuditActionTaskRetry => 'Task retried';
+
+  @override
+  String get adminAuditActionUserCreate => 'User created';
+
+  @override
+  String get adminAuditActionUserRolesUpdate => 'User roles updated';
+
+  @override
+  String get adminAuditActionUserRoleUpdate => 'User role changed';
+
+  @override
+  String get adminAuditActionUserStatusUpdate => 'User status updated';
+
+  @override
+  String get adminAuditActionUserDelete => 'User deleted';
+
+  @override
+  String get adminAuditActionSessionRevoke => 'Session revoked';
+
+  @override
+  String get adminAuditActionSessionCleanup => 'Session cleanup';
+
+  @override
+  String get adminAuditActionAuditLogCleanup => 'Audit log cleanup';
+
+  @override
+  String get adminAuditActionLoginAuditCleanup => 'Login log cleanup';
+
+  @override
+  String get adminAuditActionUnknown => 'System action';
+
+  @override
+  String get adminAuditDetailTitle => 'Audit detail';
+
+  @override
+  String get adminAuditFieldAction => 'Action';
+
+  @override
+  String get adminAuditFieldTime => 'Timestamp';
+
+  @override
+  String get adminAuditFieldActor => 'Actor';
+
+  @override
+  String get adminAuditFieldIp => 'Client IP';
+
+  @override
+  String get adminAuditChangeSnapshot => 'Change snapshot';
+
+  @override
+  String get adminAuditOldValue => 'Old value';
+
+  @override
+  String get adminAuditNewValue => 'New value';
+
+  @override
+  String get adminAuditPayload => 'Raw payload';
+
+  @override
+  String get adminAuditPayloadEmpty => 'This entry has no extended payload.';
+
+  @override
+  String get adminCleanupTarget => 'Target';
+
+  @override
+  String get adminCleanupRetention => 'Retention';
+
+  @override
+  String get adminCleanupPreviewCount => 'Estimated rows';
+
+  @override
+  String get adminCleanupPhysicalWarning =>
+      'Records beyond the retention window are physically deleted and cannot be recovered.';
+
+  @override
+  String get adminCleanupExportHint =>
+      'Export the current page as CSV before cleanup to keep a copy.';
+
+  @override
+  String get adminCleanupSessionsHint =>
+      'Only expired and revoked sessions are removed; active sessions are unaffected.';
+
+  @override
+  String get adminCleanupTargetSessions => 'Expired & revoked sessions';
+
+  @override
+  String get adminTaskDetailTitle => 'Task detail';
+
+  @override
+  String get adminTaskFieldHandler => 'Handler';
+
+  @override
+  String get adminTaskFieldQueue => 'Queue';
+
+  @override
+  String get adminTaskFieldRetryCount => 'Retry rounds';
+
+  @override
+  String get adminTaskCancel => 'Cancel task';
+
+  @override
+  String get adminTaskCancelConfirmTitle => 'Cancel this task';
+
+  @override
+  String get adminTaskCancelConfirmMessage =>
+      'The task will stop before execution and cannot be resumed.';
+
+  @override
+  String get adminTaskDiscard => 'Discard';
+
+  @override
+  String get adminTaskDiscardTitle => 'Discard DLQ task';
+
+  @override
+  String get adminTaskDiscardMessage =>
+      'A discarded task reaches a terminal state and can never be retried.';
+
+  @override
+  String get adminTaskStatusDiscarded => 'Discarded';
+
+  @override
+  String get adminTaskStatusRetryWait => 'Retry waiting';
+
+  @override
+  String get adminMetricQueuedReady => 'Queued / ready';
+
+  @override
+  String get adminMetricDlq => 'Dead letter';
+
+  @override
+  String get adminSessionMetricRevoked => 'Revoked';
+
+  @override
+  String get adminSessionClientMix => 'Client mix';
+
+  @override
+  String get adminSessionPlatformWeb => 'Web';
+
+  @override
+  String get adminSessionPlatformPc => 'PC';
+
+  @override
+  String get adminSessionPlatformMobile => 'Mobile';
+
+  @override
+  String notificationUnreadCount(Object count) {
+    return '$count unread';
+  }
+
+  @override
+  String notificationFilterAll(Object count) {
+    return 'All ($count)';
+  }
+
+  @override
+  String notificationFilterUnread(Object count) {
+    return 'Unread ($count)';
+  }
+
+  @override
+  String get notificationFilterAllTooltip => 'View all notifications';
+
+  @override
+  String get notificationFilterUnreadTooltip =>
+      'View unread notifications only';
+
+  @override
+  String notificationTotalSummary(Object count) {
+    return 'TOTAL: $count ITEMS';
+  }
+
+  @override
+  String get notificationPrevPage => 'Previous';
+
+  @override
+  String get notificationNextPage => 'Next';
+
+  @override
+  String get moduleMusicTitle => 'Music';
+
+  @override
+  String get modulePhotosTitle => 'Photos';
+
+  @override
+  String get moduleMoviesTitle => 'Movies';
+
+  @override
+  String musicModuleSubtitle(Object albumCount, Object trackCount) {
+    return '$trackCount tracks · $albumCount albums';
+  }
+
+  @override
+  String photosModuleSubtitle(Object albumCount, Object photoCount) {
+    return '$photoCount photos · $albumCount albums';
+  }
+
+  @override
+  String moviesModuleSubtitle(Object continueCount, Object titleCount) {
+    return '$titleCount titles · $continueCount in progress';
+  }
+
+  @override
+  String get notificationGroupToday => 'TODAY';
+
+  @override
+  String get notificationGroupYesterday => 'YESTERDAY';
+
+  @override
+  String get notificationGroupEarlier => 'EARLIER';
+
+  @override
+  String get notificationSubtitleAllRead => 'All caught up';
+
+  @override
+  String get notificationDeleteConfirmMessage =>
+      'Delete this notification? This cannot be undone.';
+
+  @override
+  String get profileHeaderAccount => 'Account Profile';
+
+  @override
+  String get profileHeaderAppearance => 'Appearance';
+
+  @override
+  String get profileHeaderNotifications => 'Notification Preferences';
+
+  @override
+  String get profileHeaderSecurity => 'Security & Sessions';
+
+  @override
+  String get profileHeaderServer => 'Server Configuration';
+
+  @override
+  String get profileHeaderAbout => 'About';
+
+  @override
+  String get profileSectionAccountSubtitle =>
+      'Manage your basic profile, avatar and account status.';
+
+  @override
+  String get profileSectionAppearanceSubtitle =>
+      'Adjust theme, language, font scale and local backdrop.';
+
+  @override
+  String get profileSectionNotificationsSubtitle =>
+      'Configure notification types and foreground toasts.';
+
+  @override
+  String get profileSectionSecuritySubtitle =>
+      'Manage password, two-factor authentication and active sessions.';
+
+  @override
+  String get profileSectionServerSubtitle =>
+      'View and switch the connected server.';
+
+  @override
+  String get profileSectionAboutSubtitle => 'View system version and updates.';
+
+  @override
+  String get profileGeneralInfoTitle => 'General Information';
+
+  @override
+  String get profileDisplayNameLabel => 'Display Name';
+
+  @override
+  String get profileAvatarHint => 'JPG/PNG/WebP up to 5MB';
+
+  @override
+  String get profileRoleLabel => 'Role';
+
+  @override
+  String get profilePasswordRowTitle => 'Password';
+
+  @override
+  String get profileCredentialsTitle => 'Credentials & 2FA';
+
+  @override
+  String get profileTwoFactorManageAction => 'Manage 2FA';
+
+  @override
+  String get profileActiveSessionsTitle => 'Active Sessions';
+
+  @override
+  String get profileSessionDeviceColumn => 'Device / Browser';
+
+  @override
+  String get profileSessionIpColumn => 'IP Address';
+
+  @override
+  String get profileSessionLoginTimeColumn => 'Signed in';
+
+  @override
+  String get profileSessionExpiresColumn => 'Expires';
+
+  @override
+  String get profileSessionLastActiveColumn => 'Last active';
+
+  @override
+  String get profileSessionStatusColumn => 'Status';
+
+  @override
+  String get profileSessionActionColumn => 'Actions';
+
+  @override
+  String get profileSessionCurrent => 'Current';
+
+  @override
+  String get notificationActionViewFiles => 'View files';
+
+  @override
+  String get notificationActionOpenMedia => 'Open media center';
+
+  @override
+  String get notificationActionManageSessions => 'Manage sessions';
+
+  @override
+  String get notificationActionViewShares => 'View shares';
+
+  @override
+  String get profileUpdateFailed => 'Failed to save profile';
+
+  @override
+  String get profileUpdateSuccess => 'Profile updated';
+
+  @override
+  String get notificationCenterTitle => 'Notifications';
+
+  @override
+  String get profileBreadcrumbTitle => 'Profile & Settings';
+
+  @override
+  String get videoAutoImportStatusUnknown =>
+      'Import result could not be confirmed yet; check the notification and task center later';
+
+  @override
+  String get readerAnnotationSaveFailed =>
+      'Failed to save the annotation, please retry';
+
+  @override
+  String get readerAnnotationDeleteFailed =>
+      'Failed to delete the annotation, please retry';
+
+  @override
+  String get musicFavoriteToggleFailed =>
+      'Failed to toggle favorite, please retry';
+
+  @override
+  String get readerImportCandidatesLoadFailed =>
+      'Failed to load import candidates';
+
+  @override
+  String syncReplayPendingWarning(Object count) {
+    return '$count offline operations are pending and will retry automatically when back online';
+  }
+
+  @override
+  String get commonRetry => 'Retry';
+
+  @override
+  String get profileEditProfile => 'Edit Profile';
+
+  @override
+  String get profileEditProfileTitle => 'Edit Profile';
+
+  @override
+  String profileSessionLoginAt(Object time) {
+    return 'Signed in $time';
+  }
+
+  @override
+  String get profileDisplayNameInvalid =>
+      'Display name must be 1-120 characters';
+
+  @override
+  String get profileEmailInvalid => 'Invalid email format';
+
+  @override
+  String profileSessionExpiresAt(Object time) {
+    return 'Expires $time';
+  }
+
+  @override
+  String get notificationTypeMediaImportCompleted => 'Media import completed';
+
+  @override
+  String get notificationTypeMediaImportCompletedDesc =>
+      'An uploaded file was imported into the library automatically';
+
+  @override
+  String get notificationTypeMediaImportFailed => 'Media import failed';
+
+  @override
+  String get notificationTypeMediaImportFailedDesc =>
+      'An uploaded file could not be imported automatically';
+
+  @override
+  String get notificationMediaImportCompleted =>
+      'Media was imported into the library automatically';
+
+  @override
+  String notificationMediaImportCompletedWithName(Object fileName) {
+    return 'File $fileName was imported into the library automatically';
+  }
+
+  @override
+  String get notificationMediaImportFailed =>
+      'Automatic media import failed; check the file and re-upload or import manually';
+
+  @override
+  String notificationMediaImportFailedWithName(Object fileName) {
+    return 'Automatic import of file $fileName failed; check the file and re-upload or import manually';
+  }
+
+  @override
+  String get favoriteAdded => 'Added to favorites';
+
+  @override
+  String get favoriteRemoved => 'Removed from favorites';
+
+  @override
+  String get mobileNavLibrary => 'Library';
+
+  @override
+  String get mobileSpaceLibrarySubtitle => 'Your media, together';
+
+  @override
+  String get mobileSpaceReaderSubtitle => 'A quieter space';
+
+  @override
+  String get mobileSpaceFilesSubtitle => 'Your digital workspace';
+
+  @override
+  String get toolsEntryLabel => 'Workspace tools';
+
+  @override
+  String get toolsEntrySub => 'Low-frequency management pages';
+
+  @override
+  String get toolsTitle => 'Workspace tools';
+
+  @override
+  String get toolsSubtitle =>
+      'Pages that have no first-level entry inside their module';
+
+  @override
+  String get toolsIntroEyebrow => 'Supplementary list';
+
+  @override
+  String get toolsIntroTitle => 'The less-used entries, in one place.';
+
+  @override
+  String get toolsIntroBody =>
+      'Manage files, films, music and this server without leaving the interface you already know.';
+
+  @override
+  String get toolsGroupFiles => 'Files';
+
+  @override
+  String get toolsGroupMedia => 'Movies & music';
+
+  @override
+  String get toolsGroupPhotosReader => 'Photos & reader';
+
+  @override
+  String get toolsVideoCollectionsDetail => 'Curated sets and seasons';
+
+  @override
+  String get toolsMusicScanDetail => 'Sources, scans and matches';
+
+  @override
+  String get toolsScraperDetail => 'Matched, pending and failed';
+
+  @override
+  String get accountSheetTitle => 'Account';
+
+  @override
+  String get accountEntryNotifications => 'Notifications';
+
+  @override
+  String get accountEntryDevices => 'Devices';
+
+  @override
+  String get accountEntryEnvironment => 'Backdrop library';
+
+  @override
+  String get accountEntrySettings => 'Settings';
+
+  @override
+  String get accountManageAccount => 'Manage account';
+
+  @override
+  String get accountStatusHealthy => 'OmniNest is healthy';
+
+  @override
+  String get accountStatusOffline => 'OmniNest is offline';
+
+  @override
+  String get librarySegmentAll => 'All';
+
+  @override
+  String get libraryBannerEyebrow => 'Recent album';
+
+  @override
+  String libraryBannerPhotoCount(int count) {
+    return '$count photos';
+  }
+
+  @override
+  String get libraryOpenAlbum => 'View album';
+
+  @override
+  String get libraryRecentPhotosTitle => 'Recent photos';
+
+  @override
+  String get libraryJustInEyebrow => 'Just in';
+
+  @override
+  String get libraryCollectionEyebrow => 'Your collection';
+
+  @override
+  String get librarySectionFavorites => 'Favorite photos';
+
+  @override
+  String get libraryNoFavorites => 'No favorite photos yet';
+
+  @override
+  String libraryPhotosMore(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get libraryPickUpEyebrow => 'Pick up where you left off';
+
+  @override
+  String get libraryContinueWatchingTitle => 'Continue watching';
+
+  @override
+  String get libraryNoMovies => 'Nothing to watch yet';
+
+  @override
+  String libraryMinutesLeft(int minutes) {
+    return '$minutes min left';
+  }
+
+  @override
+  String get libraryMadeForNowEyebrow => 'Made for this moment';
+
+  @override
+  String get libraryRecentListeningTitle => 'Recent listening';
+
+  @override
+  String get libraryNoMusic => 'No music in your library yet';
+
+  @override
+  String get searchMobilePlaceholder => 'Search everything';
+
+  @override
+  String get searchScopesTitle => 'Search across OmniNest';
+
+  @override
+  String get searchRecentQueries => 'Recent searches';
+
+  @override
+  String get searchLoadFailed => 'Search is unavailable right now';
+
+  @override
+  String get searchCommandHome => 'Go to Home';
+
+  @override
+  String get searchCommandLibrary => 'Go to Library';
+
+  @override
+  String get searchCommandReader => 'Go to Reader';
+
+  @override
+  String get searchCommandFiles => 'Go to Files';
+
+  @override
+  String get searchCommandPhotos => 'Open Photos';
+
+  @override
+  String get searchCommandMovies => 'Open Movies';
+
+  @override
+  String get searchCommandMusic => 'Open Music';
+
+  @override
+  String get spatialFocusEyebrow => 'Continue where you left off';
+
+  @override
+  String get spatialNowPlaying => 'Now playing';
+
+  @override
+  String get spatialResume => 'Resume';
+
+  @override
+  String get spatialPlay => 'Play';
+
+  @override
+  String get spatialRecentlyEyebrow => 'Recently';
+
+  @override
+  String get spatialRecentlyTitle => 'Recently touched';
+
+  @override
+  String get spatialActionFind => 'Find anything';
+
+  @override
+  String get spatialActionAddMedia => 'Add media';
+
+  @override
+  String get spatialViewLibrary => 'View library';
+
+  @override
+  String spatialFocusReadingSub(String chapter, int percent) {
+    return 'Chapter $chapter · $percent%';
+  }
+
+  @override
+  String spatialFocusWatchingSub(int percent) {
+    return '$percent% watched';
+  }
+
+  @override
+  String get spatialRecentPhotos => 'New photos';
+
+  @override
+  String get spatialRecentFiles => 'Recent files';
+
+  @override
+  String get readerSpaceContinueEyebrow => 'Continue reading';
+
+  @override
+  String get readerSpaceInsightEyebrow => 'This week';
+
+  @override
+  String readerInsightFocus(String duration) {
+    return '$duration in focus this week';
+  }
+
+  @override
+  String readerInsightStreak(int count) {
+    return '$count-day streak';
+  }
+
+  @override
+  String readerInsightBooksFinished(int count) {
+    return '$count books finished in total';
+  }
+
+  @override
+  String get readerReadNextEyebrow => 'Your shelves';
+
+  @override
+  String get readerReadNextTitle => 'Read next';
+
+  @override
+  String get readerSpaceAllBooks => 'All books';
+
+  @override
+  String filesStorageQuotaLine(String used, String total) {
+    return '$used of $total used';
+  }
+
+  @override
+  String get spatialFocusMorning => 'CONTINUE YOUR MORNING';
+
+  @override
+  String get spatialFocusAfternoon => 'CONTINUE YOUR AFTERNOON';
+
+  @override
+  String get spatialFocusEvening => 'CONTINUE YOUR EVENING';
+
+  @override
+  String spatialPlayingFrom(String source) {
+    return 'Playing from $source';
+  }
+
+  @override
+  String get filesHomeTabMyFiles => 'My files';
+
+  @override
+  String get filesViewList => 'List view';
+
+  @override
+  String get filesViewGrid => 'Grid view';
+
+  @override
+  String weatherSheetLocationEyebrow(String city) {
+    return '$city · LOCAL WEATHER';
+  }
+
+  @override
+  String weatherSheetHourRange(int count, int low, int high) {
+    return 'Between $low° and $high° over the next $count hours.';
+  }
+
+  @override
+  String get weatherHumidityDry => 'Dry';
+
+  @override
+  String get weatherHumidityComfortable => 'Comfortable';
+
+  @override
+  String get weatherHumidityHumid => 'Humid';
+
+  @override
+  String get weatherHourNow => 'Now';
+
+  @override
+  String get weatherMetricWind => 'Wind';
+
+  @override
+  String get weatherMetricHumidity => 'Humidity';
+
+  @override
+  String get weatherMetricAirQuality => 'Air quality';
+
+  @override
+  String get weatherMetricSunset => 'Sunset';
+
+  @override
+  String weatherSunsetIn(int minutes) {
+    return '$minutes min away';
+  }
+
+  @override
+  String get weatherForecastTitle => 'Next three days';
+
+  @override
+  String get weatherSettingsAction => 'Visual environment';
+
+  @override
+  String get weatherDayTomorrow => 'Tomorrow';
+
+  @override
+  String get weatherSheetEnvironmentNote =>
+      'Your visual environment is following local light and weather.';
+
+  @override
+  String get bookDetailInLibrary => 'IN YOUR LIBRARY';
+
+  @override
+  String get bookDetailHeader => 'Book details';
+
+  @override
+  String get readerDetailActionMetadataDesc =>
+      'Title, author, cover and summary';
+
+  @override
+  String get readerDetailActionReparseDesc =>
+      'Rebuild cover, metadata and chapters';
+
+  @override
+  String bookDetailMeta(String type, int year) {
+    return '$type · added $year';
+  }
+
+  @override
+  String get bookDetailContinue => 'Continue reading';
+
+  @override
+  String get bookDetailStart => 'Start reading';
+
+  @override
+  String get bookDetailMetadata => 'Edit metadata';
+
+  @override
+  String get bookDetailProgressLabel => 'Reading progress';
+
+  @override
+  String bookDetailLastOpened(String date) {
+    return 'Last opened $date';
+  }
+
+  @override
+  String get bookDetailAbout => 'About this book';
+
+  @override
+  String get bookDetailShowMore => 'Show more';
+
+  @override
+  String get bookDetailShowLess => 'Show less';
+
+  @override
+  String get bookDetailContents => 'Contents';
+
+  @override
+  String get bookDetailChapters => 'Chapters';
+
+  @override
+  String bookDetailChapterCount(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String bookDetailChapterPages(int count) {
+    return '$count pages';
+  }
+
+  @override
+  String get accountStatusSyncNote => 'Last synced just now';
+
+  @override
+  String get accountStatusOfflineNote => 'Reconnecting when network returns';
+
+  @override
+  String accountEntryNotificationsSub(int count) {
+    return '$count new updates';
+  }
+
+  @override
+  String get accountEntryNotificationsNone => 'All caught up';
+
+  @override
+  String accountEntryDevicesSub(int count) {
+    return '$count devices online';
+  }
+
+  @override
+  String get accountEntryEnvironmentDefault => 'Default environment';
+
+  @override
+  String get accountEntrySettingsSub => 'Appearance, privacy, storage';
+
+  @override
+  String get libraryEmptyPhotosTitle => 'No photos yet';
+
+  @override
+  String get libraryEmptyPhotosMessage =>
+      'Import or upload to see your moments here.';
+
+  @override
+  String get libraryEmptyFavoritesTitle => 'No favorites yet';
+
+  @override
+  String get libraryEmptyFavoritesMessage =>
+      'Long-press a photo to favorite it.';
+
+  @override
+  String get libraryEmptyMoviesTitle => 'Nothing to watch';
+
+  @override
+  String get libraryEmptyMoviesMessage =>
+      'Register a library source and scan to build your cinema.';
+
+  @override
+  String get libraryEmptyMusicTitle => 'No music yet';
+
+  @override
+  String get libraryEmptyMusicMessage =>
+      'Import tracks and they will land right here.';
+
+  @override
+  String get searchEmptyTitle => 'No matches yet';
+
+  @override
+  String get searchEmptyMessage => 'Try a broader search across OmniNest.';
+
+  @override
+  String filesPaginationTotal(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String filesLoadMore(Object loaded, Object total) {
+    return 'Load more';
+  }
+
+  @override
+  String get filesPaginationEnd => 'End of list';
+
+  @override
+  String get filesLoadMoreAction => 'Load more';
+
+  @override
+  String get readerContinueChapter => 'Continue chapter';
+
+  @override
+  String get libraryEmptyBooksTitle => 'No books yet';
+
+  @override
+  String get libraryEmptyBooksMessage =>
+      'Import EPUB or comics to fill your shelves.';
+
+  @override
+  String get readerRecentTitle => 'Recently read';
+
+  @override
+  String get readerNotesEyebrow => 'Recent notes';
+
+  @override
+  String get readerNotesTitle => 'Ideas worth returning to';
+
+  @override
+  String get weatherSheetLocalFallback => 'Local weather';
+
+  @override
+  String get weatherStatusDisabled =>
+      'Weather is disabled. Ask an administrator to enable it in the config center.';
+
+  @override
+  String get weatherSettingsTitle => 'Weather';
+
+  @override
+  String get weatherSettingsSubtitle =>
+      'Choose a city for the local forecast, or use this device\'s location.';
+
+  @override
+  String get weatherSettingsLocation => 'Preferred city';
+
+  @override
+  String get weatherSettingsLocationHint => 'City or region name';
+
+  @override
+  String get weatherSettingsSaveLocation => 'Save location';
+
+  @override
+  String get weatherSettingsUseDevice => 'Use device location';
+
+  @override
+  String get weatherSettingsSaved => 'Weather location saved';
+
+  @override
+  String get weatherSettingsCurrentConditions => 'Current conditions';
+
+  @override
+  String get weatherSettingsLoading => 'Loading weather…';
+
+  @override
+  String get weatherStatusLocationMissing =>
+      'Location not found. Update your preferred city in settings.';
+
+  @override
+  String get weatherStatusUpstreamFailed =>
+      'Weather request failed. Please try again later.';
+
+  @override
+  String get weatherStatusRetry => 'Retry';
+
+  @override
+  String weatherSheetFeelsLike(int temp) {
+    return 'Feels like $temp°';
+  }
+
+  @override
+  String get musicNowPlayingMoreActions => 'More actions';
+
+  @override
+  String get musicSourceSyncError =>
+      'Platform sync failed; the local library keeps playing.';
+
+  @override
+  String get musicImmersiveEyebrow => 'Music · Immersive';
+
+  @override
+  String get musicNowPlayingEyebrow => 'NOW PLAYING';
+
+  @override
+  String get musicLiveLyrics => 'LIVE LYRICS';
+
+  @override
+  String get musicFullLyrics => 'Full lyrics';
+
+  @override
+  String get spatialStartListening => 'Nothing playing yet';
+
+  @override
+  String get spatialStartTitle => 'Start listening';
+
+  @override
+  String get spatialStartSubtitle =>
+      'Pick up where you left off, or begin something new';
+
+  @override
+  String searchResultCount(int count) {
+    return '$count RESULTS ACROSS OMNINEST';
+  }
+
+  @override
+  String get desktopToggleSidebar => 'Toggle sidebar';
+
+  @override
+  String get desktopBack => 'Back';
+
+  @override
+  String get desktopForward => 'Forward';
+
+  @override
+  String get desktopSearchPill => 'Search library, files, or run a command';
+
+  @override
+  String get desktopToggleTheme => 'Toggle theme';
+
+  @override
+  String get desktopBackgroundTasks => 'Background tasks';
+
+  @override
+  String get desktopNotifications => 'Notifications';
+
+  @override
+  String get desktopDetailsPanel => 'Details panel';
+
+  @override
+  String get desktopAccount => 'Account';
+
+  @override
+  String get desktopMinimize => 'Minimize';
+
+  @override
+  String get desktopMaximize => 'Maximize';
+
+  @override
+  String get desktopRestoreWindow => 'Restore';
+
+  @override
+  String get desktopCloseWindow => 'Close';
+
+  @override
+  String get desktopRoleOwner => 'Owner';
+
+  @override
+  String get desktopRoleAdmin => 'Administrator';
+
+  @override
+  String get desktopRoleMember => 'Member';
+
+  @override
+  String get desktopNavHome => 'Home';
+
+  @override
+  String get desktopNavMovies => 'Movies';
+
+  @override
+  String get desktopNavPhotos => 'Photos';
+
+  @override
+  String get desktopNavMusic => 'Music';
+
+  @override
+  String get desktopNavReader => 'Reader';
+
+  @override
+  String get desktopNavFiles => 'Files';
+
+  @override
+  String get desktopNavAdmin => 'Admin';
+
+  @override
+  String get desktopNavSettings => 'Settings';
+
+  @override
+  String get desktopPinned => 'Pinned';
+
+  @override
+  String get desktopPinnedContinue => 'Continue watching';
+
+  @override
+  String get desktopPinnedFavorites => 'Favorites';
+
+  @override
+  String get desktopPinnedRecent => 'Recently added';
+
+  @override
+  String get desktopStorage => 'Storage';
+
+  @override
+  String desktopStorageUsage(String used, String total) {
+    return '$used of $total';
+  }
+
+  @override
+  String desktopStorageUnlimited(String used) {
+    return '$used used · no quota';
+  }
+
+  @override
+  String get desktopOfflineBar =>
+      'You are offline. Playback progress and reading position are saved locally and sync when you reconnect.';
+
+  @override
+  String get desktopDockDetails => 'Details';
+
+  @override
+  String get desktopDockQueue => 'Queue';
+
+  @override
+  String get desktopDockEmpty =>
+      'Select a title, track, or file to see its details here.';
+
+  @override
+  String get desktopDockNowPlaying => 'Now playing';
+
+  @override
+  String get desktopDockClear => 'Clear';
+
+  @override
+  String get desktopDockQueueEmpty => 'The queue is empty.';
+
+  @override
+  String get desktopClosePanel => 'Close panel';
+
+  @override
+  String get desktopCast => 'Cast';
+
+  @override
+  String get desktopFileSection => 'File';
+
+  @override
+  String get desktopPlayNext => 'Play next';
+
+  @override
+  String get desktopAddToQueue => 'Add to queue';
+
+  @override
+  String get desktopStartReading => 'Start reading';
+
+  @override
+  String get desktopWatchlist => 'Watchlist';
+
+  @override
+  String get desktopPlay => 'Play';
+
+  @override
+  String get desktopPause => 'Pause';
+
+  @override
+  String get desktopPrevious => 'Previous';
+
+  @override
+  String get desktopNext => 'Next';
+
+  @override
+  String get desktopFavorite => 'Favorite';
+
+  @override
+  String get desktopMute => 'Mute';
+
+  @override
+  String get desktopVolume => 'Volume';
+
+  @override
+  String get desktopOpenNowPlaying => 'Open Now Playing';
+
+  @override
+  String get desktopExpand => 'Expand';
+
+  @override
+  String get desktopPlayInOrder => 'Play in order';
+
+  @override
+  String get desktopShuffle => 'Shuffle';
+
+  @override
+  String get desktopRepeatOne => 'Repeat one';
+
+  @override
+  String get desktopClickToSwitch => 'click to switch';
+
+  @override
+  String get desktopNothingPlaying => 'Nothing playing';
+
+  @override
+  String get desktopNothingPlayingHint => 'Pick a track in Music to start.';
+
+  @override
+  String get desktopMarkAllRead => 'Mark all read';
+
+  @override
+  String desktopUnreadSummary(int n) {
+    return '$n unread';
+  }
+
+  @override
+  String get desktopFilterAll => 'All';
+
+  @override
+  String get desktopFilterUnread => 'Unread';
+
+  @override
+  String get desktopGroupToday => 'Today';
+
+  @override
+  String get desktopGroupEarlier => 'Earlier';
+
+  @override
+  String get desktopNothingUnread => 'Nothing unread. Quiet is good.';
+
+  @override
+  String get desktopNotificationSettings => 'Choose which types you get';
+
+  @override
+  String get desktopClearAll => 'Clear all';
+
+  @override
+  String get desktopAllTasks => 'All tasks';
+
+  @override
+  String desktopTasksSummary(int active, int failed) {
+    return '$active active · $failed failed';
+  }
+
+  @override
+  String get desktopNothingRunning => 'Nothing running.';
+
+  @override
+  String get desktopRetry => 'Retry';
+
+  @override
+  String get desktopKeyboardShortcuts => 'Keyboard shortcuts';
+
+  @override
+  String get desktopBackdropLibrary => 'Backdrop library';
+
+  @override
+  String get desktopSecuritySessions => 'Security & sessions';
+
+  @override
+  String get desktopAdminConsole => 'Admin console';
+
+  @override
+  String get desktopSignOut => 'Sign out';
+
+  @override
+  String get desktopReference => 'Reference';
+
+  @override
+  String get desktopTaskStatusRunning => 'running';
+
+  @override
+  String get desktopTaskStatusQueued => 'queued';
+
+  @override
+  String get desktopTaskStatusPending => 'pending';
+
+  @override
+  String get desktopTaskStatusCompleted => 'succeeded';
+
+  @override
+  String get desktopTaskStatusFailed => 'failed';
+
+  @override
+  String get desktopTaskStatusCancelled => 'cancelled';
+
+  @override
+  String get desktopCommandPalette => 'Command palette';
+
+  @override
+  String get desktopPaletteHint => 'Search or type a command…';
+
+  @override
+  String get desktopSearchScope => 'Search scope';
+
+  @override
+  String get desktopScopeAll => 'All';
+
+  @override
+  String get desktopScopeMovies => 'Movies';
+
+  @override
+  String get desktopScopePhotos => 'Photos';
+
+  @override
+  String get desktopScopeMusic => 'Music';
+
+  @override
+  String get desktopScopeFiles => 'Files';
+
+  @override
+  String get desktopScopeReader => 'Reader';
+
+  @override
+  String get desktopGroupGoTo => 'Go to';
+
+  @override
+  String get desktopGroupActions => 'Actions';
+
+  @override
+  String desktopPaletteEmpty(String query) {
+    return 'No results for “$query”';
+  }
+
+  @override
+  String get desktopPaletteIdleEmpty => 'Nothing in this scope yet.';
+
+  @override
+  String get desktopSearchEverything => 'Search everything';
+
+  @override
+  String get desktopPaletteNavigate => 'navigate';
+
+  @override
+  String get desktopPaletteOpen => 'open';
+
+  @override
+  String get desktopPaletteClose => 'close';
+
+  @override
+  String get desktopActionToggleSidebar => 'Toggle sidebar';
+
+  @override
+  String get desktopActionToggleDetails => 'Toggle details panel';
+
+  @override
+  String get desktopActionSwitchToLight => 'Switch to light theme';
+
+  @override
+  String get desktopActionSwitchToDark => 'Switch to dark theme';
+
+  @override
+  String get desktopActionOpenAppearance => 'Appearance settings';
+
+  @override
+  String get desktopActionPlaybackToggle => 'Play / pause';
+
+  @override
+  String get desktopActionNextTrack => 'Next track';
+
+  @override
+  String get desktopActionOpenNowPlaying => 'Open Now Playing';
+
+  @override
+  String get desktopActionShortcuts => 'Keyboard shortcuts';
+
+  @override
+  String get desktopActionSignOut => 'Sign out';
+
+  @override
+  String get desktopShortcutsNavigation => 'Navigation';
+
+  @override
+  String get desktopShortcutsInterface => 'Interface';
+
+  @override
+  String get desktopShortcutsPlayback => 'Playback';
+
+  @override
+  String get desktopShortcutsFiles => 'Files';
+
+  @override
+  String get desktopShortcutPalette => 'Command palette';
+
+  @override
+  String get desktopShortcutGoTo => 'Go to Home … Files';
+
+  @override
+  String get desktopShortcutSettings => 'Settings';
+
+  @override
+  String get desktopShortcutBackForward => 'Back / Forward';
+
+  @override
+  String get desktopShortcutSidebar => 'Toggle sidebar';
+
+  @override
+  String get desktopShortcutDetails => 'Toggle details panel';
+
+  @override
+  String get desktopShortcutThisSheet => 'This sheet';
+
+  @override
+  String get desktopShortcutCloseOverlay => 'Close overlay';
+
+  @override
+  String get desktopShortcutPlayPause => 'Play / pause';
+
+  @override
+  String get desktopShortcutNextPrev => 'Next / previous track';
+
+  @override
+  String get desktopShortcutFullscreen => 'Full screen';
+
+  @override
+  String get desktopShortcutSelectAll => 'Select all';
+
+  @override
+  String get desktopShortcutRename => 'Rename';
+
+  @override
+  String get desktopShortcutDelete => 'Move to recycle';
+
+  @override
+  String get desktopShortcutOpenItem => 'Open';
+
+  @override
+  String get desktopGreetingMorning => 'Good morning';
+
+  @override
+  String get desktopGreetingAfternoon => 'Good afternoon';
+
+  @override
+  String get desktopGreetingEvening => 'Good evening';
+
+  @override
+  String get desktopGreetingNight => 'Still up';
+
+  @override
+  String desktopGreeting(String greeting, String name) {
+    return '$greeting, $name';
+  }
+
+  @override
+  String desktopHomeLeadResume(int count, String title) {
+    return '$count items in your library. “$title” is ready to resume.';
+  }
+
+  @override
+  String desktopHomeLeadQuiet(int count) {
+    return '$count items in your library, all quiet and in order.';
+  }
+
+  @override
+  String desktopResumeTitle(String title) {
+    return 'Resume $title';
+  }
+
+  @override
+  String get desktopStartListening => 'Start listening';
+
+  @override
+  String get desktopStatLibrary => 'Library';
+
+  @override
+  String get desktopStatListening => 'Listening';
+
+  @override
+  String get desktopStatReading => 'Reading streak';
+
+  @override
+  String get desktopStatDays => 'days';
+
+  @override
+  String desktopStatLongestStreakCaption(int days) {
+    return 'Longest: $days days';
+  }
+
+  @override
+  String get desktopStatStorage => 'Storage';
+
+  @override
+  String desktopStatItems(int n) {
+    return '$n items';
+  }
+
+  @override
+  String get desktopStatThisWeek => 'this week';
+
+  @override
+  String desktopStatInProgress(int n) {
+    return '$n in progress';
+  }
+
+  @override
+  String desktopStatOfTotal(String total) {
+    return 'of $total';
+  }
+
+  @override
+  String get desktopStatNoQuota => 'no quota';
+
+  @override
+  String get desktopContinueWatching => 'Continue watching';
+
+  @override
+  String get desktopAllMovies => 'All movies';
+
+  @override
+  String get desktopEveningListening => 'Made for this moment';
+
+  @override
+  String get desktopOpenMusic => 'Open music';
+
+  @override
+  String get desktopCurrentlyReading => 'Currently reading';
+
+  @override
+  String get desktopOpenReader => 'Reader';
+
+  @override
+  String get desktopRecentPhotos => 'Recent photos';
+
+  @override
+  String get desktopOpenPhotos => 'Open Photos';
+
+  @override
+  String get desktopRecentFiles => 'Recent files';
+
+  @override
+  String get desktopOpenFiles => 'Open Files';
+
+  @override
+  String get desktopActivity => 'Activity';
+
+  @override
+  String get desktopFreshArrivals => 'Fresh arrivals';
+
+  @override
+  String get desktopPickUpWhereYouLeft => 'Pick up where you left';
+
+  @override
+  String get desktopBooksEyebrow => 'Books';
+
+  @override
+  String get desktopContinue => 'Continue';
+
+  @override
+  String desktopProgressPercent(int n) {
+    return '$n%';
+  }
+
+  @override
+  String desktopPercentLeft(int n) {
+    return '$n% left';
+  }
+
+  @override
+  String desktopChapterLabel(String title) {
+    return 'Chapter · $title';
+  }
+
+  @override
+  String get desktopHomeEmptyContinue =>
+      'Nothing in progress. Open Movies to start something.';
+
+  @override
+  String get desktopHomeEmptyPhotos => 'No photos yet.';
+
+  @override
+  String get desktopHomeEmptyFiles => 'No recent files.';
+
+  @override
+  String get desktopHomeEmptyActivity => 'No recent activity.';
+
+  @override
+  String get desktopHomeEmptyMusic =>
+      'No tracks yet. Scan your music library to begin.';
+
+  @override
+  String get desktopHomeEmptyBook => 'Nothing on the shelf yet.';
+
+  @override
+  String get desktopWeatherUnavailable => 'Weather unavailable';
+
+  @override
+  String get desktopWeatherReading => 'Reading the sky…';
+
+  @override
+  String get desktopWeatherLive => 'Live';
+
+  @override
+  String get desktopWeatherStale => 'Offline · cached';
+
+  @override
+  String get desktopWeatherRefresh => 'Refresh weather';
+
+  @override
+  String desktopWeatherHighLow(int hi, int lo) {
+    return 'H $hi° · L $lo°';
+  }
+
+  @override
+  String desktopWeatherFeels(int n) {
+    return 'Feels like $n°';
+  }
+
+  @override
+  String get desktopWeatherDay => 'Day';
+
+  @override
+  String get desktopWeatherNight => 'Night';
+
+  @override
+  String desktopWeatherWind(String value) {
+    return '$value km/h';
+  }
+
+  @override
+  String desktopWeatherHumidity(String value) {
+    return '$value%';
+  }
+
+  @override
+  String desktopItemCount(int n) {
+    return '$n items';
+  }
+
+  @override
+  String desktopFolderItemCount(int n) {
+    return '$n items';
+  }
+
+  @override
+  String desktopPlayTitle(String title) {
+    return 'Play $title';
+  }
+
+  @override
+  String get desktopOpenDetails => 'Details';
+
+  @override
+  String get desktopQuickLook => 'Quick look in side panel';
+
+  @override
+  String get desktopMoreActions => 'More';
+
+  @override
+  String get desktopAppearance => 'Appearance';
+
+  @override
+  String get desktopAppearanceHint =>
+      'Theme, accent and atmosphere for this device.';
+
+  @override
+  String get desktopTheme => 'Theme';
+
+  @override
+  String get desktopThemeDark => 'Dark';
+
+  @override
+  String get desktopThemeLight => 'Light';
+
+  @override
+  String get desktopThemeSystem => 'System';
+
+  @override
+  String get desktopAccent => 'Accent';
+
+  @override
+  String get desktopAccentSage => 'Sage';
+
+  @override
+  String get desktopAccentMist => 'Mist';
+
+  @override
+  String get desktopAccentCopper => 'Copper';
+
+  @override
+  String get desktopAccentIris => 'Iris';
+
+  @override
+  String get desktopUndo => 'Undo';
+
+  @override
+  String get desktopShortcutSeek => 'Seek 5s';
+
+  @override
+  String get desktopAccentHint =>
+      'Soft, low-saturation tones tuned for long sessions.';
+
+  @override
+  String get desktopAtmosphere => 'Atmosphere';
+
+  @override
+  String get desktopAmbientLight => 'Ambient light';
+
+  @override
+  String get desktopAmbientHint => 'Blurred artwork glow behind the interface';
+
+  @override
+  String get desktopReduceMotion => 'Reduce motion';
+
+  @override
+  String get desktopReduceMotionHint => 'Disable parallax and floating drift';
+
+  @override
+  String get desktopCompactDensity => 'Compact density';
+
+  @override
+  String get desktopCompactHint => 'Tighter rows and smaller sidebar';
+
+  @override
+  String get desktopLanguage => 'Language';
+
+  @override
+  String get desktopLanguageHint => 'Applies at once, no restart';
+
+  @override
+  String get desktopLanguageAndText => 'Language & text';
+
+  @override
+  String get desktopLanguageChinese => 'Chinese (Simplified)';
+
+  @override
+  String get desktopLanguageChanged => 'Language changed';
+
+  @override
+  String get desktopProfileDisplayNameInvalid =>
+      'Display name must be 1–40 characters';
+
+  @override
+  String get desktopProfileAvatarSizeError => 'Photos must be under 2 MB';
+
+  @override
+  String get desktopTextSize => 'Text size';
+
+  @override
+  String get desktopTextSizeHint => 'Scales the whole interface';
+
+  @override
+  String get desktopDone => 'Done';
+
+  @override
+  String get desktopCancel => 'Cancel';
+
+  @override
+  String desktopPercentValue(int n) {
+    return '$n%';
+  }
+
+  @override
+  String get desktopWelcomeBack => 'Welcome back';
+
+  @override
+  String get desktopSignIn => 'Sign in';
+
+  @override
+  String get desktopUsername => 'Username';
+
+  @override
+  String get desktopPassword => 'Password';
+
+  @override
+  String get desktopAuthArtTitle =>
+      'Everything you keep, quietly in one place.';
+
+  @override
+  String get desktopAuthArtSubtitle =>
+      'Movies, photos, music, books and files from your own server.';
+
+  @override
+  String get desktopSetUpNewServer => 'Set up a new server';
+
+  @override
+  String get desktopTwoFactor => 'Two-factor';
+
+  @override
+  String get desktopEnterYourCode => 'Enter your code';
+
+  @override
+  String get desktopAuthCodeHint =>
+      'Open your authenticator app and type the 6-digit code.';
+
+  @override
+  String get desktopBackToSignIn => 'Back to sign in';
+
+  @override
+  String get desktopVerifying => 'Verifying…';
+
+  @override
+  String get desktopRouteError => 'Something went wrong on this page.';
+
+  @override
+  String get desktopRouteRetry => 'Try again';
+
+  @override
+  String get desktopQueueHint => 'Drag to reorder · double-click to play';
+
+  @override
+  String desktopStatLibrarySub(int photos, int movies) {
+    return '$photos photos · $movies titles';
+  }
+
+  @override
+  String desktopStatListeningSub(int n) {
+    return '$n plays recently';
+  }
+
+  @override
+  String get desktopForYou => 'For you';
+
+  @override
+  String get desktopSortRecent => 'Recent';
+
+  @override
+  String get desktopSortRating => 'Rating';
+
+  @override
+  String get desktopSortYear => 'Year';
+
+  @override
+  String get desktopToastQueueCleared => 'Queue cleared';
+
+  @override
+  String get desktopToastAllRead => 'All caught up';
+
+  @override
+  String get desktopToastNotificationsCleared => 'Notifications cleared';
+
+  @override
+  String get desktopPhotosLibrary => 'Library';
+
+  @override
+  String desktopPhotosCount(int photos, int videos) {
+    return '$photos photos · $videos videos';
+  }
+
+  @override
+  String desktopPhotosAlbumDetailCaption(int count) {
+    return '$count photos · an album is a collection; deleting it keeps the photos.';
+  }
+
+  @override
+  String get desktopPhotosAlbumDuplicate =>
+      'An album with this name already exists';
+
+  @override
+  String desktopPhotosAlbumCreatedWithPhotos(String name, int count) {
+    return 'Album \"$name\" created with $count photos';
+  }
+
+  @override
+  String get desktopPhotosAlbumCollectionNote =>
+      'An album is a collection. Deleting it never deletes the photos.';
+
+  @override
+  String desktopMusicHeadline(int tracks, int albums) {
+    return '$tracks tracks · $albums albums';
+  }
+
+  @override
+  String get desktopMusicTracks => 'Tracks';
+
+  @override
+  String get desktopRecentlyAdded => 'Recently added';
+
+  @override
+  String get desktopMusicLibraryEyebrow => 'Your library';
+
+  @override
+  String get desktopSeeAll => 'See all';
+
+  @override
+  String get desktopUpNext => 'Up next';
+
+  @override
+  String get desktopOpenQueue => 'Open queue';
+
+  @override
+  String desktopSeeAllCount(int count) {
+    return 'See all ($count)';
+  }
+
+  @override
+  String get musicNoFavoritesYet => 'No favourites yet';
+
+  @override
+  String get musicNoFavoritesHint => 'Heart a track to keep it here.';
+
+  @override
+  String get desktopMusicPlaying => 'Playing now';
+
+  @override
+  String get desktopMusicPaused => 'Paused';
+
+  @override
+  String get desktopColTitle => 'Title';
+
+  @override
+  String get desktopColAlbum => 'Album';
+
+  @override
+  String get desktopMusicSearchHint => 'Filter tracks, artists, albums';
+
+  @override
+  String get desktopMusicNoTracks => 'No tracks match your filters.';
+
+  @override
+  String desktopReaderHeadline(int titles, int reading) {
+    return '$titles titles · $reading in progress';
+  }
+
+  @override
+  String get desktopReaderSubtitle => 'Quiet time, well kept.';
+
+  @override
+  String get desktopReaderContinue => 'Continue reading';
+
+  @override
+  String get desktopReaderContinueAction => 'Continue';
+
+  @override
+  String get desktopReaderBookPage => 'Book page';
+
+  @override
+  String get desktopReaderLibrary => 'Books';
+
+  @override
+  String get desktopReaderEmpty => 'Nothing on the shelf yet.';
+
+  @override
+  String get desktopFilterInProgress => 'In progress';
+
+  @override
+  String get desktopFilterFinished => 'Finished';
+
+  @override
+  String get desktopOwner => 'Owner';
+
+  @override
+  String get desktopRole => 'Role';
+
+  @override
+  String get desktopServer => 'Server';
+
+  @override
+  String get desktopSettingsSubtitle =>
+      'Appearance, account and storage for this workspace.';
+
+  @override
+  String desktopFilesHeadline(int files, String used) {
+    return '$files files · $used used';
+  }
+
+  @override
+  String get desktopFilesListView => 'List view';
+
+  @override
+  String get desktopFilesGridView => 'Grid view';
+
+  @override
+  String get desktopFilesEmpty => 'This folder is empty.';
+
+  @override
+  String get desktopFilesRecent => 'Recent';
+
+  @override
+  String get desktopFilesFavorites => 'Favorites';
+
+  @override
+  String get desktopFilesRecycle => 'Recycle';
+
+  @override
+  String get desktopFilesAll => 'My files';
+
+  @override
+  String get desktopFilesSharedByMe => 'Shared by me';
+
+  @override
+  String get desktopFilesModified => 'Modified';
+
+  @override
+  String get desktopFilesSize => 'Size';
+
+  @override
+  String get desktopFilesUpload => 'Upload';
+
+  @override
+  String get desktopFilesClear => 'Clear';
+
+  @override
+  String get desktopFilesDeleteForever => 'Delete forever';
+
+  @override
+  String get desktopFilesPrivate => 'Private';
+
+  @override
+  String get desktopFilesSharedBadge => 'Shared';
+
+  @override
+  String get desktopFilesFilterAll => 'All';
+
+  @override
+  String get desktopFilesFilterFolders => 'Folders';
+
+  @override
+  String get desktopFilesFilterDocuments => 'Documents';
+
+  @override
+  String get desktopFilesFilterImages => 'Images';
+
+  @override
+  String get desktopFilesFilterMedia => 'Media';
+
+  @override
+  String get desktopFilesSelectRow => 'Select this row';
+
+  @override
+  String get desktopFilesClearSearch => 'Clear search';
+
+  @override
+  String desktopFilesSearchHint(String scope) {
+    return 'Search in $scope';
+  }
+
+  @override
+  String get desktopFilesFilesGroup => 'Files';
+
+  @override
+  String get desktopFilesItemsGroup => 'Items';
+
+  @override
+  String get desktopFilesTransfers => 'Transfers';
+
+  @override
+  String desktopFilesActiveTransfers(int count) {
+    return '$count active';
+  }
+
+  @override
+  String get desktopFilesDropToUpload => 'Drop to upload';
+
+  @override
+  String desktopFilesDropTarget(String target) {
+    return 'to $target';
+  }
+
+  @override
+  String get desktopFilesEmptyFolder =>
+      'This folder is empty. Drop files here or press Upload.';
+
+  @override
+  String get desktopFilesEmptyFilter => 'No items match this filter.';
+
+  @override
+  String get desktopFilesClearFilters => 'Clear filters';
+
+  @override
+  String get desktopFilesRecycleNotice =>
+      'Items are removed automatically after 30 days.';
+
+  @override
+  String get desktopFilesRecycleNoticeBody =>
+      'Restore to bring them back, or delete permanently to free space now.';
+
+  @override
+  String get desktopFilesShareDialogTitle => 'Share link';
+
+  @override
+  String get desktopFilesCreateLink => 'Create link';
+
+  @override
+  String get desktopFilesLinkCopied => 'Link copied to clipboard';
+
+  @override
+  String get desktopFilesRevoke => 'Revoke';
+
+  @override
+  String desktopFilesOwner(String name) {
+    return 'From $name';
+  }
+
+  @override
+  String get desktopFilesDetails => 'Details & versions';
+
+  @override
+  String get desktopFilesVersions => 'Versions';
+
+  @override
+  String get desktopFilesMoveToRecycle => 'Move to Recycle';
+
+  @override
+  String get desktopFilesEmptyRecycle => 'Empty recycle';
+
+  @override
+  String get desktopFilesPaused => 'Paused';
+
+  @override
+  String get desktopFilesDisable => 'Disable';
+
+  @override
+  String desktopFilesItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get desktopFilesRenameHint => 'New name';
+
+  @override
+  String get desktopFilesFolderNameHint => 'Folder name';
+
+  @override
+  String get desktopFilesSave => 'Save';
+
+  @override
+  String get desktopFilesOpen => 'Open';
+
+  @override
+  String desktopFilesUploadDone(int done, int total) {
+    return 'Uploaded $done of $total';
+  }
+
+  @override
+  String get desktopFilesMovedToRecycle => 'Moved to Recycle';
+
+  @override
+  String get desktopFilesRestored => 'Restored';
+
+  @override
+  String get desktopFilesShareUnavailable =>
+      'Share links need the web base URL configured on the server.';
+
+  @override
+  String desktopFilesLoadMore(int loaded, int total) {
+    return 'Load more ($loaded of $total)';
+  }
+
+  @override
+  String get desktopFilesGroupLibrary => 'Library';
+
+  @override
+  String get desktopFilesGroupSharing => 'Sharing';
+
+  @override
+  String get desktopFilesGroupSources => 'Sources';
+
+  @override
+  String get desktopFilesGroupStorage => 'Storage';
+
+  @override
+  String desktopFilesStorageUsed(String used, String quota) {
+    return '$used of $quota used';
+  }
+
+  @override
+  String desktopFilesShareVisits(int count) {
+    return '$count visits';
+  }
+
+  @override
+  String get desktopFilesKindFolder => 'Folder';
+
+  @override
+  String get desktopFilesKindDocument => 'Document';
+
+  @override
+  String get desktopFilesKindImage => 'Image';
+
+  @override
+  String get desktopFilesKindVideo => 'Video';
+
+  @override
+  String get desktopFilesKindAudio => 'Audio';
+
+  @override
+  String get desktopFilesKindArchive => 'Archive';
+
+  @override
+  String get desktopFilesKindText => 'Text';
+
+  @override
+  String get desktopFilesKindOther => 'File';
+
+  @override
+  String desktopPhotosIndex(int index, int total) {
+    return '$index of $total';
+  }
+
+  @override
+  String get desktopPhotosInfo => 'Information';
+
+  @override
+  String get desktopPhotosTaken => 'Taken';
+
+  @override
+  String get desktopPhotosLocation => 'Location';
+
+  @override
+  String get desktopPhotosCamera => 'Camera';
+
+  @override
+  String get desktopPhotosExposure => 'Exposure';
+
+  @override
+  String get desktopPhotosDimensions => 'Dimensions';
+
+  @override
+  String get desktopPhotosZoom => 'Zoom';
+
+  @override
+  String get desktopPhotosPrevious => 'Previous';
+
+  @override
+  String get desktopPhotosNext => 'Next';
+
+  @override
+  String get desktopPhotosDownload => 'Download';
+
+  @override
+  String get desktopPhotosTags => 'Tags';
+
+  @override
+  String get desktopMoviesRuntime => 'Runtime';
+
+  @override
+  String get desktopMoviesMoreLikeThis => 'More like this';
+
+  @override
+  String get desktopSeriesEpisodes => 'Episodes';
+
+  @override
+  String get desktopSeriesFiles => 'Files';
+
+  @override
+  String get desktopSeriesSubtitles => 'Subtitles';
+
+  @override
+  String desktopSeriesSeasonCount(Object count) {
+    return '$count seasons';
+  }
+
+  @override
+  String get desktopSeriesSeasonCountLabel => 'Seasons';
+
+  @override
+  String get desktopMoviesCastCrew => 'Cast & crew';
+
+  @override
+  String get videoDetailTabFiles => 'Files';
+
+  @override
+  String get desktopMoviesReadMore => 'Read more';
+
+  @override
+  String get desktopMoviesShowLess => 'Show less';
+
+  @override
+  String get desktopMoviesNoCastCrew => 'Cast and crew metadata unavailable';
+
+  @override
+  String get desktopMoviesDirector => 'Director';
+
+  @override
+  String get desktopMoviesWriter => 'Writer';
+
+  @override
+  String get desktopMoviesLead => 'Lead';
+
+  @override
+  String get desktopMoviesCastMember => 'Cast';
+
+  @override
+  String get desktopMoviesPrimaryFile => 'Primary';
+
+  @override
+  String get desktopMoviesAlternateFile => 'Alternate';
+
+  @override
+  String get desktopMoviesTranscoding => 'Transcoding';
+
+  @override
+  String get desktopMoviesTranscodingEnabledDescription =>
+      'Enabled by an administrator. Create a lighter copy for slow networks.';
+
+  @override
+  String get desktopMoviesTranscodingDisabledDescription =>
+      'Off for this server. Direct play only. An administrator can enable it in Admin → Config.';
+
+  @override
+  String get desktopMoviesTranscodeQueued => 'Transcode queued';
+
+  @override
+  String get desktopMoviesFileUnavailable => 'Media file details unavailable';
+
+  @override
+  String get desktopSeriesEpisodesEmpty => 'No episodes available';
+
+  @override
+  String desktopSeriesSeasonTitle(Object season) {
+    return 'Season $season';
+  }
+
+  @override
+  String get desktopSeriesFilesEmpty => 'No media files available';
+
+  @override
+  String get desktopSeriesFileDetailsUnavailable => 'Media details unavailable';
+
+  @override
+  String get desktopSeriesNoSubtitles => 'No subtitles for this episode';
+
+  @override
+  String get desktopMoviesNoOverview => 'No overview yet.';
+
+  @override
+  String get desktopMoviesEditDetails => 'Edit details';
+
+  @override
+  String get desktopMoviesMatchMetadata => 'Match metadata';
+
+  @override
+  String get desktopMoviesRematchMetadata => 'Re-match metadata';
+
+  @override
+  String get desktopMoviesReprobe => 'Re-probe';
+
+  @override
+  String get desktopMoviesExportNfo => 'Export NFO';
+
+  @override
+  String get desktopMoviesMatchTitle => 'Choose the right match';
+
+  @override
+  String get desktopMoviesMatchLoading => 'Loading candidates…';
+
+  @override
+  String get desktopMoviesMatchEmpty => 'No candidate matches found.';
+
+  @override
+  String get desktopMoviesMatchQueued =>
+      'Applying metadata from the selected match…';
+
+  @override
+  String get desktopMoviesProbeDone => 'Media info updated';
+
+  @override
+  String get desktopMoviesNfoExported => 'NFO exported next to the media file';
+
+  @override
+  String get desktopMoviesNotScraped => 'Not scraped';
+
+  @override
+  String get desktopMoviesNoMetadataHint =>
+      'No metadata yet. Match this title against TMDB to fill in the synopsis, cast and artwork.';
+
+  @override
+  String desktopMoviesWatched(int percent) {
+    return '$percent% watched';
+  }
+
+  @override
+  String get desktopMoviesFromStart => 'From start';
+
+  @override
+  String get photosTabPlaces => 'Places';
+
+  @override
+  String get photosNoPlaces =>
+      'No locations yet. Photos with GPS data show up here.';
+
+  @override
+  String desktopPhotosPlaceCount(int count) {
+    return '$count photos';
+  }
+
+  @override
+  String get desktopPhotosSelect => 'Select photo';
+
+  @override
+  String get desktopPhotosClearSelection => 'Clear selection';
+
+  @override
+  String desktopPhotosFavorited(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Added $count photos to favorites',
+      one: 'Added 1 photo to favorites',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String desktopPhotosMovedToTrash(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Moved $count photos to the trash',
+      one: 'Moved 1 photo to the trash',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String desktopPhotosRestoredFromTrash(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Restored $count photos',
+      one: 'Restored 1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get photosTabTrash => 'Trash';
+
+  @override
+  String get photosTrashHint =>
+      'Items in Trash are kept until you delete them permanently.';
+
+  @override
+  String get desktopHistory => 'History';
+
+  @override
+  String get desktopSettingsUpToDate => 'You are on the latest version.';
+
+  @override
+  String get desktopSettingsForegroundBanner => 'Foreground banners';
+
+  @override
+  String get desktopSettingsServerVersion => 'Server';
+
+  @override
+  String get desktopConnectedServices => 'Connected services';
+
+  @override
+  String get desktopServicesRefresh => 'Refresh';
+
+  @override
+  String get desktopReaderOverview => 'Overview';
+
+  @override
+  String get desktopReaderLibraryView => 'Library';
+
+  @override
+  String get desktopReaderSearchHint => 'Search title, author, series or tag';
+
+  @override
+  String desktopReaderTitleCount(int count) {
+    return '$count titles';
+  }
+
+  @override
+  String get desktopReaderClearFilters => 'Clear filters';
+
+  @override
+  String get desktopSortProgress => 'Progress';
+
+  @override
+  String get desktopSortTitle => 'Title';
+
+  @override
+  String get desktopSortAuthor => 'Author';
+
+  @override
+  String get desktopSortAdded => 'Recently added';
+
+  @override
+  String get desktopReaderSortLabel => 'Sort';
+
+  @override
+  String get desktopReaderSortRecent => 'Recently read';
+
+  @override
+  String get profileRemoveAvatar => 'Remove';
+
+  @override
+  String get profileAvatarRemoved => 'Profile photo removed';
+
+  @override
+  String get weatherCitySearching => 'Searching places…';
+
+  @override
+  String get weatherCityNoMatches => 'No matching places.';
+
+  @override
+  String get weatherCitySearchOffline => 'Search needs an internet connection.';
+
+  @override
+  String get filesShareOff => 'Off';
+
+  @override
+  String get filesSharePasscode => 'Passcode';
+
+  @override
+  String get filesSharePasscodeHint => 'Leave blank to generate a passcode';
+
+  @override
+  String get filesShareRecipients => 'Recipients';
+
+  @override
+  String get filesShareRecipientsHint => 'Search people by name or username';
+
+  @override
+  String get filesSharingDisabled => 'Sharing turned off';
+
+  @override
+  String get videoHistoryRestored => 'Watch history restored';
+
+  @override
+  String get setupStatusErrorTitle => 'Setup status unavailable';
+
+  @override
+  String get setupBrandFiles => 'Files · multiple storage';
+
+  @override
+  String get setupBrandMedia => 'Movies · music · photos';
+
+  @override
+  String get setupBrandReading => 'Reading · offline sync';
+
+  @override
+  String get twoFactorEnrollCopyAll => 'Copy all codes';
+
+  @override
+  String get desktopSetupTitle => 'First-time setup';
+
+  @override
+  String get desktopSetupSubtitle =>
+      'Create the super administrator for this OmniNest instance.';
+
+  @override
+  String get adminUsers => 'Users';
+
+  @override
+  String get adminItems => 'Items';
+
+  @override
+  String get adminSystemHealth => 'System health';
+
+  @override
+  String get adminViewLogs => 'View logs';
+
+  @override
+  String get adminStatus => 'Status';
+
+  @override
+  String get adminAllRoles => 'All roles';
+
+  @override
+  String get adminQuotaUnlimited => 'Unlimited';
+
+  @override
+  String adminUsersTotal(int count) {
+    return '$count users';
+  }
+
+  @override
+  String get desktopNpAppearance => 'Appearance';
+
+  @override
+  String get desktopNpPresets => 'Presets';
+
+  @override
+  String get desktopNpBackground => 'Background';
+
+  @override
+  String get desktopNpMask => 'Mask';
+
+  @override
+  String get desktopNpDarkness => 'Darkness';
+
+  @override
+  String get desktopNpBlur => 'Blur';
+
+  @override
+  String get desktopNpLyrics => 'Lyrics';
+
+  @override
+  String get desktopNpSize => 'Size';
+
+  @override
+  String get desktopNpGlow => 'Glow';
+
+  @override
+  String get desktopNpReset => 'Reset to default';
+
+  @override
+  String get desktopNpCover => 'Blurred cover';
+
+  @override
+  String get desktopNpAurora => 'Aurora';
+
+  @override
+  String get desktopNpSpectrum => 'Spectrum pulse';
+
+  @override
+  String get desktopNpGradient => 'Gradient';
+
+  @override
+  String get desktopNpPlain => 'Plain';
+
+  @override
+  String get desktopNpLibrary => 'Wallpaper library';
+
+  @override
+  String get desktopNpWallEmpty =>
+      'No wallpapers yet. Upload one to get started.';
+
+  @override
+  String get desktopNpManageLibrary => 'Manage library';
+
+  @override
+  String get desktopNpPresetAuto => 'Auto';
+
+  @override
+  String get desktopNpPresetSunset => 'Sunset';
+
+  @override
+  String get desktopNpPresetOcean => 'Ocean';
+
+  @override
+  String get desktopNpPresetForest => 'Forest';
+
+  @override
+  String get desktopNpPresetRose => 'Rose';
+
+  @override
+  String get desktopNpPresetMono => 'Mono';
+
+  @override
+  String get desktopNotifToday => 'Today';
+
+  @override
+  String get desktopNotifEarlier => 'Earlier';
+
+  @override
+  String get desktopConfigDiscard => 'Discard';
+
+  @override
+  String get desktopConfigSaveChanges => 'Save changes';
+
+  @override
+  String desktopConfigUnsaved(int count) {
+    return '$count unsaved';
+  }
+
+  @override
+  String get adminConfigReadOnly => 'Read-only';
+
+  @override
+  String get adminConfigOn => 'On';
+
+  @override
+  String get adminConfigOff => 'Off';
+
+  @override
+  String adminConfigSaved(String count) {
+    return '$count settings saved';
+  }
+
+  @override
+  String get desktopBookProgress => 'Progress';
+
+  @override
+  String get desktopBookChapters => 'Chapters';
+
+  @override
+  String get desktopBookAdded => 'Added';
+
+  @override
+  String get desktopBookFormat => 'Format';
+
+  @override
+  String desktopConfigReviewTitle(int count) {
+    return '$count change(s) to apply';
+  }
+
+  @override
+  String get desktopConfigReviewHint =>
+      'These values are written to the server when you save.';
+
+  @override
+  String desktopConfigHistoryTotal(int count) {
+    return '$count change(s)';
+  }
+
+  @override
+  String get desktopConfigExport => 'Export';
+
+  @override
+  String get desktopConfigExported => 'Configuration exported';
+
+  @override
+  String get desktopConfigSearchHint => 'Search by name, key or description';
+
+  @override
+  String get desktopConfigFilterModified => 'Modified';
+
+  @override
+  String get desktopConfigFilterSecrets => 'Secrets';
+
+  @override
+  String get desktopConfigNoMatch => 'No parameters match your filters.';
+
+  @override
+  String get desktopConfigReview => 'Review';
+
+  @override
+  String get desktopConfigHistory => 'Change history';
+
+  @override
+  String get desktopConfigHistoryScope => 'This session';
+
+  @override
+  String get desktopConfigHistoryEmpty => 'No changes this session.';
+
+  @override
+  String get desktopConfigRolledBack => 'Rolled back';
+
+  @override
+  String get desktopConfigResetRow => 'Reset to the saved value';
+
+  @override
+  String get desktopConfigSensitiveTag => 'sensitive';
+
+  @override
+  String get desktopBookNotes => 'Notes';
+
+  @override
+  String get desktopBookActivity => 'Activity';
+
+  @override
+  String get desktopBookEditMetadata => 'Edit metadata';
+
+  @override
+  String get desktopBookTags => 'Tags';
+
+  @override
+  String get desktopBookTagsHint => 'Comma separated';
+
+  @override
+  String get desktopBookType => 'Type';
+
+  @override
+  String get desktopBookTypeBook => 'Book';
+
+  @override
+  String get desktopBookTypeComic => 'Comic';
+
+  @override
+  String get desktopBookTypeManga => 'Manga';
+
+  @override
+  String get desktopBookSeries => 'Series name';
+
+  @override
+  String get desktopBookVolume => 'Volume number';
+
+  @override
+  String get desktopBookVolumeHint => '1';
+
+  @override
+  String get desktopBookVolumeInvalid => 'Enter a volume number from 1 to 999';
+
+  @override
+  String get desktopBookCoverUrl => 'Cover image URL';
+
+  @override
+  String get desktopBookCoverUrlHint => 'Leave empty for the library cover';
+
+  @override
+  String get desktopBookRestoreOriginal => 'Restore original';
+
+  @override
+  String get desktopBookMetadataRestored => 'Original metadata restored';
+
+  @override
+  String get desktopBookReparse => 'Re-parse';
+
+  @override
+  String get desktopBookRemove => 'Remove';
+
+  @override
+  String get desktopBookDetails => 'Details';
+
+  @override
+  String get desktopBookContent => 'Content';
+
+  @override
+  String get desktopBookPublisher => 'Publisher';
+
+  @override
+  String get desktopBookLanguage => 'Language';
+
+  @override
+  String get desktopBookParsing => 'Parsing';
+
+  @override
+  String get desktopBookReadable => 'Readable';
+
+  @override
+  String get desktopBookNoChapters => 'No chapters parsed yet.';
+
+  @override
+  String get desktopBookNoNotes =>
+      'Highlights, notes and bookmarks you make while reading appear here.';
+
+  @override
+  String get desktopBookNoActivity => 'No reading activity yet.';
+
+  @override
+  String get desktopBookActivityScope => 'Last 7 days · all books';
+
+  @override
+  String get desktopBookRelated => 'More on your shelf';
+
+  @override
+  String get desktopBookHighlight => 'Highlight';
+
+  @override
+  String get desktopBookBookmark => 'Bookmark';
+
+  @override
+  String get desktopBookTitle => 'Title';
+
+  @override
+  String get desktopBookAuthor => 'Author';
+
+  @override
+  String get desktopBookDescription => 'Description';
+
+  @override
+  String get desktopBookTitleRequired => 'A title is required';
+
+  @override
+  String desktopFieldChars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count characters',
+      one: '1 character',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get setupTokenRequired => 'Enter the setup token';
+
+  @override
+  String get setupTokenLabel => 'Install token';
+
+  @override
+  String get setupPasswordHint => 'At least 8 characters, up to 64';
+
+  @override
+  String get setupEmailInvalid => 'Enter a valid email address';
+
+  @override
+  String get setupFixHighlightedFields =>
+      'Please fix the highlighted fields to continue.';
+
+  @override
+  String get desktopBookMetadataSaved => 'Metadata saved';
+
+  @override
+  String get desktopBookReparseConfirm =>
+      'This rebuilds chapters and the reading cache. Progress is kept.';
+
+  @override
+  String get desktopBookReparsed => 'Re-parse queued';
+
+  @override
+  String get desktopBookRemoveMessage =>
+      'This removes the book from your shelf and deletes highlights, notes and progress. The source file stays in your storage.';
+
+  @override
+  String get desktopBookRemoved => 'Removed';
+
+  @override
+  String desktopBookActivitySummary(int done, int reading) {
+    return '$done finished · $reading in progress';
+  }
+
+  @override
+  String get filesShareUnlimited => 'Unlimited';
+
+  @override
+  String get videoStudio => 'Studio';
+
+  @override
+  String get videoVideo => 'Video';
+
+  @override
+  String get videoSubtitles => 'Subtitles';
+
+  @override
+  String get musicAddToQueue => 'Add to queue';
+
+  @override
+  String get adminEditUser => 'Edit user';
+
+  @override
+  String get adminUserSaved => 'User updated';
+
+  @override
+  String get desktopNpWordFill => 'Word fill';
+
+  @override
+  String get desktopNpBrush => 'Brush';
+
+  @override
+  String get desktopNpPaint => 'Lyric paint';
+
+  @override
+  String get desktopNpWholeLine => 'Whole line';
+
+  @override
+  String get desktopNpHalves => 'Upper / lower halves';
+
+  @override
+  String get desktopNpLowerBrush => 'Lower half';
+
+  @override
+  String get desktopNpSplitPos => 'Split position';
+
+  @override
+  String get desktopBackdropUse => 'Use a custom backdrop';
+
+  @override
+  String get desktopBackdropUseOn =>
+      'Your wallpaper replaces the ambient glow and the Home sky.';
+
+  @override
+  String get desktopBackdropUseOff =>
+      'Off - OmniNest keeps its default ambient light and live sky.';
+
+  @override
+  String get desktopBackdropDefaultScene => 'Default ambient scene';
+
+  @override
+  String get desktopBackdropBuiltin => 'Built in, works offline';
+
+  @override
+  String get desktopBackdropLibraryDesc =>
+      'Upload JPG, PNG, WebP, GIF, MP4, WebM or MOV. Synced with your account and shared across devices.';
+
+  @override
+  String get desktopBackdropFilterStatic => 'Static';
+
+  @override
+  String get desktopBackdropFilterMotion => 'Motion';
+
+  @override
+  String get desktopBackdropFilterMine => 'Mine';
+
+  @override
+  String get desktopBackdropClearUploads => 'Clear my uploads';
+
+  @override
+  String desktopBackdropClearUploadsBody(int count) {
+    return '$count uploaded backdrops will be deleted from your library. Built-in wallpapers stay.';
+  }
+
+  @override
+  String get desktopBackdropNoUploads =>
+      'Nothing uploaded yet. Videos and GIFs play as live wallpapers.';
+
+  @override
+  String get desktopBackdropPresentation => 'Presentation';
+
+  @override
+  String get desktopBackdropReset => 'Reset';
+
+  @override
+  String get desktopBackdropResetDone => 'Presentation reset';
+
+  @override
+  String get desktopBackdropApplyTo => 'Apply to';
+
+  @override
+  String get desktopBackdropApplyDesc =>
+      'Where the wallpaper is allowed to show, this device only';
+
+  @override
+  String get desktopBackdropEverywhere => 'Everywhere';
+
+  @override
+  String get desktopBackdropHomeMusic => 'Home & Music';
+
+  @override
+  String get desktopBackdropKindImage => 'Image';
+
+  @override
+  String get desktopBackdropKindVideo => 'Video';
+
+  @override
+  String get desktopBackdropKindGif => 'GIF';
+
+  @override
+  String get desktopPhotosEmptyBody =>
+      'Photos you add or import will show up here.';
+
+  @override
+  String get desktopMoviesEmptyFavoritesTitle => 'No favourites yet';
+
+  @override
+  String get desktopMoviesEmptyFavoritesBody =>
+      'Heart a title on its page to keep it here.';
+
+  @override
+  String get desktopMoviesEmptyHistoryTitle => 'Nothing here yet';
+
+  @override
+  String get desktopMoviesEmptyHistoryBody =>
+      'Titles you start watching will show up here.';
+
+  @override
+  String get desktopMoviesEmptyLibraryBody =>
+      'Import a film or series and it will show up here.';
+
+  @override
+  String get desktopMoviesWatchlist => 'Watchlist';
+
+  @override
+  String get desktopMoviesEmptyWatchlistTitle => 'Your watchlist is empty';
+
+  @override
+  String get desktopMoviesEmptyWatchlistBody =>
+      'Use “Add to watchlist” on a title to save it for later.';
+
+  @override
+  String get desktopMoviesAddWatchlist => 'Add to watchlist';
+
+  @override
+  String get desktopMoviesRemoveWatchlist => 'Remove from watchlist';
+
+  @override
+  String get desktopMoviesAddedWatchlist => 'Added to Watchlist';
+
+  @override
+  String get desktopMoviesRemovedWatchlist => 'Removed from Watchlist';
+
+  @override
+  String get desktopMoviesMarkWatched => 'Mark as watched';
+
+  @override
+  String get desktopMoviesMarkUnwatched => 'Mark as unwatched';
+
+  @override
+  String desktopMoviesMarkedWatched(String title) {
+    return 'Marked “$title” as watched';
+  }
+
+  @override
+  String desktopMoviesMarkedUnwatched(String title) {
+    return 'Marked “$title” as unwatched';
+  }
+
+  @override
+  String get photosDownload => 'Download';
+
+  @override
+  String photosSavedCount(int count) {
+    return 'Saved $count';
+  }
+
+  @override
+  String get photosDownloadNeedsOriginal =>
+      'Open a photo first - list data has no original file URL';
+}

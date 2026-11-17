@@ -1,0 +1,730 @@
+package com.omninest.modules.photos.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FilePurgeOrigin;
+import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.photos.domain.PhotoItem;
+import com.omninest.modules.photos.domain.PhotoTag;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
+import com.omninest.modules.photos.dto.GroupBy;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoGroupDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoListItemDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
+import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
+import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
+import com.omninest.modules.photos.repository.PhotoGroupPreviewProjection;
+import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.modules.photos.repository.PhotoListItemProjection;
+import com.omninest.modules.photos.repository.PhotoTagRepository;
+import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+/**
+ * PhotoLibraryService 单元测试。
+ * 覆盖照片列表和搜索功能。
+ *
+ * @author OmniNest
+ */
+class PhotoLibraryServiceTest {
+
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID PHOTO_ID_1 = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID PHOTO_ID_2 = UUID.fromString("20000000-0000-0000-0000-000000000002");
+    private static final UUID FILE_NODE_ID_1 = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID FILE_NODE_ID_2 = UUID.fromString("30000000-0000-0000-0000-000000000002");
+    private static final UUID COVER_FILE_ID_1 = UUID.fromString("50000000-0000-0000-0000-000000000001");
+    private static final UUID COVER_FILE_ID_2 = UUID.fromString("50000000-0000-0000-0000-000000000002");
+
+    private PhotoItemRepository photoItemRepository;
+    private PhotoFavoriteRepository favoriteRepository;
+    private PhotoAlbumRepository albumRepository;
+    private PhotoAlbumItemRepository albumItemRepository;
+    private PhotoTagRepository photoTagRepository;
+    private PhotoLabelPolicy photoLabelPolicy;
+    private FileDeletionService fileDeletionService;
+    private FileQueryService fileQueryService;
+    private ReadThroughCache readThroughCache;
+    private MediaSyncEventService syncEventService;
+    private PhotoContentAnalysisService contentAnalysisService;
+    private PhotoGeoService photoGeoService;
+    private SystemInstanceConfigService systemInstanceConfigService;
+    private PhotosRuntimeConfigService photosRuntimeConfigService;
+    private PhotoChangeSideEffects sideEffects;
+
+    private PhotoLibraryService service;
+
+    @BeforeEach
+    void setUp() {
+        photoItemRepository = mock(PhotoItemRepository.class);
+        favoriteRepository = mock(PhotoFavoriteRepository.class);
+        albumRepository = mock(PhotoAlbumRepository.class);
+        albumItemRepository = mock(PhotoAlbumItemRepository.class);
+        photoTagRepository = mock(PhotoTagRepository.class);
+        photoLabelPolicy = new PhotoLabelPolicy();
+        fileDeletionService = mock(FileDeletionService.class);
+        fileQueryService = mock(FileQueryService.class);
+        readThroughCache = mock(ReadThroughCache.class);
+        syncEventService = mock(MediaSyncEventService.class);
+        contentAnalysisService = mock(PhotoContentAnalysisService.class);
+        photoGeoService = mock(PhotoGeoService.class);
+        systemInstanceConfigService = mock(SystemInstanceConfigService.class);
+        when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
+        photosRuntimeConfigService = mock(PhotosRuntimeConfigService.class);
+        when(photosRuntimeConfigService.legacyListLimit()).thenReturn(200);
+        // 副作用组件按真实装配注入：既有断言继续验证相册计数重算与同步事件。
+        sideEffects = new PhotoChangeSideEffects(
+                albumRepository,
+                albumItemRepository,
+                syncEventService,
+                readThroughCache
+        );
+
+        service = new PhotoLibraryService(
+                photoItemRepository,
+                favoriteRepository,
+                albumRepository,
+                sideEffects,
+                photoTagRepository,
+                photoLabelPolicy,
+                fileDeletionService,
+                fileQueryService,
+                readThroughCache,
+                contentAnalysisService,
+                photoGeoService,
+                systemInstanceConfigService,
+                photosRuntimeConfigService,
+                new PhotoDtoAssembler(
+                        photoItemRepository,
+                        favoriteRepository,
+                        photoTagRepository,
+                        fileQueryService
+                )
+        );
+    }
+
+    @Test
+    void deletePhotoMovesPhotoIntoTrashInsteadOfPurging() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "待删除照片");
+        photo.setDeletedAt(null);
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of(photo));
+
+        service.movePhotoToTrash(OWNER_ID, PHOTO_ID_1);
+
+        assertThat(photo.getDeletedAt()).isNotNull();
+        verify(photoItemRepository).saveAll(List.of(photo));
+        verify(fileDeletionService, Mockito.never()).deletePermanently(
+                any(), any(), anyBoolean(), any(), any()
+        );
+        verify(photoItemRepository, Mockito.never()).delete(photo);
+    }
+
+    @Test
+    void purgePhotoFromTrashCreatesPermanentPurgeTask() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "回收站照片");
+        photo.setDeletedAt(Instant.now());
+        UUID taskId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        when(photoItemRepository.findTrashedByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1))
+                .thenReturn(Optional.of(photo));
+        when(fileDeletionService.deletePermanently(
+                eq(OWNER_ID),
+                eq(FILE_NODE_ID_1),
+                eq(false),
+                any(FilePurgeOrigin.class),
+                isNull()
+        )).thenReturn(taskId);
+
+        UUID result = service.purgePhotoFromTrash(OWNER_ID, PHOTO_ID_1, false);
+
+        assertThat(result).isEqualTo(taskId);
+        verify(fileDeletionService).deletePermanently(
+                eq(OWNER_ID),
+                eq(FILE_NODE_ID_1),
+                eq(false),
+                any(FilePurgeOrigin.class),
+                isNull()
+        );
+    }
+
+    @Test
+    void restorePhotoFromTrashClearsDeletedAt() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "回收站照片");
+        photo.setDeletedAt(Instant.now());
+        when(photoItemRepository.findTrashedByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1))
+                .thenReturn(Optional.of(photo));
+
+        service.restorePhotoFromTrash(OWNER_ID, PHOTO_ID_1);
+
+        assertThat(photo.getDeletedAt()).isNull();
+        verify(photoItemRepository).save(photo);
+    }
+
+    @Test
+    void movePhotosToTrashMarksEachPhotoDeleted() {
+        PhotoItem firstPhoto = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
+        PhotoItem secondPhoto = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "第二张照片");
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(firstPhoto, secondPhoto));
+
+        List<PhotoTrashResultDto> results = service.movePhotosToTrash(
+                OWNER_ID,
+                List.of(PHOTO_ID_1, PHOTO_ID_2)
+        );
+
+        assertThat(results).hasSize(2);
+        assertThat(results.stream().allMatch(PhotoTrashResultDto::success)).isTrue();
+        assertThat(firstPhoto.getDeletedAt()).isNotNull();
+        assertThat(secondPhoto.getDeletedAt()).isNotNull();
+        // 批量入口一次读、一次写：逐张 save 会把相册重算与缓存失效放大成 N 倍。
+        verify(photoItemRepository).saveAll(List.of(firstPhoto, secondPhoto));
+        verify(photoItemRepository, never()).save(any(PhotoItem.class));
+        verify(fileDeletionService, Mockito.never()).deletePermanentlyBatch(
+                any(), any(), anyBoolean(), any()
+        );
+    }
+
+    @Test
+    void purgeTrashSplitsTrashIntoBoundedTasks() {
+        PhotoItem first = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
+        PhotoItem second = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "第二张照片");
+        when(photoItemRepository.findTrashBatch(eq(OWNER_ID), any(), any(Pageable.class)))
+                .thenReturn(List.of(first))
+                .thenReturn(List.of(second))
+                .thenReturn(List.of());
+        UUID firstTaskId = UUID.fromString("90000000-0000-0000-0000-000000000001");
+        UUID secondTaskId = UUID.fromString("90000000-0000-0000-0000-000000000002");
+        when(fileDeletionService.deletePermanentlyBatch(eq(OWNER_ID), any(), eq(false), any()))
+                .thenReturn(firstTaskId)
+                .thenReturn(secondTaskId);
+
+        UUID taskId = service.purgeTrash(OWNER_ID);
+
+        // 返回首个任务供客户端跟踪；后续批次各自成任务，避免单任务载荷与单事务越界。
+        assertThat(taskId).isEqualTo(firstTaskId);
+        verify(fileDeletionService, Mockito.times(2))
+                .deletePermanentlyBatch(eq(OWNER_ID), any(), eq(false), any());
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(photoItemRepository, Mockito.atLeastOnce())
+                .findTrashBatch(eq(OWNER_ID), any(), pageCaptor.capture());
+        assertThat(pageCaptor.getValue().getPageSize()).isEqualTo(200);
+    }
+
+    @Test
+    void movePhotosToTrashReportsMissingPhotosWithoutFailingBatch() {
+        PhotoItem existing = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(existing));
+
+        List<PhotoTrashResultDto> results = service.movePhotosToTrash(
+                OWNER_ID,
+                List.of(PHOTO_ID_1, PHOTO_ID_2)
+        );
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).success()).isTrue();
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(existing.getDeletedAt()).isNotNull();
+        verify(photoItemRepository).saveAll(List.of(existing));
+    }
+
+    @Test
+    void photoDetail_returnsSourceUrlWithoutExpandingListPayload() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "详情照片");
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1))
+                .thenReturn(Optional.of(photo));
+        when(favoriteRepository.existsByOwnerUserIdAndPhotoId(OWNER_ID, PHOTO_ID_1))
+                .thenReturn(false);
+        when(photoTagRepository.findByOwnerUserIdAndPhotoId(OWNER_ID, PHOTO_ID_1))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
+                .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1-thumb.jpg", "http://minio/photo1-thumb"));
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, FILE_NODE_ID_1))
+                .thenReturn(downloadUrl(FILE_NODE_ID_1, "photo1.jpg", "http://minio/photo1-source"));
+
+        PhotoItemDto result = service.photo(OWNER_ID, PHOTO_ID_1);
+
+        assertThat(result.coverUrl()).isEqualTo("http://minio/photo1-thumb");
+        assertThat(result.sourceUrl()).isEqualTo("http://minio/photo1-source");
+    }
+
+    @Test
+    void listPhotosByIdsSignsOriginalAndMotionVideoUrls() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "原图照片");
+        UUID motionVideoId = UUID.randomUUID();
+        photo.setMotionState(PhotoMotionVideoService.STATE_READY);
+        photo.setMotionVideoFileNodeId(motionVideoId);
+        when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of(photo));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any())).thenAnswer(invocation -> {
+            Collection<UUID> requested = invocation.getArgument(1);
+            Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
+            if (requested.contains(COVER_FILE_ID_1)) {
+                resolved.put(COVER_FILE_ID_1, downloadUrl(COVER_FILE_ID_1, "cover.jpg", "http://minio/cover"));
+            }
+            if (requested.contains(FILE_NODE_ID_1)) {
+                resolved.put(FILE_NODE_ID_1, downloadUrl(FILE_NODE_ID_1, "source.jpg", "http://minio/source"));
+            }
+            if (requested.contains(motionVideoId)) {
+                resolved.put(motionVideoId, downloadUrl(motionVideoId, "motion.mp4", "http://minio/motion"));
+            }
+            return resolved;
+        });
+
+        List<PhotoItemDto> result = service.listPhotosByIds(OWNER_ID, List.of(PHOTO_ID_1));
+
+        assertThat(result).singleElement().satisfies(dto -> {
+            assertThat(dto.sourceUrl()).isEqualTo("http://minio/source");
+            assertThat(dto.motionVideoUrl()).isEqualTo("http://minio/motion");
+        });
+    }
+
+    @Test
+    void listPhotosPage_searchesDatabaseWithExpandedLabelCodes() {
+        // 「猫咪」只能通过同义词表反查成 SUBJECT:cat 的编码命中；写死原始关键词会漏掉这批照片。
+        PhotoListItemProjection projection = photoProjection(PHOTO_ID_1, "橘猫");
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("猫咪"), eq(List.of("cat")), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(projection), invocation.getArgument(3), 1));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any())).thenReturn(Map.of());
+
+        Page<PhotoListItemDto> result = service.listPhotosPage(
+                OWNER_ID, 0, 50, "createdAt,desc", " 猫咪 ");
+
+        assertThat(result.getContent()).extracting(PhotoListItemDto::id).containsExactly(PHOTO_ID_1);
+        verify(photoItemRepository, Mockito.never()).findListPage(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPage_passesNonEmptySentinelWhenNoLabelMatches() {
+        // JPA 会把空集合展开成非法的 IN ()，没有命中任何标签时必须退化为不会命中的哨兵。
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("sunset"), eq(List.of("__no_label__")), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "sunset");
+
+        verify(photoItemRepository).searchListPage(
+                eq(OWNER_ID), eq("sunset"), eq(List.of("__no_label__")), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPage_returnsBoundedProjectionPage() {
+        PhotoListItemProjection projection = photoProjection(PHOTO_ID_1, "分页照片");
+        when(photoItemRepository.findListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(1);
+                    return new PageImpl<>(List.of(projection), pageable, 120);
+                });
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of(PHOTO_ID_1));
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any()))
+                .thenAnswer(invocation -> {
+                    Collection<UUID> requested = invocation.getArgument(1);
+                    Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
+                    // 封面与原图共用同一次批量签发：逐行签发会退化成每张照片两次单行查询
+                    // 加一次对象存储签名运算，一屏 200 张就是数百次往返。
+                    if (requested.contains(COVER_FILE_ID_1)) {
+                        resolved.put(COVER_FILE_ID_1, new FileDownloadUrlDto(
+                                COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1",
+                                Instant.now().plusSeconds(900)));
+                    }
+                    if (requested.contains(FILE_NODE_ID_1)) {
+                        resolved.put(FILE_NODE_ID_1, new FileDownloadUrlDto(
+                                FILE_NODE_ID_1, "photo1.jpg", "http://minio/photo1-source",
+                                Instant.now().plusSeconds(900)));
+                    }
+                    return resolved;
+                });
+
+        Page<PhotoListItemDto> result = service.listPhotosPage(
+                OWNER_ID,
+                0,
+                50,
+                "createdAt,desc",
+                null
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(120);
+        assertThat(result.getSize()).isEqualTo(50);
+        assertThat(result.getContent()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(PHOTO_ID_1);
+            assertThat(item.title()).isEqualTo("分页照片");
+            assertThat(item.favorite()).isTrue();
+            assertThat(item.coverUrl()).isEqualTo("http://minio/photo1");
+            assertThat(item.sourceUrl()).isEqualTo("http://minio/photo1-source");
+        });
+        verify(fileQueryService, never()).createDownloadUrlAs(eq(OWNER_ID), any());
+    }
+
+    @Test
+    void listPhotosPage_nullCoverFileIdDoesNotThrow() {
+        // 封面派生尚未完成时 coverFileId 为 null；不可变 Map 的 get(null) 曾抛 NPE（D-012 漏网点）。
+        PhotoListItemProjection projection = photoProjection(PHOTO_ID_1, "封面未解析");
+        when(projection.getCoverFileId()).thenReturn(null);
+        when(photoItemRepository.findListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(1);
+                    return new PageImpl<>(List.of(projection), pageable, 1);
+                });
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+
+        Page<PhotoListItemDto> result = service.listPhotosPage(
+                OWNER_ID,
+                0,
+                50,
+                "createdAt,desc",
+                null
+        );
+
+        assertThat(result.getContent()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(PHOTO_ID_1);
+            assertThat(item.coverUrl()).isNull();
+        });
+    }
+
+    @Test
+    void listPhotosPage_usesSearchQueryOnlyForNonBlankKeyword() {
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("sunset"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "  sunset  ");
+
+        verify(photoItemRepository).searchListPage(eq(OWNER_ID), eq("sunset"), any(), any(Pageable.class));
+        verify(photoItemRepository, Mockito.never()).findListPage(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPageEscapesLikeWildcardsBeforeReachingTheQuery() {
+        // 前后通配已经由 SQL 拼好，用户敲的 % 与 _ 必须变成字面量，否则条件会被放宽。
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("100\\% \\_x"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", " 100% _x ");
+
+        verify(photoItemRepository).searchListPage(
+                eq(OWNER_ID), eq("100\\% \\_x"), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPage_skipsIndexAndFallbackForBlankQuery() {
+        when(photoItemRepository.findListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
+
+        assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", null).getContent()).isEmpty();
+        assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "   ").getContent()).isEmpty();
+
+        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listFavoritesPage_selectsTypedQueryBranch() {
+        when(photoItemRepository.findFavoriteListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
+        when(photoItemRepository.searchFavoriteListPage(
+                eq(OWNER_ID), eq("night"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        service.listFavoritesPage(OWNER_ID, 0, 50, "createdAt,desc", null);
+        service.listFavoritesPage(OWNER_ID, 0, 50, "createdAt,desc", "night");
+
+        verify(photoItemRepository).findFavoriteListPage(eq(OWNER_ID), any(Pageable.class));
+        verify(photoItemRepository).searchFavoriteListPage(
+                eq(OWNER_ID), eq("night"), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listPhotosPage_rejectsUnknownSortField() {
+        assertThatThrownBy(() -> service.listPhotosPage(
+                OWNER_ID,
+                0,
+                50,
+                "providerMetadata,asc",
+                null
+        )).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("照片排序字段不合法");
+    }
+
+    @Test
+    void timelinePage_groupsBoundedMonthPreviews() {
+        PhotoTimelinePreviewProjection mayFirst = timelineProjection(PHOTO_ID_1, 2026, 5, 12);
+        PhotoTimelinePreviewProjection maySecond = timelineProjection(PHOTO_ID_2, 2026, 5, 12);
+        when(photoItemRepository.findTimelinePreviewPage(eq(OWNER_ID), anyString(), eq(100L), eq(100)))
+                .thenReturn(List.of(mayFirst, maySecond));
+        when(photoItemRepository.countTimelineMonths(eq(OWNER_ID), anyString())).thenReturn(240L);
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID,
+                List.of(PHOTO_ID_1, PHOTO_ID_2)
+        )).thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID,
+                List.of(PHOTO_ID_1, PHOTO_ID_2)
+        )).thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
+                .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
+
+        Page<PhotoTimelineMonthDto> result = service.timelinePage(OWNER_ID, 1, 500);
+
+        assertThat(result.getSize()).isEqualTo(100);
+        assertThat(result.getTotalElements()).isEqualTo(240);
+        assertThat(result.getContent()).singleElement().satisfies(month -> {
+            assertThat(month.year()).isEqualTo(2026);
+            assertThat(month.month()).isEqualTo(5);
+            assertThat(month.photoCount()).isEqualTo(12);
+            assertThat(month.previewPhotos()).hasSize(2);
+        });
+        verify(photoItemRepository).findTimelinePreviewPage(eq(OWNER_ID), anyString(), eq(100L), eq(100));
+    }
+
+    @Test
+    void groupByPage_usesDatabaseAggregationAndBoundsPageSize() {
+        PhotoGroupPreviewProjection projection = groupProjection(PHOTO_ID_1, "jpg", 80);
+        when(photoItemRepository.findGroupPreviewPage(
+                eq(OWNER_ID),
+                eq("FORMAT"),
+                anyString(),
+                eq(100L),
+                eq(100)
+        )).thenReturn(List.of(projection));
+        when(photoItemRepository.countPhotoGroups(eq(OWNER_ID), eq("FORMAT"), anyString()))
+                .thenReturn(205L);
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlAs(OWNER_ID, COVER_FILE_ID_1))
+                .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
+
+        Page<PhotoGroupDto> result = service.groupByPage(OWNER_ID, GroupBy.FORMAT, 1, 500);
+
+        assertThat(result.getSize()).isEqualTo(100);
+        assertThat(result.getTotalElements()).isEqualTo(205);
+        assertThat(result.getContent()).singleElement().satisfies(group -> {
+            assertThat(group.groupKey()).isEqualTo("jpg");
+            assertThat(group.photoCount()).isEqualTo(80);
+            assertThat(group.photos()).singleElement().satisfies(photo ->
+                    assertThat(photo.id()).isEqualTo(PHOTO_ID_1));
+        });
+        verify(photoItemRepository).findGroupPreviewPage(
+                eq(OWNER_ID),
+                eq("FORMAT"),
+                anyString(),
+                eq(100L),
+                eq(100)
+        );
+    }
+
+    @Test
+    void addTagPersistsTagRowAndRecordsSyncEvent() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
+        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边")).thenReturn(false);
+
+        service.addTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        // 标签落库即可被检索命中，不需要再向任何索引副本同步一次。
+        ArgumentCaptor<PhotoTag> tagCaptor = ArgumentCaptor.forClass(PhotoTag.class);
+        verify(photoTagRepository).save(tagCaptor.capture());
+        assertThat(tagCaptor.getValue().getTag()).isEqualTo("海边");
+        assertThat(tagCaptor.getValue().getPhotoId()).isEqualTo(PHOTO_ID_1);
+        verify(syncEventService, Mockito.atLeastOnce())
+                .record(eq(OWNER_ID), any(), eq("PHOTO_ITEM"), eq(PHOTO_ID_1.toString()), any(), any(), any());
+    }
+
+    @Test
+    void addTagIsIdempotentForExistingTag() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
+        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边")).thenReturn(true);
+
+        service.addTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        verify(photoTagRepository, Mockito.never()).save(any(PhotoTag.class));
+    }
+
+    @Test
+    void removeTagDeletesExactTagRow() {
+        service.removeTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        verify(photoTagRepository).deleteByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边");
+    }
+
+    // ── 辅助方法 ──
+
+    private PhotoItem photoItem(UUID id, UUID fileNodeId, UUID coverFileId, String title) {
+        PhotoItem photo = new PhotoItem();
+        photo.setId(id);
+        photo.setOwnerUserId(OWNER_ID);
+        photo.setFileNodeId(fileNodeId);
+        photo.setCoverFileId(coverFileId);
+        photo.setTitle(title);
+        photo.setFileSize(1024L);
+        photo.setMetadataStatus("MATCHED");
+        photo.setProviderMetadata(new HashMap<>());
+        photo.setGpsLocation(new HashMap<>());
+        photo.setCreatedAt(Instant.parse("2026-05-01T10:00:00Z"));
+        photo.setUpdatedAt(Instant.parse("2026-05-01T10:00:00Z"));
+        return photo;
+    }
+
+    private PhotoListItemProjection photoProjection(UUID id, String title) {
+        PhotoListItemProjection projection = mock(PhotoListItemProjection.class);
+        when(projection.getId()).thenReturn(id);
+        when(projection.getOwnerUserId()).thenReturn(OWNER_ID);
+        when(projection.getFileNodeId()).thenReturn(FILE_NODE_ID_1);
+        when(projection.getTitle()).thenReturn(title);
+        when(projection.getWidth()).thenReturn(1920);
+        when(projection.getHeight()).thenReturn(1080);
+        when(projection.getFormat()).thenReturn("jpg");
+        when(projection.getFileSize()).thenReturn(1024L);
+        when(projection.getCoverFileId()).thenReturn(COVER_FILE_ID_1);
+        when(projection.getMetadataStatus()).thenReturn("MATCHED");
+        when(projection.getCreatedAt()).thenReturn(Instant.parse("2026-05-01T10:00:00Z"));
+        return projection;
+    }
+
+    private PhotoTimelinePreviewProjection timelineProjection(UUID id, int year, int month, long photoCount) {
+        PhotoTimelinePreviewProjection projection = mock(PhotoTimelinePreviewProjection.class);
+        when(projection.getId()).thenReturn(id);
+        when(projection.getOwnerUserId()).thenReturn(OWNER_ID);
+        when(projection.getFileNodeId()).thenReturn(FILE_NODE_ID_1);
+        when(projection.getTitle()).thenReturn("时间线照片");
+        when(projection.getWidth()).thenReturn(1920);
+        when(projection.getHeight()).thenReturn(1080);
+        when(projection.getDateTaken()).thenReturn(Instant.parse("2026-05-01T10:00:00Z"));
+        when(projection.getFormat()).thenReturn("jpg");
+        when(projection.getFileSize()).thenReturn(1024L);
+        when(projection.getCoverFileId()).thenReturn(COVER_FILE_ID_1);
+        when(projection.getMetadataStatus()).thenReturn("MATCHED");
+        when(projection.getCreatedAt()).thenReturn(Instant.parse("2026-05-01T10:00:00Z"));
+        when(projection.getYear()).thenReturn(year);
+        when(projection.getMonth()).thenReturn(month);
+        when(projection.getPhotoCount()).thenReturn(photoCount);
+        return projection;
+    }
+
+    private PhotoGroupPreviewProjection groupProjection(UUID id, String groupKey, long photoCount) {
+        PhotoGroupPreviewProjection projection = mock(PhotoGroupPreviewProjection.class);
+        when(projection.getId()).thenReturn(id);
+        when(projection.getOwnerUserId()).thenReturn(OWNER_ID);
+        when(projection.getFileNodeId()).thenReturn(FILE_NODE_ID_1);
+        when(projection.getTitle()).thenReturn("分组照片");
+        when(projection.getWidth()).thenReturn(1920);
+        when(projection.getHeight()).thenReturn(1080);
+        when(projection.getFormat()).thenReturn("jpg");
+        when(projection.getFileSize()).thenReturn(1024L);
+        when(projection.getCoverFileId()).thenReturn(COVER_FILE_ID_1);
+        when(projection.getMetadataStatus()).thenReturn("MATCHED");
+        when(projection.getCreatedAt()).thenReturn(Instant.parse("2026-05-01T10:00:00Z"));
+        when(projection.getGroupKey()).thenReturn(groupKey);
+        when(projection.getPhotoCount()).thenReturn(photoCount);
+        return projection;
+    }
+
+    @Test
+    void listByTagPage_returnsPageSliceWithTagAssociationTotal() {
+        PhotoTag tag1 = new PhotoTag();
+        tag1.setOwnerUserId(OWNER_ID);
+        tag1.setTag("旅行");
+        tag1.setPhotoId(PHOTO_ID_1);
+        PhotoTag tag2 = new PhotoTag();
+        tag2.setOwnerUserId(OWNER_ID);
+        tag2.setTag("旅行");
+        tag2.setPhotoId(PHOTO_ID_2);
+        Pageable pageable = PageRequest.of(0, 2);
+        when(photoTagRepository.findActiveByOwnerUserIdAndTag(OWNER_ID, "旅行", pageable))
+                .thenReturn(new PageImpl<>(List.of(tag1, tag2), pageable, 5));
+        PhotoItem photo1 = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片一");
+        PhotoItem photo2 = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "标签照片二");
+        when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(photo1, photo2));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrlsAs(eq(OWNER_ID), any()))
+                .thenReturn(Map.of(
+                        COVER_FILE_ID_1,
+                        downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"),
+                        COVER_FILE_ID_2,
+                        downloadUrl(COVER_FILE_ID_2, "photo2.jpg", "http://minio/photo2")));
+
+        Page<PhotoItemDto> result = service.listByTagPage(OWNER_ID, "旅行", 0, 2);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent()).extracting(PhotoItemDto::title)
+                .containsExactly("标签照片一", "标签照片二");
+        // totalElements 取标签关联总数而非当前页条数，滚动加载据此判断 hasMore。
+        assertThat(result.getTotalElements()).isEqualTo(5);
+    }
+
+    @Test
+    void listByTagPage_emptyTagReturnsEmptyPageWithoutItemLookup() {
+        Pageable pageable = PageRequest.of(0, 2);
+        when(photoTagRepository.findActiveByOwnerUserIdAndTag(OWNER_ID, "无标签", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Page<PhotoItemDto> result = service.listByTagPage(OWNER_ID, "无标签", 0, 2);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+        verify(photoItemRepository, Mockito.never()).findActiveByOwnerUserIdAndIdIn(any(), any());
+    }
+
+    private FileDownloadUrlDto downloadUrl(UUID fileId, String fileName, String url) {
+        return new FileDownloadUrlDto(fileId, fileName, url, Instant.now().plusSeconds(900));
+    }
+}

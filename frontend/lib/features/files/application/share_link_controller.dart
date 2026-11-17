@@ -1,0 +1,186 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/features/files/application/file_browser_controller.dart';
+import 'package:omninest/features/files/domain/file_manager_models.dart';
+
+final shareLinkControllerProvider =
+    AsyncNotifierProvider.autoDispose<ShareLinkController, FileShareLink?>(
+      ShareLinkController.new,
+    );
+
+/// 我的分享链接列表状态。
+final myShareLinksProvider = AsyncNotifierProvider.autoDispose<
+  MyShareLinksNotifier,
+  List<FileShareLink>
+>(MyShareLinksNotifier.new);
+
+class ShareLinkController extends AsyncNotifier<FileShareLink?> {
+  @override
+  FileShareLink? build() => null;
+
+  /// 创建分享链接并存储到状态。
+  ///
+  /// 失败不向调用方抛出：摘要落到 `AsyncError` 由分享面板内联展示，
+  /// 同时结束忙碌态，保证用户可改参数后重试。返回 null 表示未创建成功。
+  Future<FileShareLink?> createShareLink({
+    required String resourceId,
+    required String resourceType,
+    String? password,
+    bool generatePassword = false,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    bool allowDownloads = true,
+    bool originalQuality = true,
+    bool includeLocation = true,
+  }) async {
+    state = const AsyncLoading();
+    final repository = ref.read(fileRepositoryProvider);
+    try {
+      final link = await repository.createShareLink(
+        resourceId: resourceId,
+        resourceType: resourceType,
+        password: password,
+        generatePassword: generatePassword,
+        expiresAt: expiresAt,
+        maxAccessCount: maxAccessCount,
+        allowDownloads: allowDownloads,
+        originalQuality: originalQuality,
+        includeLocation: includeLocation,
+      );
+      if (!ref.mounted) {
+        return link;
+      }
+      state = AsyncData(link);
+      await _refreshShareLists();
+      return link;
+    } on Object catch (error, stackTrace) {
+      if (ref.mounted) {
+        state = AsyncError(error, stackTrace);
+      }
+      return null;
+    }
+  }
+
+  /// 修改分享链接设置并写入状态。
+  ///
+  /// 失败处理与 [createShareLink] 一致：摘要落到 `AsyncError` 由分享面板内联展示，
+  /// 用户可改参数后重试。参数传 null 表示保持原值，空串与 0 的清除语义见 data 层。
+  Future<FileShareLink?> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+    bool? allowDownloads,
+    bool? originalQuality,
+    bool? includeLocation,
+  }) async {
+    state = const AsyncLoading();
+    final repository = ref.read(fileRepositoryProvider);
+    try {
+      final link = await repository.updateShareLink(
+        shareId: shareId,
+        password: password,
+        expiresAt: expiresAt,
+        maxAccessCount: maxAccessCount,
+        allowDownloads: allowDownloads,
+        originalQuality: originalQuality,
+        includeLocation: includeLocation,
+      );
+      if (!ref.mounted) {
+        return link;
+      }
+      state = AsyncData(link);
+      await _refreshShareLists();
+      return link;
+    } on Object catch (error, stackTrace) {
+      if (ref.mounted) {
+        state = AsyncError(error, stackTrace);
+      }
+      return null;
+    }
+  }
+
+  /// 撤销分享链接。
+  Future<void> revokeShare(String shareId) async {
+    final repository = ref.read(fileRepositoryProvider);
+    await repository.revokeShare(shareId);
+    if (!ref.mounted) {
+      return;
+    }
+    state = const AsyncData(null);
+    await _refreshShareLists();
+  }
+
+  /// 定向刷新分享相关列表，避免重建整个文件浏览器 Controller。
+  Future<void> _refreshShareLists() async {
+    if (!ref.mounted) {
+      return;
+    }
+    if (ref.exists(myShareLinksProvider)) {
+      await ref.read(myShareLinksProvider.notifier).load();
+    }
+    if (!ref.exists(fileBrowserControllerProvider)) {
+      return;
+    }
+    final browser = ref.read(fileBrowserControllerProvider.notifier);
+    final section =
+        ref.read(fileBrowserControllerProvider).asData?.value.section;
+    switch (section) {
+      case FileManagerSection.myShares:
+        await browser.showMyShares();
+      case FileManagerSection.shareManagement:
+        await browser.showShareLinks();
+      default:
+        break;
+    }
+  }
+
+  /// 重置状态（弹窗关闭时调用）。
+  void reset() {
+    state = const AsyncData(null);
+  }
+}
+
+class MyShareLinksNotifier extends AsyncNotifier<List<FileShareLink>> {
+  @override
+  List<FileShareLink> build() => [];
+
+  /// 加载我的分享链接列表。
+  Future<void> load() async {
+    state = const AsyncLoading();
+    final repository = ref.read(fileRepositoryProvider);
+    try {
+      final links = await repository.listMyShares();
+      // autoDispose：列表页关闭后 Ref 已销毁，继续写 state 会抛 Bad state。
+      if (!ref.mounted) {
+        return;
+      }
+      state = AsyncData(links);
+    } on Object catch (error, stackTrace) {
+      if (!ref.mounted) {
+        return;
+      }
+      state = AsyncError(error, stackTrace);
+    }
+  }
+
+  /// 撤销分享链接并刷新列表。
+  Future<void> revokeShare(String shareId) async {
+    final repository = ref.read(fileRepositoryProvider);
+    await repository.revokeShare(shareId);
+    await load();
+    if (!ref.exists(fileBrowserControllerProvider)) {
+      return;
+    }
+    final browser = ref.read(fileBrowserControllerProvider.notifier);
+    final section =
+        ref.read(fileBrowserControllerProvider).asData?.value.section;
+    switch (section) {
+      case FileManagerSection.myShares:
+        await browser.showMyShares();
+      case FileManagerSection.shareManagement:
+        await browser.showShareLinks();
+      default:
+        break;
+    }
+  }
+}

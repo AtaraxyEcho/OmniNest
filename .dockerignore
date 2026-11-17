@@ -1,0 +1,73 @@
+# Git 元数据和本地工程状态
+.git/
+**/.git/
+.gitignore
+.gitattributes
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+.agents/
+.codex/
+.codex-tmp/
+.impeccable/
+.localappdata/
+docs/
+logo/
+
+# 本地环境变量和凭据
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 构建产物、依赖缓存和测试输出
+**/target/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/coverage/
+**/test-results/
+**/test/**/failures/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+
+# 本地运行数据、日志和临时目录
+**/.omninest/
+/data/
+**/logs/
+**/tmp/
+**/temp/
+**/backups/
+*.log
+*.dump
+*.dump.gz
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+
+# AI 模型缓存不随构建上下文传入镜像
+vision-sidecar/models/
+*.pth
+*.pt
+*.onnx
+*.safetensors
+
+# 操作系统临时文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~

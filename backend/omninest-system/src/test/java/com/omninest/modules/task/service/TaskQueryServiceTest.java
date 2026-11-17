@@ -1,0 +1,434 @@
+package com.omninest.modules.task.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.modules.task.domain.TaskStatus;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.domain.TaskDispatch;
+import com.omninest.modules.task.dto.TaskDto;
+import com.omninest.modules.task.repository.TaskDispatchRepository;
+import com.omninest.modules.task.repository.TaskRecordRepository;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+import static org.mockito.Mockito.never;
+
+/**
+ * TaskQueryService 单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class TaskQueryServiceTest {
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+
+    @Mock
+    private TaskRecordRepository taskRecordRepository;
+
+    @Mock
+    private TaskDispatchService taskDispatchService;
+
+    @Mock
+    private TaskDispatchRepository taskDispatchRepository;
+
+    @Mock
+    private TaskRecordService taskRecordService;
+
+    @Mock
+    private RateLimitService rateLimitService;
+
+    private TaskQueryService taskQueryService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class)))
+                .thenReturn(true);
+        taskQueryService = new TaskQueryService(
+                taskRecordRepository,
+                taskRecordService,
+                new TaskRedispatchService(taskDispatchService, taskDispatchRepository),
+                rateLimitService
+        );
+    }
+
+    /**
+     * 创建测试用任务记录
+     */
+    private TaskRecord createTaskRecord(String status) {
+        TaskRecord record = new TaskRecord();
+        record.setId(UUID.randomUUID());
+        record.setOwnerUserId(OWNER_ID);
+        record.setTaskType("FILE_INDEX");
+        record.setStatus(status);
+        record.setRetryCount(0);
+        record.setProgress(0);
+        record.setMaxRetries(3);
+        record.setCreatedAt(Instant.now());
+        record.setUpdatedAt(Instant.now());
+        record.setVersion(0L);
+        return record;
+    }
+
+    @Nested
+    @DisplayName("list 方法测试")
+    class ListTests {
+
+        @Test
+        @DisplayName("无状态过滤时返回全部任务")
+        void list_noStatusFilter_returnsAllTasks() {
+            // Arrange
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+            TaskRecord task1 = createTaskRecord("QUEUED");
+            TaskRecord task2 = createTaskRecord("COMPLETED");
+            Page<TaskRecord> page = new PageImpl<>(List.of(task1, task2), pageable, 2);
+            when(taskRecordRepository.findByOwnerUserId(OWNER_ID, pageable)).thenReturn(page);
+
+            // Act
+            Page<TaskDto> result = taskQueryService.listOwned(OWNER_ID, null, pageable);
+
+            // Assert
+            assertThat(result.getContent()).hasSize(2);
+            assertThat(result.getTotalElements()).isEqualTo(2);
+            verify(taskRecordRepository).findByOwnerUserId(OWNER_ID, pageable);
+        }
+
+        @Test
+        @DisplayName("空字符串状态过滤时返回全部任务")
+        void list_emptyStatusFilter_returnsAllTasks() {
+            // Arrange
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+            Page<TaskRecord> page = new PageImpl<>(List.of(), pageable, 0);
+            when(taskRecordRepository.findByOwnerUserId(OWNER_ID, pageable)).thenReturn(page);
+
+            // Act
+            Page<TaskDto> result = taskQueryService.listOwned(OWNER_ID, "", pageable);
+
+            // Assert
+            assertThat(result.getContent()).isEmpty();
+            verify(taskRecordRepository).findByOwnerUserId(OWNER_ID, pageable);
+        }
+
+        @Test
+        @DisplayName("调用方指定排序时不被服务覆盖")
+        void list_withCallerSort_isNotOverridden() {
+            Pageable sorted = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "createdAt"));
+            Page<TaskRecord> page = new PageImpl<>(List.of(), sorted, 0);
+            when(taskRecordRepository.findByOwnerUserId(OWNER_ID, sorted)).thenReturn(page);
+
+            taskQueryService.listOwned(OWNER_ID, null, sorted);
+
+            verify(taskRecordRepository).findByOwnerUserId(OWNER_ID, sorted);
+        }
+
+        @Test
+        @DisplayName("指定状态过滤时返回匹配任务")
+        void list_withStatusFilter_returnsMatchingTasks() {
+            // Arrange
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+            TaskRecord task = createTaskRecord("QUEUED");
+            Page<TaskRecord> page = new PageImpl<>(List.of(task), pageable, 1);
+            when(taskRecordRepository.findByOwnerUserIdAndStatus(OWNER_ID, "QUEUED", pageable)).thenReturn(page);
+
+            // Act
+            Page<TaskDto> result = taskQueryService.listOwned(OWNER_ID, "QUEUED", pageable);
+
+            // Assert
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).status()).isEqualTo("QUEUED");
+            verify(taskRecordRepository).findByOwnerUserIdAndStatus(OWNER_ID, "QUEUED", pageable);
+        }
+
+        @Test
+        @DisplayName("指定状态无匹配时返回空结果")
+        void list_withStatusFilter_noMatch_returnsEmpty() {
+            // Arrange
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+            Page<TaskRecord> page = new PageImpl<>(List.of(), pageable, 0);
+            when(taskRecordRepository.findByOwnerUserIdAndStatus(OWNER_ID, "FAILED", pageable)).thenReturn(page);
+
+            // Act
+            Page<TaskDto> result = taskQueryService.listOwned(OWNER_ID, "FAILED", pageable);
+
+            // Assert
+            assertThat(result.getContent()).isEmpty();
+            verify(taskRecordRepository).findByOwnerUserIdAndStatus(OWNER_ID, "FAILED", pageable);
+        }
+    }
+
+    @Nested
+    @DisplayName("listDlq 方法测试")
+    class ListDlqTests {
+
+        @Test
+        @DisplayName("返回死信队列中的任务")
+        void listDlq_returnsDeadLetterTasks() {
+            // Arrange
+            TaskRecord dlqTask = createTaskRecord(TaskStatus.DLQ.getValue());
+            when(taskRecordRepository.findByStatusOrderByCreatedAtDesc(
+                    eq(TaskStatus.DLQ.getValue()), any(PageRequest.class)))
+                    .thenReturn(List.of(dlqTask));
+
+            // Act
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
+
+            // Assert
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).status()).isEqualTo(TaskStatus.DLQ.getValue());
+        }
+
+        @Test
+        @DisplayName("跨用户查看死信任务时脱敏私有路径")
+        void listDlq_masksPrivatePathsForOtherUsers() {
+            TaskRecord foreign = createTaskRecord(TaskStatus.DLQ.getValue());
+            foreign.setOwnerUserId(UUID.randomUUID());
+            foreign.setErrorMessage("处理失败: C:\\data\\users\\secret\\报告.pdf");
+            foreign.setResult("{\"filePath\":\"/private/photos/a.jpg\",\"fileId\":\"x\"}");
+            when(taskRecordRepository.findByStatusOrderByCreatedAtDesc(
+                    eq(TaskStatus.DLQ.getValue()), any(PageRequest.class)))
+                    .thenReturn(List.of(foreign));
+
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
+
+            assertThat(result.get(0).errorSummary()).doesNotContain("secret").contains("已脱敏");
+            assertThat(result.get(0).result()).doesNotContain("private").contains("已脱敏");
+        }
+
+        @Test
+        @DisplayName("死信队列为空时返回空列表")
+        void listDlq_emptyQueue_returnsEmptyList() {
+            // Arrange
+            when(taskRecordRepository.findByStatusOrderByCreatedAtDesc(
+                    eq(TaskStatus.DLQ.getValue()), any(PageRequest.class)))
+                    .thenReturn(List.of());
+
+            // Act
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
+
+            // Assert
+            assertThat(result).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("摘要优先任务按状态直接查询，不受最近 50 条窗口限制")
+    void summaryOwned_priorityTaskIsQueriedByStatus() {
+        TaskRecord failedTask = createTaskRecord(TaskStatus.FAILED.getValue());
+        failedTask.setId(UUID.fromString("20000000-0000-0000-0000-000000000001"));
+        when(taskRecordRepository.countByOwnerUserIdAndStatusIn(eq(OWNER_ID), any()))
+                .thenReturn(1L);
+        when(taskRecordRepository.findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(
+                eq(OWNER_ID), any())).thenReturn(Optional.of(failedTask));
+
+        var summary = taskQueryService.summaryOwned(OWNER_ID);
+
+        assertThat(summary.activeCount()).isEqualTo(1);
+        assertThat(summary.failedCount()).isEqualTo(1);
+        assertThat(summary.priorityTask()).isNotNull();
+        assertThat(summary.priorityTask().id()).isEqualTo(failedTask.getId());
+    }
+
+    @Nested
+    @DisplayName("retryDlqEntry 方法测试")
+    class RetryDlqEntryTests {
+
+        @Test
+        @DisplayName("重试死信任务成功并经 Outbox 重新投递")
+        void retryDlqEntry_validDeadLetterTask_retriesSuccessfully() {
+            // Arrange
+            UUID taskId = UUID.randomUUID();
+            TaskRecord dlqTask = createTaskRecord(TaskStatus.DLQ.getValue());
+            dlqTask.setId(taskId);
+            dlqTask.setRetryCount(3);
+            dlqTask.setErrorMessage("处理失败");
+            dlqTask.setStackSummary("stack");
+            dlqTask.setNextRetryAt(Instant.now());
+            dlqTask.setCompletedAt(Instant.now());
+            dlqTask.setRoutingKey(QueueNames.PHOTO_BATCH_ROUTING_KEY);
+            dlqTask.setPayload("{\"taskId\":\"" + taskId + "\","
+                    + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\"}");
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(dlqTask));
+
+            // Act
+            taskQueryService.retryDlqEntry(taskId);
+
+            // Assert：状态重置已下沉到 TaskRecordService.resetToQueued，本入口只负责编排
+            // 「先重置、再重新投递」。逐字段的重置断言属于 resetToQueued 自身的职责边界。
+            InOrder order = Mockito.inOrder(taskRecordService, taskDispatchService);
+            order.verify(taskRecordService).resetToQueued(dlqTask);
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+            verify(taskDispatchService).enqueue(
+                    eq(taskId),
+                    eq(QueueNames.TASK_EXCHANGE),
+                    eq(QueueNames.PHOTO_BATCH_ROUTING_KEY),
+                    payloadCaptor.capture()
+            );
+            assertThat(payloadCaptor.getValue()).containsEntry("taskId", taskId.toString());
+        }
+
+        @Test
+        @DisplayName("载荷无法重建时重试失败")
+        void retryDlqEntry_missingRoutingKey_throwsException() {
+            // Arrange
+            UUID taskId = UUID.randomUUID();
+            TaskRecord dlqTask = createTaskRecord(TaskStatus.DLQ.getValue());
+            dlqTask.setId(taskId);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(dlqTask));
+
+            // Act & Assert
+            assertThatThrownBy(() -> taskQueryService.retryDlqEntry(taskId))
+                    .isInstanceOf(BusinessException.class);
+            verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("任务不存在时抛出异常")
+        void retryDlqEntry_taskNotFound_throwsException() {
+            // Arrange
+            UUID taskId = UUID.randomUUID();
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> taskQueryService.retryDlqEntry(taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.TASK_NOT_FOUND);
+                    });
+        }
+
+        @Test
+        @DisplayName("非死信任务不可重试")
+        void retryDlqEntry_nonDeadLetterTask_throwsException() {
+            // Arrange
+            UUID taskId = UUID.randomUUID();
+            TaskRecord queuedTask = createTaskRecord("QUEUED");
+            queuedTask.setId(taskId);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(queuedTask));
+
+            // Act & Assert
+            assertThatThrownBy(() -> taskQueryService.retryDlqEntry(taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.TASK_STATUS_ILLEGAL);
+                    });
+        }
+    }
+
+    @Nested
+    @DisplayName("retryOwned 方法测试")
+    class RetryOwnedTests {
+
+        @Test
+        @DisplayName("非本人任务不可重试")
+        void retryOwned_foreignOwner_throwsException() {
+            UUID taskId = UUID.randomUUID();
+            TaskRecord task = createTaskRecord("FAILED");
+            task.setId(taskId);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(task));
+
+            UUID otherUser = UUID.fromString("10000000-0000-0000-0000-000000000002");
+            assertThatThrownBy(() -> taskQueryService.retryOwned(otherUser, taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.TASK_NOT_FOUND);
+                    });
+            verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("死信任务不可走本人重试")
+        void retryOwned_dlqTask_throwsException() {
+            UUID taskId = UUID.randomUUID();
+            TaskRecord task = createTaskRecord("DLQ");
+            task.setId(taskId);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(task));
+
+            assertThatThrownBy(() -> taskQueryService.retryOwned(OWNER_ID, taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.TASK_STATUS_ILLEGAL);
+                    });
+        }
+
+        @Test
+        @DisplayName("FAILED 任务重试后重新入队并投递")
+        void retryOwned_failedTask_queuesAndRedispatches() {
+            UUID taskId = UUID.randomUUID();
+            TaskRecord task = createTaskRecord("FAILED");
+            task.setId(taskId);
+            task.setRetryCount(2);
+            task.setErrorMessage("boom");
+            task.setStackSummary("stack");
+            task.setNextRetryAt(Instant.now());
+            task.setCompletedAt(Instant.now());
+            task.setRoutingKey(QueueNames.THUMBNAIL_ROUTING_KEY);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(task));
+            TaskDispatch dispatch = new TaskDispatch();
+            dispatch.setRoutingKey(QueueNames.THUMBNAIL_ROUTING_KEY);
+            dispatch.setPayload("{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\"}");
+            when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId))
+                    .thenReturn(Optional.of(dispatch));
+
+            taskQueryService.retryOwned(OWNER_ID, taskId);
+
+            InOrder order = Mockito.inOrder(taskRecordService, taskDispatchService);
+            order.verify(taskRecordService).resetToQueued(task);
+            verify(taskDispatchService).enqueue(eq(taskId), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("重试额度耗尽时拒绝且不查库不投递")
+        void retryOwned_retryBudgetExhausted_throwsRateLimited() {
+            UUID taskId = UUID.randomUUID();
+            when(rateLimitService.tryAcquire(
+                    eq("task:retry:" + OWNER_ID), eq(10), eq(Duration.ofMinutes(5))))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> taskQueryService.retryOwned(OWNER_ID, taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED);
+                    });
+            verify(taskRecordRepository, never()).findById(any());
+            verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
+        }
+    }
+}

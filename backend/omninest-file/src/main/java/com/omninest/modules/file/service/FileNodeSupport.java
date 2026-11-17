@@ -1,0 +1,315 @@
+package com.omninest.modules.file.service;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.FileTypeCategories;
+import java.util.HashMap;
+import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.port.MediaCoverDirectory;
+import com.omninest.modules.user.port.UserNameDirectory;
+import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SourceType;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.repository.FileFavoriteRepository;
+import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+/**
+ * 文件节点查找与 DTO 映射的共享支撑服务。
+ * 供收藏、分享、版本等文件扩展服务复用，避免各服务重复实现节点可见性规则。
+ *
+ * @author OmniNest
+ */
+@Service
+@RequiredArgsConstructor
+public class FileNodeSupport {
+    private final UserNameDirectory userNameDirectory;
+    private final MediaCoverDirectory mediaCoverDirectory;
+    private final FileNodeRepository fileNodeRepository;
+    private final SharedSpaceService sharedSpaceService;
+    private final FileFavoriteRepository favoriteRepository;
+
+    /**
+     * 查找用户拥有的未删除节点。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileId      文件节点 ID
+     * @return 文件节点
+     */
+    public FileNode findActiveNode(UUID ownerUserId, UUID fileId) {
+        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+    }
+
+    /**
+     * 查找用户可见的文件（个人空间或共享空间）。
+     * 用于收藏、最近访问等需要访问共享空间文件的场景；
+     * 共享空间回退分支要求空间启用且具备 CAN_BROWSE 能力，未授权用户按不存在处理。
+     *
+     * @param userId 用户 ID
+     * @param fileId 文件节点 ID
+     * @return 文件节点
+     */
+    public FileNode findVisibleNode(UUID userId, UUID fileId) {
+        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, userId)
+                .orElseGet(() -> {
+                    FileNode shared = fileNodeRepository
+                            .findByIdAndSpaceTypeAndDeletedFalse(fileId, SpaceType.SHARED)
+                            .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+                    // 与批量收藏共用同一可见性判定：空间开关与角色权限缺一不可，
+                    // 且不可用异常表达，避免 403/404 差异成为共享文件存在性探测 oracle。
+                    if (!sharedSpaceService.canBrowse(userId)) {
+                        throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
+                    }
+                    return shared;
+                });
+    }
+
+    /**
+     * 查找用户拥有的未删除节点（业务对象不存在时返回 NOT_FOUND）。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileId      文件节点 ID
+     * @return 文件节点
+     */
+    public FileNode findOwnedNode(UUID ownerUserId, UUID fileId) {
+        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
+    }
+
+    /**
+     * 校验节点允许执行分享、复制、版本等写语义操作。
+     * 本地只读影视库节点拒绝此类操作。
+     *
+     * @param node 文件节点
+     */
+    public void requireShareable(FileNode node) {
+        if (SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不支持该文件操作");
+        }
+    }
+
+    /**
+     * 判断同级目录下是否存在同名节点（限定空间）。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType   节点所属空间
+     * @param parentId    父目录 ID，null 表示根目录
+     * @param name        节点名称
+     * @return 是否存在同名节点
+     */
+    public boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String name) {
+        if (parentId == null) {
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, name);
+        }
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, name);
+    }
+
+    /**
+     * 解析子节点规范化路径。
+     *
+     * @param parent    父节点，null 表示根目录
+     * @param childName 子节点名称
+     * @return 规范化路径
+     */
+    public String resolveChildPath(FileNode parent, String childName) {
+        if (parent == null) {
+            return "/" + childName;
+        }
+        return parent.getNormalizedPath() + "/" + childName;
+    }
+
+    /**
+     * 将文件节点映射为对外 DTO。
+     *
+     * @param node 文件节点
+     * @return 文件节点 DTO
+     */
+    public FileNodeDto toNodeDto(FileNode node) {
+        Map<UUID, UUID> covers = resolveAliveCovers(List.of(node));
+        return toNodeDto(
+                node,
+                resolveUploaderNames(List.of(node)),
+                covers.get(node.getId()),
+                false
+        );
+    }
+
+    /**
+     * 将文件节点映射为对外 DTO，上传者显示名一次批量解析，避免列表页逐节点查询。
+     *
+     * @param nodes 文件节点列表
+     * @return 文件节点 DTO 列表
+     */
+    public List<FileNodeDto> toNodeDtos(List<FileNode> nodes) {
+        return toNodeDtos(nodes, null);
+    }
+
+    /**
+     * 将文件节点映射为对外 DTO，并按观察者补齐收藏状态。
+     *
+     * <p>收藏状态必须随列表下推：前端预载收藏列表受单页上限约束，累计收藏超过一页后
+     * 较早收藏的节点会在目录里丢失星标。</p>
+     *
+     * @param nodes 文件节点列表
+     * @param viewerUserId 当前查询用户；为 null 时不解析收藏状态
+     * @return 文件节点 DTO 列表
+     */
+    public List<FileNodeDto> toNodeDtos(List<FileNode> nodes, UUID viewerUserId) {
+        Map<UUID, String> names = resolveUploaderNames(nodes);
+        Map<UUID, UUID> covers = resolveAliveCovers(nodes);
+        Set<UUID> favoritedIds = resolveFavoritedIds(nodes, viewerUserId);
+        return nodes.stream()
+                .map(node -> toNodeDto(
+                        node,
+                        names,
+                        covers.get(node.getId()),
+                        favoritedIds.contains(node.getId())))
+                .toList();
+    }
+
+    private Set<UUID> resolveFavoritedIds(List<FileNode> nodes, UUID viewerUserId) {
+        if (viewerUserId == null || nodes.isEmpty()) {
+            return Set.of();
+        }
+        List<UUID> nodeIds = new ArrayList<>(nodes.size());
+        for (FileNode node : nodes) {
+            nodeIds.add(node.getId());
+        }
+        return new HashSet<>(favoriteRepository.findFavoritedNodeIds(viewerUserId, nodeIds));
+    }
+
+    /**
+     * 解析本批节点的媒体封面并校验存活：仅对媒体类 FILE 节点发起反查
+     * （文件夹/普通文档零查询），封面节点已删除或缺失的剔除（防悬空
+     * 引用漏到前端造成无效签名请求）。
+     */
+    private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
+        Map<UUID, Set<UUID>> mediaIdsByOwner = new HashMap<>();
+        for (FileNode node : nodes) {
+            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+                continue;
+            }
+            if (!isMediaCategory(node)) {
+                continue;
+            }
+            mediaIdsByOwner
+                    .computeIfAbsent(node.getOwnerUserId(), key -> new HashSet<>())
+                    .add(node.getId());
+        }
+        if (mediaIdsByOwner.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UUID> covers = new HashMap<>();
+        mediaIdsByOwner.forEach((ownerUserId, mediaFileIds) ->
+                covers.putAll(mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds)));
+        if (covers.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> aliveIds = new HashSet<>();
+        for (FileNode coverNode : fileNodeRepository.findAllById(covers.values())) {
+            if (!coverNode.isDeleted() && NodeType.FILE.getValue().equals(coverNode.getNodeType())) {
+                aliveIds.add(coverNode.getId());
+            }
+        }
+        Map<UUID, UUID> alive = new HashMap<>();
+        for (Map.Entry<UUID, UUID> entry : covers.entrySet()) {
+            if (aliveIds.contains(entry.getValue())) {
+                alive.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return alive;
+    }
+
+    /** 媒体类判定：视频/音频/小说/漫画分类的文件才可能持有库封面。 */
+    private boolean isMediaCategory(FileNode node) {
+        String category = FileTypeCategories.resolve(
+                node.getName(), node.getMimeType(), node.getNodeType());
+        return FileTypeCategories.VIDEO.equals(category)
+                || FileTypeCategories.AUDIO.equals(category)
+                || FileTypeCategories.NOVEL.equals(category)
+                || FileTypeCategories.COMIC.equals(category);
+    }
+
+    private Map<UUID, String> resolveUploaderNames(List<FileNode> nodes) {
+        Set<UUID> uploaderIds = new HashSet<>();
+        for (FileNode node : nodes) {
+            UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+            if (uploaderId != null) {
+                uploaderIds.add(uploaderId);
+            }
+        }
+        return userNameDirectory.resolveDisplayNames(uploaderIds);
+    }
+
+    private FileNodeDto toNodeDto(
+            FileNode node,
+            Map<UUID, String> uploaderNames,
+            UUID coverFileId,
+            boolean favorited
+    ) {
+        UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+        return new FileNodeDto(
+                node.getId(),
+                node.getParentId(),
+                node.getNodeType(),
+                node.getName(),
+                node.getNormalizedPath(),
+                node.getMimeType(),
+                node.getSizeBytes(),
+                node.isShared(),
+                node.getSharedAt(),
+                node.getUpdatedAt(),
+                node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
+                node.getUploadedBy(),
+                uploaderNames.get(uploaderId),
+                coverFileId,
+                null,
+                favorited
+        );
+    }
+
+    /**
+     * 校验并获取复制目标父文件夹。
+     * 允许 targetParentId 为 null（复制到根目录）。
+     *
+     * @param ownerUserId    所有者用户 ID
+     * @param targetParentId 目标父文件夹 ID
+     * @return 目标父节点，null 表示根目录
+     */
+    public FileNode resolveCopyTargetParent(UUID ownerUserId, UUID targetParentId) {
+        if (targetParentId == null) {
+            return null;
+        }
+        FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, ownerUserId)
+                .orElseGet(() -> resolveSharedCopyTargetParent(ownerUserId, targetParentId));
+        if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "目标父级必须是文件夹");
+        }
+        return parent;
+    }
+
+    /**
+     * 共享空间目录可能由其他成员创建：按可见性查找，并要求当前用户具备浏览与上传能力。
+     */
+    private FileNode resolveSharedCopyTargetParent(UUID ownerUserId, UUID targetParentId) {
+        FileNode shared = fileNodeRepository
+                .findByIdAndSpaceTypeAndDeletedFalse(targetParentId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+        if (!sharedSpaceService.canBrowse(ownerUserId)) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在");
+        }
+        sharedSpaceService.requireSharedWrite(ownerUserId);
+        return shared;
+    }
+}

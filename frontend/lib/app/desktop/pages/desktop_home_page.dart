@@ -1,0 +1,818 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_routes.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/desktop/pages/desktop_home_lists.dart';
+import 'package:omninest/app/desktop/pages/desktop_home_sections.dart';
+import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_sky.dart';
+import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_palette.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/features/files/file_dashboard.dart';
+import 'package:omninest/features/music/music_portal.dart';
+import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/features/portal/portal_weather.dart';
+import 'package:omninest/features/reader/reader_dashboard.dart';
+import 'package:omninest/features/video/video_dashboard.dart';
+
+/// 桌面首页（样例 `Home.tsx`）：天象 hero + 四指标 + 继续观看 +
+/// 此刻聆听 / 在读 + 最近照片 + 最近文件 / 动态。
+///
+/// 全部数据来自各模块的只读门面，没有演示占位：空库时每个分区
+/// 落到各自的空态与前往入口，而不是留白或假数字。
+class DesktopHomePage extends ConsumerStatefulWidget {
+  const DesktopHomePage({super.key});
+
+  /// 问候语与天象都跟当前时刻走。视觉基线需要确定的时刻，
+  /// 测试在此注入固定时钟，生产路径始终读真实时间。
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
+  @override
+  ConsumerState<DesktopHomePage> createState() => _DesktopHomePageState();
+}
+
+class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).toString();
+    final now = DesktopHomePage.clock();
+    final hour = now.hour + now.minute / 60;
+    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final name =
+        (user?.displayName?.trim().isNotEmpty ?? false)
+            ? user!.displayName!.trim()
+            : (user?.username ?? '');
+    final movieSnapshot = ref.watch(
+      movieDashboardProvider.select((state) {
+        final dashboard = state.asData?.value;
+        final resume =
+            dashboard != null && dashboard.continueWatching.isNotEmpty
+                ? dashboard.continueWatching.first
+                : null;
+        return (
+          count: dashboard?.stats.movieCount ?? 0,
+          resumeId: resume?.id,
+          resumeTitle: resume?.title,
+        );
+      }),
+    );
+    final photoCount = ref.watch(
+      photoDashboardProvider.select(
+        (state) => state.asData?.value.totalPhotos ?? 0,
+      ),
+    );
+    final readerTotal = ref.watch(
+      readerDashboardProvider.select(
+        (state) => state.asData?.value.overview.totalItems ?? 0,
+      ),
+    );
+    final readingStreak = ref.watch(
+      readerStatsProvider.select(
+        (state) => state.asData?.value.currentStreak ?? 0,
+      ),
+    );
+    final longestReadingStreak = ref.watch(
+      readerStatsProvider.select(
+        (state) => state.asData?.value.longestStreak ?? 0,
+      ),
+    );
+    final storage = ref.watch(fileStorageStatsProvider).asData?.value;
+    final musicSnapshot = ref.watch(
+      musicPortalSnapshotProvider.select((state) {
+        final music = state.asData?.value;
+        final track = music?.featuredTrack ?? music?.activeTrack;
+        return (
+          trackId: track?.id,
+          trackTitle: track?.title,
+          playCount: music?.recentPlayCount ?? 0,
+          trackCount: music?.trackCount ?? 0,
+        );
+      }),
+    );
+    final weather = ref.watch(
+      realtimeWeatherProvider.select((state) => state.asData?.value),
+    );
+    final reduceMotion = ref.watch(desktopAppearanceProvider).reduceMotion;
+
+    // hero 的次按钮跟样例一样直呼曲名：泛化的「开始聆听」在播放条已经
+    // 有曲目时反而比按钮旁边那行文案更模糊。库空时才退回泛化文案。
+    final listenLabel = musicSnapshot.trackTitle ?? l10n.desktopStartListening;
+    final greeting =
+        hour < 5
+            ? l10n.desktopGreetingNight
+            : hour < 12
+            ? l10n.desktopGreetingMorning
+            : hour < 18
+            ? l10n.desktopGreetingAfternoon
+            : l10n.desktopGreetingEvening;
+    final libraryTotal =
+        movieSnapshot.count +
+        photoCount +
+        musicSnapshot.trackCount +
+        readerTotal;
+
+    return Scrollbar(
+      controller: _scroll,
+      child: SingleChildScrollView(
+        controller: _scroll,
+        child: DesktopPage(
+          topPadding: DesktopMetrics.pageTopPaddingCompact,
+          // 样例只给 `.hero-sky` 与各列表条目挂入场动画，区块容器本身不动；
+          // 交错覆盖在 `.stat`/`.rail`/`.mini-list`/`.timeline` 各自内部完成。
+          children: [
+            DesktopRise(
+              duration: DesktopMotion.slow,
+              // 样例 `.bd-on .hero-sky .sky { display:none }`：自定义壁纸在场
+              // 时首页不再叠实时天象，否则两层天气画面互相打架。
+              child: _HeroSky(
+                showSky:
+                    !(ref
+                            .watch(appBackdropControllerProvider)
+                            .asData
+                            ?.value
+                            .hasActiveBackdrop ??
+                        false),
+                // 样例眉标只到「周六，11 月 14 日」：年份在首页永不需要，
+                // 带上它会把这行从三格撑成四格，压掉右边天气卡的对齐。
+                dateLabel: DateFormat.MMMMEEEEd(locale).format(now),
+                greeting: l10n.desktopGreeting(greeting, name),
+                lead:
+                    movieSnapshot.resumeTitle == null
+                        ? l10n.desktopHomeLeadQuiet(libraryTotal)
+                        : l10n.desktopHomeLeadResume(
+                          libraryTotal,
+                          movieSnapshot.resumeTitle!,
+                        ),
+                hour: hour,
+                weather: weather,
+                reduceMotion: reduceMotion,
+                resumeLabel:
+                    movieSnapshot.resumeTitle == null
+                        ? null
+                        : l10n.desktopResumeTitle(movieSnapshot.resumeTitle!),
+                listenLabel: listenLabel,
+                onResume:
+                    movieSnapshot.resumeId == null
+                        ? null
+                        : () => context.push(
+                          DesktopRoutes.moviePlay(movieSnapshot.resumeId!),
+                        ),
+                onStartListening: () {
+                  final trackId = musicSnapshot.trackId;
+                  if (trackId == null) {
+                    context.go(DesktopRoutes.music);
+                    return;
+                  }
+                  ref.read(musicPortalActionsProvider).playTrackById(trackId);
+                  context.push(DesktopRoutes.nowPlaying);
+                },
+              ),
+            ),
+            const SizedBox(height: 22),
+            _StatsRow(
+              libraryTotal: libraryTotal,
+              photoCount: photoCount,
+              movieCount: movieSnapshot.count,
+              playCount: musicSnapshot.playCount,
+              readingStreak: readingStreak,
+              longestReadingStreak: longestReadingStreak,
+              storage: storage,
+            ),
+            DesktopSection(
+              eyebrow: l10n.desktopPickUpWhereYouLeft,
+              title: l10n.desktopContinueWatching,
+              actionLabel: l10n.desktopAllMovies,
+              onAction: () => context.go(DesktopRoutes.movies),
+              child: const DesktopContinueRail(),
+            ),
+            _TwoColumns(
+              left: DesktopSection(
+                eyebrow: l10n.desktopFreshArrivals,
+                title: l10n.desktopEveningListening,
+                actionLabel: l10n.desktopOpenMusic,
+                onAction: () => context.go(DesktopRoutes.music),
+                child: const DesktopListeningRow(),
+              ),
+              right: DesktopSection(
+                eyebrow: l10n.desktopBooksEyebrow,
+                title: l10n.desktopCurrentlyReading,
+                actionLabel: l10n.desktopOpenReader,
+                onAction: () => context.go(DesktopRoutes.reader),
+                child: const DesktopReadingCard(),
+              ),
+            ),
+            DesktopSection(
+              eyebrow: l10n.desktopFreshArrivals,
+              title: l10n.desktopRecentPhotos,
+              actionLabel: l10n.desktopOpenPhotos,
+              onAction: () => context.go(DesktopRoutes.photos),
+              child: const DesktopPhotoStrip(),
+            ),
+            _TwoColumns(
+              equal: true,
+              left: DesktopSection(
+                title: l10n.desktopRecentFiles,
+                actionLabel: l10n.desktopOpenFiles,
+                onAction: () => context.go(DesktopRoutes.files),
+                child: const DesktopRecentFiles(),
+              ),
+              right: DesktopSection(
+                title: l10n.desktopActivity,
+                actionLabel: l10n.desktopNotifications,
+                onAction: () => context.push(DesktopRoutes.notifications),
+                child: const DesktopActivityTimeline(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例 `.cols-2`：宽屏两栏，窄于 1100 叠成单列。
+class _TwoColumns extends StatelessWidget {
+  const _TwoColumns({
+    required this.left,
+    required this.right,
+    this.equal = false,
+  });
+
+  final Widget left;
+  final Widget right;
+  final bool equal;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 1100) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [left, right],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: equal ? 10 : 14, child: left),
+            const SizedBox(width: 36),
+            Expanded(flex: 10, child: right),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HeroSky extends StatelessWidget {
+  const _HeroSky({
+    required this.showSky,
+    required this.dateLabel,
+    required this.greeting,
+    required this.lead,
+    required this.hour,
+    required this.weather,
+    required this.reduceMotion,
+    required this.listenLabel,
+    required this.onStartListening,
+    this.resumeLabel,
+    this.onResume,
+  });
+
+  /// 是否绘制实时天象；自定义壁纸在场时为 false。
+  final bool showSky;
+
+  final String dateLabel;
+  final String greeting;
+  final String lead;
+  final double hour;
+  final WeatherData? weather;
+  final bool reduceMotion;
+  final String listenLabel;
+  final VoidCallback onStartListening;
+  final String? resumeLabel;
+  final VoidCallback? onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final height = (MediaQuery.sizeOf(context).height * 0.42).clamp(
+      340.0,
+      460.0,
+    );
+    final isDay = hour >= 5.5 && hour < 20.5;
+    final condition =
+        weather == null
+            ? DesktopSkyCondition.clear
+            : desktopSkyConditionOf(
+              iconCode: weather!.icon,
+              text: weather!.text,
+            );
+    final showWeatherCard = width >= 1180;
+
+    return Container(
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+        boxShadow: DesktopSkin.of(context).shadow,
+      ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+        border: Border.all(color: DesktopSkin.of(context).line2),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (showSky)
+            DesktopSky(
+              condition: condition,
+              hour: hour,
+              isDay: isDay,
+              reduceMotion: reduceMotion,
+            ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  DesktopPalette.heroShade,
+                  DesktopPalette.heroShadeClear,
+                ],
+                stops: [0.0, 0.62],
+              ),
+            ),
+          ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  DesktopPalette.heroShadeSoft,
+                  DesktopPalette.heroShadeClear,
+                ],
+                stops: [0.0, 0.5],
+              ),
+            ),
+          ),
+          Positioned(
+            left: (width * 0.034).clamp(28.0, 56.0),
+            right: showWeatherCard ? 330 : 40,
+            bottom: 40,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  dateLabel.toUpperCase(),
+                  style: DesktopType.eyebrow(
+                    DesktopPalette.onStage.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  greeting,
+                  style: DesktopType.displayXl(DesktopPalette.onStage, width),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Text(
+                    lead,
+                    style: DesktopType.medium(
+                      DesktopPalette.onStage.withValues(alpha: 0.82),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    if (resumeLabel != null)
+                      DesktopButton(
+                        label: resumeLabel!,
+                        icon: DesktopIcons.play,
+                        variant: DesktopButtonVariant.primary,
+                        large: true,
+                        onPressed: onResume,
+                      ),
+                    DesktopButton(
+                      label: listenLabel,
+                      icon: DesktopIcons.music,
+                      variant: DesktopButtonVariant.glass,
+                      large: true,
+                      onPressed: onStartListening,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (showWeatherCard)
+            Positioned(
+              right: 28,
+              top: 28,
+              child: _WeatherCard(weather: weather, isDay: isDay),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeatherCard extends ConsumerWidget {
+  const _WeatherCard({required this.weather, required this.isDay});
+
+  final WeatherData? weather;
+  final bool isDay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final onGlass = DesktopPalette.onStage;
+    final data = weather;
+    final time = DateFormat.Hm(
+      Localizations.localeOf(context).toString(),
+    ).format(DesktopHomePage.clock());
+
+    Widget body;
+    if (data == null) {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AppLoading(),
+          const SizedBox(height: 8),
+          Text(
+            l10n.desktopWeatherReading,
+            style: DesktopType.caption(onGlass.withValues(alpha: 0.75)),
+          ),
+        ],
+      );
+    } else if (data.status != 'OK') {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(DesktopIcons.cloud, size: 22, color: onGlass),
+          const SizedBox(height: 8),
+          Text(
+            l10n.desktopWeatherUnavailable,
+            style: DesktopType.denseStrong(onGlass),
+          ),
+          const SizedBox(height: 8),
+          DesktopButton(
+            label: l10n.desktopWeatherRefresh,
+            icon: DesktopIcons.retry,
+            variant: DesktopButtonVariant.glass,
+            onPressed: () => ref.invalidate(realtimeWeatherProvider),
+          ),
+        ],
+      );
+    } else {
+      final live = !data.isDegraded;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(time, style: DesktopType.display(onGlass)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${data.locationName} · ${data.text}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.caption(
+                        onGlass.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text('${data.temp}°', style: DesktopType.displaySm(onGlass)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: onGlass.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isDay ? DesktopIcons.sun : DesktopIcons.moon,
+                  size: 26,
+                  color: onGlass,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        l10n.desktopWeatherHighLow(data.tempMax, data.tempMin),
+                        style: DesktopType.denseStrong(onGlass),
+                      ),
+                      Text(
+                        l10n.desktopWeatherFeels(data.feelsLike),
+                        style: DesktopType.caption(
+                          onGlass.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(DesktopIcons.wind, size: 14, color: onGlass),
+              const SizedBox(width: 5),
+              Text(
+                l10n.desktopWeatherWind(data.windSpeed),
+                style: DesktopType.caption(onGlass.withValues(alpha: 0.85)),
+              ),
+              const Spacer(),
+              Icon(DesktopIcons.drop, size: 14, color: onGlass),
+              const SizedBox(width: 5),
+              Text(
+                l10n.desktopWeatherHumidity(data.humidity),
+                style: DesktopType.caption(onGlass.withValues(alpha: 0.85)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.only(top: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: onGlass.withValues(alpha: 0.16)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: live ? skin.ok : skin.warn,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    live ? l10n.desktopWeatherLive : l10n.desktopWeatherStale,
+                    style: DesktopType.micro(onGlass.withValues(alpha: 0.8)),
+                  ),
+                ),
+                DesktopIconButton(
+                  icon: DesktopIcons.retry,
+                  size: 24,
+                  iconSize: 12,
+                  color: onGlass,
+                  tooltip: l10n.desktopWeatherRefresh,
+                  onPressed: () => ref.invalidate(realtimeWeatherProvider),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: 270,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: onGlass.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: onGlass.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 50,
+            offset: const Offset(0, 20),
+            spreadRadius: -20,
+          ),
+        ],
+      ),
+      child: body,
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({
+    required this.libraryTotal,
+    required this.photoCount,
+    required this.movieCount,
+    required this.playCount,
+    required this.readingStreak,
+    required this.longestReadingStreak,
+    required this.storage,
+  });
+
+  final int libraryTotal;
+  final int photoCount;
+  final int movieCount;
+  final int playCount;
+  final int readingStreak;
+  final int longestReadingStreak;
+  final FileStorageStats? storage;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final used = storage == null ? 0.0 : storage!.usedBytes / 1073741824;
+    final cards = <Widget>[
+      _StatCard(
+        icon: DesktopIcons.library,
+        label: l10n.desktopStatLibrary,
+        value: '$libraryTotal',
+        numericValue: libraryTotal.toDouble(),
+        caption: l10n.desktopStatLibrarySub(photoCount, movieCount),
+      ),
+      _StatCard(
+        icon: DesktopIcons.music,
+        label: l10n.desktopStatListening,
+        value: '$playCount',
+        numericValue: playCount.toDouble(),
+        caption: l10n.desktopStatListeningSub(playCount),
+      ),
+      _StatCard(
+        icon: DesktopIcons.book,
+        label: l10n.desktopStatReading,
+        value: '$readingStreak',
+        numericValue: readingStreak.toDouble(),
+        unit: l10n.desktopStatDays,
+        caption: l10n.desktopStatLongestStreakCaption(longestReadingStreak),
+      ),
+      _StatCard(
+        icon: DesktopIcons.cloud,
+        label: l10n.desktopStatStorage,
+        value: used.toStringAsFixed(1),
+        numericValue: used,
+        decimals: 1,
+        unit: 'GB',
+        caption:
+            storage == null || storage!.isQuotaUnlimited
+                ? l10n.desktopStatNoQuota
+                : l10n.desktopStatOfTotal(formatFileSize(storage!.quotaBytes)),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 40),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth < 720 ? 2 : 4;
+          const gap = 14.0;
+          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              // 样例 `.stat`：每张卡按 `--i * 55ms` 各自入场。
+              for (var i = 0; i < cards.length; i++)
+                SizedBox(
+                  width: width,
+                  child: DesktopStagger(index: i, child: cards[i]),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.caption,
+    this.unit,
+    this.numericValue,
+    this.decimals = 0,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String caption;
+  final String? unit;
+
+  /// 有值时从 0 滚到目标值（样例 `CountUp`，1100ms 三次缓出）。
+  final double? numericValue;
+  final int decimals;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return DesktopHover(
+      enabled: false,
+      builder:
+          (context, _) => Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              color: skin.panel,
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+              border: Border.all(color: skin.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: skin.accentWash(0.14),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, size: 16, color: skin.accent),
+                ),
+                const SizedBox(height: 14),
+                Text(label, style: DesktopType.caption(skin.text3)),
+                const SizedBox(height: 2),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child:
+                          numericValue == null
+                              ? Text(
+                                value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.statValue(skin.text),
+                              )
+                              : TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: numericValue),
+                                duration: DesktopMotion.progress,
+                                curve: Curves.easeOutCubic,
+                                builder:
+                                    (context, animated, _) => Text(
+                                      animated.toStringAsFixed(decimals),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.statValue(skin.text),
+                                    ),
+                              ),
+                    ),
+                    if (unit != null) ...[
+                      const SizedBox(width: 4),
+                      Text(unit!, style: DesktopType.caption(skin.text3)),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+}

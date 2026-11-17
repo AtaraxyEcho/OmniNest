@@ -1,0 +1,281 @@
+logging:
+  # 日志写入各服务工作目录下的 logs/（本地开发为 backend/logs/），避免与源码根目录混杂。
+  file:
+    name: ${OMNINEST_LOG_PATH:logs/omninest.log}
+  # 滚动主闸：单文件 50MB、保留 14 天、归档总量 512MB；
+  # 定时清理任务（LogRetentionService）仅作非 logback 文件的兜底。
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 14
+      total-size-cap: 512MB
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{requestId}] %-5level %logger{36} - %msg%n"
+
+server:
+  shutdown: graceful
+
+spring:
+  application:
+    name: omninest
+  # 调度线程池：Boot 默认只有 1 条线程，api 节点上 500ms 一次的任务/事件发件箱轮询
+  # 会排在每日维护型 cron（日志保留、来源对账等）之后，长任务能把任务投递整体拖住。
+  task:
+    scheduling:
+      pool:
+        size: ${OMNINEST_SCHEDULING_POOL_SIZE:4}
+      thread-name-prefix: omninest-sched-
+  mvc:
+    # 音视频流式响应依赖 StreamingResponseBody 异步写出；容器默认约 30s 超时会在
+    # 整曲/整片传输中途打断线程，导致 HttpClient InterruptedException 与客户端断流。
+    # 默认 30 分钟，覆盖整曲/整片传输；超长媒体可用环境变量覆盖。
+    async:
+      request-timeout: ${OMNINEST_MVC_ASYNC_REQUEST_TIMEOUT:1800000}
+  # 项目仅通过 RedisTemplate 使用 Redis，不存在 Spring Data Redis Repository，排除后避免多数据模块仓库扫描噪音
+  autoconfigure:
+    exclude: org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+  config:
+    import: optional:file:.env[.properties]
+  profiles:
+    active: ${OMNINEST_PROFILE:dev}
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.batch_size: 50
+        default_batch_fetch_size: 50
+        order_inserts: true
+        order_updates: true
+  jackson:
+    time-zone: Asia/Shanghai
+  # datasource.url/username/password 在 profile 文件中配置；
+  # Hikari 参数由环境变量 SPRING_DATASOURCE_HIKARI_* 注入，避免 Boot4 池启动后再绑定 pool-name。
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-migration-naming: true
+    schemas: omni
+    default-schema: omni
+    baseline-on-migrate: false
+    baseline-version: 1
+    clean-disabled: true
+  rabbitmq:
+    port: 5672
+    virtual-host: /
+    connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-retries: 3
+  data:
+    redis:
+      port: 6379
+      database: 0
+      timeout: 3s
+      connect-timeout: 3s
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+photo:
+  batch-download:
+    max-files: 1000
+    max-single-file-bytes: 536870912
+    max-source-bytes: 21474836480
+    min-free-bytes: 536870912
+  batch-retention:
+    enabled: ${PHOTO_BATCH_RETENTION_ENABLED:true}
+    max-age: ${PHOTO_BATCH_RETENTION_MAX_AGE:7d}
+    batch-size: ${PHOTO_BATCH_RETENTION_BATCH_SIZE:200}
+  media-limits:
+    max-standard-file-bytes: 134217728
+    max-raw-file-bytes: 536870912
+    max-width: 30000
+    max-height: 30000
+    max-pixels: 100000000
+    max-decoded-bytes: 419430400
+
+file:
+  batch-download:
+    max-total-bytes: 5368709120
+  transfer-limits:
+    max-files-per-task: 10000
+    max-derived-asset-bytes: 536870912
+
+video:
+  stream:
+    max-concurrent-streams: ${OMNINEST_VIDEO_STREAM_MAX_CONCURRENT:4}
+    slot-wait-timeout: 2s
+
+reader:
+  archive-limits:
+    max-archive-bytes: 2147483648
+    max-entries: 20000
+    max-entry-bytes: 67108864
+    max-total-uncompressed-bytes: 4294967296
+    max-compression-ratio: 200.0
+    compression-ratio-check-threshold-bytes: 1048576
+
+omninest:
+  runtime:
+    role: ${OMNINEST_ROLE:api}
+  processing:
+    root: ${OMNINEST_PROCESSING_ROOT:${java.io.tmpdir}/omninest-processing}
+  music:
+    history-retention-days: 90
+  # 媒体/文件处理的并发闸门；按 Worker 连接池、CPU 与对象存储带宽调优。
+  concurrency:
+    photo-scan: ${OMNINEST_PHOTOS_SCAN_CONCURRENCY:3}
+    music-prefetch: ${OMNINEST_MUSIC_SCAN_PREFETCH_CONCURRENCY:4}
+    music-prefetch-batch: ${OMNINEST_MUSIC_SCAN_PREFETCH_BATCH_SIZE:16}
+    screenshot-download: ${OMNINEST_VIDEO_SCREENSHOT_CONCURRENCY:4}
+    video-probe: ${OMNINEST_VIDEO_PROBE_CONCURRENCY:2}
+    video-subtitle: ${OMNINEST_VIDEO_SUBTITLE_CONCURRENCY:2}
+    import-multipart: ${OMNINEST_FILE_IMPORT_MULTIPART_CONCURRENCY:4}
+  setup:
+    # 占位符桥接：.env 以 properties 形式导入时大写下划线键对 @ConfigurationProperties 宽松绑定不可靠，
+    # 经精确占位符同时覆盖 .env、真实环境变量与缺省值三种来源。
+    two-factor-required: ${OMNINEST_SETUP_TWOFACTORREQUIRED:false}
+  task:
+    outbox:
+      enabled: true
+      interval-millis: 500
+      batch-size: 100
+      lease-seconds: 30
+      confirm-timeout-millis: 2000
+      instance-id: ${random.uuid}
+  file-purge:
+    stale-heartbeat-seconds: 120
+    recovery-interval-millis: 30000
+  sync:
+    outbox:
+      enabled: true
+      interval-millis: 500
+      batch-size: 100
+      lease-seconds: 30
+      confirm-timeout-millis: 2000
+      instance-id: ${random.uuid}
+    retention:
+      enabled: true
+      days: 30
+      cleanup-cron: 0 15 2 * * *
+    realtime:
+      session-audit-millis: 10000
+      authentication-timeout-millis: 15000
+      max-sessions-per-instance: 500
+      max-pending-sessions-per-instance: 64
+  security:
+    credential-encryption-key-version: 1
+    # 轮换 KEK 时把旧版本密钥按“版本号: Base64”写入 credential-encryption-previous-keys，
+    # 旧密文仍可解密；版本匹配但密钥缺失时按密钥版本不受支持拒绝。
+    credential-encryption-previous-keys: {}
+    access-token-ttl: 30m
+    refresh-token-ttl: 30d
+    refresh-session-max-lifetime: 90d
+    allow-credentials: true
+    # script-src 无 unsafe-inline；style-src 保留给 Flutter Web 引擎运行时内联样式。
+    content-security-policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    permissions-policy: "camera=(self), geolocation=(self), microphone=(), payment=()"
+  worker:
+    runtime:
+      instance-id: ${random.uuid}
+      heartbeat-interval: PT15S
+      heartbeat-ttl: PT45S
+      probe-timeout: PT3S
+    media-concurrency: 1
+    # 与 vision-sidecar 的两路推理并发对齐；Worker 连接池 8，留足心跳与其他消费者。
+    photo-ai-concurrency: ${OMNINEST_WORKER_PHOTO_AI_CONCURRENCY:2}
+  messaging:
+    rabbit:
+      maximum-message-bytes: 1048576
+      message-ttl: 7d
+      consumer-prefetch: 10
+      backlog-monitoring-enabled: true
+      backlog-warning-messages: 10000
+      backlog-critical-messages: 50000
+      backlog-poll-interval: 60s
+  redis:
+    capacity:
+      monitoring-enabled: true
+      memory-warning-ratio: 0.80
+      memory-critical-ratio: 0.90
+      poll-interval: 60s
+  history-retention:
+    enabled: true
+    task-maximum-age: 30d
+    dispatch-maximum-age: 30d
+    purge-entry-maximum-age: 30d
+    audit-maximum-age: 365d
+    config-maximum-age: 365d
+    notification-maximum-age: 90d
+    config-minimum-versions: 20
+    batch-size: 500
+    maximum-batches: 20
+    cleanup-cron: 0 30 3 * * *
+  storage:
+    derived-orphan-scan:
+      enabled: true
+      delete-enabled: false
+      prefix: ""
+      minimum-age: 24h
+      page-size: 500
+      maximum-pages-per-run: 20
+      maximum-deletes-per-run: 100
+      cursor-ttl: 30d
+      lock-ttl: 30m
+      cleanup-cron: 0 15 4 * * *
+    user-file-orphan-scan:
+      enabled: true
+      # 原件不可重建：默认只出报表。开启删除前必须先人工核对一轮候选清单，
+      # 且严禁在清空 schema 而保留存储桶之后立刻打开（此时桶内全部对象都会被判成孤儿）。
+      delete-enabled: false
+      prefix: ""
+      minimum-age: 30d
+      page-size: 500
+      maximum-pages-per-run: 20
+      maximum-deletes-per-run: 100
+      cursor-ttl: 30d
+      lock-ttl: 30m
+      cleanup-cron: 0 5 5 * * *
+  rate-limit:
+    enabled: true
+    default-limit: 120
+    default-window: 60s
+    key-prefix: omninest:rate-limit
+  upload:
+    url-ttl: 4h
+    session-ttl: 24h
+  clamav:
+    timeout: 120s
+  rclone:
+    connect-timeout-seconds: 10
+    read-timeout-seconds: 300
+    metadata-cache-ttl: 60m
+  minio:
+    api-call-timeout-seconds: 1800
+    buckets:
+      user-files: user-files
+      derived-assets: derived-assets
+      quarantine: file-quarantine

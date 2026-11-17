@@ -1,0 +1,352 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_platform_qr_session_controller.dart';
+import 'package:omninest/features/music/data/music_api.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
+
+class _MockMusicApi extends Mock implements MusicApi {}
+
+/// 轻量中心控制器桩：只为 QR 终态判定提供 neteaseUserInfo 快照。
+class _StubCenterController extends MusicCenterController {
+  _StubCenterController(this.userInfo);
+
+  final PlatformUserInfo? userInfo;
+
+  @override
+  Future<MusicCenterState> build() async => MusicCenterState(
+    dashboard: MusicDashboard.empty(),
+    tracks: const <MusicTrack>[],
+    albums: const <MusicAlbum>[],
+    artists: const <MusicArtist>[],
+    playlists: const <MusicPlaylist>[],
+    neteaseUserInfo: userInfo,
+  );
+}
+
+/// 轮询循环在 application 层，这里锁定它的状态机契约：
+/// 会话申请、状态去重、过期收尾、确认后刷新、失败可见与取消。
+void main() {
+  late _MockMusicApi api;
+
+  setUp(() {
+    api = _MockMusicApi();
+  });
+
+  /// 等待首轮轮询完成（首轮无退避，立即执行）。
+  Future<void> settleFirstPoll() =>
+      Future<void>.delayed(const Duration(milliseconds: 60));
+
+  ProviderContainer createContainer({
+    Future<void> Function()? refresh,
+    PlatformUserInfo? centerUserInfo,
+    bool mountCenter = false,
+  }) {
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        if (refresh != null)
+          platformQrLoginRefreshProvider.overrideWithValue(refresh),
+        if (mountCenter)
+          musicCenterControllerProvider.overrideWith(
+            () => _StubCenterController(centerUserInfo),
+          ),
+      ],
+    );
+    addTearDown(container.dispose);
+    if (mountCenter) {
+      // 提前挂载中心控制器，供确认后的终态判定读取资料快照。
+      container.read(musicCenterControllerProvider.notifier);
+    }
+    return container;
+  }
+
+  String qrBase64() => base64Encode(const <int>[137, 80, 78, 71]);
+
+  void stubSession() {
+    when(() => api.createNeteaseQrLogin()).thenAnswer(
+      (_) async => QrLoginSession(loginKey: 'key-1', qrImageBase64: qrBase64()),
+    );
+  }
+
+  test('start requests a session and decodes the QR bitmap once', () async {
+    stubSession();
+    when(
+      () => api.checkNeteaseQrLogin('key-1'),
+    ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+    final container = createContainer();
+
+    await container.read(platformQrSessionProvider.notifier).start();
+    await settleFirstPoll();
+
+    final state = container.read(platformQrSessionProvider);
+    expect(state.status, PlatformQrDisplayStatus.waiting);
+    expect(state.loginKey, 'key-1');
+    expect(state.hasQrImage, isTrue);
+    verify(() => api.createNeteaseQrLogin()).called(1);
+
+    container.read(platformQrSessionProvider.notifier).cancel();
+  });
+
+  test('repeated identical status does not notify listeners again', () async {
+    stubSession();
+    when(
+      () => api.checkNeteaseQrLogin('key-1'),
+    ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+    final container = createContainer();
+    var notifications = 0;
+    final subscription = container.listen<PlatformQrSessionState>(
+      platformQrSessionProvider,
+      (previous, next) => notifications++,
+    );
+    addTearDown(subscription.close);
+
+    await container.read(platformQrSessionProvider.notifier).start();
+    await settleFirstPoll();
+    final afterFirstPoll = notifications;
+
+    // 第二轮轮询拿到同样的 pending：状态未变化则不再通知，
+    // 否则面板（含二维码位图）会每 2 秒重建一次，表现为闪烁。
+    await Future<void>.delayed(const Duration(seconds: 3));
+    expect(notifications, afterFirstPoll);
+
+    container.read(platformQrSessionProvider.notifier).cancel();
+  });
+
+  test(
+    'confirmed status triggers platform refresh and stops polling',
+    () async {
+      stubSession();
+      var refreshCalls = 0;
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'confirmed'));
+      final container = createContainer(refresh: () async => refreshCalls++);
+
+      await container.read(platformQrSessionProvider.notifier).start();
+      await settleFirstPoll();
+
+      expect(refreshCalls, 1);
+      verify(() => api.checkNeteaseQrLogin('key-1')).called(1);
+    },
+  );
+
+  test(
+    'confirmed enters syncing and settles to clean state once refreshed',
+    () async {
+      stubSession();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'confirmed'));
+      final refreshGate = Completer<void>();
+      final container = createContainer(
+        refresh: () => refreshGate.future,
+        mountCenter: true,
+        centerUserInfo: const PlatformUserInfo(
+          platform: 'netease',
+          userId: '42',
+          nickname: '听歌的人',
+          avatarUrl: '',
+          vip: false,
+        ),
+      );
+
+      await container.read(platformQrSessionProvider.notifier).start();
+      await settleFirstPoll();
+
+      // 确认后立即进入"同步中"，而不是退回等待扫码的旧二维码动画。
+      expect(
+        container.read(platformQrSessionProvider).status,
+        PlatformQrDisplayStatus.syncing,
+      );
+
+      refreshGate.complete();
+      await Future<void>.delayed(Duration.zero);
+      // 资料已落地：宿主区块切换到已登录卡片，会话状态复位。
+      final settled = container.read(platformQrSessionProvider);
+      expect(settled.status, PlatformQrDisplayStatus.idle);
+      expect(settled.loginKey, isNull);
+    },
+  );
+
+  test(
+    'sync failure with missing profile surfaces reason and returns to entry',
+    () async {
+      stubSession();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'confirmed'));
+      final container = createContainer(
+        refresh: () async => throw Exception('profile fetch failed'),
+        mountCenter: true,
+        centerUserInfo: null,
+      );
+
+      await container.read(platformQrSessionProvider.notifier).start();
+      await settleFirstPoll();
+
+      final settled = container.read(platformQrSessionProvider);
+      // 登录已成立但资料未同步：回到入口态并给出原因，不能停在同步中转圈。
+      expect(settled.status, PlatformQrDisplayStatus.idle);
+      expect(settled.failureMessage, isNotNull);
+      expect(settled.busy, isFalse);
+    },
+  );
+
+  test('poll interval tightens to 1s only while scanned', () {
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 0,
+        scanned: true,
+      ),
+      1,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 0,
+        scanned: false,
+      ),
+      2,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 1,
+        scanned: true,
+      ),
+      3,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 3,
+        scanned: true,
+      ),
+      12,
+    );
+  });
+
+  test('expired status ends the session with a regeneratable state', () async {
+    stubSession();
+    when(
+      () => api.checkNeteaseQrLogin('key-1'),
+    ).thenAnswer((_) async => const QrLoginStatus(status: 'expired'));
+    final container = createContainer();
+
+    await container.read(platformQrSessionProvider.notifier).start();
+    await settleFirstPoll();
+
+    final state = container.read(platformQrSessionProvider);
+    expect(state.status, PlatformQrDisplayStatus.expired);
+    expect(state.canRegenerate, isTrue);
+  });
+
+  test('polling failure surfaces an error state with a message', () async {
+    stubSession();
+    when(() => api.checkNeteaseQrLogin('key-1')).thenThrow(DioExceptionStub());
+    final container = createContainer();
+
+    await container.read(platformQrSessionProvider.notifier).start();
+    await settleFirstPoll();
+
+    final state = container.read(platformQrSessionProvider);
+    expect(state.status, PlatformQrDisplayStatus.error);
+    expect(state.failureMessage, isNotNull);
+    expect(state.canRegenerate, isTrue);
+
+    container.read(platformQrSessionProvider.notifier).cancel();
+  });
+
+  test(
+    'start reuses an unexpired session instead of requesting a new one',
+    () async {
+      stubSession();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+      final container = createContainer();
+      final notifier = container.read(platformQrSessionProvider.notifier);
+
+      await notifier.start();
+      await settleFirstPoll();
+      expect(verify(() => api.checkNeteaseQrLogin('key-1')).callCount, 1);
+
+      // 再次进入扫码方式（例如切到手机号又切回）：已有未过期会话只续用，
+      // 不会重新申请二维码，用户手上那张码仍然有效。
+      await notifier.start();
+      await settleFirstPoll();
+
+      verify(() => api.createNeteaseQrLogin()).called(1);
+      notifier.cancel();
+    },
+  );
+
+  test(
+    'regenerate takes over polling and discards the abandoned session',
+    () async {
+      var sessions = 0;
+      when(() => api.createNeteaseQrLogin()).thenAnswer((_) async {
+        sessions++;
+        return QrLoginSession(
+          loginKey: 'key-$sessions',
+          qrImageBase64: qrBase64(),
+        );
+      });
+      // 旧 loginKey 的在途响应在换码之后才返回，必须被丢弃。
+      final staleResponse = Completer<QrLoginStatus>();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) => staleResponse.future);
+      when(
+        () => api.checkNeteaseQrLogin('key-2'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+      final container = createContainer();
+      final notifier = container.read(platformQrSessionProvider.notifier);
+
+      await notifier.start();
+      await settleFirstPoll();
+      expect(container.read(platformQrSessionProvider).loginKey, 'key-1');
+
+      // 等待扫码态主动换码：新会话必须接管轮询，旧会话的 expired 不能覆盖新码。
+      await notifier.regenerate();
+      staleResponse.complete(const QrLoginStatus(status: 'expired'));
+      await settleFirstPoll();
+
+      final state = container.read(platformQrSessionProvider);
+      expect(state.loginKey, 'key-2');
+      expect(state.status, PlatformQrDisplayStatus.waiting);
+      expect(state.canRegenerate, isFalse);
+      verify(() => api.checkNeteaseQrLogin('key-2')).called(1);
+
+      notifier.cancel();
+    },
+  );
+
+  test('cancel stops the polling loop', () async {
+    stubSession();
+    when(
+      () => api.checkNeteaseQrLogin('key-1'),
+    ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+    final container = createContainer();
+    final notifier = container.read(platformQrSessionProvider.notifier);
+
+    await notifier.start();
+    await settleFirstPoll();
+    notifier.cancel();
+    final callsAtCancel =
+        verify(() => api.checkNeteaseQrLogin('key-1')).callCount;
+    expect(callsAtCancel, greaterThan(0));
+
+    // 取消后不再有任何新的轮询请求（已有的调用已被上面 verify 消费）。
+    await Future<void>.delayed(const Duration(seconds: 3));
+    verifyNever(() => api.checkNeteaseQrLogin('key-1'));
+  });
+}
+
+/// 模拟一次网络层异常（保持与真实调用一致的异常类型语义）。
+class DioExceptionStub implements Exception {
+  @override
+  String toString() => 'DioExceptionStub';
+}

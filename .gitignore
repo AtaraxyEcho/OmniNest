@@ -1,0 +1,144 @@
+# 操作系统和编辑器临时文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+*~
+*.swp
+*.swo
+
+# IDE 和本地工程状态
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.playwright-cli/
+
+# Agent 和本机工具状态
+/.agents/
+/.codex/
+/.codex-tmp/
+/.impeccable/
+/.localappdata/
+/.workbuddy/
+/.zcodeignore
+
+# 本地设计资料和品牌源文件
+/docs/
+/logo/
+
+# 本地环境变量和凭据
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 本地运行时目录、缓存和临时文件
+/.omninest/
+**/.omninest/
+/data/
+# 应用与测试日志：统一落在 backend/logs、frontend/logs 等模块目录，不入库
+/logs/
+**/logs/*
+!**/logs/.gitkeep
+/tmp/
+/temp/
+/db/
+*.log
+*.out
+*.err
+*.pid
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# 数据库导出和备份文件
+/backups/
+**/backups/
+*.dump
+# 误执行的 git 命令产物（如 "et --hard <sha>" 落盘的 reflog 转储）
+/et --hard*
+*.dump.gz
+*.backup
+*.bak
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Java / Maven 构建产物
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Flutter / Dart 构建产物和缓存
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/coverage/
+**/test/**/failures/
+
+# Android、iOS、桌面平台生成文件
+**/android/local.properties
+**/android/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/key.properties
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/Generated.xcconfig
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+
+# Python / AI Sidecar 缓存
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.venv/
+**/.venv/
+
+# AI 模型和本地推理缓存
+vision-sidecar/models/
+*.pth
+*.pt
+*.onnx
+*.safetensors
+
+# 本地分析和测试输出
+*.out
+*.trace
+*.prof
+test-results/
+**/test-results/
+/webapp/
+**/webapp/
+
+# 前端依赖与本地验证产物
+node_modules/
+**/node_modules/
+output/
+**/output/playwright/
+

@@ -1,0 +1,230 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+
+/// 正文图片全屏预览：暗底、可缩放平移、点空白或关闭按钮退出。
+class ReaderImagePreview extends ConsumerStatefulWidget {
+  const ReaderImagePreview({
+    required this.block,
+    required this.retryCount,
+    this.itemId,
+    super.key,
+  });
+
+  final ImageBlock block;
+  final String? itemId;
+  final int retryCount;
+
+  static Future<void> show(
+    BuildContext context, {
+    required ImageBlock block,
+    String? itemId,
+    int retryCount = 0,
+  }) {
+    return Navigator.of(context, rootNavigator: true).push<void>(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        barrierDismissible: true,
+        pageBuilder: (_, animation, _) {
+          return FadeTransition(
+            opacity: animation,
+            child: ReaderImagePreview(
+              block: block,
+              itemId: itemId,
+              retryCount: retryCount,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  ConsumerState<ReaderImagePreview> createState() => _ReaderImagePreviewState();
+}
+
+class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
+  static const _placeholderPrefix = '__IMG_';
+  static const _placeholderSuffix = '__';
+
+  /// 解码尺寸上限：预览只需要按屏幕分辨率解码，系数留给缩放与放大手势。
+  ///
+  /// 全屏预览一本扫描版书里的 8000px 原图时，按原尺寸解码会在切页瞬间打出
+  /// 显存与内存峰值；`cacheWidth` 让解码器直接按比例解到位图。
+  static const int _decodeWidthFactor = 2;
+  static const int _minDecodeWidth = 512;
+  static const int _maxDecodeWidth = 4096;
+
+  int _decodeWidthLimit() {
+    final size = MediaQuery.sizeOf(context);
+    final logicalWidth =
+        size.width.isFinite && size.width > 0
+            ? size.width
+            : _minDecodeWidth.toDouble();
+    return (logicalWidth *
+            MediaQuery.devicePixelRatioOf(context) *
+            _decodeWidthFactor)
+        .round()
+        .clamp(_minDecodeWidth, _maxDecodeWidth)
+        .toInt();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final block = widget.block;
+    final caption = block.caption;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).maybePop(),
+              child: ColoredBox(color: Colors.black.withValues(alpha: 0.94)),
+            ),
+          ),
+          Positioned.fill(
+            child: SafeArea(
+              child: InteractiveViewer(
+                maxScale: 4,
+                minScale: 1,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 56,
+                    ),
+                    child: _buildImage(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: SafeArea(
+              child: IconButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withValues(alpha: 0.35),
+                ),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              ),
+            ),
+          ),
+          if (caption != null && caption.isNotEmpty)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 20,
+              child: SafeArea(
+                child: Text(
+                  caption,
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImage() {
+    final block = widget.block;
+    final cacheWidth = _decodeWidthLimit();
+    final isDataUri = block.src.startsWith('data:');
+    if (isRemoteReaderImageSource(block.src)) {
+      // 远程图片不自动抓取（追踪像素与客户端侧 SSRF），预览同样只认本地缓存
+      // 占位符与 data URI；远程来源一律显示破图占位。
+      return _errorIcon();
+    }
+    // 占位符必须两头都在且中间确有路径：只按前缀判定时，一个长度为 6 的
+    // `__IMG_` 会让 substring 以负长度抛 RangeError，预览整页崩。
+    final isCachedImage =
+        block.src.startsWith(_placeholderPrefix) &&
+        block.src.endsWith(_placeholderSuffix) &&
+        block.src.length >
+            _placeholderPrefix.length + _placeholderSuffix.length;
+    if (isCachedImage && widget.itemId != null) {
+      final imagePath = block.src.substring(
+        _placeholderPrefix.length,
+        block.src.length - _placeholderSuffix.length,
+      );
+      return ref
+          .watch(
+            readerCachedImageProvider((
+              itemId: widget.itemId!,
+              imagePath: imagePath,
+              bust: widget.retryCount,
+            )),
+          )
+          .when(
+            loading:
+                () => const SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white54,
+                  ),
+                ),
+            error: (_, _) => _errorIcon(),
+            data: (bytes) {
+              if (bytes == null || bytes.isEmpty) {
+                return _errorIcon();
+              }
+              return Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                cacheWidth: cacheWidth,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => _errorIcon(),
+              );
+            },
+          );
+    }
+    if (isDataUri) {
+      try {
+        final commaIndex = block.src.indexOf(',');
+        if (commaIndex < 0) {
+          return _errorIcon();
+        }
+        final bytes = base64Decode(block.src.substring(commaIndex + 1));
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          cacheWidth: cacheWidth,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => _errorIcon(),
+        );
+      } on Exception {
+        return _errorIcon();
+      }
+    }
+    // 远程图片不自动抓取（追踪像素与客户端侧 SSRF），预览同样只认本地缓存
+    // 占位符与 data URI；其余来源一律显示破图占位。
+    return _errorIcon();
+  }
+
+  Widget _errorIcon() {
+    return const Icon(
+      Icons.broken_image_outlined,
+      color: Colors.white38,
+      size: 48,
+    );
+  }
+}

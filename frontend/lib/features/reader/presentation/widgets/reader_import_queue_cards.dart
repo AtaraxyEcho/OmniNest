@@ -1,0 +1,266 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/space_selector_sheet.dart';
+import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+import 'package:omninest/platform/file_pick.dart';
+
+/// 「从设备导入」按钮：选择阅读文件并加入导入队列。
+class ImportFromDeviceButton extends ConsumerStatefulWidget {
+  const ImportFromDeviceButton({super.key});
+
+  @override
+  ConsumerState<ImportFromDeviceButton> createState() =>
+      _ImportFromDeviceButtonState();
+}
+
+class _ImportFromDeviceButtonState
+    extends ConsumerState<ImportFromDeviceButton> {
+  bool _busy = false;
+
+  Future<void> _pickAndUpload() async {
+    // 文件选择器与空间面板都是异步边界，队列按调用新建作业且没有文件级去重：
+    // 在途期间再点一次会把同一批文件重复入队。
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final picked = await FilePick.pickFiles(
+        allowedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
+      );
+      if (picked.isEmpty) return;
+      if (!mounted) return;
+      final files = <XFile>[];
+      for (final file in picked) {
+        final localPath = file.path;
+        final hasLocalPath = localPath != null && localPath.isNotEmpty;
+        if (!hasLocalPath && (await file.length() ?? 0) == 0) {
+          // 平台只给内存字节且为空文件时不入队，与迁移前的判定一致。
+          continue;
+        }
+        files.add(await file.toXFile(mimeType: _mimeTypeFor(file.name)));
+      }
+      if (files.isEmpty) {
+        // StateError 不继承 Exception，抛出后不会被下面的 catch 接住，
+        // 用户会看到“点了没反应”。这里直接给出提示并结束。
+        if (mounted) {
+          showReaderSnackBar(
+            context,
+            AppLocalizations.of(context).readerImportNoReadableFiles,
+          );
+        }
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      final spaceSelection = await showSpaceSelectorSheet(
+        context,
+        allowShared: true,
+      );
+      if (spaceSelection == null || !mounted) {
+        return;
+      }
+      ref
+          .read(readerImportQueueProvider.notifier)
+          .enqueue(
+            files,
+            spaceType:
+                spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL',
+          );
+    } on Exception catch (error) {
+      if (mounted) {
+        showReaderSnackBar(
+          context,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  String _mimeTypeFor(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.epub')) {
+      return 'application/epub+zip';
+    }
+    if (lower.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
+    if (lower.endsWith('.cbz') || lower.endsWith('.zip')) {
+      return 'application/zip';
+    }
+    return 'text/plain';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.readerColors;
+    return OutlinedButton.icon(
+      onPressed: _busy ? null : _pickAndUpload,
+      icon: Icon(
+        Icons.upload_file_rounded,
+        size: AppControlTokens.buttonIconSize,
+        color: rc.onSurface,
+      ),
+      label: Text(AppLocalizations.of(context).readerAddBook),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: rc.onSurface,
+        side: BorderSide(color: rc.outlineVariant),
+      ),
+    );
+  }
+}
+
+/// 导入队列中的单个上传任务行：文件名 + 状态 + 进度 + 重试/取消。
+class ImportJobRow extends ConsumerWidget {
+  const ImportJobRow({required this.job, super.key});
+
+  final ReaderImportJob job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final rc = context.readerColors;
+    final failed = job.status == ReaderImportJobStatus.failed;
+    final label = switch (job.status) {
+      ReaderImportJobStatus.queued => l10n.readerImportQueuedShort,
+      ReaderImportJobStatus.uploading => l10n.importUploading,
+      ReaderImportJobStatus.registering => l10n.readerImportRegistering,
+      ReaderImportJobStatus.failed => l10n.readerImportFailed,
+      ReaderImportJobStatus.cancelled => l10n.readerImportCancelled,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: rc.outlineVariant),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            failed ? Icons.error_outline_rounded : Icons.book_outlined,
+            size: 20,
+            color: failed ? rc.danger : rc.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        job.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: rc.onSurface,
+                          fontSize: AppTypography.bodyMedium,
+                          height: 1.3,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: rc.outlineVariant),
+                      ),
+                      child: Text(
+                        job.spaceType == 'SHARED'
+                            ? l10n.importToSharedSpace
+                            : l10n.importToPersonalSpace,
+                        style: TextStyle(
+                          color: rc.onSurfaceVariant,
+                          fontSize: AppTypography.labelMicro,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: failed ? rc.danger : rc.onSurfaceVariant,
+                        fontSize: AppTypography.labelSmall,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                if (failed &&
+                    job.errorMessage != null &&
+                    job.errorMessage!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    job.errorMessage!.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: rc.danger,
+                      fontSize: AppTypography.labelSmall,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+                if (!failed) ...[
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: job.progress > 0 ? job.progress : null,
+                      minHeight: 2,
+                      backgroundColor: rc.surfaceContainerHigh,
+                      color: rc.reading,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (failed)
+            IconButton(
+              onPressed:
+                  () => ref
+                      .read(readerImportQueueProvider.notifier)
+                      .retry(job.id),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              tooltip: l10n.coreRetry,
+            ),
+          IconButton(
+            onPressed:
+                () =>
+                    ref.read(readerImportQueueProvider.notifier).cancel(job.id),
+            icon: Icon(
+              failed ? Icons.close_rounded : Icons.stop_rounded,
+              size: 18,
+              color: rc.onSurfaceVariant,
+            ),
+            tooltip: failed ? l10n.coreClose : l10n.readerCancelImport,
+          ),
+        ],
+      ),
+    );
+  }
+}

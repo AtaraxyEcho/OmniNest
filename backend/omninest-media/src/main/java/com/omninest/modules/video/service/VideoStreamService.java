@@ -1,0 +1,674 @@
+package com.omninest.modules.video.service;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.video.config.VideoStreamProperties;
+import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+/**
+ * Web 端流式音频转码服务，在后端容器本地启动 ffmpeg。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+public class VideoStreamService {
+    private static final int BUFFER_SIZE = 64 * 1024;
+    /** 流式转码超时（秒）：4 小时 */
+    private static final long STREAM_TRANSCODE_TIMEOUT_SECONDS = 4 * 3600;
+    private static final long TIMEOUT_JOIN_MILLIS = 5_000L;
+
+    /** Web 端浏览器原生不支持的音频编码（flac/vorbis 现代浏览器已支持，不再列入） */
+    public static final List<String> WEB_UNSUPPORTED_AUDIO = List.of(
+            "ac3", "eac3", "dts", "dts-hd", "truehd", "pcm"
+    );
+
+    private final MediaVideoItemRepository videoItemRepository;
+    private final VideoSourceInputResolver sourceInputResolver;
+    private final MediaContentAccessService mediaContentAccessService;
+    private final VideoStreamProperties streamProperties;
+    private final VideoFfmpegRuntime ffmpegRuntime;
+
+    /**
+     * 同一时刻允许的实时 ffmpeg 流数。
+     *
+     * <p>每次 Seek 都会另起一路 HTTP 流请求，无上限时连续拖动进度条会让多个 ffmpeg
+     * 同时全速拉取源视频，打满宿主机 CPU 与对象存储带宽。槽位耗尽时短暂等待
+     * 客户端已断开的旧进程释放槽位，仍取不到才拒绝新流。</p>
+     */
+    private final Semaphore streamSlots;
+
+    /** 同一观看者同一影片只保留最新一路 ffmpeg；拖动进度条重开流时先杀掉旧进程。 */
+    private final Map<String, Process> activeStreams = new ConcurrentHashMap<>();
+
+    /**
+     * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
+     */
+    private void requireStreamSlot(UUID videoItemId) {
+        boolean acquired;
+        try {
+            acquired = streamSlots.tryAcquire(
+                    Math.max(0L, streamProperties.getSlotWaitTimeout().toMillis()), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "实时转码通道已满，请稍后重试");
+        }
+        if (!acquired) {
+            log.warn("实时音频转码并发已达上限: limit={}, videoItemId={}",
+                    streamProperties.getMaxConcurrentStreams(), videoItemId);
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "实时转码通道已满，请稍后重试");
+        }
+    }
+
+    private void releaseStreamSlot() {
+        streamSlots.release();
+    }
+
+    /**
+     * 在固定响应头之前占用一路流槽位。
+     *
+     * <p>控制器必须先拿到槽位再写 {@code Content-Type}：槽位耗尽抛出的 503 只能在
+     * 响应提交前生效，否则播放器收到的是一段标着 {@code video/mp4} 的损坏流。
+     * 调用方取得槽位后必须在 finally 中调用 {@link #releaseStreamSlotForRequest()}。</p>
+     *
+     * @param videoItemId 视频条目标识，仅用于日志
+     */
+    public void acquireStreamSlot(UUID videoItemId) {
+        requireStreamSlot(videoItemId);
+    }
+
+    /** 释放由 {@link #acquireStreamSlot(UUID)} 占用的槽位。 */
+    public void releaseStreamSlotForRequest() {
+        releaseStreamSlot();
+    }
+
+    /**
+     * 在申请转码槽位前终止同一观看者在当前视频上的旧流。
+     *
+     * <p>拖动进度条会重新发起流请求；若全局槽位已被占满（其中可能包含该观看者
+     * 自己的旧 ffmpeg），先申请槽位会等待超时并返回 503，永远走不到后续的
+     * 「替换旧流」步骤。先终止旧流可立即释放其槽位。</p>
+     *
+     * @param requesterUserId 实际请求者，可为空
+     * @param ownerUserId 目录所有者，仅在请求者为空时兜底
+     * @param videoItemId 视频条目 ID
+     */
+    public void terminateActiveStreamForRequester(
+            UUID requesterUserId, UUID ownerUserId, UUID videoItemId) {
+        UUID viewerUserId = requesterUserId != null ? requesterUserId : ownerUserId;
+        terminateActiveStream(streamKey(viewerUserId, videoItemId));
+    }
+
+    public VideoStreamService(
+            MediaVideoItemRepository videoItemRepository,
+            VideoSourceInputResolver sourceInputResolver,
+            MediaContentAccessService mediaContentAccessService,
+            VideoStreamProperties streamProperties,
+            VideoFfmpegRuntime ffmpegRuntime
+    ) {
+        this.videoItemRepository = videoItemRepository;
+        this.sourceInputResolver = sourceInputResolver;
+        this.mediaContentAccessService = mediaContentAccessService;
+        this.streamProperties = streamProperties;
+        this.ffmpegRuntime = ffmpegRuntime;
+        this.streamSlots = new Semaphore(Math.max(1, streamProperties.getMaxConcurrentStreams()), true);
+    }
+
+    /**
+     * 判断指定视频条目的音频编码是否需要 Web 端转码。
+     */
+    public boolean needsTranscode(UUID ownerUserId, UUID videoItemId) {
+        MediaVideoItem item = mediaContentAccessService.findReadableVideo(ownerUserId, videoItemId)
+                .orElse(null);
+        if (item == null) {
+            return false;
+        }
+        String audioCodec = item.getAudioCodec();
+        if (audioCodec == null || audioCodec.isBlank()) {
+            return false;
+        }
+        return WEB_UNSUPPORTED_AUDIO.contains(audioCodec.trim().toLowerCase());
+    }
+
+    /**
+     * 流开始前的快速失败校验：条目可读、容器有解复用器、ffmpeg 可用。
+     *
+     * <p>HTTP 层必须在固定 {@code video/mp4} 响应头之前调用，让 503/400 仍能以
+     * 标准 JSON 返回，而不是一段损坏的 MP4 流。</p>
+     *
+     * @param ownerUserId 目录所有者
+     * @param videoItemId 视频条目标识
+     */
+    public void requireStreamable(MediaVideoItem item) {
+        // 调用方已用播放令牌校验过可读性并拿到条目，这里不再重复一次读库+授权判定。
+        VideoLiveInputFormats.requireDemuxer(item.getContainerFormat());
+        if (ffmpegRuntime.isDisabled()) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");
+        }
+    }
+
+    /**
+     * 按请求的音频模式选择缓存音频复用或实时转码。
+     *
+     * @param ownerUserId 所属用户
+     * @param videoItemId 视频条目标识
+     * @param startSeconds 起始秒数
+     * @param audioMode 音频模式
+     * @param output HTTP 响应输出流
+     */
+    public void streamByAudioMode(
+            UUID ownerUserId,
+            UUID videoItemId,
+            long startSeconds,
+            String audioMode,
+            OutputStream output
+    ) {
+        streamByAudioMode(ownerUserId, videoItemId, null, startSeconds, audioMode, output);
+    }
+
+    /**
+     * 按音频模式输出转码流，并按观看者替换上一次未结束的流。
+     *
+     * @param ownerUserId 目录所有者
+     * @param videoItemId 视频条目标识
+     * @param viewerUserId 实际观看者；为空时不启用同观看者旧流替换
+     * @param startSeconds 起始秒数
+     * @param audioMode 音频模式
+     * @param output HTTP 响应输出流
+     */
+    public void streamByAudioMode(
+            UUID ownerUserId,
+            UUID videoItemId,
+            UUID viewerUserId,
+            long startSeconds,
+            String audioMode,
+            OutputStream output
+    ) {
+        streamByAudioMode(ownerUserId, videoItemId, viewerUserId, startSeconds, audioMode, output, false);
+    }
+
+    /**
+     * 按音频模式输出转码流，并声明调用方是否已预先占用流槽位。
+     *
+     * @param slotPreAcquired 调用方已在写响应头之前调用 {@link #acquireStreamSlot(UUID)}
+     */
+    public void streamByAudioMode(
+            UUID ownerUserId,
+            UUID videoItemId,
+            UUID viewerUserId,
+            long startSeconds,
+            String audioMode,
+            OutputStream output,
+            boolean slotPreAcquired
+    ) {
+        boolean ownSlot = !slotPreAcquired;
+        MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+        UUID catalogOwnerId = sourceItem.getOwnerUserId();
+        String streamKey = streamKey(viewerUserId, videoItemId);
+        var audioCached = videoItemRepository
+                .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
+                        catalogOwnerId,
+                        videoItemId,
+                        "AUDIO_ONLY"
+                );
+        if ("cached".equals(audioMode) && audioCached.isPresent()) {
+            UUID audioFileNodeId = audioCached.get().getFileNodeId();
+            log.info("使用缓存音频 mux: videoItemId={}, audioFileNodeId={}", videoItemId, audioFileNodeId);
+            // 已加载并鉴权过的条目直接下传，避免同一次流请求重复查询与复核。
+            streamWithCachedAudio(sourceItem, audioFileNodeId, startSeconds, streamKey, output, ownSlot);
+            return;
+        }
+        if ("cached".equals(audioMode)) {
+            log.info("缓存音频不存在，回退到实时转码: videoItemId={}", videoItemId);
+        } else {
+            log.info("使用原始音频实时转码: videoItemId={}", videoItemId);
+        }
+        streamAudioTranscoded(sourceItem, startSeconds, streamKey, output, ownSlot);
+    }
+
+    private String streamKey(UUID viewerUserId, UUID videoItemId) {
+        return viewerUserId == null ? null : viewerUserId + ":" + videoItemId;
+    }
+
+    private void terminateActiveStream(String streamKey) {
+        if (streamKey == null) {
+            return;
+        }
+        Process previous = activeStreams.remove(streamKey);
+        if (previous != null) {
+            log.info("替换同一观看者的旧转码流: streamKey={}", streamKey);
+            terminateProcess(previous);
+        }
+    }
+
+    private void registerActiveStream(String streamKey, Process process) {
+        if (streamKey == null) {
+            return;
+        }
+        // 快速连续 Seek 时两个请求可能先后通过 terminateActiveStream 再各自启动进程：
+        // 后写者会覆盖先写者，被覆盖的进程必须立即销毁，否则它继续占用转码槽位且无人能停。
+        Process displaced = activeStreams.put(streamKey, process);
+        if (displaced != null && displaced != process) {
+            log.info("并发流注册覆盖旧进程，销毁未被跟踪的流: streamKey={}", streamKey);
+            terminateProcess(displaced);
+        }
+    }
+
+    private void unregisterActiveStream(String streamKey, Process process) {
+        if (streamKey != null) {
+            activeStreams.remove(streamKey, process);
+        }
+    }
+
+    /**
+     * 以流式方式将视频输出到 OutputStream。
+     * 视频流 copy，音频转码为 AAC，输出 fMP4 格式。
+     *
+     * @param ownerUserId  所属用户
+     * @param videoItemId  视频条目 ID
+     * @param startSeconds 起始秒数（用于 seek）
+     * @param output       HTTP 响应的 OutputStream
+     */
+    public void streamAudioTranscoded(
+            UUID ownerUserId, UUID videoItemId, long startSeconds, OutputStream output
+    ) {
+        streamAudioTranscoded(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId),
+                startSeconds, null, output, true);
+    }
+
+    /**
+     * 以已加载并鉴权的条目启动实时转码流；单次请求只查询/鉴权一次源条目。
+     */
+    void streamAudioTranscoded(
+            MediaVideoItem item, long startSeconds, String streamKey,
+            OutputStream output, boolean ownSlot
+    ) {
+        UUID videoItemId = item.getId();
+        String demuxer = VideoLiveInputFormats.requireDemuxer(item.getContainerFormat());
+        String internalUrl = resolveInput(item.getOwnerUserId(), item.getFileNodeId());
+        log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, demuxer={}, startSeconds={}",
+                videoItemId, item.getAudioCodec(), item.getContainerFormat(), demuxer, startSeconds);
+
+        List<String> ffmpegArgs = buildTranscodeArgs(demuxer, internalUrl, startSeconds);
+        StreamCommand streamCommand = buildStreamCommand(ffmpegArgs);
+        terminateActiveStream(streamKey);
+        // 槽位可能已由控制器在写响应头之前占好，此时只释放不重复占用。
+        if (ownSlot) {
+            requireStreamSlot(videoItemId);
+        }
+
+        Process process = null;
+        Thread timeoutThread = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
+            pb.redirectErrorStream(false);
+            process = pb.start();
+            closeStdinPipe(process);
+            registerActiveStream(streamKey, process);
+            log.info("ffmpeg 进程已启动: pid={}", process.pid());
+            final Process ffmpegProcess = process;
+            AtomicBoolean timedOut = new AtomicBoolean();
+            timeoutThread = startTimeoutMonitor(ffmpegProcess, timedOut);
+
+            Thread.ofVirtual()
+                    .name("ffmpeg-stderr")
+                    .start(() -> drainStderr(ffmpegProcess));
+
+            try (InputStream stdout = process.getInputStream()) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytesRead;
+                while ((bytesRead = stdout.read(buffer)) != -1) {
+                    output.write(buffer, 0, bytesRead);
+                    output.flush();
+                }
+            }
+
+            timeoutThread.join(TIMEOUT_JOIN_MILLIS);
+            if (timedOut.get()) {
+                log.warn("ffmpeg 流式转码超时: videoItemId={}, timeout={}s", videoItemId, STREAM_TRANSCODE_TIMEOUT_SECONDS);
+                return;
+            }
+            // stdout 读到 EOF 只说明管道关闭，内核可能尚未完成进程回收；
+            // 未确认退出就调用 exitValue() 会抛 IllegalThreadStateException。
+            if (!process.waitFor(TIMEOUT_JOIN_MILLIS, TimeUnit.MILLISECONDS)) {
+                log.warn("ffmpeg 流式转码进程未在预期时间内退出: videoItemId={}", videoItemId);
+                return;
+            }
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                log.warn("ffmpeg 流式转码退出码异常: exitCode={}, videoItemId={}", exitCode, videoItemId);
+            } else {
+                log.info("流式转码完成: videoItemId={}, startSeconds={}", videoItemId, startSeconds);
+            }
+        } catch (IOException e) {
+            log.debug("流式转码中断（客户端可能断开）: videoItemId={}, message={}", videoItemId, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("流式转码被中断: videoItemId={}", videoItemId);
+        } finally {
+            unregisterActiveStream(streamKey, process);
+            terminateProcess(process);
+            if (timeoutThread != null) {
+                timeoutThread.interrupt();
+            }
+            if (ownSlot) {
+                releaseStreamSlot();
+            }
+        }
+    }
+
+    /**
+     * 将原始视频流 + 缓存的 AAC 音频流 mux 为 fMP4 推送给浏览器。
+     * 视频流 copy（零编码开销），音频从缓存文件读取。
+     *
+     * @param ownerUserId      源条目的目录所有者（非请求者）
+     * @param sourceVideoItemId 原始视频条目 ID（用于获取视频流）
+     * @param audioFileNodeId  缓存 AAC 音频的 FileNode ID
+     * @param startSeconds     起始秒数（用于 seek）
+     * @param output           HTTP 响应的 OutputStream
+     */
+    public void streamWithCachedAudio(
+            UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
+            long startSeconds, OutputStream output
+    ) {
+        streamWithCachedAudio(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId),
+                audioFileNodeId, startSeconds, null, output, true);
+    }
+
+    /**
+     * 将原始视频流 + 缓存的 AAC 音频流 mux 为 fMP4 推送给浏览器。
+     *
+     * @param ownSlot 本次调用是否自行占用并释放流槽位；控制器已预先占位时传 false
+     */
+    public void streamWithCachedAudio(
+            UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
+            long startSeconds, String streamKey, OutputStream output, boolean ownSlot
+    ) {
+        streamWithCachedAudio(
+                mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId),
+                audioFileNodeId, startSeconds, streamKey, output, ownSlot);
+    }
+
+    /**
+     * 以已加载并鉴权的源条目启动缓存音频混流；单次请求只查询/鉴权一次源条目。
+     */
+    void streamWithCachedAudio(
+            MediaVideoItem sourceItem, UUID audioFileNodeId,
+            long startSeconds, String streamKey, OutputStream output, boolean ownSlot
+    ) {
+        UUID sourceVideoItemId = sourceItem.getId();
+        String videoDemuxer = VideoLiveInputFormats.requireDemuxer(sourceItem.getContainerFormat());
+        String videoInternalUrl = resolveInput(sourceItem.getOwnerUserId(), sourceItem.getFileNodeId());
+        String audioInternalUrl = resolveInput(sourceItem.getOwnerUserId(), audioFileNodeId);
+
+        log.info("缓存音频 mux 开始: sourceVideoItemId={}, demuxer={}, startSeconds={}",
+                sourceVideoItemId, videoDemuxer, startSeconds);
+
+        List<String> ffmpegArgs = buildCachedAudioArgs(
+                videoDemuxer, videoInternalUrl, audioInternalUrl, startSeconds);
+        StreamCommand streamCommand = buildStreamCommand(ffmpegArgs);
+        terminateActiveStream(streamKey);
+        if (ownSlot) {
+            requireStreamSlot(sourceVideoItemId);
+        }
+
+        Process process = null;
+        Thread timeoutThread = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
+            pb.redirectErrorStream(false);
+            process = pb.start();
+            closeStdinPipe(process);
+            registerActiveStream(streamKey, process);
+            log.info("ffmpeg mux 进程已启动: pid={}", process.pid());
+            final Process ffmpegProcess = process;
+            AtomicBoolean timedOut = new AtomicBoolean();
+            timeoutThread = startTimeoutMonitor(ffmpegProcess, timedOut);
+
+            Thread.ofVirtual()
+                    .name("ffmpeg-stderr")
+                    .start(() -> drainStderr(ffmpegProcess));
+
+            try (InputStream stdout = process.getInputStream()) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytesRead;
+                while ((bytesRead = stdout.read(buffer)) != -1) {
+                    output.write(buffer, 0, bytesRead);
+                    output.flush();
+                }
+            }
+
+            timeoutThread.join(TIMEOUT_JOIN_MILLIS);
+            if (timedOut.get()) {
+                log.warn(
+                        "ffmpeg mux 超时: sourceVideoItemId={}, timeout={}s",
+                        sourceVideoItemId,
+                        STREAM_TRANSCODE_TIMEOUT_SECONDS
+                );
+                return;
+            }
+            // 与实时转码相同：stdout EOF 不代表进程已退出，先 waitFor 再读退出码。
+            if (!process.waitFor(TIMEOUT_JOIN_MILLIS, TimeUnit.MILLISECONDS)) {
+                log.warn("ffmpeg mux 进程未在预期时间内退出: sourceVideoItemId={}", sourceVideoItemId);
+                return;
+            }
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                log.warn("ffmpeg mux 退出码异常: exitCode={}, sourceVideoItemId={}", exitCode, sourceVideoItemId);
+            } else {
+                log.info("缓存音频 mux 完成: sourceVideoItemId={}, startSeconds={}", sourceVideoItemId, startSeconds);
+            }
+        } catch (IOException e) {
+            log.debug("mux 中断（客户端可能断开）: sourceVideoItemId={}, message={}", sourceVideoItemId, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("mux 被中断: sourceVideoItemId={}", sourceVideoItemId);
+        } finally {
+            unregisterActiveStream(streamKey, process);
+            terminateProcess(process);
+            if (timeoutThread != null) {
+                timeoutThread.interrupt();
+            }
+            if (ownSlot) {
+                releaseStreamSlot();
+            }
+        }
+    }
+
+    /**
+     * 构建单个输入项：协议白名单、可选 seek、强制解复用器与 {@code -i}。
+     *
+     * <p>{@code -protocol_whitelist} 只作用于紧随其后的那一个输入，必须逐输入附加：
+     * 混流时两路来源的可信级别不同，合并白名单会让本地文件获得出网能力、
+     * 或让远程流获得读取宿主文件的能力。</p>
+     */
+    private List<String> inputArgs(String demuxer, String inputUrl, long startSeconds) {
+        List<String> args = new ArrayList<>();
+        args.add("-protocol_whitelist");
+        args.add(protocolWhitelistFor(inputUrl));
+        if (startSeconds > 0) {
+            args.addAll(List.of("-ss", String.valueOf(startSeconds)));
+        }
+        args.addAll(List.of("-f", demuxer, "-i", inputUrl));
+        return args;
+    }
+
+    /**
+     * 构建实时转码的 ffmpeg 参数（不含执行前缀）。
+     */
+    List<String> buildTranscodeArgs(String demuxer, String inputUrl, long startSeconds) {
+        List<String> args = new ArrayList<>(inputArgs(demuxer, inputUrl, startSeconds));
+        // 不映射字幕流：字幕通过独立的 /vtt 端点按需提取为 WebVTT
+        args.addAll(List.of(
+                "-map", "0:v",
+                "-map", "0:a"
+        ));
+        // 视频流直接 copy（零编码开销），浏览器负责解码
+        // hevc/h265: Chrome 107+ 支持硬件解码，Safari 原生支持
+        args.addAll(List.of("-c:v", "copy"));
+        args.addAll(List.of(
+                "-c:a", "aac", "-b:a", "192k",
+                "-f", "mp4",
+                "-movflags", "frag_keyframe+empty_moov",
+                "pipe:1"
+        ));
+        return args;
+    }
+
+    /**
+     * 构建缓存音频 mux 的 ffmpeg 参数。
+     */
+    List<String> buildCachedAudioArgs(
+            String videoDemuxer, String videoUrl, String audioUrl, long startSeconds) {
+        List<String> args = new ArrayList<>();
+        // -ss 是输入级参数，必须分别放在两个 -i 之前；只给视频 seek 会让音频
+        // 从头播放，缓存音轨模式下产生稳定的音画不同步。
+        args.addAll(inputArgs(videoDemuxer, videoUrl, startSeconds));
+        // 派生音频固定为 ADTS AAC，同样不允许自动探测。
+        args.addAll(inputArgs("aac", audioUrl, startSeconds));
+        args.addAll(List.of(
+                "-map", "0:v", "-map", "1:a"
+        ));
+        // 视频流直接 copy（零编码开销），浏览器负责解码
+        args.addAll(List.of("-c:v", "copy"));
+        // 音频重新编码为 AAC-LC：原始 ADTS 流的元数据（时长/码率）可能不准确，
+        // copy 会导致浏览器收到畸形数据断开连接；re-encode 确保输出正确的 ASC 头和 MP4 兼容格式
+        args.addAll(List.of(
+                "-c:a", "aac", "-b:a", "192k", "-ac", "2",
+                "-f", "mp4",
+                "-movflags", "frag_keyframe+empty_moov",
+                "pipe:1"
+        ));
+        return args;
+    }
+
+    /**
+     * 构建完整命令：本机 ffmpeg 前只插入执行前缀，协议白名单由各输入项自带。
+     */
+    StreamCommand buildStreamCommand(List<String> ffmpegArgs) {
+        if (ffmpegRuntime.isDisabled()) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");
+        }
+        List<String> command = new ArrayList<>();
+        command.add("ffmpeg");
+        command.add("-y");
+        // -nostdin：默认 stdin 可用时 ffmpeg 会等待交互按键（如 'q'），
+        // 管道流式转码场景下这既挂住进程又白占一个文件描述符。
+        command.add("-nostdin");
+        command.addAll(ffmpegArgs);
+        return new StreamCommand(command);
+    }
+
+    private String resolveInput(UUID ownerUserId, UUID fileNodeId) {
+        return sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
+    }
+
+    /**
+     * 按输入类型给出该输入自身允许的协议集合。
+     *
+     * <p>本地来源禁止出网（防 SSRF 跳板），远程来源禁止 {@code file:} 读取宿主文件。</p>
+     */
+    String protocolWhitelistFor(String inputUrl) {
+        return isHttpInput(inputUrl) ? "http,https,tcp,tls" : "file,crypto,data";
+    }
+
+    private boolean isHttpInput(String input) {
+        if (input == null) {
+            return false;
+        }
+        String lower = input.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
+    }
+
+    record StreamCommand(List<String> command) {
+    }
+
+    private void terminateProcess(Process process) {
+        if (process == null) {
+            return;
+        }
+        process.destroyForcibly();
+        try {
+            process.waitFor(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        try {
+            process.getInputStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+        try {
+            process.getErrorStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+        try {
+            process.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+    }
+
+    private Thread startTimeoutMonitor(Process process, AtomicBoolean timedOut) {
+        return Thread.ofVirtual()
+                .name("ffmpeg-timeout")
+                .start(() -> {
+                    try {
+                        boolean finished = process.waitFor(STREAM_TRANSCODE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                        if (!finished) {
+                            timedOut.set(true);
+                            process.destroyForcibly();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        process.destroyForcibly();
+                    }
+                });
+    }
+
+    /**
+     * 关闭交给子进程的标准输入管道。
+     *
+     * <p>{@code -nostdin} 只让 ffmpeg 不去读输入，父进程这一侧的管道仍然开着；
+     * 不关闭会在长连接流式转码期间累积空闲文件描述符。</p>
+     */
+    private void closeStdinPipe(Process process) {
+        try {
+            process.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("ffmpeg stdin 管道关闭失败: pid={}", process.pid());
+        }
+    }
+
+    private void drainStderr(Process process) {
+        long drainedBytes = 0;
+        try (InputStream stderr = process.getErrorStream()) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = stderr.read(buffer)) != -1) {
+                drainedBytes += bytesRead;
+            }
+            log.debug("ffmpeg stderr 已排空: bytes={}", drainedBytes);
+        } catch (IOException e) {
+            log.debug("ffmpeg stderr 读取结束: {}", e.getMessage());
+        }
+    }
+}

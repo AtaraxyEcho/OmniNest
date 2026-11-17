@@ -1,0 +1,434 @@
+package com.omninest.modules.reader.dto;
+
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Reader 模块 DTO 定义。
+ */
+public final class ReaderDtos {
+
+    private ReaderDtos() {
+    }
+
+    // ==================== Response DTOs ====================
+
+    /** 阅读条目摘要。 */
+    public record ReaderItemDto(
+            UUID id,
+            /** 关联文件节点 ID；空间迁移与封面设置依赖该字段 */
+            UUID fileNodeId,
+            String itemType,
+            String contentKind,
+            String title,
+            String authorName,
+            String coverUrl,
+            String description,
+            String publisher,
+            String language,
+            BigDecimal rating,
+            /** 出版日期，编辑页写入 reader_items.release_date */
+            LocalDate releaseDate,
+            /** 分类标签，来自 reader_items.genres 的 items 数组 */
+            List<String> genres,
+            /** 连载状态，存 reader_items.external_ids 的 serialStatus 键 */
+            String serialStatus,
+            /** ISBN，存 reader_items.external_ids 的 isbn 键 */
+            String isbn,
+            Instant createdAt,
+            Instant updatedAt,
+            boolean addedToBookshelf,
+            /** 当前用户阅读进度（0-1），未阅读时为 null */
+            Double progressPercent,
+            String spaceType,
+            int manifestVersion,
+            /** 导入状态：READY / PARSING / PARTIAL_FAILED / FAILED */
+            String importStatus,
+            /** 最近一次解析错误码 */
+            String parseErrorCode,
+            /** 最近一次解析错误信息 */
+            String parseErrorMessage,
+            String readerType,
+            String seriesName,
+            Integer volumeNumber,
+            String coverImageUrl,
+            boolean hasManualMetadataOverride
+    ) {
+        public ReaderItemDto(
+                UUID id,
+                UUID fileNodeId,
+                String itemType,
+                String contentKind,
+                String title,
+                String authorName,
+                String coverUrl,
+                String description,
+                String publisher,
+                String language,
+                BigDecimal rating,
+                LocalDate releaseDate,
+                List<String> genres,
+                String serialStatus,
+                String isbn,
+                Instant createdAt,
+                Instant updatedAt,
+                boolean addedToBookshelf,
+                Double progressPercent,
+                String spaceType,
+                int manifestVersion,
+                String importStatus,
+                String parseErrorCode,
+                String parseErrorMessage
+        ) {
+            this(id, fileNodeId, itemType, contentKind, title, authorName, coverUrl, description,
+                    publisher, language, rating, releaseDate, genres, serialStatus, isbn, createdAt, updatedAt,
+                    addedToBookshelf, progressPercent, spaceType, manifestVersion, importStatus, parseErrorCode,
+                    parseErrorMessage, null, null, null, null, false);
+        }
+    }
+
+    /** 阅读条目详情（含当前进度）。 */
+    public record ReaderItemDetailDto(
+            ReaderItemDto item,
+            ReaderProgressDto progress
+    ) {
+    }
+
+    /** 阅读进度。 */
+    public record ReaderProgressDto(
+            long charOffset,
+            BigDecimal progressPercent,
+            String readingMode,
+            String chapterId,
+            UUID pageId,
+            Integer pageIndex,
+            String pageFingerprint,
+            UUID sourceId,
+            Integer sourcePageIndex,
+            String catalogKey,
+            Integer manifestVersion,
+            /** 漫画：页内偏移（滚动模式，0.0-1.0） */
+            Double intraPageOffset,
+            Instant updatedAt
+    ) {
+    }
+
+    /** 书签。 */
+    public record ReaderBookmarkDto(
+            UUID id,
+            UUID readerItemId,
+            /** 书签所属章节标识；客户端偏移是章节内的，缺实时只能回到当前进度章 */
+            String chapterId,
+            long charOffset,
+            BigDecimal progressPercent,
+            String note,
+            Instant createdAt
+    ) {
+    }
+
+    /** 批注（高亮 + 附注）。 */
+    public record ReaderAnnotationDto(
+            UUID id,
+            UUID readerItemId,
+            String chapterId,
+            long startOffset,
+            long endOffset,
+            String highlightText,
+            String note,
+            String color,
+            Instant createdAt,
+            /** 服务端乐观锁版本：更新时回传作为并发校验的期望值。 */
+            Long version
+    ) {
+    }
+
+    /** 笔记。 */
+    public record ReaderNoteDto(
+            UUID id,
+            UUID readerItemId,
+            Long charOffset,
+            String title,
+            String content,
+            Instant createdAt,
+            /** 服务端乐观锁版本：更新时回传作为并发校验的期望值。 */
+            Long version
+    ) {
+    }
+
+    /** 仪表盘（概览 + 继续阅读 + 最近条目）。 */
+    public record ReaderDashboardDto(
+            ReaderOverviewDto overview,
+            List<ReaderItemDto> continueReading,
+            List<ReaderItemDto> recentItems
+    ) {
+    }
+
+    /** 概览统计（含最近 14 天逐日阅读分钟数）。 */
+    public record ReaderOverviewDto(
+            int totalItems,
+            int continueCount,
+            List<ReaderDailyReadingDto> dailyReading
+    ) {
+        /** 兼容旧构造：未取日粒度数据时给空列表。 */
+        public ReaderOverviewDto(int totalItems, int continueCount) {
+            this(totalItems, continueCount, List.of());
+        }
+    }
+
+    /** 单日阅读分钟数，对应样例概览的 `.bars` 柱图与 `.bar-axis` 日期轴。 */
+    public record ReaderDailyReadingDto(String date, long minutes) {
+    }
+
+    /** 阅读统计。 */
+    public record ReaderReadingStatsDto(
+            int totalMinutesToday,
+            int totalMinutesThisWeek,
+            int currentStreak,
+            int longestStreak,
+            int totalBooksRead
+    ) {
+    }
+
+    /** 每日阅读分钟数（按用户本地时区聚合）。 */
+    public record ReaderDailyMinutesDto(
+            LocalDate date,
+            int minutes
+    ) {
+    }
+
+    /** 阅读统计概览：柱状图数据、完成/在读计数与在读列表。 */
+    public record ReaderStatsOverviewDto(
+            List<ReaderDailyMinutesDto> dailyMinutes,
+            long completedCount,
+            long inProgressCount,
+            long totalItems,
+            List<ReaderItemDto> inProgressItems
+    ) {
+    }
+
+    // ==================== Request DTOs ====================
+
+    /** 更新阅读进度请求。 */
+    public record UpdateProgressRequest(
+            @Min(value = 0, message = "charOffset 不能为负数")
+            long charOffset,
+            @NotNull(message = "progressPercent 不能为空")
+            @DecimalMin(value = "0.0", message = "progressPercent 不能小于 0")
+            @DecimalMax(value = "1.0", message = "progressPercent 不能大于 1")
+            BigDecimal progressPercent,
+            @Size(max = 50, message = "readingMode 长度不能超过 50")
+            String readingMode,
+            @Size(max = 128, message = "chapterId 长度不能超过 128")
+            String chapterId,
+            /** 漫画：页面 ID 锚点。 */
+            UUID pageId,
+            /** 漫画：页码索引。 */
+            Integer pageIndex,
+            /** 漫画：页面指纹（用于目录变更后定位）。 */
+            @Size(max = 64, message = "pageFingerprint 长度不能超过 64")
+            String pageFingerprint,
+            /** 漫画：来源文件 ID。 */
+            UUID sourceId,
+            /** 漫画：来源文件内页码索引。 */
+            Integer sourcePageIndex,
+            /** 漫画：目录键。 */
+            @Size(max = 500, message = "catalogKey 长度不能超过 500")
+            String catalogKey,
+            /** 漫画：清单版本号。 */
+            Integer manifestVersion,
+            /** 漫画：页内偏移（滚动模式，0.0-1.0） */
+            Double intraPageOffset,
+            /** 客户端记录本次进度的时刻；离线补传必须沿用记录时刻而非发送时刻。 */
+            Instant clientUpdatedAt
+    ) {
+    }
+
+    /** 创建书签请求。 */
+    public record CreateBookmarkRequest(
+            @Size(max = 128, message = "chapterId 长度不能超过 128")
+            String chapterId,
+            @Min(value = 0, message = "charOffset 不能为负数")
+            long charOffset,
+            // progressPercent 为必填：service 端直接 .max(BigDecimal.ZERO)，
+            // 缺参会 NPE 500（D-014），此处以校验注解提前拦截为 400。
+            @NotNull(message = "progressPercent 不能为空")
+            @DecimalMin(value = "0.0", message = "progressPercent 不能小于 0")
+            @DecimalMax(value = "1.0", message = "progressPercent 不能大于 1")
+            BigDecimal progressPercent,
+            @Size(max = 2000, message = "note 长度不能超过 2000")
+            String note,
+            @Size(max = 120, message = "clientOperationId 长度不能超过 120")
+            String clientOperationId
+    ) {
+    }
+
+    /** 创建批注请求。 */
+    public record CreateAnnotationRequest(
+            @Size(max = 128, message = "chapterId 长度不能超过 128")
+            String chapterId,
+            @Min(value = 0, message = "startOffset 不能为负数")
+            long startOffset,
+            @Min(value = 0, message = "endOffset 不能为负数")
+            long endOffset,
+            @Size(max = 4096, message = "highlightText 长度不能超过 4096")
+            String highlightText,
+            @Size(max = 4096, message = "note 长度不能超过 4096")
+            String note,
+            @Size(max = 16, message = "color 长度不能超过 16")
+            @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
+            String color,
+            @Size(max = 120, message = "clientOperationId 长度不能超过 120")
+            String clientOperationId
+    ) {
+    }
+
+    /** 更新批注请求。 */
+    public record UpdateAnnotationRequest(
+            @Size(max = 4096, message = "note 长度不能超过 4096")
+            String note,
+            @Size(max = 16, message = "color 长度不能超过 16")
+            @Pattern(regexp = "^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|[a-zA-Z]{1,16})$", message = "color 必须是十六进制色值或颜色名")
+            String color,
+            /** 客户端最后看到的版本；缺省时退化为后写覆盖（兼容旧客户端与本地优先队列）。 */
+            @PositiveOrZero(message = "expectedVersion 不能为负数")
+            Long expectedVersion
+    ) {
+    }
+
+    /** 创建笔记请求。 */
+    public record CreateNoteRequest(
+            Long charOffset,
+            @Size(max = 500, message = "title 长度不能超过 500")
+            String title,
+            @NotBlank String content,
+            @Size(max = 120, message = "clientOperationId 长度不能超过 120")
+            String clientOperationId
+    ) {
+    }
+
+    /** 更新笔记请求。 */
+    public record UpdateNoteRequest(
+            @Size(max = 500, message = "title 长度不能超过 500")
+            String title,
+            @NotBlank String content,
+            /** 客户端最后看到的版本；缺省时退化为后写覆盖（兼容旧客户端与本地优先队列）。 */
+            @PositiveOrZero(message = "expectedVersion 不能为负数")
+            Long expectedVersion
+    ) {
+    }
+
+    /** 更新条目元数据请求。 */
+    public record UpdateItemMetadataRequest(
+            @Size(max = 500, message = "title 长度不能超过 500")
+            String title,
+            @Size(max = 300, message = "authorName 长度不能超过 300")
+            String authorName,
+            @Size(max = 5000, message = "description 长度不能超过 5000")
+            String description,
+            @Size(max = 300, message = "publisher 长度不能超过 300")
+            String publisher,
+            @Size(max = 50, message = "language 长度不能超过 50")
+            String language,
+            LocalDate releaseDate,
+            @DecimalMin(value = "0.0", message = "rating 不能小于 0")
+            @DecimalMax(value = "10.0", message = "rating 不能大于 10")
+            BigDecimal rating,
+            @Size(max = 20, message = "genres 数量不能超过 20")
+            List<String> genres,
+            @Size(max = 50, message = "serialStatus 长度不能超过 50")
+            String serialStatus,
+            @Size(max = 64, message = "isbn 长度不能超过 64")
+            String isbn,
+            @Pattern(regexp = "(?i)BOOK|COMIC|MANGA", message = "readerType 必须为 BOOK、COMIC 或 MANGA")
+            String readerType,
+            @Size(max = 300, message = "seriesName 长度不能超过 300")
+            String seriesName,
+            @Min(value = 1, message = "volumeNumber 必须大于 0")
+            @Max(value = 999, message = "volumeNumber 不能超过 999")
+            Integer volumeNumber,
+            Boolean clearVolumeNumber,
+            @Size(max = 2048, message = "coverImageUrl 长度不能超过 2048")
+            String coverImageUrl,
+            Boolean restoreOriginal,
+            Boolean clearReleaseDate,
+            Boolean clearRating
+    ) {
+        public UpdateItemMetadataRequest(
+                String title,
+                String authorName,
+                String description,
+                String publisher,
+                String language,
+                LocalDate releaseDate,
+                BigDecimal rating,
+                List<String> genres,
+                String serialStatus,
+                String isbn
+        ) {
+            this(title, authorName, description, publisher, language, releaseDate, rating, genres, serialStatus,
+                    isbn, null, null, null, null, null, null, null, null);
+        }
+    }
+
+    /** 记录阅读会话请求。 */
+    public record RecordSessionRequest(
+            @Size(max = 128, message = "clientSessionId 长度不能超过 128")
+            String clientSessionId,
+            @NotNull Instant startedAt,
+            @NotNull Instant endedAt,
+            @Min(value = 1, message = "durationSeconds 必须大于 0")
+            int durationSeconds
+    ) {
+    }
+
+    /** 导入文件请求。 */
+    public record ImportFileRequest(
+            @NotNull
+            UUID fileNodeId,
+            boolean force,
+            @Size(max = 20, message = "contentKindOverride 长度不能超过 20")
+            String contentKindOverride
+    ) {
+    }
+
+    /** 可导入文件候选条目。 */
+    public record ImportCandidateDto(
+            UUID fileNodeId,
+            String fileName,
+            String itemType,
+            Long sizeBytes,
+            String spaceType,
+            Instant createdAt
+    ) {
+    }
+
+    /**
+     * 可导入候选列表：超过服务端上限时按创建时间倒序截断。
+     *
+     * @param items 候选文件
+     * @param truncated 是否还有更多候选未返回
+     */
+    public record ImportCandidatesResponse(
+            List<ImportCandidateDto> items,
+            boolean truncated
+    ) {
+    }
+
+    /** 从文件节点设置封面请求。 */
+    public record SetCoverFromFileRequest(
+            @NotNull UUID fileNodeId
+    ) {
+    }
+}

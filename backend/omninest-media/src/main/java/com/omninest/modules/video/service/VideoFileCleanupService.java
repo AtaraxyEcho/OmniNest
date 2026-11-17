@@ -1,0 +1,575 @@
+package com.omninest.modules.video.service;
+
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.media.domain.ResourceType;
+import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.service.FileBusinessReference;
+import com.omninest.modules.file.service.FilePurgeParticipant;
+import com.omninest.modules.file.service.PurgeContext;
+import com.omninest.modules.file.service.PurgeContributionWriter;
+import com.omninest.modules.media.domain.MediaPlaybackType;
+import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
+import com.omninest.modules.media.service.MediaPlaybackCleanupService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.video.domain.ContentAsset;
+import com.omninest.modules.video.domain.MediaMovie;
+import com.omninest.modules.video.domain.MediaSubtitleTrack;
+import com.omninest.modules.video.domain.MediaTvEpisode;
+import com.omninest.modules.video.domain.MediaTvSeason;
+import com.omninest.modules.video.domain.MediaTvSeries;
+import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.repository.ContentAssetRepository;
+import com.omninest.modules.video.repository.MediaMovieRepository;
+import com.omninest.modules.video.repository.MediaNfoExportRepository;
+import com.omninest.modules.video.repository.MediaSeriesFavoriteRepository;
+import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
+import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
+import com.omninest.modules.video.repository.MediaTvSeasonRepository;
+import com.omninest.modules.video.repository.MediaTvSeriesRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionItemRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
+import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
+import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 文件删除触发的影视业务数据清理服务。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class VideoFileCleanupService implements
+        FilePurgeParticipant,
+        MediaFileVisibilitySyncParticipant {
+    private static final String MODULE = "MOVIES";
+    private static final String RESOURCE_TYPE = "VIDEO_ITEM";
+    private final MediaVideoItemRepository videoItemRepository;
+    private final MediaPlaybackCleanupService playbackCleanupService;
+    private final MediaWatchHistoryRepository watchHistoryRepository;
+    private final MediaVideoFavoriteRepository videoFavoriteRepository;
+    private final MediaVideoCollectionItemRepository collectionItemRepository;
+    private final MediaSubtitleTrackRepository subtitleTrackRepository;
+    private final MediaNfoExportRepository nfoExportRepository;
+    private final ContentAssetRepository contentAssetRepository;
+    private final MediaMovieRepository movieRepository;
+    private final MediaTvEpisodeRepository tvEpisodeRepository;
+    private final MediaTvSeasonRepository tvSeasonRepository;
+    private final MediaTvSeriesRepository tvSeriesRepository;
+    private final MediaSeriesFavoriteRepository seriesFavoriteRepository;
+    private final MediaVideoCollectionRepository videoCollectionRepository;
+    private final MediaSyncEventService syncEventService;
+    private final ReadThroughCache readThroughCache;
+
+    /**
+     * 查询目标文件的视频条目引用。
+     *
+     * @param context 删除上下文
+     * @return 视频条目引用
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<FileBusinessReference> findBusinessReferences(PurgeContext context) {
+        List<FileBusinessReference> references = new ArrayList<>();
+        videoItemRepository.findByFileNodeIdIn(context.fileNodeIds()).stream()
+                .map(video -> new FileBusinessReference(
+                        MODULE,
+                        RESOURCE_TYPE,
+                        video.getId(),
+                        video.getFileNodeId()
+                ))
+                .forEach(references::add);
+        subtitleTrackRepository.findByFileNodeIdIn(context.fileNodeIds()).stream()
+                .map(track -> new FileBusinessReference(
+                        MODULE,
+                        "SUBTITLE_TRACK",
+                        track.getId(),
+                        track.getFileNodeId()
+                ))
+                .forEach(references::add);
+        return List.copyOf(references);
+    }
+
+    /**
+     * 贡献视频条目及删除后将成为孤立资源的父级资产。
+     *
+     * @param context 删除上下文
+     * @param writer 资源写入器
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public void contribute(PurgeContext context, PurgeContributionWriter writer) {
+        Map<UUID, List<MediaVideoItem>> videosByOwner = videoItemRepository
+                .findByFileNodeIdIn(context.fileNodeIds())
+                .stream()
+                .collect(Collectors.groupingBy(
+                        MediaVideoItem::getOwnerUserId,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        videosByOwner.forEach((ownerUserId, videos) -> contributeOwnedVideos(
+                new PurgeContext(
+                        context.taskId(),
+                        ownerUserId,
+                        context.rootFileNodeId(),
+                        context.fileNodeIds()
+                ),
+                videos,
+                writer
+        ));
+    }
+
+    private void contributeOwnedVideos(
+            PurgeContext context,
+            List<MediaVideoItem> videos,
+            PurgeContributionWriter writer
+    ) {
+        List<UUID> videoIds = videos.stream().map(MediaVideoItem::getId).toList();
+        // 内嵌字幕提取出的 DERIVED 节点只被字幕轨道的 fileNodeId 引用：finalizePurge
+        // 会直接删掉轨道行，这里不收集就会留下 deleted=false 的永久孤儿（连孤儿扫描器
+        // 也不会回收，因为它只处理已标记删除的节点）。
+        List<UUID> subtitleFileNodeIds = subtitleTrackRepository
+                .findByOwnerUserIdAndVideoItemIdIn(context.ownerUserId(), videoIds)
+                .stream()
+                .map(MediaSubtitleTrack::getFileNodeId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!subtitleFileNodeIds.isEmpty()) {
+            writer.addFileNodeIds(subtitleFileNodeIds);
+        }
+        addContentAssetFiles(writer, context.ownerUserId(), ResourceType.VIDEO_ITEM, videoIds);
+        contributeMovieAssets(context, writer, videos, videoIds);
+        contributeEpisodeAndSeriesAssets(context, writer, videos, videoIds);
+    }
+
+    /**
+     * 幂等清理影视业务记录。
+     *
+     * @param context 删除上下文
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void finalizePurge(PurgeContext context) {
+        List<UUID> fileNodeIds = List.copyOf(context.fileNodeIds());
+        subtitleTrackRepository.deleteByFileNodeIdIn(fileNodeIds);
+        Map<UUID, List<MediaVideoItem>> videosByOwner = videoItemRepository.findByFileNodeIdIn(fileNodeIds).stream()
+                .collect(Collectors.groupingBy(
+                        MediaVideoItem::getOwnerUserId,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        videosByOwner.forEach(this::deleteOwnedRows);
+        clearDanglingFileReferences(fileNodeIds);
+    }
+
+    /**
+     * 处理文件移入回收站事件。
+     *
+     * @param event 文件节点软删除事件
+     */
+    @EventListener
+    @Transactional(rollbackFor = Exception.class)
+    public void handleFileNodesSoftDeleted(FileNodesSoftDeletedEvent event) {
+        if (event.fileNodeIds() == null || event.fileNodeIds().isEmpty()) {
+            return;
+        }
+        log.debug("文件移入回收站，保留影视业务数据: ownerUserId={}, fileNodeCount={}",
+                event.ownerUserId(), event.fileNodeIds().size());
+    }
+
+    /**
+     * 使引用指定文件节点的影视库缓存失效。
+     *
+     * @param fileNodeIds 文件节点 ID
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void invalidateFileVisibility(Collection<UUID> fileNodeIds) {
+        if (fileNodeIds == null || fileNodeIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> owners = new HashSet<>();
+        videoItemRepository.findByFileNodeIdIn(fileNodeIds).stream()
+                .map(MediaVideoItem::getOwnerUserId)
+                .filter(Objects::nonNull)
+                .forEach(owners::add);
+        subtitleTrackRepository.findByFileNodeIdIn(fileNodeIds).stream()
+                .map(track -> track.getOwnerUserId())
+                .filter(Objects::nonNull)
+                .forEach(owners::add);
+        owners.forEach(ownerUserId -> syncEventService.invalidate(
+                ownerUserId,
+                SyncScope.VIDEO,
+                "VIDEO_LIBRARY",
+                Map.of("reason", "FILE_VISIBILITY_CHANGED")
+        ));
+    }
+
+    private void deleteOwnedRows(UUID ownerUserId, List<MediaVideoItem> videos) {
+        if (videos.isEmpty()) {
+            return;
+        }
+        List<UUID> videoItemIds = videos.stream().map(MediaVideoItem::getId).toList();
+        List<String> videoKeys = videoItemIds.stream().map(UUID::toString).toList();
+        // 续播进度按观看者归属：共享或公共影视条目会被其他成员观看，
+        // 只删条目所有者那一份会在别人「继续观看」里留下死条目。
+        playbackCleanupService.deleteAllUsers(MediaPlaybackType.VIDEO, videoKeys);
+        // 观看历史、收藏与合集条目按"观看者"归属：共享空间或公共影视库的条目会被其他成员
+        // 引用，只删条目所有者那一份会在别人列表里留下指向已删条目的死引用。
+        // 仪表盘计数按用户缓存 3 分钟，其余成员的统计在缓存到期后自洽。
+        watchHistoryRepository.deleteByVideoItemIdIn(videoItemIds);
+        videoFavoriteRepository.deleteByVideoItemIdIn(videoItemIds);
+        collectionItemRepository.deleteByVideoItemIdIn(videoItemIds);
+        subtitleTrackRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
+        nfoExportRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
+        cleanupContentAssets(ownerUserId, videoItemIds);
+
+        Set<UUID> movieIds = new HashSet<>();
+        Set<UUID> episodeIds = new HashSet<>();
+        Set<UUID> seriesIds = new HashSet<>();
+        for (MediaVideoItem video : videos) {
+            if (video.getMovieId() != null) {
+                movieIds.add(video.getMovieId());
+            }
+            if (video.getEpisodeId() != null) {
+                episodeIds.add(video.getEpisodeId());
+            }
+            if (video.getSeriesId() != null) {
+                seriesIds.add(video.getSeriesId());
+            }
+        }
+
+        videoItemRepository.deleteAllInBatch(videos);
+        cleanupOrphanedMovieParents(ownerUserId, movieIds);
+        cleanupOrphanedTvParents(ownerUserId, episodeIds, seriesIds);
+        // 条目删除改变影视库各类统计，需失效 dashboard 缓存。
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
+    }
+
+    private void cleanupOrphanedMovieParents(UUID ownerUserId, Set<UUID> movieIds) {
+        if (movieIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> moviesWithItems = new HashSet<>(
+                videoItemRepository.findMovieIdsWithItems(ownerUserId, movieIds));
+        List<UUID> toDelete = movieIds.stream()
+                .filter(id -> !moviesWithItems.contains(id))
+                .toList();
+        if (!toDelete.isEmpty()) {
+            deleteContentAssetRows(ownerUserId, ResourceType.MOVIE, toDelete);
+            movieRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, toDelete);
+            log.info("已清理孤立电影: count={}, ids={}", toDelete.size(), toDelete);
+        }
+    }
+
+    private void cleanupOrphanedTvParents(UUID ownerUserId, Set<UUID> episodeIds, Set<UUID> seriesIds) {
+        Set<UUID> affectedSeriesIds = new HashSet<>(seriesIds);
+        if (!episodeIds.isEmpty()) {
+            Set<UUID> episodesWithItems = new HashSet<>(
+                    videoItemRepository.findEpisodeIdsWithItems(ownerUserId, episodeIds));
+            List<MediaTvEpisode> episodes = tvEpisodeRepository
+                    .findAllByIdInAndOwnerUserId(episodeIds, ownerUserId);
+            List<UUID> episodesToDelete = new ArrayList<>();
+            for (MediaTvEpisode episode : episodes) {
+                if (!episodesWithItems.contains(episode.getId())) {
+                    episodesToDelete.add(episode.getId());
+                    if (episode.getSeriesId() != null) {
+                        affectedSeriesIds.add(episode.getSeriesId());
+                    }
+                }
+            }
+            if (!episodesToDelete.isEmpty()) {
+                tvEpisodeRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, episodesToDelete);
+                log.info("已清理孤立剧集: count={}", episodesToDelete.size());
+            }
+        }
+
+        if (affectedSeriesIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> seriesWithItems = new HashSet<>(
+                videoItemRepository.findSeriesIdsWithItems(ownerUserId, affectedSeriesIds));
+        List<MediaTvSeries> allSeries = tvSeriesRepository
+                .findAllByIdInAndOwnerUserId(affectedSeriesIds, ownerUserId);
+        List<UUID> seriesToDelete = new ArrayList<>();
+        Set<UUID> seriesIdsToCheckSeasons = new HashSet<>();
+        for (MediaTvSeries series : allSeries) {
+            if (!seriesWithItems.contains(series.getId())) {
+                seriesToDelete.add(series.getId());
+            } else {
+                seriesIdsToCheckSeasons.add(series.getId());
+            }
+        }
+
+        cleanupOrphanedSeasons(ownerUserId, seriesIdsToCheckSeasons);
+        deleteOrphanedSeries(ownerUserId, seriesToDelete);
+    }
+
+    private void cleanupOrphanedSeasons(UUID ownerUserId, Set<UUID> seriesIds) {
+        if (seriesIds.isEmpty()) {
+            return;
+        }
+        List<MediaTvSeason> seasons = tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(ownerUserId, seriesIds);
+        if (seasons.isEmpty()) {
+            return;
+        }
+        Map<String, Long> itemCountBySeason = new HashMap<>();
+        for (MediaVideoItemRepository.SeasonItemCountProjection row
+                : videoItemRepository.countItemsBySeason(ownerUserId, seriesIds)) {
+            if (row.getSeriesId() == null || row.getSeasonNumber() == null) {
+                continue;
+            }
+            itemCountBySeason.put(seasonKey(row.getSeriesId(), row.getSeasonNumber()), row.getItemCount());
+        }
+
+        List<UUID> orphanSeasonIds = new ArrayList<>();
+        List<MediaTvSeason> staleCountSeasons = new ArrayList<>();
+        for (MediaTvSeason season : seasons) {
+            long episodeCount = itemCountBySeason.getOrDefault(
+                    seasonKey(season.getSeriesId(), season.getSeasonNumber()), 0L);
+            if (episodeCount == 0) {
+                orphanSeasonIds.add(season.getId());
+            } else if (season.getEpisodeCount() == null || season.getEpisodeCount() != (int) episodeCount) {
+                // 存活季的集数必须随剧集永久删除收敛，否则详情页长期显示虚高集数。
+                season.setEpisodeCount((int) episodeCount);
+                staleCountSeasons.add(season);
+            }
+        }
+        if (!staleCountSeasons.isEmpty()) {
+            tvSeasonRepository.saveAll(staleCountSeasons);
+        }
+        if (!orphanSeasonIds.isEmpty()) {
+            tvSeasonRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, orphanSeasonIds);
+            log.info("已清理孤立季: count={}", orphanSeasonIds.size());
+        }
+    }
+
+    private static String seasonKey(UUID seriesId, Integer seasonNumber) {
+        return seriesId + "#" + seasonNumber;
+    }
+
+    private void deleteOrphanedSeries(UUID ownerUserId, List<UUID> seriesIds) {
+        if (seriesIds.isEmpty()) {
+            return;
+        }
+        // 季按系列归属，一次读出再整批删除，避免每个系列一次查询。
+        List<MediaTvSeason> seasons = tvSeasonRepository.findByOwnerUserIdAndSeriesIdIn(ownerUserId, seriesIds);
+        if (!seasons.isEmpty()) {
+            tvSeasonRepository.deleteByOwnerUserIdAndIdIn(
+                    ownerUserId,
+                    seasons.stream().map(MediaTvSeason::getId).toList());
+        }
+        // 收藏按观看者归属，系列彻底删除后必须清理所有成员的收藏。
+        seriesFavoriteRepository.deleteBySeriesIdIn(seriesIds);
+        deleteContentAssetRows(ownerUserId, ResourceType.TV_SERIES, seriesIds);
+        tvSeriesRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, seriesIds);
+        log.info("已清理孤立系列: count={}, ids={}", seriesIds.size(), seriesIds);
+    }
+
+    private void clearDanglingFileReferences(List<UUID> deletedFileIds) {
+        Set<UUID> fileIds = new HashSet<>(deletedFileIds);
+        movieRepository.findByPosterFileIdIn(fileIds)
+                .forEach(movie -> movie.setPosterFileId(null));
+        movieRepository.findByBackdropFileIdIn(fileIds)
+                .forEach(movie -> movie.setBackdropFileId(null));
+        tvSeriesRepository.findByPosterFileIdIn(fileIds)
+                .forEach(series -> series.setPosterFileId(null));
+        tvSeriesRepository.findByBackdropFileIdIn(fileIds)
+                .forEach(series -> series.setBackdropFileId(null));
+        tvSeasonRepository.findByPosterFileIdIn(fileIds)
+                .forEach(season -> season.setPosterFileId(null));
+        tvEpisodeRepository.findByStillFileIdIn(fileIds)
+                .forEach(episode -> episode.setStillFileId(null));
+        videoCollectionRepository.findByCoverFileIdIn(fileIds)
+                .forEach(collection -> collection.setCoverFileId(null));
+        // 自定义海报/背景图可能来自云盘里的任意图片节点：只清实体字段会留下指向已删
+        // 节点的资产行，后续按资产表反查签名地址就取不到内容。
+        List<ContentAsset> danglingAssets = contentAssetRepository.findByFileNodeIdIn(fileIds);
+        if (!danglingAssets.isEmpty()) {
+            contentAssetRepository.deleteAll(danglingAssets);
+        }
+    }
+
+    private void cleanupContentAssets(UUID ownerUserId, List<UUID> resourceIds) {
+        List<ContentAsset> assets = contentAssetRepository
+                .findAllByOwnerUserIdAndResourceTypeAndResourceIdIn(
+                        ownerUserId,
+                        ResourceType.VIDEO_ITEM.getValue(),
+                        resourceIds
+                );
+        if (assets.isEmpty()) {
+            return;
+        }
+        contentAssetRepository.deleteAll(assets);
+    }
+
+    private void contributeMovieAssets(
+            PurgeContext context,
+            PurgeContributionWriter writer,
+            List<MediaVideoItem> videos,
+            List<UUID> videoIds
+    ) {
+        Set<UUID> movieIds = videos.stream()
+                .map(MediaVideoItem::getMovieId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (movieIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> moviesWithRemainingItems = new HashSet<>(
+                videoItemRepository.findMovieIdsWithRemainingItems(
+                        context.ownerUserId(), movieIds, videoIds));
+        Set<UUID> orphanMovieIds = movieIds.stream()
+                .filter(movieId -> !moviesWithRemainingItems.contains(movieId))
+                .collect(Collectors.toSet());
+        List<MediaMovie> movies = movieRepository.findAllByIdInAndOwnerUserId(
+                orphanMovieIds,
+                context.ownerUserId()
+        );
+        writer.addFileNodeIds(movies.stream().map(MediaMovie::getPosterFileId).filter(Objects::nonNull).toList());
+        writer.addFileNodeIds(movies.stream().map(MediaMovie::getBackdropFileId).filter(Objects::nonNull).toList());
+        addContentAssetFiles(writer, context.ownerUserId(), ResourceType.MOVIE, orphanMovieIds);
+    }
+
+    private void contributeEpisodeAndSeriesAssets(
+            PurgeContext context,
+            PurgeContributionWriter writer,
+            List<MediaVideoItem> videos,
+            List<UUID> videoIds
+    ) {
+        Set<UUID> episodeIds = videos.stream()
+                .map(MediaVideoItem::getEpisodeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!episodeIds.isEmpty()) {
+            Set<UUID> episodesWithRemainingItems = new HashSet<>(
+                    videoItemRepository.findEpisodeIdsWithRemainingItems(
+                            context.ownerUserId(), episodeIds, videoIds));
+            Set<UUID> orphanEpisodeIds = episodeIds.stream()
+                    .filter(episodeId -> !episodesWithRemainingItems.contains(episodeId))
+                    .collect(Collectors.toSet());
+            List<MediaTvEpisode> episodes = tvEpisodeRepository
+                    .findAllByIdInAndOwnerUserId(orphanEpisodeIds, context.ownerUserId());
+            writer.addFileNodeIds(episodes.stream()
+                    .map(MediaTvEpisode::getStillFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+        }
+
+        Set<UUID> seriesIds = videos.stream()
+                .map(MediaVideoItem::getSeriesId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!seriesIds.isEmpty()) {
+            Set<UUID> seriesWithRemainingItems = new HashSet<>(
+                    videoItemRepository.findSeriesIdsWithRemainingItems(
+                            context.ownerUserId(), seriesIds, videoIds));
+            Set<UUID> orphanSeriesIds = seriesIds.stream()
+                    .filter(seriesId -> !seriesWithRemainingItems.contains(seriesId))
+                    .collect(Collectors.toSet());
+            List<MediaTvSeries> series = tvSeriesRepository
+                    .findAllByIdInAndOwnerUserId(orphanSeriesIds, context.ownerUserId());
+            writer.addFileNodeIds(series.stream()
+                    .map(MediaTvSeries::getPosterFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+            writer.addFileNodeIds(series.stream()
+                    .map(MediaTvSeries::getBackdropFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+            addContentAssetFiles(writer, context.ownerUserId(), ResourceType.TV_SERIES, orphanSeriesIds);
+        }
+
+        Set<SeasonKey> affectedSeasons = videos.stream()
+                .filter(video -> video.getSeriesId() != null && video.getSeasonNumber() != null)
+                .map(video -> new SeasonKey(video.getSeriesId(), video.getSeasonNumber()))
+                .collect(Collectors.toSet());
+        if (affectedSeasons.isEmpty()) {
+            return;
+        }
+        Set<UUID> affectedSeriesIds = affectedSeasons.stream()
+                .map(SeasonKey::seriesId)
+                .collect(Collectors.toSet());
+        Set<SeasonKey> seasonsWithRemainingItems = videoItemRepository
+                .findSeasonKeysWithRemainingItems(context.ownerUserId(), affectedSeriesIds, videoIds)
+                .stream()
+                .filter(row -> row.length >= 2 && row[0] instanceof UUID && row[1] instanceof Number)
+                .map(row -> new SeasonKey((UUID) row[0], ((Number) row[1]).intValue()))
+                .collect(Collectors.toSet());
+        Set<SeasonKey> orphanSeasonKeys = affectedSeasons.stream()
+                .filter(key -> !seasonsWithRemainingItems.contains(key))
+                .collect(Collectors.toSet());
+        if (orphanSeasonKeys.isEmpty()) {
+            return;
+        }
+        writer.addFileNodeIds(tvSeasonRepository
+                .findByOwnerUserIdAndSeriesIdIn(context.ownerUserId(), affectedSeriesIds)
+                .stream()
+                .filter(season -> orphanSeasonKeys.contains(
+                        new SeasonKey(season.getSeriesId(), season.getSeasonNumber())))
+                .map(MediaTvSeason::getPosterFileId)
+                .filter(Objects::nonNull)
+                .toList());
+    }
+
+    private void addContentAssetFiles(
+            PurgeContributionWriter writer,
+            UUID ownerUserId,
+            ResourceType resourceType,
+            Collection<UUID> resourceIds
+    ) {
+        if (resourceIds.isEmpty()) {
+            return;
+        }
+        writer.addFileNodeIds(contentAssetRepository
+                .findAllByOwnerUserIdAndResourceTypeAndResourceIdIn(
+                        ownerUserId,
+                        resourceType.getValue(),
+                        resourceIds
+                )
+                .stream()
+                .map(ContentAsset::getFileNodeId)
+                .filter(Objects::nonNull)
+                .toList());
+    }
+
+    private void deleteContentAssetRows(
+            UUID ownerUserId,
+            ResourceType resourceType,
+            Collection<UUID> resourceIds
+    ) {
+        if (resourceIds.isEmpty()) {
+            return;
+        }
+        List<ContentAsset> assets = contentAssetRepository
+                .findAllByOwnerUserIdAndResourceTypeAndResourceIdIn(
+                        ownerUserId,
+                        resourceType.getValue(),
+                        resourceIds
+                );
+        if (!assets.isEmpty()) {
+            contentAssetRepository.deleteAll(assets);
+        }
+    }
+
+    private record SeasonKey(UUID seriesId, Integer seasonNumber) {
+    }
+}

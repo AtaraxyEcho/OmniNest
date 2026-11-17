@@ -1,0 +1,365 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/theme/workstation_skin.dart';
+
+/// 全局统一下拉选项描述。
+class AppDropdownItem<T> {
+  const AppDropdownItem({
+    required this.value,
+    required this.label,
+    this.enabled = true,
+  });
+
+  final T value;
+  final String label;
+
+  /// 禁用项在菜单中置灰且不可选择。
+  final bool enabled;
+}
+
+/// 全局统一下拉选择：闭合态与 [TextField] 同风格的描边填充式
+///（静态 outlineVariant 描边、hover 加深、聚焦主色描边 + 右侧旋转箭头），
+/// 展开菜单基于 Material 3 的 [MenuAnchor]——锚点定位、自动上下翻转、
+/// 外部点击关闭与键盘导航均由框架保证；视觉上为圆角投影面板、选项
+/// hover 高亮、选中项主色加粗并打勾。全局所有表单型下拉统一使用本控件。
+///
+/// 工位皮肤作用域内（Files / Admin，经 [WorkstationSurfaceFlag] 感知）：
+/// 字段与菜单改直角细线零阴影，默认 hairline 描边、聚焦/展开仅 1px
+/// 精准升为 onSurface；非工位子树保持全局默认圆角外观不受影响。
+///
+/// 字段横向撑满父级约束（或 [width]），箭头通过 suffixIcon 固定右侧；
+/// 筛选栏等与按钮并排的场景应传 [dense] 为 true。
+class AppDropdown<T> extends StatefulWidget {
+  const AppDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.label,
+    this.placeholder,
+    this.width,
+    this.suffixText,
+    this.helperText,
+    this.dense = false,
+    super.key,
+  });
+
+  final T value;
+  final List<AppDropdownItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+
+  /// 浮动标签；为空时不显示。
+  ///
+  /// [dense] 为 true 时作为字段内前缀文案，不抬升字段高度。
+  final String? label;
+
+  /// 当前值不在 [items] 中时展示的占位文案；为空时显示空串而非首项。
+  final String? placeholder;
+
+  /// 固定宽度；为空时由父级约束决定并横向撑满。
+  final double? width;
+  final String? suffixText;
+
+  /// 字段下方的辅助说明。
+  final String? helperText;
+
+  /// 紧凑模式：高度与按钮对齐，[label] 以内嵌前缀展示。
+  final bool dense;
+
+  @override
+  State<AppDropdown<T>> createState() => _AppDropdownState<T>();
+}
+
+class _AppDropdownState<T> extends State<AppDropdown<T>> {
+  final MenuController _menu = MenuController();
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  int _indexOfValue() {
+    return widget.items.indexWhere((item) => item.value == widget.value);
+  }
+
+  String get _currentLabel {
+    final index = _indexOfValue();
+    return index >= 0 && index < widget.items.length
+        ? widget.items[index].label
+        : (widget.placeholder ?? '');
+  }
+
+  void _toggleMenu() {
+    _menu.isOpen ? _menu.close() : _menu.open();
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.arrowDown) {
+      _toggleMenu();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _select(int index) {
+    final item = widget.items[index];
+    _menu.close();
+    if (item.value != widget.value) {
+      widget.onChanged?.call(item.value);
+    }
+  }
+
+  EdgeInsetsGeometry get _contentPadding {
+    final horizontal =
+        widget.dense
+            ? AppControlTokens.denseFieldHorizontalPadding
+            : AppControlTokens.fieldHorizontalPadding;
+    final vertical =
+        widget.dense
+            ? AppControlTokens.denseFieldVerticalPadding
+            : AppControlTokens.fieldVerticalPadding;
+    return EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    // 工位 Scope 标记：直角细线形态；否则维持全局默认圆角外观。
+    final workstation =
+        Theme.of(context).extension<WorkstationSurfaceFlag>() != null;
+    final dense = widget.dense;
+    final labelStyle = textTheme.bodySmall?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
+    final valueStyle = textTheme.bodyMedium?.copyWith(color: colors.onSurface);
+
+    Widget field = Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _handleKeyEvent,
+      onFocusChange: (value) => setState(() => _focused = value),
+      child: Semantics(
+        button: true,
+        label: _currentLabel,
+        child: MenuAnchor(
+          controller: _menu,
+          useRootOverlay: true,
+          alignmentOffset: const Offset(0, 6),
+          // 工位形态交由皮肤 menuTheme 统一（直角、outline 强边、零阴影）。
+          style:
+              workstation
+                  ? null
+                  : MenuStyle(
+                    backgroundColor: WidgetStatePropertyAll(
+                      colors.surfaceContainerHigh,
+                    ),
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppControlTokens.menuRadius,
+                        ),
+                        side: BorderSide(color: colors.outlineVariant),
+                      ),
+                    ),
+                    elevation: const WidgetStatePropertyAll(8),
+                    padding: const WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(vertical: 6),
+                    ),
+                    minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
+                    maximumSize: const WidgetStatePropertyAll(
+                      Size(double.infinity, 320),
+                    ),
+                  ),
+          builder: (context, controller, child) {
+            final isOpen = controller.isOpen;
+            return MouseRegion(
+              cursor: SystemMouseCursors.click,
+              onHover: (_) {
+                if (!_hovered) {
+                  setState(() => _hovered = true);
+                }
+              },
+              onExit: (_) {
+                if (_hovered) {
+                  setState(() => _hovered = false);
+                }
+              },
+              child: GestureDetector(
+                onTap: () => isOpen ? controller.close() : controller.open(),
+                behavior: HitTestBehavior.opaque,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final boundedWidth =
+                        constraints.hasBoundedWidth
+                            ? constraints.maxWidth
+                            : null;
+                    final fieldWidth = widget.width ?? boundedWidth;
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: AppControlTokens.fieldHeight,
+                        minWidth: fieldWidth ?? 0,
+                        maxWidth: fieldWidth ?? double.infinity,
+                      ),
+                      child: InputDecorator(
+                        isFocused: _focused || isOpen,
+                        isEmpty: false,
+                        expands: false,
+                        decoration: InputDecoration(
+                          labelText: dense ? null : widget.label,
+                          floatingLabelBehavior:
+                              dense ? FloatingLabelBehavior.never : null,
+                          helperText: widget.helperText,
+                          isDense: true,
+                          suffixText:
+                              widget.suffixText == null ||
+                                      widget.suffixText!.isEmpty
+                                  ? null
+                                  : widget.suffixText,
+                          suffixIcon: AnimatedRotation(
+                            turns: isOpen ? 0.5 : 0,
+                            duration: MotionToken.reduced(
+                              context,
+                              MotionToken.fast,
+                            ),
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 20,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 0,
+                          ),
+                          filled: true,
+                          // 与主题输入框一致：浅色不用纯白填充。
+                          fillColor: colors.surfaceContainerLow,
+                          contentPadding: _contentPadding,
+                          border: _fieldBorder(colors.outlineVariant),
+                          enabledBorder: _fieldBorder(
+                            workstation
+                                ? colors.outlineVariant
+                                : _focused || isOpen
+                                ? colors.primary
+                                : _hovered
+                                ? colors.onSurfaceVariant
+                                : colors.outlineVariant,
+                          ),
+                          focusedBorder: _fieldBorder(
+                            colors.primary,
+                            width: workstation ? 1 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (dense && widget.label != null) ...[
+                              Flexible(
+                                child: Text(
+                                  widget.label!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: labelStyle,
+                                ),
+                              ),
+                              Text(' · ', style: labelStyle),
+                            ],
+                            Expanded(
+                              child: Text(
+                                _currentLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: valueStyle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+          menuChildren: [
+            for (var i = 0; i < widget.items.length; i++)
+              MenuItemButton(
+                onPressed: widget.items[i].enabled ? () => _select(i) : null,
+                style: ButtonStyle(
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  minimumSize: WidgetStatePropertyAll(
+                    Size.fromHeight(AppControlTokens.menuItemHeight),
+                  ),
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppControlTokens.controlRadius,
+                      ),
+                    ),
+                  ),
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) =>
+                        states.contains(WidgetState.hovered)
+                            ? colors.onSurface.withValues(alpha: 0.06)
+                            : Colors.transparent,
+                  ),
+                  foregroundColor: WidgetStatePropertyAll(colors.onSurface),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.items[i].label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color:
+                              widget.items[i].value == widget.value
+                                  ? colors.primary
+                                  : colors.onSurface,
+                          fontWeight:
+                              widget.items[i].value == widget.value
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (widget.items[i].value == widget.value)
+                      Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: colors.primary,
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (widget.width != null) {
+      field = SizedBox(width: widget.width, child: field);
+    }
+    return field;
+  }
+
+  OutlineInputBorder _fieldBorder(Color color, {double width = 1}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+}

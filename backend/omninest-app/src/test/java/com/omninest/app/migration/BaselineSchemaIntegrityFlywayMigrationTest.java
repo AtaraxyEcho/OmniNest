@@ -1,0 +1,251 @@
+package com.omninest.app.migration;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import org.assertj.core.api.Assertions;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.annotation.DirtiesContext;
+
+/**
+ * 在真实 PostgreSQL 中验证当前空库基线的结构完整性。
+ *
+ * @author OmniNest
+ */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Testcontainers(disabledWithoutDocker = true)
+class BaselineSchemaIntegrityFlywayMigrationTest {
+    private static final String IMAGE = "postgres:18-alpine";
+
+    @Container
+    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(IMAGE)
+            .withDatabaseName("omninest_baseline_integrity")
+            .withUsername("omninest")
+            .withPassword("omninest");
+
+    @BeforeAll
+    static void migrateSchema() {
+        Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/migration")
+                .validateMigrationNaming(true)
+                .schemas("omni")
+                .defaultSchema("omni")
+                .load()
+                .migrate();
+    }
+
+    @Test
+    void everyTableHasPrimaryKey() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_class table_definition
+                JOIN pg_namespace namespace ON namespace.oid = table_definition.relnamespace
+                LEFT JOIN pg_constraint primary_key
+                  ON primary_key.conrelid = table_definition.oid
+                 AND primary_key.contype = 'p'
+                WHERE namespace.nspname = 'omni'
+                  AND table_definition.relkind = 'r'
+                  AND primary_key.oid IS NULL
+                """)).isZero();
+    }
+
+    @Test
+    void everyConstraintIsValidated() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_constraint
+                WHERE connamespace = 'omni'::regnamespace
+                  AND NOT convalidated
+                """)).isZero();
+    }
+
+    @Test
+    void baselineContainsRequiredReaderAndTaskIndexes() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_constraint
+                WHERE connamespace = 'omni'::regnamespace
+                  AND conname IN (
+                    'reader_catalog_nodes_pkey',
+                    'reader_pages_pkey',
+                    'reader_progress_pkey',
+                    'uniq_reader_progress_owner_item',
+                    'chk_reader_progress_mode',
+                    'chk_reader_progress_range'
+                  )
+                """)).isEqualTo(6);
+
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_indexes
+                WHERE schemaname = 'omni'
+                  AND indexname IN (
+                    'idx_reader_catalog_nodes_item',
+                    'idx_reader_catalog_nodes_key',
+                    'idx_reader_catalog_nodes_parent',
+                    'idx_reader_catalog_nodes_source',
+                    'idx_reader_pages_catalog',
+                    'idx_reader_pages_catalog_key',
+                    'idx_reader_pages_item',
+                    'idx_reader_pages_source',
+                    'idx_reader_pages_source_page',
+                    'idx_reader_progress_owner'
+                  )
+                """)).isEqualTo(10);
+
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_indexes
+                WHERE schemaname = 'omni'
+                  AND indexname IN (
+                    'idx_import_tasks_task',
+                    'idx_music_scan_jobs_task',
+                    'idx_photo_batch_tasks_task',
+                    'idx_photo_scan_jobs_task'
+                  )
+                """)).isEqualTo(4);
+    }
+
+    @Test
+    void baselineContainsFilePurgeAndTaskOutboxStructures() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'omni'
+                  AND table_name IN ('file_purge_entries', 'sys_task_dispatches')
+                """)).isEqualTo(2);
+
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'omni'
+                  AND (
+                    (table_name = 'file_nodes' AND column_name IN (
+                      'purge_state', 'purge_task_id', 'purge_requested_at', 'version', 'category'
+                    ))
+                    OR
+                    (table_name = 'sys_tasks' AND column_name IN (
+                      'phase', 'resource_type', 'resource_id', 'next_retry_at', 'heartbeat_at'
+                    ))
+                  )
+                """)).isEqualTo(10);
+
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM pg_indexes
+                WHERE schemaname = 'omni'
+                  AND indexname IN (
+                    'idx_file_purge_entries_task_status',
+                    'uq_file_purge_entries_object',
+                    'idx_sys_task_dispatches_available',
+                    'idx_sys_task_dispatches_lease',
+                    'idx_sys_task_dispatches_task'
+                  )
+                """)).isEqualTo(5);
+    }
+
+    @Test
+    void settledQuotaReservationKeepsZeroHeldBytes() throws SQLException {
+        // 结算后的真实形状：reserved_bytes 归零、committed_bytes 记账。两个列记录
+        // 互不重叠的量；早期按"reserved 是上限"写的 committed<=reserved 会让每一次
+        // 真实结算都以 23514 失败（背景素材上传即因此永久停在扫描阶段）。
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO omni.storage_quota_reservations
+                        (owner_user_id, source_type, source_id, reserved_bytes,
+                         committed_bytes, quota_applied, status, expires_at)
+                    VALUES
+                        (gen_random_uuid(), 'BACKDROP_UPLOAD', gen_random_uuid(), 0,
+                         11747231, false, 'COMMITTED', now() + interval '1 hour')
+                    """);
+            Assertions.assertThat(countObjects("""
+                    SELECT count(*)
+                    FROM omni.storage_quota_reservations
+                    WHERE status = 'COMMITTED' AND reserved_bytes = 0
+                    """)).isEqualTo(1);
+        }
+        // 放宽上限关系不等于放弃约束：负数仍然必须被拒。
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            Assertions.assertThatThrownBy(() -> statement.executeUpdate("""
+                            INSERT INTO omni.storage_quota_reservations
+                                (owner_user_id, source_type, source_id, reserved_bytes, expires_at)
+                            VALUES
+                                (gen_random_uuid(), 'UPLOAD', gen_random_uuid(), -1, now())
+                            """))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("chk_storage_quota_reservations_bytes");
+        }
+    }
+
+    @Test
+    void currentMigrationsAreRecordedByFlyway() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM omni.flyway_schema_history
+                WHERE version IN ('001', '002')
+                  AND success
+                """)).isEqualTo(2);
+    }
+
+    @Test
+    void baselineExcludesRemovedLegacyTables() throws SQLException {
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'omni'
+                  AND table_name IN ('backup_jobs', 'photo_backup_status')
+                """)).isZero();
+    }
+
+    @Test
+    void activeFileNodePathsAreUniqueWhileRootDerivedNamesMayRepeat() throws SQLException {
+        String owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO omni.file_nodes
+                        (id, owner_user_id, node_type, name, normalized_path)
+                    VALUES
+                        (gen_random_uuid(), '%s', 'FILE', 'a.txt', '/a.txt')
+                    """.formatted(owner));
+
+            Assertions.assertThatThrownBy(() -> statement.executeUpdate("""
+                            INSERT INTO omni.file_nodes
+                                (id, owner_user_id, node_type, name, normalized_path)
+                            VALUES
+                                (gen_random_uuid(), '%s', 'FILE', 'a.txt', '/a.txt')
+                            """.formatted(owner)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("uniq_file_nodes_active_path_personal");
+
+            // 根层派生资产可以同名，路径由 .metadata 下的照片标识区分。
+            statement.executeUpdate("""
+                    INSERT INTO omni.file_nodes
+                        (id, owner_user_id, node_type, name, normalized_path, source_type)
+                    VALUES
+                        (gen_random_uuid(), '%s', 'FILE', 'thumb.webp',
+                         '/.metadata/PHOTO_ITEM/11111111-1111-4111-8111-111111111111/POSTER/thumb.webp', 'DERIVED'),
+                        (gen_random_uuid(), '%s', 'FILE', 'thumb.webp',
+                         '/.metadata/PHOTO_ITEM/22222222-2222-4222-8222-222222222222/POSTER/thumb.webp', 'DERIVED')
+                    """.formatted(owner, owner));
+        }
+    }
+
+    private int countObjects(String sql) throws SQLException {
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            Assertions.assertThat(result.next()).isTrue();
+            return result.getInt(1);
+        }
+    }
+}

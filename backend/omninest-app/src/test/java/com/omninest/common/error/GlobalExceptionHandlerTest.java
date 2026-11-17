@@ -1,0 +1,275 @@
+package com.omninest.common.error;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.omninest.common.enums.ErrorCode;
+import java.io.IOException;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+/**
+ * 全局异常响应映射测试。
+ *
+ * @author Notask Flow Team
+ */
+class GlobalExceptionHandlerTest {
+
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    @DisplayName("运行依赖不可用返回 503")
+    void handleDependencyUnavailableReturns503() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "依赖服务不可用"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE.getCode());
+    }
+
+    @Test
+    @DisplayName("章节正文未派生返回 404，客户端据此回退本地解析")
+    void handleChapterTextUnavailable_returns404() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.CHAPTER_TEXT_UNAVAILABLE,
+                "本章正文尚未就绪"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.CHAPTER_TEXT_UNAVAILABLE.getCode());
+    }
+
+    @Test
+    @DisplayName("缺下载权限返回 403，播放与下载共用这一档语义")
+    void handleDownloadPermissionRequired_returns403() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.DOWNLOAD_PERMISSION_REQUIRED,
+                "无下载权限"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.DOWNLOAD_PERMISSION_REQUIRED.getCode());
+    }
+
+    @Test
+    @DisplayName("未映射的业务码返回 400，不借用 404 语义")
+    void handleUnmappedBusinessCode_returns400() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.READING_PROGRESS_INVALID,
+                "阅读进度不合法"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("HttpRequestMethodNotSupportedException 返回 405")
+    void handleMethodNotSupported_returns405() throws HttpRequestMethodNotSupportedException {
+        var exception = new HttpRequestMethodNotSupportedException("PATCH");
+
+        var response = handler.handleMethodNotSupported(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        Assertions.assertThat(response.getBody().getCode()).isEqualTo(ErrorCode.BAD_REQUEST.getCode());
+    }
+
+    @Test
+    @DisplayName("NoHandlerFoundException 返回 404")
+    void handleNoHandlerFound_returns404() {
+        var exception = new NoHandlerFoundException("GET", "/api/v1/unknown", null);
+
+        var response = handler.handleNoHandlerFound(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        Assertions.assertThat(response.getBody().getCode()).isEqualTo(ErrorCode.NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("NoResourceFoundException 返回 404")
+    void handleNoResourceFound_returns404() {
+        var exception = new NoResourceFoundException(
+                HttpMethod.GET,
+                "api/v1/unknown",
+                "/api/v1/unknown"
+        );
+
+        var response = handler.handleNoResourceFound(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        Assertions.assertThat(response.getBody().getCode()).isEqualTo(ErrorCode.NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("非 API 路径 404 降为 DEBUG，API 路径保持 WARN")
+    void logsUnknownPathByPathPrefix() {
+        Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(appender);
+        try {
+            handler.handleNoResourceFound(
+                    new NoResourceFoundException(HttpMethod.GET, "index.html", "/index.html"));
+            handler.handleNoResourceFound(
+                    new NoResourceFoundException(HttpMethod.GET, "api/v1/unknown", "/api/v1/unknown"));
+            handler.handleNoHandlerFound(new NoHandlerFoundException("GET", "/main.dart.js", null));
+
+            Assertions.assertThat(appender.list).hasSize(3);
+            Assertions.assertThat(appender.list.get(0).getLevel()).isEqualTo(Level.DEBUG);
+            Assertions.assertThat(appender.list.get(1).getLevel()).isEqualTo(Level.WARN);
+            Assertions.assertThat(appender.list.get(2).getLevel()).isEqualTo(Level.DEBUG);
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    @DisplayName("缺失必填请求参数返回 400 而非 500")
+    void handleMissingParameterReturns400() {
+        var exception = new MissingServletRequestParameterException("q", "String");
+
+        var response = handler.handleMissingParameter(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR.getCode());
+        Assertions.assertThat(response.getBody().getMessage()).contains("q");
+    }
+
+    @Test
+    @DisplayName("日期时间解析失败返回 400 而非 500")
+    void handleDateTimeParseReturns400() {
+        var exception = new java.time.format.DateTimeParseException("Text could not be parsed", "bad", 0);
+
+        var response = handler.handleDateTimeParse(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR.getCode());
+    }
+
+    @Test
+    @DisplayName("客户端断开异步请求时不再生成错误响应")
+    void handleAsyncRequestNotUsable_doesNotWriteResponse() {
+        AsyncRequestNotUsableException exception =
+                new AsyncRequestNotUsableException("客户端已断开");
+
+        Assertions.assertThatCode(() -> handler.handleAsyncRequestNotUsable(exception))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("异步请求超时不再生成错误响应")
+    void handleAsyncRequestTimeout_doesNotWriteResponse() {
+        AsyncRequestTimeoutException exception = new AsyncRequestTimeoutException();
+
+        Assertions.assertThatCode(() -> handler.handleAsyncRequestTimeout(exception))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("流式响应中断的 IOException 不写入错误体")
+    void handleIoException_clientDisconnectDoesNotWriteResponse() throws IOException {
+        IOException exception = new IOException(
+                "java.lang.InterruptedException",
+                new InterruptedException("sleep interrupted"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.handleIoException(exception, response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
+        Assertions.assertThat(response.getStatus()).isEqualTo(MockHttpServletResponse.SC_OK);
+    }
+
+    @Test
+    @DisplayName("非客户端断开的 IOException 必须落 500，不得以 200 空体结束")
+    void handleIoException_otherFailureWritesInternalServerError() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.handleIoException(new IOException("stream broke mid-write"), response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentAsString())
+                .contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
+    }
+
+    @Test
+    @DisplayName("响应已提交时 IOException 不再改写状态码")
+    void handleIoException_committedResponseKeepsStatus() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setCommitted(true);
+
+        handler.handleIoException(new IOException("bucket unreachable"), response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("预设媒体 Content-Type 时跳过 JSON 错误体写出")
+    void handleUnexpected_skipsJsonBodyWhenContentTypeIsMedia() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("audio/mpeg;charset=UTF-8");
+        Exception exception = new IllegalStateException("stream failed");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    }
+
+    @Test
+    @DisplayName("已取过输出流的文本响应仍能写出 500 错误体，不再二次 getWriter")
+    void handleUnexpected_writesJsonThroughOutputStreamWhenStreamAlreadyObtained() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("text/plain;charset=UTF-8");
+        // 模拟流式接口先取 OutputStream：Servlet 规范下再调用 getWriter 会直接抛错。
+        response.getOutputStream();
+        Exception exception = new IllegalStateException("stream failed");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentAsString())
+                .contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
+    }
+
+    @Test
+    @DisplayName("JSON 可写出时未知异常仍返回统一 500 错误体")
+    void handleUnexpected_writesJsonWhenContentTypeIsWritable() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Exception exception = new IllegalStateException("boom");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentType()).contains("application/json");
+        Assertions.assertThat(response.getContentAsString()).contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
+    }
+}

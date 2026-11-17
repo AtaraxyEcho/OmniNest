@@ -1,0 +1,180 @@
+package com.omninest.modules.music.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.service.PurgeContext;
+import com.omninest.modules.media.domain.MediaPlaybackType;
+import com.omninest.modules.media.service.MediaPlaybackCleanupService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.music.domain.MusicAlbum;
+import com.omninest.modules.music.domain.MusicArtist;
+import com.omninest.modules.music.domain.MusicTrack;
+import com.omninest.modules.music.repository.MusicAlbumRepository;
+import com.omninest.modules.music.repository.MusicAlbumTrackStats;
+import com.omninest.modules.music.repository.MusicArtistRepository;
+import com.omninest.modules.music.repository.MusicArtistTrackStats;
+import com.omninest.modules.music.repository.MusicFavoriteRepository;
+import com.omninest.modules.music.repository.MusicPlayHistoryRepository;
+import com.omninest.modules.music.repository.MusicPlaylistItemRepository;
+import com.omninest.modules.music.repository.MusicPlaylistRepository;
+import com.omninest.modules.music.repository.MusicTrackRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+/**
+ * 音乐文件关联数据清理服务测试。
+ *
+ * @author OmniNest
+ */
+class MusicFileCleanupServiceTest {
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID FILE_NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID COVER_FILE_ID = UUID.fromString("20000000-0000-0000-0000-000000000009");
+    private static final UUID TRACK_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+
+    private final MusicTrackRepository trackRepository = Mockito.mock(MusicTrackRepository.class);
+    private final MediaPlaybackCleanupService playbackCleanupService =
+            Mockito.mock(MediaPlaybackCleanupService.class);
+    private final MusicFavoriteRepository favoriteRepository = Mockito.mock(MusicFavoriteRepository.class);
+    private final MusicPlayHistoryRepository playHistoryRepository =
+            Mockito.mock(MusicPlayHistoryRepository.class);
+    private final MusicPlaylistItemRepository playlistItemRepository =
+            Mockito.mock(MusicPlaylistItemRepository.class);
+    private final MusicAlbumRepository albumRepository = Mockito.mock(MusicAlbumRepository.class);
+    private final MusicArtistRepository artistRepository = Mockito.mock(MusicArtistRepository.class);
+    private final MusicPlaylistRepository playlistRepository = Mockito.mock(MusicPlaylistRepository.class);
+    private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
+    private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
+    private final MusicCoverRetentionService coverRetentionService =
+            Mockito.mock(MusicCoverRetentionService.class);
+    private final MusicFileCleanupService service = new MusicFileCleanupService(
+            trackRepository,
+            playbackCleanupService,
+            favoriteRepository,
+            playHistoryRepository,
+            playlistItemRepository,
+            albumRepository,
+            artistRepository,
+            playlistRepository,
+            syncEventService,
+            readThroughCache,
+            coverRetentionService
+    );
+
+    @Test
+    void hardDeleteRemovesOwnedTrackAssociations() {
+        MusicTrack track = track();
+        Mockito.when(trackRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
+                .thenReturn(List.of(track));
+
+        service.finalizePurge(purgeContext());
+
+        List<String> musicKeys = List.of("local:" + TRACK_ID);
+        // 共享曲目被物理清除时，所有成员的关联行都要消失：按上传者过滤会留下孤儿行。
+        Mockito.verify(playbackCleanupService).deleteAllUsers(MediaPlaybackType.MUSIC, musicKeys);
+        Mockito.verify(favoriteRepository).deleteByTrackIdIn(List.of(TRACK_ID));
+        Mockito.verify(playHistoryRepository).deleteByTrackIdIn(List.of(TRACK_ID));
+        Mockito.verify(playlistItemRepository).deleteByTrackIdIn(List.of(TRACK_ID));
+        Mockito.verify(trackRepository).deleteAllInBatch(List.of(track));
+        // 曲目行删掉后，它指向的封面与缩略图必须一起进入回收，否则成为无主派生资产。
+        Mockito.verify(coverRetentionService).releaseUnreferenced(OWNER_ID, Set.of(COVER_FILE_ID));
+    }
+
+    @Test
+    void hardDeleteRecomputesStatsForSurvivingAlbumAndArtist() {
+        UUID albumId = UUID.randomUUID();
+        UUID artistId = UUID.randomUUID();
+        MusicTrack track = track();
+        track.setAlbumId(albumId);
+        track.setArtistId(artistId);
+        MusicAlbum album = new MusicAlbum();
+        album.setId(albumId);
+        album.setOwnerUserId(OWNER_ID);
+        album.setTrackCount(9);
+        album.setTotalDuration(9999);
+        MusicArtist artist = new MusicArtist();
+        artist.setId(artistId);
+        artist.setOwnerUserId(OWNER_ID);
+        artist.setTrackCount(9);
+        artist.setAlbumCount(9);
+        MusicAlbumTrackStats albumStats = Mockito.mock(MusicAlbumTrackStats.class);
+        Mockito.when(albumStats.getAlbumId()).thenReturn(albumId);
+        Mockito.when(albumStats.getTrackCount()).thenReturn(1L);
+        Mockito.when(albumStats.getTotalDuration()).thenReturn(180L);
+        MusicArtistTrackStats artistStats = Mockito.mock(MusicArtistTrackStats.class);
+        Mockito.when(artistStats.getArtistId()).thenReturn(artistId);
+        Mockito.when(artistStats.getTrackCount()).thenReturn(1L);
+        Mockito.when(artistStats.getAlbumCount()).thenReturn(1L);
+        Mockito.when(trackRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
+                .thenReturn(List.of(track));
+        Mockito.when(albumRepository.findAllByIdInAndOwnerUserId(Set.of(albumId), OWNER_ID))
+                .thenReturn(List.of(album));
+        Mockito.when(trackRepository.findAlbumIdsWithTracks(OWNER_ID, Set.of(albumId)))
+                .thenReturn(List.of(albumId));
+        Mockito.when(trackRepository.findAlbumStatsByOwnerUserIdAndAlbumIdIn(
+                OWNER_ID, List.of(albumId))).thenReturn(List.of(albumStats));
+        Mockito.when(artistRepository.findAllByIdInAndOwnerUserId(Set.of(artistId), OWNER_ID))
+                .thenReturn(List.of(artist));
+        Mockito.when(trackRepository.findArtistIdsWithTracks(OWNER_ID, Set.of(artistId)))
+                .thenReturn(List.of(artistId));
+        Mockito.when(trackRepository.findArtistStatsByOwnerUserIdAndArtistIdIn(
+                OWNER_ID, List.of(artistId))).thenReturn(List.of(artistStats));
+
+        service.finalizePurge(purgeContext());
+
+        assertThat(album.getTrackCount()).isEqualTo(1);
+        assertThat(album.getTotalDuration()).isEqualTo(180);
+        assertThat(artist.getTrackCount()).isEqualTo(1);
+        assertThat(artist.getAlbumCount()).isEqualTo(1);
+        Mockito.verify(albumRepository).saveAll(List.of(album));
+        Mockito.verify(artistRepository).saveAll(List.of(artist));
+    }
+
+    @Test
+    void softDeletePreservesMusicRowsAndUserAssociations() {
+        service.handleFileNodesSoftDeleted(new FileNodesSoftDeletedEvent(
+                OWNER_ID,
+                List.of(FILE_NODE_ID),
+                Instant.now()
+        ));
+
+        Mockito.verifyNoInteractions(playbackCleanupService);
+        Mockito.verify(trackRepository, Mockito.never()).deleteAllInBatch(Mockito.anyList());
+    }
+
+    @Test
+    void visibilityChangeInvalidatesAffectedMusicOwner() {
+        Mockito.when(trackRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
+                .thenReturn(List.of(track()));
+
+        service.invalidateFileVisibility(List.of(FILE_NODE_ID));
+
+        Mockito.verify(syncEventService).invalidate(
+                OWNER_ID,
+                SyncScope.MUSIC,
+                "MUSIC_LIBRARY",
+                Map.of("reason", "FILE_VISIBILITY_CHANGED")
+        );
+    }
+
+    private MusicTrack track() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        return track;
+    }
+
+    private PurgeContext purgeContext() {
+        return new PurgeContext(UUID.randomUUID(), OWNER_ID, FILE_NODE_ID, List.of(FILE_NODE_ID));
+    }
+}

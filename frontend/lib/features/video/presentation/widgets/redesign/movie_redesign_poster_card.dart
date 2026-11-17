@@ -1,0 +1,503 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_status.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
+
+/// 海报卡片视图模型：统一电影条目与系列两类数据源。
+@immutable
+class MovieRedesignCardData {
+  const MovieRedesignCardData({
+    required this.id,
+    required this.title,
+    this.subtitle,
+    required this.year,
+    this.rating,
+    required this.status,
+    this.posterUrl,
+    this.progressPercent,
+    this.onTap,
+    this.onPlay,
+  });
+
+  final String id;
+  final String title;
+
+  /// 英文原标题，与主标题相同时不展示。
+  final String? subtitle;
+  final String year;
+  final double? rating;
+  final MovieRedesignStatus status;
+  final String? posterUrl;
+
+  /// 观看进度百分比 0-100，为空时不显示进度条。
+  final double? progressPercent;
+  final VoidCallback? onTap;
+  final VoidCallback? onPlay;
+
+  /// 从影视条目构建。
+  factory MovieRedesignCardData.fromVideoItem(MovieVideoItem item) {
+    return MovieRedesignCardData(
+      id: item.id,
+      title: item.title,
+      subtitle: _distinctOriginalTitle(item.title, item.originalTitle),
+      year: item.year,
+      rating: item.rating,
+      status: movieRedesignStatusFrom(item.metadataStatus),
+      posterUrl: item.posterImageUrl,
+    );
+  }
+
+  /// 复制并覆盖回调。
+  MovieRedesignCardData copyWith({VoidCallback? onTap, VoidCallback? onPlay}) {
+    return MovieRedesignCardData(
+      id: id,
+      title: title,
+      subtitle: subtitle,
+      year: year,
+      rating: rating,
+      status: status,
+      posterUrl: posterUrl,
+      progressPercent: progressPercent,
+      onTap: onTap ?? this.onTap,
+      onPlay: onPlay ?? this.onPlay,
+    );
+  }
+
+  /// 从系列构建。
+  factory MovieRedesignCardData.fromSeries(MovieSeries series) {
+    return MovieRedesignCardData(
+      id: series.id,
+      title: series.title,
+      subtitle: _distinctOriginalTitle(series.title, series.originalTitle),
+      year: series.year,
+      rating: series.rating,
+      status: movieRedesignStatusFrom(series.metadataStatus),
+      posterUrl: series.posterImageUrl,
+    );
+  }
+
+  static String? _distinctOriginalTitle(String title, String? original) {
+    final trimmed = original?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    if (trimmed.toLowerCase() == title.trim().toLowerCase()) {
+      return null;
+    }
+    return trimmed;
+  }
+}
+
+/// 海报网格度量：按可用宽度决定列数与单元纵横比。
+class MovieRedesignGridMetrics {
+  const MovieRedesignGridMetrics._({
+    required this.columns,
+    required this.spacing,
+    required this.childAspectRatio,
+  });
+
+  final int columns;
+  final double spacing;
+  final double childAspectRatio;
+
+  /// 单元高度 = 海报宽高比 2:3 + 文本区固定高度（随字体档位放大）。
+  static const double _textExtent = 72;
+
+  /// 列数/间距按视口宽（对应原型 md/lg/xl 与 gap-3 sm:gap-4），
+  /// 单元尺寸按内容宽（扣除侧栏后的实际网格宽度）。
+  factory MovieRedesignGridMetrics.resolve({
+    required double viewportWidth,
+    required double contentWidth,
+    double textScale = 1.0,
+  }) {
+    final columns = switch (viewportWidth) {
+      < 768 => 3,
+      < 1024 => 4,
+      < 1280 => 5,
+      _ => 6,
+    };
+    final spacing = movieRedesignAtSm(viewportWidth) ? 16.0 : 12.0;
+    final cellWidth = (contentWidth - spacing * (columns - 1)) / columns;
+    final cellHeight = cellWidth * 1.5 + _textExtent * textScale;
+    return MovieRedesignGridMetrics._(
+      columns: columns,
+      spacing: spacing,
+      childAspectRatio: cellWidth / cellHeight,
+    );
+  }
+}
+
+/// 新版海报卡：2:3 海报 + hover 播放浮层 + 进度条 + 双语标题 + 等宽元信息行。
+class MovieRedesignPosterCard extends StatefulWidget {
+  const MovieRedesignPosterCard({
+    required this.data,
+    this.enableHero = false,
+    super.key,
+  });
+
+  final MovieRedesignCardData data;
+
+  /// 是否参与跨页共享元素转场。
+  ///
+  /// 只允许主网格开启：同一路由里横滑轨与网格常出现同一条目，两处都用
+  /// 同一个 tag 会直接触发 `Multiple heroes that share the same tag` 断言。
+  final bool enableHero;
+
+  @override
+  State<MovieRedesignPosterCard> createState() =>
+      _MovieRedesignPosterCardState();
+}
+
+class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
+  bool _hovered = false;
+
+  /// 仅在主网格开启跨页转场；横滑轨必须保持关闭，否则同一条目会在同一路由
+  /// 出现两个相同 tag 的 Hero。
+  Widget _withHero(Widget child, String id) {
+    if (!widget.enableHero) {
+      return child;
+    }
+    return Hero(tag: 'movie-poster-$id', child: child);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.data;
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
+    final onPlay = data.onPlay;
+    final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 2 / 3,
+            child: Material(
+              color: palette.muted,
+              borderRadius: MovieRedesignPalette.borderRadius,
+              // 2px 圆角下 hardEdge 足够；antiAlias 在 Impeller/OpenGLES
+              // 深色场景可能沿裁剪边产生对角线亮缝。
+              clipBehavior: Clip.hardEdge,
+              child: InkWell(
+                onTap: data.onTap,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedScale(
+                      duration: MotionToken.normal,
+                      curve: Curves.easeOut,
+                      scale: _hovered ? 1.05 : 1.0,
+                      child: _withHero(
+                        _PosterImage(
+                          posterUrl: data.posterUrl,
+                          cacheKey: 'movie-poster:${data.id}',
+                        ),
+                        data.id,
+                      ),
+                    ),
+                    if (onPlay != null)
+                      if (hoverCapable)
+                        AnimatedOpacity(
+                          duration: MotionToken.reduced(
+                            context,
+                            const Duration(milliseconds: 300),
+                          ),
+                          opacity: _hovered ? 1 : 0,
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            child: Center(
+                              child: AnimatedScale(
+                                duration: MotionToken.reduced(
+                                  context,
+                                  const Duration(milliseconds: 200),
+                                ),
+                                curve: Curves.easeOut,
+                                scale: _hovered ? 1.0 : 0.75,
+                                child: _PlayButton(onPlay: onPlay),
+                              ),
+                            ),
+                          ),
+                        )
+                      // 触屏无 hover：整卡压暗会常驻，只常显右上角播放钮，
+                      // 避开底部进度条；命中区按壳层标准取 48。
+                      else
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: _PlayButton(
+                              onPlay: onPlay,
+                              size: MobileLayoutTokens.minimumTarget,
+                            ),
+                          ),
+                        ),
+                    if (data.progressPercent != null)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: MovieRedesignProgressBar(
+                          value: data.progressPercent! / 100,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: InkWell(
+              onTap: data.onTap ?? data.onPlay,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Builder(
+                    builder: (context) {
+                      // 原型 text-xs sm:text-sm。
+                      final atSm = movieRedesignAtSm(
+                        MediaQuery.sizeOf(context).width,
+                      );
+                      final titleSize = atSm ? 14.0 : 12.0;
+                      final smallSize = atSm ? 12.0 : 10.0;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.body(
+                              size: titleSize,
+                              weight: FontWeight.w500,
+                              color:
+                                  _hovered
+                                      ? palette.primary
+                                      : palette.foreground,
+                              height: 16 / titleSize,
+                            ),
+                          ),
+                          if (data.subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              data.subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.body(
+                                size: smallSize,
+                                // 深色模式用高对比次要色，浅壁纸上仍可读。
+                                color: palette.secondaryForeground,
+                                height: 14 / smallSize,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  data.year,
+                                  style: text.mono(
+                                    size: smallSize,
+                                    color: palette.secondaryForeground,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _MetaDot(palette: palette),
+                              if (data.rating != null) ...[
+                                Icon(
+                                  Icons.star,
+                                  size: 10,
+                                  color: MovieRedesignPalette.star,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  data.rating!.toStringAsFixed(1),
+                                  style: text.mono(
+                                    size: smallSize,
+                                    color: palette.secondaryForeground,
+                                  ),
+                                ),
+                                _MetaDot(palette: palette),
+                              ],
+                              MovieRedesignStatusDot(status: data.status),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaDot extends StatelessWidget {
+  const _MetaDot({required this.palette});
+
+  final MovieRedesignPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      // ignore: font_size_whitelist
+      child: Text('·', style: context.movieRedesignText.mono(size: 10)),
+    );
+  }
+}
+
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.onPlay, this.size = 40});
+
+  final VoidCallback onPlay;
+
+  /// 可见圆钮直径；触屏形态取壳层命中标准 48。
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.movieRedesign;
+    // 播放浮钮是嵌在整卡命中区里的独立控件，读屏必须能单独报出动作；
+    // 样例里它的 aria-label 由外层 button 承担，这里两层都可点因此要自带。
+    final label = AppLocalizations.of(context).videoPlay;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: palette.primary,
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: onPlay,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                size: 22,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PosterImage extends StatelessWidget {
+  const _PosterImage({this.posterUrl, this.cacheKey});
+
+  final String? posterUrl;
+  final String? cacheKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = posterUrl;
+    if (url == null || url.isEmpty) {
+      return const SizedBox.expand();
+    }
+    // 海报卡片逻辑宽约 140–220，按 DPR 解码避免原图进内存。
+    final cacheWidth = MoviePosterImage.decodeWidth(context, 220, cap: 640);
+    return MoviePosterImage(
+      imageUrl: url,
+      cacheKey: cacheKey,
+      cacheWidth: cacheWidth,
+      alignment: Alignment.topCenter,
+      fallback: const SizedBox.expand(),
+    );
+  }
+}
+
+/// 非滚动区的静态海报网格。
+class MovieRedesignPosterGrid extends StatelessWidget {
+  const MovieRedesignPosterGrid({required this.items, super.key});
+
+  final List<MovieRedesignCardData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final metrics = MovieRedesignGridMetrics.resolve(
+          viewportWidth: MediaQuery.sizeOf(context).width,
+          contentWidth: constraints.maxWidth,
+          textScale:
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, ComposedScaler.maxScale).toDouble(),
+        );
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: metrics.columns,
+            crossAxisSpacing: metrics.spacing,
+            mainAxisSpacing: metrics.spacing,
+            childAspectRatio: metrics.childAspectRatio,
+          ),
+          itemBuilder:
+              (context, index) =>
+                  MovieRedesignPosterCard(data: items[index], enableHero: true),
+        );
+      },
+    );
+  }
+}
+
+/// 滚动区内的海报 Sliver 网格。
+class MovieRedesignPosterSliverGrid extends StatelessWidget {
+  const MovieRedesignPosterSliverGrid({required this.items, super.key});
+
+  final List<MovieRedesignCardData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final metrics = MovieRedesignGridMetrics.resolve(
+          viewportWidth: MediaQuery.sizeOf(context).width,
+          contentWidth: constraints.crossAxisExtent,
+          textScale:
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, ComposedScaler.maxScale).toDouble(),
+        );
+        return SliverGrid(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: metrics.columns,
+            crossAxisSpacing: metrics.spacing,
+            mainAxisSpacing: metrics.spacing,
+            childAspectRatio: metrics.childAspectRatio,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) =>
+                MovieRedesignPosterCard(data: items[index], enableHero: true),
+            childCount: items.length,
+          ),
+        );
+      },
+    );
+  }
+}

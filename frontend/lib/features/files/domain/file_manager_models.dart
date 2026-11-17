@@ -1,0 +1,675 @@
+import 'package:omninest/features/files/domain/file_node.dart';
+
+class FileTypeStats {
+  const FileTypeStats({
+    required this.category,
+    required this.count,
+    required this.sizeBytes,
+  });
+
+  final String category;
+  final int count;
+  final int sizeBytes;
+}
+
+class FileStorageStats {
+  const FileStorageStats({
+    required this.totalFiles,
+    required this.totalFolders,
+    required this.usedBytes,
+    required this.quotaBytes,
+    required this.quotaStatus,
+    required this.typeDistribution,
+  });
+
+  final int totalFiles;
+  final int totalFolders;
+  final int usedBytes;
+  final int quotaBytes;
+  final String quotaStatus;
+  final List<FileTypeStats> typeDistribution;
+
+  bool get isQuotaUnlimited => quotaBytes < 0;
+
+  double get usageRatio {
+    if (isQuotaUnlimited) {
+      return 0;
+    }
+    if (quotaBytes <= 0) {
+      return 0;
+    }
+    return (usedBytes / quotaBytes).clamp(0, 1);
+  }
+}
+
+class FileUploadPolicy {
+  const FileUploadPolicy({
+    required this.directUploadMaxBytes,
+    required this.defaultPartSizeBytes,
+    required this.maxPartSizeBytes,
+    required this.maxTotalParts,
+    required this.maxConcurrentParts,
+    this.maxFileSizeBytes = 0,
+  });
+
+  final int directUploadMaxBytes;
+  final int defaultPartSizeBytes;
+  final int maxPartSizeBytes;
+  final int maxTotalParts;
+  final int maxConcurrentParts;
+
+  /// 服务端单文件上限；0 表示未下发（老服务端），此时不做本地预检。
+  final int maxFileSizeBytes;
+}
+
+abstract final class FileUploadTaskMessageCode {
+  static const waiting = 'waiting';
+  static const directUploading = 'directUploading';
+  static const multipartUploading = 'multipartUploading';
+  static const pausePending = 'pausePending';
+  static const paused = 'paused';
+  static const resuming = 'resuming';
+  static const completed = 'completed';
+  static const scanPending = 'scanPending';
+  static const conflict = 'conflict';
+  static const partCompleted = 'partCompleted';
+  static const purgingConflict = 'purgingConflict';
+  static const retrying = 'retrying';
+  static const failed = 'failed';
+}
+
+class FileUploadClientTask {
+  const FileUploadClientTask({
+    required this.id,
+    required this.fileName,
+    required this.sizeBytes,
+    required this.uploadedBytes,
+    required this.status,
+    this.message,
+    this.messageCode,
+    this.messageArgument,
+    this.messageCurrent,
+    this.messageTotal,
+    this.uploadId,
+  });
+
+  final String id;
+  final String fileName;
+  final int sizeBytes;
+  final int uploadedBytes;
+  final String status;
+  final String? message;
+  final String? messageCode;
+  final String? messageArgument;
+  final int? messageCurrent;
+  final int? messageTotal;
+  final String? uploadId;
+
+  double get progress {
+    if (sizeBytes <= 0) {
+      return 0;
+    }
+    return (uploadedBytes / sizeBytes).clamp(0, 1);
+  }
+
+  /// 已结束且无需用户继续操作；冲突态需要用户抉择，不算终态。
+  bool get isTerminal {
+    final normalized = status.toUpperCase();
+    return normalized == 'COMPLETED' ||
+        normalized == 'FAILED' ||
+        normalized == 'CANCELLED';
+  }
+
+  FileUploadClientTask copyWith({
+    int? uploadedBytes,
+    String? status,
+    String? message,
+    String? messageCode,
+    String? messageArgument,
+    int? messageCurrent,
+    int? messageTotal,
+    String? uploadId,
+  }) {
+    return FileUploadClientTask(
+      id: id,
+      fileName: fileName,
+      sizeBytes: sizeBytes,
+      uploadedBytes: uploadedBytes ?? this.uploadedBytes,
+      status: status ?? this.status,
+      message: message ?? this.message,
+      messageCode: messageCode ?? this.messageCode,
+      messageArgument: messageArgument ?? this.messageArgument,
+      messageCurrent: messageCurrent ?? this.messageCurrent,
+      messageTotal: messageTotal ?? this.messageTotal,
+      uploadId: uploadId ?? this.uploadId,
+    );
+  }
+}
+
+class FileShareLink {
+  const FileShareLink({
+    required this.id,
+    required this.resourceType,
+    required this.resourceId,
+    required this.resourceName,
+    required this.shareCode,
+    required this.status,
+    required this.accessCount,
+    required this.createdAt,
+    this.maxAccessCount,
+    this.expiresAt,
+    this.disabledAt,
+    this.generatedPassword,
+    this.allowDownloads = true,
+    this.originalQuality = true,
+    this.includeLocation = true,
+  });
+
+  final String id;
+  final String resourceType;
+  final String resourceId;
+  final String resourceName;
+  final String shareCode;
+  final String status;
+  final int? maxAccessCount;
+  final int accessCount;
+  final DateTime? expiresAt;
+  final DateTime? disabledAt;
+  final DateTime? createdAt;
+  final String? generatedPassword;
+  final bool allowDownloads;
+  final bool originalQuality;
+  final bool includeLocation;
+}
+
+class FileShareRecipient {
+  const FileShareRecipient({
+    required this.id,
+    required this.username,
+    this.displayName,
+  });
+
+  factory FileShareRecipient.fromJson(Map<String, dynamic> json) =>
+      FileShareRecipient(
+        id: json['id']?.toString() ?? '',
+        username: json['username']?.toString() ?? '',
+        displayName: json['displayName']?.toString(),
+      );
+
+  final String id;
+  final String username;
+  final String? displayName;
+
+  String get label =>
+      displayName?.trim().isNotEmpty == true ? displayName!.trim() : username;
+}
+
+class FileSharePreview {
+  const FileSharePreview({
+    required this.shareId,
+    required this.fileName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.resourceType,
+    required this.hasPassword,
+    this.allowDownloads = true,
+    this.originalQuality = true,
+    this.includeLocation = true,
+  });
+
+  final String shareId;
+  final String fileName;
+  final String? mimeType;
+  final int sizeBytes;
+  final String resourceType;
+  final bool hasPassword;
+  final bool allowDownloads;
+  final bool originalQuality;
+  final bool includeLocation;
+}
+
+/// 文件媒体元数据（ffprobe 探测；字段缺失为 null）。
+class FileMediaInfo {
+  const FileMediaInfo({this.durationSeconds, this.width, this.height});
+
+  final double? durationSeconds;
+  final int? width;
+  final int? height;
+
+  /// mm:ss / h:mm:ss 展示；无时长返回 null。
+  String? get durationLabel {
+    final seconds = durationSeconds;
+    if (seconds == null || seconds <= 0) {
+      return null;
+    }
+    final total = seconds.round();
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
+  }
+}
+
+class SharedFileItem {
+  const SharedFileItem({
+    required this.shareId,
+    required this.file,
+    required this.ownerUserId,
+    required this.sharedAt,
+    this.expiresAt,
+  });
+
+  final String shareId;
+  final FileNode file;
+  final String ownerUserId;
+  final DateTime? sharedAt;
+  final DateTime? expiresAt;
+}
+
+class FileUploadQueueItem {
+  const FileUploadQueueItem({
+    required this.id,
+    required this.uploadId,
+    required this.fileName,
+    required this.sizeBytes,
+    required this.partSizeBytes,
+    required this.totalParts,
+    required this.uploadedParts,
+    required this.status,
+    this.parentId,
+    this.spaceType,
+    this.expiresAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String uploadId;
+  final String? parentId;
+  final String fileName;
+  final int sizeBytes;
+  final int partSizeBytes;
+  final int totalParts;
+  final int uploadedParts;
+  final String status;
+
+  /// 会话所属空间：`SHARED` 为共享空间，其余按个人空间处理。
+  final String? spaceType;
+  final DateTime? expiresAt;
+  final DateTime? updatedAt;
+
+  double get progress {
+    if (totalParts <= 0) {
+      return 0;
+    }
+    return (uploadedParts / totalParts).clamp(0, 1);
+  }
+}
+
+class ExternalStorageAccount {
+  const ExternalStorageAccount({
+    required this.id,
+    required this.provider,
+    required this.displayName,
+    this.connectionMetadata = const {},
+    this.credentialsConfigured = false,
+    required this.status,
+    this.lastErrorCode,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String provider;
+  final String displayName;
+  final Map<String, String> connectionMetadata;
+  final bool credentialsConfigured;
+  final String status;
+  final String? lastErrorCode;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+}
+
+class ExternalStorageConnector {
+  const ExternalStorageConnector({
+    required this.code,
+    required this.displayName,
+    required this.authMode,
+    this.availability = '',
+    this.oauthConfigured = true,
+  });
+
+  final String code;
+  final String displayName;
+  final String authMode;
+  final String availability;
+
+  /// OAuth 类连接器的实例级应用是否已配置；未配置时创建会被服务端拒绝。
+  final bool oauthConfigured;
+}
+
+class ExternalFileItem {
+  const ExternalFileItem({
+    required this.name,
+    required this.path,
+    required this.isDir,
+    this.sizeBytes = 0,
+    this.modifiedAt,
+    this.mimeType,
+    this.hash,
+  });
+
+  final String name;
+  final String path;
+  final bool isDir;
+  final int sizeBytes;
+  final DateTime? modifiedAt;
+  final String? mimeType;
+  final String? hash;
+}
+
+class ExternalSpaceUsage {
+  const ExternalSpaceUsage({
+    required this.totalBytes,
+    required this.usedBytes,
+    required this.freeBytes,
+    required this.trashedBytes,
+  });
+
+  factory ExternalSpaceUsage.fromJson(Map<String, dynamic> json) {
+    return ExternalSpaceUsage(
+      totalBytes: _asInt(json['totalBytes']),
+      usedBytes: _asInt(json['usedBytes']),
+      freeBytes: _asInt(json['freeBytes']),
+      trashedBytes: _asInt(json['trashedBytes']),
+    );
+  }
+
+  final int totalBytes;
+  final int usedBytes;
+  final int freeBytes;
+  final int trashedBytes;
+
+  /// 已用空间百分比（0~1）
+  double get usagePercent => totalBytes > 0 ? usedBytes / totalBytes : 0;
+}
+
+class ImportTask {
+  const ImportTask({
+    required this.id,
+    this.taskId,
+    required this.externalAccountId,
+    required this.sourcePath,
+    this.sourceKind = 'FILE',
+    required this.status,
+    this.fileName,
+    this.totalBytes = 0,
+    this.transferredBytes = 0,
+    this.speedBytes = 0,
+    this.totalFiles = 0,
+    this.completedFiles = 0,
+    this.currentFileName,
+    this.errorSummary,
+    this.completedFileId,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String? taskId;
+  final String externalAccountId;
+  final String sourcePath;
+  final String sourceKind;
+  final String? fileName;
+  final int totalBytes;
+  final int transferredBytes;
+  final int speedBytes;
+  final int totalFiles;
+  final int completedFiles;
+  final String? currentFileName;
+  final String status;
+  final String? errorSummary;
+  final String? completedFileId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  double get progress =>
+      totalBytes > 0 ? (transferredBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
+
+  bool get canCancel =>
+      !{'CANCELLED', 'COMPLETED', 'FAILED'}.contains(status.toUpperCase());
+
+  bool get isDirectory => sourceKind.toUpperCase() == 'DIRECTORY';
+
+  bool get isActive => canCancel;
+
+  ImportTask copyWith({
+    String? status,
+    int? transferredBytes,
+    int? speedBytes,
+  }) {
+    return ImportTask(
+      id: id,
+      taskId: taskId,
+      externalAccountId: externalAccountId,
+      sourcePath: sourcePath,
+      sourceKind: sourceKind,
+      status: status ?? this.status,
+      fileName: fileName,
+      totalBytes: totalBytes,
+      transferredBytes: transferredBytes ?? this.transferredBytes,
+      speedBytes: speedBytes ?? this.speedBytes,
+      totalFiles: totalFiles,
+      completedFiles: completedFiles,
+      currentFileName: currentFileName,
+      errorSummary: errorSummary,
+      completedFileId: completedFileId,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+/// 共享空间使用情况
+class SharedSpaceUsage {
+  const SharedSpaceUsage({
+    required this.usedBytes,
+    required this.maxBytes,
+    required this.fileCount,
+  });
+
+  final int usedBytes;
+  final int maxBytes;
+  final int fileCount;
+
+  bool get isUnlimited => maxBytes < 0;
+
+  double get usageRatio {
+    if (isUnlimited) return 0;
+    if (maxBytes <= 0) return 0;
+    return (usedBytes / maxBytes).clamp(0, 1);
+  }
+}
+
+/// 文件历史版本条目。
+class FileVersion {
+  const FileVersion({
+    required this.id,
+    required this.versionNo,
+    required this.objectId,
+    required this.changeType,
+    required this.sizeBytes,
+    required this.createdAt,
+    required this.isCurrent,
+    this.createdBy,
+    this.remark,
+  });
+
+  factory FileVersion.fromJson(Map<String, dynamic> json) {
+    return FileVersion(
+      id: json['id']?.toString() ?? '',
+      versionNo:
+          json['versionNo'] is num ? (json['versionNo'] as num).toInt() : 0,
+      objectId: json['objectId']?.toString() ?? '',
+      changeType: json['changeType']?.toString() ?? '',
+      sizeBytes:
+          json['sizeBytes'] is num ? (json['sizeBytes'] as num).toInt() : 0,
+      createdBy: json['createdBy']?.toString(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
+      isCurrent: json['isCurrent'] == true,
+      remark: json['remark']?.toString(),
+    );
+  }
+
+  final String id;
+  final int versionNo;
+  final String objectId;
+  final String changeType;
+  final int sizeBytes;
+  final String? createdBy;
+  final DateTime? createdAt;
+  final bool isCurrent;
+  final String? remark;
+}
+
+int _asInt(Object? value) {
+  return switch (value) {
+    final int number => number,
+    final num number => number.toInt(),
+    final String text => int.tryParse(text) ?? 0,
+    _ => 0,
+  };
+}
+
+/// 子页列表分页：WorkstationPaginationBar 消费。
+class FilesSubPage<T> {
+  const FilesSubPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
+  });
+
+  factory FilesSubPage.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) decode,
+  ) {
+    final rawItems = json['items'];
+    return FilesSubPage(
+      items:
+          rawItems is List
+              ? rawItems
+                  .whereType<Map<String, dynamic>>()
+                  .map(decode)
+                  .toList(growable: false)
+              : <T>[],
+      page: (json['page'] as num?)?.toInt() ?? 0,
+      size: (json['size'] as num?)?.toInt() ?? 10,
+      totalElements: (json['totalElements'] as num?)?.toInt() ?? 0,
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final List<T> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+}
+
+/// 子表分页元数据：WorkstationPaginationBar 消费，per 分区一份。
+class FilesSubPageMeta {
+  const FilesSubPageMeta({
+    this.page = 0,
+    this.size = 10,
+    this.totalElements = 0,
+    this.totalPages = 0,
+  });
+
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+
+  FilesSubPageMeta copyWith({
+    int? page,
+    int? size,
+    int? totalElements,
+    int? totalPages,
+  }) {
+    return FilesSubPageMeta(
+      page: page ?? this.page,
+      size: size ?? this.size,
+      totalElements: totalElements ?? this.totalElements,
+      totalPages: totalPages ?? this.totalPages,
+    );
+  }
+}
+
+/// 分类近似枚举（与 FileBrowserFileCategory 一一对应，供筛选计数与展示层复用）。
+///
+/// 放在 domain：分类判定只依赖节点名与 MIME，浏览器视图与应用层状态都要用它，
+/// 留在 presentation 会让 application 反向依赖展示层。
+enum FileCategoryLabel {
+  all,
+  image,
+  video,
+  audio,
+  document,
+  novel,
+  comic,
+  archive,
+  other,
+}
+
+/// 客户端近似分类：按 MIME 与扩展名归入九个分类（供筛选计数与分区内过滤复用）。
+FileCategoryLabel fileCategoryOfNode(FileNode node) {
+  if (node.isFolder) {
+    return FileCategoryLabel.other;
+  }
+  final mime = (node.mimeType ?? '').toLowerCase();
+  final name = node.name.toLowerCase();
+  if (mime.startsWith('image/')) {
+    return FileCategoryLabel.image;
+  }
+  if (mime.startsWith('video/')) {
+    return FileCategoryLabel.video;
+  }
+  if (mime.startsWith('audio/')) {
+    return FileCategoryLabel.audio;
+  }
+  if (name.endsWith('.cbz') || name.endsWith('.cbr')) {
+    return FileCategoryLabel.comic;
+  }
+  if (name.endsWith('.epub') || name.endsWith('.txt')) {
+    return FileCategoryLabel.novel;
+  }
+  if (name.endsWith('.zip') ||
+      name.endsWith('.rar') ||
+      name.endsWith('.7z') ||
+      name.endsWith('.tar') ||
+      name.endsWith('.gz')) {
+    return FileCategoryLabel.archive;
+  }
+  if (mime.contains('pdf') ||
+      mime.startsWith('text/') ||
+      mime.contains('word') ||
+      mime.contains('sheet') ||
+      name.endsWith('.doc') ||
+      name.endsWith('.docx') ||
+      name.endsWith('.xls') ||
+      name.endsWith('.xlsx') ||
+      name.endsWith('.ppt') ||
+      name.endsWith('.pptx') ||
+      name.endsWith('.pdf')) {
+    return FileCategoryLabel.document;
+  }
+  return FileCategoryLabel.other;
+}

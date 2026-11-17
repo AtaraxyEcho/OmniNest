@@ -1,0 +1,537 @@
+package com.omninest.modules.video.service;
+
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.CollectionType;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.video.domain.MediaSeriesFavorite;
+import com.omninest.modules.video.domain.MediaVideoCollection;
+import com.omninest.modules.video.domain.MediaVideoCollectionItem;
+import com.omninest.modules.video.domain.MediaVideoFavorite;
+import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.domain.MediaWatchHistory;
+import com.omninest.modules.video.dto.MovieDtos.MovieCollectionDto;
+import com.omninest.modules.video.dto.MovieDtos.MovieCollectionItemRequest;
+import com.omninest.modules.video.dto.MovieDtos.MovieCollectionRequest;
+import com.omninest.modules.video.dto.MovieDtos.MovieFavoriteStateDto;
+import com.omninest.modules.video.dto.MovieDtos.MovieWatchlistStateDto;
+import com.omninest.modules.video.dto.MovieDtos.MovieVideoItemDto;
+import com.omninest.modules.video.dto.MovieDtos.MovieWatchHistoryDto;
+import com.omninest.modules.video.repository.MediaSeriesFavoriteRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionItemRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
+import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
+import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 影视收藏、历史与合集维护服务。
+ *
+ * @author OmniNest
+ */
+@Service
+@RequiredArgsConstructor
+public class MovieEngagementService {
+    private final MediaVideoItemRepository videoItemRepository;
+    private final MediaVideoFavoriteRepository favoriteRepository;
+    private final MediaSeriesFavoriteRepository seriesFavoriteRepository;
+    private final MediaWatchHistoryRepository historyRepository;
+    private final MediaVideoCollectionRepository collectionRepository;
+    private final MediaVideoCollectionItemRepository collectionItemRepository;
+    private final VideoItemDtoConverter videoItemDtoConverter;
+    private final MediaSyncEventService syncEventService;
+    private final MediaLibraryAccessService mediaLibraryAccessService;
+    private final MediaContentAccessService mediaContentAccessService;
+    private final FileQueryService fileQueryService;
+    private final ReadThroughCache readThroughCache;
+
+    /** 首页摘要类列表的上限；完整列表走对应的分页方法。 */
+    private static final int SUMMARY_LIST_LIMIT = 200;
+
+    @Transactional(readOnly = true)
+    public List<MovieVideoItemDto> favorites(UUID ownerUserId) {
+        // 首页摘要用途：收藏可能上万条，无界查询会把实体与封面签名一起装进内存；
+        // 完整列表走 favoritesPage。
+        return toFavoriteDtos(ownerUserId, favoriteRepository
+                .findPageByOwnerUserIdOrderByCreatedAtDesc(
+                        ownerUserId, PageRequest.of(0, SUMMARY_LIST_LIMIT))
+                .getContent());
+    }
+
+    /**
+     * 分页查询用户收藏的视频，按收藏时间倒序，供收藏列表滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 收藏视频分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieVideoItemDto> favoritesPage(UUID ownerUserId, int page, int size) {
+        Page<MediaVideoFavorite> favorites = favoriteRepository.findPageByOwnerUserIdOrderByCreatedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toFavoriteDtos(ownerUserId, favorites.getContent()),
+                favorites.getPageable(),
+                favorites.getTotalElements()
+        );
+    }
+
+    private List<MovieVideoItemDto> toFavoriteDtos(UUID ownerUserId, List<MediaVideoFavorite> favorites) {
+        if (favorites.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> videoItemIds = favorites.stream().map(MediaVideoFavorite::getVideoItemId).toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
+                        ownerUserId,
+                        scope.sharedSpaceReadable(),
+                        SpaceType.SHARED,
+                        scope.librarySourceIds(),
+                        videoItemIds
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        MediaVideoItem::getId,
+                        item -> item,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        List<MediaVideoItem> items = favorites.stream()
+                .map(fav -> itemIndex.get(fav.getVideoItemId()))
+                .filter(item -> item != null)
+                .toList();
+        return videoItemDtoConverter.toVideoDtos(ownerUserId, items);
+    }
+
+    @Transactional(readOnly = true)
+    public MovieFavoriteStateDto favoriteStatus(UUID ownerUserId, UUID videoItemId) {
+        findVideo(ownerUserId, videoItemId);
+        boolean isFavorite = favoriteRepository.findByOwnerUserIdAndVideoItemId(ownerUserId, videoItemId).isPresent();
+        return new MovieFavoriteStateDto(videoItemId, isFavorite);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MovieFavoriteStateDto favorite(UUID ownerUserId, UUID videoItemId, boolean favorite) {
+        findVideo(ownerUserId, videoItemId);
+        var existing = favoriteRepository.findByOwnerUserIdAndVideoItemId(ownerUserId, videoItemId);
+        if (favorite && existing.isEmpty()) {
+            MediaVideoFavorite created = new MediaVideoFavorite();
+            created.setOwnerUserId(ownerUserId);
+            created.setVideoItemId(videoItemId);
+            favoriteRepository.save(created);
+        }
+        if (!favorite) {
+            existing.ifPresent(favoriteRepository::delete);
+        }
+        invalidateDashboardCache(ownerUserId);
+        recordEvent(ownerUserId, "VIDEO_ITEM", videoItemId, SyncAction.UPDATED, Map.of("favorite", favorite));
+        return new MovieFavoriteStateDto(videoItemId, favorite);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovieWatchHistoryDto> history(UUID ownerUserId) {
+        // 同收藏：摘要只需最近一批，完整历史走 historyPage。
+        return toHistoryDtos(ownerUserId, historyRepository
+                .findPageByOwnerUserIdOrderByPlayedAtDesc(
+                        ownerUserId, PageRequest.of(0, SUMMARY_LIST_LIMIT))
+                .getContent());
+    }
+
+    /**
+     * 分页查询用户观看历史，按播放时间倒序，供历史列表滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 历史分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieWatchHistoryDto> historyPage(UUID ownerUserId, int page, int size) {
+        Page<MediaWatchHistory> histories = historyRepository.findPageByOwnerUserIdOrderByPlayedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toHistoryDtos(ownerUserId, histories.getContent()),
+                histories.getPageable(),
+                histories.getTotalElements()
+        );
+    }
+
+    /**
+     * 查询单集的最近一条观看历史。
+     *
+     * @param ownerUserId 所有者用户标识
+     * @param videoItemId 视频条目标识
+     * @return 观看历史；不存在或不可见时为空
+     */
+    @Transactional(readOnly = true)
+    public MovieWatchHistoryDto historyForItem(UUID ownerUserId, UUID videoItemId) {
+        return historyRepository.findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(ownerUserId, videoItemId)
+                .flatMap(history -> toHistoryDtos(ownerUserId, List.of(history)).stream().findFirst())
+                .orElse(null);
+    }
+
+    /**
+     * 查询某系列下的观看历史，供详情页续播与下一集判断。
+     *
+     * @param ownerUserId 所有者用户标识
+     * @param seriesId 系列标识
+     * @return 该系列的观看历史，按播放时间倒序
+     */
+    @Transactional(readOnly = true)
+    public List<MovieWatchHistoryDto> historyForSeries(UUID ownerUserId, UUID seriesId) {
+        return toHistoryDtos(
+                ownerUserId,
+                historyRepository.findByOwnerUserIdAndSeriesIdOrderByPlayedAtDesc(ownerUserId, seriesId)
+        );
+    }
+
+    private List<MovieWatchHistoryDto> toHistoryDtos(UUID ownerUserId, List<MediaWatchHistory> histories) {
+        if (histories.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> videoItemIds = histories.stream().map(MediaWatchHistory::getVideoItemId).distinct().toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        List<MediaVideoItem> items = videoItemRepository.findReadableByIds(
+                ownerUserId,
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                scope.librarySourceIds(),
+                videoItemIds
+        );
+        Map<UUID, MovieVideoItemDto> itemIndex = videoItemDtoConverter.toVideoDtos(ownerUserId, items).stream()
+                .collect(Collectors.toMap(
+                        MovieVideoItemDto::id,
+                        item -> item,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        return histories.stream()
+                .flatMap(h -> Optional.ofNullable(itemIndex.get(h.getVideoItemId()))
+                        .map(item -> {
+                            return new MovieWatchHistoryDto(
+                                    h.getId(),
+                                    item.id(),
+                                    item.title(),
+                                    item.posterFileId(),
+                                    item.posterUrl(),
+                                    h.getPositionSeconds(),
+                                    h.getDurationSeconds(),
+                                    h.isCompleted(),
+                                    h.getPlayedAt(),
+                                    item.mediaType(),
+                                    item.seriesId()
+                            );
+                        })
+                        .stream())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovieCollectionDto> collections(UUID ownerUserId) {
+        List<MediaVideoCollection> collections = collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
+                .stream()
+                .filter(collection -> !CollectionType.WATCHLIST.getValue().equals(collection.getCollectionType()))
+                .toList();
+        if (collections.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Long> countMap = collectionItemRepository
+                .countByOwnerUserIdAndCollectionIdIn(
+                        ownerUserId,
+                        collections.stream().map(MediaVideoCollection::getId).toList()
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (Long) row[1]
+                ));
+        return collections.stream()
+                .map(c -> toCollectionDto(c, countMap.getOrDefault(c.getId(), 0L)))
+                .toList();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MovieCollectionDto createCollection(UUID ownerUserId, MovieCollectionRequest request) {
+        if (request.name() == null || request.name().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "合集名称不能为空");
+        }
+        if (request.coverFileId() != null) {
+            // 封面 ID 由客户端提交，必须归当前用户且是图片，否则合集卡片会引用他人文件。
+            fileQueryService.validateOwnedImage(ownerUserId, request.coverFileId());
+        }
+        MediaVideoCollection collection = new MediaVideoCollection();
+        collection.setOwnerUserId(ownerUserId);
+        collection.setName(request.name().trim());
+        collection.setDescription(request.description());
+        collection.setCoverFileId(request.coverFileId());
+        collection.setCollectionType(CollectionType.MANUAL.getValue());
+        MediaVideoCollection saved = collectionRepository.save(collection);
+        invalidateDashboardCache(ownerUserId);
+        recordEvent(ownerUserId, "VIDEO_COLLECTION", saved.getId(), SyncAction.CREATED, Map.of());
+        return toCollectionDto(saved, 0);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovieVideoItemDto> watchlist(UUID ownerUserId) {
+        return collectionRepository.findByOwnerUserIdAndCollectionType(ownerUserId, CollectionType.WATCHLIST.getValue())
+                .map(collection -> collectionItems(ownerUserId, collection.getId()))
+                .orElseGet(List::of);
+    }
+
+    @Transactional(readOnly = true)
+    public MovieWatchlistStateDto watchlistStatus(UUID ownerUserId, UUID videoItemId) {
+        findVideo(ownerUserId, videoItemId);
+        boolean watchlisted = collectionRepository
+                .findByOwnerUserIdAndCollectionType(ownerUserId, CollectionType.WATCHLIST.getValue())
+                .flatMap(collection -> collectionItemRepository.findByOwnerUserIdAndCollectionIdAndVideoItemId(
+                        ownerUserId, collection.getId(), videoItemId))
+                .isPresent();
+        return new MovieWatchlistStateDto(videoItemId, watchlisted);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MovieWatchlistStateDto setWatchlist(UUID ownerUserId, UUID videoItemId, boolean watchlisted) {
+        findVideo(ownerUserId, videoItemId);
+        Optional<MediaVideoCollection> existingCollection = collectionRepository
+                .findByOwnerUserIdAndCollectionType(ownerUserId, CollectionType.WATCHLIST.getValue());
+        if (!watchlisted && existingCollection.isEmpty()) {
+            return new MovieWatchlistStateDto(videoItemId, false);
+        }
+        MediaVideoCollection collection = existingCollection.orElseGet(() -> ensureWatchlist(ownerUserId));
+        if (watchlisted) {
+            if (collectionItemRepository.insertIfAbsent(ownerUserId, collection.getId(), videoItemId) > 0) {
+                collectionRepository.save(collection);
+                invalidateDashboardCache(ownerUserId);
+                recordEvent(ownerUserId, "VIDEO_COLLECTION", collection.getId(), SyncAction.UPDATED,
+                        Map.of("watchlistVideoItemId", videoItemId.toString(), "watchlisted", true));
+            }
+        } else {
+            var existing = collectionItemRepository.findByOwnerUserIdAndCollectionIdAndVideoItemId(
+                    ownerUserId, collection.getId(), videoItemId);
+            if (existing.isPresent()) {
+                collectionItemRepository.delete(existing.get());
+                collectionRepository.save(collection);
+                invalidateDashboardCache(ownerUserId);
+                recordEvent(ownerUserId, "VIDEO_COLLECTION", collection.getId(), SyncAction.UPDATED,
+                        Map.of("watchlistVideoItemId", videoItemId.toString(), "watchlisted", false));
+            }
+        }
+        return new MovieWatchlistStateDto(videoItemId, watchlisted);
+    }
+
+    private MediaVideoCollection ensureWatchlist(UUID ownerUserId) {
+        int inserted = collectionRepository.insertWatchlistIfAbsent(ownerUserId);
+        MediaVideoCollection collection = collectionRepository
+                .findByOwnerUserIdAndCollectionType(ownerUserId, CollectionType.WATCHLIST.getValue())
+                .orElseThrow(() -> new IllegalStateException("Watchlist 写入后无法读取"));
+        if (inserted > 0) {
+            recordEvent(ownerUserId, "VIDEO_COLLECTION", collection.getId(), SyncAction.CREATED,
+                    Map.of("systemCollection", CollectionType.WATCHLIST.getValue()));
+        }
+        return collection;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MovieCollectionDto addCollectionItem(UUID ownerUserId, UUID collectionId, MovieCollectionItemRequest request) {
+        MediaVideoCollection collection = collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
+        findVideo(ownerUserId, request.videoItemId());
+        collectionItemRepository.findByOwnerUserIdAndCollectionIdAndVideoItemId(ownerUserId, collectionId, request.videoItemId())
+                .orElseGet(() -> {
+                    MediaVideoCollectionItem item = new MediaVideoCollectionItem();
+                    item.setOwnerUserId(ownerUserId);
+                    item.setCollectionId(collectionId);
+                    item.setVideoItemId(request.videoItemId());
+                    item.setSortOrder(request.sortOrder());
+                    return collectionItemRepository.save(item);
+                });
+        collectionRepository.save(collection);
+        long itemCount = collectionItemRepository.countByOwnerUserIdAndCollectionId(ownerUserId, collectionId);
+        invalidateDashboardCache(ownerUserId);
+        recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.UPDATED, Map.of());
+        return toCollectionDto(collection, itemCount);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovieVideoItemDto> collectionItems(UUID ownerUserId, UUID collectionId) {
+        collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
+        List<MediaVideoCollectionItem> collectionItems = collectionItemRepository
+                .findByOwnerUserIdAndCollectionIdOrderBySortOrderAsc(ownerUserId, collectionId);
+        if (collectionItems.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> videoItemIds = collectionItems.stream().map(MediaVideoCollectionItem::getVideoItemId).toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
+                        ownerUserId,
+                        scope.sharedSpaceReadable(),
+                        SpaceType.SHARED,
+                        scope.librarySourceIds(),
+                        videoItemIds
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        MediaVideoItem::getId,
+                        item -> item,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        List<MediaVideoItem> items = collectionItems.stream()
+                .map(ci -> itemIndex.get(ci.getVideoItemId()))
+                .filter(item -> item != null)
+                .toList();
+        return videoItemDtoConverter.toVideoDtos(ownerUserId, items);
+    }
+
+    private MovieCollectionDto toCollectionDto(MediaVideoCollection collection, long itemCount) {
+        return new MovieCollectionDto(
+                collection.getId(),
+                collection.getName(),
+                collection.getDescription(),
+                collection.getCoverFileId(),
+                collection.getCollectionType(),
+                itemCount,
+                collection.getUpdatedAt()
+        );
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public boolean toggleSeriesFavorite(UUID ownerUserId, UUID seriesId) {
+        mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        var existing = seriesFavoriteRepository.findByOwnerUserIdAndSeriesId(ownerUserId, seriesId);
+        boolean newFavorite;
+        if (existing.isPresent()) {
+            seriesFavoriteRepository.delete(existing.get());
+            newFavorite = false;
+        } else {
+            addSeriesFavorite(ownerUserId, seriesId);
+            newFavorite = true;
+        }
+        recordEvent(ownerUserId, "VIDEO_SERIES", seriesId, SyncAction.UPDATED, Map.of("favorite", newFavorite));
+        invalidateDashboardCache(ownerUserId);
+        return newFavorite;
+    }
+
+    /**
+     * 幂等设定剧集收藏：请求重放或多端并发点击不会把结果翻回相反值。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param seriesId 剧集 ID
+     * @param favorite true 表示收藏，false 表示取消收藏
+     * @return 设定后的收藏状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean setSeriesFavorite(UUID ownerUserId, UUID seriesId, boolean favorite) {
+        mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        var existing = seriesFavoriteRepository.findByOwnerUserIdAndSeriesId(ownerUserId, seriesId);
+        if (favorite == existing.isPresent()) {
+            return favorite;
+        }
+        if (existing.isPresent()) {
+            seriesFavoriteRepository.delete(existing.get());
+        } else {
+            addSeriesFavorite(ownerUserId, seriesId);
+        }
+        recordEvent(ownerUserId, "VIDEO_SERIES", seriesId, SyncAction.UPDATED, Map.of("favorite", favorite));
+        invalidateDashboardCache(ownerUserId);
+        return favorite;
+    }
+
+    private void addSeriesFavorite(UUID ownerUserId, UUID seriesId) {
+        MediaSeriesFavorite fav = new MediaSeriesFavorite();
+        fav.setOwnerUserId(ownerUserId);
+        fav.setSeriesId(seriesId);
+        seriesFavoriteRepository.save(fav);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean seriesFavoriteStatus(UUID ownerUserId, UUID seriesId) {
+        mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        return seriesFavoriteRepository.existsByOwnerUserIdAndSeriesId(ownerUserId, seriesId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCollection(UUID ownerUserId, UUID collectionId) {
+        MediaVideoCollection collection = collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
+        collectionItemRepository.deleteByOwnerUserIdAndCollectionId(ownerUserId, collectionId);
+        collectionRepository.delete(collection);
+        invalidateDashboardCache(ownerUserId);
+        recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.DELETED, Map.of());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void removeCollectionItem(UUID ownerUserId, UUID collectionId, UUID videoItemId) {
+        collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
+        collectionItemRepository.deleteByOwnerUserIdAndCollectionIdAndVideoItemId(ownerUserId, collectionId, videoItemId);
+        invalidateDashboardCache(ownerUserId);
+        recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.UPDATED, Map.of());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteHistoryItem(UUID ownerUserId, UUID historyId) {
+        historyRepository.deleteByOwnerUserIdAndId(ownerUserId, historyId);
+        recordEvent(ownerUserId, "VIDEO_HISTORY", historyId, SyncAction.DELETED, Map.of());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void clearHistory(UUID ownerUserId) {
+        historyRepository.deleteByOwnerUserId(ownerUserId);
+        syncEventService.invalidate(ownerUserId, SyncScope.VIDEO, "VIDEO_HISTORY", Map.of());
+    }
+
+    /**
+     * 失效指定用户的视频仪表盘缓存。
+     *
+     * <p>收藏与合集变更都会改变 dashboard 的收藏/合集计数统计。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     */
+    private void invalidateDashboardCache(UUID ownerUserId) {
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
+    }
+
+    private MediaVideoItem findVideo(UUID ownerUserId, UUID videoItemId) {
+        return mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+    }
+
+    private void recordEvent(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            SyncAction action,
+            Map<String, Object> hints
+    ) {
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.VIDEO,
+                resourceType,
+                resourceId == null ? null : resourceId.toString(),
+                action,
+                null,
+                hints
+        );
+    }
+
+}

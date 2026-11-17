@@ -1,0 +1,669 @@
+part of 'file_browser_page.dart';
+
+/// 上传进度富单元格：百分比主行 + 明细次行 + 2px 进度条。
+class _UploadProgressCell extends StatelessWidget {
+  const _UploadProgressCell({
+    required this.value,
+    required this.primary,
+    required this.detail,
+  });
+
+  final double value;
+  final String primary;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.filesColors;
+    // 右缘留白：子页表格列间零间距，全宽进度条不加内边距会直接顶到
+    // 相邻状态徽章，视觉上与状态列连成一体。
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 44,
+                child: Text(
+                  primary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelSmall,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelMicro,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRect(
+            child: SizedBox(
+              height: 2,
+              child: LinearProgressIndicator(
+                value: value,
+                minHeight: 2,
+                color: colors.success,
+                backgroundColor: colors.surfaceContainerHighest,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 上传状态统一文案。
+String _uploadStatusLabel(AppLocalizations l10n, String status) {
+  return switch (status.toUpperCase()) {
+    // 上传动作写入的是 UPLOADING/QUEUED，与传输队列的 RUNNING/PENDING 是同一语义。
+    'RUNNING' || 'UPLOADING' => l10n.filesStatusRunning,
+    'PENDING' || 'QUEUED' => l10n.filesStatusPending,
+    'PAUSED' => l10n.filesStatusPaused,
+    'COMPLETED' => l10n.filesStatusCompleted,
+    'FAILED' => l10n.filesStatusFailed,
+    'CONFLICT' => l10n.filesStatusConflict,
+    _ => status,
+  };
+}
+
+/// 上传状态语义色。
+_BadgeTone _uploadStatusTone(String status) {
+  return switch (status.toUpperCase()) {
+    'COMPLETED' || 'RUNNING' || 'UPLOADING' => _BadgeTone.good,
+    'FAILED' || 'CONFLICT' => _BadgeTone.bad,
+    'PAUSED' || 'PENDING' || 'QUEUED' => _BadgeTone.warn,
+    _ => _BadgeTone.neutral,
+  };
+}
+
+// ───────────────────────── 外部存储（10） ─────────────────────────
+
+class _ExternalStorageWorkspace extends ConsumerWidget {
+  const _ExternalStorageWorkspace({required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final enabled = !state.isBusy;
+    final browsing = state.externalBrowseAccountId != null;
+    if (MobileShellScope.isHosted(context) && !browsing) {
+      return _HostedExternalStorage(
+        state: state,
+        onAdd:
+            () => unawaited(
+              _addExternalStorage(
+                context: context,
+                ref: ref,
+                controller: controller,
+              ),
+            ),
+        onOpenAccount:
+            (accountId) => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalStorage(accountId),
+              ),
+            ),
+      );
+    }
+    if (MobileShellScope.isHosted(context) && browsing) {
+      // 触屏浏览态：工位面包屑/悬停行/分页条换成原型 `.feature-list` 形态。
+      final accountId = state.externalBrowseAccountId!;
+      final browsePath = state.externalBrowsePath ?? '/';
+      final segments = browsePath
+          .split('/')
+          .where((segment) => segment.isNotEmpty)
+          .toList(growable: false);
+      return _HostedExternalBrowse(
+        state: state,
+        space: state.externalSpace,
+        segments: segments,
+        onEnterDirectory:
+            (path) => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalSubdirectory(accountId, path),
+              ),
+            ),
+        onGoUp:
+            () => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalSubdirectory(
+                  accountId,
+                  segments.length <= 1
+                      ? '/'
+                      : '/${segments.take(segments.length - 1).join('/')}',
+                ),
+              ),
+            ),
+        onClose: controller.closeExternalBrowse,
+        onImport:
+            (item) => unawaited(
+              _importExternalBrowseItem(context, controller, accountId, item),
+            ),
+        onLoadNext: () => unawaited(controller.loadMoreExternalBrowse()),
+        onRetry:
+            () => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalStorage(
+                  accountId,
+                  path: browsePath,
+                ),
+              ),
+            ),
+      );
+    }
+    if (browsing) {
+      return _ExternalBrowsePanel(state: state);
+    }
+    final accounts = state.externalAccounts;
+    final ready = accounts.where((a) => a.credentialsConfigured).length;
+    final abnormal =
+        accounts
+            .where(
+              (a) =>
+                  a.status.toUpperCase() != 'CONNECTED' &&
+                  a.status.toUpperCase() != 'ACTIVE',
+            )
+            .length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SubHeader(
+          title: FileManagerSection.externalStorage.labelOf(l10n),
+          subtitle: FileManagerSection.externalStorage.descriptionOf(l10n),
+          actions: [
+            FilesActionButton(
+              label: l10n.filesAddMount,
+              icon: Icons.add_rounded,
+              variant: FilesActionButtonVariant.primary,
+              onPressed:
+                  enabled
+                      ? () => unawaited(
+                        _addExternalStorage(
+                          context: context,
+                          ref: ref,
+                          controller: controller,
+                        ),
+                      )
+                      : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SubMetricStrip(
+          cards: [
+            _MetricCard(
+              label: l10n.filesMetricMounts,
+              value: accounts.length.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.onSurface,
+            ),
+            _MetricCard(
+              label: l10n.filesMetricReady,
+              value: ready.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.success,
+            ),
+            _MetricCard(
+              label: l10n.filesMetricAbnormal,
+              value: abnormal.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.error,
+            ),
+            _MetricCard(
+              label: l10n.filesExternalStorage,
+              value: accounts.map((a) => a.provider).toSet().length.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.onSurface,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: SingleChildScrollView(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 920 ? 2 : 1;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final account in accounts)
+                      SizedBox(
+                        width:
+                            (constraints.maxWidth - (columns - 1) * 12) /
+                            columns,
+                        child: _ExternalMountCard(
+                          account: account,
+                          enabled: enabled,
+                          onBrowse:
+                              () => unawaited(
+                                _runFileAction(
+                                  context,
+                                  () => controller.browseExternalStorage(
+                                    account.id,
+                                  ),
+                                ),
+                              ),
+                          onTest:
+                              () => unawaited(
+                                _runFileAction(
+                                  context,
+                                  () =>
+                                      controller.testExternalStorageConnection(
+                                        account.id,
+                                      ),
+                                ),
+                              ),
+                          onConfig:
+                              () => _showExternalStorageDialog(
+                                context: context,
+                                ref: ref,
+                                account: account,
+                                onSubmit: ({
+                                  required String provider,
+                                  required String displayName,
+                                  required String encryptedCredentials,
+                                }) async {
+                                  await controller.updateExternalStorage(
+                                    accountId: account.id,
+                                    displayName: displayName,
+                                    encryptedCredentials: encryptedCredentials,
+                                  );
+                                  return account;
+                                },
+                              ),
+                          onUnmount:
+                              () => _confirmAndRun(
+                                context,
+                                title: l10n.filesDisableMountConfirm,
+                                message: l10n.filesDisableMountMessage(
+                                  account.displayName,
+                                ),
+                                confirmLabel: l10n.filesDisableMount,
+                                action:
+                                    () => controller.disableExternalStorage(
+                                      account,
+                                    ),
+                              ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExternalMountCard extends StatelessWidget {
+  const _ExternalMountCard({
+    required this.account,
+    required this.enabled,
+    required this.onBrowse,
+    required this.onTest,
+    required this.onConfig,
+    required this.onUnmount,
+  });
+
+  final ExternalStorageAccount account;
+  final bool enabled;
+  final VoidCallback onBrowse;
+  final VoidCallback onTest;
+  final VoidCallback onConfig;
+  final VoidCallback onUnmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.filesColors;
+    final l10n = AppLocalizations.of(context);
+    final healthy =
+        account.status.toUpperCase() == 'CONNECTED' ||
+        account.status.toUpperCase() == 'ACTIVE';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_queue_rounded,
+                size: 20,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  account.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _StatusBadge(
+                account.provider.toUpperCase(),
+                tone: _BadgeTone.neutral,
+              ),
+              const SizedBox(width: 6),
+              _StatusBadge(
+                healthy ? 'ONLINE' : account.status,
+                tone: healthy ? _BadgeTone.good : _BadgeTone.bad,
+              ),
+            ],
+          ),
+          if (account.lastErrorCode != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              account.lastErrorCode!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.labelSmall,
+                color: colors.error,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _SubAction(
+                  label: l10n.filesOpBrowse,
+                  onTap: enabled ? onBrowse : null,
+                ),
+              ),
+              const SizedBox(width: 6),
+              _SubAction(
+                label: l10n.filesTestConnection,
+                onTap: enabled ? onTest : null,
+              ),
+              const SizedBox(width: 6),
+              _SubAction(
+                label: l10n.filesOpConfig,
+                onTap: enabled ? onConfig : null,
+              ),
+              const SizedBox(width: 6),
+              _SubAction(
+                label: l10n.filesOpUnmount,
+                destructive: true,
+                onTap: enabled ? onUnmount : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────── 导入任务（11） ─────────────────────────
+
+class _ImportTasksWorkspace extends ConsumerStatefulWidget {
+  const _ImportTasksWorkspace({required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  ConsumerState<_ImportTasksWorkspace> createState() =>
+      _ImportTasksWorkspaceState();
+}
+
+class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
+  String _filter = 'ALL';
+
+  @override
+  Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      final meta = widget.state.importMeta;
+      return _HostedImportTasks(
+        state: widget.state,
+        // 「已加载」取真实在列条数：续载是追加语义，按页窗推算会虚报。
+        loadedCount: widget.state.importTasks.length,
+        totalCount: meta.totalElements,
+        onLoadNext:
+            () => unawaited(
+              ref
+                  .read(fileBrowserControllerProvider.notifier)
+                  .loadMoreImportTasks(),
+            ),
+      );
+    }
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).toString();
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final enabled = !widget.state.isBusy;
+    final tasks = widget.state.importTasks;
+    int countOf(String status) =>
+        tasks.where((t) => t.status.toUpperCase() == status).length;
+    final running = countOf('RUNNING');
+    final completed = countOf('COMPLETED');
+    final failed = countOf('FAILED');
+    final filtered =
+        tasks
+            .where((t) => _filter == 'ALL' || t.status.toUpperCase() == _filter)
+            .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SubHeader(
+          title: FileManagerSection.importTasks.labelOf(l10n),
+          subtitle: FileManagerSection.importTasks.descriptionOf(l10n),
+        ),
+        const SizedBox(height: 16),
+        _SubMetricStrip(
+          cards: [
+            _MetricCard(
+              label: l10n.filesMetricUploading,
+              value: running.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.success,
+            ),
+            _MetricCard(
+              label: l10n.filesMetricQueued,
+              value: countOf('PENDING').toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.onSurface,
+            ),
+            _MetricCard(
+              label: l10n.filesMetricCompleted,
+              value: completed.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.onSurface,
+            ),
+            _MetricCard(
+              label: l10n.filesMetricFailed,
+              value: failed.toString(),
+              detail: l10n.filesCurrentView,
+              color: context.filesColors.error,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SubChipsBar(
+          chips: [
+            _SubChip(
+              label: '${l10n.filesStatusFilterAll} (${tasks.length})',
+              active: _filter == 'ALL',
+              onTap: () => setState(() => _filter = 'ALL'),
+            ),
+            _SubChip(
+              label: l10n.filesStatusRunning,
+              active: _filter == 'RUNNING',
+              onTap: () => setState(() => _filter = 'RUNNING'),
+            ),
+            _SubChip(
+              label: l10n.filesStatusCompleted,
+              active: _filter == 'COMPLETED',
+              onTap: () => setState(() => _filter = 'COMPLETED'),
+            ),
+            _SubChip(
+              label: l10n.filesStatusFailed,
+              active: _filter == 'FAILED',
+              onTap: () => setState(() => _filter = 'FAILED'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: _SubTable.builder(
+            columns: [
+              _SubColumn(l10n.filesTaskSource, flex: 3),
+              _SubColumn(l10n.filesColumnType, width: 84),
+              _SubColumn(l10n.filesColumnSize, width: 96),
+              _SubColumn(l10n.filesProgress, flex: 2),
+              _SubColumn(l10n.filesImportFileCount, width: 96),
+              _SubColumn(l10n.filesImportSpeed, width: 100),
+              _SubColumn(l10n.filesColumnStatus, width: 88),
+              _SubColumn(l10n.filesColumnCreatedAt, width: 108),
+              _SubColumn(l10n.filesFileActions, width: 132),
+            ],
+            rowCount: filtered.length,
+            rowBuilder: (context, index) {
+              final task = filtered[index];
+              return _SubRow(
+                cells: [
+                  // 失败任务把错误摘要提到次行：仅靠徽章无法解释失败原因。
+                  _SubNameCell(
+                    name: task.fileName ?? task.sourcePath,
+                    detail:
+                        (task.errorSummary ?? '').isNotEmpty
+                            ? task.errorSummary!
+                            : task.sourcePath,
+                    isFolder: task.isDirectory,
+                  ),
+                  _SubMono(task.isDirectory ? 'DIRECTORY' : 'FILE'),
+                  _SubMono(formatFileSize(task.totalBytes)),
+                  _SubProgressCell(
+                    value: task.progress,
+                    label:
+                        '${(task.progress * 100).toStringAsFixed(1)}%'
+                        '${task.totalFiles > 0 ? ' (${task.completedFiles}/${task.totalFiles})' : ''}',
+                  ),
+                  _SubMono(
+                    task.totalFiles > 0
+                        ? '${task.completedFiles}/${task.totalFiles}'
+                        : '—',
+                  ),
+                  _SubMono(formatFileSize(task.speedBytes)),
+                  _importBadge(task.status, l10n),
+                  _SubMono(
+                    task.createdAt == null
+                        ? '—'
+                        : DateFormat(
+                          'MM-dd HH:mm',
+                          locale,
+                        ).format(task.createdAt!),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (task.canCancel)
+                          _SubAction(
+                            label: l10n.filesTaskCancel,
+                            destructive: true,
+                            onTap:
+                                enabled
+                                    ? () => _confirmAndRun(
+                                      context,
+                                      title: l10n.filesImportCancelConfirm,
+                                      message: l10n.filesImportCancelMessage,
+                                      confirmLabel: l10n.filesTaskCancel,
+                                      action:
+                                          () =>
+                                              controller.cancelImportTask(task),
+                                    )
+                                    : null,
+                          ),
+                        const SizedBox(width: 6),
+                        _SubAction(
+                          label: l10n.filesDeleteTask,
+                          onTap:
+                              enabled
+                                  ? () => _confirmAndRun(
+                                    context,
+                                    title: l10n.filesDeleteUploadTask,
+                                    message: l10n.filesDeleteUploadTaskMessage,
+                                    confirmLabel: l10n.filesDeleteTask,
+                                    action:
+                                        () => controller.deleteImportTask(task),
+                                  )
+                                  : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        WorkstationPaginationBar(
+          currentPage: widget.state.importMeta.page,
+          totalPages: widget.state.importMeta.totalPages,
+          totalElements: widget.state.importMeta.totalElements,
+          rowsPerPage: widget.state.importMeta.size,
+          busy: widget.state.isBusy,
+          onPageChanged: (page) => controller.showImportTasks(page: page),
+          onRowsPerPageChanged:
+              (size) => controller.showImportTasks(page: 0, size: size),
+        ),
+      ],
+    );
+  }
+
+  Widget _importBadge(String status, AppLocalizations l10n) {
+    final s = status.toUpperCase();
+    if (s == 'COMPLETED') {
+      return _StatusBadge(l10n.filesStatusCompleted, tone: _BadgeTone.good);
+    }
+    if (s == 'FAILED') {
+      return _StatusBadge(l10n.filesStatusFailed, tone: _BadgeTone.bad);
+    }
+    if (s == 'RUNNING') {
+      return _StatusBadge(l10n.filesStatusRunning, tone: _BadgeTone.good);
+    }
+    return _StatusBadge(status, tone: _BadgeTone.neutral);
+  }
+}

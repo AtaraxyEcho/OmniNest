@@ -1,0 +1,380 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
+
+/// 应用背景设置面板中的操作按钮。
+class AppBackdropActionButton extends StatelessWidget {
+  const AppBackdropActionButton({
+    required this.palette,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final AppBackdropPalette palette;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: palette.surfaceContainer.withValues(
+              alpha: onTap == null ? 0.45 : 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palette.outline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: palette.text, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: AppTypography.bodyMedium,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 应用背景设置面板中的显示与设备控制区。
+class AppBackdropControls extends StatelessWidget {
+  const AppBackdropControls({
+    required this.palette,
+    required this.state,
+    required this.notifier,
+    super.key,
+  });
+
+  final AppBackdropPalette palette;
+  final AppBackdropState state;
+  final AppBackdropController notifier;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final settings = state.settings;
+    return Material(
+      color: palette.surfaceContainer,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: palette.outline),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _BackdropToggleRow(
+                value: settings.enabled,
+                onChanged:
+                    state.selectedBackdrop == null ? null : notifier.setEnabled,
+                title: l10n.portalLocalBackdropEnable,
+                subtitle: l10n.portalLocalBackdropEnableHint,
+                palette: palette,
+              ),
+              _BackdropToggleRow(
+                value: settings.separateDeviceBackdrops,
+                onChanged: notifier.setDeviceSeparation,
+                title: l10n.portalLocalBackdropSeparateDevices,
+                subtitle: l10n.portalLocalBackdropSeparateDevicesHint,
+                palette: palette,
+              ),
+              AnimatedSwitcher(
+                duration: MotionToken.reduced(
+                  context,
+                  const Duration(milliseconds: 180),
+                ),
+                layoutBuilder: excludeExitingSemanticsStack,
+                child:
+                    settings.separateDeviceBackdrops
+                        ? _BackdropTargetNotice(
+                          key: ValueKey(state.selectionTarget),
+                          palette: palette,
+                          target: state.selectionTarget,
+                        )
+                        : const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                l10n.portalLocalBackdropFit,
+                style: TextStyle(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<AppBackdropFit>(
+                style: ButtonStyle(
+                  foregroundColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return palette.accent;
+                    }
+                    return palette.text;
+                  }),
+                  backgroundColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return palette.accent.withValues(alpha: 0.16);
+                    }
+                    return palette.surfaceContainer;
+                  }),
+                  side: WidgetStatePropertyAll(
+                    BorderSide(color: palette.outline),
+                  ),
+                ),
+                segments: [
+                  ButtonSegment(
+                    value: AppBackdropFit.cover,
+                    label: Text(l10n.portalLocalBackdropFitCover),
+                  ),
+                  ButtonSegment(
+                    value: AppBackdropFit.contain,
+                    label: Text(l10n.portalLocalBackdropFitContain),
+                  ),
+                  ButtonSegment(
+                    value: AppBackdropFit.fill,
+                    label: Text(l10n.portalLocalBackdropFitFill),
+                  ),
+                ],
+                selected: {settings.fit},
+                onSelectionChanged: (value) => notifier.setFit(value.first),
+              ),
+              if (settings.fit == AppBackdropFit.cover) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.portalLocalBackdropAlignment,
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SegmentedButton<AppBackdropAlignment>(
+                  style: ButtonStyle(
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return palette.accent;
+                      }
+                      return palette.text;
+                    }),
+                    backgroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return palette.accent.withValues(alpha: 0.16);
+                      }
+                      return palette.surfaceContainer;
+                    }),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(color: palette.outline),
+                    ),
+                  ),
+                  segments: [
+                    ButtonSegment(
+                      value: AppBackdropAlignment.top,
+                      label: Text(l10n.portalLocalBackdropAlignTop),
+                    ),
+                    ButtonSegment(
+                      value: AppBackdropAlignment.center,
+                      label: Text(l10n.portalLocalBackdropAlignCenter),
+                    ),
+                    ButtonSegment(
+                      value: AppBackdropAlignment.bottom,
+                      label: Text(l10n.portalLocalBackdropAlignBottom),
+                    ),
+                  ],
+                  selected: {settings.alignment},
+                  onSelectionChanged:
+                      (value) => notifier.setAlignment(value.first),
+                ),
+              ],
+              const SizedBox(height: 12),
+              if (state.selectedBackdrop?.sourceType ==
+                  AppBackdropSourceType.server) ...[
+                if (state.selectedBackdrop?.isVideo == true)
+                  AppBackdropActionButton(
+                    palette: palette,
+                    icon: Icons.cleaning_services_rounded,
+                    label: l10n.portalLocalBackdropClearVideoCache,
+                    onTap: () => notifier.clearLocalVideoCache(),
+                  ),
+                if (state.selectedBackdrop?.isVideo == true)
+                  const SizedBox(height: 8),
+              ],
+              _BackdropToggleRow(
+                value: settings.videoMuted,
+                onChanged: notifier.setVideoMuted,
+                title: l10n.portalLocalBackdropVideoMuted,
+                palette: palette,
+              ),
+              if (state.selectedBackdrop?.isVideo == true) ...[
+                const SizedBox(height: 8),
+                AppBackdropActionButton(
+                  palette: palette,
+                  icon: Icons.replay_rounded,
+                  label: l10n.portalLocalBackdropRetryPlayback,
+                  onTap: () {
+                    final selected = state.selectedBackdrop!;
+                    final source =
+                        (selected.localVideoPath != null &&
+                                selected.localVideoPath!.isNotEmpty)
+                            ? selected.localVideoPath!
+                            : selected.path;
+                    AppBackdropVideoSession.retryPath(source);
+                  },
+                ),
+              ],
+              const SizedBox(height: 20),
+              Text(
+                l10n.portalLocalBackdropLocalOnly,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: AppTypography.bodySmall,
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BackdropTargetNotice extends StatelessWidget {
+  const _BackdropTargetNotice({
+    required this.palette,
+    required this.target,
+    super.key,
+  });
+
+  final AppBackdropPalette palette;
+  final AppBackdropSelectionTarget target;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final mobile = target == AppBackdropSelectionTarget.mobile;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            mobile ? Icons.smartphone_rounded : Icons.desktop_windows_rounded,
+            color: palette.accent,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              mobile
+                  ? l10n.portalLocalBackdropCurrentMobile
+                  : l10n.portalLocalBackdropCurrentDesktop,
+              style: TextStyle(
+                color: palette.muted,
+                fontSize: AppTypography.bodySmall,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 背景设置面板的方形开关行：文案取面板色板，开关几何与
+/// WorkstationSwitch 对齐，整行可点按（替代 M3 胶囊 SwitchListTile）。
+class _BackdropToggleRow extends StatelessWidget {
+  const _BackdropToggleRow({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.palette,
+    this.subtitle,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final String title;
+  final String? subtitle;
+  final AppBackdropPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final interactive = onChanged != null;
+    return MouseRegion(
+      cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: interactive ? () => onChanged!(!value) : null,
+        child: Opacity(
+          opacity: interactive ? 1 : 0.45,
+          child: Padding(
+            // 测试与调用方定位开关行的稳定锚点。
+            key: ValueKey<String>('backdrop-toggle-$title'),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: AppTypography.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                WorkstationSwitch(value: value, onChanged: onChanged),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

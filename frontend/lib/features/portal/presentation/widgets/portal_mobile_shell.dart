@@ -1,0 +1,740 @@
+import 'dart:async';
+import 'dart:ui' show ImageFilter;
+
+import 'package:intl/intl.dart' show DateFormat;
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
+import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/core/widgets/animated_card.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
+import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
+import 'package:omninest/features/portal/application/portal_paged_cards.dart';
+import 'package:omninest/features/portal/application/weather_provider.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_paged_list_card.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_mobile_tier.dart';
+import 'package:omninest/features/portal/presentation/widgets/storage_overview_widget.dart';
+import 'package:omninest/features/portal/presentation/widgets/now_playing_widget.dart';
+import 'package:omninest/features/portal/presentation/widgets/reading_progress_widget.dart';
+import 'package:omninest/features/portal/presentation/widgets/weather_detail_dialog.dart';
+import 'package:omninest/features/portal/presentation/widgets/weather_detail_sheet.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_glass_components.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_glass_sliver_app_bar.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
+import 'package:omninest/features/video/domain/movie_models.dart';
+import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
+import 'package:omninest/features/files/file_dashboard.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+
+part 'portal_mobile_system_widgets.dart';
+part 'portal_mobile_quick_actions.dart';
+part 'portal_mobile_weather_card.dart';
+part 'portal_mobile_hosted_content.dart';
+part 'portal_mobile_hosted_recent.dart';
+
+/// 取舞台（`.app-frame`）与内容列（`.content-scroll`）两个限宽里的较紧者。
+///
+/// 两者在原型里分别由不同媒体段落给出，720-979 档内容列 720 比舞台 760
+/// 更紧；无上限时返回 infinity，交给父级铺满。
+double _portalContentCap(PortalMobileTier tier) {
+  final stage = tier.stageMaxWidth;
+  final content = tier.contentMaxWidth;
+  if (stage == null) {
+    return content ?? double.infinity;
+  }
+  if (content == null) {
+    return stage;
+  }
+  return stage < content ? stage : content;
+}
+
+/// Portal 移动端入口，入场动画只在首次挂载时播放。
+class PortalMobileShell extends ConsumerStatefulWidget {
+  const PortalMobileShell({super.key});
+
+  @override
+  ConsumerState<PortalMobileShell> createState() => _PortalMobileShellState();
+}
+
+class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
+  static const _animTotal = Duration(milliseconds: 220);
+  static const _entryDuration = Duration(milliseconds: 220);
+  static const _cardCount = 7;
+
+  DateTime? _lastBackPress;
+  static Duration _stagger(int index) =>
+      Duration(milliseconds: (_animTotal.inMilliseconds * index) ~/ _cardCount);
+
+  Future<void> _onRefresh() async {
+    final actions = ref.read(portalDashboardActionsProvider);
+    // 用户显式下拉刷新，不受分区节流限制。
+    await actions.refreshAll(force: true);
+  }
+
+  /// 返回阶梯的最底一级：门户上要「再按一次」才退出。
+  ///
+  /// 托管态门户是分支里的唯一路由，`Navigator.pop` 无处可弹，退出只能走
+  /// `SystemNavigator.pop`；非托管（窄窗直挂、测试直挂）仍有来源路由，弹回它。
+  void _handleBackRequest(BuildContext context, {required bool hosted}) {
+    final now = DateTime.now();
+    if (_lastBackPress == null ||
+        now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).portalPressBackAgain,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    if (hosted) {
+      unawaited(SystemNavigator.pop());
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final hosted = MobileShellScope.isHosted(context);
+    if (hosted) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _handleBackRequest(context, hosted: true);
+        },
+        child: _HostedPortalContent(onRefresh: _onRefresh),
+      );
+    }
+    // 非托管分支（窄窗直开 Portal、测试直挂页面）按原型 `.content-scroll`
+    // 处理限宽与页边距；托管 Home 由 _HostedPortalContent 按 `.home-stage`
+    // 口径处理。
+    final tier = PortalMobileTier.resolve(context);
+    final storageStats = ref.watch(portalStorageStatsProvider);
+    final musicSnapshot = ref.watch(portalMusicSnapshotProvider);
+    final photoDashboard = ref.watch(portalPhotoDashboardProvider);
+    final readerDashboard = ref.watch(portalReaderDashboardProvider);
+    // 整屏唯一动画：卡片各自等数时不再各画转圈，统一由这条线表达。
+    // 分页卡（继续观看/最近照片）自己 watch 的 provider 也要计入，否则
+    // 首屏会出现「区级线 + 卡内转圈」两处动画。
+    final anyCardLoading =
+        storageStats.isLoading ||
+        musicSnapshot.isLoading ||
+        photoDashboard.isLoading ||
+        readerDashboard.isLoading ||
+        ref.watch(portalContinueWatchingProvider).isLoading ||
+        ref.watch(portalRecentPhotosProvider).isLoading;
+    final backdropState =
+        ref.watch(appBackdropControllerProvider).asData?.value;
+    final appBackdropActive =
+        backdropState?.settings.enabled == true &&
+        backdropState?.selectedBackdrop != null &&
+        backdropState?.selectedBackdrop?.missing == false;
+    final portalTheme = PortalMobileTheme.resolve(
+      context,
+      backdropActive: appBackdropActive,
+    );
+    final scheme = portalTheme.colorScheme;
+    final foreground = scheme.onSurface;
+    final animationsDisabled =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    Widget entrance(String key, int index, Widget child) {
+      return AnimatedCard(
+        key: ValueKey(key),
+        delay: animationsDisabled ? Duration.zero : _stagger(index),
+        duration: _entryDuration,
+        enabled: !animationsDisabled,
+        child: child,
+      );
+    }
+
+    void retry(PortalDashboardSection section) {
+      unawaited(ref.read(portalDashboardActionsProvider).retry(section));
+    }
+
+    Widget mobileSurface(Widget child) {
+      if (hosted) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer.withValues(alpha: 0.92),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: child,
+          ),
+        );
+      }
+      return PortalGlassCard(
+        padding: EdgeInsets.zero,
+        borderRadius: 8,
+        surfaceAlpha: appBackdropActive ? 0.62 : 0.90,
+        shadow: !appBackdropActive,
+        backgroundColor: scheme.surfaceContainer,
+        borderColor: scheme.outlineVariant,
+        child: child,
+      );
+    }
+
+    final content = PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackRequest(context, hosted: false);
+      },
+      child: Scaffold(
+        backgroundColor:
+            appBackdropActive
+                ? Colors.transparent
+                : Theme.of(context).scaffoldBackgroundColor,
+        extendBodyBehindAppBar: true,
+        body: Stack(
+          children: [
+            // 主内容
+            RefreshIndicator(
+              displacement: 40,
+              edgeOffset: 0,
+              strokeWidth: 2.5,
+              color: scheme.primary,
+              onRefresh: _onRefresh,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: _portalContentCap(tier),
+                  ),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    slivers: [
+                      if (!hosted)
+                        PortalGlassSliverAppBar(
+                          title: const Text('OmniNest'),
+                          actions: [
+                            IconButton(
+                              tooltip: l10n.portalLocalBackdropTitle,
+                              onPressed: () => showAppBackdropSettings(context),
+                              icon: Icon(
+                                Icons.wallpaper_rounded,
+                                color: foreground,
+                                size: 20,
+                              ),
+                            ),
+                            FontScaleControl(size: 20, color: foreground),
+                            NotificationIcon(size: 20, color: foreground),
+                            const SizedBox(width: 8),
+                            const UserAvatarMenu(),
+                          ],
+                        ),
+                      // 卡片列表
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          tier.contentHorizontalPadding,
+                          12,
+                          tier.contentHorizontalPadding,
+                          hosted ? 16 : 100,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            if (anyCardLoading)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: MobileLoadingLine(top: true),
+                              ),
+                            entrance(
+                              'weather',
+                              0,
+                              mobileSurface(const _WeatherCard()),
+                            ),
+                            if (hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-quick-actions',
+                                1,
+                                mobileSurface(const _MobileQuickActions()),
+                              ),
+                            ],
+                            if (!hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'weekly-stats',
+                                1,
+                                mobileSurface(
+                                  _WeeklyStatsCard(
+                                    readingCount: readerDashboard.whenOrNull(
+                                      data: (d) => d.overview.continueCount,
+                                    ),
+                                    musicPlays: musicSnapshot.whenOrNull(
+                                      data:
+                                          (snapshot) =>
+                                              snapshot.recentPlayCount,
+                                    ),
+                                    photoCount: photoDashboard.whenOrNull(
+                                      data: (d) => d.totalPhotos,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'quick-actions',
+                                2,
+                                mobileSurface(const _MobileQuickActions()),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            entrance(
+                              'continue-watching',
+                              3,
+                              mobileSurface(
+                                PortalPagedListCard<MovieContinueWatching>(
+                                  provider: portalContinueWatchingProvider,
+                                  headerIcon: Icons.movie_outlined,
+                                  headerTitle: l10n.portalContinueWatching,
+                                  openRoute: '/video',
+                                  emptyMessage: l10n.portalNoWatchingContent,
+                                  rowBuilder:
+                                      (item) => _PortalContinueWatchingRow(
+                                        item: item,
+                                      ),
+                                ),
+                              ),
+                            ),
+                            if (!hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'now-playing',
+                                4,
+                                mobileSurface(
+                                  musicSnapshot.when(
+                                    data:
+                                        (snapshot) => NowPlayingWidget(
+                                          track: snapshot.featuredTrack,
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 80),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadMusicFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.music,
+                                              ),
+                                        ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            if (hosted) ...[
+                              entrance(
+                                'hosted-storage',
+                                5,
+                                storageStats.when(
+                                  data:
+                                      (s) => mobileSurface(
+                                        StorageOverviewWidget(stats: s),
+                                      ),
+                                  loading:
+                                      () => const _SkeletonCard(height: 100),
+                                  error:
+                                      (_, _) => _ErrorCard(
+                                        message: l10n.portalLoadStorageFailed,
+                                        onRetry:
+                                            () => retry(
+                                              PortalDashboardSection.storage,
+                                            ),
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-reading',
+                                5,
+                                readerDashboard.when(
+                                  data:
+                                      (d) => mobileSurface(
+                                        ReadingProgressWidget(
+                                          item: d.continueReading.firstOrNull,
+                                        ),
+                                      ),
+                                  loading:
+                                      () => const _SkeletonCard(height: 100),
+                                  error:
+                                      (_, _) => _ErrorCard(
+                                        message: l10n.portalLoadReadingFailed,
+                                        onRetry:
+                                            () => retry(
+                                              PortalDashboardSection.reader,
+                                            ),
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-recent-photos',
+                                6,
+                                mobileSurface(
+                                  PortalPagedListCard<PhotoItem>(
+                                    provider: portalRecentPhotosProvider,
+                                    headerIcon: Icons.photo_outlined,
+                                    headerTitle: l10n.portalRecentPhotos,
+                                    openRoute: '/photos',
+                                    emptyMessage: l10n.portalNoPhotos,
+                                    rowBuilder:
+                                        (item) =>
+                                            _PortalRecentPhotoRow(item: item),
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              entrance(
+                                'storage-reading',
+                                5,
+                                _TwoColumnRow(
+                                  left: storageStats.when(
+                                    data:
+                                        (s) => mobileSurface(
+                                          StorageOverviewWidget(stats: s),
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 100),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadStorageFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.storage,
+                                              ),
+                                        ),
+                                  ),
+                                  right: readerDashboard.when(
+                                    data:
+                                        (d) => mobileSurface(
+                                          ReadingProgressWidget(
+                                            item: d.continueReading.firstOrNull,
+                                          ),
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 100),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadReadingFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.reader,
+                                              ),
+                                        ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'recent-photos',
+                                6,
+                                mobileSurface(
+                                  PortalPagedListCard<PhotoItem>(
+                                    provider: portalRecentPhotosProvider,
+                                    headerIcon: Icons.photo_outlined,
+                                    headerTitle: l10n.portalRecentPhotos,
+                                    openRoute: '/photos',
+                                    emptyMessage: l10n.portalNoPhotos,
+                                    rowBuilder:
+                                        (item) =>
+                                            _PortalRecentPhotoRow(item: item),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (!hosted)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: PortalGlassDock(
+                  currentIndex: -1,
+                  onTap: (index) {
+                    final routes = [
+                      '/files',
+                      '/video',
+                      '/music',
+                      '/photos',
+                      '/reader',
+                    ];
+                    context.go(routes[index]);
+                  },
+                  items: [
+                    PortalGlassDockItem(
+                      icon: Icons.folder_outlined,
+                      selectedIcon: Icons.folder_rounded,
+                      label: l10n.portalDockFiles,
+                    ),
+                    PortalGlassDockItem(
+                      icon: Icons.movie_outlined,
+                      selectedIcon: Icons.movie_rounded,
+                      label: l10n.portalDockMovies,
+                    ),
+                    PortalGlassDockItem(
+                      icon: Icons.music_note_outlined,
+                      selectedIcon: Icons.music_note_rounded,
+                      label: l10n.portalDockMusic,
+                    ),
+                    PortalGlassDockItem(
+                      icon: Icons.photo_library_outlined,
+                      selectedIcon: Icons.photo_library_rounded,
+                      label: l10n.portalDockPhotos,
+                    ),
+                    PortalGlassDockItem(
+                      icon: Icons.menu_book_outlined,
+                      selectedIcon: Icons.menu_book_rounded,
+                      label: l10n.portalDockReading,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    return Theme(data: portalTheme, child: content);
+  }
+}
+
+/// 双列等高布局
+class _TwoColumnRow extends StatelessWidget {
+  const _TwoColumnRow({required this.left, required this.right});
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 140,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 12),
+          Expanded(child: right),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── 骨架屏 & 错误卡片 ──────────────────────────────────────────────────────
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard({required this.height});
+  final double height;
+  @override
+  Widget build(BuildContext context) {
+    // 卡片各自等数时不再各画转圈（同屏曾有 4-5 个动画）：整屏唯一动画
+    // 由壳层顶部的 MobileLoadingLine 承担，这里只保持版面稳定。
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: SizedBox(
+        height: height,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 96,
+                height: 10,
+                color: scheme.onSurface.withValues(alpha: 0.07),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: scheme.onSurface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: scheme.error, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: Text(l10n.coreRetry)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 继续观看行：续播进入播放器；选集入口见最近添加等 `movieDetailRoute`。
+class _PortalContinueWatchingRow extends StatelessWidget {
+  const _PortalContinueWatchingRow({required this.item});
+
+  final MovieContinueWatching item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => context.push(moviePlayRoute(item.id)),
+        child: Row(
+          children: [
+            PortalMediaThumbnail(
+              imageUrl: item.posterUrl,
+              cacheKey: 'portal-preview:video:${item.id}',
+              width: 40,
+              height: 56,
+              // 单维约束解码：高度主导槽位仅约束高度，海报真实纵横比
+              // 由 cover 裁切保持。
+              cacheHeight: 168,
+              borderRadius: BorderRadius.circular(4),
+              fallback: Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: item.progressPercent / 100,
+                      minHeight: 3,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${item.progressPercent.round()}%',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 最近照片行：方形缩略图加标题，点击进入相册。
+class _PortalRecentPhotoRow extends StatelessWidget {
+  const _PortalRecentPhotoRow({required this.item});
+
+  final PhotoItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = item.title;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => context.push('/photos/${item.id}'),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 44,
+              child: PortalMediaThumbnail(
+                imageUrl: item.coverUrl,
+                cacheKey: 'portal-preview:photos:${item.id}',
+                cacheWidth: 132,
+                borderRadius: BorderRadius.circular(6),
+                fallback: Container(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title.isEmpty ? item.id : title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

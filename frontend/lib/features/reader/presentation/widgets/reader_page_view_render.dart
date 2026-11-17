@@ -1,0 +1,108 @@
+part of 'reader_page_view.dart';
+
+/// 页面占位与翻页动画内容渲染。
+extension _ReaderPageViewRender on _ReaderPageViewState {
+  Widget _buildPageOrEmpty(int index) {
+    final page = widget.pageBuilder(index);
+    if (page == null) {
+      return SizedBox.expand(child: ColoredBox(color: widget.surfaceColor));
+    }
+    return SizedBox.expand(
+      child: ColoredBox(color: widget.surfaceColor, child: page),
+    );
+  }
+
+  Widget _buildAnimationContent() {
+    final current = _currentPageWidget ?? pageAt(widget.state.pageIndex);
+
+    if (_flipProgress <= 0 && !_isAnimating) {
+      return _constrainPage(current);
+    }
+
+    final target = _targetPageWidget;
+    if (target == null) {
+      return _constrainPage(current);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width =
+            constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+        final height =
+            constraints.hasBoundedHeight
+                ? constraints.maxHeight
+                : MediaQuery.sizeOf(context).height;
+        final sheetWidth =
+            widget.spread
+                ? math.max(0.0, (width - _spreadGutterWidth) / 2)
+                : width;
+        return SizedBox.expand(
+          child: AnimatedBuilder(
+            // 拖动期间进度写在 _flipProgressNotifier 上、松手后由动画控制器接管，
+            // 两者必须同时监听，否则手指未抬起前画面不跟随位移刷新。
+            animation: Listenable.merge([
+              _animController!,
+              _flipProgressNotifier,
+            ]),
+            builder: (context, _) {
+              final t = _isAnimating ? _animController!.value : _flipProgress;
+              final curl =
+                  widget.turnMode == PageTurnMode.cover
+                      ? _buildCurlTurn(t, width, height)
+                      : null;
+              final content =
+                  curl ??
+                  switch (widget.turnMode) {
+                    PageTurnMode.cover => _buildCover(
+                      current,
+                      target,
+                      t,
+                      width,
+                    ),
+                    PageTurnMode.fade => _buildFade(current, target, t),
+                    PageTurnMode.slide => const SizedBox.shrink(),
+                  };
+              if (!_curlCapturing) {
+                return content;
+              }
+              return Stack(
+                children: [content, ..._curlCaptureSources(sheetWidth, height)],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _constrainPage(Widget? page) {
+    return SizedBox.expand(
+      child: ColoredBox(color: widget.surfaceColor, child: page),
+    );
+  }
+
+  Widget _buildCover(Widget? current, Widget? target, double t, double width) {
+    final targetOffset = _isForward ? (1 - t) * width : (t - 1) * width;
+
+    return Stack(
+      children: [
+        _constrainPage(current),
+        Transform.translate(
+          offset: Offset(targetOffset, 0),
+          child: _constrainPage(target),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFade(Widget? current, Widget? target, double t) {
+    return Stack(
+      children: [
+        Opacity(opacity: 1 - t, child: _constrainPage(current)),
+        Opacity(opacity: t, child: _constrainPage(target)),
+      ],
+    );
+  }
+}

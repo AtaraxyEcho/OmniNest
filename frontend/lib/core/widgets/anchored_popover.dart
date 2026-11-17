@@ -1,0 +1,136 @@
+import 'package:flutter/material.dart';
+
+/// 锚定浮层：在锚点控件下方右对齐弹出面板，点击浮层外部关闭。
+///
+/// 对应 Reader 重构原型 Popover 的定位语义（absolute top-full mt-2
+/// right-0）。使用根 Overlay 直插面板而非 MenuAnchor：定位精确可控，
+/// 且避免桌面端菜单语义树更新触发的引擎无障碍报错。
+class AnchoredPopover {
+  AnchoredPopover({this.gap = 8});
+
+  /// 面板与锚点底边的间距，原型为 mt-2（8px）。
+  final double gap;
+
+  OverlayEntry? _entry;
+  _PopoverMetricsObserver? _metricsObserver;
+  Animation<double>? _coveringAnimation;
+  void Function(AnimationStatus)? _coveringListener;
+
+  bool get isOpen => _entry != null;
+
+  /// 在 [anchorContext] 对应控件下方右对齐打开 [panelBuilder] 面板。
+  /// [onChanged] 在打开与关闭时回调，供宿主刷新入口态样式。
+  void open(
+    BuildContext anchorContext,
+    WidgetBuilder panelBuilder, {
+    VoidCallback? onChanged,
+  }) {
+    if (isOpen) {
+      return;
+    }
+    final RenderBox box = anchorContext.findRenderObject()! as RenderBox;
+    final OverlayState overlay = Overlay.of(anchorContext, rootOverlay: true);
+    final RenderBox overlayBox =
+        overlay.context.findRenderObject()! as RenderBox;
+    final Offset anchorTopLeft = box.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final double right = (overlayBox.size.width -
+            anchorTopLeft.dx -
+            box.size.width)
+        .clamp(8.0, double.infinity);
+    final double top = anchorTopLeft.dy + box.size.height + gap;
+
+    void close() => _close(onChanged);
+
+    final OverlayEntry entry = OverlayEntry(
+      builder:
+          (context) => Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: close,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Positioned(
+                top: top,
+                right: right,
+                // 锚点下方剩余高度不足（横屏小窗）时按剩余空间封顶并允许
+                // 滚动，否则固定高的面板会越出屏幕且无法触达底部项。
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: (overlayBox.size.height - top - 8).clamp(
+                      0.0,
+                      double.infinity,
+                    ),
+                  ),
+                  child: SingleChildScrollView(child: panelBuilder(context)),
+                ),
+              ),
+            ],
+          ),
+    );
+    _entry = entry;
+    // 窗口缩放/旋转后浮层会停在旧坐标与旧高度上，直接收起最稳妥；
+    // 重新打开时按当前锚点重新定位。
+    _metricsObserver = _PopoverMetricsObserver(close);
+    WidgetsBinding.instance.addObserver(_metricsObserver!);
+    // 根 Overlay 的浮层不属于当前路由：压栈新页面或切换分支时它不会跟着走，
+    // 会悬在新页面正上方。监听当前路由的被覆盖动画，一开始被盖就收起。
+    final covering = ModalRoute.of(anchorContext)?.secondaryAnimation;
+    if (covering != null) {
+      void onCoveringChanged(AnimationStatus status) {
+        if (status == AnimationStatus.forward ||
+            status == AnimationStatus.completed) {
+          _close(onChanged);
+        }
+      }
+
+      covering.addStatusListener(onCoveringChanged);
+      _coveringAnimation = covering;
+      _coveringListener = onCoveringChanged;
+    }
+    overlay.insert(entry);
+    onChanged?.call();
+  }
+
+  /// 关闭当前浮层，未打开时为空操作。
+  void close({VoidCallback? onChanged}) => _close(onChanged);
+
+  void _close(VoidCallback? onChanged) {
+    final entry = _entry;
+    if (entry == null) {
+      return;
+    }
+    _entry = null;
+    final observer = _metricsObserver;
+    _metricsObserver = null;
+    if (observer != null) {
+      WidgetsBinding.instance.removeObserver(observer);
+    }
+    final coveringAnimation = _coveringAnimation;
+    final coveringListener = _coveringListener;
+    _coveringAnimation = null;
+    _coveringListener = null;
+    if (coveringAnimation != null && coveringListener != null) {
+      coveringAnimation.removeStatusListener(coveringListener);
+    }
+    entry.remove();
+    onChanged?.call();
+  }
+}
+
+/// 监听窗口尺寸变化：锚点浮层在尺寸变化后自动收起。
+class _PopoverMetricsObserver with WidgetsBindingObserver {
+  _PopoverMetricsObserver(this.onMetricsChanged);
+
+  final VoidCallback onMetricsChanged;
+
+  @override
+  void didChangeMetrics() {
+    onMetricsChanged();
+  }
+}

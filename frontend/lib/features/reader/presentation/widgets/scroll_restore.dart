@@ -1,0 +1,241 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
+
+/// 滚动位置恢复器。
+///
+/// 封装帧末回调自循环的启停：每次 start 抬高代次，旧循环在下一次 tick 上
+/// 发现代次不符即退出，因此不会有多条循环并存、互相把对方从批次边界杀死。
+///
+/// ## 恢复策略
+///
+/// 由于 ListView 懒加载 + 图片异步加载，[ScrollPosition.maxScrollExtent]
+/// 在布局过程中持续变化。恢复分两个阶段：
+///
+/// 1. **主动恢复**：落点偏离目标超过容差时重新跳转，直到位置稳定
+/// 2. **监控期**：settle 后继续监控，只有 max 变化真正把落点带出容差
+///   （说明有新内容加载导致布局偏移），重新激活恢复
+///
+/// settle 即视为恢复完成：`isActive` 在进入监控期时就转 false，而写抑制
+/// （`shouldSuppressWrites`）与循环本身继续到监控期结束（默认 5 秒）或
+/// 用户滚动为止。
+class ScrollRestore {
+  ScrollRestore({
+    int stableFramesThreshold = 10,
+    double driftThreshold = 10.0,
+    double maxChangeThreshold = 1.0,
+    Duration monitorDuration = const Duration(seconds: 5),
+  }) : _stableFramesThreshold = stableFramesThreshold,
+       _driftThreshold = driftThreshold,
+       _maxChangeThreshold = maxChangeThreshold,
+       _monitorDuration = monitorDuration;
+
+  final int _stableFramesThreshold;
+  final double _driftThreshold;
+  final double _maxChangeThreshold;
+  final Duration _monitorDuration;
+
+  int _generation = 0;
+  bool _active = false;
+  bool _monitoring = false;
+
+  /// 当前是否正在主动恢复中（不包括监控期）。
+  bool get isActive => _active && !_monitoring;
+
+  /// 是否应抑制外部进度保存（包括主动恢复期和监控期）。
+  /// 监控期内 maxScrollExtent 仍在变化，保存会写入错误位置。
+  bool get shouldSuppressWrites => _active;
+
+  /// 取消当前恢复流程（不触发 [onSettled] 回调）。
+  void cancel() {
+    _active = false;
+    _monitoring = false;
+    // generation 在 start() 中递增，此处不递增避免累积
+  }
+
+  /// 启动恢复流程。
+  ///
+  /// 使用 [addPostFrameCallback] 自循环，每帧检查偏移量与目标的偏差。
+  /// 恢复完成或取消后自动停止调度，不会积累永久回调。
+  ///
+  /// [targetOffsetBuilder] 返回 null 表示目标未就绪（如章节高度尚未
+  /// 精测收敛，估算落点会偏差数十个百分点）：恢复原地保持不跳转、
+  /// 不积累稳定帧，逐帧重试直至 builder 给出真实目标；总时长仍受
+  /// [totalTimeout] 兜底。
+  ///
+  /// [onSettled] 在恢复流程结束时触发（无论是否到达目标）：参数为
+  /// true 表示已稳定到达目标位置；false 表示被 [isUserScrolling] 的
+  /// 用户主动滚动中断或超过 [totalTimeout]，此时调用方不得把恢复
+  /// 目标写入位置追踪，只能结束恢复态。[cancel] 不触发回调，由调用
+  /// 方自行清理。
+  ///
+  /// 恢复完成后进入监控期（[_monitorDuration]），期间只有布局偏移把落点
+  /// 带出容差才会重新激活恢复；maxScrollExtent 因图片渐进加载而持续
+  /// 变化时，用户活动探针与总超时保证循环必然终止。
+  void start({
+    required ScrollController scrollController,
+    required double? Function() targetOffsetBuilder,
+    required ValueChanged<bool> onSettled,
+    bool Function()? isUserScrolling,
+    Duration totalTimeout = const Duration(seconds: 10),
+  }) {
+    _generation++;
+    final myGeneration = _generation;
+    _active = true;
+    _monitoring = false;
+    final startedAt = DateTime.now();
+
+    int stableFrames = 0;
+    int pendingFrames = 0;
+    double lastMax = 0;
+    bool settled = false;
+    DateTime? settledAt;
+
+    // 布局等待阶段最大帧数（约 3 秒 @60fps），超时后放弃恢复
+    const maxPendingFrames = 180;
+
+    void tick() {
+      // 检查是否应继续
+      if (!_active || myGeneration != _generation) return;
+      // 用户主动滚动（滚轮/拖动/点击）立即让位，绝不与用户争抢滚动位置
+      if (isUserScrolling != null && isUserScrolling()) {
+        _active = false;
+        _monitoring = false;
+        onSettled(false);
+        return;
+      }
+      // 总时长硬上限：图片渐进加载等导致 maxScrollExtent 持续变化时，
+      // 重新激活分支会无限 jumpTo 拉回用户位置，必须整体兜底
+      if (DateTime.now().difference(startedAt) > totalTimeout) {
+        _active = false;
+        _monitoring = false;
+        onSettled(false);
+        return;
+      }
+      if (!scrollController.hasClients) {
+        pendingFrames++;
+        if (pendingFrames >= maxPendingFrames) {
+          _active = false;
+          if (kDebugMode) {
+            readerDebugLog('ScrollRestore: timed out waiting for layout');
+          }
+          onSettled(false);
+          return;
+        }
+        SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+        return;
+      }
+
+      final max = scrollController.position.maxScrollExtent;
+      if (max <= 0) {
+        pendingFrames++;
+        if (pendingFrames >= maxPendingFrames) {
+          _active = false;
+          if (kDebugMode) {
+            readerDebugLog('ScrollRestore: timed out, maxScrollExtent <= 0');
+          }
+          onSettled(false);
+          return;
+        }
+        SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+        return;
+      }
+
+      final builtTarget = targetOffsetBuilder();
+      if (builtTarget == null) {
+        // 目标未就绪：原地保持不跳转、不积累稳定帧（否则会在错误位置
+        // settle），逐帧重试等待 builder 给出真实目标；totalTimeout 兜底。
+        if (kDebugMode) {
+          readerDebugLog('ScrollRestore: target not ready, holding position');
+        }
+        SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+        return;
+      }
+
+      final target = builtTarget.clamp(0.0, max);
+      final currentOffset = scrollController.offset;
+      final drift = (currentOffset - target).abs();
+      final overflowed = currentOffset > max + 1.0;
+      // 只用于过滤亚像素抖动：max 真正变化是否重要由 drift 判定。
+      final maxChanged = (max - lastMax).abs() > _maxChangeThreshold;
+      if (maxChanged) {
+        lastMax = max;
+      }
+      // max 变化本身不构成跳转理由：落点仍在容差内说明偏移未受影响
+      // （精测收敛、视口下方加载的图片都会只改 max）。此前按 max 变化
+      // 无条件跳转会把稳定帧清零，收敛期永远无法 settle，监控期还会
+      // 把用户刚滚动的位置拉回旧落点。
+      if (overflowed || (maxChanged && drift > _driftThreshold)) {
+        if (settled) {
+          settled = false;
+          settledAt = null;
+          _monitoring = false;
+          stableFrames = 0;
+          if (kDebugMode) {
+            readerDebugLog(
+              'ScrollRestore: layout shifted during monitor, re-activating '
+              '(drift=${drift.toStringAsFixed(1)}, max=${max.toStringAsFixed(1)})',
+            );
+          }
+        } else {
+          stableFrames = 0;
+        }
+        scrollController.jumpTo(target);
+      } else if (!settled) {
+        if (drift <= _driftThreshold) {
+          stableFrames++;
+          if (stableFrames >= _stableFramesThreshold) {
+            settled = true;
+            settledAt = DateTime.now();
+            _monitoring = true;
+            onSettled(true);
+            if (kDebugMode) {
+              readerDebugLog(
+                'ScrollRestore: settled, entering monitor period '
+                '(${_monitorDuration.inSeconds}s)',
+              );
+            }
+          }
+        } else {
+          stableFrames = 0;
+          scrollController.jumpTo(target);
+        }
+      } else {
+        // 监控期
+        if (DateTime.now().difference(settledAt!) > _monitorDuration) {
+          _active = false;
+          _monitoring = false;
+          if (kDebugMode) {
+            readerDebugLog('ScrollRestore: monitor period ended, stopping');
+          }
+          return; // 停止调度
+        }
+        if (drift > _driftThreshold * 3) {
+          _active = false;
+          _monitoring = false;
+          if (kDebugMode) {
+            readerDebugLog(
+              'ScrollRestore: user scroll detected during monitor, stopping',
+            );
+          }
+          return; // 停止调度
+        }
+      }
+
+      // 调度下一帧（自循环）
+      if (_active && myGeneration == _generation) {
+        SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+      }
+    }
+
+    // 启动第一帧
+    SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+
+    if (kDebugMode) {
+      readerDebugLog('ScrollRestore: started (generation=$_generation)');
+    }
+  }
+
+  String get debugLabel => 'ScrollRestore(gen=$_generation, active=$_active)';
+}

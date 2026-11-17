@@ -1,0 +1,246 @@
+package com.omninest.modules.music.repository;
+
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.music.domain.MusicArtist;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> {
+    List<MusicArtist> findByOwnerUserIdOrderByNameAsc(UUID ownerUserId);
+
+    /**
+     * 查询至少包含一个活动曲目的艺术家。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 活动艺术家
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where artist.ownerUserId = :ownerUserId and file.deleted = false
+            """)
+    Page<MusicArtist> findActiveByOwnerUserId(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable);
+
+    /**
+     * 查询当前用户可见的活动歌手：本人名下，或含本人可见共享空间曲目。
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    Page<MusicArtist> findVisibleActiveArtists(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
+     * 统计当前用户可见的活动歌手数（个人 + 共享）。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @return 可见歌手数
+     */
+    @Query("""
+            select count(distinct artist) from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            """)
+    long countVisibleActive(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 查询当前用户可见的高频歌手（个人 + 共享）。
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param pageable 分页限制
+     * @return 可见歌手
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+            order by artist.trackCount desc, artist.updatedAt desc
+            """)
+    List<MusicArtist> findTopVisibleActiveByTrackCountDesc(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
+
+    /**
+     * 搜索当前用户可见的活动歌手。
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where file.deleted = false
+              and (artist.ownerUserId = :userId
+                   or (:sharedType is not null and file.spaceType = :sharedType))
+              and lower(artist.name) like lower(concat('%', :keyword, '%')) escape '\\'
+            order by artist.name asc
+            limit 10
+            """)
+    List<MusicArtist> searchVisibleActiveArtists(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("keyword") String keyword);
+
+    Optional<MusicArtist> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+
+    /**
+     * 批量重算艺术家曲目数与专辑数，单条 SQL 覆盖一组艺术家。
+     *
+     * <p>与「活动曲目」相关查询（{@code findTop12ActiveByOwnerUserId}、
+     * {@code searchVisibleActiveArtists}）同口径，只统计 {@code file_nodes.is_deleted = false}
+     * 的曲目：回收站里的文件仍留在 {@code music_tracks}，不排除会让艺术家卡片显示
+     * 已删除曲目，与详情页的曲目列表对不上。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param artistIds 艺术家 ID 集合
+     * @return 更新的行数
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE omni.music_artists artist
+            SET track_count = (
+                    SELECT COUNT(*)::int FROM omni.music_tracks track
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.artist_id = artist.id
+                      AND fn.is_deleted = false),
+                album_count = (
+                    SELECT COUNT(DISTINCT track.album_id)::int FROM omni.music_tracks track
+                    JOIN omni.file_nodes fn ON fn.id = track.file_node_id
+                    WHERE track.owner_user_id = :ownerUserId
+                      AND track.artist_id = artist.id
+                      AND fn.is_deleted = false),
+                updated_at = now()
+            WHERE artist.owner_user_id = :ownerUserId
+              AND artist.id IN (:artistIds)
+            """, nativeQuery = true)
+    int refreshStatisticsBatch(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistIds") Collection<UUID> artistIds);
+
+    /**
+     * 按规范化名称匹配艺术家。
+     *
+     * <p>{@code (owner_user_id, lower(name))} 没有唯一约束：通过 MusicBrainz 刮削可以导入
+     * 同名但 {@code musicbrainzArtistId} 不同的两位歌手。返回单值必须带确定性排序，
+     * 否则多行会抛 {@code IncorrectResultSizeDataAccessException}。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param name 艺术家名称
+     * @return 最早创建的匹配艺术家
+     */
+    Optional<MusicArtist> findFirstByOwnerUserIdAndNameIgnoreCaseOrderByCreatedAtAsc(
+            UUID ownerUserId, String name);
+
+    @Query(value = """
+            select id, owner_user_id, name, avatar_file_id, bio, track_count,
+                   album_count, external_ids, provider_metadata, created_at, updated_at, version
+            from omni.music_artists
+            where owner_user_id = :ownerUserId
+              and external_ids ->> 'musicbrainzArtistId' = :musicBrainzArtistId
+            limit 1
+            """, nativeQuery = true)
+    Optional<MusicArtist> findByOwnerUserIdAndMusicBrainzArtistId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("musicBrainzArtistId") String musicBrainzArtistId
+    );
+
+    List<MusicArtist> findTop12ByOwnerUserIdOrderByTrackCountDescUpdatedAtDesc(UUID ownerUserId);
+
+    /**
+     * 查询近期活动艺术家。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 最多十二个活动艺术家
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where artist.ownerUserId = :ownerUserId and file.deleted = false
+            order by artist.trackCount desc, artist.updatedAt desc
+            limit 12
+            """)
+    List<MusicArtist> findTop12ActiveByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    List<MusicArtist> findTop10ByOwnerUserIdAndNameContainingIgnoreCaseOrderByNameAsc(UUID ownerUserId, String keyword);
+
+    /**
+     * 搜索至少包含一个活动曲目的艺术家。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param keyword 名称关键词
+     * @return 最多十个活动艺术家
+     */
+    @Query("""
+            select distinct artist from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where artist.ownerUserId = :ownerUserId
+              and file.deleted = false
+              and lower(artist.name) like lower(concat('%', :keyword, '%')) escape '\\'
+            order by artist.name asc
+            limit 10
+            """)
+    List<MusicArtist> searchActiveByOwnerUserId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("keyword") String keyword
+    );
+
+    long countByOwnerUserId(UUID ownerUserId);
+
+    /**
+     * 统计至少包含一个活动曲目的艺术家。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 活动艺术家数量
+     */
+    @Query("""
+            select count(distinct artist.id) from MusicArtist artist
+            join MusicTrack track on track.artistId = artist.id
+            join FileNode file on track.fileNodeId = file.id
+            where artist.ownerUserId = :ownerUserId and file.deleted = false
+            """)
+    long countActiveByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    List<MusicArtist> findAllByIdInAndOwnerUserId(Collection<UUID> ids, UUID ownerUserId);
+
+    void deleteByOwnerUserIdAndIdIn(UUID ownerUserId, Collection<UUID> ids);
+
+    List<MusicArtist> findByOwnerUserIdAndAvatarFileIdIn(UUID ownerUserId, Collection<UUID> fileIds);
+
+    /**
+     * 按头像文件批量查询全部艺术家。
+     *
+     * @param fileIds 文件节点 ID
+     * @return 艺术家
+     */
+    List<MusicArtist> findByAvatarFileIdIn(Collection<UUID> fileIds);
+}

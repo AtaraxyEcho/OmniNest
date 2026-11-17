@@ -1,0 +1,209 @@
+package com.omninest.modules.user.service;
+
+import com.omninest.common.security.AuthenticationTokenPolicy;
+import com.omninest.common.security.SessionRevocationCache;
+import com.omninest.common.security.SessionRevocationChecker;
+import com.omninest.modules.user.domain.SessionRevocationEntity;
+import com.omninest.modules.user.repository.AuthUserRepository;
+import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 编排会话撤销记录、撤销黑名单缓存、未撤销短期判定和安全降级判定。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SessionRevocationService implements SessionRevocationChecker {
+
+    private static final Duration DEFAULT_REVOCATION_TTL = Duration.ofDays(30);
+    /**
+     * 「经数据库确认未撤销」的判定保留时长。
+     *
+     * <p>取值只影响一种退化场景：撤销时 Redis 写黑名单与清除判定同时部分失败，此时旧判定
+     * 最多再存活一个周期。数据库始终是权威，TTL 到期即回源复核。</p>
+     */
+    private static final Duration NOT_REVOKED_TTL = Duration.ofMinutes(1);
+    /** 令牌有效期缺失时的兜底截止时间保留时长，与默认 30 分钟访问令牌一致。 */
+    private static final Duration DEFAULT_ACCESS_TOKEN_TTL = Duration.ofMinutes(30);
+
+    private final SessionRevocationJpaRepository repository;
+    private final SessionRevocationCache cache;
+    private final SessionRevocationWriter writer;
+    private final AuthenticationTokenPolicy authenticationTokenPolicy;
+    private final AuthUserRepository authUserRepository;
+
+    /**
+     * 撤销单个会话，并将撤销结果写入持久层和缓存。
+     *
+     * <p>持久化走独立事务：调用方随后抛错回滚时，吊销记录仍然保留。</p>
+     *
+     * @param userId 用户标识
+     * @param sessionId 会话标识
+     * @param ttl 撤销缓存保留时间
+     */
+    public void revokeSession(UUID userId, UUID sessionId, Duration ttl) {
+        try {
+            writer.persistRevocation(userId, sessionId);
+        } catch (RuntimeException exception) {
+            // 刷新令牌重放检测路径：调用方必须照常抛 RefreshTokenReplayException，
+            // 不能被落库失败改写成 500；Redis 黑名单已在下方无条件写入。
+            log.error("数据库会话撤销写入失败: userId={}, sessionId={}", userId, sessionId, exception);
+        }
+        publishRevocations(userId, List.of(sessionId), ttl);
+    }
+
+    /**
+     * 撤销会话并同时落库会话撤销状态；两步在独立事务中一起提交。
+     *
+     * <p>刷新重放、主动登出与管理端强制退出使用本入口：调用方在吊销后通常会抛错或继续
+     * 其它写操作，会话行与撤销记录的落库不能被后续失败回滚。</p>
+     *
+     * <p>先写 Redis 黑名单再落库：落库失败时请求仍会被立即拒绝，不会出现"接口报错但
+     * 令牌照常可用"；数据库异常向上抛出，让显式登出与管理员撤销的调用方（及其审计）
+     * 一并回滚，而不是静默返回成功、等 Redis TTL 到期后会话自己"复活"。</p>
+     *
+     * @param userId 用户标识
+     * @param sessionId 会话标识
+     * @param reason 写入会话行的撤销原因
+     * @param ttl 撤销缓存保留时间
+     */
+    public void revokeSessionAndDeactivate(UUID userId, UUID sessionId, String reason, Duration ttl) {
+        publishRevocations(userId, List.of(sessionId), ttl);
+        writer.persistRevocationAndDeactivate(userId, sessionId, reason);
+    }
+
+    /**
+     * 在调用方事务中记录一组已撤销会话。
+     *
+     * @param userId 用户标识
+     * @param sessionIds 会话标识集合
+     */
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
+    public void recordRevocations(UUID userId, Collection<UUID> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return;
+        }
+        repository.saveAll(entities(userId, sessionIds));
+    }
+
+    /**
+     * 发布已提交的会话撤销结果，使其可被安全链即时判定。
+     *
+     * @param userId 用户标识
+     * @param sessionIds 会话标识集合
+     * @param ttl 撤销缓存保留时间
+     */
+    public void publishRevocations(UUID userId, Collection<UUID> sessionIds, Duration ttl) {
+        cache.markRevoked(userId, sessionIds, ttl);
+    }
+
+    /**
+     * 记录访问令牌截止时间：早于或等于该时间签发的访问令牌立即失效。
+     *
+     * <p>用于权限变更保留当前会话的场景，避免旧 JWT 中的高权限声明在剩余
+     * 有效期内继续生效。数据库列是权威兜底，Redis 只是快速通道；两步都写，
+     * 缓存丢失时仍能拦截旧权限令牌。</p>
+     *
+     * @param userId 用户标识
+     * @param cutoff 截止时间
+     */
+    public void invalidateAccessTokensBefore(UUID userId, Instant cutoff) {
+        if (userId == null || cutoff == null) {
+            return;
+        }
+        Duration ttl = accessTokenTtl();
+        // 数据库列是权威兜底，必须先在独立事务中提交；Redis 异常不得回滚它。
+        writer.persistAccessCutoff(userId, cutoff);
+        try {
+            cache.markAccessTokenCutoff(userId, cutoff, ttl);
+        } catch (RuntimeException exception) {
+            log.warn("Redis 访问令牌截止时间缓存写入失败，由数据库权威列兜底: userId={}", userId, exception);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isTokenStale(UUID userId, Instant issuedAt) {
+        if (issuedAt == null) {
+            return true;
+        }
+        Optional<Instant> cutoff = cache.accessTokenCutoff(userId);
+        if (cutoff.isEmpty()) {
+            cutoff = loadDatabaseCutoff(userId);
+        }
+        // 同一秒内签发的令牌必须被视为过期：秒级精度下严格小于会让撤权同秒
+        // 签发的旧权限令牌继续有效到自然过期。
+        return cutoff
+                .map(value -> issuedAt.getEpochSecond() <= value.getEpochSecond())
+                .orElse(false);
+    }
+
+    private Optional<Instant> loadDatabaseCutoff(UUID userId) {
+        try {
+            Optional<Instant> cutoff = authUserRepository.findAccessCutoffAt(userId);
+            cutoff.ifPresent(value -> cache.markAccessTokenCutoff(userId, value, accessTokenTtl()));
+            return cutoff;
+        } catch (RuntimeException exception) {
+            // 缓存与数据库同时不可用属于极端故障：放行会让旧权限令牌继续生效，
+            // 因此这里与 isRevoked 一致按已过期处理。
+            log.error("访问令牌截止时间查询失败，拒绝当前令牌: userId={}", userId, exception);
+            return Optional.of(Instant.MAX);
+        }
+    }
+
+    private Duration accessTokenTtl() {
+        Duration ttl = authenticationTokenPolicy.accessTokenTtl();
+        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            return DEFAULT_ACCESS_TOKEN_TTL;
+        }
+        return ttl;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isRevoked(UUID userId, UUID sessionId) {
+        Optional<Boolean> cached = cache.checkRevoked(userId, sessionId);
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+        try {
+            boolean revoked = repository.existsByUserIdAndSessionId(userId, sessionId);
+            if (revoked) {
+                publishRevocations(userId, List.of(sessionId), DEFAULT_REVOCATION_TTL);
+            } else {
+                // 未命中黑名单不等于「确认未撤销」：不写这条短期判定的话，占绝大多数的正常
+                // 请求每次都要回源数据库，缓存退化成额外的第二次往返。
+                cache.markNotRevoked(userId, sessionId, NOT_REVOKED_TTL);
+            }
+            return revoked;
+        } catch (RuntimeException exception) {
+            log.error("数据库会话撤销查询失败，拒绝当前会话: userId={}", userId, exception);
+            return true;
+        }
+    }
+
+    private List<SessionRevocationEntity> entities(UUID userId, Collection<UUID> sessionIds) {
+        return sessionIds.stream().map(sessionId -> entity(userId, sessionId)).toList();
+    }
+
+    private SessionRevocationEntity entity(UUID userId, UUID sessionId) {
+        return new SessionRevocationEntity(null, userId, sessionId, null);
+    }
+}

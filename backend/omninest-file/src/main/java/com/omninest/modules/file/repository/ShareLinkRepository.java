@@ -1,0 +1,92 @@
+package com.omninest.modules.file.repository;
+
+import com.omninest.modules.file.domain.ShareLink;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
+    List<ShareLink> findByOwnerUserIdAndDisabledAtIsNullOrderByCreatedAtDesc(UUID ownerUserId);
+
+    @Query("""
+            select s from ShareLink s
+            where s.ownerUserId = :ownerUserId and s.disabledAt is null
+            order by s.createdAt desc
+            """)
+    Page<ShareLink> findActiveByOwnerPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable);
+
+    /**
+     * 分页查询全站未撤销的分享链接，供管理端治理使用。
+     *
+     * @param pageable 分页参数
+     * @return 分享链接分页
+     */
+    @Query("""
+            select s from ShareLink s
+            where s.disabledAt is null
+            order by s.createdAt desc
+            """)
+    Page<ShareLink> findAllActivePage(Pageable pageable);
+
+    List<ShareLink> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
+
+    Optional<ShareLink> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+
+    List<ShareLink> findByOwnerUserIdAndResourceIdIn(UUID ownerUserId, Collection<UUID> resourceIds);
+
+    /**
+     * 查询一批资源上的全部分享链接（含已停用），用于物理删除后的彻底清理。
+     */
+    List<ShareLink> findByResourceIdIn(Collection<UUID> resourceIds);
+
+    Optional<ShareLink> findByTokenHash(String tokenHash);
+
+    List<ShareLink> findByResourceIdAndDisabledAtIsNull(UUID resourceId);
+
+    List<ShareLink> findByResourceIdInAndDisabledAtIsNull(Collection<UUID> resourceIds);
+
+    /**
+     * 批量禁用指定资源的所有分享链接。
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ShareLink s SET s.disabledAt = :now WHERE s.resourceId = :resourceId AND s.disabledAt IS NULL")
+    void disableByResourceId(@Param("resourceId") UUID resourceId, @Param("now") Instant now);
+
+    /**
+     * 一次禁用一批资源上的所有有效分享链接。
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ShareLink s SET s.disabledAt = :now "
+            + "WHERE s.resourceId IN :resourceIds AND s.disabledAt IS NULL")
+    int disableByResourceIdIn(@Param("resourceIds") Collection<UUID> resourceIds, @Param("now") Instant now);
+
+    /**
+     * 在链接仍有效且未达到上限时原子消费一次访问次数。
+     *
+     * @param shareId 分享链接 ID
+     * @param now 当前时间
+     * @return 成功消费时为 1，否则为 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ShareLink s
+            SET s.accessCount = s.accessCount + 1,
+                s.updatedAt = :now,
+                s.version = s.version + 1
+            WHERE s.id = :shareId
+              AND s.disabledAt IS NULL
+              AND (s.expiresAt IS NULL OR s.expiresAt > :now)
+              AND (s.maxAccessCount IS NULL OR s.accessCount < s.maxAccessCount)
+            """)
+    int consumeAccess(@Param("shareId") UUID shareId, @Param("now") Instant now);
+}

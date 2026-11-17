@@ -1,0 +1,277 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/utils/lenient_uri_decode.dart';
+import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_chapter_end_card.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
+import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_return_to_progress_control.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
+
+part 'reader_view_page_builders_schedule.dart';
+part 'reader_view_page_builders_content.dart';
+part 'reader_view_page_builders_links.dart';
+part 'reader_view_page_builders_restore.dart';
+part 'reader_view_page_builders_return.dart';
+part 'reader_view_page_builders_callbacks.dart';
+
+/// reader_view_page.dart 的构建方法 mixin。
+///
+/// 通过 getter/setter 访问 State 字段，避免私有成员访问限制。
+mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
+  /// 扩展方法使用的状态更新入口：mounted 检查后调用 setState。
+  void _updateState(VoidCallback update) {
+    if (mounted) {
+      setState(update);
+    }
+  }
+
+  bool _readerRebuildScheduled = false;
+  bool _viewportUpdateScheduled = false;
+  Size? _pendingViewportSize;
+  bool _pageNavigatorWarmupScheduled = false;
+  String? _pageCountWarmupChapterId;
+  bool _scrollRestoreScheduled = false;
+  bool _pageRestoreScheduled = false;
+  ReaderProgressSnapshot? _pendingProgressSnapshot;
+  bool _progressSnapshotApplyScheduled = false;
+
+  // ── State 字段访问器（由 State 实现） ──
+  ReaderContentLoader? get contentLoader;
+  ReaderPositionTracker get positionTracker;
+  ScrollController get scrollController;
+  ScrollRestore get restore;
+  ReaderViewSettings get settings;
+  String get currentChapterId;
+  bool get isPageMode;
+  int get pageModePage;
+  set pageModePage(int value);
+
+  /// 当前页是否已加书签（由 library actions mixin 维护），页角缎带用它。
+  bool get isBookmarked;
+  ValueNotifier<int> get pageCountNotifier;
+  bool get isRestoringProgress;
+  set isRestoringProgress(bool value);
+  DateTime get restoreSilenceUntil;
+  set restoreSilenceUntil(DateTime value);
+  double get scrollProgress;
+  set scrollProgress(double value);
+
+  /// 全书进度（0..1），未知时为 null；章末卡片用它写位次行。
+  double? get lastKnownBookProgress;
+  double? get pendingChapterProgress;
+  set pendingChapterProgress(double? value);
+  int? get pendingRestoreCharOffset;
+  set pendingRestoreCharOffset(int? value);
+  DateTime get lastPointerDownTime;
+  set lastPointerDownTime(DateTime value);
+  Size? get pageViewportSize;
+  set pageViewportSize(Size? value);
+  bool get showReturnControl;
+  bool get showControls;
+  bool get showRemoteProgressCue;
+  ReaderProgressSnapshot? get remoteProgressCandidate;
+  bool get modeSwitchInProgress;
+  set modeSwitchInProgress(bool value);
+  int? get modeSwitchAnchor;
+  set modeSwitchAnchor(int? value);
+  int get restoreTargetCharOffset;
+  set restoreTargetCharOffset(int value);
+  bool get isSwitchingChapter;
+  bool get isLoadingChapter;
+  bool get selectionActive;
+  void registerReaderSelectionKeyActions(ReaderSelectionKeyActions? actions);
+  ReaderChapterLoadCoordinator get chapterLoadCoordinator;
+  ReaderPageLocator get pageLocator;
+  dynamic get annotationHandler;
+  String get itemId;
+  ReaderPageTurnController get pageTurnController;
+
+  // ── 跨 mixin 方法（由 State 实现） ──
+  void dismissReturnSnackBar();
+  void updateProgressFromPage();
+  void tryNavigateChapter(int offset);
+  void toggleControls();
+  void returnToOriginalProgress();
+  void jumpToRemoteProgress();
+  void ensureScrollMetricsFresh();
+  void onViewportChanged(Size newSize);
+  Future<int?> findPageByCharOffset(ChapterData chapterData, int charOffset);
+  Future<void> switchToChapter(
+    String chapterId, {
+    required ReaderChapterNavigationIntent intent,
+  });
+  void scheduleLocalProgressSave({
+    required double chapterProgress,
+    required int charOffset,
+    required String mode,
+  });
+  void onReaderSelectionActive(bool active);
+  DateTime? get lastAppliedProgressAt;
+  void applyProgressSnapshot(ReaderProgressSnapshot snapshot, {bool force});
+  void prefetchNextChapterAtBoundary(int pageIndex);
+
+  /// 反向章界回退：用户在窗口顶部继续上滚时回退到上一章末尾，
+  /// 由 ReaderViewPageInteractionMixin 实现并在滚动内容越界时调用。
+  void handleBackwardChapterOverscroll();
+
+  // ── 页面尺寸 ──
+
+  double computePageWidth() {
+    final viewport = pageViewportSize;
+    final size =
+        viewport != null && viewport.width.isFinite
+            ? viewport
+            : MediaQuery.sizeOf(context);
+    return ReaderControlLayout.resolve(
+      viewport: size,
+      fontSize: settings.fontSize,
+      textScale: MediaQuery.textScalerOf(context).scale(1),
+    ).textColumnWidth;
+  }
+
+  double computePageHeight() {
+    final chromeLayout = ReaderChromeLayout.resolve(
+      immersiveMode: settings.immersiveMode,
+      isPageMode: isPageMode,
+    );
+    final viewport = pageViewportSize;
+    if (viewport != null && viewport.height.isFinite) {
+      final available = viewport.height - chromeLayout.chapterHeaderReserve - 1;
+      return available > 1 ? available : 1;
+    }
+    final size = MediaQuery.sizeOf(context);
+    final topInset =
+        settings.immersiveMode ? 0.0 : MediaQuery.viewPaddingOf(context).top;
+    final available =
+        size.height - topInset - chromeLayout.viewportVerticalReserve;
+    final contentHeight = available - chromeLayout.chapterHeaderReserve - 1;
+    return contentHeight > 1 ? contentHeight : 1;
+  }
+
+  double get viewportAnchorY {
+    final size = MediaQuery.sizeOf(context);
+    final topInset =
+        settings.immersiveMode ? 0.0 : MediaQuery.viewPaddingOf(context).top;
+    final chromeLayout = ReaderChromeLayout.resolve(
+      immersiveMode: settings.immersiveMode,
+      isPageMode: isPageMode,
+    );
+    return (size.height - topInset - chromeLayout.viewportVerticalReserve) *
+        0.25;
+  }
+
+  int computePageCharOffset(int pageIndex) {
+    final pageWidth = computePageWidth();
+    final pageHeight = computePageHeight();
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final slice = contentLoader?.computePage(
+      chapterId: currentChapterId,
+      settings: settings,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+      pageIndex: pageIndex,
+      textScale: textScale,
+    );
+    if (slice != null) return slice.startCharOffset;
+    // 章末收页没有正文切片，它的位置就是本章末尾。退回 0 会让读者在章末合上书、
+    // 再开时从章首读起——判据收在 readerPageCharOffset，进度与恢复共用同一条。
+    final data = contentLoader?.get(currentChapterId, settings);
+    if (data == null) return 0;
+    final navigator = data.getOrCreatePageNavigator(
+      pageWidth,
+      pageHeight,
+      settings,
+      textScale: textScale,
+    );
+    return readerPageCharOffset(
+      slice: slice,
+      pageIndex: pageIndex,
+      contentPages: navigator.readablePageCount,
+      fullyPaginated: navigator.isFullyPaginated,
+      totalChars: data.totalChars,
+    );
+  }
+
+  PageTurnMode parsePageTurnMode(String mode) {
+    return switch (mode) {
+      'cover' => PageTurnMode.cover,
+      'fade' => PageTurnMode.fade,
+      _ => PageTurnMode.slide,
+    };
+  }
+
+  int? resolveAnchorCharOffset(String chapterId, String? anchor) {
+    if (anchor == null || anchor.isEmpty) {
+      return 0;
+    }
+    final data = contentLoader?.getByChapterId(chapterId);
+    final htmlContent = data?.content.content;
+    if (htmlContent == null || htmlContent.isEmpty) {
+      return null;
+    }
+    // 首选解析期记下的锚点位置：与块偏移、页区间同一个字符域。
+    final recorded = data!.anchors[anchor];
+    if (recorded != null) {
+      return recorded.clamp(0, data.totalChars);
+    }
+    final anchorOffset = _findAnchorHtmlOffset(htmlContent, anchor);
+    if (anchorOffset == null) {
+      return null;
+    }
+    // 兜底：锚点挂在解析期没有落到的位置（例如被跳过的非正文子树里）时，
+    // 只能按纯文本前缀反推。这一份与字符域不同口径（实体、`<title>`、标签空白
+    // 都不在块的字符计数里），所以只在查不到记录时才用。
+    final prefix = htmlContent.substring(0, anchorOffset);
+    final plainPrefix = stripHtml(prefix);
+    return plainPrefix.length.clamp(0, data.totalChars).toInt();
+  }
+
+  int? _findAnchorHtmlOffset(String html, String anchor) {
+    final escaped = RegExp.escape(anchor);
+    final pattern = RegExp(
+      '\\s(?:id|name)\\s*=\\s*["\\\']$escaped["\\\']',
+      caseSensitive: false,
+    );
+    final match = pattern.firstMatch(html);
+    return match?.start;
+  }
+}
+
+/// 本次物理页回调是否只是模式切换落地的回声。
+///
+/// 落地页的页首偏移比冻结锚点更浅，按它记账会把刚切完模式的位置凭空退回
+/// 页首；换到别的页面才说明用户真实翻过页。单击只切换工具栏可见性，不再
+/// 参与该判定。
+bool isModeSwitchLandingEcho({
+  required bool anchorActive,
+  required int changedPageIndex,
+  required int landedPageIndex,
+}) {
+  return anchorActive && changedPageIndex == landedPageIndex;
+}

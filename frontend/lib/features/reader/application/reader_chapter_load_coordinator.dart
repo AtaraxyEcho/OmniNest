@@ -1,0 +1,110 @@
+/// 章节内容加载协调器。
+///
+/// 统一维护加载代次、当前请求与失败章节，避免过期异步请求覆盖当前章节。
+class ReaderChapterLoadCoordinator {
+  int _generation = 0;
+  String? _loadingChapterId;
+  String? _failedChapterId;
+  ReaderChapterFailure? _failedReason;
+
+  /// 当前是否正在加载章节内容。
+  bool get isLoading => _loadingChapterId != null;
+
+  /// 当前正在加载的章节 ID。
+  String? get loadingChapterId => _loadingChapterId;
+
+  /// 最近一次失败的原因；旧路径未标注原因时为 null。
+  ReaderChapterFailure? get failureReason => _failedReason;
+
+  /// 判断指定章节是否处于失败状态。
+  bool hasFailed(String chapterId) => _failedChapterId == chapterId;
+
+  /// 开始加载并返回本次请求代次。
+  int begin(String chapterId) {
+    _generation++;
+    _loadingChapterId = chapterId;
+    _failedChapterId = null;
+    _failedReason = null;
+    return _generation;
+  }
+
+  /// 判断异步结果是否仍属于当前请求。
+  bool isCurrent(int generation, String chapterId) =>
+      generation == _generation && _loadingChapterId == chapterId;
+
+  /// 标记当前请求成功。
+  void succeed(int generation, String chapterId) {
+    if (!isCurrent(generation, chapterId)) {
+      return;
+    }
+    _loadingChapterId = null;
+    _failedChapterId = null;
+    _failedReason = null;
+  }
+
+  /// 标记当前请求失败，并记录可提示给用户的原因。
+  void fail(int generation, String chapterId, {ReaderChapterFailure? reason}) {
+    if (!isCurrent(generation, chapterId)) {
+      return;
+    }
+    _loadingChapterId = null;
+    _failedChapterId = chapterId;
+    _failedReason = reason;
+  }
+
+  /// 清除指定章节的失败状态，允许用户重试。
+  void clearFailure(String chapterId) {
+    if (_failedChapterId == chapterId) {
+      _failedChapterId = null;
+      _failedReason = null;
+    }
+  }
+
+  /// 取消当前请求并使在途结果失效。
+  void cancel() {
+    _generation++;
+    _loadingChapterId = null;
+    _failedChapterId = null;
+    _failedReason = null;
+  }
+
+  /// 请求结果不再被消费（章节已被切走或收养改写）时释放占用。
+  ///
+  /// 仅当代次与章节仍匹配时生效，避免误清后续请求的占用状态。
+  /// 残留的 _loadingChapterId 会让 isLoading 恒真，进而把依赖该状态的
+  /// 输入闸门（如翻页 PagedState.isPaginating）永久锁死。
+  void releaseIfCurrent(int generation, String chapterId) {
+    if (!isCurrent(generation, chapterId)) {
+      return;
+    }
+    cancel();
+  }
+}
+
+/// 章节正文不可用的原因，决定向用户显示哪条可执行提示。
+enum ReaderChapterFailure {
+  /// 服务端派生正文取不到，且本地也没有可读的整本文件：需要联网。
+  needsNetwork,
+
+  /// 服务端与本地切片与清单不一致（偏移漂移或清单超前）：需要重新解析本书。
+  needsReparse,
+
+  /// 条目声明了客户端没有解码能力的字符集（Big5/cp936 等）：重导或转成 UTF-8 才有解。
+  unsupportedEncoding,
+}
+
+/// TXT 单章正文不可用，携带可提示给用户的原因。
+class TxtChapterTextException implements Exception {
+  /// 构造失败；[reason] 为 null 时使用通用加载失败文案，
+  /// 不猜测原因（例如本地文件超限与联网与否无关）。
+  const TxtChapterTextException(this.detail, {this.reason});
+
+  final ReaderChapterFailure? reason;
+
+  /// 诊断信息（不含书名、路径或正文内容）。
+  final String detail;
+
+  @override
+  String toString() =>
+      'TxtChapterTextException(${reason?.name ?? 'unspecified'}): $detail';
+}

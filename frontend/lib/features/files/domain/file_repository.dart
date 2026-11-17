@@ -1,0 +1,291 @@
+import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
+import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/public_share.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
+
+abstract interface class FileRepository {
+  Future<List<FileNode>> listFiles({String? parentId, String? category});
+
+  Future<FileNodePage> listFilesPage({
+    String? parentId,
+    String? category,
+    int page = 0,
+    int size = 10,
+  });
+
+  Future<List<FileNode>> listRecycleBin({String spaceType = 'PERSONAL'});
+
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listRecycleBinPage({
+    String spaceType = 'PERSONAL',
+    int page = 0,
+    int size = 50,
+  });
+
+  Future<List<FileNode>> listRecentFiles();
+
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listRecentFilesPage({int page = 0, int size = 50});
+
+  Future<List<FileNode>> listFavoriteFiles();
+
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listFavoriteFilesPage({int page = 0, int size = 50});
+
+  Future<FileNode> createFolder({String? parentId, required String name});
+
+  Future<FileNode> renameFile({required String fileId, required String name});
+
+  Future<FileNode> moveFile({required String fileId, required String parentId});
+
+  /// 复制文件节点到目标目录（null 表示根目录）。
+  Future<FileNode> copyFile({required String fileId, String? targetParentId});
+
+  /// 查询文件版本历史。
+  Future<List<FileVersion>> listFileVersions(String fileId);
+
+  /// 恢复历史版本为当前内容。
+  Future<FileNode> restoreFileVersion({
+    required String fileId,
+    required String versionId,
+  });
+
+  Future<String> downloadUrl(String fileId);
+
+  /// 探测文件媒体元数据（视频时长/分辨率，图片尺寸）。
+  Future<FileMediaInfo> mediaInfo(String fileId);
+
+  Future<String> loadTextPreview(String fileId);
+
+  Future<void> deleteFile(String fileId);
+
+  Future<FileNode> restoreFile(String fileId);
+
+  /// 永久删除单个回收站文件，返回后端异步任务提交结果。
+  Future<TaskSubmission> purgeFile(String fileId);
+
+  Future<FileNode> addFavorite(String fileId);
+
+  Future<void> removeFavorite(String fileId);
+
+  Future<List<FileNode>> batchDeleteFiles(List<String> fileIds);
+
+  Future<List<FileNode>> batchRestoreFiles(List<String> fileIds);
+
+  /// 批量永久删除回收站文件，返回后端异步任务提交结果。
+  Future<TaskSubmission> batchPurgeFiles(List<String> fileIds);
+
+  Future<List<FileNode>> batchMoveFiles(List<String> fileIds, String parentId);
+
+  Future<List<FileNode>> batchAddFavorites(List<String> fileIds);
+
+  Future<void> batchRemoveFavorites(List<String> fileIds);
+
+  Future<List<SharedFileItem>> listSharedWithMe();
+
+  /// 分页获取共享给我列表：子表页码控件消费。
+  Future<FilesSubPage<SharedFileItem>> listSharedWithMePage({
+    int page = 0,
+    int size = 10,
+  });
+
+  /// 分页浏览定向分享给当前用户的文件夹子树。
+  Future<FilesSubPage<ShareChild>> listSharedFolderChildren({
+    required String shareId,
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  });
+
+  Future<List<FileShareLink>> listMyShares();
+
+  Future<List<FileShareRecipient>> searchShareRecipients(String query);
+
+  /// 分页获取我的分享链接：子表页码控件消费。
+  Future<FilesSubPage<FileShareLink>> listMySharesPage({
+    int page = 0,
+    int size = 10,
+  });
+
+  Future<FileShareLink> createShareLink({
+    required String resourceId,
+    String resourceType,
+    String? password,
+    bool generatePassword,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    bool allowDownloads = true,
+    bool originalQuality = true,
+    bool includeLocation = true,
+    List<String> recipientUserIds = const <String>[],
+  });
+
+  /// 修改分享链接设置；空串与 0 的清除语义见实现侧注释，null 表示保持原值。
+  Future<FileShareLink> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+    bool? allowDownloads,
+    bool? originalQuality,
+    bool? includeLocation,
+  });
+
+  Future<void> revokeShare(String shareId);
+
+  Future<FileSharePreview> previewShare(String token, {String? password});
+
+  Future<void> acceptShare(
+    String token, {
+    String? password,
+    String? targetParentId,
+  });
+
+  Future<FileStorageStats> storageStats();
+
+  Future<FileUploadPolicy> uploadPolicy();
+
+  Future<List<FileUploadQueueItem>> listUploadQueue();
+
+  Future<FilesSubPage<FileUploadQueueItem>> listUploadQueuePage({
+    int page = 0,
+    int size = 10,
+  });
+
+  Future<FileUploadSession> createUploadSession({
+    String? parentId,
+    required String fileName,
+    required int sizeBytes,
+    String? mimeType,
+    String? sha256,
+    int? partSizeBytes,
+    String? spaceType,
+    String? asVersionOfFileId,
+  });
+
+  Future<void> completeUploadPart({
+    required String uploadId,
+    required int partNumber,
+    required String eTag,
+  });
+
+  Future<String> putUploadUrl({
+    required String uploadUrl,
+    required Stream<List<int>> data,
+    required int contentLength,
+    FileUploadCancellationToken? cancellationToken,
+    FileUploadProgressCallback? onProgress,
+  });
+
+  /// 按需拉取单个分片的预签名上传地址。
+  Future<String> getUploadPartUrl({
+    required String uploadId,
+    required int partNumber,
+  });
+
+  Future<FileUploadCompleteResult> completeUploadSession({
+    required String sessionId,
+    String? sha256,
+    String? asVersionOfFileId,
+  });
+
+  Future<void> cancelUploadSession(String uploadId);
+
+  Future<List<ExternalStorageAccount>> listExternalStorages();
+
+  Future<List<ExternalStorageConnector>> listExternalConnectors();
+
+  Future<ExternalStorageAccount> createExternalStorage({
+    required String provider,
+    required String displayName,
+    required String encryptedCredentials,
+  });
+
+  Future<void> disableExternalStorage(String accountId);
+
+  Future<void> deleteExternalStorage(String accountId);
+
+  Future<ExternalStorageAccount> updateExternalStorage({
+    required String accountId,
+    required String displayName,
+    required String encryptedCredentials,
+  });
+
+  Future<List<ExternalFileItem>> browseExternalStorage(
+    String accountId,
+    String path,
+  );
+
+  /// 分页浏览外部存储目录：子表页码控件消费。
+  Future<({List<ExternalFileItem> items, FilesSubPageMeta meta})>
+  browseExternalStoragePage(
+    String accountId,
+    String path, {
+    int page = 0,
+    int size = 10,
+  });
+
+  Future<ImportTask> createImportTask(
+    String accountId, {
+    required String sourcePath,
+    required String sourceKind,
+    String? targetParentId,
+    String? spaceType,
+  });
+
+  Future<List<ImportTask>> listImportTasks();
+
+  Future<FilesSubPage<ImportTask>> listImportTasksPage({
+    int page = 0,
+    int size = 10,
+  });
+
+  Future<void> cancelImportTask(String taskId);
+
+  /// 获取外部存储空间用量
+  Future<ExternalSpaceUsage> getExternalStorageSpace(String accountId);
+
+  /// 测试外部存储连通性
+  Future<void> testExternalStorageConnection(String accountId);
+
+  /// 开始 OAuth 授权
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  });
+
+  // ============================================================
+  // 共享空间相关方法
+  // ============================================================
+
+  /// 浏览共享空间目录
+  Future<List<FileNode>> listSharedSpaceFiles({String? parentId});
+
+  Future<FileNodePage> listSharedSpaceFilesPage({
+    String? parentId,
+    int page = 0,
+    int size = 10,
+  });
+
+  /// 在共享空间创建文件夹
+  Future<FileNode> createSharedFolder({String? parentId, required String name});
+
+  Future<FileNode> renameSharedFile({
+    required String fileId,
+    required String name,
+  });
+
+  /// 移动文件到共享空间
+  Future<void> moveToSharedSpace(String fileId);
+
+  /// 从共享空间移回个人空间
+  Future<void> moveToPersonalSpace(String fileId);
+
+  /// 删除共享空间文件
+  Future<void> deleteSharedFile(String fileId);
+
+  /// 获取共享空间使用情况
+  Future<SharedSpaceUsage> getSharedSpaceUsage();
+}

@@ -1,0 +1,714 @@
+import 'dart:async';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/storage/local_database_provider.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_local_cache.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
+import 'package:omninest/core/log/dev_log.dart';
+
+final appBackdropRepositoryProvider = Provider<AppBackdropRepository>((ref) {
+  return AppBackdropRepository(ref.watch(localDatabaseProvider));
+});
+
+final appBackdropLocalVideoCacheProvider = Provider<AppBackdropLocalVideoCache>(
+  (ref) {
+    final cache = AppBackdropLocalVideoCache();
+    ref.onDispose(cache.dispose);
+    // 退出登录/切换账号后同一设备的原账号壁纸视频必须清掉，否则下一个账号能看到残留文件。
+    ref.listen(authSessionProvider, (previous, next) {
+      final wasAuthenticated = previous?.value?.isAuthenticated ?? false;
+      final isAuthenticated = next.value?.isAuthenticated ?? false;
+      if (wasAuthenticated && !isAuthenticated) {
+        unawaited(cache.evictAll());
+      }
+    });
+    return cache;
+  },
+);
+
+final appBackdropApiProvider = Provider<BackdropApi>((ref) {
+  return BackdropApi(ref.watch(apiClientProvider));
+});
+
+final appBackdropFilePickerProvider = Provider<BackdropFilePicker>((ref) {
+  return const DefaultBackdropFilePicker();
+});
+
+final appBackdropBundledAssetInstallerProvider =
+    Provider<AppBackdropBundledAssetInstaller>((ref) {
+      return AppBackdropBundledAssetInstaller();
+    });
+
+final appBackdropSelectionTargetProvider = Provider<AppBackdropSelectionTarget>(
+  (ref) =>
+      isMobilePlatform
+          ? AppBackdropSelectionTarget.mobile
+          : AppBackdropSelectionTarget.desktop,
+);
+
+/// 需要映射专属文案、不自动重试的业务错误码。
+const _nonTransientUploadCodes = {
+  '8002',
+  '8003',
+  '8004',
+  '8005',
+  '8006',
+  '8007',
+  '429',
+};
+
+/// 后端 ErrorCode.BACKDROP_NOT_FOUND:删除时视为"服务端已删除"幂等通过。
+const _backdropNotFoundCode = '8001';
+
+final appBackdropControllerProvider =
+    AsyncNotifierProvider<AppBackdropController, AppBackdropState>(
+      AppBackdropController.new,
+    );
+
+/// 应用背景库控制器。
+///
+/// 服务端素材库与用户偏好(scope=backdrop)是事实来源,drift 行为离线缓存与
+/// 内置壁纸登记;本机文件导入链路已退役,素材统一经服务端流转。
+class AppBackdropController extends AsyncNotifier<AppBackdropState> {
+  /// 本地 server 壁纸缓存属于上一次构建的登录账号；换号或冷启动首次登录都要清掉。
+  static String? _serverAssetsOwner;
+
+  /// 签名 URL 过期时间(内存态,避免为过期检测扩大 drift schema)。
+  final Map<String, DateTime> _urlExpiresAt = <String, DateTime>{};
+
+  /// 视频壁纸本机缓存路径(assetId → 本地文件)。
+  final Map<String, String> _localVideoPaths = <String, String>{};
+
+  static const Duration _urlRefreshLead = Duration(minutes: 2);
+  Future<void>? _settingsMutation;
+
+  static const Duration _processingPollInterval = Duration(seconds: 3);
+  static const Duration _processingPollTimeout = Duration(minutes: 10);
+  Timer? _processingPollTimer;
+  DateTime? _processingPollDeadline;
+
+  /// 轮询由 application 持有：上传受理后的安全扫描（视频还叠加缩略图/转码）
+  /// 要在服务端跑完才转 READY，桌面面板与移动抽屉都只展示状态、各自不再起定时器。
+  @override
+  set state(AsyncValue<AppBackdropState> value) {
+    super.state = value;
+    _syncProcessingPoll();
+  }
+
+  /// 存在处理中素材就按固定间隔回读，全部到终态、超过上限或控制器释放即停。
+  void _syncProcessingPoll() {
+    final hasProcessing =
+        state.asData?.value.backdrops.any(
+          (backdrop) => backdrop.status == AppBackdropAssetStatus.processing,
+        ) ??
+        false;
+    if (!hasProcessing) {
+      _stopProcessingPoll();
+      return;
+    }
+    final deadline =
+        _processingPollDeadline ??= DateTime.now().add(_processingPollTimeout);
+    if (DateTime.now().isAfter(deadline)) {
+      _stopProcessingPoll();
+      return;
+    }
+    _processingPollTimer ??= Timer.periodic(_processingPollInterval, (_) {
+      unawaited(syncFromServer());
+    });
+  }
+
+  void _stopProcessingPoll() {
+    _processingPollTimer?.cancel();
+    _processingPollTimer = null;
+    _processingPollDeadline = null;
+  }
+
+  @override
+  Future<AppBackdropState> build() async {
+    ref.onDispose(_stopProcessingPoll);
+    final repository = ref.watch(appBackdropRepositoryProvider);
+    ref.watch(appBackdropSelectionTargetProvider);
+    // 只订阅用户身份：selectAsync 等首帧会话恢复完成，之后仅在 user.id
+    // 变化时重建；同账号 token 静默续期发布的 expiresAt 不再触发整树重建。
+    final userId = await ref.watch(
+      authSessionProvider.selectAsync((session) => session.user?.id),
+    );
+    if (userId != null && _serverAssetsOwner != userId) {
+      _serverAssetsOwner = userId;
+      await repository.clearBackdrops().catchError((Object _) {
+        // 本地缓存清理失败不应阻断壁纸设置加载。
+      });
+    }
+    await _registerBundledBackdrop(repository);
+    // read 而非 watch:偏好 save 会更新 state,若 watch(future) 会导致本控制器
+    // 在每次选中/启用后整树重建 → 反复 refresh → 视频会话被打断。
+    await ref.read(backdropPreferencesProvider.future);
+    final canUseServerLibrary =
+        ref.read(userCapabilitiesProvider).canUseBackdropLibrary;
+    if (userId != null && canUseServerLibrary) {
+      await refreshServerAssets();
+    }
+    var loaded = await _loadCurrentState(repository);
+    if (!loaded.hasActiveBackdrop) {
+      AppBackdropAsset? bundled;
+      for (final backdrop in loaded.backdrops) {
+        if (backdrop.isBundled && backdrop.isSelectable) {
+          bundled = backdrop;
+          break;
+        }
+      }
+      if (bundled != null) {
+        final selectedId = loaded.settings.selectedBackdropId;
+        AppBackdropAsset? selected;
+        if (selectedId != null) {
+          for (final backdrop in loaded.backdrops) {
+            if (backdrop.id == selectedId) {
+              selected = backdrop;
+              break;
+            }
+          }
+        }
+        final needBundledFallback = selected == null || !selected.isSelectable;
+        // 选中了内置壁纸但被关闭时,保持用户关闭意图;
+        // 无选中或选中不可用时,回落内置壁纸并启用,保证启动即有背景。
+        if (needBundledFallback) {
+          final next = loaded.settings.copyWith(
+            enabled: true,
+            selectedBackdropId: bundled.id,
+            desktopBackdropId:
+                loaded.settings.separateDeviceBackdrops
+                    ? bundled.id
+                    : loaded.settings.desktopBackdropId,
+            mobileBackdropId:
+                loaded.settings.separateDeviceBackdrops
+                    ? bundled.id
+                    : loaded.settings.mobileBackdropId,
+          );
+          await repository.saveSettings(next);
+          loaded = await _loadCurrentState(repository);
+        }
+      } else {}
+    }
+    return loaded;
+  }
+
+  /// 拉取服务端素材并写入本地缓存;未登录(如安装引导阶段)与离线时保留缓存内容。
+  Future<void> refreshServerAssets() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    final repository = ref.read(appBackdropRepositoryProvider);
+    try {
+      final assets = await ref.read(appBackdropApiProvider).list();
+      for (final asset in assets) {
+        final expiresAt = asset.contentUrlExpiresAt;
+        if (expiresAt != null) {
+          _urlExpiresAt[asset.id] = expiresAt;
+        } else {
+          _urlExpiresAt.remove(asset.id);
+        }
+      }
+      await repository.upsertServerAssets(assets);
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        devLog('背景库服务端列表同步失败(可能离线): $error');
+      }
+    }
+  }
+
+  /// 无条件从服务端同步列表并刷新当前 state。
+  ///
+  /// 面板打开与"处理中"素材轮询使用:上传受理后素材要在服务端完成安全扫描
+  /// (视频还叠加缩略图/转码)才转 READY,必须周期性回读才能看到状态流转;
+  /// 离线或失败时静默保留上次已加载内容。
+  Future<void> syncFromServer() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    await refreshServerAssets();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AsyncData(
+      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
+  }
+
+  /// 签名 URL 可能已过期或即将过期时刷新服务端列表。
+  ///
+  /// [force] 为 true 时无条件刷新(如视频打开失败后的补偿)。
+  Future<void> ensureFreshServerUrls({bool force = false}) async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    if (!force && !_serverUrlsNeedRefresh()) {
+      return;
+    }
+    await refreshServerAssets();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(refreshed);
+  }
+
+  bool _serverUrlsNeedRefresh() {
+    final current = state.asData?.value;
+    final hasServerAssets =
+        current?.backdrops.any(
+          (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+        ) ??
+        false;
+    if (!hasServerAssets && _urlExpiresAt.isEmpty) {
+      // 仅内置壁纸或空库,无需刷新签名 URL。
+      return false;
+    }
+    if (_urlExpiresAt.isEmpty) {
+      // 本地有服务端缓存但内存无过期信息(冷启动),视为需要刷新。
+      return true;
+    }
+    final threshold = DateTime.now().add(_urlRefreshLead);
+    return _urlExpiresAt.values.any(
+      (expiresAt) => !expiresAt.isAfter(threshold),
+    );
+  }
+
+  /// 唤起文件选择并逐个上传。
+  /// 网络类失败自动重试一次;全部结束后刷新列表并记录失败条目。
+  Future<void> addBackdropFiles() async {
+    if (!await _canStartUpload()) {
+      return;
+    }
+    final picked = await ref.read(appBackdropFilePickerProvider).pick();
+    await _uploadBatch(picked, const []);
+  }
+
+  /// 上传系统拖放进来的文件。
+  /// 扩展名不受支持的条目直接记为不支持格式,不发起上传请求。
+  Future<void> addDroppedBackdropFiles(List<XFile> dropped) async {
+    if (dropped.isEmpty) {
+      return;
+    }
+    if (!await _canStartUpload()) {
+      return;
+    }
+    final accepted = <BackdropPickedFile>[];
+    final rejected = <BackdropUploadFailure>[];
+    for (final file in dropped) {
+      if (!isBackdropAllowedFileName(file.name)) {
+        rejected.add(BackdropUploadFailure(title: file.name, code: '8002'));
+        continue;
+      }
+      try {
+        accepted.add(await BackdropPickedFile.fromDroppedFile(file));
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          devLog('背景素材拖放读取失败: ${file.name} $error');
+        }
+        rejected.add(BackdropUploadFailure(title: file.name, code: 'UNKNOWN'));
+      }
+    }
+    await _uploadBatch(accepted, rejected);
+  }
+
+  Future<bool> _canStartUpload() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return false;
+    }
+    final current = state.asData?.value;
+    return current?.uploading != true;
+  }
+
+  Future<void> _uploadBatch(
+    List<BackdropPickedFile> picked,
+    List<BackdropUploadFailure> knownFailures,
+  ) async {
+    if (picked.isEmpty && knownFailures.isEmpty) {
+      return;
+    }
+    state = AsyncData(
+      (state.asData?.value ??
+              await _loadCurrentState(ref.read(appBackdropRepositoryProvider)))
+          .copyWith(uploading: true, clearUploadFailures: true),
+    );
+    final failures = <BackdropUploadFailure>[...knownFailures];
+    for (final file in picked) {
+      try {
+        final asset = await _uploadWithRetry(file);
+        await ref.read(appBackdropRepositoryProvider).upsertServerAssets([
+          asset,
+        ]);
+      } on AppException catch (error) {
+        if (kDebugMode) {
+          devLog('背景素材上传失败: ${file.name} code=${error.code}');
+        }
+        failures.add(BackdropUploadFailure(title: file.name, code: error.code));
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          devLog('背景素材上传异常: ${file.name} $error');
+        }
+        failures.add(BackdropUploadFailure(title: file.name, code: 'UNKNOWN'));
+      }
+    }
+    await refreshServerAssets();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(
+      refreshed.copyWith(uploading: false, failedUploads: failures),
+    );
+  }
+
+  Future<BackdropServerAsset> _uploadWithRetry(BackdropPickedFile file) async {
+    try {
+      return await ref.read(appBackdropApiProvider).upload(file);
+    } on AppException catch (error) {
+      if (_nonTransientUploadCodes.contains(error.code)) {
+        rethrow;
+      }
+      // 网络类失败自动重试一次。
+      return await ref.read(appBackdropApiProvider).upload(file);
+    }
+  }
+
+  /// 选择背景素材;设置经由偏好同步(服务端事实来源)落盘。
+  /// 首次选中时若背景未启用,自动打开;先写本地镜像再同步,避免冲突导致白屏。
+  Future<void> selectBackdrop(String id) async {
+    var current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    var selected = current.backdrops.where((backdrop) => backdrop.id == id);
+    if (selected.isEmpty || !selected.single.isSelectable) {
+      await ensureFreshServerUrls(force: true);
+      current =
+          state.asData?.value ??
+          await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+      selected = current.backdrops.where((b) => b.id == id);
+      if (selected.isEmpty || !selected.single.isSelectable) {
+        return;
+      }
+    }
+    var updated = current.settings.selectBackdropFor(
+      current.selectionTarget,
+      id,
+    );
+    if (!updated.enabled) {
+      updated = updated.copyWith(enabled: true);
+    }
+    // 非设备分离时同步三槽位,避免 desktop/mobile 残留旧 ID 导致归一化来回切。
+    if (!updated.separateDeviceBackdrops) {
+      updated = updated.copyWith(
+        selectedBackdropId: id,
+        desktopBackdropId: id,
+        mobileBackdropId: id,
+      );
+    }
+    await _applySettings(updated);
+    final after =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    if (after.settings.selectedBackdropId != id || !after.hasActiveBackdrop) {
+      await _applySettings(updated);
+    }
+  }
+
+  /// 设置桌面端和移动端是否分别保存背景选择。
+  Future<void> setDeviceSeparation(bool separate) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    final updated = current.settings.withDeviceSeparation(
+      separate,
+      current.selectionTarget,
+    );
+    await _persistSettings(updated);
+  }
+
+  /// 启用或关闭背景。
+  Future<void> setEnabled(bool enabled) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    final nextEnabled = enabled && current.selectedBackdrop != null;
+    await _persistSettings(current.settings.copyWith(enabled: nextEnabled));
+  }
+
+  /// 更新背景适配方式。
+  Future<void> setFit(AppBackdropFit fit) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(fit: fit));
+  }
+
+  /// 更新 cover/fill 对齐锚点。
+  Future<void> setAlignment(AppBackdropAlignment alignment) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(alignment: alignment));
+  }
+
+  /// 更新背景暗化强度。
+  Future<void> setDimAmount(double value) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(dimAmount: value));
+  }
+
+  /// 更新背景模糊强度。
+  Future<void> setBlurAmount(double value) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(blurAmount: value));
+  }
+
+  /// 更新视频静音设置。
+  Future<void> setVideoMuted(bool muted) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(videoMuted: muted));
+  }
+
+  /// 移除背景素材;服务端素材先调删除接口,失败则保持本地现状。
+  ///
+  /// 服务端返回"素材不存在"(BACKDROP_NOT_FOUND, 8001, 常见于上次删除的
+  /// 响应丢失)时按已删除幂等处理,继续清理本地;否则重试会永远失败。
+  Future<void> removeBackdrop(String id) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    final selected = current.backdrops.where((backdrop) => backdrop.id == id);
+    if (selected.isEmpty) {
+      return;
+    }
+    if (selected.any((backdrop) => backdrop.isBundled)) {
+      return;
+    }
+    final isServer = selected.any(
+      (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+    );
+    if (isServer) {
+      try {
+        await ref.read(appBackdropApiProvider).delete(id);
+      } on AppException catch (error) {
+        if (error.code != _backdropNotFoundCode) {
+          await _markDeleteFailed();
+          return;
+        }
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          devLog('背景素材删除失败,保留本地缓存: $error');
+        }
+        await _markDeleteFailed();
+        return;
+      }
+      _urlExpiresAt.remove(id);
+    }
+    await ref.read(appBackdropRepositoryProvider).removeBackdrop(id);
+    await ref.read(appBackdropLocalVideoCacheProvider).evict(id);
+    _localVideoPaths.remove(id);
+    state = AsyncData(
+      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
+  }
+
+  Future<void> _markDeleteFailed() async {
+    final failed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(
+      failed.copyWith(message: AppBackdropMessage.deleteFailed),
+    );
+  }
+
+  /// 清空服务端背景素材库并同步清理本地缓存;内置壁纸与选择保留。
+  /// 部分失败时仍清理已成功条目,并在状态中记录 removed/failed。
+  Future<void> clearBackdrops() async {
+    final session = await ref.read(authSessionProvider.future);
+    var removed = 0;
+    var failed = 0;
+    if (session.isAuthenticated) {
+      try {
+        final result = await ref.read(appBackdropApiProvider).deleteAll();
+        removed = result.deleted;
+        failed = result.failed;
+        if (failed == 0) {
+          _urlExpiresAt.clear();
+        } else {
+          await refreshServerAssets();
+        }
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          devLog('背景库服务端清空失败,保留本地现状: $error');
+        }
+        final current = await _loadCurrentState(
+          ref.read(appBackdropRepositoryProvider),
+        );
+        state = AsyncData(
+          current.copyWith(message: AppBackdropMessage.deleteFailed),
+        );
+        return;
+      }
+    }
+    await ref.read(appBackdropRepositoryProvider).clearBackdrops();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(
+      refreshed.copyWith(
+        clearResult: BackdropClearResult(removed: removed, failed: failed),
+        message: failed > 0 ? AppBackdropMessage.deleteFailed : null,
+      ),
+    );
+  }
+
+  Future<void> _registerBundledBackdrop(
+    AppBackdropRepository repository,
+  ) async {
+    try {
+      final bundledAsset = await ref
+          .read(appBackdropBundledAssetInstallerProvider)
+          .install();
+      if (bundledAsset != null) {
+        await repository.ensureBundledBackdrop(bundledAsset);
+      }
+    } on Object catch (error, stackTrace) {
+      if (kDebugMode) {
+        devLog('应用内置背景注册失败: $error');
+        devLogStack(stackTrace: stackTrace);
+      }
+    }
+  }
+
+  /// 清空本机视频壁纸缓存。不立即重新下载,避免「清空后马上占满磁盘」;
+  /// 下次重新选中视频时再按需缓存。
+  Future<int> clearLocalVideoCache() async {
+    final cache = ref.read(appBackdropLocalVideoCacheProvider);
+    final removed = await cache.evictAll();
+    _localVideoPaths.clear();
+    final loaded = await ref.read(appBackdropRepositoryProvider).loadState();
+    final assets = loaded.backdrops
+        .map(
+          (backdrop) =>
+              backdrop.localVideoPath == null
+                  ? backdrop
+                  : backdrop.copyWith(localVideoPath: null),
+        )
+        .toList(growable: false);
+    state = AsyncData(
+      loaded.copyWith(
+        backdrops: assets,
+        selectionTarget: ref.read(appBackdropSelectionTargetProvider),
+      ),
+    );
+    return removed;
+  }
+
+  /// 当前是否有已就绪的本机视频缓存。
+  bool get hasLocalVideoCache => _localVideoPaths.isNotEmpty;
+
+  Future<void> _persistSettings(AppBackdropSettings settings) {
+    return _applySettings(settings);
+  }
+
+  /// 串行写设置:先本地镜像即时生效,再同步服务端,最后回读状态。
+  Future<void> _applySettings(AppBackdropSettings settings) {
+    final previous = _settingsMutation ?? Future<void>.value();
+    final next = previous.then((_) => _applySettingsUnlocked(settings));
+    _settingsMutation = next.catchError((Object _) {});
+    return next;
+  }
+
+  Future<void> _applySettingsUnlocked(AppBackdropSettings settings) async {
+    await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
+    state = AsyncData(
+      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
+    final prefs = ref.read(backdropPreferencesProvider).asData?.value;
+    if (prefs == settings) {
+      return;
+    }
+    await ref.read(backdropPreferencesProvider.notifier).save(settings);
+    final after = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    if (state.asData?.value != after) {
+      state = AsyncData(after);
+    }
+  }
+
+  Future<AppBackdropState> _loadCurrentState(
+    AppBackdropRepository repository,
+  ) async {
+    final loaded = await repository.loadState();
+    final assets = loaded.backdrops
+        .map((backdrop) {
+          final local = _localVideoPaths[backdrop.id];
+          return local == null
+              ? backdrop
+              : backdrop.copyWith(localVideoPath: local);
+        })
+        .toList(growable: false);
+    final withLocal = loaded.copyWith(
+      backdrops: assets,
+      selectionTarget: ref.read(appBackdropSelectionTargetProvider),
+    );
+    _scheduleLocalVideoCache(withLocal);
+    return withLocal;
+  }
+
+  /// 对当前选中的服务端视频启动本机缓存;就绪后刷新 state 使用本地路径。
+  void _scheduleLocalVideoCache(AppBackdropState state) {
+    final selected = state.selectedBackdrop;
+    if (selected == null ||
+        !selected.isVideo ||
+        selected.sourceType != AppBackdropSourceType.server ||
+        selected.path.isEmpty ||
+        !selected.path.startsWith('http') ||
+        _localVideoPaths.containsKey(selected.id)) {
+      return;
+    }
+    final cache = ref.read(appBackdropLocalVideoCacheProvider);
+    final assetId = selected.id;
+    final remoteUrl = selected.path;
+    unawaited(
+      cache.ensureCached(assetId: assetId, remoteUrl: remoteUrl).then((local) {
+        if (local == null || !ref.mounted) {
+          return;
+        }
+        _localVideoPaths[assetId] = local;
+        final current = this.state.asData?.value;
+        if (current == null) {
+          return;
+        }
+        final nextAssets = current.backdrops
+            .map((backdrop) {
+              return backdrop.id == assetId
+                  ? backdrop.copyWith(localVideoPath: local)
+                  : backdrop;
+            })
+            .toList(growable: false);
+        this.state = AsyncData(current.copyWith(backdrops: nextAssets));
+      }),
+    );
+  }
+}

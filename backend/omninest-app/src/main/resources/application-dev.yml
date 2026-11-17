@@ -1,0 +1,113 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: ${OMNINEST_DB_URL:jdbc:postgresql://localhost:5432/omninest}
+    username: ${OMNINEST_DB_USER:omninest}
+    password: ${OMNINEST_DB_PASSWORD:omninest}
+  rabbitmq:
+    host: ${OMNINEST_RABBITMQ_HOST:localhost}
+    username: ${OMNINEST_RABBITMQ_USER:omninest}
+    password: ${OMNINEST_RABBITMQ_PASSWORD:omninest}
+  data:
+    redis:
+      host: ${OMNINEST_REDIS_HOST:localhost}
+      password: ${OMNINEST_REDIS_PASSWORD:}
+  web:
+    resources:
+      # 同源托管前端 SPA（flutter build web 产物，backend/webapp/）：
+      # 页面与 API 同站点，HttpOnly 刷新 Cookie 稳定可达；产物目录
+      # 可由 OMNINEST_WEBAPP_DIR 覆盖。生产环境由 nginx 托管，不走此配置。
+      static-locations: file:${OMNINEST_WEBAPP_DIR:./webapp}/,classpath:/META-INF/resources/,classpath:/resources/,classpath:/static/,classpath:/public/
+
+server:
+  port: ${OMNINEST_SERVER_PORT:8080}
+
+logging:
+  level:
+    root: INFO
+    com.omninest: DEBUG
+    org.springframework.security: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,flyway
+
+
+music:
+  providers:
+    music-brainz-user-agent: ${OMNINEST_MUSICBRAINZ_USER_AGENT:OmniNest/0.1.0 (music@omninest.local)}
+    netease-base-url: ${OMNINEST_NETEASE_API_BASE_URL:http://localhost:3001}
+
+photo:
+  ai:
+    endpoint: ${OMNINEST_PHOTO_AI_ENDPOINT:http://localhost:8090}
+    secret: ${OMNINEST_AI_SIDECAR_SECRET:change-me-ai-sidecar-random-secret}
+    timeout-seconds: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:30}
+    max-image-bytes: ${OMNINEST_PHOTO_AI_MAX_IMAGE_BYTES:67108864}
+    max-response-bytes: ${OMNINEST_PHOTO_AI_MAX_RESPONSE_BYTES:1048576}
+  geo:
+    import:
+      # GeoNames dump 数据集目录；相对路径相对后端进程工作目录（backend/）解析。
+      dir: ${OMNINEST_GEO_IMPORT_DIR:../data/geonames}
+
+file:
+  local-media:
+    # 本地媒体默认用于开发环境的只读扫描和 Range 读取。
+    enabled: ${OMNINEST_LOCAL_MEDIA_ENABLED:true}
+    node-id: local-node
+    max-files-per-scan: 100000
+    max-scan-depth: 32
+    mounts:
+      library:
+        host-path: ${OMNINEST_LOCAL_MEDIA_ROOT:../.omninest/local-media}
+        process-path: ${OMNINEST_LOCAL_MEDIA_PROCESS_ROOT:/mnt/local-media}
+
+reader:
+  comic-parser:
+    consume-in-api: ${OMNINEST_READER_COMIC_CONSUME_IN_API:true}
+
+omninest:
+  setup:
+    enabled: ${OMNINEST_SETUP_ENABLED:true}
+    token: ${OMNINEST_SETUP_TOKEN:}
+    persistent-state-enabled: ${OMNINEST_SETUP_PERSISTENT_STATE_ENABLED:true}
+    web-base-url: ${OMNINEST_SETUP_WEB_BASE_URL:http://localhost:3000}
+  runtime:
+    # 占位符桥接 .env 导入键（宽松绑定对大写下划线属性源不可靠），默认 dev 单进程内嵌 worker。
+    embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}
+    # 单进程 dev 同时内嵌调度器，回收站清理、配额对账与保留期清理才可被实际执行。
+    embedded-scheduler-enabled: ${OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED:true}
+  security:
+    jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
+    # 公开默认 JWT secret 在所有 profile 拒绝启动；dev 开箱即用依赖此显式豁免，
+    # 仅限本机回环调试，绑定局域网地址前必须改用独立密钥。
+    allow-insecure-local-secret: true
+    # 外部存储凭据、分享口令与 TOTP 密钥共用的 AES-GCM KEK。生产必须显式配置；
+    # dev 提供固定的公开测试密钥，保证本地创建分享、绑定 2FA 开箱可用。
+    credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:b21uaW5lc3QtZGV2LWNyZWRlbnRpYWwta2V5LTAwMDE=}
+    refresh-cookie-secure: ${OMNINEST_SECURITY_REFRESH_COOKIE_SECURE:false}
+    refresh-cookie-same-site: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:STRICT}
+    registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}
+    trusted-proxies: ${OMNINEST_SECURITY_TRUSTED_PROXIES:}
+    allowed-origins: ${OMNINEST_SECURITY_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+  clamav:
+    enabled: ${OMNINEST_CLAMAV_ENABLED:false}
+    host: ${OMNINEST_CLAMAV_HOST:localhost}
+    port: ${OMNINEST_CLAMAV_PORT:3310}
+  rclone:
+    endpoint: ${OMNINEST_RCLONE_ENDPOINT:http://localhost:5572}
+    username: ${OMNINEST_RCLONE_RC_USER:admin}
+    password: ${OMNINEST_RCLONE_RC_PASS:secret}
+    local-host-path: ${OMNINEST_RCLONE_LOCAL_HOST_PATH:../.omninest/local-files}
+    import-host-path: ${OMNINEST_RCLONE_IMPORT_HOST_PATH:../.omninest/rclone-imports}
+    import-container-path: ${OMNINEST_RCLONE_IMPORT_CONTAINER_PATH:/mnt/imports}
+  minio:
+    endpoint: ${OMNINEST_MINIO_ENDPOINT:http://localhost:9000}
+    public-endpoint: ${OMNINEST_MINIO_PUBLIC_ENDPOINT:${OMNINEST_MINIO_ENDPOINT:http://localhost:9000}}
+    docker-endpoint: ${OMNINEST_MINIO_DOCKER_ENDPOINT:http://omninest-minio:9000}
+    access-key: ${OMNINEST_MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${OMNINEST_MINIO_SECRET_KEY:minioadmin}

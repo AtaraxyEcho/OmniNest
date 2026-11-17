@@ -1,0 +1,194 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+# 批量下载是同步长连接流；后端只能限制单实例并发，而生产后端端口仅绑定回环地址，
+# 外部请求全部经过这个单入口。按凭据做跨 API 副本的全局并发上限，超出返回 429。
+limit_conn_zone $http_authorization zone=omninest_batch_download:10m;
+# 凭据可刷新：同一用户换一枚 Token 就能再占一份额度。再按来源 IP 设一档，
+# 单个主机无法靠多开会话/刷新令牌把后端全局并发槽全部占满（NAT 下留 3 份余量）。
+limit_conn_zone $binary_remote_addr zone=omninest_batch_download_ip:10m;
+
+server {
+    listen 80;
+    server_name ${OMNINEST_PUBLIC_HOST};
+    root /usr/share/nginx/html;
+    index index.html;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $omninest_backend backend-api:8080;
+
+    location = /health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok';
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+
+    # 子路径部署（OMNINEST_WEB_BASE_PATH=/omninest/）下前端请求带前缀，
+    # 这里必须同样带上并剥离后再转发，否则请求会落到静态规则返回 404。
+    location = ${OMNINEST_WEB_BASE_PATH}api/v1/files/batch/download {
+        client_max_body_size 64k;
+        limit_conn omninest_batch_download 2;
+        limit_conn omninest_batch_download_ip 3;
+        limit_conn_status 429;
+        limit_conn_log_level warn;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # 壁纸直传：唯一需要 512MB 无缓冲请求体的业务入口。使用同级 ^~ 最长前缀，
+    # 与下方通用 api/ 入口并存；块内必须自带 rewrite 与全部转发头，不回退父块。
+    location ^~ ${OMNINEST_WEB_BASE_PATH}api/v1/backdrops {
+        client_max_body_size 512m;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    # ^~ 前缀匹配：否则 API 路径以 .png/.js 等后缀结尾时会被下方静态正则
+    # location 抢占，返回静态目录的 404 并附带公共缓存头。
+    location ^~ ${OMNINEST_WEB_BASE_PATH}api/ {
+        # 登录等公开接口也走这里：默认收敛到 64MB，覆盖照片编辑/封面/头像，
+        # 仅壁纸直传单独放宽；流式下载仍保留 3600s 读超时。
+        client_max_body_size 64m;
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(api/.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location ^~ ${OMNINEST_WEB_BASE_PATH}ws {
+        rewrite ^${OMNINEST_WEB_BASE_PATH}(ws.*)$ /$1 break;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+
+    # 压缩与缓存：Flutter Web 产物文件名不带内容哈希，入口与 Service Worker
+    # 必须每次校验，其余静态资源给 1 小时有界缓存避免发版后陈旧。
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types text/css application/javascript application/json image/svg+xml font/ttf font/otf;
+
+    location = ${OMNINEST_WEB_BASE_PATH}flutter_service_worker.js {
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # SPA 主文档与静态回退：补齐后端 SecurityHeaderFilter 同款安全响应头
+    #（该 Filter 只覆盖 /api/ 响应，nginx 直发的主文档不经过后端）。
+    # add_header 在 location 级不继承 server 级，两处必须写全。
+    location = ${OMNINEST_WEB_BASE_PATH}index.html {
+        add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        try_files $uri =404;
+    }
+
+    location = ${OMNINEST_WEB_BASE_PATH}flutter_bootstrap.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    location = ${OMNINEST_WEB_BASE_PATH}version.json {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # 带扩展名的静态资源必须 404 而不能回退到主文档：Flutter 加载字体/图片/WASM 时
+    # 拿到 text/html 会直接解码失败。与 https 模板保持同一套安全头。
+    location ~* \.(?:js|css|wasm|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|otf)$ {
+        add_header Cache-Control "public, max-age=3600";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=()" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        # 不回退到 $uri/：构建产物里的真实目录会命中目录索引并 403，前端路由需要的是主文档。
+        try_files $uri ${OMNINEST_WEB_BASE_PATH}index.html;
+    }
+}
+
+server {
+    listen 9000;
+    server_name ${OMNINEST_PUBLIC_HOST};
+    client_max_body_size 0;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $omninest_minio minio:9000;
+
+    # 与 HTTPS 模板的 9000 端口保持同一套嗅探与嵌入防护。
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    # S3 预签名端口只服务对象读写，管理面（含 /minio/admin）不得直通公网。
+    location ^~ /minio/ {
+        return 403;
+    }
+
+    location / {
+        proxy_pass http://$omninest_minio;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}

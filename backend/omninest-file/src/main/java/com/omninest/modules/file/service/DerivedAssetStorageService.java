@@ -1,0 +1,860 @@
+package com.omninest.modules.file.service;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.SafeUrlValidator;
+import com.omninest.common.storage.ObjectStorageBuckets;
+import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.util.LikePatterns;
+import com.omninest.modules.file.config.FileTransferLimitsProperties;
+import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.domain.FilePurgeState;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileObjectRepository;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 派生资源对象与文件节点的存储服务。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DerivedAssetStorageService {
+    private static final Duration DOWNLOAD_TIMEOUT = Duration.ofSeconds(30);
+    private static final int MAX_REDIRECTS = 5;
+    /** 远程抓取和流式复制派生字节的字节上限；本地落库上限由部署配置决定。 */
+    private static final long MAX_FETCHED_DERIVED_ASSET_BYTES = 128L * 1024 * 1024;
+    /** 转码产物、批量打包等完整内容产物的兜底上限，仅用于拦截异常产物写满磁盘。 */
+    private static final long MAX_MEDIA_DERIVED_ASSET_BYTES = 64L * 1024 * 1024 * 1024;
+    /**
+     * 允许按完整内容产物上限存储的资产类型。文件模块不感知业务枚举，此处按字符串契约匹配；
+     * 新增资产类型默认沿用小资产上限，确属完整内容产物时在此显式加入。
+     */
+    private static final Set<String> LARGE_ASSET_TYPES = Set.of("TRANSCODE", "DOWNLOAD");
+    /**
+     * 派生资产节点的来源类型标记。
+     *
+     * <p>公开是为了让业务模块在"能不能物理删这个节点"上共用同一判据：
+     * 用户自己上传进网盘的节点来源类型是 {@code UPLOAD}，不属于派生资产，
+     * 业务侧不能把它当自己的清理对象交进永久删除集。
+     */
+    public static final String SOURCE_TYPE_DERIVED = "DERIVED";
+
+    /** 复用 HttpClient 实例，避免每次请求创建新连接池 */
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(DOWNLOAD_TIMEOUT)
+            // 重定向在 download 内手动逐跳校验；客户端自动跟随会绕过对跳转后地址的 SSRF 检查。
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+
+    private final ObjectStorageBuckets objectStorageBuckets;
+    private final ObjectStorageClient objectStorageClient;
+    private final FileObjectRepository fileObjectRepository;
+    private final FileNodeRepository fileNodeRepository;
+    private final SafeUrlValidator safeUrlValidator;
+    private final TransactionTemplate transactionTemplate;
+    private final FileTransferLimitsProperties transferLimits;
+    private final TempStagingPort tempStagingPort;
+
+    /** 在独立新事务中执行存储动作；并发流水线写入同一对象键时重试一次。 */
+    private UUID storeInNewTransactionWithRetry(StoreAction action) {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return executeWithConflictRetry(template, action);
+    }
+
+    /** 独立短事务：对象存储调用必须落在事务之外，否则远程 IO 期间一直占着数据库连接。 */
+    private TransactionTemplate newTransaction() {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
+    }
+
+    /** 执行存储动作，命中对象键唯一键冲突时以新事务重试一次，复用先到者写入的元数据。 */
+    private UUID executeWithConflictRetry(TransactionTemplate template, StoreAction action) {
+        DataIntegrityViolationException lastFailure = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                return template.execute(status -> action.run());
+            } catch (DataIntegrityViolationException ex) {
+                if (attempt == 2) {
+                    throw ex;
+                }
+                lastFailure = ex;
+                log.warn("派生资源元数据并发写入冲突，重试: attempt={}", attempt);
+            }
+        }
+        throw lastFailure;
+    }
+
+    /** 存储动作。 */
+    @FunctionalInterface
+    private interface StoreAction {
+        UUID run();
+    }
+
+    /**
+    /**
+     * 查询已存在的派生资产文件节点 ID。
+     *
+     * <p>与 {@link #isAvailable} 使用同一可用性判定（路径存在、来源为派生、
+     * 对象仍在对象存储中），供调用方在不重新生成资产的情况下回填引用。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 资产文件名
+     * @return 派生资产 FileNode ID；不可用或不存在时返回空
+     */
+    public Optional<UUID> findStoredFileNodeId(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName
+    ) {
+        return findRegisteredFileNodeId(ownerUserId, resourceType, resourceId, assetType, fileName)
+                .filter(this::objectStillExists);
+    }
+
+    /**
+     * 查询已登记的派生资产文件节点 ID，不做对象存储存在性探测。
+     *
+     * <p>供封面缩略图等热路径使用：登记即认为可用，对象丢失由读流失败
+     * 触发调用方失效缓存并重新派生，或由对账任务清理孤儿节点。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 资产文件名
+     * @return 派生资产 FileNode ID；未登记时返回空
+     */
+    public Optional<UUID> findRegisteredFileNodeId(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName
+    ) {
+        String path = normalizedPath(resourceType, resourceId, assetType, fileName);
+        // 现有派生资产写入均为个人空间；带上 spaceType 防止同路径的共享节点造成多行命中。
+        return fileNodeRepository.findActivePath(ownerUserId, SpaceType.PERSONAL, path)
+                .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType())
+                        && node.getCurrentObjectId() != null)
+                .map(FileNode::getId);
+    }
+
+    private boolean objectStillExists(UUID fileNodeId) {
+        return fileNodeRepository.findById(fileNodeId)
+                .filter(node -> node.getCurrentObjectId() != null)
+                .flatMap(node -> fileObjectRepository.findById(node.getCurrentObjectId()))
+                .map(object -> objectStorageClient.objectExists(new ObjectStorageKey(
+                        object.getBucketName(),
+                        object.getObjectKey()
+                )))
+                .orElse(false);
+    }
+
+    /**
+     * 按派生 FileNode ID 删除物理对象与元数据。
+     *
+     * <p>供业务清理流程在缺少所有者上下文时使用；节点必须是 DERIVED 来源。</p>
+     *
+     * <p>对象删除落在事务之外且先于元数据：对象存储失败时元数据还在，清理流程可以重试；
+     * 若在事务内先删元数据，回滚会留下指向已删对象的行，成功则把远程 IO 的时长
+     * 全部计进数据库连接占用。</p>
+     *
+     * @param fileNodeId 派生资产 FileNode ID
+     * @return 是否删除了节点
+     */
+    public boolean deleteDerivedFileNode(UUID fileNodeId) {
+        if (fileNodeId == null) {
+            return false;
+        }
+        return deleteResolved(resolveDerivedDeleteTarget(fileNodeId));
+    }
+
+    /**
+     * 待删除的派生资产：节点标识与需要清理的物理对象。
+     */
+    private record DerivedDeleteTarget(UUID nodeId, UUID ownerUserId, ObjectStorageKey objectKey) {
+    }
+
+    public boolean deleteOwned(UUID ownerUserId, UUID fileNodeId) {
+        return deleteResolved(resolveOwnedDeleteTarget(ownerUserId, fileNodeId));
+    }
+
+    /**
+     * 批量删除当前用户拥有的派生资源及其对象元数据。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeIds 文件节点 ID 集合
+     * @return 成功匹配并删除的派生资源数量
+     */
+    public int deleteOwnedBatch(UUID ownerUserId, Collection<UUID> fileNodeIds) {
+        if (fileNodeIds == null || fileNodeIds.isEmpty()) {
+            return 0;
+        }
+        int deletedCount = 0;
+        for (UUID fileNodeId : fileNodeIds) {
+            if (fileNodeId != null && deleteOwned(ownerUserId, fileNodeId)) {
+                deletedCount++;
+            }
+        }
+        return deletedCount;
+    }
+
+    /**
+     * 检查派生资源元数据和对象存储内容是否均可用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 业务资源类型
+     * @param resourceId 业务资源 ID
+     * @param assetType 派生资源类型
+     * @param fileName 派生资源文件名
+     * @return 元数据和物理对象均存在时返回 true
+     */
+    public boolean isAvailable(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName
+    ) {
+        String path = normalizedPath(resourceType, resourceId, assetType, fileName);
+        // 元数据读取放进只读短事务，对象存储探测留在事务外：
+        // 否则一次 HEAD 的往返时长会被算进数据库连接占用。
+        TransactionTemplate readOnly = newTransaction();
+        readOnly.setReadOnly(true);
+        ObjectStorageKey key = readOnly.execute(status ->
+                fileNodeRepository.findActivePath(ownerUserId, SpaceType.PERSONAL, path)
+                        .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType()))
+                        .map(FileNode::getCurrentObjectId)
+                        .flatMap(fileObjectRepository::findById)
+                        .map(object -> new ObjectStorageKey(
+                                object.getBucketName(),
+                                object.getObjectKey()
+                        ))
+                        .orElse(null));
+        return key != null && objectStorageClient.objectExists(key);
+    }
+
+    /**
+     * 短事务：解析当前用户可删的派生节点与对象键；不存在或不属于该用户时返回 null。
+     */
+    private DerivedDeleteTarget resolveOwnedDeleteTarget(UUID ownerUserId, UUID fileNodeId) {
+        return newTransaction().execute(status -> {
+            FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
+                    .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
+                    .orElse(null);
+            return node == null ? null : toDeleteTarget(node, ownerUserId);
+        });
+    }
+
+    /**
+     * 短事务：解析无所有者上下文的派生节点（调用方已完成授权）。
+     */
+    private DerivedDeleteTarget resolveDerivedDeleteTarget(UUID fileNodeId) {
+        return newTransaction().execute(status -> fileNodeRepository.findById(fileNodeId)
+                .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
+                .map(node -> toDeleteTarget(node, null))
+                .orElse(null));
+    }
+
+    private DerivedDeleteTarget toDeleteTarget(FileNode node, UUID ownerUserId) {
+        ObjectStorageKey key = node.getCurrentObjectId() == null
+                ? null
+                : fileObjectRepository.findById(node.getCurrentObjectId())
+                        .map(object -> new ObjectStorageKey(object.getBucketName(), object.getObjectKey()))
+                        .orElse(null);
+        return new DerivedDeleteTarget(node.getId(), ownerUserId, key);
+    }
+
+    /**
+     * 对象先删、元数据后删：对象存储失败时元数据还在，清理流程可以重试；
+     * 两段各自是短事务，远程 IO 不在连接占用范围内。
+     */
+    private boolean deleteResolved(DerivedDeleteTarget target) {
+        if (target == null) {
+            return false;
+        }
+        if (target.objectKey() != null) {
+            objectStorageClient.removeObject(target.objectKey());
+        }
+        newTransaction().executeWithoutResult(status -> {
+            FileNode node = target.ownerUserId() == null
+                    ? fileNodeRepository.findById(target.nodeId()).orElse(null)
+                    : fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
+                            target.nodeId(), target.ownerUserId()).orElse(null);
+            if (node == null) {
+                return;
+            }
+            if (node.getCurrentObjectId() != null) {
+                fileObjectRepository.findById(node.getCurrentObjectId())
+                        .ifPresent(fileObjectRepository::delete);
+            }
+            fileNodeRepository.delete(node);
+        });
+        return true;
+    }
+
+    /**
+     * 将输入流保存为衍生资产文件（默认存入个人空间）。
+     */
+    public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
+                     String assetType, String fileName, String mimeType, InputStream data) {
+        return store(ownerUserId, resourceType, resourceId, assetType, fileName, mimeType, data, SpaceType.PERSONAL);
+    }
+
+    /**
+     * 将本地文件保存为派生资产文件（默认存入个人空间）。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 文件名
+     * @param mimeType MIME 类型
+     * @param sourceFile 本地源文件
+     * @return FileNode ID
+     */
+    public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
+                      String assetType, String fileName, String mimeType, Path sourceFile) {
+        return store(
+                ownerUserId,
+                resourceType,
+                resourceId,
+                assetType,
+                fileName,
+                mimeType,
+                sourceFile,
+                SpaceType.PERSONAL
+        );
+    }
+
+    /**
+     * 将输入流保存为衍生资产文件。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型（如 READER_ITEM）
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型（如 POSTER）
+     * @param fileName 文件名
+     * @param mimeType MIME 类型
+     * @param data 输入流
+     * @param spaceType 空间类型（PERSONAL / SHARED）
+     * @return FileNode ID
+     */
+    public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
+                     String assetType, String fileName, String mimeType, InputStream data, SpaceType spaceType) {
+        Path tempFile = null;
+        try {
+            tempFile = tempStagingPort.createTempFile("derived", "reader-cover-", ".img");
+            try (OutputStream out = Files.newOutputStream(tempFile)) {
+                copyBounded(data, out, MAX_FETCHED_DERIVED_ASSET_BYTES);
+            }
+            Path stagedFile = tempFile;
+            return storeFile(ownerUserId, resourceType, resourceId, assetType,
+                    fileName, fileName, mimeType, stagedFile, spaceType);
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                    log.debug("忽略: {}", ignored.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * 将本地文件保存为派生资产文件。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 文件名
+     * @param mimeType MIME 类型
+     * @param sourceFile 本地源文件
+     * @param spaceType 空间类型
+     * @return FileNode ID
+     */
+    public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
+                      String assetType, String fileName, String mimeType,
+                      Path sourceFile, SpaceType spaceType) {
+        try {
+            return storeFile(
+                    ownerUserId,
+                    resourceType,
+                    resourceId,
+                    assetType,
+                    fileName,
+                    fileName,
+                    mimeType,
+                    sourceFile,
+                    spaceType
+            );
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
+        }
+    }
+
+    /**
+     * 使用独立的逻辑文件名和对象存储文件名保存本地派生资产。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 文件节点使用的逻辑文件名
+     * @param storageFileName 对象键使用的存储文件名
+     * @param mimeType MIME 类型
+     * @param sourceFile 本地源文件
+     * @return FileNode ID
+     */
+    public UUID store(UUID ownerUserId, String resourceType, UUID resourceId,
+                      String assetType, String fileName, String storageFileName,
+                      String mimeType, Path sourceFile) {
+        try {
+            return storeFile(
+                    ownerUserId,
+                    resourceType,
+                    resourceId,
+                    assetType,
+                    fileName,
+                    storageFileName,
+                    mimeType,
+                    sourceFile,
+                    SpaceType.PERSONAL
+            );
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败");
+        }
+    }
+
+    private UUID storeFile(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName,
+            String storageFileName,
+            String mimeType,
+            Path sourceFile,
+            SpaceType spaceType
+    ) throws IOException {
+        Path normalizedSource = sourceFile.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(normalizedSource)) {
+            throw new IOException("派生资源源文件不存在");
+        }
+        long sizeBytes = Files.size(normalizedSource);
+        long maxBytes = assetType != null && LARGE_ASSET_TYPES.contains(assetType)
+                ? MAX_MEDIA_DERIVED_ASSET_BYTES
+                : transferLimits.getMaxDerivedAssetBytes();
+        if (sizeBytes <= 0 || sizeBytes > maxBytes) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源大小超出限制");
+        }
+        // 对象上传与全文件摘要都在数据库事务之外完成：完整内容产物可达数十 GB，
+        // 放在事务里会在整个网络传输与磁盘摘要期间独占连接与行锁。
+        String objectSha256 = sha256(normalizedSource);
+        String shortHash = objectSha256.length() >= 12 ? objectSha256.substring(0, 12) : objectSha256;
+        // 对象键纳入内容摘要：覆盖同一逻辑路径的派生资产时新旧物理对象隔离，
+        // 落库失败只可能回收本次写入，不会删掉旧 FileObject 仍在引用的对象。
+        String objectKey = "derived/"
+                + ownerUserId + "/"
+                + segment(resourceType) + "/"
+                + resourceId + "/"
+                + segment(assetType) + "/"
+                + shortHash + "_" + safeFileName(storageFileName);
+        String bucketName = objectStorageBuckets.derivedAssets();
+        ObjectStorageKey finalKey = new ObjectStorageKey(bucketName, objectKey);
+        ObjectStorageKey stagingKey = new ObjectStorageKey(
+                bucketName,
+                "derived-staging/" + ownerUserId + "/" + UUID.randomUUID() + "/" + safeFileName(storageFileName)
+        );
+        String normalizedPath = normalizedPath(resourceType, resourceId, assetType, fileName);
+        requireTargetWritable(ownerUserId, spaceType, normalizedPath);
+        boolean existedBefore = fileObjectRepository
+                .findByBucketNameAndObjectKey(bucketName, objectKey)
+                .isPresent();
+        try {
+            objectStorageClient.putObject(stagingKey, normalizedSource, mimeType);
+            // 跨桶复制在事务外完成：大体积转码产物复制可达数十秒，放进 REQUIRES_NEW
+            // 会让一个独立连接整段挂起。复制成功而落库失败时补偿删除已复制的对象。
+            objectStorageClient.copyObject(stagingKey, finalKey);
+            AtomicReference<ReplacedObject> replaced = new AtomicReference<>();
+            try {
+                UUID nodeId = storeInNewTransactionWithRetry(() -> {
+                    requireTargetWritable(ownerUserId, spaceType, normalizedPath);
+                    return persistFileMetadata(ownerUserId, fileName, mimeType, spaceType,
+                            bucketName, objectKey, normalizedPath, sizeBytes, objectSha256, replaced);
+                });
+                // 新元数据已提交，旧对象不再被这个节点引用；回收必须发生在提交之后，
+                // 否则事务回滚时会把节点仍在使用的旧对象删掉。
+                cleanupReplacedObject(replaced.get());
+                return nodeId;
+            } catch (RuntimeException exception) {
+                // 只回收本次新建的对象键；同键已存在说明它可能被旧 FileObject 引用，
+                // 删除会把仍然有效的派生资产变成悬空引用。残留的未引用对象由
+                // DerivedAssetOrphanScanner 按年龄兜底清理。
+                if (!existedBefore) {
+                    removeStagingObject(finalKey);
+                }
+                throw exception;
+            }
+        } finally {
+            removeStagingObject(stagingKey);
+        }
+    }
+
+    /**
+     * 在独立事务内写入对象元数据与派生节点，只做轻量数据库操作。
+     */
+    private UUID persistFileMetadata(UUID ownerUserId, String fileName, String mimeType,
+            SpaceType spaceType, String bucketName, String objectKey,
+            String normalizedPath, long sizeBytes, String sha256,
+            AtomicReference<ReplacedObject> replaced) {
+        FileObject object = fileObjectRepository
+                .findByBucketNameAndObjectKey(bucketName, objectKey)
+                .orElseGet(FileObject::new);
+        object.setBucketName(bucketName);
+        object.setObjectKey(objectKey);
+        object.setMimeType(mimeType);
+        object.setSizeBytes(sizeBytes);
+        object.setSha256(sha256);
+        FileObject savedObject = fileObjectRepository.save(object);
+
+        FileNode node = fileNodeRepository
+                .findActivePath(ownerUserId, spaceType, normalizedPath)
+                .orElseGet(FileNode::new);
+        UUID previousObjectId = node.getCurrentObjectId();
+        node.setOwnerUserId(ownerUserId);
+        node.setParentId(null);
+        node.setNodeType("FILE");
+        node.setName(safeFileName(fileName));
+        node.setNormalizedPath(normalizedPath);
+        node.setMimeType(mimeType);
+        node.setSizeBytes(sizeBytes);
+        node.setCurrentObjectId(savedObject.getId());
+        node.setSourceType(SOURCE_TYPE_DERIVED);
+        node.setDeleted(false);
+        node.setSpaceType(spaceType);
+        UUID savedNodeId = fileNodeRepository.save(node).getId();
+        if (previousObjectId != null && !previousObjectId.equals(savedObject.getId())) {
+            fileObjectRepository.findById(previousObjectId).ifPresent(previous -> replaced.set(
+                    new ReplacedObject(previous.getId(), previous.getBucketName(), previous.getObjectKey())));
+        }
+        return savedNodeId;
+    }
+
+    /**
+     * 回收被覆盖的旧派生对象：先删元数据行，再删物理对象。
+     *
+     * <p>删除前复核是否仍有活动或回收站节点引用；派生资产不进入文件版本链，
+     * 因此不需要额外检查版本表。物理删除失败时元数据行已消失，孤儿扫描器
+     * 会按年龄清理残留对象。</p>
+     */
+    private void cleanupReplacedObject(ReplacedObject replacedObject) {
+        if (replacedObject == null) {
+            return;
+        }
+        try {
+            if (fileNodeRepository.countByCurrentObjectId(replacedObject.objectId()) > 0) {
+                return;
+            }
+            newTransaction().executeWithoutResult(status ->
+                    fileObjectRepository.deleteById(replacedObject.objectId()));
+            removeStagingObject(new ObjectStorageKey(
+                    replacedObject.bucketName(), replacedObject.objectKey()));
+        } catch (RuntimeException exception) {
+            log.warn("旧派生对象回收失败: objectId={}, errorType={}",
+                    replacedObject.objectId(), exception.getClass().getSimpleName());
+        }
+    }
+
+    /** 被新内容替换掉的旧对象，仅在元数据提交成功后回收。 */
+    private record ReplacedObject(UUID objectId, String bucketName, String objectKey) {
+    }
+
+    private void requireTargetWritable(UUID ownerUserId, SpaceType spaceType, String normalizedPath) {
+        fileNodeRepository.findActivePath(ownerUserId, spaceType, normalizedPath).ifPresent(node -> {
+            if (node.getPurgeState() != null && node.getPurgeState() != FilePurgeState.NONE) {
+                throw new BusinessException(ErrorCode.FILE_LIFECYCLE_CONFLICT, "派生资源正在永久删除");
+            }
+        });
+    }
+
+    private void removeStagingObject(ObjectStorageKey stagingKey) {
+        try {
+            objectStorageClient.removeObject(stagingKey);
+        } catch (RuntimeException exception) {
+            log.warn("派生资源暂存对象清理失败: errorType={}",
+                    exception.getClass().getSimpleName(), exception);
+        }
+    }
+
+    public UUID storeRemote(DerivedAssetRequest request) {
+        validate(request);
+        Path tempFile = null;
+        try {
+            DownloadedAsset downloaded = download(request.sourceUrl());
+            tempFile = downloaded.path();
+            String mimeType = firstNonBlank(downloaded.mimeType(), request.mimeType(), "application/octet-stream");
+            Path downloadedFile = tempFile;
+            try {
+                // 元数据落在 storeFile 内部的独立新事务：唯一键冲突会把外层事务标记 rollback-only，
+                // 重试不能复用调用方事务。
+                return storeFile(
+                        request.ownerUserId(),
+                        request.resourceType(),
+                        request.resourceId(),
+                        request.assetType(),
+                        request.fileName(),
+                        request.fileName(),
+                        mimeType,
+                        downloadedFile,
+                        request.spaceType() != null ? request.spaceType() : SpaceType.PERSONAL
+                );
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件保存失败");
+            }
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                    log.debug("忽略: {}", ignored.getMessage());
+                }
+            }
+        }
+    }
+
+    private DownloadedAsset download(String sourceUrl) {
+        try {
+            URI currentUri = URI.create(sourceUrl);
+            for (int redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+                safeUrlValidator.requireSafeHttpUrl(currentUri.toString());
+                HttpRequest request = HttpRequest.newBuilder(currentUri)
+                        .timeout(DOWNLOAD_TIMEOUT)
+                        .header("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
+                        .GET()
+                        .build();
+                HttpResponse<InputStream> response = httpClient
+                        .send(request, HttpResponse.BodyHandlers.ofInputStream());
+                if (isRedirect(response.statusCode())) {
+                    try (InputStream ignored = response.body()) {
+                        String location = response.headers().firstValue("Location")
+                                .orElseThrow(() -> new BusinessException(
+                                        ErrorCode.FILE_UPLOAD_FAILED,
+                                        "资源重定向地址缺失"
+                                ));
+                        currentUri = currentUri.resolve(location);
+                    }
+                    continue;
+                }
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    try (InputStream ignored = response.body()) {
+                        throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件下载失败");
+                    }
+                }
+                return persistResponse(response);
+            }
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源重定向次数过多");
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件下载被中断");
+        } catch (IllegalArgumentException | IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "资源文件下载失败");
+        }
+    }
+
+    private DownloadedAsset persistResponse(HttpResponse<InputStream> response) throws IOException {
+        // 先拿到流再判长度：超限直接抛错会让实体流悬空，连接既无法复用也不会被回收。
+        try (InputStream body = response.body()) {
+            long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
+            if (contentLength > MAX_FETCHED_DERIVED_ASSET_BYTES) {
+                throw new IOException("派生资源响应大小超出限制");
+            }
+            Path tempFile = tempStagingPort.createTempFile("derived", "remote-", ".asset");
+            try {
+                try (OutputStream output = Files.newOutputStream(tempFile)) {
+                    copyBounded(body, output, MAX_FETCHED_DERIVED_ASSET_BYTES);
+                }
+                String mimeType = response.headers().firstValue("Content-Type")
+                        .map(value -> value.split(";")[0].trim())
+                        .orElse(null);
+                return new DownloadedAsset(tempFile, mimeType);
+            } catch (IOException ex) {
+                Files.deleteIfExists(tempFile);
+                throw ex;
+            }
+        }
+    }
+
+    private void copyBounded(InputStream input, OutputStream output, long maxBytes) throws IOException {
+        byte[] buffer = new byte[8192];
+        long copied = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            copied += read;
+            if (copied > maxBytes) {
+                throw new IOException("派生资源大小超出限制");
+            }
+            output.write(buffer, 0, read);
+        }
+        if (copied == 0) {
+            throw new IOException("派生资源为空");
+        }
+    }
+
+    private boolean isRedirect(int statusCode) {
+        return statusCode == 301
+                || statusCode == 302
+                || statusCode == 303
+                || statusCode == 307
+                || statusCode == 308;
+    }
+
+    private void validate(DerivedAssetRequest request) {
+        if (request == null
+                || request.ownerUserId() == null
+                || request.resourceId() == null
+                || isBlank(request.sourceUrl())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "资源文件参数不完整");
+        }
+    }
+
+    private String normalizedPath(String resourceType, UUID resourceId, String assetType, String fileName) {
+        return "/.metadata/"
+                + segment(resourceType)
+                + "/"
+                + resourceId
+                + "/"
+                + segment(assetType)
+                + "/"
+                + safeFileName(fileName);
+    }
+
+    private String safeFileName(String fileName) {
+        String value = firstNonBlank(fileName, "asset.bin");
+        return value.replaceAll("[\\\\/\\u0000]", "_").trim();
+    }
+
+    private String segment(String value) {
+        String text = firstNonBlank(value, "UNKNOWN");
+        return text.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_-]", "_");
+    }
+
+    private String sha256(Path file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = Files.newInputStream(file);
+                 DigestInputStream digestInput = new DigestInputStream(input, digest)) {
+                digestInput.transferTo(OutputStream.nullOutputStream());
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", ex);
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * 列出用户在指定资源类型下仍存活的派生节点引用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @return 节点引用列表
+     */
+    @Transactional(readOnly = true)
+    public List<DerivedNodeRef> listDerivedNodeRefs(UUID ownerUserId, String resourceType) {
+        // segment() 规范化时会把非法字符写成下划线（READER_ITEM 这类），下划线是字面量不是通配符。
+        String prefix = LikePatterns.escapeSpecials("/.metadata/" + segment(resourceType) + "/");
+        return fileNodeRepository
+                .findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId, SOURCE_TYPE_DERIVED, prefix)
+                .stream()
+                .map(node -> new DerivedNodeRef(node.getId(), node.getNormalizedPath(), node.getCreatedAt()))
+                .toList();
+    }
+
+    /**
+     * 列出在指定资源类型下持有存活派生节点的用户。
+     *
+     * @param resourceType 资源类型
+     * @return 用户 ID 列表
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> listOwnerIdsByDerivedPathPrefix(String resourceType) {
+        // segment() 规范化时会把非法字符写成下划线（READER_ITEM 这类），下划线是字面量不是通配符。
+        String prefix = LikePatterns.escapeSpecials("/.metadata/" + segment(resourceType) + "/");
+        return fileNodeRepository.findOwnerIdsBySourceTypeAndNormalizedPathPrefix(
+                SOURCE_TYPE_DERIVED, prefix);
+    }
+
+    /**
+     * 派生节点引用。
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param normalizedPath 节点完整逻辑路径
+     * @param createdAt 节点创建时间，供调用方区分历史孤儿与正在写入的资产
+     */
+    public record DerivedNodeRef(UUID fileNodeId, String normalizedPath, Instant createdAt) {
+    }
+
+    private record DownloadedAsset(Path path, String mimeType) {
+    }
+}

@@ -1,0 +1,185 @@
+package com.omninest.modules.configcenter.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.Collections;
+import org.junit.jupiter.api.Test;
+
+class ConfigDefinitionCatalogTest {
+    @Test
+    void catalogContainsOnlyTheApprovedRuntimeSettings() {
+        var definitions = ConfigDefinitionCatalog.definitions();
+
+        // 删除 security.rate-limit 与 reader.gbooks/openlib 后：总计 70（GENERAL 31 + INTEGRATION 39）。
+        assertThat(definitions).hasSize(70);
+        assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
+        assertThat(definitions)
+                .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
+                .hasSize(31);
+        assertThat(definitions)
+                .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
+                .hasSize(39);
+    }
+
+    @Test
+    void mailChannelKeepsItsCredentialSuperAdminOnlyAndSensitive() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.password"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.sensitive()).isTrue();
+                    assertThat(definition.superAdminOnly()).isTrue();
+                    assertThat(definition.defaultValue()).isEmpty();
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.enabled"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.valueType()).isEqualTo(ConfigValueType.BOOLEAN);
+                    assertThat(definition.superAdminOnly()).isTrue();
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.timeout-millis"))
+                .hasValueSatisfying(definition ->
+                        assertThat(definition.normalize("5000")).isEqualTo("5000"));
+    }
+
+    @Test
+    void mailEncryptionAndFormatOnlyAcceptTheDeclaredValues() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.security"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("STARTTLS");
+                    assertThat(definition.allowedValues())
+                            .containsExactly("NONE", "STARTTLS", "SSL");
+                    assertThat(definition.normalize("SSL")).isEqualTo("SSL");
+                    assertThatThrownBy(() -> definition.normalize("TRUST_ALL"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.format"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("PLAIN");
+                    assertThatThrownBy(() -> definition.normalize("HTML_ONLY"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+    }
+
+    @Test
+    void mailTrustListRejectsWildcardsAndKeepsConcreteHosts() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.trust-hosts"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.normalize("")).isEmpty();
+                    assertThat(definition.normalize("  Mail.Internal , 10.0.0.5 "))
+                            .isEqualTo("mail.internal,10.0.0.5");
+                    // 通配符与空项会把整条信道降级成不校验证书，必须在保存时就拒绝。
+                    assertThatThrownBy(() -> definition.normalize("*"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail.internal,*"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail.internal,,10.0.0.5"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail internal"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThat(definition.normalize(String.join(",", Collections.nCopies(20, "mx.internal"))))
+                            .isEqualTo(String.join(",", Collections.nCopies(20, "mx.internal")));
+                    assertThatThrownBy(() ->
+                            definition.normalize(String.join(",", Collections.nCopies(21, "mx.internal"))))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+    }
+
+    @Test
+    void mailSiteAddressIsRejectedBeforeItCanBecomeALinkTarget() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.web-base-url"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.normalize("https://nest.example.test"))
+                            .isEqualTo("https://nest.example.test");
+                    assertThatThrownBy(() -> definition.normalize("file:///etc/passwd"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("https://user:pw@nest.example.test"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+    }
+
+    @Test
+    void backdropDefinitionsExposeQuotaAndUploadLimits() {
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-image-bytes"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("20971520"));
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-video-bytes"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("469762048");
+                    assertThat(definition.maxValue()).isEqualByComparingTo("503316480");
+                });
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-assets-per-user"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("30"));
+        assertThat(ConfigDefinitionCatalog.find("backdrop.upload.rate-per-hour"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("20"));
+    }
+
+    @Test
+    void catalogTracksDeprecatedKeysWithoutMakingThemEditable() {
+        assertThat(ConfigDefinitionCatalog.isKnownHidden("rate-limit.default-limit")).isTrue();
+        assertThat(ConfigDefinitionCatalog.isKnownHidden("transcode.enabled")).isTrue();
+        assertThat(ConfigDefinitionCatalog.find("transcode.enabled")).isEmpty();
+        assertThat(ConfigDefinitionCatalog.find("media.transcode.enabled"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("false"));
+        assertThat(ConfigDefinitionCatalog.find("rate-limit.default-limit")).isEmpty();
+        assertThat(ConfigDefinitionCatalog.find("media.tmdb.url")).isPresent();
+        assertThat(ConfigDefinitionCatalog.find("weather.qweather.url")).isPresent();
+        assertThat(ConfigDefinitionCatalog.find("weather.location")).isPresent();
+        assertThat(ConfigDefinitionCatalog.find("music.netease.url")).isPresent();
+        // QQ 音乐平台已下线：相关配置项不再出现在目录中。
+        assertThat(ConfigDefinitionCatalog.find("music.qq.u-url")).isEmpty();
+        assertThat(ConfigDefinitionCatalog.find("music.qq.c-url")).isEmpty();
+    }
+
+    @Test
+    void logRetentionScanPathsStayRelativeToTheRunDirectoryAndSuperAdminOnly() {
+        ConfigDefinition definition = ConfigDefinitionCatalog.find("log-retention.scan-paths").orElseThrow();
+
+        // 该目录下的文件会被清理任务删除：绝对路径、盘符、UNC 与 .. 逃逸必须在写入前拒绝，
+        // 而不是等到定时任务执行时才发现配置无效。
+        assertThat(definition.normalize(" logs , logs/archive ")).isEqualTo("logs,logs/archive");
+        assertThat(definition.superAdminOnly()).isTrue();
+        for (String rejected : new String[] {
+                "/var/lib/omninest", "D:\\logs", "\\\\fileserver\\share", "../outside", "logs/../../x", ""}) {
+            assertThatThrownBy(() -> definition.normalize(rejected))
+                    .as("拒绝 %s", rejected)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void numericDefinitionsAcceptOnlyIntegralValues() {
+        ConfigDefinition definition = ConfigDefinitionCatalog.find("storage.quota.default").orElseThrow();
+
+        assertThat(definition.normalize("10.0")).isEqualTo("10");
+        assertThatThrownBy(() -> definition.normalize("10.5"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("整数");
+    }
+
+    @Test
+    void restrictedMediaDefinitionsAreMarkedForSuperAdminOnly() {
+        assertThat(ConfigDefinitionCatalog.find("media.import.enabled").orElseThrow().superAdminOnly()).isTrue();
+        assertThat(ConfigDefinitionCatalog.find("media.tmdb.key")
+                .orElseThrow()
+                .superAdminOnly()).isTrue();
+    }
+
+    @Test
+    void tmdbStrategyRetainsSupportedRawQueryMode() {
+        ConfigDefinition definition = ConfigDefinitionCatalog.find("media.tmdb.strategy").orElseThrow();
+
+        assertThat(definition.normalize("RAW_ONLY")).isEqualTo("RAW_ONLY");
+    }
+
+    @Test
+    void endpointDefinitionsAcceptSafeHttpSyntaxOnly() {
+        ConfigDefinition definition = ConfigDefinitionCatalog.find("media.tmdb.url").orElseThrow();
+
+        assertThat(definition.normalize(" https://tmdb.example/v3 "))
+                .isEqualTo("https://tmdb.example/v3");
+        assertThatThrownBy(() -> definition.normalize("file:///tmp/tmdb"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> definition.normalize("https://user:password@tmdb.example/v3"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> definition.normalize("https://tmdb.example/v3?token=secret"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+}

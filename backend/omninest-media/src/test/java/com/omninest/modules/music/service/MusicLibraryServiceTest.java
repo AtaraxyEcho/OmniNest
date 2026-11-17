@@ -1,0 +1,594 @@
+package com.omninest.modules.music.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+
+import com.omninest.common.access.SharedSpaceAccessQuery;
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.file.service.FilePurgeOrigin;
+import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.music.config.MusicLibraryProperties;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.music.domain.MusicAlbum;
+import com.omninest.modules.music.domain.MusicArtist;
+import com.omninest.modules.music.domain.MusicPlayHistory;
+import com.omninest.modules.music.domain.MusicTrack;
+import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
+import com.omninest.modules.music.repository.MusicAlbumRepository;
+import com.omninest.modules.music.repository.MusicArtistRepository;
+import com.omninest.modules.music.repository.MusicFavoriteRepository;
+import com.omninest.modules.music.repository.MusicPlayHistoryRepository;
+import com.omninest.modules.music.repository.MusicTrackRepository;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+/**
+ * 本地音乐曲库服务测试。
+ *
+ * @author OmniNest
+ */
+class MusicLibraryServiceTest {
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID TRACK_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID FILE_NODE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID COVER_FILE_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
+
+    private final MusicTrackRepository trackRepository = mock(MusicTrackRepository.class);
+    private final MusicAlbumRepository albumRepository = mock(MusicAlbumRepository.class);
+    private final MusicArtistRepository artistRepository = mock(MusicArtistRepository.class);
+    private final MusicFavoriteRepository favoriteRepository = mock(MusicFavoriteRepository.class);
+    private final MusicPlayHistoryRepository playHistoryRepository = mock(MusicPlayHistoryRepository.class);
+    private final FileDeletionService fileDeletionService = mock(FileDeletionService.class);
+    private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
+    private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final MusicLibraryProperties musicLibraryProperties = new MusicLibraryProperties();
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery = mock(SharedSpaceAccessQuery.class);
+    private final MusicLibraryService libraryService = new MusicLibraryService(
+            trackRepository,
+            albumRepository,
+            artistRepository,
+            favoriteRepository,
+            playHistoryRepository,
+            fileDeletionService,
+            fileQueryService,
+            fileLifecycleGuard,
+            readThroughCache,
+            syncEventService,
+            musicLibraryProperties,
+            sharedSpaceAccessQuery
+    );
+
+    @BeforeEach
+    void allowSharedSpaceVisibility() {
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+    }
+
+    @Test
+    void tracksExcludeSharedSpaceWhenBrowseDenied() {
+        when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(false);
+        var pageable = PageRequest.of(0, 50, Sort.by(Sort.Direction.ASC, "title"));
+        when(trackRepository.findTracksVisibleToUser(OWNER_ID, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        libraryService.tracks(OWNER_ID, 0, 50, null);
+
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, null, pageable);
+    }
+
+    @Test
+    void trackSummaryDtoOmitsLyricsForListProjection() {
+        MusicTrack track = track();
+        track.setLyricsRaw("[00:01.00]Hello");
+        track.setLyricsTranslation("你好");
+        track.setTitle("Night Drive");
+
+        var summary = libraryService.toTrackSummaryDto(track, true);
+        var full = libraryService.toTrackDto(track, true);
+
+        assertThat(summary.lyricsRaw()).isNull();
+        assertThat(summary.lyricsTranslation()).isNull();
+        assertThat(summary.favorite()).isTrue();
+        assertThat(full.lyricsRaw()).isEqualTo("[00:01.00]Hello");
+        assertThat(full.lyricsTranslation()).isEqualTo("你好");
+    }
+
+    @Test
+    void getTrackReturnsFullProjectionWithLyrics() {
+        MusicTrack track = track();
+        track.setLyricsRaw("[00:01.00]Hello");
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
+        when(favoriteRepository.existsByOwnerUserIdAndTrackId(OWNER_ID, TRACK_ID)).thenReturn(true);
+
+        var dto = libraryService.getTrack(OWNER_ID, TRACK_ID);
+
+        assertThat(dto.id()).isEqualTo(TRACK_ID);
+        assertThat(dto.lyricsRaw()).isEqualTo("[00:01.00]Hello");
+        assertThat(dto.favorite()).isTrue();
+    }
+
+    @Test
+    void getTrackRejectsPrivateTrackOfOtherOwner() {
+        MusicTrack foreignTrack = track();
+        foreignTrack.setOwnerUserId(UUID.randomUUID());
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(foreignTrack));
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"))
+                .when(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_NODE_ID);
+
+        assertThatThrownBy(() -> libraryService.getTrack(OWNER_ID, TRACK_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEDIA_NOT_FOUND);
+    }
+
+    @Test
+    void albumTracksPagePagesInDatabaseAndKeepsFilteredTotal() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        MusicAlbum album = new MusicAlbum();
+        album.setId(albumId);
+        album.setOwnerUserId(OWNER_ID);
+        when(albumRepository.findById(albumId)).thenReturn(Optional.of(album));
+        // 分页必须由仓储承载：全量物化整张专辑再内存切页会在大专辑上放大查询与实体开销。
+        when(trackRepository.findVisibleAlbumTracksPage(eq(OWNER_ID), any(), eq(albumId), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable requested = invocation.getArgument(3);
+                    List<MusicTrack> all = List.of(track(), track(), track());
+                    int from = (int) Math.min(requested.getOffset(), all.size());
+                    int to = (int) Math.min((long) from + requested.getPageSize(), all.size());
+                    return new PageImpl<>(
+                            all.subList(from, to), requested, all.size());
+                });
+
+        var first = libraryService.albumTracksPage(OWNER_ID, albumId, 0, 2);
+        var second = libraryService.albumTracksPage(OWNER_ID, albumId, 1, 2);
+
+        org.assertj.core.api.Assertions.assertThat(first.getContent()).hasSize(2);
+        org.assertj.core.api.Assertions.assertThat(first.getTotalElements()).isEqualTo(3);
+        org.assertj.core.api.Assertions.assertThat(second.getContent()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(second.getTotalElements()).isEqualTo(3);
+        org.assertj.core.api.Assertions.assertThat(second.getPageable().getOffset()).isEqualTo(2);
+        verify(trackRepository, never()).findVisibleAlbumTracks(eq(OWNER_ID), any(), eq(albumId));
+    }
+
+    @Test
+    void albumTracksReturnsOwnerScopedTracks() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        MusicAlbum album = new MusicAlbum();
+        album.setId(albumId);
+        album.setOwnerUserId(OWNER_ID);
+        when(albumRepository.findById(albumId)).thenReturn(Optional.of(album));
+        when(trackRepository.findVisibleAlbumTracks(OWNER_ID, SpaceType.SHARED, albumId)).thenReturn(List.of(track()));
+
+        var tracks = libraryService.albumTracks(OWNER_ID, albumId);
+
+        assertThat(tracks).hasSize(1);
+        assertThat(tracks.get(0).id()).isEqualTo(TRACK_ID);
+    }
+
+    @Test
+    void albumTracksRejectsAlbumOfOtherOwner() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        when(albumRepository.findById(albumId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> libraryService.albumTracks(OWNER_ID, albumId))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEDIA_NOT_FOUND);
+    }
+
+    @Test
+    void artistTracksReturnsOwnerScopedTracks() {
+        UUID artistId = UUID.fromString("60000000-0000-0000-0000-000000000001");
+        MusicArtist artist = new MusicArtist();
+        artist.setId(artistId);
+        artist.setOwnerUserId(OWNER_ID);
+        when(artistRepository.findById(artistId)).thenReturn(Optional.of(artist));
+        when(trackRepository.findVisibleArtistTracks(OWNER_ID, SpaceType.SHARED, artistId)).thenReturn(List.of(track()));
+
+        var tracks = libraryService.artistTracks(OWNER_ID, artistId);
+
+        assertThat(tracks).hasSize(1);
+        assertThat(tracks.get(0).id()).isEqualTo(TRACK_ID);
+    }
+
+    @Test
+    void favoritesKeepFavoriteTimeOrderInsteadOfRepositoryOrder() {
+        MusicTrack older = track();
+        MusicTrack newer = track();
+        newer.setId(UUID.fromString("20000000-0000-0000-0000-000000000002"));
+        List<UUID> preferred = List.of(newer.getId(), older.getId());
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID)).thenReturn(preferred);
+        // 批量可见性查询按主键返回，顺序与收藏时间相反：服务必须按收藏顺序重排。
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, SpaceType.SHARED, preferred))
+                .thenReturn(List.of(older, newer));
+        when(favoriteRepository.findByOwnerUserIdAndTrackIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+
+        var result = libraryService.favorites(OWNER_ID);
+
+        assertThat(result).extracting(dto -> dto.id()).containsExactly(newer.getId(), older.getId());
+    }
+
+    @Test
+    void favoritesDoNotMaterializeFavoriteEntities() {
+        when(favoriteRepository.findFavoriteTrackIdsByOwnerUserId(OWNER_ID)).thenReturn(List.of());
+
+        assertThat(libraryService.favorites(OWNER_ID)).isEmpty();
+
+        verify(favoriteRepository, never()).findByOwnerUserIdAndTrackIdIn(eq(OWNER_ID), any());
+    }
+
+    private MusicTrack track() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        return track;
+    }
+
+    @Test
+    void deleteTrackPermanentlyDeletesLinkedFile() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.of(track));
+
+        libraryService.deleteTrack(OWNER_ID, TRACK_ID);
+
+        verify(fileDeletionService).deletePermanently(
+                eq(OWNER_ID),
+                eq(FILE_NODE_ID),
+                eq(false),
+                ArgumentMatchers.any(FilePurgeOrigin.class),
+                isNull()
+        );
+    }
+
+    @Test
+    void trackDtoUsesProviderMetadataCoverUrlWhenNoFileCoverExists() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        track.setArtistName("Omni Band");
+        track.setAlbumTitle("City Lights");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        track.getProviderMetadata().put("coverUrl", "https://example.com/cover.jpg");
+
+        var dto = libraryService.toTrackDto(track, false);
+
+        assertThat(dto.coverUrl()).isEqualTo("https://example.com/cover.jpg");
+    }
+
+    @Test
+    void trackDtoPrefersEmbeddedCoverOverExternalProviderUrl() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        track.getProviderMetadata().put("coverDataUrl", "data:image/jpeg;base64,embedded");
+        track.getProviderMetadata().put("coverUrl", "https://coverartarchive.org/release/test/front-500");
+
+        var dto = libraryService.toTrackDto(track, false);
+
+        assertThat(dto.coverUrl()).isEqualTo("data:image/jpeg;base64,embedded");
+    }
+
+    @Test
+    void trackDtoUsesStableApiPathForLocalCover() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        track.setTitle("Night Drive");
+
+        var dto = libraryService.toTrackDto(track, false);
+
+        assertThat(dto.coverUrl()).isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
+    }
+
+    @Test
+    void trackDtoLocalCoverTakesPriorityOverProviderMetadata() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        track.setTitle("Night Drive");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        track.getProviderMetadata().put("coverUrl", "https://example.com/cover.jpg");
+
+        var dto = libraryService.toTrackDto(track, false);
+
+        assertThat(dto.coverUrl()).isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
+    }
+
+    @Test
+    void playHistoryPagesWithinRetentionWindow() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().title()).isEqualTo("Night Drive");
+        assertThat(result.getContent().getFirst().playableKey()).isEqualTo("local:" + TRACK_ID);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void playHistoryResolvesLocalCoverFromTrack() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        track.setTitle("Night Drive");
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setTrackId(TRACK_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(SpaceType.SHARED), eq(List.of(TRACK_ID))))
+                .thenReturn(List.of(track));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl())
+                .isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
+    }
+
+    @Test
+    void playHistoryKeepsNullCoverWhenTrackDeleted() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setTrackId(TRACK_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(SpaceType.SHARED), eq(List.of(TRACK_ID))))
+                .thenReturn(List.of());
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl()).isNull();
+    }
+
+    @Test
+    void playHistoryKeepsOnlineCoverSnapshot() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setPlayableKey("online:netease:song-1");
+        history.setPlatform("netease");
+        history.setExternalSongId("song-1");
+        history.setTitle("Online Track");
+        history.setCoverUrl("https://p1.music.126.net/cover.jpg");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl())
+                .isEqualTo("https://p1.music.126.net/cover.jpg");
+        verify(trackRepository, never()).findTracksVisibleToUserByIds(
+                eq(OWNER_ID), eq(SpaceType.SHARED), ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void tracksPagingFallsBackToDefaultSortForUnknownField() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        var pageable = PageRequest.of(2, 50, Sort.by(Sort.Direction.ASC, "title"));
+        when(trackRepository.findTracksVisibleToUser(eq(OWNER_ID), eq(SpaceType.SHARED), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(track), pageable, 151));
+
+        var result = libraryService.tracks(OWNER_ID, 2, 50, "ownerUserId,desc");
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(151);
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, SpaceType.SHARED, pageable);
+    }
+
+    @Test
+    void tracksPagingAppliesWhitelistedDescendingSort() {
+        var pageable = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        when(trackRepository.findTracksVisibleToUser(eq(OWNER_ID), eq(SpaceType.SHARED), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        var result = libraryService.tracks(OWNER_ID, 0, 100, "updatedAt,desc");
+
+        assertThat(result.getTotalElements()).isZero();
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, SpaceType.SHARED, pageable);
+    }
+
+    @Test
+    void searchUsesMultiFieldRepositoryQueryWithStableLimit() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        track.setArtistName("Omni Band");
+        track.setAlbumTitle("City Lights");
+        PageRequest pageRequest = PageRequest.of(0, 20);
+        when(trackRepository.searchVisibleToUser(OWNER_ID, SpaceType.SHARED, "Omni", pageRequest))
+                .thenReturn(List.of(track));
+
+        var result = libraryService.search(OWNER_ID, "  Omni  ");
+
+        assertThat(result.tracks()).hasSize(1);
+        assertThat(result.tracks().getFirst().artistName()).isEqualTo("Omni Band");
+        verify(trackRepository).searchVisibleToUser(OWNER_ID, SpaceType.SHARED, "Omni", pageRequest);
+    }
+
+    @Test
+    void searchEscapesLikeWildcardsBeforeReachingTheThreeQueries() {
+        // 仓储用 concat 拼模式，所以关键词必须在服务侧就变成字面量，
+        // 否则用户敲的 % 会把条件放宽成近似全库匹配。
+        libraryService.search(OWNER_ID, " 100% _x ");
+
+        verify(trackRepository).searchVisibleToUser(
+                eq(OWNER_ID),
+                any(),
+                eq("100\\% \\_x"),
+                ArgumentMatchers.any(Pageable.class)
+        );
+        verify(albumRepository).searchVisibleActiveAlbums(eq(OWNER_ID), any(), eq("100\\% \\_x"));
+        verify(artistRepository).searchVisibleActiveArtists(eq(OWNER_ID), any(), eq("100\\% \\_x"));
+    }
+
+    @Test
+    void recordsOnlineTrackWithTypedKeyAndDisplaySnapshot() {
+        RecordMusicPlayHistoryRequest request = new RecordMusicPlayHistoryRequest(
+                "online:netease:song-1",
+                0,
+                "Cloud Song",
+                "Cloud Artist",
+                "Cloud Album",
+                "https://example.com/cloud.jpg",
+                180,
+                null
+        );
+
+        libraryService.recordPlayHistory(OWNER_ID, request);
+
+        ArgumentCaptor<MusicPlayHistory> captor = ArgumentCaptor.forClass(MusicPlayHistory.class);
+        verify(playHistoryRepository).save(captor.capture());
+        MusicPlayHistory history = captor.getValue();
+        assertThat(history.getTrackId()).isNull();
+        assertThat(history.getPlayableKey()).isEqualTo("online:netease:song-1");
+        assertThat(history.getTitle()).isEqualTo("Cloud Song");
+        // 过期清理已移交调度器，记录播放历史不再触发全表范围删除。
+        verify(playHistoryRepository, never()).deleteAllExpiredHistory(ArgumentMatchers.any(Instant.class));
+    }
+
+    @Test
+    void cleanupExpiredPlayHistoryDeletesRowsOlderThanRetention() {
+        when(playHistoryRepository.deleteAllExpiredHistory(ArgumentMatchers.any(Instant.class)))
+                .thenReturn(3);
+
+        int deleted = libraryService.cleanupExpiredPlayHistory();
+
+        assertThat(deleted).isEqualTo(3);
+        ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(playHistoryRepository).deleteAllExpiredHistory(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue()).isBefore(Instant.now());
+    }
+
+    @Test
+    void recentItemsRestoreOnlineTrackSnapshot() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setPlayableKey("online:netease:song-2");
+        history.setPlatform("netease");
+        history.setExternalSongId("song-2");
+        history.setTitle("Online Song");
+        history.setArtistName("Online Artist");
+        history.setCoverUrl("https://example.com/netease.jpg");
+        history.setPlayedAt(Instant.parse("2026-07-12T01:00:00Z"));
+        when(playHistoryRepository
+                .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                        ArgumentMatchers.eq(OWNER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                ))
+                .thenReturn(List.of(history));
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, SpaceType.SHARED, List.of()))
+                .thenReturn(List.of());
+
+        var recent = libraryService.recentItems(OWNER_ID);
+
+        assertThat(recent).hasSize(1);
+        assertThat(recent.getFirst().playableKey()).isEqualTo("online:netease:song-2");
+        assertThat(recent.getFirst().onlineTrack().title()).isEqualTo("Online Song");
+    }
+
+    @Test
+    void requireReadableTrackAllowsSharedReadableFileAndRejectsPrivate() {
+        MusicTrack sharedTrack = track();
+        sharedTrack.setOwnerUserId(UUID.randomUUID());
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(sharedTrack));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_NODE_ID)).thenReturn(null);
+
+        assertThat(libraryService.requireReadableTrack(OWNER_ID, TRACK_ID)).isSameAs(sharedTrack);
+
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"))
+                .when(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_NODE_ID);
+        assertThatThrownBy(() -> libraryService.requireReadableTrack(OWNER_ID, TRACK_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("音乐资源不存在");
+    }
+
+    @Test
+    void albumSortWhitelistUsesTitleAndFallsBackForUnknownNameField() {
+        when(albumRepository.findVisibleActiveAlbums(eq(OWNER_ID), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.<MusicAlbum>of(), PageRequest.of(0, 20), 0));
+
+        libraryService.albums(OWNER_ID, 0, 20, "title,asc");
+        libraryService.albums(OWNER_ID, 0, 20, "name");
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(albumRepository, times(2)).findVisibleActiveAlbums(eq(OWNER_ID), any(), captor.capture());
+        List<Pageable> pageables = captor.getAllValues();
+        assertThat(pageables.get(0).getSort().getOrderFor("title")).isNotNull();
+        // MusicAlbum 没有 name 属性，旧白名单会把它直接交给 JPA 并抛 PropertyReferenceException
+        assertThat(pageables.get(1).getSort().getOrderFor("name")).isNull();
+        assertThat(pageables.get(1).getSort().getOrderFor("updatedAt").getDirection())
+                .isEqualTo(Sort.Direction.DESC);
+    }
+}

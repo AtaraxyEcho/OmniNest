@@ -1,0 +1,727 @@
+part of 'music_deck_content.dart';
+
+class _ContentHeader extends StatelessWidget {
+  const _ContentHeader({
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    // 托管模块页：样例 section-title（副题作眉标 + 衬线标题 + 右槽）。
+    if (MobileShellScope.isHosted(context)) {
+      return MobileEnvSectionHeader(
+        eyebrow: subtitle,
+        title: title,
+        action: trailing,
+      );
+    }
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: context.musicColors.onSurface,
+            fontSize: AppTypography.headlineSmall,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: context.musicColors.onSurfaceVariant,
+            fontSize: AppTypography.bodySmall,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (trailing != null && constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity,
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerRight, child: trailing),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: identity),
+            if (trailing != null) ...[const SizedBox(width: 16), trailing!],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LibraryHeader extends StatelessWidget {
+  const _LibraryHeader({required this.view, required this.onViewChanged});
+
+  final MusicDeckLibraryView view;
+  final ValueChanged<MusicDeckLibraryView> onViewChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // 移动端子 chip 对齐样例三档；genres 仅桌面保留（分段隐藏后 hosted
+    // 下不可达，无需回落）。
+    final hosted = MobileShellScope.isHosted(context);
+    final selector = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SegmentedButton<MusicDeckLibraryView>(
+        segments: <ButtonSegment<MusicDeckLibraryView>>[
+          ButtonSegment(
+            value: MusicDeckLibraryView.tracks,
+            label: Text(l10n.musicNavSongs),
+          ),
+          ButtonSegment(
+            value: MusicDeckLibraryView.albums,
+            label: Text(l10n.musicNavAlbums),
+          ),
+          ButtonSegment(
+            value: MusicDeckLibraryView.artists,
+            label: Text(l10n.musicNavArtists),
+          ),
+          if (!hosted)
+            ButtonSegment(
+              value: MusicDeckLibraryView.genres,
+              label: Text(l10n.musicNavGenres),
+            ),
+        ],
+        selected: <MusicDeckLibraryView>{view},
+        showSelectedIcon: false,
+        onSelectionChanged: (value) => onViewChanged(value.first),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 620) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ContentHeader(
+                title: l10n.musicDeckLibrary,
+                subtitle: l10n.musicDeckLibrarySubtitle,
+              ),
+              const SizedBox(height: 12),
+              selector,
+            ],
+          );
+        }
+        return _ContentHeader(
+          title: l10n.musicDeckLibrary,
+          subtitle: l10n.musicDeckLibrarySubtitle,
+          trailing: selector,
+        );
+      },
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, this.actionLabel, this.onAction});
+
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    // 托管模块页：样例 section-title（衬线标题 + 弱化动作钮）。
+    if (MobileShellScope.isHosted(context)) {
+      return MobileEnvSectionHeader(
+        title: title,
+        action:
+            actionLabel == null
+                ? null
+                : TextButton(
+                  onPressed: onAction,
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.env.inkMuted,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 38),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(fontSize: AppTypography.labelSmall),
+                  ),
+                ),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: context.musicColors.onSurface,
+              fontSize: AppTypography.titleLarge,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (actionLabel != null)
+          TextButton.icon(
+            onPressed: onAction,
+            icon: const Icon(Icons.arrow_forward_rounded, size: 15),
+            iconAlignment: IconAlignment.end,
+            label: Text(actionLabel!),
+          ),
+      ],
+    );
+  }
+}
+
+class _InlineEmpty extends StatelessWidget {
+  const _InlineEmpty({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MusicDeckGlass(
+      opacity: 0.12,
+      blur: 8,
+      padding: const EdgeInsets.all(22),
+      child: Center(
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: context.musicColors.onSurfaceVariant,
+            fontSize: AppTypography.bodyMedium,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartialFailureBanner extends StatelessWidget {
+  const _PartialFailureBanner({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return MusicDeckGlass(
+      opacity: 0.2,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.sync_problem_rounded,
+            color: MusicChromeColors.goldWarning,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: context.musicColors.onSurface,
+                fontSize: AppTypography.bodySmall,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: Text(AppLocalizations.of(context).musicDeckRetry),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<MusicPlayableItem> _libraryItems(
+  MusicCenterState center,
+  MusicPlatformLibraryState platform,
+  Set<MusicPlatform> sources,
+) {
+  return <MusicPlayableItem>[
+    if (sources.contains(MusicPlatform.local))
+      ...center.tracks.map(MusicPlayableItem.local),
+    for (final source in sources)
+      if (source != MusicPlatform.local)
+        ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
+                const <OnlineTrack>[])
+            .map(MusicPlayableItem.online),
+  ];
+}
+
+List<MusicDeckCoverItem> _albumCoverItems(
+  MusicCenterState center,
+  MusicPlatformLibraryState platform,
+  Set<MusicPlatform> sources,
+  ValueChanged<MusicDeckCollectionSelection> onOpenCollection,
+) {
+  final items = <MusicDeckCoverItem>[];
+  if (sources.contains(MusicPlatform.local)) {
+    items.addAll(
+      center.albums.map(
+        (album) => MusicDeckCoverItem(
+          id: album.id,
+          title: album.title,
+          subtitle: album.artistName,
+          imageUrl: album.listCoverUrl,
+          onTap: () => onOpenCollection(AlbumMusicDeckCollection(album)),
+        ),
+      ),
+    );
+  }
+  for (final source in sources.where(
+    (source) => source != MusicPlatform.local,
+  )) {
+    final groups = <String, List<OnlineTrack>>{};
+    for (final track in _knownOnlineTracks(platform, source)) {
+      final album = track.albumTitle.trim();
+      if (album.isEmpty) {
+        continue;
+      }
+      groups
+          .putIfAbsent('$album\u0000${track.artistName}', () => [])
+          .add(track);
+    }
+    for (final tracks in groups.values) {
+      final first = tracks.first;
+      final selection = OnlineAlbumMusicDeckCollection(
+        platform: source,
+        title: first.albumTitle,
+        artistName: first.artistName,
+        coverUrl: first.listCoverUrl,
+        tracks: List<OnlineTrack>.unmodifiable(tracks),
+      );
+      items.add(
+        MusicDeckCoverItem(
+          id: '${source.apiValue}:album:${first.albumTitle}:${first.artistName}',
+          title: first.albumTitle,
+          subtitle: first.artistName,
+          imageUrl: first.listCoverUrl,
+          platform: source,
+          onTap: () => onOpenCollection(selection),
+        ),
+      );
+    }
+  }
+  return items;
+}
+
+List<MusicDeckCoverItem> _artistCoverItems(
+  AppLocalizations l10n,
+  MusicCenterState center,
+  MusicPlatformLibraryState platform,
+  Set<MusicPlatform> sources,
+  ValueChanged<MusicDeckCollectionSelection> onOpenCollection,
+) {
+  final items = <MusicDeckCoverItem>[];
+  if (sources.contains(MusicPlatform.local)) {
+    items.addAll(
+      center.artists.map(
+        (artist) => MusicDeckCoverItem(
+          id: artist.id,
+          title: artist.name,
+          subtitle: l10n.musicDeckTrackCount(artist.trackCount),
+          imageUrl: artist.listCoverUrl,
+          icon: Icons.person_rounded,
+          onTap: () => onOpenCollection(ArtistMusicDeckCollection(artist)),
+        ),
+      ),
+    );
+  }
+  for (final source in sources.where(
+    (source) => source != MusicPlatform.local,
+  )) {
+    final groups = <String, List<OnlineTrack>>{};
+    for (final track in _knownOnlineTracks(platform, source)) {
+      final artist = track.artistName.trim();
+      if (artist.isEmpty) {
+        continue;
+      }
+      groups.putIfAbsent(artist, () => []).add(track);
+    }
+    for (final entry in groups.entries) {
+      final tracks = entry.value;
+      final coverUrl = tracks
+          .map((track) => track.listCoverUrl)
+          .firstWhere((url) => url.isNotEmpty, orElse: () => '');
+      final selection = OnlineArtistMusicDeckCollection(
+        platform: source,
+        name: entry.key,
+        coverUrl: coverUrl,
+        tracks: List<OnlineTrack>.unmodifiable(tracks),
+      );
+      items.add(
+        MusicDeckCoverItem(
+          id: '${source.apiValue}:artist:${entry.key}',
+          title: entry.key,
+          subtitle: l10n.musicDeckTrackCount(tracks.length),
+          imageUrl: coverUrl,
+          icon: Icons.person_rounded,
+          platform: source,
+          onTap: () => onOpenCollection(selection),
+        ),
+      );
+    }
+  }
+  return items;
+}
+
+List<OnlineTrack> _knownOnlineTracks(
+  MusicPlatformLibraryState platform,
+  MusicPlatform source,
+) {
+  final tracks = <OnlineTrack>[
+    ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
+        const <OnlineTrack>[]),
+    for (final entry in platform.playlistTracks.entries)
+      if (entry.key.startsWith('${source.apiValue}:')) ...entry.value.items,
+  ];
+  final knownIds = <String>{};
+  return tracks
+      .where((track) => knownIds.add(track.songId))
+      .toList(growable: false);
+}
+
+Future<void> _showCreatePlaylistDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final draft = await showWorkstationDialog<MusicDeckPlaylistDraft>(
+    context: context,
+    builder: (dialogContext) => const MusicDeckCreatePlaylistDialog(),
+  );
+  if (draft == null || !context.mounted) {
+    return;
+  }
+  try {
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .createPlaylist(
+          name: draft.name,
+          description: draft.description,
+          coverBytes: draft.coverBytes,
+          coverFileName: draft.coverFileName,
+        );
+  } on Exception catch (error) {
+    if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
+      _showPlaylistMessage(
+        context,
+        l10n.musicPlaylistSaveFailed(errorReason(error, l10n)),
+      );
+    }
+  }
+}
+
+Future<void> _showEditPlaylistDialog(
+  BuildContext context,
+  WidgetRef ref,
+  MusicPlaylist playlist,
+) async {
+  final draft = await showWorkstationDialog<MusicDeckPlaylistDraft>(
+    context: context,
+    builder:
+        (dialogContext) => MusicDeckCreatePlaylistDialog(
+          initialName: playlist.name,
+          initialDescription: playlist.description,
+          initialCoverUrl: playlist.coverUrl,
+          editing: true,
+        ),
+  );
+  if (draft == null || !context.mounted) {
+    return;
+  }
+  try {
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .updatePlaylist(
+          playlist,
+          name: draft.name,
+          description: draft.description,
+          coverBytes: draft.coverBytes,
+          coverFileName: draft.coverFileName,
+        );
+  } on Exception catch (error) {
+    if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
+      _showPlaylistMessage(
+        context,
+        l10n.musicPlaylistSaveFailed(errorReason(error, l10n)),
+      );
+    }
+  }
+}
+
+Future<void> _confirmDeletePlaylist(
+  BuildContext context,
+  WidgetRef ref,
+  MusicPlaylist playlist,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showWorkstationDialog<bool>(
+    context: context,
+    builder:
+        (dialogContext) => AlertDialog(
+          title: Text(l10n.musicDeletePlaylistTitle),
+          content: Text(l10n.musicDeletePlaylistMessage(playlist.name)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.musicCancel),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: MusicChromeColors.brandRed,
+                foregroundColor: context.musicColors.onSurface,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: Text(l10n.musicDeletePlaylist),
+            ),
+          ],
+        ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  try {
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .deletePlaylist(playlist);
+  } on Exception catch (error) {
+    if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
+      _showPlaylistMessage(
+        context,
+        l10n.musicPlaylistDeleteFailed(errorReason(error, l10n)),
+      );
+    }
+  }
+}
+
+void _showPlaylistMessage(BuildContext context, String message) {
+  showOmniFeedback(context, message);
+}
+
+List<MusicPlayableItem> _favoriteItems(
+  MusicPlatformLibraryState platform,
+  Set<MusicPlatform> sources,
+  List<MusicTrack> favoriteTracks,
+) {
+  return <MusicPlayableItem>[
+    if (sources.contains(MusicPlatform.local))
+      ...favoriteTracks.map(MusicPlayableItem.local),
+    for (final source in sources)
+      if (source != MusicPlatform.local)
+        ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
+                const <OnlineTrack>[])
+            .map(MusicPlayableItem.online),
+  ];
+}
+
+List<MusicPlayableItem> _recentItems(
+  MusicCenterState center,
+  Set<MusicPlatform> sources,
+) {
+  return center.recentItems
+      .where((item) {
+        return switch (item.ref) {
+          LocalMusicRef() => sources.contains(MusicPlatform.local),
+          OnlineMusicRef(:final platform) => sources.contains(platform),
+        };
+      })
+      .toList(growable: false);
+}
+
+List<MusicDeckCoverItem> _playlistCoverItems(
+  BuildContext context,
+  MusicCenterState center,
+  MusicPlatformLibraryState platform,
+  Set<MusicPlatform> sources,
+  ValueChanged<MusicDeckCollectionSelection> onOpenCollection, {
+  ValueChanged<MusicPlaylist>? onEdit,
+  ValueChanged<MusicPlaylist>? onDelete,
+}) {
+  final l10n = AppLocalizations.of(context);
+  return <MusicDeckCoverItem>[
+    if (sources.contains(MusicPlatform.local))
+      for (final playlist in center.playlists)
+        MusicDeckCoverItem(
+          id: playlist.id,
+          title: playlist.name,
+          subtitle: l10n.musicDeckTrackCount(playlist.trackCount),
+          imageUrl: playlist.listCoverUrl,
+          actions:
+              playlist.playlistType == 'CUSTOM' &&
+                      onEdit != null &&
+                      onDelete != null
+                  ? <MusicDeckCoverAction>[
+                    MusicDeckCoverAction(
+                      label: l10n.musicEditPlaylist,
+                      icon: Icons.edit_outlined,
+                      onSelected: () => onEdit(playlist),
+                    ),
+                    MusicDeckCoverAction(
+                      label: l10n.musicDeletePlaylist,
+                      icon: Icons.delete_outline_rounded,
+                      destructive: true,
+                      onSelected: () => onDelete(playlist),
+                    ),
+                  ]
+                  : const <MusicDeckCoverAction>[],
+          onTap: () => onOpenCollection(LocalMusicDeckCollection(playlist)),
+        ),
+    for (final source in sources)
+      if (source != MusicPlatform.local)
+        for (final playlist
+            in platform.playlistsByPlatform[source.apiValue] ??
+                const <OnlinePlaylist>[])
+          MusicDeckCoverItem(
+            id: '${playlist.platform}:${playlist.playlistId}',
+            title: playlist.name,
+            subtitle:
+                playlist.ownerName.isEmpty
+                    ? l10n.musicDeckTrackCount(playlist.trackCount ?? 0)
+                    : playlist.ownerName,
+            imageUrl: platform.coverUrlForPlaylist(playlist),
+            platform: source,
+            onTap: () => onOpenCollection(OnlineMusicDeckCollection(playlist)),
+          ),
+  ];
+}
+
+/// 无 activity:write 时返回 null，曲目卡片据此隐藏收藏动作。
+ValueChanged<MusicPlayableItem>? _favoriteHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+    return null;
+  }
+  return (item) {
+    if (item.ref is LocalMusicRef) {
+      final wasFavorite = item.track.favorite;
+      unawaited(() async {
+        try {
+          await ref
+              .read(musicCenterControllerProvider.notifier)
+              .toggleFavorite(item.track);
+          if (context.mounted) {
+            showOmniFeedback(
+              context,
+              wasFavorite
+                  ? AppLocalizations.of(context).favoriteRemoved
+                  : AppLocalizations.of(context).favoriteAdded,
+              severity: OmniFeedbackSeverity.success,
+            );
+          }
+        } on Exception catch (error) {
+          if (context.mounted) {
+            final l10n = AppLocalizations.of(context);
+            showOmniFeedback(
+              context,
+              failureToast(l10n, l10n.musicFavoriteToggleFailed, error),
+              severity: OmniFeedbackSeverity.error,
+            );
+          }
+        }
+      }());
+    }
+  };
+}
+
+ValueChanged<MusicPlayableItem> _enqueueTrackHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) {
+    ref.read(musicCenterControllerProvider.notifier).enqueue(item);
+    _showPlaylistMessage(
+      context,
+      AppLocalizations.of(context).musicPlayNextAdded,
+    );
+  };
+}
+
+ValueChanged<MusicPlayableItem> _addToPlaylistHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) {
+    showMusicAddToPlaylistSheet(context, ref, item);
+  };
+}
+
+/// 歌单详情里的"删除"是从歌单移除，不是销毁网盘源文件：
+/// 只提供永久粉碎会让用户误删整首曲目。
+ValueChanged<MusicPlayableItem> _removeFromPlaylistHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) async {
+    if (item.ref is! LocalMusicRef) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .removeTrackFromSelectedPlaylist(item.track);
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicRemoveFromPlaylistSuccess);
+      }
+    } on Exception {
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicRemoveFromPlaylistFailed);
+      }
+    }
+  };
+}
+
+ValueChanged<MusicPlayableItem> _deleteTrackHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) async {
+    if (item.ref is! LocalMusicRef) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      final deleted = await confirmAndRunFilePurge(
+        context,
+        resourceName: item.track.title,
+        action: (cascade) async {
+          await ref
+              .read(musicCenterControllerProvider.notifier)
+              .deleteTrack(item.track, cascade: cascade);
+        },
+      );
+      if (!deleted || !context.mounted) return;
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicDeleteLocalTrackSuccess);
+      }
+    } on Exception {
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicDeleteLocalTrackFailed);
+      }
+    }
+  };
+}

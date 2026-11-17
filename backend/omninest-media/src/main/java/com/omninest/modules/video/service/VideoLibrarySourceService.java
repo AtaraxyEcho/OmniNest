@@ -1,0 +1,584 @@
+package com.omninest.modules.video.service;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.dto.StorageLocationDtos.StorageDirectoryDto;
+import com.omninest.modules.file.service.StorageDirectoryService;
+import com.omninest.modules.file.service.StorageLocationService;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.task.domain.TaskStatus;
+import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.video.domain.MediaImportPolicy;
+import com.omninest.modules.video.domain.MediaLibraryType;
+import com.omninest.modules.video.domain.MediaLibraryVisibility;
+import com.omninest.modules.video.domain.MediaScanRun;
+import com.omninest.modules.video.domain.VideoLibrarySource;
+import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.CreateVideoLibrarySourceRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionDto;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.UpdateVideoLibrarySourceRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.VideoLibrarySourceDto;
+import com.omninest.modules.video.event.LocalVideoLibraryScanRequestedEvent;
+import com.omninest.modules.video.repository.MediaScanRunRepository;
+import com.omninest.modules.video.repository.MediaScanBatchRepository;
+import com.omninest.modules.video.repository.MediaScanCandidateRepository;
+import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.repository.VideoLibrarySourceRepository;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 影视库本地来源配置与发现任务编排服务。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class VideoLibrarySourceService {
+    private static final String DISCOVERY_TASK_TYPE = "LOCAL_VIDEO_LIBRARY_DISCOVERY";
+    private static final List<String> ACTIVE_RUN_STATUSES = List.of("QUEUED", "DISCOVERING", "APPLYING");
+
+    /**
+     * 挂载媒体库约定目录：管理员只需把资源放入对应目录，
+     * 类型由目录归属决定，不再手动选择媒体库类型。
+     */
+    private record MountCatalogSpec(MediaLibraryType libraryType, String relativeRoot, String displayName) {
+    }
+
+    private static final int CATALOG_DIR_SCAN_PAGE_SIZE = 200;
+    private static final int CATALOG_DIR_SCAN_PAGE_LIMIT = 50;
+    private static final List<MountCatalogSpec> MOUNT_CATALOG = List.of(
+            new MountCatalogSpec(MediaLibraryType.MOVIE, "Movie", "电影"),
+            new MountCatalogSpec(MediaLibraryType.TV_SERIES, "TV", "剧集"),
+            new MountCatalogSpec(MediaLibraryType.ANIME, "Anime", "动漫")
+    );
+
+    private final VideoLibrarySourceRepository sourceRepository;
+    private final MediaScanRunRepository runRepository;
+    private final MediaScanBatchRepository batchRepository;
+    private final MediaScanCandidateRepository candidateRepository;
+    private final MediaVideoItemRepository videoItemRepository;
+    private final StorageLocationService storageLocationService;
+    private final StorageDirectoryService storageDirectoryService;
+    private final TaskRecordService taskRecordService;
+    private final TaskDispatchService taskDispatchService;
+    private final MediaLibraryDiscoveryExecutor discoveryExecutor;
+    private final MediaLibraryAccessService accessService;
+    private final MediaLibraryReviewService reviewService;
+    private final MediaSyncEventService syncEventService;
+
+    /** 查询用户影视库来源。 */
+    @Transactional(readOnly = true)
+    public List<VideoLibrarySourceDto> list(UUID operatorUserId) {
+        accessService.requireManagePermission(operatorUserId);
+        return sourceRepository.findAllByOrderByNameAsc().stream().map(this::toDto).toList();
+    }
+
+    /** 创建用户影视库来源。 */
+    @Transactional(rollbackFor = Exception.class)
+    public VideoLibrarySourceDto create(UUID operatorUserId, CreateVideoLibrarySourceRequest request) {
+        accessService.requireManagePermission(operatorUserId);
+        boolean hasLocationId = request.storageLocationId() != null;
+        boolean hasMountKey = request.mountKey() != null && !request.mountKey().isBlank();
+        if (hasLocationId == hasMountKey) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "storageLocationId 与 mountKey 必须二选一");
+        }
+        StorageLocation autoCreated = null;
+        UUID storageLocationId;
+        if (hasMountKey) {
+            accessService.requireSystemConfigManage(operatorUserId);
+            StorageLocationService.SystemLocationResolution resolution =
+                    storageLocationService.findOrCreateSystemLocation(operatorUserId, request.mountKey(), ".");
+            autoCreated = resolution.created() ? resolution.location() : null;
+            storageLocationId = resolution.location().getId();
+        } else {
+            storageLocationId = request.storageLocationId();
+        }
+        try {
+            VideoLibrarySourceDto created = persistNewSource(operatorUserId, request, storageLocationId);
+            recordSourceEvent(operatorUserId, created.id());
+            return created;
+        } catch (RuntimeException exception) {
+            if (autoCreated != null) {
+                // 外层事务即将回滚；本次自动创建的位置在独立事务中按无引用条件清理，
+                // 复用既有位置（created=false）不清理。清理与他方并发引用之间的极小
+                // 窗口由位置健康检查暴露，不做悲观锁。
+                storageLocationService.rollbackAutoCreatedLocation(autoCreated.getId());
+            }
+            throw exception;
+        }
+    }
+
+    /**
+     * 按挂载键一键开通或更新媒体库。
+     *
+     * <p>在挂载根存储位置下维护 Movie、TV、Anime 三个约定目录的类型库源；
+     * 启用状态与扫描后自动入库策略作用于这三个库源。LOCAL 挂载只读，
+     * 不会自动在磁盘上创建目录，目录结构由部署侧约定。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public MountLibraryProvisionDto provisionMountLibrary(
+            UUID operatorUserId,
+            MountLibraryProvisionRequest request
+    ) {
+        accessService.requireManagePermission(operatorUserId);
+        accessService.requireSystemConfigManage(operatorUserId);
+        StorageLocationService.SystemLocationResolution resolution =
+                storageLocationService.findOrCreateSystemLocation(operatorUserId, request.mountKey(), ".");
+        StorageLocation location = resolution.location();
+        MediaImportPolicy importPolicy = request.autoImport()
+                ? MediaImportPolicy.AUTO_ADD_ALL_MATCHED
+                : MediaImportPolicy.MANUAL_REVIEW;
+        try {
+            storageDirectoryService.ensureMountDirectories(
+                    location.getMountKey(),
+                    MOUNT_CATALOG.stream().map(MountCatalogSpec::relativeRoot).toList()
+            );
+            CatalogCasingResolution casingResolution = resolveCatalogDirectoryCasings(location);
+            Map<String, String> catalogCasings = casingResolution.casings();
+            boolean locationReadable = casingResolution.locationReadable();
+            List<VideoLibrarySourceDto> sources = new ArrayList<>();
+            for (MountCatalogSpec spec : MOUNT_CATALOG) {
+                sources.add(upsertCatalogSource(
+                        operatorUserId,
+                        location,
+                        spec,
+                        importPolicy,
+                        request.enabled(),
+                        catalogCasings,
+                        locationReadable
+                ));
+            }
+            recordSourceEvent(operatorUserId, null);
+            return new MountLibraryProvisionDto(
+                    location.getMountKey(),
+                    location.getId(),
+                    request.enabled(),
+                    request.autoImport(),
+                    List.copyOf(sources)
+            );
+        } catch (RuntimeException exception) {
+            if (resolution.created()) {
+                // 与挂载直达创建一致：失败时清理本次新建且无引用的位置。
+                storageLocationService.rollbackAutoCreatedLocation(location.getId());
+            }
+            throw exception;
+        }
+    }
+
+    private VideoLibrarySourceDto upsertCatalogSource(
+            UUID operatorUserId,
+            StorageLocation location,
+            MountCatalogSpec spec,
+            MediaImportPolicy importPolicy,
+            boolean enabled,
+            Map<String, String> catalogCasings,
+            boolean locationReadable
+    ) {
+        List<VideoLibrarySource> matched = findCatalogSourcesIgnoreCase(location.getId(), spec.relativeRoot());
+        if (matched.size() > 1) {
+            throw new BusinessException(
+                    ErrorCode.CONFLICT,
+                    "存在大小写不同的同名库源目录，请先在库源列表清理重复项"
+            );
+        }
+        VideoLibrarySource source = matched.isEmpty()
+                ? createCatalogSource(
+                        operatorUserId,
+                        location,
+                        normalizeRelativeRoot(
+                                catalogCasings.getOrDefault(
+                                        spec.relativeRoot().toLowerCase(Locale.ROOT),
+                                        spec.relativeRoot()
+                                )
+                        )
+                )
+                : matched.get(0);
+        if (source.getScanStatus() != null && ACTIVE_RUN_STATUSES.contains(source.getScanStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体发现或入库期间不能变更挂载媒体库配置");
+        }
+        if (source.getLastScannedCount() > 0
+                && !source.getLibraryType().equals(spec.libraryType().name())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "已发现的媒体库不能直接更改类型，请先清理媒体实体");
+        }
+        source.setName(spec.displayName());
+        source.setLibraryType(spec.libraryType().name());
+        source.setImportPolicy(importPolicy.name());
+        if (source.getVisibilityType() == null) {
+            source.setVisibilityType(MediaLibraryVisibility.PRIVATE.name());
+        }
+        source.setEnabled(enabled);
+        if (!enabled) {
+            source.setHealthStatus("DISABLED");
+        } else if (locationReadable) {
+            source.setHealthStatus("AVAILABLE");
+        } else {
+            source.setHealthStatus("DEGRADED");
+        }
+        return toDto(sourceRepository.save(source));
+    }
+
+    private List<VideoLibrarySource> findCatalogSourcesIgnoreCase(UUID storageLocationId, String relativeRoot) {
+        return sourceRepository.findByStorageLocationId(storageLocationId).stream()
+                .filter(candidate -> candidate.getRelativeRoot() != null
+                        && candidate.getRelativeRoot().equalsIgnoreCase(relativeRoot))
+                .toList();
+    }
+
+    private VideoLibrarySource createCatalogSource(
+            UUID operatorUserId,
+            StorageLocation location,
+            String relativeRoot
+    ) {
+        requireNoPathConflict(null, location, relativeRoot);
+        VideoLibrarySource created = new VideoLibrarySource();
+        created.setOwnerUserId(operatorUserId);
+        created.setStorageLocationId(location.getId());
+        created.setRelativeRoot(relativeRoot);
+        created.setScanStatus("NEVER_SCANNED");
+        return created;
+    }
+
+    /**
+     * 分页列出挂载根目录，解析 Movie/TV/Anime 的实际大小写。
+     * 避免 Linux 大小写敏感文件系统上扫描路径对不上，也避免每个槽位重复读目录。
+     */
+    private CatalogCasingResolution resolveCatalogDirectoryCasings(StorageLocation location) {
+        Map<String, String> casings = new HashMap<>();
+        boolean readable = true;
+        try {
+            int page = 0;
+            while (page <= CATALOG_DIR_SCAN_PAGE_LIMIT) {
+                var result = storageDirectoryService.listMountChildren(location.getMountKey(), ".", page, CATALOG_DIR_SCAN_PAGE_SIZE);
+                for (StorageDirectoryDto directory : result.items()) {
+                    String name = directory.name();
+                    if (name == null) {
+                        continue;
+                    }
+                    String key = name.toLowerCase(Locale.ROOT);
+                    if (isCatalogRootName(key) && !casings.containsKey(key)) {
+                        casings.put(key, name);
+                    }
+                }
+                if (casings.size() >= MOUNT_CATALOG.size()
+                        || result.items().isEmpty()
+                        || result.page() + 1 >= result.totalPages()) {
+                    break;
+                }
+                page++;
+            }
+        } catch (RuntimeException exception) {
+            readable = false;
+            log.debug(
+                    "解析约定目录实际大小写失败，回退规范名: mountKey={}",
+                    location.getMountKey(),
+                    exception
+            );
+        }
+        return new CatalogCasingResolution(casings, readable);
+    }
+
+    private record CatalogCasingResolution(Map<String, String> casings, boolean locationReadable) {
+    }
+
+    private boolean isCatalogRootName(String lowerName) {
+        return MOUNT_CATALOG.stream()
+                .anyMatch(spec -> spec.relativeRoot().toLowerCase(Locale.ROOT).equals(lowerName));
+    }
+
+    /** 持久化新来源；权限与位置解析已由调用方完成。 */
+    private VideoLibrarySourceDto persistNewSource(
+            UUID operatorUserId,
+            CreateVideoLibrarySourceRequest request,
+            UUID storageLocationId
+    ) {
+        StorageLocation location = storageLocationService.requireAccessibleLocation(
+                operatorUserId,
+                storageLocationId
+        );
+        if (!"SYSTEM".equals(location.getScopeType())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享媒体库只能使用系统级存储位置");
+        }
+        String relativeRoot = normalizeRelativeRoot(request.relativeRoot());
+        requireNoPathConflict(null, location, relativeRoot);
+        VideoLibrarySource source = new VideoLibrarySource();
+        source.setOwnerUserId(operatorUserId);
+        source.setStorageLocationId(storageLocationId);
+        source.setName(normalizeName(request.name()));
+        source.setRelativeRoot(relativeRoot);
+        source.setLibraryType(normalizeLibraryType(request.libraryType()).name());
+        source.setImportPolicy(normalizeImportPolicy(request.importPolicy()).name());
+        source.setVisibilityType(MediaLibraryVisibility.PRIVATE.name());
+        source.setEnabled(request.enabled());
+        source.setScanStatus("NEVER_SCANNED");
+        source.setHealthStatus(request.enabled() ? "AVAILABLE" : "DISABLED");
+        return toDto(sourceRepository.save(source));
+    }
+
+    /**
+     * 删除来源配置及其未应用的扫描记录。
+     *
+     * <p>已经建立媒体实体的来源不能删除，避免留下无法授权或播放的悬空引用；
+     * 调用方应先清理相关媒体实体。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(UUID operatorUserId, UUID sourceId) {
+        VideoLibrarySource source = accessService.requireManage(operatorUserId, sourceId);
+        if (ACTIVE_RUN_STATUSES.contains(source.getScanStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体发现或入库期间不能删除影视库来源");
+        }
+        if (videoItemRepository.countByLibrarySourceId(sourceId) > 0) {
+            throw new BusinessException(ErrorCode.RESOURCE_IN_USE, "影视库来源仍有已入库媒体，请先清理媒体实体");
+        }
+        accessService.deleteForSource(sourceId);
+        candidateRepository.deleteByLibrarySourceId(sourceId);
+        batchRepository.deleteByLibrarySourceId(sourceId);
+        runRepository.deleteByLibrarySourceId(sourceId);
+        sourceRepository.delete(source);
+        recordSourceEvent(operatorUserId, sourceId);
+    }
+
+    /** 更新用户影视库来源。 */
+    @Transactional(rollbackFor = Exception.class)
+    public VideoLibrarySourceDto update(
+            UUID operatorUserId,
+            UUID sourceId,
+            UpdateVideoLibrarySourceRequest request
+    ) {
+        VideoLibrarySource source = accessService.requireManage(operatorUserId, sourceId);
+        if (ACTIVE_RUN_STATUSES.contains(source.getScanStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体发现或入库期间不能修改影视库来源");
+        }
+        StorageLocation location = storageLocationService.requireAccessibleLocation(
+                operatorUserId,
+                source.getStorageLocationId()
+        );
+        String relativeRoot = normalizeRelativeRoot(request.relativeRoot());
+        requireNoPathConflict(sourceId, location, relativeRoot);
+        MediaLibraryType libraryType = request.libraryType() == null
+                ? MediaLibraryType.valueOf(source.getLibraryType())
+                : request.libraryType();
+        if (source.getLastScannedCount() > 0 && !source.getLibraryType().equals(libraryType.name())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "已发现的媒体库不能直接更改类型，请新建来源");
+        }
+        source.setName(normalizeName(request.name()));
+        source.setRelativeRoot(relativeRoot);
+        source.setLibraryType(libraryType.name());
+        source.setImportPolicy(request.importPolicy() == null
+                ? source.getImportPolicy()
+                : request.importPolicy().name());
+        source.setEnabled(request.enabled());
+        source.setHealthStatus(request.enabled() ? source.getHealthStatus() : "DISABLED");
+        if (request.enabled() && "DISABLED".equals(source.getHealthStatus())) {
+            source.setHealthStatus("AVAILABLE");
+        }
+        VideoLibrarySourceDto updated = toDto(sourceRepository.save(source));
+        recordSourceEvent(operatorUserId, sourceId);
+        return updated;
+    }
+
+    /**
+     * 创建只发现候选、不立即写入媒体实体的后台任务。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ScrapeTaskDto scan(UUID operatorUserId, UUID sourceId) {
+        VideoLibrarySource source = accessService.requireManage(operatorUserId, sourceId);
+        UUID catalogOwnerId = source.getOwnerUserId();
+        if (!source.isEnabled()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "影视库来源已停用");
+        }
+        if (runRepository.existsByLibrarySourceIdAndStatusIn(sourceId, ACTIVE_RUN_STATUSES)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "影视库来源已有发现或入库任务正在执行");
+        }
+        long generation = runRepository
+                .findFirstByLibrarySourceIdOrderByCreatedAtDesc(sourceId)
+                .map(previous -> previous.getGeneration() + 1)
+                .orElse(1L);
+        UUID taskId = UUID.randomUUID();
+        MediaScanRun run = new MediaScanRun();
+        run.setOwnerUserId(catalogOwnerId);
+        run.setLibrarySourceId(sourceId);
+        run.setDiscoveryTaskId(taskId);
+        run.setGeneration(generation);
+        run.setStatus("QUEUED");
+        run.setPhase("DISCOVERY");
+        MediaScanRun savedRun = runRepository.save(run);
+
+        source.setScanStatus("QUEUED");
+        source.setLastErrorCode(null);
+        sourceRepository.save(source);
+        Map<String, Object> payload = Map.of(
+                "catalogOwnerId", catalogOwnerId.toString(),
+                "operatorUserId", operatorUserId.toString(),
+                "sourceId", sourceId.toString(),
+                "scanRunId", savedRun.getId().toString()
+        );
+        taskRecordService.createQueuedTask(
+                taskId,
+                operatorUserId,
+                DISCOVERY_TASK_TYPE,
+                QueueNames.LOCAL_VIDEO_LIBRARY_SCAN_ROUTING_KEY,
+                "QUEUED",
+                "MEDIA_SCAN_RUN",
+                savedRun.getId(),
+                payload
+        );
+        LocalVideoLibraryScanRequestedEvent event = new LocalVideoLibraryScanRequestedEvent(
+                taskId,
+                catalogOwnerId,
+                sourceId,
+                savedRun.getId()
+        );
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.LOCAL_VIDEO_LIBRARY_SCAN_ROUTING_KEY,
+                event
+        );
+        recordSourceEvent(operatorUserId, sourceId);
+        return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "媒体发现任务已进入队列");
+    }
+
+    /** 库源配置变更后发出 VIDEO_LIBRARY 事件，操作者其他设备的库源视图即时刷新。 */
+    private void recordSourceEvent(UUID operatorUserId, UUID sourceId) {
+        syncEventService.record(
+                operatorUserId,
+                SyncScope.VIDEO,
+                "VIDEO_LIBRARY",
+                sourceId == null ? null : sourceId.toString(),
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        );
+    }
+
+    /** Worker 执行媒体发现；发现完成后按导入策略决定是否自动入库。 */
+    public void executeScan(LocalVideoLibraryScanRequestedEvent event) {
+        discoveryExecutor.execute(event);
+        try {
+            reviewService.autoApplyIfConfigured(event.ownerUserId(), event.scanRunId());
+        } catch (RuntimeException exception) {
+            // 发现已成功收尾；自动入库失败只记录，不把扫描任务改判为失败。
+            log.warn("媒体发现后自动入库未成功: scanRunId={}", event.scanRunId(), exception);
+        }
+    }
+
+    private MediaLibraryType normalizeLibraryType(MediaLibraryType value) {
+        return value == null ? MediaLibraryType.MOVIE : value;
+    }
+
+    private MediaImportPolicy normalizeImportPolicy(MediaImportPolicy value) {
+        return value == null ? MediaImportPolicy.MANUAL_REVIEW : value;
+    }
+
+    private String normalizeName(String value) {
+        String name = value == null ? "" : value.trim();
+        if (name.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "影视库来源名称不能为空");
+        }
+        return name;
+    }
+
+    private String normalizeRelativeRoot(String value) {
+        String raw = value == null || value.isBlank() ? "." : value.trim();
+        if (raw.chars().anyMatch(character -> character < 0x20 || character == 0x7f)
+                || (raw.length() >= 2 && Character.isLetter(raw.charAt(0)) && raw.charAt(1) == ':')) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "影视库来源必须是安全的相对路径");
+        }
+        try {
+            Path path = Path.of(raw).normalize();
+            if (path.isAbsolute() || path.startsWith("..")) {
+                throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "影视库来源必须是安全的相对路径");
+            }
+            String normalized = path.toString().replace('\\', '/');
+            return normalized.isBlank() ? "." : normalized;
+        } catch (InvalidPathException exception) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "影视库来源路径格式无效");
+        }
+    }
+
+    /**
+     * 校验目标目录不与同挂载下任何既有库源物理重叠。
+     *
+     * <p>同一挂载可能同时存在挂载根位置和子目录位置（向导登记与挂载直达并存），
+     * 仅比较同一位置内的相对根会放行跨位置的物理重叠，导致同一目录重复扫描入库，
+     * 因此按"位置相对根 + 库源相对根"拼接后的物理根参与比较。</p>
+     */
+    private void requireNoPathConflict(UUID sourceId, StorageLocation targetLocation, String relativeRoot) {
+        String targetRoot = composePhysicalRoot(targetLocation.getRelativeRoot(), relativeRoot);
+        for (StorageLocation location : storageLocationService.listByMountKeyForBusiness(targetLocation.getMountKey())) {
+            for (VideoLibrarySource candidate : sourceRepository.findByStorageLocationId(location.getId())) {
+                if (sourceId != null && candidate.getId().equals(sourceId)) {
+                    continue;
+                }
+                String candidateRoot = composePhysicalRoot(location.getRelativeRoot(), candidate.getRelativeRoot());
+                if (pathsOverlap(candidateRoot, targetRoot)) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "该目录与现有媒体库目录重复或重叠");
+                }
+            }
+        }
+    }
+
+    private String composePhysicalRoot(String locationRoot, String sourceRoot) {
+        String left = isBlankRoot(locationRoot) ? "" : locationRoot;
+        String right = isBlankRoot(sourceRoot) ? "" : sourceRoot;
+        if (left.isEmpty()) {
+            return right;
+        }
+        return right.isEmpty() ? left : left + "/" + right;
+    }
+
+    private boolean isBlankRoot(String value) {
+        return value == null || value.isBlank() || ".".equals(value);
+    }
+
+    private boolean pathsOverlap(String left, String right) {
+        // 空物理根表示整个挂载，与任意子目录都重叠；避免根库源与约定子库重复扫描。
+        if (left.isBlank() || right.isBlank()) {
+            return true;
+        }
+        Path leftPath = Path.of(left.toLowerCase(Locale.ROOT)).normalize();
+        Path rightPath = Path.of(right.toLowerCase(Locale.ROOT)).normalize();
+        return leftPath.equals(rightPath) || leftPath.startsWith(rightPath) || rightPath.startsWith(leftPath);
+    }
+
+    private VideoLibrarySourceDto toDto(VideoLibrarySource source) {
+        return new VideoLibrarySourceDto(
+                source.getId(),
+                source.getName(),
+                source.getStorageLocationId(),
+                source.getRelativeRoot(),
+                MediaLibraryType.valueOf(source.getLibraryType()),
+                MediaImportPolicy.valueOf(source.getImportPolicy()),
+                MediaLibraryVisibility.from(source.getVisibilityType()),
+                source.isEnabled(),
+                source.getScanStatus(),
+                source.getHealthStatus(),
+                source.getLastScannedAt(),
+                source.getLastSuccessfulScanAt(),
+                source.getLastErrorCode(),
+                source.getLastScannedCount(),
+                source.getLastCreatedCount(),
+                source.getLastCandidateCount(),
+                source.getLastMissingCount(),
+                source.getCreatedAt(),
+                source.getUpdatedAt(),
+                source.getVersion()
+        );
+    }
+}

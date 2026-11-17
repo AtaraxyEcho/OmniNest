@@ -1,0 +1,320 @@
+package com.omninest.modules.user.service;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.Roles;
+import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.quota.service.StorageQuotaService;
+import com.omninest.modules.user.config.InitialSetupProperties;
+import com.omninest.modules.user.domain.AuthRole;
+import com.omninest.modules.user.domain.AuthUser;
+import com.omninest.modules.user.domain.SystemInstance;
+import com.omninest.modules.user.domain.SystemInstanceState;
+import com.omninest.modules.user.domain.UserStatus;
+import com.omninest.modules.user.dto.InitialSetupRequest;
+import com.omninest.modules.user.dto.InitialSetupStatusDto;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
+import com.omninest.modules.user.repository.AuthRoleRepository;
+import com.omninest.modules.user.repository.AuthUserRepository;
+import com.omninest.modules.user.repository.SystemInstanceRepository;
+import jakarta.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.DateTimeException;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Locale;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 管理首次安装状态并以一次性流程创建超级管理员。
+ *
+ * <p>安装向导可按部署形态要求同步完成两步验证注册（omninest.setup.two-factor-required，
+ * 环境变量 OMNINEST_SETUP_TWOFACTORREQUIRED），完成时把结果播种进配置中心，
+ * 使运行期强制策略与部署姿态一致。</p>
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class InitialSetupService {
+    private static final String DEFAULT_INSTANCE_NAME = "OmniNest";
+    private static final String DEFAULT_LOCALE = "zh-CN";
+    private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
+    private static final int MIN_SETUP_TOKEN_LENGTH = 32;
+    private final InitialSetupProperties properties;
+    private final AuthUserRepository authUserRepository;
+    private final AuthRoleRepository authRoleRepository;
+    private final SystemInstanceRepository systemInstanceRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final PasswordPolicy passwordPolicy;
+    private final TwoFactorService twoFactorService;
+    private final ConfigCenterService configCenterService;
+    private final StorageQuotaService storageQuotaService;
+    private final TransactionTemplate transactionTemplate;
+
+    /**
+     * 启动时提示不退化的安装判定来源。
+     *
+     * <p>{@code persistent-state-enabled=false} 只应出现在自动化测试里；生产开启会让
+     * 安装向导按“是否存在超管”判定，超管被误删或降权后向导重新暴露。</p>
+     */
+    @PostConstruct
+    void warnOnNonPersistentSetupState() {
+        if (!properties.isPersistentStateEnabled() && properties.isEnabled()) {
+            log.warn("安装向导未使用 system_instance 持久化状态判定，仅适用于测试环境；"
+                    + "生产部署请设置 OMNINEST_SETUP_PERSISTENT_STATE_ENABLED=true");
+        }
+    }
+
+    /**
+     * 查询首次安装向导状态。
+     * 已完成初始化的实例只返回最小状态：该接口匿名可达（首启探活依赖 2xx + 标准信封），
+     * 不得向陌生访客暴露令牌配置、2FA 要求与持久化状态等部署姿态。
+     *
+     * @return 不包含安装令牌内容的状态
+     */
+    @Transactional(readOnly = true)
+    public InitialSetupStatusDto status() {
+        boolean persistentStateEnabled = properties.isPersistentStateEnabled();
+        boolean setupRequired = persistentStateEnabled
+                ? requireSystemInstance().getSetupState() == SystemInstanceState.SETUP_REQUIRED
+                : !authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN);
+        if (!setupRequired) {
+            return new InitialSetupStatusDto(false, false, false, false);
+        }
+        return new InitialSetupStatusDto(
+                true,
+                hasValidConfiguredToken(),
+                persistentStateEnabled,
+                properties.isTwoFactorRequired()
+        );
+    }
+
+    /**
+     * 安装向导生成两步验证秘钥；仅在安装未完成时可用。
+     *
+     * @param username 向导中输入的超管用户名
+     * @return 秘钥与 otpauth URI
+     */
+    @Transactional(readOnly = true)
+    public TwoFactorSetupResponse newTwoFactorSecret(String username) {
+        requireSetupStillRequired();
+        return twoFactorService.newSetupSecret(username);
+    }
+
+    /**
+     * 校验安装令牌并创建首个超级管理员，按部署姿态同步完成两步验证注册并播种运行期策略。
+     *
+     * @param setupToken 客户端提交的安装令牌
+     * @param request 超级管理员资料
+     * @return 启用两步验证时的一次性备份码，未启用时为 null
+     */
+    public List<String> createSuperAdmin(String setupToken, InitialSetupRequest request) {
+        // 令牌校验、用户名规范化与密码校验都不碰数据库，因此连同 BCrypt 一起放在事务外：
+        // 事务内随后会锁系统实例行，把 250-350ms 的哈希留在锁里会让并发安装请求一起排队。
+        requireValidSetupToken(setupToken);
+        String username = request.username().trim().toLowerCase(Locale.ROOT);
+        passwordPolicy.validate(username, request.password());
+        String passwordHash = passwordEncoder.encode(request.password());
+        return transactionTemplate.execute(status -> createSuperAdminInTransaction(
+                request, username, passwordHash));
+    }
+
+    private List<String> createSuperAdminInTransaction(
+            InitialSetupRequest request,
+            String username,
+            String passwordHash
+    ) {
+        SystemInstance systemInstance = lockSystemInstance();
+        if (properties.isPersistentStateEnabled()
+                && systemInstance.getSetupState() == SystemInstanceState.READY) {
+            throw new BusinessException(ErrorCode.CONFLICT, "首次安装已经完成");
+        }
+        AuthRole superAdminRole = authRoleRepository.findByCodeForUpdate(Roles.SUPER_ADMIN)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.DEPENDENCY_UNAVAILABLE,
+                        "超级管理员角色尚未初始化"
+                ));
+        if (authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "首次安装已经完成");
+        }
+        if (authUserRepository.existsByUsername(username)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
+        }
+        // 管理员在向导里主动提交了 TOTP 秘钥时也必须绑定：配置未强制不等于可以丢弃，
+        // 否则扫码完成后凭据被静默忽略，账户看起来开了两步验证实际没有。
+        boolean twoFactorSubmitted = request.totpSecret() != null && !request.totpSecret().isBlank();
+        boolean bindTwoFactor = properties.isTwoFactorRequired() || twoFactorSubmitted;
+        List<String> backupCodes = null;
+        if (properties.isTwoFactorRequired() && !twoFactorSubmitted) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "安装向导要求完成两步验证注册");
+        }
+        if (bindTwoFactor && (request.totpCode() == null || request.totpCode().isBlank())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "两步验证码不能为空");
+        }
+
+        AuthUser user = new AuthUser();
+        user.setUsername(username);
+        user.setPasswordHash(passwordHash);
+        user.setDisplayName(normalizeDisplayName(request.displayName(), username));
+        user.setEmail(normalizeEmail(request.email()));
+        user.setStatus(UserStatus.ACTIVE.getValue());
+        // 超管与普通用户共用同一份默认配额策略，不能回落到实体硬编码的 10GB。
+        user.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
+        user.getRoles().add(superAdminRole);
+        AuthUser savedUser = authUserRepository.saveAndFlush(user);
+        if (bindTwoFactor) {
+            backupCodes = twoFactorService.provisionForNewUser(
+                    savedUser.getId(),
+                    request.totpSecret(),
+                    request.totpCode()
+            );
+        }
+        systemInstance.complete(
+                savedUser.getId(),
+                normalizeInstanceName(request.instanceName()),
+                normalizeLocale(request.defaultLocale()),
+                normalizeTimezone(request.defaultTimezone())
+        );
+        systemInstanceRepository.save(systemInstance);
+        // 管理员主动绑定 2FA 时保留 V002 的管理员强制策略；只有明确未绑定且环境
+        // 也未要求时才清空 required-roles。
+        seedTwoFactorRuntimePolicy(bindTwoFactor);
+        log.info("首次安装已创建超级管理员: username={}, twoFactor={}", username, bindTwoFactor);
+        return backupCodes;
+    }
+
+    /**
+     * 把安装期的两步验证姿态写入配置中心，使运行期强制策略与部署选择一致；
+     * 安装期无认证上下文，使用配置中心的内部播种入口，不走管理 API 的权限路径。
+     */
+    private void seedTwoFactorRuntimePolicy(boolean required) {
+        String value = required ? TwoFactorPolicyService.DEFAULT_REQUIRED_ROLES : "";
+        configCenterService.seedSystemConfigValue(TwoFactorPolicyService.REQUIRED_ROLES_KEY, value);
+    }
+
+    private void requireSetupStillRequired() {
+        boolean setupRequired = properties.isPersistentStateEnabled()
+                ? requireSystemInstance().getSetupState() == SystemInstanceState.SETUP_REQUIRED
+                : !authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN);
+        if (!setupRequired) {
+            throw new BusinessException(ErrorCode.CONFLICT, "首次安装已经完成");
+        }
+    }
+
+    private SystemInstance lockSystemInstance() {
+        return systemInstanceRepository.findByIdForUpdate(SystemInstance.SINGLETON_ID)
+                .orElseGet(() -> {
+                    if (properties.isPersistentStateEnabled()) {
+                        throw new BusinessException(
+                                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                                "系统实例状态尚未初始化"
+                        );
+                    }
+                    return newTransientSystemInstance();
+                });
+    }
+
+    private SystemInstance requireSystemInstance() {
+        return systemInstanceRepository.findById(SystemInstance.SINGLETON_ID)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.DEPENDENCY_UNAVAILABLE,
+                        "系统实例状态尚未初始化"
+                ));
+    }
+
+    private SystemInstance newTransientSystemInstance() {
+        SystemInstance systemInstance = new SystemInstance();
+        systemInstance.setId(SystemInstance.SINGLETON_ID);
+        return systemInstance;
+    }
+
+    /**
+     * 校验安装令牌但不产生任何状态变更，供控制器在扣减全局限流桶前使用。
+     *
+     * @param providedToken 客户端提交的安装令牌
+     */
+    public void validateSetupToken(String providedToken) {
+        requireValidSetupToken(providedToken);
+    }
+
+    private void requireValidSetupToken(String providedToken) {
+        String configuredToken = properties.getToken();
+        if (!properties.isEnabled()
+                || configuredToken == null
+                || configuredToken.length() < MIN_SETUP_TOKEN_LENGTH
+                || providedToken == null
+                || !constantTimeEquals(configuredToken, providedToken)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "安装凭据无效或安装向导不可用");
+        }
+    }
+
+    /**
+     * 先取定长摘要再比对：直接比较原文时，长度不同会让
+     * {@link MessageDigest#isEqual} 立即返回，泄露已配置令牌的字节长度。
+     */
+    private static boolean constantTimeEquals(String expected, String actual) {
+        try {
+            byte[] expectedDigest = MessageDigest.getInstance("SHA-256")
+                    .digest(expected.getBytes(StandardCharsets.UTF_8));
+            byte[] actualDigest = MessageDigest.getInstance("SHA-256")
+                    .digest(actual.getBytes(StandardCharsets.UTF_8));
+            return MessageDigest.isEqual(expectedDigest, actualDigest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 不可用", e);
+        }
+    }
+
+    private boolean hasValidConfiguredToken() {
+        String token = properties.getToken();
+        return properties.isEnabled() && token != null && token.length() >= MIN_SETUP_TOKEN_LENGTH;
+    }
+
+    private String normalizeDisplayName(String rawDisplayName, String username) {
+        String displayName = rawDisplayName == null ? "" : rawDisplayName.trim();
+        return displayName.isEmpty() ? username : displayName;
+    }
+
+    private String normalizeEmail(String rawEmail) {
+        String email = rawEmail == null ? "" : rawEmail.trim();
+        return email.isEmpty() ? null : email;
+    }
+
+    private String normalizeInstanceName(String rawInstanceName) {
+        String instanceName = rawInstanceName == null ? "" : rawInstanceName.trim();
+        return instanceName.isEmpty() ? DEFAULT_INSTANCE_NAME : instanceName;
+    }
+
+    private String normalizeLocale(String rawLocale) {
+        String localeTag = rawLocale == null ? "" : rawLocale.trim();
+        if (localeTag.isEmpty()) {
+            return DEFAULT_LOCALE;
+        }
+        Locale locale = Locale.forLanguageTag(localeTag);
+        if (locale.getLanguage().isEmpty() || "und".equals(locale.toLanguageTag())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "默认语言格式不正确");
+        }
+        return locale.toLanguageTag();
+    }
+
+    private String normalizeTimezone(String rawTimezone) {
+        String timezone = rawTimezone == null ? "" : rawTimezone.trim();
+        if (timezone.isEmpty()) {
+            return DEFAULT_TIMEZONE;
+        }
+        try {
+            return ZoneId.of(timezone).getId();
+        } catch (DateTimeException exception) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "默认时区格式不正确");
+        }
+    }
+
+}

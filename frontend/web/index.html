@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="js/omninest-boot.js"></script>
+
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="OmniNest self-hosted personal digital life center.">
+  <!-- 系统栏取色与移动端舞台底色一致（#0b1110），manifest 之外的旧浏览器兜底。
+       浅色极性由下面的脚本在首帧前改写。 -->
+  <meta name="theme-color" content="#0b1110" id="omninest-theme-color">
+  <!-- 两个脚本都必须外链：后端 CSP 为 script-src 'self' 'wasm-unsafe-eval'，
+       内联脚本会被拒绝执行。取色脚本要在引擎首帧之前跑完，故留在原位。 -->
+  <script src="js/omninest-theme-boot.js"></script>
+  <script src="js/omninest-engine-noise.js"></script>
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="OmniNest">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>OmniNest</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/omninest-shell.css">
+  <script src="js/omninest-webgl.js"></script>
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

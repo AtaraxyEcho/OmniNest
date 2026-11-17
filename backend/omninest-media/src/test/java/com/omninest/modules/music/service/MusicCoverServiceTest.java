@@ -1,0 +1,261 @@
+package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.file.service.FileQueryService;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
+
+class MusicCoverServiceTest {
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID FILE_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
+    private static final UUID THUMBNAIL_ID = UUID.fromString("70000000-0000-0000-0000-000000000002");
+
+    private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
+    private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
+    private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
+    private final MusicCoverThumbnailService coverThumbnailService = mock(MusicCoverThumbnailService.class);
+    private final MusicCoverService coverService = new MusicCoverService(new MediaProcessingLimitsProperties(),
+            storageService,
+            fileQueryService,
+            fileLifecycleGuard,
+            fileMetadataQueryService,
+            coverThumbnailService
+    );
+
+    @Test
+    void uploadDetectsPngFromFileHeader() {
+        byte[] png = new byte[]{
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00
+        };
+        MockMultipartFile file = new MockMultipartFile("file", "cover.bin", "application/octet-stream", png);
+        when(storageService.store(
+                eq(OWNER_ID),
+                eq("MUSIC_COVER"),
+                any(UUID.class),
+                eq("COVER"),
+                any(String.class),
+                eq("image/png"),
+                any(InputStream.class)
+        )).thenReturn(FILE_ID);
+
+        var result = coverService.upload(OWNER_ID, file);
+
+        assertThat(result.fileId()).isEqualTo(FILE_ID);
+    }
+
+    @Test
+    void uploadRejectsContentWithoutSupportedImageSignature() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "cover.jpg",
+                "image/jpeg",
+                "not-an-image".getBytes(StandardCharsets.US_ASCII)
+        );
+
+        assertThatThrownBy(() -> coverService.upload(OWNER_ID, file))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅支持");
+    }
+
+    @Test
+    void validateOwnedCoverDelegatesToFileOwnershipCheck() {
+        coverService.validateOwnedCover(OWNER_ID, FILE_ID);
+
+        verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void prepareCoverStreamReturnsDescriptorForOwnedImage() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 1024));
+
+        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
+
+        assertThat(descriptor.fileId()).isEqualTo(FILE_ID);
+        assertThat(descriptor.ownerUserId()).isEqualTo(OWNER_ID);
+        assertThat(descriptor.contentType()).isEqualTo("image/png");
+        assertThat(descriptor.sizeBytes()).isEqualTo(1024);
+        verify(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void sharedMemberDerivesThumbnailUnderCoverOwner() {
+        UUID memberId = UUID.randomUUID();
+        UUID thumbnailId = UUID.randomUUID();
+        when(fileLifecycleGuard.requireReadable(memberId, FILE_ID))
+                .thenReturn(imageDescriptor(FILE_ID, OWNER_ID, "image/png", 4096));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(MusicCoverThumbnailService.ThumbnailResult.derived(thumbnailId));
+        when(fileMetadataQueryService.findActiveById(thumbnailId))
+                .thenReturn(Optional.of(imageDescriptor(thumbnailId, OWNER_ID, "image/jpeg", 900)));
+
+        var stream = coverService.prepareThumbnailStream(memberId, FILE_ID);
+
+        assertThat(stream.descriptor().fileId()).isEqualTo(thumbnailId);
+        // 派生键必须跟随封面内容所有者，共享成员不能在各自命名空间重复生成
+        verify(coverThumbnailService).ensureThumbnail(OWNER_ID, FILE_ID, 4096);
+        verify(coverThumbnailService, never()).ensureThumbnail(memberId, FILE_ID, 4096);
+    }
+
+    @Test
+    void prepareCoverStreamRejectsMissingMimeType() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor(null, 2048));
+
+        // 共享读取不再经过 validateOwnedImage，MIME 校验必须在本方法内完成
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void prepareCoverStreamRejectsOversizedCover() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 33L * 1024 * 1024));
+
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void prepareCoverStreamAllowsScrapedCoverAboveUploadLimit() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 12L * 1024 * 1024));
+
+        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
+
+        assertThat(descriptor.sizeBytes()).isEqualTo(12L * 1024 * 1024);
+    }
+
+    @Test
+    void prepareCoverStreamRejectsMissingNode() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
+
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void streamCoverWritesContentAndClosesStream() throws Exception {
+        byte[] payload = "cover-bytes".getBytes(StandardCharsets.US_ASCII);
+        var descriptor = new MusicCoverService.CoverStreamDescriptor(OWNER_ID, FILE_ID, "image/png", payload.length);
+        when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_ID)).thenReturn(new FileContentStream(
+                new ByteArrayInputStream(payload),
+                "cover.png",
+                payload.length,
+                "image/png"
+        ));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        coverService.streamCover(descriptor, output);
+
+        assertThat(output.toByteArray()).isEqualTo(payload);
+    }
+
+    @Test
+    void prepareThumbnailStreamServesDerivedThumbnail() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 4096));
+        when(fileMetadataQueryService.findActiveById(THUMBNAIL_ID))
+                .thenReturn(Optional.of(imageDescriptor(THUMBNAIL_ID, "image/jpeg", 900)));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(MusicCoverThumbnailService.ThumbnailResult.derived(THUMBNAIL_ID));
+
+        var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
+
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.DERIVED);
+        assertThat(stream.descriptor().fileId()).isEqualTo(THUMBNAIL_ID);
+        assertThat(stream.descriptor().contentType()).isEqualTo("image/jpeg");
+        assertThat(stream.sourceFileId()).isEqualTo(FILE_ID);
+        // 派生缩略图与原图同 owner：只校验原图可读，免二次校验。
+        verify(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_ID);
+        verify(fileLifecycleGuard, never()).requireReadable(OWNER_ID, THUMBNAIL_ID);
+        verify(fileMetadataQueryService).findActiveById(THUMBNAIL_ID);
+    }
+
+    @Test
+    void prepareThumbnailStreamFallsBackForRetryableMiss() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 4096));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, true));
+
+        var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
+
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.RETRY_SOON);
+        assertThat(stream.descriptor().fileId()).isEqualTo(FILE_ID);
+    }
+
+    @Test
+    void prepareThumbnailStreamMarksCoverWithoutThumbnailAsStableFallback() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 12L * 1024 * 1024));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 12L * 1024 * 1024))
+                .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, false));
+
+        var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
+
+        // oversized 封面永远派生不出缩略图：不能按重试节奏反复下载 12MB 原图。
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.STABLE_FALLBACK);
+        assertThat(stream.descriptor().sizeBytes()).isEqualTo(12L * 1024 * 1024);
+    }
+
+    private FileDescriptor imageDescriptor(String mimeType, long sizeBytes) {
+        return imageDescriptor(FILE_ID, mimeType, sizeBytes);
+    }
+
+    private FileDescriptor imageDescriptor(UUID fileId, String mimeType, long sizeBytes) {
+        return imageDescriptor(fileId, OWNER_ID, mimeType, sizeBytes);
+    }
+
+    private FileDescriptor imageDescriptor(
+            UUID fileId,
+            UUID ownerUserId,
+            String mimeType,
+            long sizeBytes
+    ) {
+        return new FileDescriptor(
+                fileId,
+                ownerUserId,
+                null,
+                "FILE",
+                "cover.png",
+                "/library/cover.png",
+                mimeType,
+                sizeBytes,
+                null,
+                "MINIO",
+                false,
+                false,
+                SpaceType.PERSONAL,
+                ownerUserId,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-01-01T00:00:00Z")
+        );
+    }
+}

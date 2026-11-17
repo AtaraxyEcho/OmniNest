@@ -1,0 +1,256 @@
+import 'dart:async';
+import 'dart:js_interop';
+
+import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
+import 'package:omninest/core/log/dev_log.dart';
+
+/// Web 平台的背景视频视图。
+/// 基于原生 HTML video 元素(平台视图):autoplay + loop + playsinline，静音跟随上层开关，
+/// 但被浏览器自动播放策略拒绝时退回静音继续播放;BoxFit 映射为 CSS object-fit。
+/// 播放失败时切换到备用地址(内置壁纸),仍失败则收敛为空视图避免白屏。
+class AppBackdropVideoView extends StatefulWidget {
+  const AppBackdropVideoView({
+    required this.source,
+    required this.fit,
+    required this.playing,
+    required this.muted,
+    this.fallbackSource,
+    this.onSourceStale,
+    this.codecUnsupported = false,
+    super.key,
+  });
+
+  /// 服务端签名 URL 或内置资产的 Flutter 资产地址。
+  final String source;
+  final BoxFit fit;
+  final bool playing;
+  final bool muted;
+
+  /// 播放失败时的备用地址(通常为内置壁纸资产 URL)。
+  final String? fallbackSource;
+
+  /// 主源打开失败时通知上层签名 URL 可能过期。
+  final VoidCallback? onSourceStale;
+
+  /// 服务端已判定浏览器无法解码该编码；置真时播放失败不再按签名过期处理，也不重试。
+  final bool codecUnsupported;
+
+  @override
+  State<AppBackdropVideoView> createState() => _AppBackdropVideoViewState();
+}
+
+class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
+  web.HTMLVideoElement? _element;
+  JSFunction? _errorListener;
+  JSFunction? _readyListener;
+  String? _appliedSource;
+  bool _failed = false;
+  bool _sourceStaleNotified = false;
+  Timer? _retryTimer;
+  int _attempts = 0;
+  bool _autoplayPolicyMuted = false;
+
+  static const int _maxAttempts = 2;
+
+  void _onElementCreated(Object element) {
+    _element = element as web.HTMLVideoElement;
+    final el = _element!;
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.display = 'block';
+    el.style.objectFit = _objectFit(widget.fit);
+    el.muted = widget.muted || _autoplayPolicyMuted;
+    el.autoplay = true;
+    el.loop = true;
+    el.playsInline = true;
+    el.setAttribute('playsinline', '');
+    el.preload = 'auto';
+    _errorListener = _handleError.toJS;
+    _readyListener = _handleReady.toJS;
+    el.addEventListener('error', _errorListener!);
+    el.addEventListener('loadeddata', _readyListener!);
+    _applySource();
+  }
+
+  @override
+  void didUpdateWidget(AppBackdropVideoView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fit != widget.fit) {
+      _element?.style.objectFit = _objectFit(widget.fit);
+    }
+    if (oldWidget.muted != widget.muted) {
+      // 壁纸设置里的"视频静音"开关此前在 Web 端是死参：改动必须回写元素，
+      // 并清掉自动播放策略造成的静音回退。
+      _autoplayPolicyMuted = false;
+      _element?.muted = widget.muted;
+    }
+    final oldIdentity = _sourceIdentityOf(oldWidget.source);
+    final newIdentity = _sourceIdentityOf(widget.source);
+    if (oldIdentity != newIdentity) {
+      _sourceStaleNotified = false;
+      _attempts = 0;
+      _failed = false;
+    } else if (oldWidget.source != widget.source &&
+        _appliedSource != null &&
+        !_failed) {
+      // 仅签名参数轮换:热更新 src,不重置失败状态。
+      _appliedSource = widget.source;
+      _element?.src = widget.source;
+      return;
+    }
+    _applySource();
+  }
+
+  String _sourceIdentityOf(String path) {
+    final trimmed = path.trim();
+    final queryIndex = trimmed.indexOf('?');
+    return queryIndex < 0 ? trimmed : trimmed.substring(0, queryIndex);
+  }
+
+  void _notifySourceStaleOnce() {
+    if (_sourceStaleNotified) {
+      return;
+    }
+    _sourceStaleNotified = true;
+    widget.onSourceStale?.call();
+  }
+
+  void _applySource() {
+    final el = _element;
+    if (el == null || _failed) {
+      return;
+    }
+    if (_appliedSource == widget.source) {
+      _syncPlayback(el);
+      return;
+    }
+    _appliedSource = widget.source;
+    el.src = widget.source;
+    if (widget.playing) {
+      _play(el);
+    }
+  }
+
+  void _syncPlayback(web.HTMLVideoElement el) {
+    if (widget.playing) {
+      _play(el);
+    } else {
+      el.pause();
+    }
+  }
+
+  void _play(web.HTMLVideoElement el) {
+    el.play().toDart.then(
+      (_) {},
+      onError: (Object _) {
+        if (widget.muted || _autoplayPolicyMuted) {
+          return;
+        }
+        // 自动播放策略拒绝带声播放：退回静音继续放，而不是让壁纸停在原地。
+        _autoplayPolicyMuted = true;
+        el.muted = true;
+        el.play().toDart.then((_) {}, onError: (Object _) {});
+      },
+    );
+  }
+
+  void _handleReady(web.Event event) {
+    if (!mounted) {
+      return;
+    }
+    _attempts = 0;
+  }
+
+  void _handleError(web.Event event) {
+    // dispose 里的 load() 自身还能回灌一次 error：不设这道闸就会
+    // 在已卸载的 State 上 setState，并用残留元素重开重试定时器。
+    if (!mounted) {
+      return;
+    }
+    if (widget.codecUnsupported) {
+      // 编码已知不可播：重签和重试都只会重复同一失败，直接收敛到静态海报。
+      if (!_failed) {
+        setState(() => _failed = true);
+        devLog('背景视频编码浏览器不支持，跳过签名刷新与重试');
+      }
+      return;
+    }
+    final fallback = widget.fallbackSource;
+    if (_appliedSource != null &&
+        fallback != null &&
+        _appliedSource != fallback) {
+      devLog('背景视频播放失败,回退内置壁纸');
+      _notifySourceStaleOnce();
+      _appliedSource = fallback;
+      final el = _element;
+      if (el != null) {
+        el.src = fallback;
+        _play(el);
+      }
+      return;
+    }
+    if ((_appliedSource ?? '').startsWith('http')) {
+      _notifySourceStaleOnce();
+    }
+    _attempts++;
+    if (_attempts <= _maxAttempts) {
+      _retryTimer?.cancel();
+      _retryTimer = Timer(const Duration(seconds: 2), () {
+        final el = _element;
+        if (el == null || _failed) {
+          return;
+        }
+        el.src = _appliedSource ?? '';
+        if (widget.playing) {
+          _play(el);
+        }
+      });
+      return;
+    }
+    if (!_failed) {
+      setState(() => _failed = true);
+      devLog('背景视频多次播放失败,收敛为空背景等待对账或用户操作');
+    }
+  }
+
+  String _objectFit(BoxFit fit) {
+    return fit == BoxFit.contain ? 'contain' : 'cover';
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    final el = _element;
+    if (el != null) {
+      final errorListener = _errorListener;
+      final readyListener = _readyListener;
+      if (errorListener != null) {
+        el.removeEventListener('error', errorListener);
+      }
+      if (readyListener != null) {
+        el.removeEventListener('loadeddata', readyListener);
+      }
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    _element = null;
+    _errorListener = null;
+    _readyListener = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox.expand(
+      child: HtmlElementView.fromTagName(
+        tagName: 'video',
+        onElementCreated: _onElementCreated,
+      ),
+    );
+  }
+}

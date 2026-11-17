@@ -1,0 +1,285 @@
+package com.omninest.modules.video.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.video.config.VideoStreamProperties;
+import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import java.io.ByteArrayOutputStream;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+/**
+ * VideoStreamService 单元测试。
+ *
+ * @author OmniNest
+ */
+class VideoStreamServiceTest {
+
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID VIDEO_ITEM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+
+    private final MediaVideoItemRepository videoItemRepository =
+            mock(MediaVideoItemRepository.class);
+    private final VideoSourceInputResolver sourceInputResolver = mock(VideoSourceInputResolver.class);
+    private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
+    private final VideoFfmpegRuntime ffmpegRuntime = mock(VideoFfmpegRuntime.class);
+
+    private final VideoStreamService service = new VideoStreamService(
+            videoItemRepository,
+            sourceInputResolver,
+            mediaContentAccessService,
+            new VideoStreamProperties(),
+            ffmpegRuntime
+    );
+
+    @Test
+    void needsTranscode_returnsTrueForUnsupportedCodec() {
+        // ac3 编码在 WEB_UNSUPPORTED_AUDIO 列表中
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(OWNER_ID);
+        item.setAudioCodec("ac3");
+
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
+                .thenReturn(Optional.of(item));
+
+        boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void needsTranscode_returnsFalseForSupportedCodec() {
+        // aac 编码不在 WEB_UNSUPPORTED_AUDIO 列表中
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(OWNER_ID);
+        item.setAudioCodec("aac");
+
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
+                .thenReturn(Optional.of(item));
+
+        boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void needsTranscode_returnsFalseWhenItemNotFound() {
+        // 视频条目不存在时返回 false
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
+                .thenReturn(Optional.empty());
+
+        boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void streamByAudioMode_usesCachedAudioWhenAvailable() {
+        UUID audioFileNodeId = UUID.randomUUID();
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(OWNER_ID);
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, VIDEO_ITEM_ID)).thenReturn(item);
+        MediaVideoItem cachedAudio = new MediaVideoItem();
+        cachedAudio.setFileNodeId(audioFileNodeId);
+        when(videoItemRepository.findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
+                OWNER_ID,
+                VIDEO_ITEM_ID,
+                "AUDIO_ONLY"
+        )).thenReturn(Optional.of(cachedAudio));
+        VideoStreamService spyService = spy(service);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        doNothing().when(spyService).streamWithCachedAudio(
+                item,
+                audioFileNodeId,
+                12L,
+                null,
+                output,
+                true
+        );
+
+        spyService.streamByAudioMode(OWNER_ID, VIDEO_ITEM_ID, 12L, "cached", output);
+
+        verify(spyService).streamWithCachedAudio(
+                item,
+                audioFileNodeId,
+                12L,
+                null,
+                output,
+                true
+        );
+    }
+
+    @Test
+    void streamByAudioModeResolvesCachedAudioUnderCatalogOwnerForSharedLibrary() {
+        UUID requester = UUID.randomUUID();
+        UUID catalogOwner = UUID.randomUUID();
+        UUID audioFileNodeId = UUID.randomUUID();
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(catalogOwner);
+        item.setLibrarySourceId(UUID.randomUUID());
+        when(mediaContentAccessService.requireReadableVideo(requester, VIDEO_ITEM_ID)).thenReturn(item);
+        MediaVideoItem cachedAudio = new MediaVideoItem();
+        cachedAudio.setFileNodeId(audioFileNodeId);
+        when(videoItemRepository.findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
+                catalogOwner,
+                VIDEO_ITEM_ID,
+                "AUDIO_ONLY"
+        )).thenReturn(Optional.of(cachedAudio));
+        VideoStreamService spyService = spy(service);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        doNothing().when(spyService).streamWithCachedAudio(
+                item,
+                audioFileNodeId,
+                0L,
+                null,
+                output,
+                true
+        );
+
+        spyService.streamByAudioMode(requester, VIDEO_ITEM_ID, 0L, "cached", output);
+
+        // 播放计划按源条目所有者宣告缓存，流端点必须用同一把钥匙查
+        verify(spyService).streamWithCachedAudio(
+                item,
+                audioFileNodeId,
+                0L,
+                null,
+                output,
+                true
+        );
+    }
+
+    @Test
+    void streamAudioTranscodedRejectsPlaylistContainerBeforeStartingFfmpeg() {
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(OWNER_ID);
+        item.setContainerFormat("hls");
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, VIDEO_ITEM_ID)).thenReturn(item);
+
+        assertThatThrownBy(() -> service.streamAudioTranscoded(
+                OWNER_ID, VIDEO_ITEM_ID, 0L, new ByteArrayOutputStream()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.MEDIA_FORMAT_UNSUPPORTED));
+    }
+
+    @Test
+    void transcodeArgsForceDemuxerBeforeInput() {
+        List<String> args = service.buildTranscodeArgs("mov", "http://minio/movie.mp4", 12L);
+
+        assertThat(args).containsSubsequence("-ss", "12", "-f", "mov", "-i", "http://minio/movie.mp4");
+    }
+
+    @Test
+    void cachedAudioArgsForceAacDemuxerForDerivedAudio() {
+        List<String> args = service.buildCachedAudioArgs(
+                "matroska", "http://minio/movie.mkv", "http://minio/audio.aac", 0L);
+
+        assertThat(args).containsSubsequence(
+                "-f", "matroska", "-i", "http://minio/movie.mkv",
+                "-f", "aac", "-i", "http://minio/audio.aac");
+    }
+
+    @Test
+    void cachedAudioArgsSeekBothVideoAndAudioInputs() {
+        List<String> args = service.buildCachedAudioArgs(
+                "matroska", "http://minio/movie.mkv", "http://minio/audio.aac", 42L);
+
+        // -ss 必须分别出现在两个 -i 之前，否则音频从 0:00 开始并与视频错位。
+        assertThat(args).containsSubsequence(
+                "-ss", "42", "-f", "matroska", "-i", "http://minio/movie.mkv",
+                "-ss", "42", "-f", "aac", "-i", "http://minio/audio.aac");
+    }
+
+    @Test
+    void streamCommandAppliesProtocolWhitelistBeforeInput() {
+        when(ffmpegRuntime.isDisabled()).thenReturn(false);
+
+        List<String> command = service.buildStreamCommand(
+                service.buildTranscodeArgs("mp4", "http://minio/movie.mp4", 0L)
+        ).command();
+
+        assertThat(command).containsSubsequence(
+                "ffmpeg", "-y", "-protocol_whitelist", "http,https,tcp,tls",
+                "-f", "mp4", "-i", "http://minio/movie.mp4");
+    }
+
+    @Test
+    void cachedAudioArgsKeepWhitelistPerInputInsteadOfMerging() {
+        // 本地视频 + 远程音轨：两个输入必须各带自己的白名单，
+        // 合并后本地视频会获得出网协议、远程音轨会获得读盘能力。
+        List<String> args = service.buildCachedAudioArgs(
+                "matroska", "/mnt/local-movie/movie.mkv", "http://minio/audio.aac", 0L);
+
+        assertThat(args).containsSubsequence(
+                "-protocol_whitelist", "file,crypto,data",
+                "-f", "matroska", "-i", "/mnt/local-movie/movie.mkv");
+        assertThat(args).containsSubsequence(
+                "-protocol_whitelist", "http,https,tcp,tls",
+                "-f", "aac", "-i", "http://minio/audio.aac");
+        assertThat(args).doesNotContain("file,crypto,data,http,https,tcp,tls");
+    }
+
+    /**
+     * 槽位耗尽必须拒绝，且失败的获取不能留下痕迹：归还后要能重新取满。
+     *
+     * <p>拖动进度条会连续重开流，槽位若不回收，实例会逐步失去全部转码通道。
+     * 用 10ms 等待超时避免用例受默认 2s 拖累，整条链路不碰 ffmpeg。</p>
+     */
+    @Test
+    void streamSlotRejectsWhenExhaustedAndRecoversAfterRelease() {
+        VideoStreamService limited = serviceWithStreamSlots(2, Duration.ofMillis(10));
+
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        assertThatThrownBy(() -> limited.acquireStreamSlot(VIDEO_ITEM_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+
+        // 归还一路即可再次获取，说明拒绝的那次没有吃掉别人的 permit。
+        limited.releaseStreamSlotForRequest();
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+
+        // 全部归还后仍能恰好取满两路，多取一路仍被拒：既没泄漏也没被放大。
+        limited.releaseStreamSlotForRequest();
+        limited.releaseStreamSlotForRequest();
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        limited.acquireStreamSlot(VIDEO_ITEM_ID);
+        assertThatThrownBy(() -> limited.acquireStreamSlot(VIDEO_ITEM_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+        limited.releaseStreamSlotForRequest();
+        limited.releaseStreamSlotForRequest();
+    }
+
+    private VideoStreamService serviceWithStreamSlots(int maxConcurrentStreams, Duration slotWaitTimeout) {
+        VideoStreamProperties properties = new VideoStreamProperties();
+        properties.setMaxConcurrentStreams(maxConcurrentStreams);
+        properties.setSlotWaitTimeout(slotWaitTimeout);
+        return new VideoStreamService(
+                videoItemRepository,
+                sourceInputResolver,
+                mediaContentAccessService,
+                properties,
+                ffmpegRuntime
+        );
+    }
+}

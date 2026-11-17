@@ -1,0 +1,64 @@
+package com.omninest.common.security;
+
+import java.util.Set;
+
+/**
+ * 系统权限编码常量。
+ *
+ * <p>内容贡献写（file/media/photo:write）与本人体验状态（activity/preference）分离：
+ * 进度、队列、收藏、书签、通知已读归 activity，UI/播放偏好归 preference。</p>
+ *
+ * @author OmniNest
+ */
+public final class Permissions {
+    public static final String PROFILE_READ = "profile:read";
+    public static final String PROFILE_WRITE = "profile:write";
+    public static final String ACTIVITY_READ = "activity:read";
+    public static final String ACTIVITY_WRITE = "activity:write";
+    public static final String PREFERENCE_READ = "preference:read";
+    public static final String PREFERENCE_WRITE = "preference:write";
+    public static final String FILE_READ = "file:read";
+    public static final String FILE_WRITE = "file:write";
+    public static final String MEDIA_READ = "media:read";
+    public static final String MEDIA_WRITE = "media:write";
+    public static final String MEDIA_LIBRARY_MANAGE = "media:library:manage";
+    public static final String PHOTO_READ = "photo:read";
+    public static final String PHOTO_WRITE = "photo:write";
+    public static final String PHOTO_ADMIN = "photo:admin";
+    public static final String BACKDROP_READ = "backdrop:read";
+    public static final String BACKDROP_WRITE = "backdrop:write";
+    public static final String TASK_READ = "task:read";
+    public static final String TASK_ADMIN = "task:admin";
+    public static final String SYSTEM_CONFIG_READ = "system:config:read";
+    public static final String SYSTEM_CONFIG_MANAGE = "system:config:manage";
+    public static final String SYSTEM_USER_READ = "system:user:read";
+    public static final String SYSTEM_USER_MANAGE = "system:user:manage";
+
+    public static final Set<String> SUPER_ADMIN_PERMISSIONS = Set.of(
+            PROFILE_READ,
+            PROFILE_WRITE,
+            ACTIVITY_READ,
+            ACTIVITY_WRITE,
+            PREFERENCE_READ,
+            PREFERENCE_WRITE,
+            FILE_READ,
+            FILE_WRITE,
+            MEDIA_READ,
+            MEDIA_WRITE,
+            MEDIA_LIBRARY_MANAGE,
+            PHOTO_READ,
+            PHOTO_WRITE,
+            PHOTO_ADMIN,
+            BACKDROP_READ,
+            BACKDROP_WRITE,
+            TASK_READ,
+            TASK_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_MANAGE,
+            SYSTEM_USER_READ,
+            SYSTEM_USER_MANAGE
+    );
+
+    private Permissions() {
+    }
+}

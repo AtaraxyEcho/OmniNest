@@ -1,0 +1,26 @@
+server {
+    listen 80;
+    server_name ${OMNINEST_PUBLIC_HOST};
+
+    location = /health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'waiting-for-certificate';
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+
+    location / {
+        add_header Retry-After 60 always;
+        return 503 'HTTPS certificate is not ready';
+    }
+}
+
+server {
+    listen 9000;
+    server_name ${OMNINEST_PUBLIC_HOST};
+    return 503 'HTTPS certificate is not ready';
+}

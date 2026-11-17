@@ -1,0 +1,73 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
+
+/// 选中的待上传背景文件,平台差异(Web 流式 / 桌面移动路径)收敛在此。
+class BackdropPickedFile {
+  const BackdropPickedFile({
+    required this.name,
+    required this.size,
+    this.path,
+    this.readStream,
+  });
+
+  /// 文件名(含扩展名)。
+  final String name;
+
+  /// 文件大小,单位字节。
+  final int size;
+
+  /// 本机绝对路径;仅桌面/移动可用。
+  final String? path;
+
+  /// 分块读取流;Web 平台上传使用,避免整载内存。
+  final Stream<List<int>>? readStream;
+
+  /// 是否基于流上传(Web)。
+  bool get isStreamBased => path == null || path!.isEmpty;
+
+  /// 由系统拖放条目构造待上传文件。拖放入口仅在非 Web 平台启用,路径为真实文件路径。
+  static Future<BackdropPickedFile> fromDroppedFile(XFile file) async {
+    return BackdropPickedFile(
+      name: file.name,
+      size: await file.length(),
+      path: file.path,
+    );
+  }
+}
+
+/// 背景素材文件选择器端口。
+abstract class BackdropFilePicker {
+  Future<List<BackdropPickedFile>> pick();
+}
+
+/// 默认实现:file_picker。Web 通过 readAsByteStream 流式读取，避免整载内存；
+/// 桌面/移动由 file_picker 提供路径。
+class DefaultBackdropFilePicker implements BackdropFilePicker {
+  const DefaultBackdropFilePicker();
+
+  static const List<String> allowedExtensions = backdropAllowedExtensions;
+
+  @override
+  Future<List<BackdropPickedFile>> pick() async {
+    final files = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: allowedExtensions,
+    );
+    return Future.wait(
+      files.map((file) async {
+        final size = file.lengthSync() ?? await file.length() ?? 0;
+        return BackdropPickedFile(
+          name: file.name,
+          size: size,
+          path: isWebPlatform ? null : file.path,
+          // 只有 Web 需要流式上传（那里没有路径可用，必须整段读）。
+          // 桌面/移动走 MultipartFile.fromFile，这个流永远不会被消费，
+          // 无谓地为一个几百 MB 的 4K 视频持有文件流。
+          readStream: isWebPlatform ? file.readAsByteStream() : null,
+        );
+      }),
+    );
+  }
+}

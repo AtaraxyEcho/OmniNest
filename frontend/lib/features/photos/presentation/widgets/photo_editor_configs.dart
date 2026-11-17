@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:pro_image_editor/pro_image_editor.dart';
+
+/// 图片编辑器的配色：与壳层活体玻璃同一套暗色环境。
+///
+/// 只给 `ThemeData(brightness: dark)` 会落到 M3 默认色板；这里使用环境色板，
+/// 让编辑器主行动钮与 OmniNest 的强调色及玻璃面板保持一致。
+ThemeData photoEditorTheme(MobileEnvPalette env) {
+  final scheme = (env.brightness == Brightness.dark
+          ? const ColorScheme.dark()
+          : const ColorScheme.light())
+      .copyWith(
+        primary: env.accent,
+        onPrimary: env.onAccent,
+        surface: env.sheetSolid,
+        onSurface: env.ink,
+        surfaceContainerHighest: env.surfaceRaised,
+        onSurfaceVariant: env.inkMuted,
+        outline: env.line15,
+      );
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: env.stage,
+  );
+}
+
+/// 构建随应用语言变化的图片编辑器配置。
+///
+/// 滤镜名为专有名词，保留英文原名；其余用户可见文案统一来自 ARB。
+ProImageEditorConfigs buildPhotoEditorConfigs(
+  AppLocalizations l10n,
+  MobileEnvPalette env,
+) {
+  return ProImageEditorConfigs(
+    theme: photoEditorTheme(env),
+    mainEditor: MainEditorConfigs(
+      // 底栏铺满含手势导航区：外层纯黑 Scaffold 兜底，SafeArea 只避让内容，
+      // 避免系统手势区出现 Portal 背景空隙。
+      safeArea: const EditorSafeArea(
+        top: true,
+        bottom: true,
+        left: false,
+        right: false,
+      ),
+    ),
+    i18n: I18n(
+      cancel: l10n.photosEditorCancel,
+      undo: l10n.photosEditorUndo,
+      redo: l10n.photosEditorRedo,
+      done: l10n.photosEditorDone,
+      remove: l10n.photosEditorRemove,
+      doneLoadingMsg: l10n.photosEditorDoneLoadingMsg,
+      importStateHistoryMsg: l10n.photosEditorImportStateHistoryMsg,
+      various: I18nVarious(
+        loadingDialogMsg: l10n.photosEditorLoadingDialogMsg,
+        closeEditorWarningTitle: l10n.photosEditorCloseWarningTitle,
+        closeEditorWarningMessage: l10n.photosEditorCloseWarningMessage,
+        closeEditorWarningConfirmBtn: l10n.photosEditorCloseWarningConfirm,
+        closeEditorWarningCancelBtn: l10n.photosEditorCancel,
+      ),
+      layerInteraction: I18nLayerInteraction(
+        remove: l10n.photosEditorRemove,
+        edit: l10n.photosEditorLayerEdit,
+        rotateScale: l10n.photosEditorLayerRotateScale,
+      ),
+      paintEditor: I18nPaintEditor(
+        bottomNavigationBarText: l10n.photosEditorPaintBottomNav,
+        moveAndZoom: l10n.photosEditorPaintMoveAndZoom,
+        freestyle: l10n.photosEditorPaintFreestyle,
+        arrow: l10n.photosEditorPaintArrow,
+        line: l10n.photosEditorPaintLine,
+        rectangle: l10n.photosEditorPaintRectangle,
+        circle: l10n.photosEditorPaintCircle,
+        dashLine: l10n.photosEditorPaintDashLine,
+        dashDotLine: l10n.photosEditorPaintDashDotLine,
+        hexagon: l10n.photosEditorPaintHexagon,
+        polygon: l10n.photosEditorPaintPolygon,
+        blur: l10n.photosEditorPaintBlur,
+        pixelate: l10n.photosEditorPaintPixelate,
+        lineWidth: l10n.photosEditorLineWidth,
+        eraser: l10n.photosEditorEraser,
+        toggleFill: l10n.photosEditorToggleFill,
+        changeOpacity: l10n.photosEditorChangeOpacity,
+        opacity: l10n.photosEditorOpacity,
+        color: l10n.photosEditorColor,
+        strokeWidth: l10n.photosEditorStrokeWidth,
+        fill: l10n.photosEditorFill,
+        back: l10n.photosEditorBack,
+        cancel: l10n.photosEditorCancel,
+        undo: l10n.photosEditorUndo,
+        redo: l10n.photosEditorRedo,
+        done: l10n.photosEditorDone,
+        smallScreenMoreTooltip: l10n.photosEditorMore,
+      ),
+      textEditor: I18nTextEditor(
+        bottomNavigationBarText: l10n.photosEditorTextBottomNav,
+        inputHintText: l10n.photosEditorTextInputHint,
+        textAlign: l10n.photosEditorTextAlign,
+        fontScale: l10n.photosEditorFontScale,
+        backgroundMode: l10n.photosEditorTextBackgroundMode,
+        back: l10n.photosEditorBack,
+        done: l10n.photosEditorDone,
+        smallScreenMoreTooltip: l10n.photosEditorMore,
+      ),
+      cropRotateEditor: I18nCropRotateEditor(
+        bottomNavigationBarText: l10n.photosEditorCropBottomNav,
+        rotate: l10n.photosEditorCropRotate,
+        flip: l10n.photosEditorCropFlip,
+        tilt: l10n.photosEditorCropTilt,
+        tiltRotate: l10n.photosEditorCropRotate,
+        tiltHorizontal: l10n.photosEditorCropTiltHorizontal,
+        tiltVertical: l10n.photosEditorCropTiltVertical,
+        ratio: l10n.photosEditorCropRatio,
+        reset: l10n.photosEditorCropReset,
+        back: l10n.photosEditorBack,
+        done: l10n.photosEditorDone,
+        cancel: l10n.photosEditorCancel,
+        undo: l10n.photosEditorUndo,
+        redo: l10n.photosEditorRedo,
+        smallScreenMoreTooltip: l10n.photosEditorMore,
+      ),
+      tuneEditor: I18nTuneEditor(
+        bottomNavigationBarText: l10n.photosEditorTuneBottomNav,
+        brightness: l10n.photosEditorTuneBrightness,
+        contrast: l10n.photosEditorTuneContrast,
+        saturation: l10n.photosEditorTuneSaturation,
+        exposure: l10n.photosEditorTuneExposure,
+        hue: l10n.photosEditorTuneHue,
+        temperature: l10n.photosEditorTuneTemperature,
+        fade: l10n.photosEditorTuneFade,
+        tint: l10n.photosEditorTuneTint,
+        back: l10n.photosEditorBack,
+        done: l10n.photosEditorDone,
+        undo: l10n.photosEditorUndo,
+        redo: l10n.photosEditorRedo,
+      ),
+      filterEditor: I18nFilterEditor(
+        bottomNavigationBarText: l10n.photosEditorFilterBottomNav,
+        back: l10n.photosEditorBack,
+        done: l10n.photosEditorDone,
+        // 滤镜名为专有名词保留原文，仅本地化"无滤镜"。
+        filters: I18nFilters(none: l10n.photosEditorFilterNone),
+      ),
+      blurEditor: I18nBlurEditor(
+        bottomNavigationBarText: l10n.photosEditorBlurBottomNav,
+        back: l10n.photosEditorBack,
+        done: l10n.photosEditorDone,
+      ),
+      emojiEditor: I18nEmojiEditor(
+        bottomNavigationBarText: l10n.photosEditorEmojiBottomNav,
+        search: l10n.photosEditorEmojiSearch,
+        categoryRecent: l10n.photosEditorEmojiRecent,
+        categorySmileys: l10n.photosEditorEmojiSmileys,
+        categoryAnimals: l10n.photosEditorEmojiAnimals,
+        categoryFood: l10n.photosEditorEmojiFood,
+        categoryActivities: l10n.photosEditorEmojiActivities,
+        categoryTravel: l10n.photosEditorEmojiTravel,
+        categoryObjects: l10n.photosEditorEmojiObjects,
+        categorySymbols: l10n.photosEditorEmojiSymbols,
+        categoryFlags: l10n.photosEditorEmojiFlags,
+      ),
+      stickerEditor: I18nStickerEditor(
+        bottomNavigationBarText: l10n.photosEditorStickerBottomNav,
+      ),
+    ),
+    cropRotateEditor: CropRotateEditorConfigs(
+      aspectRatios: [
+        AspectRatioItem(text: l10n.photosEditorRatioFree, value: -1),
+        AspectRatioItem(text: l10n.photosEditorRatioOriginal, value: 0.0),
+        const AspectRatioItem(text: '1:1', value: 1.0),
+        const AspectRatioItem(text: '4:3', value: 4.0 / 3.0),
+        const AspectRatioItem(text: '3:4', value: 3.0 / 4.0),
+        const AspectRatioItem(text: '16:9', value: 16.0 / 9.0),
+        const AspectRatioItem(text: '9:16', value: 9.0 / 16.0),
+      ],
+    ),
+  );
+}

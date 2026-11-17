@@ -1,0 +1,175 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' as selector;
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+
+/// 平台文件对象的类型出口。
+///
+/// presentation 只允许通过本文件认识文件对象与选择器分组：`XFile`/`XTypeGroup`
+/// 由插件包定义，直接 import 插件会让平台分支重新泄漏到 UI 层。这里只重导出类型，
+/// 真正的选择动作仍走 [FilePick] 与各 feature 的 application 层选择器。
+export 'package:file_selector/file_selector.dart' show XFile, XTypeGroup;
+
+/// 平台文件选择的唯一出口。
+///
+/// presentation 层只消费 [PickedFile]，不再直接依赖 file_picker、`dart:io` 或 `kIsWeb` 分支；
+/// 本地路径与 Web 内存字节的差异全部收在这里。
+abstract final class FilePick {
+  /// 调用平台相机拍照，用户放弃时返回 null。
+  ///
+  /// 这里返回 [XFile] 而不是 [PickedFile]：相机产物只有「立刻上传」这一个用途，
+  /// 上传链路本身就以 [XFile] 为通货，再包一层不带来任何平台差异收敛。
+  static Future<XFile?> pickCameraPhoto({double? maxWidth}) {
+    return ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: maxWidth,
+    );
+  }
+
+  /// 调用平台相机录像，用户放弃时返回 null。
+  static Future<XFile?> pickCameraVideo() {
+    return ImagePicker().pickVideo(source: ImageSource.camera);
+  }
+
+  /// 选择图片，扩展名与类型过滤交由平台原生选择器处理。
+  static Future<List<PickedFile>> pickImages({String? dialogTitle}) {
+    return _pick(
+      type: FileType.image,
+      allowedExtensions: null,
+      dialogTitle: dialogTitle,
+    );
+  }
+
+  /// 按扩展名选择文件；`allowedExtensions` 不含点号，如 `['lrc', 'txt']`。
+  static Future<List<PickedFile>> pickFiles({
+    required List<String> allowedExtensions,
+    String? dialogTitle,
+  }) {
+    return _pick(
+      type: FileType.custom,
+      allowedExtensions: allowedExtensions,
+      dialogTitle: dialogTitle,
+    );
+  }
+
+  static Future<List<PickedFile>> _pick({
+    required FileType type,
+    required List<String>? allowedExtensions,
+    String? dialogTitle,
+  }) async {
+    final picked = await FilePicker.pickFiles(
+      type: type,
+      allowedExtensions: allowedExtensions,
+      dialogTitle: dialogTitle,
+    );
+    return picked.map(PickedFile._fromPlatformFile).toList(growable: false);
+  }
+
+  /// 选择一个文件（不限定类型）。
+  ///
+  /// 这条出口走 file_selector 而不是 file_picker：Web 端浏览器只给 Blob 句柄、
+  /// 没有本地路径，file_picker 取 path 会静默失败；返回的 [XFile] 可按流读取，
+  /// 与上传链路一致。
+  static Future<XFile?> openSingleFile() => selector.openFile();
+
+  /// 选择多个文件（不限定类型）。
+  static Future<List<XFile>> openMultipleFiles() => selector.openFiles();
+}
+
+/// 一次选择结果里的单个文件。
+///
+/// 字节按需读取：大文件（EPUB/ZIP 之类）只拿路径与大小，不因此整本驻留内存。
+final class PickedFile {
+  const PickedFile._fromPlatformFile(this._source);
+
+  final PlatformFile _source;
+
+  /// 含扩展名的文件名。
+  String get name => _source.name;
+
+  /// 小写、不含点号的扩展名；无扩展名时为 null。
+  String? get extension => _source.extension?.toLowerCase();
+
+  /// 本地磁盘路径；Web 或无法寻址时为 null。
+  String? get path => _source.path;
+
+  /// 已知大小，未免去读盘时返回 null。
+  int? lengthSync() => _source.lengthSync();
+
+  /// 文件大小；无法确定时返回 null。
+  Future<int?> length() => _source.length();
+
+  /// 读取整个文件字节；平台只给路径（桌面端的常见形态）时按路径补读一次。
+  Future<Uint8List> readBytes() async {
+    final bytes = await _source.readAsBytes();
+    if (bytes.isNotEmpty) {
+      return bytes;
+    }
+    final localPath = path;
+    if (kIsWeb || localPath == null || localPath.isEmpty) {
+      return bytes;
+    }
+    return XFile(localPath).readAsBytes();
+  }
+
+  /// 转成可上传的 [XFile]：本地路径优先，Web 直接复用浏览器文件句柄。
+  ///
+  /// Web 端不能先 [readBytes] 再构造：那会按文件大小复制一份 `Uint8List`，
+  /// 大文件（EPUB/漫画包）直接撑爆标签页；`PlatformFile.xFile` 底层持有
+  /// Blob 句柄，`openRead` 按块读取。调用方显式要求的 MIME 用包装对象覆盖，
+  /// 不为此回退到整份读取。
+  Future<XFile> toXFile({String? mimeType}) async {
+    final localPath = path;
+    if (!kIsWeb && localPath != null && localPath.isNotEmpty) {
+      return XFile(localPath, name: name, mimeType: mimeType);
+    }
+    final source = _source.xFile;
+    if (mimeType == null || mimeType == source.mimeType) {
+      return source;
+    }
+    return _MimeTypedXFile(source, mimeType, name);
+  }
+}
+
+/// 只覆盖 MIME 类型与展示名、其余读写全部委托给底层 [XFile] 的包装。
+///
+/// 用于 Web 上既保留浏览器 Blob 的流式读取，又把调用方声明的 MIME
+/// 带给上传链路，避免为了改 MIME 把整份文件读进内存。
+final class _MimeTypedXFile implements XFile {
+  _MimeTypedXFile(this._delegate, this._mimeType, this._name);
+
+  final XFile _delegate;
+  final String _mimeType;
+  final String _name;
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  String get name => _name;
+
+  @override
+  String get mimeType => _mimeType;
+
+  @override
+  Future<int> length() => _delegate.length();
+
+  @override
+  Future<Uint8List> readAsBytes() => _delegate.readAsBytes();
+
+  @override
+  Stream<Uint8List> openRead([int? start, int? end]) =>
+      _delegate.openRead(start, end);
+
+  @override
+  Future<String> readAsString({Encoding encoding = utf8}) =>
+      _delegate.readAsString(encoding: encoding);
+
+  @override
+  Future<void> saveTo(String path) => _delegate.saveTo(path);
+
+  @override
+  Future<DateTime> lastModified() => _delegate.lastModified();
+}

@@ -1,0 +1,290 @@
+package com.omninest.modules.file.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.omninest.modules.file.dto.FileMediaInfoDto;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+/**
+ * ffprobe 探测测试：解析用固定 JSON，进程侧用可控假进程覆盖超时、截断与临时文件清理。
+ *
+ * @author OmniNest
+ */
+class MediaProbeServiceTest {
+
+    private static final String PROBE_JSON = """
+            {
+              "streams": [
+                {"codec_type": "audio", "duration": "1.0"},
+                {"codec_type": "video", "width": 3840, "height": 2160, "duration": "742.5"}
+              ],
+              "format": {"duration": "742.500"}
+            }
+            """;
+
+    private final MediaProbeService service = new MediaProbeService(new TestTempStagingPort());
+
+    /** 假进程不会真的打开它，这里只需要一个本地路径形状。 */
+    private static final Path PROBE_INPUT = Path.of(System.getProperty("java.io.tmpdir"), "probe-fixture.bin");
+
+    @Test
+    void parsesVideoDurationAndResolution() {
+        FileMediaInfoDto info = service.parseProbeJson(PROBE_JSON);
+        assertThat(info.durationSeconds()).isEqualTo(742.500);
+        assertThat(info.width()).isEqualTo(3840);
+        assertThat(info.height()).isEqualTo(2160);
+        assertThat(info.isEmpty()).isFalse();
+    }
+
+    @Test
+    void fallsBackToStreamDurationAndImageDimensions() {
+        String json = """
+                {
+                  "streams": [
+                    {"codec_type": "video", "width": 4032, "height": 3024}
+                  ]
+                }
+                """;
+        FileMediaInfoDto info = service.parseProbeJson(json);
+        assertThat(info.durationSeconds()).isNull();
+        assertThat(info.width()).isEqualTo(4032);
+        assertThat(info.height()).isEqualTo(3024);
+    }
+
+    @Test
+    void malformedOrEmptyOutputYieldsEmptyResult() {
+        assertThat(service.parseProbeJson("").isEmpty()).isTrue();
+        assertThat(service.parseProbeJson("not json").isEmpty()).isTrue();
+        assertThat(service.parseProbeJson("{\"streams\": []}").isEmpty()).isTrue();
+    }
+
+    @Test
+    void streamDurationNaKeepParsedDimensions() {
+        String json = """
+                {
+                  "streams": [
+                    {"codec_type": "video", "width": 1920, "height": 1080, "duration": "N/A"}
+                  ],
+                  "format": {"duration": "N/A"}
+                }
+                """;
+        FileMediaInfoDto info = service.parseProbeJson(json);
+        assertThat(info.durationSeconds()).isNull();
+        assertThat(info.width()).isEqualTo(1920);
+        assertThat(info.height()).isEqualTo(1080);
+    }
+
+    @Test
+    void failedProbeIsNotCached() {
+        AtomicReference<Integer> attempts = new AtomicReference<>(0);
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            attempts.updateAndGet(value -> value + 1);
+            throw new IOException("ffprobe 超时");
+        }, new TestTempStagingPort());
+
+        assertThat(probing.probe("transient-failure", PROBE_INPUT).isEmpty()).isTrue();
+        assertThat(probing.probe("transient-failure", PROBE_INPUT).isEmpty()).isTrue();
+
+        assertThat(attempts.get()).isEqualTo(2);
+    }
+
+    @Test
+    void probeCommandAsksFfprobeForJsonAndCarriesLocalInput() throws Exception {
+        AtomicReference<List<String>> command = new AtomicReference<>();
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            command.set(args);
+            Files.writeString(file, PROBE_JSON);
+            return new FakeProcess(true, false, 0);
+        }, new TestTempStagingPort());
+
+        probing.runFfprobe(PROBE_INPUT);
+
+        assertThat(command.get()).containsExactly(
+                "ffprobe", "-v", "quiet", "-nostdin",
+                "-protocol_whitelist", "file,crypto,data",
+                "-print_format", "json",
+                "-show_format", "-show_streams", PROBE_INPUT.toAbsolutePath().normalize().toString());
+    }
+
+    /**
+     * 探测输入形态是这条链的安全边界：一旦把地址交给 ffprobe，内容里内嵌的远程引用就会被跟随。
+     * 这里把它钉成"末位参数必须是本地绝对路径"，改回 URL 立刻红。
+     */
+    @Test
+    void probeInputNeverBecomesAnAddress() throws Exception {
+        AtomicReference<List<String>> command = new AtomicReference<>();
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            command.set(args);
+            Files.writeString(file, PROBE_JSON);
+            return new FakeProcess(true, false, 0);
+        }, new TestTempStagingPort());
+
+        probing.runFfprobe(PROBE_INPUT);
+
+        String input = command.get().get(command.get().size() - 1);
+        assertThat(input).doesNotContain("://");
+        assertThat(Path.of(input)).isAbsolute();
+    }
+
+    @Test
+    void probeReadsOutputFromRedirectedFileAndDeletesItAfterwards() throws Exception {
+        AtomicReference<Path> outputFile = new AtomicReference<>();
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            outputFile.set(file);
+            Files.writeString(file, PROBE_JSON);
+            return new FakeProcess(true, false, 0);
+        }, new TestTempStagingPort());
+
+        String json = probing.runFfprobe(PROBE_INPUT);
+
+        assertThat(json).contains("\"duration\": \"742.500\"");
+        assertThat(Files.exists(outputFile.get())).isFalse();
+    }
+
+    @Test
+    void probeBoundsRetainedOutputAtConfiguredLimit() throws Exception {
+        byte[] output = new byte[MediaProbeService.MAX_OUTPUT_BYTES + 4096];
+        Arrays.fill(output, (byte) 'a');
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            Files.write(file, output);
+            return new FakeProcess(true, false, 0);
+        }, new TestTempStagingPort());
+
+        String json = probing.runFfprobe(PROBE_INPUT);
+
+        assertThat(json).hasSize(MediaProbeService.MAX_OUTPUT_BYTES);
+    }
+
+    @Test
+    void hungProcessIsKilledAndReportedAsTimeout() throws Exception {
+        FakeProcess process = new FakeProcess(false, false, 0);
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> process, new TestTempStagingPort());
+
+        assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("超时");
+        assertThat(process.isAlive()).isFalse();
+    }
+
+    @Test
+    void probeFailureWithoutInterruptKeepsThreadInterruptFlagClear() {
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            throw new IOException("ffprobe 未安装");
+        }, new TestTempStagingPort());
+
+        assertThat(probing.probe("missing-binary", PROBE_INPUT).isEmpty()).isTrue();
+        assertThat(Thread.interrupted()).isFalse();
+    }
+
+    @Test
+    void outputTempFileIsDeletedWhenProcessCannotStart() throws Exception {
+        AtomicReference<Path> outputFile = new AtomicReference<>();
+        MediaProbeService probing = MediaProbeService.forTesting((args, file) -> {
+            outputFile.set(file);
+            throw new IOException("ffprobe 未安装");
+        }, new TestTempStagingPort());
+
+        assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
+                .isInstanceOf(IOException.class);
+        assertThat(Files.exists(outputFile.get())).isFalse();
+    }
+
+    @Test
+    void interruptWhileWaitingIsPropagatedToCallerFlag() {
+        MediaProbeService probing = MediaProbeService.forTesting(
+                (args, file) -> new FakeProcess(true, true, 0), new TestTempStagingPort());
+
+        try {
+            assertThat(probing.probe("interrupted", PROBE_INPUT).isEmpty()).isTrue();
+            assertThat(Thread.interrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    /**
+     * 可控完成状态、中断行为与退出码的测试进程。
+     *
+     * @author OmniNest
+     */
+    private static final class FakeProcess extends Process {
+        private final boolean completesNormally;
+        private final boolean interruptedWhileWaiting;
+        private final int exitCode;
+        private final ByteArrayOutputStream stdin = new ByteArrayOutputStream();
+        private final InputStream stdout = new ByteArrayInputStream(new byte[0]);
+        private boolean alive = true;
+
+        private FakeProcess(boolean completesNormally, boolean interruptedWhileWaiting, int exitCode) {
+            this.completesNormally = completesNormally;
+            this.interruptedWhileWaiting = interruptedWhileWaiting;
+            this.exitCode = exitCode;
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return stdin;
+        }
+
+        @Override
+        public InputStream getInputStream() {
+            return stdout;
+        }
+
+        @Override
+        public InputStream getErrorStream() {
+            return InputStream.nullInputStream();
+        }
+
+        @Override
+        public int waitFor() {
+            alive = false;
+            return exitCode;
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
+            if (interruptedWhileWaiting) {
+                throw new InterruptedException("等待被中断");
+            }
+            if (completesNormally) {
+                alive = false;
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public int exitValue() {
+            return exitCode;
+        }
+
+        @Override
+        public void destroy() {
+            alive = false;
+        }
+
+        @Override
+        public Process destroyForcibly() {
+            alive = false;
+            return this;
+        }
+
+        @Override
+        public boolean isAlive() {
+            return alive;
+        }
+    }
+}

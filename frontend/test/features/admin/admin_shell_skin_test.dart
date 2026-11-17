@@ -1,0 +1,229 @@
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/core/theme/workstation_skin.dart';
+import 'package:omninest/features/admin/application/admin_console_controller.dart';
+import 'package:omninest/features/admin/domain/admin_console_summary.dart';
+import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/features/admin/domain/admin_section.dart';
+import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
+
+AdminConsoleSummary _fakeSummary() {
+  return AdminConsoleSummary(
+    users: AdminUserStats(
+      total: 12,
+      active: 10,
+      disabled: 2,
+      roleCounts: const {},
+    ),
+    roles: const [],
+    configs: AdminConfigStats(
+      total: 0,
+      hot: 0,
+      nextTask: 0,
+      restartRequired: 0,
+    ),
+    tasks: AdminTaskStats(
+      total: 0,
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      dlq: 0,
+    ),
+    storage: AdminStorageStats(
+      fileCount: 4280,
+      folderCount: 0,
+      objectCount: 0,
+      usedBytes: 842500000000,
+      externalAccountCount: 0,
+    ),
+    health: const [],
+  );
+}
+
+class _FakeAdminConsoleController extends AdminConsoleController {
+  @override
+  Future<AdminConsoleSummary> build() => Future.value(_fakeSummary());
+}
+
+/// 管理端外壳按权限挑选分区，需要管理权限才能看到全部分组。
+class _AdminSessionNotifier extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async {
+    return AuthSessionState(
+      user: UserProfile(
+        id: 'admin-1',
+        username: 'admin-it',
+        role: 'ADMIN',
+        permissions: const {
+          'system:config:read',
+          'system:user:read',
+          'task:admin',
+        },
+      ),
+    );
+  }
+}
+
+Future<void> _pumpShell(
+  WidgetTester tester, {
+  bool light = false,
+  Size size = const Size(1440, 900),
+  String? initialSectionSegment,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        adminConsoleControllerProvider.overrideWith(
+          _FakeAdminConsoleController.new,
+        ),
+        authSessionProvider.overrideWith(_AdminSessionNotifier.new),
+      ],
+      child: MaterialApp(
+        theme: light ? OmniNestTheme.light() : OmniNestTheme.dark(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        home: AdminDashboardPage(initialSectionSegment: initialSectionSegment),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// 取导航项当前底色（悬停渐变结束后即目标档）。
+Color? _navItemBackground(WidgetTester tester, Finder label) {
+  final container = tester.widget<AnimatedContainer>(
+    find.ancestor(of: label, matching: find.byType(AnimatedContainer)).first,
+  );
+  return (container.decoration as BoxDecoration?)?.color;
+}
+
+void main() {
+  testWidgets('宽屏外壳渲染工位皮肤要素（PORTAL/在线徽章/等宽组标/存储微卡）', (tester) async {
+    await _pumpShell(tester);
+
+    expect(find.text('PORTAL'), findsOneWidget);
+    // 在线徽章取实时相位文案，未连接时为 OFFLINE。
+    expect(find.textContaining(RegExp('^(ONLINE|OFFLINE)\$')), findsOneWidget);
+    expect(find.textContaining('OmniNest Admin /'), findsOneWidget);
+    // 5 分区后侧栏只保留一组 CONSOLE 等宽标题，分区名作为导航项不再带组码。
+    expect(find.textContaining('(CONSOLE)'), findsOneWidget);
+    expect(find.text('身份与权限'), findsWidgets);
+    expect(find.text('运维'), findsWidgets);
+    // 底部存储微卡渲染 summary 数值。
+    final l10n = AppLocalizations.of(tester.element(find.text('PORTAL')));
+    expect(find.text(l10n.adminStorageOverview), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('外壳整体运行在工位 ColorScheme 上', (tester) async {
+    await _pumpShell(tester);
+    final ctx = tester.element(find.text('PORTAL'));
+    expect(Theme.of(ctx).colorScheme.surface, WorkstationPalette.canvasDark);
+    expect(
+      Theme.of(ctx).colorScheme.outlineVariant,
+      WorkstationPalette.lineDark,
+    );
+  });
+
+  testWidgets('浅色工位侧栏未激活项悬停压暗一档，不取纯白容器色', (tester) async {
+    await _pumpShell(tester, light: true);
+    final scheme = Theme.of(tester.element(find.text('PORTAL'))).colorScheme;
+    final l10n = AppLocalizations.of(tester.element(find.text('PORTAL')));
+    final label = find.text(l10n.adminGroupOperations).first;
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(label));
+    await tester.pumpAndSettle();
+
+    // 浅色下 surfaceContainer 是纯白，比侧栏底更亮；悬停必须落在更暗的一档。
+    expect(scheme.surfaceContainer, WorkstationPalette.containerLight);
+    expect(_navItemBackground(tester, label), scheme.surfaceContainerLow);
+    expect(
+      _navItemBackground(tester, label)?.computeLuminance(),
+      lessThan(scheme.surface.computeLuminance()),
+    );
+
+    await gesture.moveTo(const Offset(1200, 400));
+    await tester.pumpAndSettle();
+    expect(_navItemBackground(tester, label), Colors.transparent);
+  });
+
+  testWidgets('暗档侧栏未激活项悬停弱于选中档，移出后完全复位', (tester) async {
+    await _pumpShell(tester);
+    final scheme = Theme.of(tester.element(find.text('PORTAL'))).colorScheme;
+    final l10n = AppLocalizations.of(tester.element(find.text('PORTAL')));
+    final label = find.text(l10n.adminGroupOperations).first;
+    final selectedLabel = find.text(l10n.adminGroupOverview).first;
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(label));
+    await tester.pumpAndSettle();
+
+    expect(_navItemBackground(tester, label), scheme.surfaceContainer);
+    expect(
+      _navItemBackground(tester, selectedLabel),
+      scheme.surfaceContainerHighest,
+    );
+    expect(
+      scheme.surfaceContainer.computeLuminance(),
+      greaterThan(scheme.surface.computeLuminance()),
+    );
+  });
+
+  for (final width in [360.0, 390.0]) {
+    testWidgets('窄屏 $width 顶栏保留通知与账号入口', (tester) async {
+      await _pumpShell(tester, size: Size(width, 844));
+
+      expect(find.byType(NotificationIcon), findsOneWidget);
+      expect(find.byType(UserAvatarMenu), findsOneWidget);
+      expect(
+        find.byTooltip(
+          AppLocalizations.of(
+            tester.element(find.byType(NotificationIcon)),
+          ).notificationTitle,
+        ),
+        findsWidgets,
+      );
+      expect(
+        find.byTooltip(
+          AppLocalizations.of(
+            tester.element(find.byType(UserAvatarMenu)),
+          ).coreProfile,
+        ),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('窄屏自带滚动的分区不再套外层同轴滚动容器', (tester) async {
+    await _pumpShell(tester, size: const Size(390, 844));
+
+    // 概览仍由外壳滚动（内容不自带滚动）。
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey(AdminSection.overview)),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsOneWidget,
+    );
+  });
+}

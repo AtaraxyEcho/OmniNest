@@ -1,0 +1,490 @@
+import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
+import 'package:omninest/features/photos/application/photo_center_models.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
+
+/// Frame 回收站视图：衬线标题 + 计数说明 + 清空按钮 + 暗化瀑布流。
+///
+/// 图格悬停显示恢复/永久删除按钮；照片进入回收站保留 30 天。
+class FrameTrashView extends StatefulWidget {
+  const FrameTrashView({
+    required this.photos,
+
+    /// 回收站总条数（服务端），未传时退回已加载长度。
+    this.totalCount,
+    required this.isLoading,
+    required this.onRestore,
+    required this.onDeleteForever,
+    required this.onEmptyTrash,
+    this.errorMessage,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
+    super.key,
+  });
+
+  final List<PhotoItem> photos;
+  final int? totalCount;
+  final bool isLoading;
+  final String? errorMessage;
+  final ValueChanged<PhotoItem> onRestore;
+  final ValueChanged<PhotoItem> onDeleteForever;
+  final VoidCallback onEmptyTrash;
+
+  /// 滚动加载三件套：修复回收站 >50 条不可见的截断缺陷。
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
+
+  @override
+  State<FrameTrashView> createState() => _FrameTrashViewState();
+}
+
+class _FrameTrashViewState extends State<FrameTrashView> {
+  Future<void> _confirmEmptyTrash() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showFrameConfirmDialog(
+      context,
+      title: l10n.photosEmptyTrashConfirmTitle,
+      body: l10n.photosEmptyTrashConfirmBody(
+        widget.totalCount ?? widget.photos.length,
+      ),
+      confirmLabel: l10n.photosDeleteForever,
+      destructive: true,
+    );
+    if (confirmed) {
+      widget.onEmptyTrash();
+    }
+  }
+
+  Future<void> _confirmDeleteForever(PhotoItem photo) async {
+    // 确认与级联影响由页面层 confirmAndRunFilePurge 统一处理，避免双重弹窗。
+    widget.onDeleteForever(photo);
+  }
+
+  static const double _tileGap = 10;
+  static const double _rowGap = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = context.frameColors;
+    return InfiniteScrollTrigger(
+      enabled:
+          widget.hasMore && !widget.isLoadingMore && widget.onLoadMore != null,
+      onLoadMore: widget.onLoadMore ?? () {},
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final padding = constraints.crossAxisExtent > 768 ? 24.0 : 16.0;
+              final columns = _columnCount(constraints.crossAxisExtent);
+              return SliverPadding(
+                padding: EdgeInsets.all(padding),
+                sliver: SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: _buildHeader(context, l10n, colors),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    if (widget.errorMessage != null)
+                      SliverToBoxAdapter(child: _buildError())
+                    else if (widget.photos.isEmpty)
+                      SliverToBoxAdapter(child: _buildEmpty(l10n))
+                    else
+                      _buildTileRows(
+                        constraints.crossAxisExtent - padding * 2,
+                        columns,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 列数阈值按视口宽度取，与内边距无关（与原 Wrap 布局同源）。
+  static int _columnCount(double viewportWidth) {
+    if (viewportWidth > 1280) {
+      return 4;
+    }
+    if (viewportWidth > 900) {
+      return 3;
+    }
+    return 2;
+  }
+
+  /// 按行分块懒建。原先整片 Wrap 塞在单个 sliver 里，回收站照片再多数也全量构建；
+  /// 逐格宽高比不同，不能换成固定比例的 SliverGrid。
+  /// 格宽向下取整，避免浮点余量把整行最后一格挤成次行。
+  Widget _buildTileRows(double contentWidth, int columns) {
+    final itemWidth =
+        ((contentWidth - (columns - 1) * _tileGap) / columns).floorToDouble();
+    final rowCount = (widget.photos.length + columns - 1) ~/ columns;
+    return SliverList.separated(
+      itemCount: rowCount,
+      separatorBuilder: (context, index) => const SizedBox(height: _rowGap),
+      itemBuilder: (context, row) {
+        final start = row * columns;
+        final end =
+            (start + columns) > widget.photos.length
+                ? widget.photos.length
+                : start + columns;
+        return Wrap(
+          spacing: _tileGap,
+          children: [
+            for (var index = start; index < end; index++)
+              SizedBox(
+                width: itemWidth,
+                child: _TrashTile(
+                  key: ValueKey('trash-${widget.photos[index].id}'),
+                  photo: widget.photos[index],
+                  onRestore: () => widget.onRestore(widget.photos[index]),
+                  onDeleteForever:
+                      () => _confirmDeleteForever(widget.photos[index]),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    AppLocalizations l10n,
+    FrameColors colors,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                frameViewLabel(l10n, FrameView.trash),
+                style: TextStyle(
+                  fontFamily: FramePalette.serifFamily,
+                  fontFamilyFallback: FramePalette.serifFallback,
+                  color: colors.ink,
+                  fontSize: AppTypography.headlineSmall,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.photosTrashSubtitle(
+                  widget.totalCount ?? widget.photos.length,
+                ),
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (widget.photos.isNotEmpty)
+          _EmptyTrashButton(onTap: _confirmEmptyTrash),
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        widget.errorMessage!,
+        style: TextStyle(
+          color: SeverityColors.danger,
+          fontSize: AppTypography.bodyMedium,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 64),
+      child: FrameEmptyView(
+        icon: Icons.delete_outlined,
+        message: l10n.photosFrameTrashEmpty,
+        hint: l10n.photosFrameTrashEmptyHint,
+      ),
+    );
+  }
+}
+
+/// 清空回收站按钮：红色文字，悬停浅红底。
+class _EmptyTrashButton extends StatefulWidget {
+  const _EmptyTrashButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_EmptyTrashButton> createState() => _EmptyTrashButtonState();
+}
+
+class _EmptyTrashButtonState extends State<_EmptyTrashButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color:
+                _hovering
+                    ? SeverityColors.danger.withValues(alpha: 0.08)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            AppLocalizations.of(context).photosEmptyTrash,
+            style: const TextStyle(
+              color: SeverityColors.danger,
+              fontSize: AppTypography.bodyLarge,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 回收站图格：图片暗化，悬停显示恢复/永久删除按钮，底部显示标题。
+///
+/// 触屏无悬停能力，长按图格弹出操作面板提供相同动作。
+class _TrashTile extends StatefulWidget {
+  const _TrashTile({
+    required this.photo,
+    required this.onRestore,
+    required this.onDeleteForever,
+    super.key,
+  });
+
+  final PhotoItem photo;
+  final VoidCallback onRestore;
+  final VoidCallback onDeleteForever;
+
+  @override
+  State<_TrashTile> createState() => _TrashTileState();
+}
+
+class _TrashTileState extends State<_TrashTile> {
+  bool _hovering = false;
+
+  double get _aspectRatio {
+    final width = widget.photo.width;
+    final height = widget.photo.height;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return 1.0;
+    }
+    return (width / height).clamp(0.6, 2.4);
+  }
+
+  Future<void> _showActionSheet() async {
+    final l10n = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return MobileSheetSemantics(
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.restore_rounded),
+                  title: Text(l10n.photosRestore),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.onRestore();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: SeverityColors.danger,
+                  ),
+                  title: Text(
+                    l10n.photosDeletePermanently,
+                    style: const TextStyle(color: SeverityColors.danger),
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.onDeleteForever();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.frameColors;
+    final photo = widget.photo;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: _showActionSheet,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: AspectRatio(
+              aspectRatio: _aspectRatio,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Opacity(
+                    opacity: 0.7,
+                    child:
+                        photo.hasCover
+                            ? PhotoThumbImage(
+                              imageUrl: photo.coverUrl!,
+                              cacheKey: photo.coverCacheKey,
+                            )
+                            : ColoredBox(color: colors.card),
+                  ),
+                  Positioned.fill(
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.basic,
+                      onEnter: (_) => setState(() => _hovering = true),
+                      onExit: (_) => setState(() => _hovering = false),
+                      child: AnimatedOpacity(
+                        opacity: _hovering ? 1 : 0,
+                        duration:
+                            MediaQuery.disableAnimationsOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 150),
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _TrashPillButton(
+                                  icon: Icons.restore_rounded,
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosRestore,
+                                  background: Colors.white,
+                                  foreground: FramePalette.ink,
+                                  onTap: widget.onRestore,
+                                ),
+                                const SizedBox(width: 8),
+                                _TrashPillButton(
+                                  icon: Icons.delete_outline_rounded,
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosDeletePermanently,
+                                  background: SeverityColors.danger,
+                                  foreground: Colors.white,
+                                  onTap: widget.onDeleteForever,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              photo.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.muted,
+                fontSize: AppTypography.bodySmall,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 回收站操作胶囊按钮。
+class _TrashPillButton extends StatelessWidget {
+  const _TrashPillButton({
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: foreground),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: AppTypography.bodySmall,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

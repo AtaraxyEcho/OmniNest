@@ -1,0 +1,894 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'
+    show
+        FilteringTextInputFormatter,
+        LengthLimitingTextInputFormatter,
+        TextInputFormatter;
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/widgets/app_dropdown.dart';
+import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/platform/file_pick.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+
+class ReaderMetadataEditPage extends ConsumerStatefulWidget {
+  const ReaderMetadataEditPage({required this.itemId, super.key});
+
+  final String itemId;
+
+  @override
+  ConsumerState<ReaderMetadataEditPage> createState() =>
+      _ReaderMetadataEditPageState();
+}
+
+class _ReaderMetadataEditPageState
+    extends ConsumerState<ReaderMetadataEditPage> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _titleCtrl;
+  late TextEditingController _authorCtrl;
+  late TextEditingController _descriptionCtrl;
+  late TextEditingController _publisherCtrl;
+  late TextEditingController _releaseDateCtrl;
+  late TextEditingController _ratingCtrl;
+  late TextEditingController _genresCtrl;
+  late TextEditingController _isbnCtrl;
+  late TextEditingController _seriesCtrl;
+  late TextEditingController _volumeCtrl;
+  late TextEditingController _coverImageUrlCtrl;
+  String _readerType = 'BOOK';
+  String _serialStatus = 'UNKNOWN';
+  bool _saving = false;
+
+  /// 表单只在首次拿到详情时回填一次。在 `build` 里无条件回填会让用户清空
+  /// 任一字段后，任何一次 `setState`（切下拉框、点保存）都把旧值顶回去。
+  bool _formInitialized = false;
+
+  static const _serialStatuses = ['UNKNOWN', 'ONGOING', 'COMPLETED'];
+  static const _readerTypes = ['BOOK', 'COMIC', 'MANGA'];
+
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/reader/items/${widget.itemId}');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController();
+    _authorCtrl = TextEditingController();
+    _descriptionCtrl = TextEditingController();
+    _publisherCtrl = TextEditingController();
+    _releaseDateCtrl = TextEditingController();
+    _ratingCtrl = TextEditingController();
+    _genresCtrl = TextEditingController();
+    _isbnCtrl = TextEditingController();
+    _seriesCtrl = TextEditingController();
+    _volumeCtrl = TextEditingController();
+    _coverImageUrlCtrl = TextEditingController();
+    unawaited(_seedFormFromDetail());
+  }
+
+  /// 首次拿到详情后回填一次表单；正文渲染只读状态，不在 build 中写控制器。
+  Future<void> _seedFormFromDetail() async {
+    try {
+      final detail = await ref.read(
+        readerItemDetailProvider(widget.itemId).future,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _initForm(detail.item));
+    } on Exception catch (e) {
+      // 详情请求失败时 build 已经渲染 AppErrorView，这里只留痕，不重复提示。
+      devLog('元数据编辑页表单回填失败: ${describeUserFacingError(e).displayMessage}');
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _authorCtrl.dispose();
+    _descriptionCtrl.dispose();
+    _publisherCtrl.dispose();
+    _releaseDateCtrl.dispose();
+    _ratingCtrl.dispose();
+    _genresCtrl.dispose();
+    _isbnCtrl.dispose();
+    _seriesCtrl.dispose();
+    _volumeCtrl.dispose();
+    _coverImageUrlCtrl.dispose();
+    super.dispose();
+  }
+
+  void _initForm(ReaderItem item) {
+    if (_formInitialized) {
+      return;
+    }
+    _formInitialized = true;
+    _titleCtrl.text = item.title;
+    _authorCtrl.text = item.authorName ?? '';
+    _descriptionCtrl.text = item.description ?? '';
+    _publisherCtrl.text = item.publisher ?? '';
+    _releaseDateCtrl.text =
+        item.releaseDate?.toIso8601String().split('T').first ?? '';
+    _ratingCtrl.text = item.rating?.toString() ?? '';
+    _genresCtrl.text = item.genres?.join(', ') ?? '';
+    _isbnCtrl.text = item.isbn ?? '';
+    _readerType = item.readerType;
+    _seriesCtrl.text = item.seriesName ?? '';
+    _volumeCtrl.text = item.volumeNumber?.toString() ?? '';
+    _coverImageUrlCtrl.text = item.coverImageUrl ?? '';
+    if (item.serialStatus != null) {
+      _serialStatus = item.serialStatus!;
+    }
+  }
+
+  Map<String, dynamic> _buildUpdatePayload(ReaderItem original) {
+    final fields = <String, dynamic>{};
+    if (_titleCtrl.text.trim() != original.title) {
+      fields['title'] = _titleCtrl.text.trim();
+    }
+    if (_authorCtrl.text.trim() != (original.authorName ?? '')) {
+      fields['authorName'] = _authorCtrl.text.trim();
+    }
+    if (_descriptionCtrl.text.trim() != (original.description ?? '')) {
+      fields['description'] = _descriptionCtrl.text.trim();
+    }
+    if (_publisherCtrl.text.trim() != (original.publisher ?? '')) {
+      fields['publisher'] = _publisherCtrl.text.trim();
+    }
+    if (_releaseDateCtrl.text.trim() !=
+        (original.releaseDate?.toIso8601String().split('T').first ?? '')) {
+      if (_releaseDateCtrl.text.trim().isEmpty &&
+          original.releaseDate != null) {
+        fields['clearReleaseDate'] = true;
+      } else if (_releaseDateCtrl.text.trim().isNotEmpty) {
+        fields['releaseDate'] = _releaseDateCtrl.text.trim();
+      }
+    }
+    final ratingText = _ratingCtrl.text.trim();
+    final newRating = ratingText.isEmpty ? null : double.tryParse(ratingText);
+    if (ratingText.isEmpty && original.rating != null) {
+      fields['clearRating'] = true;
+    } else if (newRating != original.rating) {
+      fields['rating'] = newRating;
+    }
+    final genresList =
+        _genresCtrl.text
+            .split(',')
+            .map((g) => g.trim())
+            .where((g) => g.isNotEmpty)
+            .toList();
+    if (genresList.join(',') != (original.genres?.join(',') ?? '')) {
+      fields['genres'] = genresList;
+    }
+    if (_serialStatus != (original.serialStatus ?? 'UNKNOWN')) {
+      fields['serialStatus'] = _serialStatus;
+    }
+    final isbn = _isbnCtrl.text.trim();
+    if (isbn != (original.isbn ?? '')) {
+      fields['isbn'] = isbn;
+    }
+    if (_readerType != original.readerType) {
+      fields['readerType'] = _readerType;
+    }
+    if (_seriesCtrl.text.trim() != (original.seriesName ?? '')) {
+      fields['seriesName'] = _seriesCtrl.text.trim();
+    }
+    final volumeText = _volumeCtrl.text.trim();
+    if (volumeText.isEmpty && original.volumeNumber != null) {
+      fields['clearVolumeNumber'] = true;
+    } else if (volumeText.isNotEmpty &&
+        int.tryParse(volumeText) != original.volumeNumber) {
+      fields['volumeNumber'] = int.parse(volumeText);
+    }
+    final coverImageUrl = _coverImageUrlCtrl.text.trim();
+    if (coverImageUrl != (original.coverImageUrl ?? '')) {
+      fields['coverImageUrl'] = coverImageUrl;
+    }
+    return fields;
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    final detailAsync = ref.read(readerItemDetailProvider(widget.itemId));
+    final detail = detailAsync.asData?.value;
+    if (detail == null) return;
+
+    final payload = _buildUpdatePayload(detail.item);
+    if (payload.isEmpty) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerNoChanges);
+      }
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .updateItemMetadata(itemId: widget.itemId, fields: payload);
+      if (!mounted) return;
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerMetadataSaved);
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(
+          context,
+          l10n.readerSaveFailed(
+            describeUserFacingError(e, l10n: l10n).displayMessage,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _restoreOriginal() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .updateItemMetadata(
+            itemId: widget.itemId,
+            fields: const {'restoreOriginal': true},
+          );
+      if (!mounted) return;
+      _formInitialized = false;
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+      await _seedFormFromDetail();
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      showReaderSnackBar(context, l10n.readerMetadataRestored);
+    } on Exception catch (e) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(
+          context,
+          l10n.readerSaveFailed(
+            describeUserFacingError(e, l10n: l10n).displayMessage,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
+    return Scaffold(
+      backgroundColor: context.readerColors.surface,
+      appBar: AppBar(
+        backgroundColor: context.readerColors.surfaceContainer,
+        leading: IconButton(
+          tooltip: AppLocalizations.of(context).coreBack,
+          icon: Icon(Icons.arrow_back_rounded),
+          onPressed: _handleBack,
+        ),
+        title: Text(
+          AppLocalizations.of(context).readerEditMetadata,
+          style: TextStyle(
+            color: context.readerColors.onSurface,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
+              child:
+                  _saving
+                      ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                      : Text(AppLocalizations.of(context).readerSave),
+            ),
+          ),
+        ],
+      ),
+      body: detailAsync.when(
+        data: _buildForm,
+        error:
+            (e, _) => AppErrorView(
+              message:
+                  describeUserFacingError(
+                    e,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage,
+            ),
+        loading: () => const AppLoading(),
+      ),
+    );
+  }
+
+  Widget _buildForm(ReaderItemDetail detail) {
+    final l10n = AppLocalizations.of(context);
+    final item = detail.item;
+    return Form(
+      key: _formKey,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCoverSection(item),
+                if (item.hasManualMetadataOverride) ...[
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _saving ? null : _restoreOriginal,
+                      icon: const Icon(Icons.restore_rounded),
+                      label: Text(l10n.readerRestoreOriginalMetadata),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 32),
+                _buildReaderTypeDropdown(),
+                const SizedBox(height: 16),
+                _buildFieldPair(
+                  first: _buildTextField(
+                    controller: _seriesCtrl,
+                    label: l10n.readerLabelSeries,
+                  ),
+                  second: _buildTextField(
+                    controller: _volumeCtrl,
+                    label: l10n.readerLabelVolume,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(3),
+                    ],
+                    validator: _validateVolume,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _titleCtrl,
+                  label: l10n.readerLabelTitle,
+                  required: true,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _authorCtrl,
+                  label: l10n.readerLabelAuthor,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _descriptionCtrl,
+                  label: l10n.readerLabelDescription,
+                  maxLines: 5,
+                ),
+                const SizedBox(height: 16),
+                _buildFieldPair(
+                  first: _buildTextField(
+                    controller: _publisherCtrl,
+                    label: l10n.readerLabelPublisher,
+                  ),
+                  second: _buildTextField(
+                    controller: _releaseDateCtrl,
+                    label: l10n.readerLabelReleaseDate,
+                    validator: _validateReleaseDate,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildFieldPair(
+                  first: _buildTextField(
+                    controller: _ratingCtrl,
+                    label: l10n.readerLabelRating,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: _validateRating,
+                  ),
+                  second: _buildSerialStatusDropdown(),
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _genresCtrl,
+                  label: l10n.readerLabelGenres,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(controller: _isbnCtrl, label: 'ISBN'),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _coverImageUrlCtrl,
+                  label: l10n.readerLabelCoverUrl,
+                  validator: _validateCoverImageUrl,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 14),
+                  child: Text(
+                    l10n.readerLabelCoverUrlHint,
+                    style: TextStyle(
+                      color: context.readerColors.onSurfaceVariant,
+                      fontSize: AppTypography.bodySmall,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverSection(ReaderItem item) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            width: 160,
+            height: 224,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: context.readerColors.surfaceContainerHighest,
+              border: Border.all(
+                color: context.readerColors.outlineVariant.withValues(
+                  alpha: 0.3,
+                ),
+              ),
+            ),
+            child:
+                item.hasCover
+                    ? AuthCoverImage(
+                      itemId: item.id,
+                      coverUrl: item.coverUrl,
+                      fit: BoxFit.cover,
+                      fallback: _coverPlaceholder(),
+                    )
+                    : _coverPlaceholder(),
+          ),
+          SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _pickFromFiles(),
+                icon: Icon(Icons.folder_open_rounded, size: 18),
+                label: Text(l10n.readerSelectFromFile),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.readerColors.onSurface,
+                  side: BorderSide(
+                    color: context.readerColors.outlineVariant.withValues(
+                      alpha: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () => _pickAndUpload(),
+                icon: Icon(Icons.upload_rounded, size: 18),
+                label: Text(l10n.readerUploadCover),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.readerColors.onSurface,
+                  side: BorderSide(
+                    color: context.readerColors.outlineVariant.withValues(
+                      alpha: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _coverPlaceholder() {
+    return Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 48,
+        color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.4),
+      ),
+    );
+  }
+
+  /// 双列表单字段组：窄屏（可用宽 <420 或大字号）改纵向堆叠，
+  /// 判定阈值对齐漫画详情页先例。
+  Widget _buildFieldPair({required Widget first, required Widget second}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow =
+            constraints.maxWidth < 420 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.4;
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 16), second],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 16),
+            Expanded(child: second),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 评分允许留空（不评分），一旦填写就必须是 0~10 的数字。
+  /// 不校验时 `double.tryParse` 对 "abc" 返回 null，保存会把原有评分静默清空。
+  String? _validateRating(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(text);
+    if (parsed == null || parsed < 0 || parsed > 10) {
+      return AppLocalizations.of(context).readerInvalidRating;
+    }
+    return null;
+  }
+
+  /// 出版日期按后端解析口径要求 YYYY-MM-DD，非法串在提交前拦下。
+  String? _validateReleaseDate(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
+    }
+    if (!_releaseDatePattern.hasMatch(text)) {
+      return AppLocalizations.of(context).readerInvalidReleaseDate;
+    }
+    return null;
+  }
+
+  static final RegExp _releaseDatePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    bool required = false,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? Function(String? value)? validator,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      style: TextStyle(
+        color: context.readerColors.onSurface,
+        fontSize: AppTypography.bodyLarge,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
+          fontSize: AppTypography.bodyMedium,
+        ),
+        filled: true,
+        fillColor: context.readerColors.surfaceContainerHigh.withValues(
+          alpha: 0.5,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: context.readerColors.outlineVariant.withValues(alpha: 0.3),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: context.readerColors.outlineVariant.withValues(alpha: 0.3),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1.5,
+          ),
+        ),
+        // 垂直内边距取全仓输入框 token，与同行的 AppDropdown 闭合态
+        // 严格等高（36/44），避免元数据表单里两套控件度量并存。
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: AppControlTokens.fieldVerticalPadding,
+        ),
+      ),
+      validator: (value) {
+        if (required && (value == null || value.trim().isEmpty)) {
+          return AppLocalizations.of(context).readerFieldRequired(label);
+        }
+        return validator?.call(value);
+      },
+    );
+  }
+
+  Widget _buildReaderTypeDropdown() {
+    final l10n = AppLocalizations.of(context);
+    return AppDropdown<String>(
+      value: _readerType,
+      label: l10n.readerLabelType,
+      items: [
+        for (final type in _readerTypes)
+          AppDropdownItem(
+            value: type,
+            label: switch (type) {
+              'COMIC' => l10n.readerTypeComic,
+              'MANGA' => l10n.readerTypeManga,
+              _ => l10n.readerTypeBook,
+            },
+          ),
+      ],
+      onChanged: (value) {
+        if (value != null) setState(() => _readerType = value);
+      },
+    );
+  }
+
+  String? _validateVolume(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final parsed = int.tryParse(text);
+    if (parsed == null || parsed < 1 || parsed > 999) {
+      return AppLocalizations.of(context).readerVolumeNumberInvalid;
+    }
+    return null;
+  }
+
+  String? _validateCoverImageUrl(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final uri = Uri.tryParse(text);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        !(uri.scheme == 'http' || uri.scheme == 'https') ||
+        uri.userInfo.isNotEmpty) {
+      return AppLocalizations.of(context).readerInvalidCoverUrl;
+    }
+    return null;
+  }
+
+  Widget _buildSerialStatusDropdown() {
+    final l10n = AppLocalizations.of(context);
+    return AppDropdown<String>(
+      value: _serialStatus,
+      label: l10n.readerLabelSerialStatus,
+      items: [
+        for (final s in _serialStatuses)
+          AppDropdownItem(
+            value: s,
+            label: switch (s) {
+              'ONGOING' => l10n.readerStatusOngoing,
+              'COMPLETED' => l10n.readerStatusCompleted,
+              _ => l10n.readerStatusUnknown,
+            },
+          ),
+      ],
+      onChanged: (v) {
+        if (v != null) setState(() => _serialStatus = v);
+      },
+    );
+  }
+
+  Future<void> _pickFromFiles() async {
+    // 弹出文件选择对话框，列出托管存储中的图片文件。
+    try {
+      final candidates =
+          await ref
+              .read(readerCenterControllerProvider.notifier)
+              .coverCandidates();
+      if (!mounted) {
+        return;
+      }
+      if (candidates.isEmpty) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerNoImageFiles);
+        return;
+      }
+      final selected = await showWorkstationDialog<ReaderCoverCandidate>(
+        context: context,
+        builder:
+            (ctx) => _FilePickerDialog(
+              files: candidates,
+              title: AppLocalizations.of(context).readerSelectCoverImage,
+            ),
+      );
+      if (selected == null || !mounted) return;
+      final fileNodeId = selected.fileNodeId;
+      if (fileNodeId.isEmpty) return;
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .setCoverFromFile(itemId: widget.itemId, fileNodeId: fileNodeId);
+      if (!mounted) {
+        return;
+      }
+      // 新封面上传后旧字节缓存必须同步失效，否则 LRU 会继续命中旧图。
+      ReaderCoverByteCache.remove(widget.itemId);
+      ref.invalidate(coverBytesProvider(widget.itemId));
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+      _coverImageUrlCtrl.clear();
+      final l10n = AppLocalizations.of(context);
+      showReaderSnackBar(context, l10n.readerCoverUpdated);
+    } on Exception catch (e) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(
+          context,
+          describeUserFacingError(e, l10n: l10n).displayMessage,
+        );
+      }
+    }
+  }
+
+  Future<void> _pickAndUpload() async {
+    try {
+      final result = await FilePick.pickFiles(
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+      );
+      if (result.isEmpty) return;
+      if (!mounted) {
+        return;
+      }
+      final file = result.first;
+      final length = await file.length();
+      if (!mounted) {
+        return;
+      }
+      if (length != null && length > FileSizeThresholds.readerCoverMaxBytes) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerCoverTooLarge);
+        return;
+      }
+      final bytes = await file.readBytes();
+      if (!mounted) {
+        return;
+      }
+      if (bytes.isEmpty) return;
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .uploadCover(
+            itemId: widget.itemId,
+            // readBytes 已经返回 Uint8List，再包一层 fromList 只是白拷一份。
+            imageBytes: bytes,
+            fileName: file.name,
+          );
+      if (!mounted) {
+        return;
+      }
+      // 新封面上传后旧字节缓存必须同步失效，否则 LRU 会继续命中旧图。
+      ReaderCoverByteCache.remove(widget.itemId);
+      ref.invalidate(coverBytesProvider(widget.itemId));
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+      _coverImageUrlCtrl.clear();
+      final l10n = AppLocalizations.of(context);
+      showReaderSnackBar(context, l10n.readerCoverUploaded);
+    } on Exception catch (e) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(
+          context,
+          l10n.readerUploadFailed(
+            describeUserFacingError(e, l10n: l10n).displayMessage,
+          ),
+        );
+      }
+    }
+  }
+}
+
+class _FilePickerDialog extends StatelessWidget {
+  const _FilePickerDialog({required this.files, required this.title});
+
+  final List<ReaderCoverCandidate> files;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: context.readerColors.surfaceContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 480, maxHeight: 520),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 12, 0),
+              child: Row(
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: context.readerColors.onSurface,
+                      fontSize: AppTypography.titleMedium,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).coreClose,
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                itemCount: files.length,
+                itemBuilder: (ctx, index) {
+                  final file = files[index];
+                  final name =
+                      file.fileName.isEmpty
+                          ? AppLocalizations.of(context).readerUnknownFile
+                          : file.fileName;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.image_outlined,
+                      color: context.readerColors.onSurfaceVariant,
+                    ),
+                    title: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.readerColors.onSurface,
+                        fontSize: AppTypography.bodyLarge,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(context, file),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

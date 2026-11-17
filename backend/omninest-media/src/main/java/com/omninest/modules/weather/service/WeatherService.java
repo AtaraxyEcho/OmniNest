@@ -1,0 +1,898 @@
+package com.omninest.modules.weather.service;
+
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.Ed25519Signer;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.OctetKeyPair;
+import com.nimbusds.jose.util.Base64URL;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import com.omninest.common.config.ConfigRefreshEvent;
+import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
+import com.omninest.modules.weather.dto.WeatherDto;
+import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
+
+/**
+ * 天气服务
+ *
+ * 使用和风天气 API，JWT (Ed25519) 认证。
+ * 缓存策略：JWT 55min，城市解析 24h，天气数据 10min。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class WeatherService {
+
+    private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
+    /** 界面语言缺失或不在白名单时的状况文案语言。 */
+    private static final String DEFAULT_LANG = "zh";
+    /** 坐标格式与控制器同源：{@code 经度,纬度}，整数度（如 116,40）同样合法。 */
+    private static final Pattern COORD_PATTERN =
+            Pattern.compile("^(-?\\d{1,3}(?:\\.\\d+)?),\\s*(-?\\d{1,3}(?:\\.\\d+)?)$");
+    private static final List<String> CONFIG_KEYS = List.of(
+            "weather.enabled",
+            "weather.qweather.url",
+            "weather.location",
+            "weather.qweather.project",
+            "weather.qweather.credential",
+            "weather.qweather.key"
+    );
+
+    private final ConfigValueProvider configValueProvider;
+    private final WeatherCacheStore weatherCacheStore;
+    private final SafeUrlValidator safeUrlValidator;
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    /** 天气 API 专用线程池（虚拟线程） */
+    private final ExecutorService weatherExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    /** 停机时中断挂起的天气请求，与其余受管线程池的关闭风格一致。 */
+    @PreDestroy
+    void shutdownWeatherExecutor() {
+        weatherExecutor.shutdownNow();
+    }
+
+    /** JWT 生成锁：用 ReentrantLock 而非 synchronized，避免虚拟线程在锁内阻塞时钉死载体线程。 */
+    private final ReentrantLock jwtLock = new ReentrantLock();
+
+    /** 配置快照锁：锁内可能穿透到数据库读取配置，同样不得使用 synchronized。 */
+    private final ReentrantLock configLock = new ReentrantLock();
+
+    /** 天气数据 singleflight：防止同一位置的并发请求穿透缓存 */
+    private final ConcurrentHashMap<String, CompletableFuture<WeatherDto>> inflightRequests =
+            new ConcurrentHashMap<>();
+
+    /** 配置缓存 */
+    private volatile Map<String, String> configCache;
+    private volatile Instant configCacheExpiry = Instant.MIN;
+
+    /**
+     * 配置中心更新后立即失效本地天气配置快照，避免热更新被五分钟缓存延迟覆盖。
+     *
+     * @param event 配置刷新事件
+     */
+    @EventListener
+    public void onConfigRefresh(ConfigRefreshEvent event) {
+        if (event == null || event.key() == null || CONFIG_KEYS.contains(event.key())) {
+            configLock.lock();
+            try {
+                configCache = null;
+                configCacheExpiry = Instant.MIN;
+            } finally {
+                configLock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 获取实时天气（聚合实时天气 + 空气质量 + 预报）
+     *
+     * 外部 API 业务失败（城市不存在、403 等）返回空数据做优雅降级。
+     * 配置错误等关键问题抛出 BusinessException。
+     */
+    public WeatherDto getRealtimeWeather(String location) {
+        return getRealtimeWeather(location, null, null);
+    }
+
+    /**
+     * 获取实时天气。
+     *
+     * @param location API 查询位置（GPS 经纬度或城市名）
+     * @param displayName 展示用地区名；location 为 GPS 时用于回填用户偏好城市
+     * @param lang 状况文案语言（客户端已同步的界面语言），白名单外一律回落到中文
+     */
+    public WeatherDto getRealtimeWeather(String location, String displayName, String lang) {
+        final Map<String, String> config = loadConfig();
+        final String apiLang = normalizeLang(lang);
+
+        if (!"true".equalsIgnoreCase(config.get("weather.enabled"))) {
+            return WeatherDto.disabled();
+        }
+
+        String baseUrl = config.get("weather.qweather.url");
+        String rawLocation = (location != null && !location.isBlank()) ? location.trim()
+                : config.get("weather.location");
+        final String effectiveDisplayName = resolveDisplayName(rawLocation, displayName, config);
+
+        // 解析位置
+        ResolvedWeatherLocation resolved = resolveLocation(rawLocation, config, apiLang);
+        if (resolved == null) {
+            // 用户指定位置解析失败，尝试配置中心默认值
+            String fallbackLocation = config.get("weather.location");
+            if (fallbackLocation != null && !fallbackLocation.isBlank()
+                    && !fallbackLocation.equals(rawLocation)) {
+                resolved = resolveLocation(fallbackLocation, config, apiLang);
+            }
+            if (resolved == null) {
+                return WeatherDto.locationNotFound();
+            }
+        }
+
+        // 检查天气数据缓存
+        final ResolvedWeatherLocation finalResolved = resolved;
+        final String finalBaseUrl = baseUrl;
+        // 状况文案按语言返回，缓存与 singleflight 都必须带语言，
+        // 否则中文用户先落缓存会让英文用户拿到中文文本。
+        final String requestKey = cacheKey(finalResolved.latLon(), apiLang);
+        WeatherDto cachedWeather = weatherCacheStore.findWeather(requestKey).orElse(null);
+        if (cachedWeather != null) {
+            return withLocationName(cachedWeather, effectiveDisplayName);
+        }
+
+        // singleflight：同一位置的并发请求复用同一个 Future，防止缓存击穿。
+        // 必须用 computeIfAbsent 创建：先 supplyAsync 再 putIfAbsent 的写法会让每个并发线程
+        // 都真的发出一轮外部请求，落败线程的 cancel 只能取消已经开跑的任务。
+        final AtomicBoolean owned = new AtomicBoolean(false);
+        CompletableFuture<WeatherDto> future = inflightRequests.computeIfAbsent(requestKey, key -> {
+            owned.set(true);
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    // 预生成 JWT，并行请求外部 API
+                    String jwt = generateJwt(config);
+                    CompletableFuture<JsonNode> weatherNowFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
+                    CompletableFuture<JsonNode> airNowFuture = CompletableFuture.supplyAsync(
+                            () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt, apiLang), weatherExecutor);
+                    CompletableFuture<JsonNode> weather7dFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
+                    CompletableFuture<JsonNode> weather24hFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
+
+                    // 四个外部请求必须并行等待：逐个 get(5s) 的最坏耗时是 20s，
+                    // 超过调用方 6s 上限后仍会有子任务在后台滞留。
+                    CompletableFuture<?>[] subtasks = {
+                            weatherNowFuture, airNowFuture, weather7dFuture, weather24hFuture
+                    };
+                    try {
+                        CompletableFuture.allOf(subtasks).get(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        cancelSubtasks(subtasks);
+                    } catch (Exception timeoutOrFailure) {
+                        cancelSubtasks(subtasks);
+                    }
+                    JsonNode weatherNow = weatherNowFuture.getNow(null);
+                    JsonNode airNow = airNowFuture.getNow(null);
+                    JsonNode weather7d = weather7dFuture.getNow(null);
+                    JsonNode weather24h = weather24hFuture.getNow(null);
+
+                    if (weatherNow == null) {
+                        return WeatherDto.empty();
+                    }
+
+                    WeatherDto result = aggregateWeather(
+                            weatherNow, airNow, weather7d, weather24h,
+                            finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
+                                    ? finalResolved.locationName()
+                                    : effectiveDisplayName);
+                    // 外部接口返回非 200 业务码时 aggregateWeather 返回空对象；
+                    // 把空结果写缓存会让一次瞬时故障在整个 TTL 内都表现为"无天气"。
+                    // 7 日预报子请求超时降级时也跳过缓存：残缺温度不应锁定整个 TTL。
+                    if (!result.equals(WeatherDto.empty()) && !result.daily().isEmpty()) {
+                        weatherCacheStore.saveWeather(requestKey, result);
+                    }
+                    return result;
+                } catch (Exception e) {
+                    log.error("获取天气数据失败", e);
+                    return WeatherDto.empty();
+                }
+            }, weatherExecutor);
+        });
+
+        if (owned.get()) {
+            // 登记线程负责摘除条目：按值删除，避免超时线程误摘后来者的任务
+            future.whenComplete((value, throwable) -> inflightRequests.remove(requestKey, future));
+        }
+        try {
+            // 等待线程与登记线程使用同一份展示名口径；缓存命中的分支已经补齐，
+            // singleflight 等待分支不能直接返回首次请求写入的 locationName。
+            return withLocationName(future.get(6, TimeUnit.SECONDS), effectiveDisplayName);
+        } catch (Exception e) {
+            log.warn("天气请求未在超时内完成: location={}", requestKey, e);
+            // 不取消共享 future：等待者超时只影响本次调用，后台任务仍可在
+            // 内部 5 秒超时后收敛并写入缓存，避免把同 key 的并发请求一起打成空结果。
+            return WeatherDto.empty();
+        }
+    }
+
+    // ==================== 位置解析 ====================
+
+    private ResolvedWeatherLocation resolveLocation(String location, Map<String, String> config, String lang) {
+        if (isLatLon(location)) {
+            // 坐标先归一化到固定精度：原始浮点串既会让 GPS 漂移逐次击穿缓存，
+            // 又会把极小坐标写成科学计数法。
+            String normalized = WeatherCoordinates.normalize(location);
+            // GPS 只给了坐标：用 GeoAPI 反查真实城市名，失败也不阻断天气查询。
+            ResolvedWeatherLocation geo = lookupGeoLocation(normalized, config, lang);
+            return new ResolvedWeatherLocation(
+                    normalized, normalized, geo == null ? "" : geo.locationName());
+        }
+        // 城市名由用户偏好/配置直接提供，展示名优先用入参，不依赖 Geo 返回字段。
+        ResolvedWeatherLocation resolved = lookupGeoLocation(location, config, lang);
+        if (resolved == null) {
+            return null;
+        }
+        return new ResolvedWeatherLocation(
+                resolved.weatherLocation(), resolved.latLon(), location);
+    }
+
+    /**
+     * 解析展示用地区名：用户入参城市 > 调用方传入展示名 > 空串。
+     *
+     * <p>坐标查询不回退配置默认城市，真实城市名由 GeoAPI 反查结果提供。</p>
+     */
+    private String resolveDisplayName(
+            String rawLocation, String displayName, Map<String, String> config) {
+        if (rawLocation != null && !rawLocation.isBlank() && !isLatLon(rawLocation)) {
+            return rawLocation.trim();
+        }
+        // 坐标查询的展示名只能来自 GeoAPI 反查或调用方明确的展示名，
+        // 不能回退到配置中心的默认城市，否则人在北京会看到“上海/北京”之类的错位。
+        if (displayName != null && !displayName.isBlank() && !isLatLon(displayName)) {
+            return displayName.trim();
+        }
+        return "";
+    }
+
+    /**
+     * 缓存命中时补齐展示地区名（旧缓存可能没有 locationName）。
+     */
+    private WeatherDto withLocationName(WeatherDto weather, String locationName) {
+        String target = locationName != null ? locationName : "";
+        if (weather == null) {
+            return WeatherDto.upstreamError();
+        }
+        if (target.isBlank() || target.equals(weather.locationName())) {
+            return weather;
+        }
+        return new WeatherDto(
+                weather.temp(), weather.feelsLike(), weather.text(), weather.icon(),
+                weather.humidity(), weather.windSpeed(), weather.windDir(),
+                weather.pressure(), weather.visibility(), weather.uvIndex(),
+                weather.sunrise(), weather.sunset(), weather.aqi(), weather.pm2p5(),
+                weather.aqiCategory(), weather.updateTime(), weather.healthAdvice(),
+                weather.tempMax(), weather.tempMin(), weather.precip(), weather.windScale(),
+                weather.textDay(), weather.textNight(),
+                weather.hourly(), weather.daily(),
+                target,
+                weather.status()
+        );
+    }
+
+    /**
+     * 通过 GeoAPI 查询城市信息（LocationID + 经纬度）
+     *
+     * 城市不存在属于正常业务场景，返回 null（不抛异常）。
+     * 缓存穿透防护：失败结果缓存 10min。
+     */
+    private ResolvedWeatherLocation lookupGeoLocation(String cityName, Map<String, String> config, String lang) {
+        // 坐标反查的城市名随语言变化，缓存键必须带语言；城市名查询的展示名
+        // 取用户入参，反查结果只用于 LocationID 与经纬度，可以跨语言共享。
+        String locationCacheKey = isLatLon(cityName) ? cityName + "|" + lang : cityName;
+        ResolvedWeatherLocation cached = weatherCacheStore.findLocation(locationCacheKey).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+
+        if (weatherCacheStore.isLocationMissing(locationCacheKey)) {
+            return null;
+        }
+
+        try {
+            String jwt = generateJwt(config);
+            String baseUrl = config.get("weather.qweather.url");
+            String encoded = URLEncoder.encode(cityName, StandardCharsets.UTF_8);
+            URI uri = apiUri(baseUrl, "/geo/v2/city/lookup?location=" + encoded + "&lang=" + lang);
+            JsonNode result = httpGet(uri, jwt);
+            if (result == null) {
+                // 网络/HTTP 故障不代表城市不存在，不能进入负缓存。
+                log.warn("天气 GeoAPI 请求失败，跳过负缓存: locationLength={}", cityName.length());
+                return null;
+            }
+
+            String code = result.path("code").asString(null);
+            JsonNode locations = result.path("location");
+            boolean notFound = "404".equals(code) || "204".equals(code)
+                    || (("200".equals(code)) && (!locations.isArray() || locations.isEmpty()));
+            if (notFound) {
+                // 读缓存用 locationCacheKey（坐标查询带语言后缀），写负缓存也必须同一口径。
+                weatherCacheStore.markLocationMissing(locationCacheKey);
+                return null;
+            }
+            if (!"200".equals(code) || locations == null || !locations.isArray()) {
+                log.warn("天气 GeoAPI 返回非成功业务码: code={}", code);
+                return null;
+            }
+
+            JsonNode first = locations.get(0);
+            String id = first.path("id").asString(null);
+            String lat = first.path("lat").asString(null);
+            String lon = first.path("lon").asString(null);
+            if (id == null || lat == null || lon == null) {
+                log.warn("天气 GeoAPI 结果缺少定位字段: code={}", code);
+                return null;
+            }
+
+            // 与坐标入参同一份格式化：同一城市无论来自入参还是 GeoAPI 都落到同一个缓存键。
+            String latLon = WeatherCoordinates.normalize(lon + "," + lat);
+            String name = first.path("name").asString(null);
+            ResolvedWeatherLocation location = new ResolvedWeatherLocation(
+                    id, latLon, name == null ? "" : name.trim());
+            weatherCacheStore.saveLocation(locationCacheKey, location);
+            return location;
+        } catch (BusinessException e) {
+            // 未配置密钥等配置问题不是“城市不存在”，不得写 10 分钟负缓存。
+            log.warn("天气 GeoAPI 配置不可用: errorType={}", e.getClass().getSimpleName());
+            return null;
+        } catch (Exception e) {
+            log.warn("天气 GeoAPI 调用异常，跳过负缓存: errorType={}", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    // ==================== 外部 API 调用 ====================
+
+    /**
+     * 界面语言代码 → 和风天气 {@code lang} 取值。
+     *
+     * 值要拼进出站 URL，所以只放行精确白名单：取主语言子tag（{@code zh-Hans}→{@code zh}）
+     * 并要求整体就是 zh 或 en，其余（含 {@code en&x=1} 这类带分隔符的注入串）
+     * 一律回落到中文，不原样转发调用方传入的字符串。
+     */
+    static String normalizeLang(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return DEFAULT_LANG;
+        }
+        String primary = raw.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
+        return switch (primary) {
+            case "en" -> "en";
+            case "zh" -> "zh";
+            default -> DEFAULT_LANG;
+        };
+    }
+
+    /** 天气数据缓存键：同一经纬度在不同语言下是不同份文本。 */
+    private static String cacheKey(String latLon, String lang) {
+        return latLon + ":" + lang;
+    }
+
+    /**
+     * 拼装并校验出站地址：基址由超级管理员配置，但协议、用户信息段与目标主机必须仍落在基址同源内。
+     */
+    private URI apiUri(String baseUrl, String relativePath) {
+        return OutboundEndpointRules.requireConfiguredEndpoint(baseUrl, URI.create(baseUrl + relativePath),
+                safeUrlValidator);
+    }
+
+    private JsonNode fetchApi(String baseUrl, String path, String location, String jwt, String lang) {
+        try {
+            String encoded = URLEncoder.encode(location, StandardCharsets.UTF_8);
+            URI uri = apiUri(baseUrl, path + "?location=" + encoded + "&lang=" + lang);
+            return httpGet(uri, jwt);
+        } catch (Exception e) {
+            log.error("调用天气 API 失败: {}", path, e);
+            return null;
+        }
+    }
+
+    private JsonNode fetchAirQuality(String baseUrl, String latLon, String jwt, String lang) {
+        try {
+            String[] parts = latLon.split(",");
+            if (parts.length != 2) {
+                return null;
+            }
+            // 空气质量 v1 接口的 category 与 advice 也是文案，同样按语言请求。
+            URI uri = apiUri(baseUrl, "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim()
+                    + "?lang=" + lang);
+            JsonNode json = httpGet(uri, jwt);
+            return json != null ? parseAirQualityResponse(json) : null;
+        } catch (Exception e) {
+            log.error("调用空气质量 API 失败", e);
+            return null;
+        }
+    }
+
+    /**
+     * 公共 HTTP GET
+     *
+     * @return 解析后的 JSON 树；非 2xx 或非 JSON 响应返回 null
+     * @throws RuntimeException 网络异常等不可恢复错误
+     */
+    private static void cancelSubtasks(CompletableFuture<?>[] subtasks) {
+        for (CompletableFuture<?> subtask : subtasks) {
+            subtask.cancel(true);
+        }
+    }
+
+    private JsonNode httpGet(URI uri, String jwt) {
+        var headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + jwt);
+        headers.set("Accept", "application/json");
+        headers.set("Accept-Encoding", "gzip");
+
+        // 响应体必须边读边限长：exchange(byte[].class) 会先把上游返回全部堆进内存，
+        // 恶意或异常的超大响应在解压限长生效前就已经造成内存峰值。
+        byte[] raw = restTemplate.execute(
+                uri,
+                HttpMethod.GET,
+                request -> request.getHeaders().putAll(headers),
+                response -> readBoundedResponse(response.getBody())
+        );
+        if (raw == null || raw.length == 0) {
+            return null;
+        }
+        String body = decompressGzip(raw);
+        if (body.trim().startsWith("{")) {
+            return JsonSupport.readTree(body);
+        }
+        return null;
+    }
+
+    /**
+     * 读取有上限的原始响应体；超过上限直接放弃，避免未压缩响应撑爆堆内存。
+     */
+    private byte[] readBoundedResponse(InputStream input) throws IOException {
+        if (input == null) {
+            return new byte[0];
+        }
+        try (InputStream source = input;
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int total = 0;
+            int read;
+            while ((read = source.read(buffer)) != -1) {
+                total += read;
+                if (total > MAX_RAW_RESPONSE_SIZE) {
+                    log.warn("天气响应体超过大小限制({} bytes)，丢弃响应", MAX_RAW_RESPONSE_SIZE);
+                    return null;
+                }
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    // ==================== 响应解析 ====================
+
+    private JsonNode parseAirQualityResponse(JsonNode response) {
+        ObjectNode result = JsonSupport.mapper().createObjectNode();
+        result.put("code", "200");
+        ObjectNode now = JsonSupport.mapper().createObjectNode();
+
+        JsonNode indexes = response.path("indexes");
+        if (indexes.isArray()) {
+            JsonNode aqiEntry = findByCode(indexes, "us-epa");
+            if (aqiEntry == null) aqiEntry = findByCode(indexes, "qaqi");
+            if (aqiEntry != null) {
+                now.put("aqi", getIntOrNull(aqiEntry, "aqiDisplay"));
+                now.put("category", aqiEntry.path("category").asString(null));
+            }
+        }
+
+        JsonNode pollutants = response.path("pollutants");
+        if (pollutants.isArray()) {
+            JsonNode pm25 = findByCode(pollutants, "pm2p5");
+            if (pm25 != null) {
+                JsonNode concentration = pm25.path("concentration");
+                if (concentration.isObject()) {
+                    now.put("pm2p5", getIntOrNull(concentration, "value"));
+                }
+            }
+        }
+
+        JsonNode health = response.path("health");
+        if (health.isObject()) {
+            JsonNode advice = health.path("advice");
+            if (advice.isObject()) {
+                now.put("advice", advice.path("generalPopulation").asString(null));
+            }
+        }
+
+        result.set("now", now);
+        return result;
+    }
+
+    private JsonNode findByCode(JsonNode array, String code) {
+        for (int i = 0; i < array.size(); i++) {
+            JsonNode item = array.get(i);
+            if (code.equals(item.path("code").asString(null))) return item;
+        }
+        return null;
+    }
+
+    private WeatherDto aggregateWeather(
+            JsonNode weatherNow,
+            JsonNode airNow,
+            JsonNode weather7d,
+            JsonNode weather24h,
+            String locationName) {
+        if (weatherNow == null || !"200".equals(weatherNow.path("code").asString(null))) {
+            return WeatherDto.empty();
+        }
+        JsonNode now = weatherNow.path("now");
+        if (!now.isObject()) return WeatherDto.empty();
+
+        JsonNode air = airNow != null && "200".equals(airNow.path("code").asString(null))
+                ? airNow.path("now") : null;
+        JsonNode today = null;
+        List<WeatherDto.DailyForecast> dailyForecasts = List.of();
+        if (weather7d != null && "200".equals(weather7d.path("code").asString(null))) {
+            JsonNode daily = weather7d.path("daily");
+            if (daily.isArray() && !daily.isEmpty()) {
+                today = daily.get(0);
+                dailyForecasts = parseDailyForecasts(daily);
+            }
+        }
+        List<WeatherDto.HourlyForecast> hourlyForecasts = List.of();
+        if (weather24h != null && "200".equals(weather24h.path("code").asString(null))) {
+            hourlyForecasts = parseHourlyForecasts(weather24h.path("hourly"));
+        }
+
+        double currentTemp = now.path("temp").asDouble();
+        return new WeatherDto(
+            currentTemp, now.path("feelsLike").asDouble(),
+            now.path("text").asString(null), now.path("icon").asString(null),
+            valueWithUnit(now, "humidity", "%"), valueWithUnit(now, "windSpeed", " km/h"),
+            now.path("windDir").asString(null), valueWithUnit(now, "pressure", " hPa"),
+            valueWithUnit(now, "vis", " km"),
+            today != null ? getIntOrNull(today, "uvIndex") : null,
+            today != null ? today.path("sunrise").asString(null) : "--",
+            today != null ? today.path("sunset").asString(null) : "--",
+            air != null ? getIntOrNull(air, "aqi") : null,
+            air != null ? getIntOrNull(air, "pm2p5") : null,
+            air != null ? getStringSafe(air, "category", "--") : "--",
+            weatherNow.path("updateTime").asString(null),
+            air != null ? getStringSafe(air, "advice", "") : "",
+            // 7 日预报降级时用当前实测温度兜底，不能把最高/最低温显示成 0.0°C。
+            today != null ? today.path("tempMax").asDouble() : currentTemp,
+            today != null ? today.path("tempMin").asDouble() : currentTemp,
+            valueWithUnit(now, "precip", " mm"),
+            getStringSafe(now, "windScale", "--"),
+            today != null ? getStringSafe(today, "textDay", "--") : "--",
+            today != null ? getStringSafe(today, "textNight", "--") : "--",
+            hourlyForecasts,
+            dailyForecasts,
+            locationName != null ? locationName : "",
+            WeatherDto.STATUS_OK
+        );
+    }
+
+    /**
+     * 字段缺失时返回 "--" 而不是拼出 "null%"、"null km/h"。
+     */
+    private String valueWithUnit(JsonNode node, String field, String unit) {
+        String value = node.path(field).asString(null);
+        if (value == null || value.isBlank() || "null".equalsIgnoreCase(value)) {
+            return "--";
+        }
+        return value + unit;
+    }
+
+    private List<WeatherDto.HourlyForecast> parseHourlyForecasts(JsonNode hourly) {
+        if (hourly == null || !hourly.isArray() || hourly.isEmpty()) {
+            return List.of();
+        }
+        int limit = Math.min(hourly.size(), 24);
+        ArrayList<WeatherDto.HourlyForecast> items = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            JsonNode item = hourly.get(i);
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            items.add(new WeatherDto.HourlyForecast(
+                    getStringSafe(item, "fxTime", "--"),
+                    (int) item.path("temp").asDouble(),
+                    getStringSafe(item, "icon", "999"),
+                    getStringSafe(item, "text", "--")
+            ));
+        }
+        return List.copyOf(items);
+    }
+
+    private List<WeatherDto.DailyForecast> parseDailyForecasts(JsonNode daily) {
+        if (daily == null || !daily.isArray() || daily.isEmpty()) {
+            return List.of();
+        }
+        int limit = Math.min(daily.size(), 7);
+        ArrayList<WeatherDto.DailyForecast> items = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            JsonNode item = daily.get(i);
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            items.add(new WeatherDto.DailyForecast(
+                    getStringSafe(item, "fxDate", "--"),
+                    (int) item.path("tempMax").asDouble(),
+                    (int) item.path("tempMin").asDouble(),
+                    getStringSafe(item, "iconDay", "999"),
+                    getStringSafe(item, "textDay", "--"),
+                    getStringSafe(item, "iconNight", "999"),
+                    getStringSafe(item, "textNight", "--")
+            ));
+        }
+        return List.copyOf(items);
+    }
+
+    // ==================== JWT 生成 ====================
+
+    /**
+     * 生成 JWT Token
+     *
+     * @throws BusinessException 配置不完整或签名失败
+     */
+    private String generateJwt(Map<String, String> config) {
+        String projectId = config.get("weather.qweather.project");
+        String credentialId = config.get("weather.qweather.credential");
+        String privateKeyPem = config.get("weather.qweather.key");
+
+        if (projectId == null || projectId.isBlank()
+                || credentialId == null || credentialId.isBlank()
+                || privateKeyPem == null || privateKeyPem.isBlank()) {
+            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "天气服务 JWT 配置不完整");
+        }
+
+        String cachedToken = weatherCacheStore.findJwt(credentialId).orElse(null);
+        if (cachedToken != null) return cachedToken;
+
+        jwtLock.lock();
+        try {
+            cachedToken = weatherCacheStore.findJwt(credentialId).orElse(null);
+            if (cachedToken != null) return cachedToken;
+
+            try {
+                PrivateKey privateKey = parseEd25519PrivateKey(privateKeyPem);
+
+                JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.EdDSA).keyID(credentialId).build();
+                Instant now = Instant.now();
+                JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                        .subject(projectId)
+                        .issueTime(Date.from(now.minusSeconds(30)))
+                        .expirationTime(Date.from(now.plusSeconds(3600)))
+                        .build();
+
+                SignedJWT jwt = new SignedJWT(header, claims);
+                byte[] keyBytes = privateKey.getEncoded();
+                byte[] rawPrivateKey = new byte[32];
+                System.arraycopy(keyBytes, keyBytes.length - 32, rawPrivateKey, 0, 32);
+                OctetKeyPair okp = new OctetKeyPair.Builder(Curve.Ed25519,
+                        Base64URL.encode(new byte[32])).d(Base64URL.encode(rawPrivateKey)).build();
+
+                jwt.sign(new Ed25519Signer(okp));
+                String token = jwt.serialize();
+                weatherCacheStore.saveJwt(credentialId, token);
+                return token;
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "JWT 签名失败: " + e.getMessage());
+            }
+        } finally {
+            jwtLock.unlock();
+        }
+    }
+
+    private PrivateKey parseEd25519PrivateKey(String pem) throws Exception {
+        String base64 = pem
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replace("-----BEGIN EC PRIVATE KEY-----", "")
+                .replace("-----END EC PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+        return KeyFactory.getInstance("Ed25519")
+                .generatePrivate(new PKCS8EncodedKeySpec(Base64.getDecoder().decode(base64)));
+    }
+
+    // ==================== 配置缓存 ====================
+
+    private Map<String, String> loadConfig() {
+        Instant now = Instant.now();
+        Map<String, String> cached = this.configCache;
+        if (cached != null && now.isBefore(this.configCacheExpiry)) return cached;
+
+        configLock.lock();
+        try {
+            cached = this.configCache;
+            if (cached != null && now.isBefore(this.configCacheExpiry)) return cached;
+
+            Map<String, String> newConfig = new ConcurrentHashMap<>();
+            try {
+                for (String key : CONFIG_KEYS) {
+                    configValueProvider.findByKey(key)
+                            .or(() -> legacyConfigKey(key))
+                            .ifPresent(value -> newConfig.put(key, value));
+                }
+                newConfig.putIfAbsent("weather.enabled", "true");
+                newConfig.putIfAbsent("weather.qweather.url", "https://devapi.qweather.com");
+                newConfig.putIfAbsent("weather.location", "北京");
+            } catch (Exception e) {
+                // 配置读取抖动不能把"全站天气禁用"写进 5 分钟缓存：
+                // 有上一次成功配置就继续用，没有则返回默认值但本次不缓存。
+                log.warn("加载天气配置失败，本次不写缓存: errorType={}", e.getClass().getSimpleName());
+                if (cached != null) {
+                    return cached;
+                }
+                return Map.of(
+                        "weather.enabled", "true",
+                        "weather.qweather.url", "https://devapi.qweather.com",
+                        "weather.location", "北京"
+                );
+            }
+            this.configCache = Map.copyOf(newConfig);
+            this.configCacheExpiry = now.plus(CONFIG_CACHE_TTL);
+            return this.configCache;
+        } finally {
+            configLock.unlock();
+        }
+    }
+
+    private Optional<String> legacyConfigKey(String key) {
+        String legacyKey = switch (key) {
+            case "weather.qweather.url" -> "weather.qweather.base-url";
+            case "weather.qweather.project" -> "weather.qweather.project-id";
+            case "weather.qweather.credential" -> "weather.qweather.credential-id";
+            case "weather.qweather.key" -> "weather.qweather.private-key";
+            default -> null;
+        };
+        return legacyKey == null ? Optional.empty() : configValueProvider.findByKey(legacyKey);
+    }
+
+    // ==================== 工具方法 ====================
+
+    /**
+     * 读取可空整数：缺字段、空值或非数字一律返回 null。
+     *
+     * <p>空气质量与紫外线里 0 是有业务含义的档位（最优 / 最弱），拿 0 兜底会把
+     * "没有数据"呈现成"最好"，比缺省展示更具误导性。</p>
+     */
+    private Integer getIntOrNull(JsonNode obj, String key) {
+        JsonNode value = obj.path(key);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        String text = value.asString(null);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return (int) Double.parseDouble(text);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private String getStringSafe(JsonNode obj, String key, String defaultValue) {
+        String val = obj.path(key).asString(null);
+        return val != null ? val : defaultValue;
+    }
+
+    private boolean isLatLon(String location) {
+        if (location == null) {
+            return false;
+        }
+        Matcher matcher = COORD_PATTERN.matcher(location.trim());
+        if (!matcher.matches()) {
+            return false;
+        }
+        // 与 WeatherController 一致按「经度,纬度」解析：|经度| 可到 180，|纬度| 不超过 90。
+        double longitude = Double.parseDouble(matcher.group(1));
+        double latitude = Double.parseDouble(matcher.group(2));
+        return Math.abs(longitude) <= 180 && Math.abs(latitude) <= 90;
+    }
+
+    private static final int MAX_DECOMPRESSED_SIZE = 1024 * 1024;
+    private static final int MAX_RAW_RESPONSE_SIZE = 256 * 1024;
+
+    private String decompressGzip(byte[] data) {
+        if (data.length >= 2 && (data[0] & 0xFF) == 0x1f && (data[1] & 0xFF) == 0x8b) {
+            try (var gzipIn = new GZIPInputStream(new ByteArrayInputStream(data));
+                 var out = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[1024];
+                int len;
+                int total = 0;
+                while ((len = gzipIn.read(buffer)) > 0) {
+                    total += len;
+                    if (total > MAX_DECOMPRESSED_SIZE) {
+                        log.warn("GZIP 解压超过大小限制({} bytes)，丢弃响应", MAX_DECOMPRESSED_SIZE);
+                        return "";
+                    }
+                    out.write(buffer, 0, len);
+                }
+                return out.toString(StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                log.debug("GZIP 解压失败，丢弃响应", e);
+                return "";
+            }
+        }
+        return new String(data, StandardCharsets.UTF_8);
+    }
+
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+                super.prepareConnection(connection, httpMethod);
+                // 请求头携带 JWT：GET 默认会自动跟随跳转，必须在 super 之后关掉才不会带凭据跳到别处。
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(5000);
+        return new RestTemplate(factory);
+    }
+
+}

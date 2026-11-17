@@ -1,0 +1,667 @@
+// 个人中心二级分区：安全与会话、通知偏好、服务器、关于。
+//
+// 与 profile_mobile_view.dart 同属 profile_page.dart 这一个 library，
+// 因此直接复用其中的 _PmGroupLabel/_PmRow/_PmSwitch 等私有控件，
+// 不需要把它们转正。
+part of 'profile_page.dart';
+
+/// 安全：修改密码行（对话框）+ 设备与会话列表。
+class _PmSecuritySection extends ConsumerStatefulWidget {
+  const _PmSecuritySection();
+
+  @override
+  ConsumerState<_PmSecuritySection> createState() => _PmSecuritySectionState();
+}
+
+class _PmSecuritySectionState extends ConsumerState<_PmSecuritySection> {
+  /// 撤销是网络写操作：列表回写与反馈都要先确认本页仍在，
+  /// 不在 Element 已停用后触碰 ref 与 ScaffoldMessenger。
+  Future<void> _revoke(String sessionId) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(profileCommandServiceProvider).revokeSession(sessionId);
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(userSessionsProvider);
+      showOmniFeedback(context, l10n.profileSessionRevoked);
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        failureToast(l10n, l10n.profileSessionRevokeFailed, error),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final sessions = ref.watch(userSessionsProvider);
+    final sessionList = sessions.asData?.value ?? const <UserSession>[];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      children: [
+        _PmGroupLabel(l10n.profileCredentialsTitle),
+        _PmRow(
+          icon: Icons.password_rounded,
+          label: l10n.profileRowChangePassword,
+          subtitle: l10n.profileSectionSecuritySubtitle,
+          onTap: () => unawaited(ChangePasswordDialog.show(context)),
+        ),
+        _PmTwoFactorRow(),
+        _PmGroupLabel(l10n.profileRowSessions),
+        if (sessions.isLoading)
+          // 行内子块等自己的 provider 时不再各画转圈：整屏动画至多一处。
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: MobileSkeletonBlock(height: 40),
+          )
+        else if (sessionList.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Text(
+                l10n.profileSessionsEmpty,
+                style: TextStyle(
+                  fontSize: 11, // ignore: font_size_whitelist
+                  color: context.env.inkMuted,
+                ),
+              ),
+            ),
+          )
+        else
+          for (final session in sessionList)
+            _PmSessionRow(
+              session: session,
+              onRevoke:
+                  session.current ? null : () => unawaited(_revoke(session.id)),
+            ),
+      ],
+    );
+  }
+}
+
+/// 两步验证行：状态副题 + 启用开关（开启走向导：密码→扫码→备份码；
+/// 关闭走密码与验证码双重复核）；服务器强制必需时展示「必需」徽标不可关。
+class _PmTwoFactorRow extends ConsumerStatefulWidget {
+  const _PmTwoFactorRow();
+
+  @override
+  ConsumerState<_PmTwoFactorRow> createState() => _PmTwoFactorRowState();
+}
+
+class _PmTwoFactorRowState extends ConsumerState<_PmTwoFactorRow> {
+  /// 向导是模态流程：结束后先确认本页仍在，再回写 Element 绑定的 ref。
+  Future<void> _runWizard(bool enabled) async {
+    if (enabled) {
+      await ProfileTwoFactorCard.showDisableWizard(context);
+    } else {
+      await ProfileTwoFactorCard.showEnableWizard(context);
+    }
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(profileTwoFactorStatusProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final status = ref.watch(profileTwoFactorStatusProvider);
+    return status.when(
+      loading:
+          () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: MobileSkeletonBlock(height: 44),
+          ),
+      error:
+          (_, _) => _PmRow(
+            icon: Icons.verified_user_outlined,
+            label: l10n.profileTwoFactorTitle,
+            subtitle: l10n.profileTwoFactorLoadFailed,
+            onTap: () => ref.invalidate(profileTwoFactorStatusProvider),
+          ),
+      data: (value) {
+        final subtitle =
+            value.enabled
+                ? l10n.profileTwoFactorEnabled
+                : (value.required
+                    ? l10n.profileTwoFactorRequiredBadge
+                    : l10n.profileTwoFactorDisabled);
+        return _PmRow(
+          icon: Icons.verified_user_outlined,
+          label: l10n.profileTwoFactorTitle,
+          subtitle: subtitle,
+          trailing:
+              value.required
+                  ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.env.accentInk.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      l10n.profileTwoFactorRequiredBadge,
+                      style: TextStyle(
+                        fontSize: 8, // ignore: font_size_whitelist
+                        fontWeight: FontWeight.w800,
+                        color: context.env.accentInk,
+                      ),
+                    ),
+                  )
+                  : MobileEnvSwitch(
+                    value: value.enabled,
+                    onChanged: (_) => unawaited(_runWizard(value.enabled)),
+                  ),
+        );
+      },
+    );
+  }
+}
+
+/// 会话行：设备名/平台 + IP·最近活跃 + 当前徽标或下线钮。
+class _PmSessionRow extends StatelessWidget {
+  const _PmSessionRow({required this.session, required this.onRevoke});
+
+  final UserSession session;
+  final VoidCallback? onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final title =
+        session.deviceName?.isNotEmpty == true
+            ? session.deviceName!
+            : session.clientPlatform;
+    final subtitle = '${session.ipAddress} · ${session.lastActiveAt}';
+    return Container(
+      constraints: const BoxConstraints(minHeight: 60),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: context.env.surfaceTint,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                Icons.devices_other_rounded,
+                size: 17,
+                color: context.env.inkMuted,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12, // ignore: font_size_whitelist
+                            fontWeight: FontWeight.w600,
+                            color: context.env.ink,
+                          ),
+                        ),
+                      ),
+                      if (session.current) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.env.accentInk.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            l10n.profileSessionsCurrent,
+                            style: TextStyle(
+                              fontSize: 8, // ignore: font_size_whitelist
+                              fontWeight: FontWeight.w800,
+                              color: context.env.accentInk,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9, // ignore: font_size_whitelist
+                      color: context.env.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onRevoke != null)
+              TextButton(
+                onPressed: onRevoke,
+                style: TextButton.styleFrom(
+                  foregroundColor: context.env.statusDanger,
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                child: Text(
+                  l10n.profileSessionsRevoke,
+                  style: const TextStyle(
+                    fontSize: 10, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 通知偏好：总开关 + 声音/预览 + 类型开关（复用既有偏好控制器）。
+class _PmNotificationsSection extends ConsumerStatefulWidget {
+  const _PmNotificationsSection();
+
+  @override
+  ConsumerState<_PmNotificationsSection> createState() =>
+      _PmNotificationsSectionState();
+}
+
+class _PmNotificationsSectionState
+    extends ConsumerState<_PmNotificationsSection> {
+  /// 控制器在失败时已把 state 回滚，这里只补失败反馈；
+  /// 反馈要落回 ScaffoldMessenger，因此必须先确认本页仍在。
+  Future<void> _save(NotificationPreferences next) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(notificationPreferencesProvider.notifier).save(next);
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        failureToast(l10n, l10n.profileNotificationSaveFailed, error),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final preferences = ref.watch(notificationPreferencesProvider);
+    final types = ref.watch(notificationTypesProvider);
+    return preferences.when(
+      loading:
+          () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+      error:
+          (_, _) => Center(
+            child: TextButton(
+              onPressed: () => ref.invalidate(notificationPreferencesProvider),
+              child: Text(l10n.coreRetry),
+            ),
+          ),
+      data: (prefs) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          children: [
+            _PmGroupLabel(l10n.profileNotificationSettings),
+            _PmRow(
+              icon: Icons.notifications_active_outlined,
+              label: l10n.profileNotificationMasterSwitch,
+              subtitle: l10n.profileNotificationMasterSwitchHint,
+              trailing: _PmSwitch(
+                value: prefs.enabled,
+                onChanged:
+                    (value) => unawaited(_save(prefs.copyWith(enabled: value))),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.music_note_outlined,
+              label: l10n.profileNotificationSound,
+              subtitle: l10n.profileNotificationSoundHint,
+              trailing: _PmSwitch(
+                value: prefs.sound,
+                onChanged:
+                    (value) => unawaited(_save(prefs.copyWith(sound: value))),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.visibility_outlined,
+              label: l10n.profileNotificationPreview,
+              subtitle: l10n.profileNotificationPreviewHint,
+              trailing: _PmSwitch(
+                value: prefs.showPreview,
+                onChanged:
+                    (value) =>
+                        unawaited(_save(prefs.copyWith(showPreview: value))),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.campaign_outlined,
+              label: l10n.notificationForegroundToastToggle,
+              subtitle: l10n.notificationForegroundToastToggleSubtitle,
+              trailing: _PmSwitch(
+                value: prefs.foregroundBanner,
+                onChanged:
+                    (value) => unawaited(
+                      _save(prefs.copyWith(foregroundBanner: value)),
+                    ),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.mail_outline_rounded,
+              label: l10n.profileNotificationEmail,
+              subtitle: l10n.profileNotificationEmailHint,
+              trailing: _PmSwitch(
+                value: prefs.emailNotification,
+                onChanged:
+                    (value) => unawaited(
+                      _save(prefs.copyWith(emailNotification: value)),
+                    ),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.nightlight_outlined,
+              label: l10n.notificationQuietHours,
+              subtitle: l10n.notificationQuietHoursHint,
+              trailing: _PmSwitch(
+                value: prefs.quietHours.enabled,
+                onChanged:
+                    (value) => unawaited(
+                      _save(
+                        prefs.copyWith(
+                          quietHours: prefs.quietHours.copyWith(enabled: value),
+                        ),
+                      ),
+                    ),
+              ),
+            ),
+            NotificationQuietHoursFields(
+              start: prefs.quietHours.start,
+              end: prefs.quietHours.end,
+              enabled: prefs.quietHours.enabled,
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              onChanged:
+                  (start, end) => unawaited(
+                    _save(
+                      prefs.copyWith(
+                        quietHours: prefs.quietHours.copyWith(
+                          start: start,
+                          end: end,
+                        ),
+                      ),
+                    ),
+                  ),
+            ),
+            _PmGroupLabel(l10n.profileRowNotifications),
+            types.when(
+              loading:
+                  () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+              error:
+                  (_, _) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      l10n.profileNotificationTypesLoadFailed,
+                      style: TextStyle(
+                        fontSize: 10, // ignore: font_size_whitelist
+                        color: context.env.inkMuted,
+                      ),
+                    ),
+                  ),
+              data: (list) {
+                return Column(
+                  children: [
+                    for (final type in list)
+                      _PmRow(
+                        icon: Icons.campaign_outlined,
+                        label: notificationTypeLabel(type.typeCode, l10n),
+                        subtitle:
+                            notificationTypeDescription(type.typeCode, l10n) ??
+                            type.description ??
+                            type.typeCode,
+                        trailing: _PmSwitch(
+                          value: prefs.types[type.typeCode] ?? true,
+                          onChanged:
+                              (value) => unawaited(
+                                _save(
+                                  prefs.copyWith(
+                                    types: {
+                                      ...prefs.types,
+                                      type.typeCode: value,
+                                    },
+                                  ),
+                                ),
+                              ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 服务器：地址行 + 更换入口。
+class _PmServerSection extends ConsumerWidget {
+  const _PmServerSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final environment = ref.watch(appEnvironmentProvider);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      children: [
+        _PmGroupLabel(l10n.profileServerAddress),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Text(
+            environment?.apiBaseUrl ?? '-',
+            style: TextStyle(
+              fontSize: 13, // ignore: font_size_whitelist
+              color: context.env.ink,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _PmPrimaryButton(
+          label: l10n.profileSwitchServer,
+          onPressed:
+              () => unawaited(_confirmAndChangeServer(context, ref, l10n)),
+        ),
+      ],
+    );
+  }
+}
+
+/// 更换服务器：与桌面端同一流程 —— 确认后先清会话与已保存的服务端地址再进设置页。
+/// 只跳转不清理会把旧凭据留在本机，新地址登录失败时也无从判断是旧配置还是新配置。
+Future<void> _confirmAndChangeServer(
+  BuildContext context,
+  WidgetRef ref,
+  AppLocalizations l10n,
+) async {
+  final confirmed = await showMobileConfirmSheet(
+    context,
+    title: l10n.serverPanelChangeTitle,
+    message: l10n.serverPanelChangeBody,
+    confirmLabel: l10n.serverPanelChangeConfirm,
+    destructive: true,
+  );
+  if (!confirmed || !context.mounted) {
+    return;
+  }
+  // 清除会话会触发路由重定向并卸载当前页面，server 通知器必须提前取好，
+  // 否则 await 之后再 read 会在已卸载的 WidgetRef 上抛 StateError。
+  final serverNotifier = ref.read(serverConfigProvider.notifier);
+  await ref.read(authSessionProvider.notifier).clearSession();
+  await serverNotifier.clear();
+  if (!context.mounted) {
+    return;
+  }
+  context.go('/server-setup?switch=1');
+}
+
+/// 关于：版本信息。
+class _PmAboutSection extends StatelessWidget {
+  const _PmAboutSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      children: [
+        _PmGroupLabel(l10n.profileGroupAbout),
+        _PmRow(
+          icon: Icons.auto_awesome_rounded,
+          label: 'OmniNest',
+          subtitle: 'v0.1.0 · self-hosted',
+        ),
+        const SizedBox(height: 18),
+        Center(
+          child: Text(
+            l10n.profileFooterTag,
+            style: TextStyle(
+              fontSize: 9, // ignore: font_size_whitelist
+              color: context.env.inkFaint,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 头像圆片（有图用图，无图取首字母）。
+///
+/// [onTap] 非空时该圆片即为按钮，读屏必须能播报动作含义，故同时要求
+/// [semanticLabel]（例如「个人信息」或「更换头像」）。
+class _ProfileAvatarChip extends StatelessWidget {
+  const _ProfileAvatarChip({
+    required this.avatarUrl,
+    required this.name,
+    this.size = 40,
+    this.onTap,
+    this.semanticLabel,
+  });
+
+  final String? avatarUrl;
+  final String name;
+  final double size;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl;
+    final initials =
+        name.trim().isNotEmpty
+            ? name.trim().characters.first.toUpperCase()
+            : '?';
+    final body = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: context.env.avatarBg,
+        shape: BoxShape.circle,
+      ),
+      child:
+          url != null && url.isNotEmpty
+              ? ClipOval(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  cacheWidth: quantizedDecodeWidth(
+                    logicalWidth: size,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  ),
+                  cacheHeight: quantizedDecodeWidth(
+                    logicalWidth: size,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  ),
+                  errorBuilder:
+                      (_, _, _) => Center(
+                        child: Text(
+                          initials,
+                          style: TextStyle(
+                            fontSize:
+                                size * 0.33, // ignore: font_size_whitelist
+                            fontWeight: FontWeight.w700,
+                            color: context.env.avatarFg,
+                          ),
+                        ),
+                      ),
+                ),
+              )
+              : Center(
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    fontSize: size * 0.33, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w700,
+                    color: context.env.avatarFg,
+                  ),
+                ),
+              ),
+    );
+    if (onTap == null) {
+      return body;
+    }
+    // 头像圆片无文字标签：补按钮角色与动作名称，读屏才能说出这是按钮。
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: body,
+      ),
+    );
+  }
+}

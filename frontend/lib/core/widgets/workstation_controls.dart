@@ -1,0 +1,755 @@
+/// 建筑极简主义工位控件集：仅依赖 ColorScheme，可被任何
+/// 工位皮肤 Scope（Files / Admin）覆盖的子树直接使用。
+///
+/// 度量铁律：桌面顶栏/工具栏控件高度锁定 32px，移动端触控
+/// 热区外扩到 44px；全部 0px 直角、1px 细线、零阴影。
+library;
+
+import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/app_switch.dart';
+import 'package:omninest/core/widgets/workstation_focus_target.dart';
+
+/// 工位控件的状态过渡时长：只有 1px 边框与底色换色，几何尺寸不变。
+///
+/// 走 `MotionToken.reduced` 而不是裸常量，系统开启「减少动态效果」时直接
+/// 跳到终态，不做颜色渐变。
+const Duration _stateChangeDuration = Duration(milliseconds: 120);
+
+/// 工位输入装饰：1px 细线圆角、凹入槽体底色。
+///
+/// 默认边框为 hairline（outlineVariant），聚焦仅 1px 精准升为
+/// primary，杜绝未聚焦时呈现强边框的“伪选中态”。深色主题的 onSurface
+/// 近白，拿它当焦点描边会在点击后被读成一圈白框。
+InputDecoration workstationInputDecoration(
+  BuildContext context, {
+  String? hintText,
+  IconData prefixIcon = Icons.search_rounded,
+  double height = 32,
+}) {
+  final scheme = Theme.of(context).colorScheme;
+  final radius = BorderRadius.circular(AppControlTokens.controlRadius);
+  final enabledBorder = OutlineInputBorder(
+    borderRadius: radius,
+    borderSide: BorderSide(color: scheme.outlineVariant, width: 1),
+  );
+  final focusedBorder = OutlineInputBorder(
+    borderRadius: radius,
+    borderSide: BorderSide(color: scheme.primary, width: 1),
+  );
+  return InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: scheme.surfaceContainerLow,
+    hintText: hintText,
+    hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+    prefixIcon: Icon(prefixIcon, size: 16, color: scheme.onSurfaceVariant),
+    // 前缀图标盒与字段同高，图标才能垂直居中（minHeight:0 会让图标贴顶）。
+    prefixIconConstraints: BoxConstraints(minWidth: 30, minHeight: height),
+    border: enabledBorder,
+    enabledBorder: enabledBorder,
+    focusedBorder: focusedBorder,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    constraints: BoxConstraints(minHeight: height, maxHeight: height),
+  );
+}
+
+/// 顶栏/页面工具栏统一 32px 直角描边图标按钮。
+///
+/// 三态：未激活（hairline 边 + 次级前景）、悬停（1px 细线精准变色）、
+/// 激活（surface-2 底 + 边框 + 主前景）。高度严格锁定 32px。
+class WorkstationIconButton extends StatefulWidget {
+  const WorkstationIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.active = false,
+    this.size = 32,
+    this.iconSize = 16,
+    super.key,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  /// 是否处于激活态（如详情栏开关展开时）。
+  final bool active;
+
+  final double size;
+
+  final double iconSize;
+
+  @override
+  State<WorkstationIconButton> createState() => _WorkstationIconButtonState();
+}
+
+class _WorkstationIconButtonState extends State<WorkstationIconButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = widget.onPressed != null;
+    final active = widget.active;
+    return Tooltip(
+      message: widget.tooltip,
+      child: WorkstationFocusTarget(
+        enabled: enabled,
+        semanticLabel: widget.tooltip,
+        selected: active,
+        onActivate: widget.onPressed ?? () {},
+        builder: (context, focused) {
+          final emphasized = active || _hovering || focused;
+          // 焦点用主色环，悬停用中性描边：深色主题 onSurface 近白，
+          // 把它同时用于 hover 与 focus 会在鼠标点击后冒出一圈实白框。
+          final border =
+              focused && enabled
+                  ? scheme.primary
+                  : active
+                  ? scheme.outlineVariant
+                  : emphasized && enabled
+                  ? scheme.outline
+                  : scheme.outlineVariant;
+          final foreground =
+              !enabled
+                  ? scheme.onSurfaceVariant.withValues(alpha: 0.45)
+                  : emphasized
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant;
+          return MouseRegion(
+            cursor:
+                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: widget.onPressed,
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, _stateChangeDuration),
+                width: widget.size,
+                height: widget.size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      active
+                          ? scheme.surfaceContainerHighest
+                          : Colors.transparent,
+                  border: Border.all(color: border, width: 1),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: widget.iconSize,
+                  color: foreground,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 直角分段切换器（如 表格视图 | 卡片视图）。
+///
+/// 各分段等宽共享 1px 外框，选中项 surface-2 底色高对比，未选中纯靠
+/// 变色驱动，杜绝边框切换引起的尺寸跳变。
+class WorkstationSegmented<T> extends StatelessWidget {
+  const WorkstationSegmented({
+    required this.segments,
+    required this.selected,
+    required this.onSelected,
+    this.height = 32,
+    super.key,
+  });
+
+  final List<WorkstationSegment<T>> segments;
+
+  final T selected;
+
+  final ValueChanged<T> onSelected;
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outline, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < segments.length; index++) ...[
+            if (index > 0)
+              VerticalDivider(width: 1, thickness: 1, color: scheme.outline),
+            _SegmentButton(
+              segment: segments[index],
+              selected: segments[index].value == selected,
+              height: height,
+              onTap: () => onSelected(segments[index].value),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class WorkstationSegment<T> {
+  const WorkstationSegment({
+    required this.value,
+    required this.tooltip,
+    required this.icon,
+    this.label,
+  });
+
+  final T value;
+  final String tooltip;
+  final IconData icon;
+  final String? label;
+}
+
+class _SegmentButton extends StatefulWidget {
+  const _SegmentButton({
+    required this.segment,
+    required this.selected,
+    required this.height,
+    required this.onTap,
+  });
+
+  final WorkstationSegment<Object?> segment;
+  final bool selected;
+  final double height;
+  final VoidCallback onTap;
+
+  @override
+  State<_SegmentButton> createState() => _SegmentButtonState();
+}
+
+class _SegmentButtonState extends State<_SegmentButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = widget.selected;
+    return Tooltip(
+      message: widget.segment.tooltip,
+      child: WorkstationFocusTarget(
+        enabled: true,
+        semanticLabel: widget.segment.tooltip,
+        selected: selected,
+        onActivate: widget.onTap,
+        builder: (context, focused) {
+          final emphasized = _hovering || focused;
+          final foreground =
+              selected || emphasized
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant;
+          final background =
+              selected
+                  ? scheme.surfaceContainerHighest
+                  : emphasized
+                  ? scheme.surfaceContainer
+                  : Colors.transparent;
+          return MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, _stateChangeDuration),
+                height: widget.height - 2,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                color: background,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.segment.icon, size: 16, color: foreground),
+                    if (widget.segment.label != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.segment.label!,
+                        style: TextStyle(
+                          fontSize: AppTypography.labelMedium,
+                          height: 16 / AppTypography.labelMedium,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color: foreground,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 模板规格动作按钮：桌面 28px / 移动 44px，直角三变体。
+///
+/// primary = 反色高强调（上传等主操作）；secondary = 细线描边次操作；
+/// danger = 绯红描边破坏性操作。悬停只换底色，不改变边框几何。
+class WorkstationActionButton extends StatefulWidget {
+  const WorkstationActionButton({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.variant = WorkstationActionButtonVariant.secondary,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final WorkstationActionButtonVariant variant;
+
+  @override
+  State<WorkstationActionButton> createState() =>
+      _WorkstationActionButtonState();
+}
+
+enum WorkstationActionButtonVariant { primary, secondary, danger }
+
+class _WorkstationActionButtonState extends State<WorkstationActionButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = widget.onPressed != null;
+    final height = AppControlTokens.isDesktopDensity ? 28.0 : 44.0;
+    final Color background;
+    final Color foreground;
+    final Color border;
+    final Color hoverBackground;
+    switch (widget.variant) {
+      case WorkstationActionButtonVariant.primary:
+        background = scheme.onSurface;
+        foreground = scheme.surface;
+        border = scheme.onSurface;
+        // 反色主按钮悬停必须保持反色对比：换 surfaceContainerHighest 会
+        // 变成“深灰底 + 深色前景”，两套主题下都不可读；改为降不透明度。
+        hoverBackground = scheme.onSurface.withValues(alpha: 0.82);
+      case WorkstationActionButtonVariant.secondary:
+        background = scheme.surfaceContainerLow;
+        foreground = scheme.onSurface;
+        border = scheme.outlineVariant;
+        hoverBackground = scheme.surfaceContainerHigh;
+      case WorkstationActionButtonVariant.danger:
+        background = scheme.surfaceContainerLow;
+        foreground = scheme.error;
+        border = scheme.error.withValues(alpha: 0.55);
+        hoverBackground = scheme.error.withValues(alpha: 0.10);
+    }
+    return WorkstationFocusTarget(
+      enabled: enabled,
+      semanticLabel: widget.label,
+      onActivate: widget.onPressed ?? () {},
+      builder: (context, focused) {
+        final fill =
+            !enabled
+                ? scheme.surfaceContainerLow
+                : (_hovering || focused)
+                ? hoverBackground
+                : background;
+        return MouseRegion(
+          cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            onTap: widget.onPressed,
+            child: AnimatedContainer(
+              duration: MotionToken.reduced(context, _stateChangeDuration),
+              height: height,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: fill,
+                border: Border.all(
+                  color:
+                      !enabled
+                          ? scheme.outlineVariant
+                          : focused
+                          ? scheme.primary
+                          : border,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(
+                      widget.icon,
+                      size: 14,
+                      color: !enabled ? scheme.onSurfaceVariant : foreground,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: AppTypography.labelMedium,
+                      fontWeight:
+                          widget.variant ==
+                                  WorkstationActionButtonVariant.primary
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                      color: !enabled ? scheme.onSurfaceVariant : foreground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 建筑极简主义 `✔` 文本复选框。
+///
+/// 勾选标志为加粗纯文本 ✔ 字符（非 clip-path），弹出过渡 120ms；
+/// 移动端触控热区外扩到 44px。默认值必须为未勾选。
+/// [indeterminate] 为半选态（组内部分选中）：不显示 ✔，改渲染
+/// 1px 短横线；点按仍走 [onChanged]（由调用方决定整组语义）。
+class WorkstationCheckMark extends StatefulWidget {
+  const WorkstationCheckMark({
+    required this.value,
+    this.onChanged,
+    this.enabled = true,
+    this.size = 16,
+    this.indeterminate = false,
+    super.key,
+  });
+
+  final bool value;
+
+  final ValueChanged<bool>? onChanged;
+
+  final bool enabled;
+
+  /// 视觉方框边长。
+  final double size;
+
+  /// 半选态：仅在与 [value] 为 false 组合时生效。
+  final bool indeterminate;
+
+  @override
+  State<WorkstationCheckMark> createState() => _WorkstationCheckMarkState();
+}
+
+class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
+  bool _hovering = false;
+
+  void _handleTap() {
+    final onChanged = widget.onChanged;
+    if (!widget.enabled || onChanged == null) {
+      return;
+    }
+    onChanged(!widget.value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final interactive = widget.enabled && widget.onChanged != null;
+    final value = widget.value;
+    final target = AppControlTokens.isDesktopDensity ? widget.size + 10 : 44.0;
+    return WorkstationFocusTarget(
+      enabled: interactive,
+      checked: value,
+      onActivate: _handleTap,
+      builder: (context, focused) {
+        final scheme = Theme.of(context).colorScheme;
+        // 输入边界用交互强边框，未选中时悬停仅 1px 细线精准变色。
+        final borderColor =
+            value
+                ? scheme.onSurface
+                : focused && interactive
+                ? scheme.primary
+                : _hovering && interactive
+                ? scheme.outline
+                : scheme.outlineVariant;
+        return MouseRegion(
+          cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: interactive ? _handleTap : null,
+            child: SizedBox.square(
+              dimension: target,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: MotionToken.reduced(context, _stateChangeDuration),
+                  width: widget.size,
+                  height: widget.size,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    // 勾选=弱抬升底 + 强边框 + 同色 ✔，与工位分段控件的选中口径一致；
+                    // 实底反白在浅色主题下会变成黑块配浅色勾。
+                    color:
+                        value || ((_hovering || focused) && interactive)
+                            ? scheme.surfaceContainerHighest
+                            : Colors.transparent,
+                    border: Border.all(color: borderColor, width: 1),
+                  ),
+                  child:
+                      value
+                          ? TweenAnimationBuilder<double>(
+                            key: const ValueKey('files-check-pop'),
+                            tween: Tween(begin: 0.4, end: 1),
+                            duration: MotionToken.reduced(
+                              context,
+                              _stateChangeDuration,
+                            ),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, scale, child) {
+                              return Opacity(
+                                opacity: scale.clamp(0.0, 1.0),
+                                child: Transform.scale(
+                                  scale: scale,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              '✔',
+                              style: TextStyle(
+                                fontSize: widget.size * 0.72,
+                                height: 1,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                          )
+                          : widget.indeterminate
+                          ? Container(
+                            width: widget.size * 0.55,
+                            height: 1,
+                            color: scheme.onSurface,
+                          )
+                          : null,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 工位开关：36×20 胶囊轨道 + 14px 圆点，150ms 位移。
+///
+/// 几何与 `MobilePillSwitch`、音乐 `_VisualSwitch` 同源（见
+/// `AppSwitchTrack`），全产品只此一套开关形状。选中态轨道取
+/// `colorScheme.primary`、圆点取 onPrimary；未选中为
+/// surfaceContainerHighest 底 + outline 描边。提供 [label] 时渲染为
+/// 整行可点的开关行（label 左、开关右，可选 [subtitle] 次级说明），
+/// 禁用态整行 45% 透明；不提供 [label] 时为独立开关，热区 44px。
+class WorkstationToggle extends StatelessWidget {
+  const WorkstationToggle({
+    required this.value,
+    this.onChanged,
+    this.enabled = true,
+    this.label,
+    this.subtitle,
+    super.key,
+  });
+
+  final bool value;
+
+  final ValueChanged<bool>? onChanged;
+
+  final bool enabled;
+
+  /// 开关行主文案；为空时仅渲染独立开关。
+  final String? label;
+
+  /// 开关行次级说明，位于主文案下方。
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final interactive = enabled && onChanged != null;
+    final selected = value;
+
+    void handleTap() {
+      final onChanged = this.onChanged;
+      if (!interactive || onChanged == null) {
+        return;
+      }
+      onChanged(!value);
+    }
+
+    Widget trackFor(bool focused) {
+      // 开态轨道实色填充即状态信号，不再叠描边；关态靠 outline 声明边界。
+      final borderColor =
+          selected
+              ? null
+              : interactive && focused
+              ? scheme.primary
+              : interactive
+              ? scheme.outline
+              : scheme.outlineVariant;
+      return AppSwitchTrack(
+        // 轨道键：测试与调用方定位轨道几何（36×20）用。
+        trackKey: const ValueKey('workstation-toggle-track'),
+        value: selected,
+        trackOn: scheme.primary,
+        trackOff: scheme.surfaceContainerHighest,
+        thumbOn: scheme.onPrimary,
+        thumbOff: scheme.outline,
+        borderColor: borderColor,
+      );
+    }
+
+    Widget contentFor(bool focused) {
+      final track = trackFor(focused);
+      if (label == null) {
+        final target = AppControlTokens.isDesktopDensity ? 42.0 : 44.0;
+        return SizedBox.square(dimension: target, child: Center(child: track));
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            track,
+          ],
+        ),
+      );
+    }
+
+    return WorkstationFocusTarget(
+      enabled: interactive,
+      toggled: selected,
+      semanticLabel: label,
+      onActivate: handleTap,
+      builder:
+          (context, focused) => MouseRegion(
+            cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: interactive ? handleTap : null,
+              child: Opacity(
+                opacity: interactive ? 1 : 0.45,
+                child: contentFor(focused),
+              ),
+            ),
+          ),
+    );
+  }
+}
+
+/// 工位开关（无标签版）：与 [WorkstationToggle] 共用同一胶囊几何。
+///
+/// 保留独立包装是因为设置行 / 通知开关只需要一个裸开关，不需要整行
+/// 可点区域与次级说明。热区 44×32：桌面鼠标定位精确，32 高度足够，
+/// 又不把紧凑表单行撑高。
+class WorkstationSwitch extends StatelessWidget {
+  const WorkstationSwitch({
+    required this.value,
+    this.onChanged,
+    this.enabled = true,
+    super.key,
+  });
+
+  final bool value;
+
+  final ValueChanged<bool>? onChanged;
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final interactive = enabled && onChanged != null;
+    final selected = value;
+    return WorkstationFocusTarget(
+      enabled: interactive,
+      toggled: selected,
+      onActivate: () {
+        if (interactive) {
+          onChanged!(!value);
+        }
+      },
+      builder: (context, focused) {
+        final borderColor =
+            selected
+                ? null
+                : interactive && focused
+                ? scheme.onSurface
+                : interactive
+                ? scheme.outline
+                : scheme.outlineVariant;
+        return MouseRegion(
+          cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: interactive ? () => onChanged!(!value) : null,
+            child: SizedBox(
+              width: AppSwitchGeometry.touchHitTarget,
+              height: AppSwitchGeometry.desktopHitTarget,
+              child: Center(
+                child: AppSwitchTrack(
+                  value: selected,
+                  trackOn: scheme.primary,
+                  trackOff: scheme.surfaceContainerHighest,
+                  thumbOn: scheme.onPrimary,
+                  thumbOff: scheme.outline,
+                  borderColor: borderColor,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

@@ -1,0 +1,355 @@
+import 'dart:collection';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_image_preview.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
+
+/// 渲染阅读正文中的网络、data URI 或本地缓存图片。
+class ReaderContentImage extends StatelessWidget {
+  const ReaderContentImage({
+    required this.block,
+    required this.settings,
+    required this.retryCount,
+    required this.onRetry,
+    this.itemId,
+    this.onTap,
+    this.clampSlotToConstraints = true,
+    super.key,
+  });
+
+  static const String _placeholderPrefix = '__IMG_';
+
+  /// 是否按可用高度钳制槽位。
+  ///
+  /// 页框等真有界上下文必须钳制，避免整块溢出；滚动列表在条目高度已由高度表
+  /// 定死时必须关掉，否则槽位被反向钳成 `extent-54`，图片比表里记的矮、
+  /// 题注还会在紧约束里被裁。
+  final bool clampSlotToConstraints;
+
+  final ImageBlock block;
+  final ReaderViewSettings settings;
+  final int retryCount;
+  final VoidCallback onRetry;
+  final String? itemId;
+  final ValueChanged<String>? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDataUri = block.src.startsWith('data:');
+    final isCachedImage = block.src.startsWith(_placeholderPrefix);
+    // 槽位在外层约束下计算：滚动 sliver 给无界高度（用完整槽位），
+    // 有界上下文（翻页页框/测试视口）按可用高度钳制避免整块溢出。
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        final width =
+            outerConstraints.maxWidth.isFinite && outerConstraints.maxWidth > 0
+                ? outerConstraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+        final slotHeight = ReaderPaginationEngine.clampImageSlot(
+          slot: ReaderPaginationEngine.imageSlotHeight(width),
+          availableHeight:
+              clampSlotToConstraints ? outerConstraints.maxHeight : 0.0,
+          hasCaption: block.caption?.isNotEmpty == true,
+        );
+        // 正文插图不随窗口宽度重解码：量化到固定档位后同一视觉档位复用位图。
+        final decodeWidth = quantizedDecodeWidth(
+          logicalWidth: width,
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        );
+        return _buildContent(
+          context,
+          slotHeight: slotHeight,
+          decodeWidth: decodeWidth,
+          isDataUri: isDataUri,
+          isCachedImage: isCachedImage,
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context, {
+    required double slotHeight,
+    required int decodeWidth,
+    required bool isDataUri,
+    required bool isCachedImage,
+  }) {
+    // 远程图片不自动加载（追踪像素与客户端侧 SSRF 风险），也不提供全屏预览：
+    // 预览同样只会走取图路径，点开等于换了个地方发起请求。
+    final canShowImage = isCachedImage || isDataUri;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Semantics(
+        label: block.alt ?? block.caption ?? 'Image',
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap:
+                  canShowImage
+                      ? () {
+                        onTap?.call(block.src);
+                        ReaderImagePreview.show(
+                          context,
+                          block: block,
+                          itemId: itemId,
+                          retryCount: retryCount,
+                        );
+                      }
+                      : null,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: settings.onSurfaceVariantColor.withValues(
+                      alpha: 0.10,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    height: slotHeight,
+                    width: double.infinity,
+                    child:
+                        isCachedImage
+                            ? _buildCachedImage(slotHeight, decodeWidth)
+                            : isDataUri
+                            ? _buildDataUriImage(slotHeight, decodeWidth)
+                            : _buildError(slotHeight),
+                  ),
+                ),
+              ),
+            ),
+            if (block.caption != null && block.caption!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  block.caption!,
+                  style: TextStyle(
+                    color: settings.onSurfaceVariantColor,
+                    fontSize: AppTypography.bodyMedium,
+                    fontStyle: FontStyle.italic,
+                    // 不写就会并入主题的题注行距，与测量的 TextPainter 差几个像素，
+                    // 每个图片块都短出一截；高度由 ReaderPaginationEngine 统一给。
+                    height: ReaderPaginationEngine.imageCaptionLineHeight,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCachedImage(double slotHeight, int decodeWidth) {
+    if (itemId == null) return _buildError(slotHeight);
+    final imagePath = block.src.substring(
+      _placeholderPrefix.length,
+      block.src.length - 2,
+    );
+    return _CachedReaderImage(
+      itemId: itemId!,
+      imagePath: imagePath,
+      bust: retryCount,
+      slotHeight: slotHeight,
+      decodeWidth: decodeWidth,
+      errorBuilder: () => _buildError(slotHeight),
+    );
+  }
+
+  Widget _buildDataUriImage(double slotHeight, int decodeWidth) {
+    try {
+      final commaIndex = block.src.indexOf(',');
+      if (commaIndex < 0) {
+        if (kDebugMode) {
+          readerDebugLog('ViewContent: invalid data URI — no comma found');
+        }
+        return _buildError(slotHeight);
+      }
+      final bytes = _dataUriDecodeCache.decode(
+        block.src,
+        () => base64Decode(block.src.substring(commaIndex + 1)),
+      );
+      if (kDebugMode) {
+        readerDebugLog(
+          'ViewContent: rendering data URI image — '
+          '${bytes.length} bytes, mime=${block.src.substring(5, commaIndex)}',
+        );
+      }
+      return Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        cacheWidth: decodeWidth,
+        errorBuilder: (_, _, _) => _buildError(slotHeight),
+      );
+    } on Exception {
+      return _buildError(slotHeight);
+    }
+  }
+
+  Widget _buildError(double slotHeight) {
+    return GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        height: slotHeight,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: settings.onSurfaceVariantColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.broken_image_outlined,
+              color: settings.onSurfaceVariantColor,
+              size: 32,
+            ),
+            if (block.alt != null && block.alt!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  block.alt!,
+                  style: TextStyle(
+                    color: settings.onSurfaceVariantColor,
+                    fontSize: AppTypography.bodySmall,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CachedReaderImage extends ConsumerWidget {
+  const _CachedReaderImage({
+    required this.itemId,
+    required this.imagePath,
+    required this.bust,
+    required this.slotHeight,
+    required this.decodeWidth,
+    required this.errorBuilder,
+  });
+
+  final String itemId;
+  final String imagePath;
+  final int bust;
+  final double slotHeight;
+  final int decodeWidth;
+  final Widget Function() errorBuilder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final image = ref.watch(
+      readerCachedImageProvider((
+        itemId: itemId,
+        imagePath: imagePath,
+        bust: bust,
+      )),
+    );
+    return image.when(
+      loading: () => _LoadingSlot(slotHeight: slotHeight),
+      error: (_, _) => errorBuilder(),
+      data: (bytes) {
+        if (bytes == null || bytes.isEmpty) {
+          return errorBuilder();
+        }
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          cacheWidth: decodeWidth,
+          errorBuilder: (_, _, _) => errorBuilder(),
+        );
+      },
+    );
+  }
+}
+
+/// 加载占位：与图片槽同高，解码前后布局零漂移。
+class _LoadingSlot extends StatelessWidget {
+  const _LoadingSlot({required this.slotHeight});
+
+  final double slotHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: slotHeight,
+      width: double.infinity,
+      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    );
+  }
+}
+
+/// data URI 解码结果缓存。
+///
+/// 遗留缓存数据里的内嵌图片会在滚动重渲染时反复 build；按字节预算
+/// 缓存解码结果，避免同一张大图每帧重新 base64 解码。
+class ReaderDataUriDecodeCache {
+  ReaderDataUriDecodeCache._();
+
+  static final ReaderDataUriDecodeCache instance = ReaderDataUriDecodeCache._();
+
+  static const _maxCacheBytes = FileSizeThresholds.readerImageCacheMaxBytes;
+  final LinkedHashMap<String, Uint8List> _entries = LinkedHashMap();
+
+  /// 当前缓存条目数（用于验证账号切换后的失效）。
+  int get length => _entries.length;
+
+  Uint8List decode(String dataUri, Uint8List Function() decode) {
+    final cached = _entries.remove(dataUri);
+    if (cached != null) {
+      // 重新插入尾部维持 LRU 顺序
+      _entries[dataUri] = cached;
+      return cached;
+    }
+    final bytes = decode();
+    _entries[dataUri] = bytes;
+    var totalBytes = _entries.values.fold<int>(0, (sum, v) => sum + v.length);
+    while (totalBytes > _maxCacheBytes && _entries.isNotEmpty) {
+      final oldest = _entries.keys.first;
+      totalBytes -= _entries.remove(oldest)!.length;
+    }
+    return bytes;
+  }
+
+  /// 清空全部解码结果。
+  void clear() {
+    _entries.clear();
+  }
+}
+
+final _dataUriDecodeCache = ReaderDataUriDecodeCache.instance;
+
+/// 清空 data URI 解码缓存。
+///
+/// 进程级缓存跨账号存活，登出/换号时必须显式失效，避免上一账号的图片字节
+/// 继续驻留内存。
+void clearReaderDataUriDecodeCache() {
+  _dataUriDecodeCache.clear();
+}

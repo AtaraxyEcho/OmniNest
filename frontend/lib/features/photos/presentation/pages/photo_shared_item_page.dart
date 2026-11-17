@@ -1,0 +1,414 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/errors/error_codes.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/features/photos/application/photo_repository_providers.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+
+/// 公开共享单张照片页面（无需登录）
+class PhotoSharedItemPage extends ConsumerStatefulWidget {
+  const PhotoSharedItemPage({required this.token, super.key});
+
+  final String token;
+
+  @override
+  ConsumerState<PhotoSharedItemPage> createState() =>
+      _PhotoSharedItemPageState();
+}
+
+class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
+  String? _password;
+  bool _needPassword = false;
+  String? _passwordError;
+  PhotoItem? _photo;
+  Object? _error;
+  bool _loading = true;
+  int _loadGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhoto();
+  }
+
+  Future<void> _loadPhoto() async {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      // 分享访客页必须绕开照片中心控制器：读它的 notifier 会触发整个
+      // 集合 build，替匿名访客发出 dashboard/listPhotos 等鉴权请求。
+      final repo = ref.read(photoRepositoryProvider);
+      final sessionToken = await repo.authorizeSharedPhoto(
+        widget.token,
+        password: _password,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      final photo = await repo.accessSharedPhoto(
+        widget.token,
+        sessionToken: sessionToken,
+      );
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      setState(() {
+        _photo = photo;
+        _loading = false;
+        _needPassword = false;
+        _passwordError = null;
+      });
+    } catch (e) {
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      // 稳定错误码判断是否进入密码流程，避免依赖服务端文案。
+      final code = describeUserFacingError(e).code;
+      if (_isSharePasswordError(code)) {
+        setState(() {
+          _needPassword = true;
+          _loading = false;
+          _passwordError =
+              _password == null || _password!.isEmpty
+                  ? null
+                  : describeUserFacingError(
+                    e,
+                    l10n: AppLocalizations.of(context),
+                  ).displayMessage;
+        });
+      } else {
+        setState(() {
+          _error = e;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  static bool _isSharePasswordError(String? code) {
+    return code == AppErrorCodes.needPassword ||
+        code == AppErrorCodes.passwordInvalid ||
+        code == AppErrorCodes.sharePasswordRequired;
+  }
+
+  @override
+  void dispose() {
+    _loadGeneration++;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: context.photosColors.surface,
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) return const AppLoading();
+
+    if (_error != null) {
+      return AppErrorView(
+        message:
+            describeUserFacingError(
+              _error!,
+              l10n: AppLocalizations.of(context),
+            ).displayMessage,
+        onRetry: _loadPhoto,
+      );
+    }
+
+    if (_needPassword) {
+      return _SharedItemPasswordPrompt(
+        errorText: _passwordError,
+        onSubmit: (password) {
+          _password = password;
+          _loadPhoto();
+        },
+      );
+    }
+
+    final photo = _photo;
+    if (photo == null) return const SizedBox.shrink();
+
+    return _SharedItemContent(photo: photo);
+  }
+}
+
+/// 密码输入提示（单张照片分享）
+class _SharedItemPasswordPrompt extends StatefulWidget {
+  const _SharedItemPasswordPrompt({required this.onSubmit, this.errorText});
+
+  final ValueChanged<String> onSubmit;
+  final String? errorText;
+
+  @override
+  State<_SharedItemPasswordPrompt> createState() =>
+      _SharedItemPasswordPromptState();
+}
+
+class _SharedItemPasswordPromptState extends State<_SharedItemPasswordPrompt> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        // 手机宽度不足 360 时固定宽会横向溢出，改为上限。
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: context.photosColors.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                color: context.photosColors.primaryContainer,
+                size: 48,
+              ),
+              SizedBox(height: 16),
+              Text(
+                AppLocalizations.of(context).photosSharedItemPasswordRequired,
+                style: TextStyle(
+                  color: context.photosColors.onSurface,
+                  fontSize: AppTypography.titleMedium,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                AppLocalizations.of(context).photosSharedAlbumPasswordHint,
+                style: TextStyle(
+                  color: context.photosColors.onSurfaceVariant,
+                  fontSize: AppTypography.bodyMedium,
+                ),
+              ),
+              if (widget.errorText != null) ...[
+                SizedBox(height: 8),
+                Text(
+                  widget.errorText!,
+                  style: TextStyle(
+                    color: context.photosColors.danger,
+                    fontSize: AppTypography.bodyMedium,
+                  ),
+                ),
+              ],
+              SizedBox(height: 20),
+              TextField(
+                controller: _controller,
+                obscureText: true,
+                autofocus: true,
+                style: TextStyle(color: context.photosColors.onSurface),
+                decoration: InputDecoration(
+                  hintText: AppLocalizations.of(context).photosEnterPassword,
+                  hintStyle: TextStyle(
+                    color: context.photosColors.onSurfaceVariant.withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
+                  prefixIcon: const Icon(Icons.key_rounded, size: 18),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onSubmitted: (v) {
+                  if (v.isNotEmpty) widget.onSubmit(v);
+                },
+              ),
+              SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    final text = _controller.text.trim();
+                    if (text.isNotEmpty) widget.onSubmit(text);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.photosColors.primaryContainer,
+                    foregroundColor: context.photosColors.onPrimaryContainer,
+                  ),
+                  child: Text(AppLocalizations.of(context).photosAccess),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 共享照片内容：单张大图 + 标题
+class _SharedItemContent extends StatelessWidget {
+  const _SharedItemContent({required this.photo});
+
+  final PhotoItem photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = photo.sourceUrl ?? photo.coverUrl;
+    return Column(
+      children: [
+        // 顶部栏：Scaffold body 不自动避让状态栏，分享页在手机上需自行加高。
+        Container(
+          height: 64 + MediaQuery.paddingOf(context).top,
+          padding: EdgeInsets.only(
+            left: 8,
+            right: 24,
+            top: MediaQuery.paddingOf(context).top,
+          ),
+          decoration: BoxDecoration(
+            color: context.photosColors.surfaceContainer.withValues(
+              alpha: 0.70,
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: context.photosColors.outlineVariant.withValues(
+                  alpha: 0.32,
+                ),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              // 本页挂在应用壳层之外：桌面端没有浏览器后退键时，这是唯一退出入口。
+              IconButton(
+                tooltip: AppLocalizations.of(context).coreBackToPortal,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed:
+                    () => exitDetailRoute(context, fallbackRoute: '/portal'),
+              ),
+              SizedBox(width: 4),
+              Icon(
+                Icons.photo_rounded,
+                color: context.photosColors.primaryContainer,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  photo.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.photosColors.onSurface,
+                    fontSize: AppTypography.titleMedium,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (photo.sourceUrl != null && photo.sourceUrl!.isNotEmpty)
+                IconButton(
+                  tooltip: AppLocalizations.of(context).filesDownload,
+                  icon: const Icon(Icons.download_rounded),
+                  onPressed:
+                      () => unawaited(_download(context, photo.sourceUrl!)),
+                ),
+            ],
+          ),
+        ),
+        // 照片大图
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final decodeWidth = quantizedDecodeWidth(
+                logicalWidth: constraints.maxWidth,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                max: 2048,
+              );
+              return Container(
+                color: context.photosColors.surfaceContainerLow,
+                padding: const EdgeInsets.all(24),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child:
+                        imageUrl != null && imageUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              memCacheWidth: decodeWidth,
+                              fit: BoxFit.contain,
+                              placeholder:
+                                  (context, url) => Center(
+                                    child: CircularProgressIndicator(
+                                      color:
+                                          context.photosColors.primaryContainer,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  ),
+                              errorWidget:
+                                  (context, url, error) => Icon(
+                                    Icons.broken_image_outlined,
+                                    color:
+                                        context.photosColors.onSurfaceVariant,
+                                    size: 48,
+                                  ),
+                            )
+                            : Icon(
+                              Icons.photo_outlined,
+                              color: context.photosColors.onSurfaceVariant,
+                              size: 48,
+                            ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        // 底部
+        Container(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            AppLocalizations.of(context).photosSharedPoweredBy,
+            style: TextStyle(
+              color: context.photosColors.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _download(BuildContext context, String url) async {
+    final l10n = AppLocalizations.of(context);
+    if (openDownloadUrl(url)) {
+      return;
+    }
+    final copied = await copyTextToClipboard(url);
+    if (!context.mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+    );
+  }
+}

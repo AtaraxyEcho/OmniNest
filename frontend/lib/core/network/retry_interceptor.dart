@@ -1,0 +1,217 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+
+/// 可重试的 HTTP 状态码集合。
+///
+/// 429 不在集合内：限流窗口按分钟级重置，1s/2s 后自动重发既拿不到配额，
+/// 还会继续消耗服务端限流计数。需要按 `Retry-After` 等待的场景由调用方处理。
+const _retryableStatusCodes = {408, 500, 502, 503, 504};
+
+/// 幂等 HTTP 方法集合，这些方法默认允许基于 HTTP 状态码重试。
+const _idempotentMethods = {'GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'};
+
+/// 只读 HTTP 方法：读超时说明请求已经到达服务端，只有这类方法值得自动重发。
+const _readOnlyMethods = {'GET', 'HEAD', 'OPTIONS'};
+
+/// 请求级开关：置为 `true` 时跳过"服务端错误重试"，只保留网络层重试。
+///
+/// 用于用户已确认的一次性动作（如断开平台连接）：这类请求服务端若返回 5xx，
+/// 重试既注定失败又会把等待时间放大为退避之和，体感是"点了很久没反应"。
+const skipServerErrorRetryKey = 'omninest.skipServerErrorRetry';
+
+/// Dio 请求重试拦截器。
+///
+/// 对于幂等方法（GET/HEAD/PUT/DELETE/OPTIONS），在连接异常或可重试
+/// HTTP 状态码（408/500/502/503/504）时重试。
+/// 非幂等请求只有显式携带 `Idempotency-Key` 时才允许自动重试。
+///
+/// 使用指数退避策略，初始延迟为 [baseDelay]。
+/// 重试次数存储在 `requestOptions.extra['retryCount']` 中。
+class RetryInterceptor extends Interceptor {
+  RetryInterceptor({
+    this.maxRetries = 2,
+    this.baseDelay = const Duration(seconds: 1),
+  });
+
+  /// 持有 Dio 实例引用，重试时通过同一实例发起请求以保留拦截器链。
+  Dio? _dio;
+
+  /// 绑定 Dio 实例（在 Dio 初始化后调用）。
+  void setDio(Dio dio) => _dio = dio;
+
+  /// 最大重试次数。
+  final int maxRetries;
+
+  /// 基础延迟时间，实际延迟为 baseDelay * 2^retryCount。
+  final Duration baseDelay;
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final retryCount = _currentRetryCount(err.requestOptions);
+
+    // 已达到最大重试次数，直接传递错误
+    if (retryCount >= maxRetries) {
+      handler.next(err);
+      return;
+    }
+
+    if (!_shouldRetry(err)) {
+      handler.next(err);
+      return;
+    }
+
+    // 计算指数退避延迟
+    final delay = baseDelay * (1 << retryCount);
+
+    await Future<void>.delayed(delay);
+
+    // 退避期间页面可能已离开并取消请求：取消后不得再发一次。
+    if (err.requestOptions.cancelToken?.isCancelled ?? false) {
+      handler.next(err);
+      return;
+    }
+
+    // 递增重试计数
+    err.requestOptions.extra['retryCount'] = retryCount + 1;
+
+    try {
+      final dio = _dio;
+      if (dio == null) {
+        handler.next(err);
+        return;
+      }
+      final response = await dio.fetch(err.requestOptions);
+      handler.resolve(response);
+    } on DioException catch (e) {
+      handler.next(e);
+    } on Object catch (_) {
+      // 重放可能抛 Error（如已 finalize 的 FormData 触发 StateError）：
+      // 只捕获 Exception 会让 handler 永不完成，调用方永久挂起。
+      handler.next(err);
+    }
+  }
+
+  @override
+  Future<void> onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) async {
+    final statusCode = response.statusCode;
+    final request = response.requestOptions;
+    // ApiClient 的 validateStatus 接受 <500，408/429 不会进入 onError，
+    // 只有 onResponse 能对它们做退避重试；5xx 仍由 onError 处理。
+    if (statusCode == null ||
+        statusCode >= 500 ||
+        !_retryableStatusCodes.contains(statusCode) ||
+        request.extra[skipServerErrorRetryKey] == true ||
+        !_isRetrySafe(request)) {
+      handler.next(response);
+      return;
+    }
+    final retryCount = _currentRetryCount(request);
+    if (retryCount >= maxRetries) {
+      handler.next(response);
+      return;
+    }
+    await Future<void>.delayed(baseDelay * (1 << retryCount));
+    if (request.cancelToken?.isCancelled ?? false) {
+      handler.next(response);
+      return;
+    }
+    request.extra['retryCount'] = retryCount + 1;
+    try {
+      final dio = _dio;
+      if (dio == null) {
+        handler.next(response);
+        return;
+      }
+      handler.resolve(await dio.fetch<dynamic>(request));
+    } on DioException catch (error) {
+      // 第二个参数让后续错误拦截器仍能看到这次重试的失败，而不是被静默吞掉。
+      handler.reject(error, true);
+    } on Object catch (_) {
+      handler.next(response);
+    }
+  }
+
+  /// 判断是否应该重试当前请求。
+  bool _shouldRetry(DioException err) {
+    final request = err.requestOptions;
+    if (!_isRetrySafe(request)) {
+      return false;
+    }
+
+    if (_isRetryableErrorType(err)) {
+      return true;
+    }
+
+    // 显式声明"服务端错误不重试"的请求只走网络层重试。
+    if (request.extra[skipServerErrorRetryKey] == true) {
+      return false;
+    }
+
+    // HTTP 状态码重试需要通过上面的安全重试判定。
+    final statusCode = err.response?.statusCode;
+    if (statusCode != null && _retryableStatusCodes.contains(statusCode)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// 判断是否为可重试的网络错误类型。
+  ///
+  /// 读超时（receiveTimeout）只对只读方法或显式携带幂等键的请求重试：
+  /// 30 秒读超时叠两次退避会让写操作阻塞 90 秒以上，而写请求在服务端可能
+  /// 仍在执行，重复发送的收益远低于等待放大带来的体感损失。
+  bool _isRetryableErrorType(DioException err) {
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.connectionError) {
+      return true;
+    }
+    if (err.type != DioExceptionType.receiveTimeout) {
+      return false;
+    }
+    final request = err.requestOptions;
+    return _readOnlyMethods.contains(request.method.toUpperCase()) ||
+        _hasIdempotencyKey(request);
+  }
+
+  /// 判断 HTTP 方法是否幂等。
+  bool _isIdempotent(String method) {
+    return _idempotentMethods.contains(method.toUpperCase());
+  }
+
+  bool _isRetrySafe(RequestOptions options) {
+    // FormData 发送一次后即 finalized，二次发送会抛 StateError（Error 而非
+    // Exception），重放必然失败，只能判定为不可重试。
+    if (options.data is FormData || options.data is Stream) {
+      // 单次订阅流与 FormData 同样不可重放：第二次监听会抛 StateError。
+      return false;
+    }
+    if (_isIdempotent(options.method)) {
+      return true;
+    }
+    return _hasIdempotencyKey(options);
+  }
+
+  bool _hasIdempotencyKey(RequestOptions options) {
+    final idempotencyKey =
+        options.headers.entries
+            .where((entry) => entry.key.toLowerCase() == 'idempotency-key')
+            .map((entry) => entry.value?.toString().trim())
+            .firstOrNull;
+    return idempotencyKey?.isNotEmpty == true;
+  }
+
+  /// 获取当前已重试次数。
+  int _currentRetryCount(RequestOptions options) {
+    final count = options.extra['retryCount'];
+    if (count is int) return count;
+    return 0;
+  }
+}

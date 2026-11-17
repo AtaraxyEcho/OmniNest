@@ -1,0 +1,254 @@
+package com.omninest.modules.photos.service;
+
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.service.FileBusinessReference;
+import com.omninest.modules.file.service.FilePurgeParticipant;
+import com.omninest.modules.file.service.PurgeContext;
+import com.omninest.modules.file.service.PurgeContributionWriter;
+import com.omninest.modules.file.service.ResourceShareLinkService;
+import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.photos.domain.PhotoAlbum;
+import com.omninest.modules.photos.domain.PhotoEditVersion;
+import com.omninest.modules.photos.domain.PhotoItem;
+import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
+import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoContentAnalysisRunRepository;
+import com.omninest.modules.photos.repository.PhotoContentLabelRepository;
+import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
+import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
+import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.modules.photos.repository.PhotoTagRepository;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 文件删除触发的照片业务数据清理服务。
+ *
+ * @author OmniNest
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PhotoFileCleanupService implements
+        FilePurgeParticipant,
+        MediaFileVisibilitySyncParticipant {
+    private static final String MODULE = "PHOTOS";
+    private static final String RESOURCE_TYPE = "PHOTO_ITEM";
+    private final PhotoItemRepository itemRepository;
+    private final PhotoAlbumItemRepository albumItemRepository;
+    private final PhotoFavoriteRepository favoriteRepository;
+    private final PhotoAlbumRepository albumRepository;
+    private final PhotoTagRepository tagRepository;
+    private final PhotoEditVersionRepository editVersionRepository;
+    private final PhotoThumbnailService photoThumbnailService;
+    private final PhotoContentLabelRepository contentLabelRepository;
+    private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository;
+    private final MediaSyncEventService syncEventService;
+    private final ReadThroughCache readThroughCache;
+    private final ResourceShareLinkService resourceShareLinkService;
+
+    /**
+     * 查询目标文件的照片条目引用。
+     *
+     * @param context 删除上下文
+     * @return 照片条目引用
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<FileBusinessReference> findBusinessReferences(PurgeContext context) {
+        return itemRepository
+                .findByFileNodeIdIn(context.fileNodeIds())
+                .stream()
+                .map(photo -> new FileBusinessReference(
+                        MODULE,
+                        RESOURCE_TYPE,
+                        photo.getId(),
+                        photo.getFileNodeId()
+                ))
+                .toList();
+    }
+
+    /**
+     * 贡献照片封面和全部非破坏性编辑版本文件。
+     *
+     * @param context 删除上下文
+     * @param writer 资源写入器
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public void contribute(PurgeContext context, PurgeContributionWriter writer) {
+        List<PhotoItem> photos = itemRepository
+                .findByFileNodeIdIn(context.fileNodeIds());
+        if (photos.isEmpty()) {
+            return;
+        }
+        List<UUID> photoIds = photos.stream().map(PhotoItem::getId).toList();
+        writer.addFileNodeIds(photos.stream()
+                .map(PhotoItem::getCoverFileId)
+                .filter(Objects::nonNull)
+                .toList());
+        writer.addFileNodeIds(photos.stream()
+                .map(PhotoItem::getMotionVideoFileNodeId)
+                .filter(Objects::nonNull)
+                .toList());
+        List<PhotoEditVersion> versions = editVersionRepository.findByPhotoIdIn(photoIds);
+        writer.addFileNodeIds(versions.stream()
+                .map(PhotoEditVersion::getFileId)
+                .filter(Objects::nonNull)
+                .toList());
+        // 每个编辑版本还带一份 1024px 派生缩略图；只贡献主图会让缩略图永久失去清理线索。
+        List<UUID> thumbnailFileIds = new ArrayList<>();
+        for (PhotoEditVersion version : versions) {
+            if (version.getFileId() == null) {
+                continue;
+            }
+            photoThumbnailService
+                    .findStoredThumbnailFileNodeId(version.getOwnerUserId(), version.getFileId())
+                    .ifPresent(thumbnailFileIds::add);
+        }
+        writer.addFileNodeIds(thumbnailFileIds);
+    }
+
+    /**
+     * 幂等清理照片业务记录并保留空相册。
+     *
+     * @param context 删除上下文
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void finalizePurge(PurgeContext context) {
+        List<UUID> fileNodeIds = List.copyOf(context.fileNodeIds());
+        Map<UUID, List<PhotoItem>> photosByOwner = itemRepository.findByFileNodeIdIn(fileNodeIds).stream()
+                .collect(Collectors.groupingBy(
+                        PhotoItem::getOwnerUserId,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        photosByOwner.forEach(this::deletePhotoRows);
+        clearDanglingFileReferences(fileNodeIds);
+    }
+
+    /**
+     * 处理文件移入回收站事件。
+     *
+     * @param event 文件节点软删除事件
+     */
+    @EventListener
+    @Transactional(rollbackFor = Exception.class)
+    public void handleFileNodesSoftDeleted(FileNodesSoftDeletedEvent event) {
+        if (event.fileNodeIds() == null || event.fileNodeIds().isEmpty()) {
+            return;
+        }
+        log.debug("文件移入回收站，保留照片业务数据: ownerUserId={}, fileNodeCount={}",
+                event.ownerUserId(), event.fileNodeIds().size());
+    }
+
+    /**
+     * 使引用指定文件节点的照片库缓存失效。
+     *
+     * @param fileNodeIds 文件节点 ID
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void invalidateFileVisibility(Collection<UUID> fileNodeIds) {
+        if (fileNodeIds == null || fileNodeIds.isEmpty()) {
+            return;
+        }
+        itemRepository.findByFileNodeIdIn(fileNodeIds).stream()
+                .map(PhotoItem::getOwnerUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new))
+                .forEach(ownerUserId -> syncEventService.invalidate(
+                        ownerUserId,
+                        SyncScope.PHOTOS,
+                        "PHOTO_LIBRARY",
+                        Map.of("reason", "FILE_VISIBILITY_CHANGED")
+                ));
+    }
+
+    private void deletePhotoRows(UUID ownerUserId, List<PhotoItem> photos) {
+        if (photos.isEmpty()) {
+            return;
+        }
+        List<UUID> photoIds = photos.stream().map(PhotoItem::getId).toList();
+        // 照片行删除后公开单图链接必须一起失效，否则 token 仍能读到已永久删除的内容。
+        resourceShareLinkService.revokeAllByResourceIds(photoIds);
+        tagRepository.deleteByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds);
+        editVersionRepository.deleteByPhotoIdIn(photoIds);
+        contentLabelRepository.deleteByPhotoIdIn(photoIds);
+        contentAnalysisRunRepository.deleteByPhotoIdIn(photoIds);
+        List<UUID> affectedAlbumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
+        albumItemRepository.deleteByPhotoIdIn(photoIds);
+        favoriteRepository.deleteByPhotoIdIn(photoIds);
+        itemRepository.deleteAllInBatch(photos);
+        readThroughCache.invalidate("omninest:dashboard:photo:" + ownerUserId);
+        refreshAffectedAlbums(ownerUserId, affectedAlbumIds);
+        for (PhotoItem photo : photos) {
+            syncEventService.record(
+                    ownerUserId,
+                    SyncScope.PHOTOS,
+                    "PHOTO_ITEM",
+                    photo.getId().toString(),
+                    SyncAction.DELETED,
+                    photo.getVersion(),
+                    Map.of()
+            );
+        }
+    }
+
+    private void refreshAffectedAlbums(UUID ownerUserId, List<UUID> affectedAlbumIds) {
+        if (affectedAlbumIds.isEmpty()) {
+            return;
+        }
+        List<PhotoAlbum> albums = albumRepository
+                .findAllByIdInAndOwnerUserId(affectedAlbumIds, ownerUserId);
+        Map<UUID, Long> counts = albumItemRepository
+                .countActivePhotosByAlbumIds(affectedAlbumIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> ((Number) row[1]).longValue(),
+                        (left, right) -> left
+                ));
+        for (PhotoAlbum album : albums) {
+            // 与 PhotoAlbumService 同一口径：相册计数只算未进回收站且未删除的照片，
+            // 用裸 count 会把回收站里的照片重新算回去；按相册批量聚合避免逐行 count。
+            album.setPhotoCount(counts.getOrDefault(album.getId(), 0L).intValue());
+        }
+        if (!albums.isEmpty()) {
+            albumRepository.saveAll(albums);
+        }
+    }
+
+    private void clearDanglingFileReferences(List<UUID> deletedFileIds) {
+        Set<UUID> fileIds = new HashSet<>(deletedFileIds);
+        itemRepository.findByCoverFileIdIn(fileIds)
+                .forEach(photo -> photo.setCoverFileId(null));
+        // 活动编辑产物被永久删除后回退到原图（activeFileId 为空即使用 fileNodeId）。
+        itemRepository.findByActiveFileIdIn(fileIds)
+                .forEach(photo -> photo.setActiveFileId(null));
+        // 动态照片运动视频被删除后不再签发播放地址。
+        itemRepository.findByMotionVideoFileNodeIdIn(fileIds)
+                .forEach(photo -> photo.setMotionVideoFileNodeId(null));
+        albumRepository.findByCoverFileIdIn(fileIds)
+                .forEach(album -> album.setCoverFileId(null));
+    }
+}

@@ -1,0 +1,842 @@
+package com.omninest.modules.file.service;
+
+import com.omninest.common.access.SharedSpaceAccessQuery;
+import com.omninest.common.audit.AdminAuditRecorder;
+import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.common.config.RuntimeConfigCommand;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.util.LikePatterns;
+import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.user.UserAccountQuery;
+import com.omninest.common.user.UserAccountSummary;
+import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.SharedSpacePermission;
+import com.omninest.modules.file.domain.SharedSpacePermission.Action;
+import com.omninest.modules.file.domain.SourceType;
+import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.dto.RenameFileNodeRequest;
+import com.omninest.modules.file.dto.SharedSpaceRolePermissionDto;
+import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileNodeSubtreeQueryRepository;
+import com.omninest.modules.file.repository.FileMetricsRepository;
+import com.omninest.modules.file.repository.FileNodeScanQueryRepository;
+import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
+import com.omninest.modules.user.port.RoleLookup;
+import com.omninest.modules.quota.service.StorageQuotaService;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 共享空间服务，处理共享空间的文件浏览、创建、删除和跨空间移动。
+ *
+ * @author OmniNest
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class SharedSpaceService implements SharedSpaceAccessQuery {
+
+    /** 子树路径重写的单批条目数。 */
+    private static final int SUBTREE_REWRITE_BATCH_SIZE = 500;
+
+    /** 按节点集合汇总历史版本字节时的单批上限，避免超出 JDBC 参数上限。 */
+    private static final int VERSION_BYTES_BATCH_SIZE = 1000;
+
+    /** 共享空间配置的审计资源标识（配置本身不是业务实体）。 */
+    private static final UUID SHARED_SPACE_CONFIG_AUDIT_ID =
+            UUID.nameUUIDFromBytes("shared-space-config".getBytes(StandardCharsets.UTF_8));
+
+    private final FileNodeRepository fileNodeRepository;
+    private final FileNodeSubtreeQueryRepository subtreeQueryRepository;
+    private final FileMetricsRepository fileMetricsRepository;
+    private final SharedSpacePermissionRepository permissionRepository;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
+    private final StorageQuotaService storageQuotaService;
+    private final UserAccountQuery userAccountQuery;
+    private final SharedSpaceCascadeCleanup cascadeCleanup;
+    private final FileNodeScanQueryRepository fileNodeScanQueryRepository;
+    private final ConfigValueProvider configValueProvider;
+    private final FileRestoreSupport fileRestoreSupport;
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final UserSyncEventRecorder syncEventRecorder;
+    private final RuntimeConfigCommand runtimeConfigCommand;
+    private final AdminActorVerifier adminActorVerifier;
+    private final AdminAuditRecorder adminAuditRecorder;
+    private final RoleLookup roleLookup;
+
+    /**
+     * 检查共享空间是否启用。
+     */
+    private void ensureSharedSpaceEnabled() {
+        if (!isSharedSpaceEnabled()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间已禁用");
+        }
+    }
+
+    /**
+     * 浏览共享空间目录。
+     */
+    @Transactional(readOnly = true)
+    public List<FileNode> listSharedSpaceFiles(UUID parentId, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        if (parentId == null) {
+            return fileNodeRepository.findBySpaceTypeAndParentIdIsNullAndDeletedFalse(SpaceType.SHARED);
+        }
+        return fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, parentId);
+    }
+
+    /**
+     * 分页浏览共享空间目录。
+     *
+     * @param parentId 父目录 ID
+     * @param operatorId 操作用户 ID
+     * @param page 页码
+     * @param size 每页数量
+     * @return 共享空间文件分页结果
+     */
+    @Transactional(readOnly = true)
+    public Page<FileNode> listSharedSpaceFilesPage(UUID parentId, UUID operatorId, int page, int size) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        Pageable pageable = PageRequest.of(
+                safePage,
+                safeSize,
+                Sort.by(Sort.Order.desc("nodeType"), Sort.Order.asc("name").ignoreCase()));
+        if (parentId == null) {
+            return fileNodeRepository.findVisibleSharedRoot(SpaceType.SHARED, pageable);
+        }
+        return fileNodeRepository.findVisibleSharedChildren(SpaceType.SHARED, parentId, pageable);
+    }
+
+    /**
+     * 在共享空间创建文件夹。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNode createFolder(UUID parentFolderId, String folderName, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_CREATE_FOLDER);
+        String normalizedName = SharedSpaceSupport.normalizeNodeName(folderName);
+        boolean exists = fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, parentFolderId, normalizedName);
+        if (exists) {
+            throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件夹");
+        }
+        FileNode folder = new FileNode();
+        folder.setSpaceType(SpaceType.SHARED);
+        folder.setOwnerUserId(operatorId);
+        folder.setUploadedBy(operatorId);
+        folder.setParentId(parentFolderId);
+        folder.setName(normalizedName);
+        folder.setNodeType(NodeType.FOLDER.getValue());
+        folder.setNormalizedPath(buildSharedSpacePath(parentFolderId, normalizedName));
+        folder.setSizeBytes(0L);
+        return fileNodeRepository.save(folder);
+    }
+
+    /**
+     * 重命名共享空间文件或文件夹。
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param request 重命名请求
+     * @param operatorId 操作用户 ID
+     * @return 重命名后的文件节点
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNode renameSharedFile(UUID fileNodeId, RenameFileNodeRequest request, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileNodeId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
+        validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
+        // 改名会按月重写整棵子树的 normalizedPath，等价于处置目录内所有成员的内容：
+        // 与删除、迁回个人空间同判据，混有他人上传文件时非管理级操作者不能整体改名。
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())
+                && !canAccess(operatorId, Action.CAN_DELETE_ANY)
+                && fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                        SpaceType.SHARED,
+                        LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"),
+                        operatorId
+                ) > 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无权整体重命名");
+        }
+
+        String newName = SharedSpaceSupport.normalizeNodeName(request.name());
+        if (node.getName().equals(newName)) {
+            return node;
+        }
+        if (fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, node.getParentId(), newName)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+        }
+
+        String oldPath = node.getNormalizedPath();
+        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
+        idsByOwner.computeIfAbsent(node.getOwnerUserId(), key -> new ArrayList<>()).add(node.getId());
+        for (Object[] row : fileNodeRepository.findActiveIdOwnerPairsUnderPathInSpace(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(oldPath + "/"))) {
+            UUID ownerId = (UUID) row[0];
+            UUID nodeId = (UUID) row[1];
+            idsByOwner.computeIfAbsent(ownerId, key -> new ArrayList<>()).add(nodeId);
+        }
+        String parentPath = oldPath.substring(0, Math.max(oldPath.lastIndexOf('/'), 0));
+        String newPath = parentPath.isEmpty() ? "/" + newName : parentPath + "/" + newName;
+        node.setName(newName);
+        node.setNormalizedPath(newPath);
+        rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
+        fileNodeRepository.save(node);
+        // 共享文件夹里可能有其他成员上传的子项，同步事件必须落到各自所有者名下。
+        // 正文索引以内容对象为键，同一空间内改名不需要重建。
+        idsByOwner.forEach((ownerId, ids) ->
+                recordSyncEvent(ownerId, ids, node.getId(), SyncAction.UPDATED));
+        return node;
+    }
+
+    /**
+     * 按主键游标分页重写活动子树的规范化路径。
+     *
+     * <p>驱动共享空间改名时的后代路径级联更新。只给 LIKE 用转义形式，路径改写仍按原始
+     * oldPath 长度定位，不能让反斜杠进 substring。</p>
+     *
+     * <p>只重写 {@code deleted = false} 的节点：回收站节点保留删除时的路径，恢复时按
+     * {@code parent_id} 链重算，跟着活动目录改名会让其路径与父级指向脱节。</p>
+     *
+     * <p>翻页必须按 ID 游标而不是 OFFSET：改写掉的 normalizedPath 就是过滤条件列，
+     * 第一批记录改写后已不再匹配 oldPath 前缀，剩余记录整体前移，OFFSET 会让一半节点漏改，
+     * 表现为改名后子树路径与实际层级不一致。</p>
+     *
+     * @param oldPath 移动前的节点路径
+     * @param newPath 移动后的节点路径
+     * @param spaceType 后代所在空间
+     */
+    private void rewriteSubtreePaths(String oldPath, String newPath, SpaceType spaceType) {
+        if (oldPath == null || oldPath.equals(newPath)) {
+            return;
+        }
+        String prefix = LikePatterns.escapeSpecials(oldPath + "/");
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<FileNode> batch = subtreeQueryRepository.findActiveSubtreeBySpaceTypeAfterId(
+                    spaceType, prefix, afterId, PageRequest.of(0, SUBTREE_REWRITE_BATCH_SIZE));
+            if (batch.isEmpty()) {
+                return;
+            }
+            for (FileNode descendant : batch) {
+                descendant.setNormalizedPath(
+                        newPath + descendant.getNormalizedPath().substring(oldPath.length())
+                );
+                afterId = descendant.getId();
+            }
+            fileNodeRepository.saveAll(batch);
+        }
+    }
+
+    /**
+     * 跨空间移动：个人 → 共享。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void moveToSharedSpace(UUID fileNodeId, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, operatorId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        validatePermission(operatorId, Action.CAN_MOVE_TO);
+        // 已经在共享空间里的节点再次移入会重复扣减个人配额并让共享配额虚增
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            throw new BusinessException(ErrorCode.CONFLICT, "文件已在共享空间中");
+        }
+        List<FileNode> subtree = collectPersonalSubtreeNodes(node);
+        // 回收站节点也要随父目录迁移，但不参与只读/派生来源的移动限制。
+        requireMovableSources(subtree.stream().filter(candidate -> !candidate.isDeleted()).toList());
+        // 移入共享空间根目录，检查共享空间根目录下的同名冲突
+        checkSharedSpaceNameConflict(node.getName(), null);
+        List<UUID> subtreeIds = subtree.stream()
+                .filter(candidate -> !candidate.isDeleted())
+                .map(FileNode::getId)
+                .toList();
+        cascadeCleanup.revokeShareLinks(subtreeIds);
+        cascadeCleanup.revokeFilePermissions(subtreeIds);
+        SubtreeStats stats = calculateSubtreeStats(node);
+        // 检查共享空间配额
+        sharedSpaceQuotaService.checkQuota(stats.totalBytes());
+        String oldPath = node.getNormalizedPath();
+        node.setSpaceType(SpaceType.SHARED);
+        node.setUploadedBy(operatorId);
+        // 移入共享空间根目录：规范化路径必须跟着父级重算，否则节点会以旧父级前缀
+        // 落进目标空间的另一棵子树，被那棵子树的批量软删/永久删除按前缀认领。
+        node.setParentId(null);
+        node.setNormalizedPath("/" + node.getName());
+        fileNodeRepository.save(node);
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+            moveDescendants(subtree, node, oldPath, SpaceType.SHARED, operatorId, operatorId);
+        }
+        storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
+        sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
+        recordSyncEvent(operatorId, subtreeIds, node.getId(), SyncAction.UPDATED);
+        log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}, fileCount={}",
+                fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
+    }
+
+    /**
+     * 跨空间移动：共享 → 个人。
+     *
+     * <p>只允许上传者本人移回自己的个人空间。管理员把他人文件改归属会让原属主的
+     * 照片、影视、音乐、阅读器记录与派生资产全部脱节；需要收入自己空间时使用复制。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void moveToPersonalSpace(UUID fileNodeId, UUID targetUserId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(targetUserId, Action.CAN_BROWSE);
+        FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileNodeId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        if (!Objects.equals(node.getUploadedBy(), targetUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "仅上传者本人可将文件移回个人空间，请使用复制功能");
+        }
+        validatePermission(targetUserId, Action.CAN_MOVE_FROM);
+        // 子孙节点在改空间后会退出 SHARED 查询条件，必须在变更前收集完整子树。
+        String oldPath = node.getNormalizedPath();
+        String descendantPrefix = oldPath + "/";
+        List<FileNode> descendants = fileNodeRepository.findSubtreeInSpaceIncludingDeleted(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix));
+        // 目录内可能混有其他成员上传的文件与回收站子项。非管理级操作者不能借父目录
+        // 上传者身份把他人内容整体迁入个人空间，否则等于绕过 CAN_DELETE_ANY 夺取所有权。
+        if (!canAccess(targetUserId, Action.CAN_DELETE_ANY)
+                && descendants.stream()
+                        .anyMatch(descendant -> !Objects.equals(descendant.getUploadedBy(), targetUserId))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无法整体迁回个人空间");
+        }
+        SubtreeStats stats = calculateSubtreeStats(node);
+        // 检查个人配额是否足够
+        storageQuotaService.checkQuota(targetUserId, stats.totalBytes());
+        // 个人空间根目录同名会复用同一规范化路径前缀，先拦冲突再改空间与路径。
+        if (fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                targetUserId, SpaceType.PERSONAL, node.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "个人空间根目录已存在同名节点");
+        }
+        List<UUID> subtreeIds = new ArrayList<>(descendants.stream()
+                .filter(descendant -> !descendant.isDeleted())
+                .map(FileNode::getId)
+                .toList());
+        subtreeIds.add(node.getId());
+        // 与个人 → 共享方向对称：换空间后原有公开链接与细粒度授权必须立即失效，
+        // 否则访客仍能凭旧 token 读取已迁入个人空间的内容。
+        cascadeCleanup.revokeShareLinks(subtreeIds);
+        cascadeCleanup.revokeFilePermissions(subtreeIds);
+        node.setSpaceType(SpaceType.PERSONAL);
+        node.setOwnerUserId(targetUserId);
+        // 个人空间文件不需要 uploaded_by
+        node.setUploadedBy(null);
+        // 移入个人空间根目录，规范化路径按新父级重算，口径与移入共享空间一致。
+        node.setParentId(null);
+        node.setNormalizedPath("/" + node.getName());
+        fileNodeRepository.save(node);
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+            moveDescendants(descendants, node, oldPath, SpaceType.PERSONAL, targetUserId, null);
+        }
+        sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
+        // 上面的 checkQuota 只做快速失败；真正计入必须走条件更新，否则并发迁入会写超配额。
+        storageQuotaService.chargeUsage(targetUserId, stats.totalBytes());
+        recordSyncEvent(targetUserId, subtreeIds, node.getId(), SyncAction.UPDATED);
+        log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}, fileCount={}",
+                fileNodeId, targetUserId, stats.totalBytes(), stats.fileCount());
+    }
+
+    /**
+     * 删除共享空间文件。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSharedFile(UUID fileNodeId, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileNodeId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        validateSharedLifecycleOperator(operatorId, node);
+
+        // 先收集所有后代 ID（软删除后查询会返回空）
+        String descendantPrefix = node.getNormalizedPath() + "/";
+        // 与迁回个人空间同判据：目录内混有其他成员上传的文件时，非管理级操作者不能借
+        // 父目录上传者身份整体删除，否则等于绕过 CAN_DELETE_ANY 处置他人内容。
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())
+                && !canAccess(operatorId, Action.CAN_DELETE_ANY)
+                && fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                        SpaceType.SHARED,
+                        LikePatterns.escapeSpecials(descendantPrefix),
+                        operatorId
+                ) > 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无法整体删除");
+        }
+        List<UUID> allIds = new ArrayList<>(fileNodeRepository.findActiveIdsUnderPathInSpace(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix)));
+        allIds.add(node.getId());
+
+        SubtreeStats stats = calculateSubtreeStats(node);
+
+        // 批量软删除：按空间与路径前缀一次更新，避免逐层递归逐行保存。
+        Instant deletedAt = Instant.now();
+        node.setDeleted(true);
+        node.setDeletedAt(deletedAt);
+        node.setDeletedBy(operatorId);
+        fileNodeRepository.save(node);
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+            fileNodeRepository.softDeleteSubtreeInSpace(
+                    SpaceType.SHARED,
+                    LikePatterns.escapeSpecials(descendantPrefix),
+                    deletedAt,
+                    operatorId
+            );
+        }
+
+        sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
+
+        // 按实际归属人分组：共享文件夹里可能有多个成员上传的媒体，漏掉任何一组都会让
+        // 对应成员的媒体库继续显示已删除内容。
+        Map<UUID, List<UUID>> idsByOwner = new HashMap<>();
+        Set<UUID> groupedIds = new HashSet<>();
+        for (FileNode deletedNode : fileNodeRepository.findAllById(allIds)) {
+            UUID owner = deletedNode.getUploadedBy() != null
+                    ? deletedNode.getUploadedBy() : deletedNode.getOwnerUserId();
+            idsByOwner.computeIfAbsent(owner, key -> new ArrayList<>()).add(deletedNode.getId());
+            groupedIds.add(deletedNode.getId());
+        }
+        // 查询未命中（并发清理或仓储未回表）时仍要保证根节点与后代能收到失效事件。
+        UUID fallbackOwner = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+        for (UUID id : allIds) {
+            if (groupedIds.add(id)) {
+                idsByOwner.computeIfAbsent(fallbackOwner, key -> new ArrayList<>()).add(id);
+            }
+        }
+        idsByOwner.forEach((owner, ids) -> {
+            applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(owner, ids, deletedAt));
+            syncEventRecorder.record(new SyncEventCommand(
+                    owner, SyncScope.FILES, "FILE_NODE", ids.getFirst().toString(),
+                    SyncAction.DELETED, null, Map.of()));
+        });
+        log.info("共享空间文件删除: fileId={}, operatorId={}, totalSize={}, fileCount={}",
+                fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
+    }
+
+    /**
+     * 校验共享空间是否可写入（导入/上传前置）。
+     *
+     * @param operatorId 操作用户
+     */
+    public void requireSharedWrite(UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_UPLOAD);
+    }
+
+    public void validatePermission(UUID userId, Action action) {
+        UserAccountSummary user = userAccountQuery.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        if (user.roleIds().isEmpty()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "用户未分配角色");
+        }
+        boolean allowed = permissionRepository.findByRoleIdIn(user.roleIds()).stream()
+                .anyMatch(perm -> perm.isAllowed(action));
+        if (!allowed) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作");
+        }
+    }
+
+    /**
+     * 判断用户能否浏览共享空间，供跨模块的列表可见性使用。
+     *
+     * <p>{@link #validatePermission} 用异常表达"不允许"，而列表查询只需要一个布尔量：
+     * 把共享空间开关与角色矩阵一并折算成可见性，避免调用方靠捕获异常控制流程。
+     * 判定顺序与 {@code listSharedSpaceFiles} 一致（先开关、再 CAN_BROWSE）。</p>
+     *
+     * @param userId 用户 ID
+     * @return 共享空间启用且角色授予 CAN_BROWSE 时返回 true
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canBrowse(UUID userId) {
+        return canAccess(userId, Action.CAN_BROWSE);
+    }
+
+    /**
+     * 判断用户能否下载共享空间内容，用于批量下载的逐项过滤。
+     *
+     * <p>下载同时要求浏览与下载两个权限位；任一未授予都返回 false，不抛出异常。</p>
+     *
+     * @param userId 用户 ID
+     * @return 可下载时返回 true
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canDownload(UUID userId) {
+        return canAccess(userId, Action.CAN_BROWSE) && canAccess(userId, Action.CAN_DOWNLOAD);
+    }
+
+    /**
+     * 校验共享空间浏览权限（含共享空间开关）。
+     *
+     * @param userId 用户 ID
+     */
+    public void validateBrowsePermission(UUID userId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(userId, Action.CAN_BROWSE);
+    }
+
+    /**
+     * 校验共享空间下载权限（含浏览权限与共享空间开关）。
+     *
+     * <p>{@code CAN_DOWNLOAD} 是独立权限位，只校验 CAN_BROWSE 会让关闭下载的角色
+     * 仍能通过下载地址接口取到内容。</p>
+     *
+     * @param userId 用户 ID
+     */
+    @Override
+    public void validateDownloadPermission(UUID userId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(userId, Action.CAN_BROWSE);
+        validatePermission(userId, Action.CAN_DOWNLOAD);
+    }
+
+    private boolean canAccess(UUID userId, Action action) {
+        if (!isSharedSpaceEnabled()) {
+            return false;
+        }
+        UserAccountSummary user = userAccountQuery.findById(userId).orElse(null);
+        if (user == null || user.roleIds().isEmpty()) {
+            return false;
+        }
+        return permissionRepository.findByRoleIdIn(user.roleIds()).stream()
+                .anyMatch(permission -> permission.isAllowed(action));
+    }
+
+    /**
+     * 共享空间开关当前是否开启。
+     */
+    private boolean isSharedSpaceEnabled() {
+        return configValueProvider.findByKey("share.enabled")
+                .or(() -> configValueProvider.findByKey("shared_space.enabled"))
+                .map(value -> "true".equalsIgnoreCase(value))
+                .orElse(true);
+    }
+
+    /**
+     * 校验共享空间节点的删除或恢复权限：上传者要求 CAN_DELETE_OWN，其他成员要求 CAN_DELETE_ANY。
+     *
+     * <p>恢复与删除共用同一判定，否则管理员删除的文件会出现在其回收站中却无法恢复；
+     * 回收站列表按 deleted_by 展示，而节点 owner_user_id 仍指向上传者，两处必须对齐。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param node 共享空间节点
+     */
+    public void validateSharedLifecycleOperator(UUID operatorId, FileNode node) {
+        boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
+        validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
+    }
+
+    /**
+     * 子树结算结果：字节数与文件数必须成对记账，删除或恢复整个文件夹时不能只记一个文件。
+     *
+     * @param totalBytes 子树内文件总字节数
+     * @param fileCount 子树内文件数
+     */
+    public record SubtreeStats(long totalBytes, long fileCount) {
+    }
+
+    /**
+     * 汇总文件或文件夹子树的字节数与文件数。
+     *
+     * <p>共享空间目录内混有各成员上传的文件，按文件夹创建者的 ownerUserId 过滤会漏算
+     * 其他人上传的字节与文件，因此共享空间按空间类型加路径前缀统计，个人空间按所有者统计。</p>
+     */
+    private SubtreeStats calculateSubtreeStats(FileNode node) {
+        String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            long versionBytes = fileMetricsRepository.sumVersionBytesForNode(
+                    node.getId(), node.getSpaceType().getValue(), false);
+            return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
+        }
+        List<Object[]> rows = node.getSpaceType() == SpaceType.SHARED
+                ? fileNodeRepository.sumActiveFilesUnderPathInSpace(node.getSpaceType(), prefix)
+                : fileNodeRepository.sumActiveFilesUnderPathByOwner(
+                        node.getOwnerUserId(), node.getSpaceType(), prefix);
+        long totalBytes = 0L;
+        long fileCount = 0L;
+        if (!rows.isEmpty()) {
+            Object[] row = rows.getFirst();
+            totalBytes = SharedSpaceSupport.toLong(row[0]);
+            fileCount = SharedSpaceSupport.toLong(row[1]);
+        }
+        // 账本与夜间重算都把历史版本对象计入字节，删除/移动同口径释放。
+        totalBytes += node.getSpaceType() == SpaceType.SHARED
+                ? fileMetricsRepository.sumVersionBytesUnderPathInSpace(
+                        node.getSpaceType().getValue(), prefix, false)
+                : fileMetricsRepository.sumVersionBytesUnderPathByOwner(
+                        node.getOwnerUserId(), prefix, false);
+        return new SubtreeStats(totalBytes, fileCount);
+    }
+
+    /**
+     * 汇总共享空间回收站子树恢复后应补记的用量。
+     *
+     * <p>口径与删除时一致：文件节点按自身字节计一个文件，目录按路径前缀汇总子树文件；
+     * 共享空间按空间类型加前缀统计，不按目录创建者过滤，否则会漏记其他成员上传的内容。
+     * 恢复前子树仍处于软删除状态，活跃口径的汇总只能得到零，因此这里读取已删除文件。</p>
+     *
+     * @param node 回收站中的共享空间节点
+     * @return 恢复后应补记的字节数与文件数
+     */
+    public SubtreeStats calculateRestoreSubtreeStats(FileNode node) {
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            long versionBytes = fileMetricsRepository.sumVersionBytesForNode(
+                    node.getId(), SpaceType.SHARED.getValue(), true);
+            return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
+        }
+        // 只统计本次真正会复活的节点：按路径前缀汇总会把同一路径下更早期单独删除、
+        // 不随本次目录恢复的历史文件一并计入，账本因此虚增且无法回退。
+        List<FileNode> restorable = fileRestoreSupport.deletedSubtreeNodes(node);
+        long totalBytes = 0L;
+        long fileCount = 0L;
+        List<UUID> restoredFileIds = new ArrayList<>();
+        for (FileNode child : restorable) {
+            if (!NodeType.FILE.getValue().equals(child.getNodeType())) {
+                continue;
+            }
+            totalBytes += child.getSizeBytes();
+            fileCount++;
+            restoredFileIds.add(child.getId());
+        }
+        for (int start = 0; start < restoredFileIds.size(); start += VERSION_BYTES_BATCH_SIZE) {
+            List<UUID> batch = restoredFileIds.subList(
+                    start, Math.min(start + VERSION_BYTES_BATCH_SIZE, restoredFileIds.size()));
+            totalBytes += fileMetricsRepository.sumVersionBytesForNodes(
+                    batch, SpaceType.SHARED.getValue(), true);
+        }
+        return new SubtreeStats(totalBytes, fileCount);
+    }
+
+    /**
+     * 把子树后代迁入目标空间并按新根路径重写规范化路径。
+     *
+     * <p>路径在 Java 侧按旧根路径长度精确截取，避免数据库 {@code substring} 的
+     * 1-based 偏移与根路径斜杠拼接出错；后代实体已由一次子树查询载入，不产生逐层 N+1。</p>
+     */
+    private void moveDescendants(
+            List<FileNode> descendants,
+            FileNode root,
+            String oldRootPath,
+            SpaceType targetSpace,
+            UUID targetOwner,
+            UUID uploadedBy
+    ) {
+        List<FileNode> changed = new ArrayList<>();
+        for (FileNode descendant : descendants) {
+            if (descendant.getId().equals(root.getId())) {
+                continue;
+            }
+            String oldPath = descendant.getNormalizedPath();
+            if (oldPath == null || oldPath.length() <= oldRootPath.length()
+                    || !oldPath.startsWith(oldRootPath + "/")) {
+                continue;
+            }
+            descendant.setSpaceType(targetSpace);
+            descendant.setOwnerUserId(targetOwner);
+            descendant.setUploadedBy(uploadedBy);
+            descendant.setNormalizedPath(root.getNormalizedPath()
+                    + oldPath.substring(oldRootPath.length()));
+            changed.add(descendant);
+        }
+        if (!changed.isEmpty()) {
+            fileNodeRepository.saveAll(changed);
+        }
+    }
+
+    /**
+     * 本地只读与系统派生节点不参与个人/共享配额结算，禁止跨空间移动。
+     */
+    private void requireMovableSources(List<FileNode> nodes) {
+        for (FileNode node : nodes) {
+            if ("DERIVED".equals(node.getSourceType())
+                    || SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "只读或派生文件不能移入共享空间");
+            }
+        }
+    }
+
+    private List<FileNode> collectPersonalSubtreeNodes(FileNode root) {
+        List<FileNode> nodes = new ArrayList<>();
+        nodes.add(root);
+        if (!NodeType.FOLDER.getValue().equals(root.getNodeType())) {
+            return nodes;
+        }
+        // 回收站子项必须一起迁移：父目录换空间后，旧空间的软删除子项会因
+        // 父级查找失败而永久无法恢复。
+        List<FileNode> descendants = fileNodeRepository.findPersonalSubtreeIncludingDeleted(
+                root.getOwnerUserId(),
+                SpaceType.PERSONAL,
+                LikePatterns.escapeSpecials(root.getNormalizedPath() + "/"));
+        nodes.addAll(descendants);
+        return nodes;
+    }
+
+    private void recordSyncEvent(UUID ownerUserId, List<UUID> ids, UUID rootId, SyncAction action) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        syncEventRecorder.record(new SyncEventCommand(
+                ownerUserId, SyncScope.FILES, "FILE_NODE", rootId.toString(), action, null, Map.of()));
+    }
+
+    /**
+     * 检查共享空间同名冲突。
+     */
+    private void checkSharedSpaceNameConflict(String name, UUID parentId) {
+        if (fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(SpaceType.SHARED, parentId, name)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "共享空间已存在同名文件");
+        }
+    }
+
+    /**
+     * 构建共享空间的 normalized_path。
+     */
+    private String buildSharedSpacePath(UUID parentFolderId, String name) {
+        if (parentFolderId == null) {
+            return "/" + name;
+        }
+        FileNode parent = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentFolderId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+        if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
+        return parent.getNormalizedPath() + "/" + name;
+    }
+
+    /**
+     * 更新共享空间容量与启用状态；写配置前复核操作者当前仍具备管理权限。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateConfig(UUID operatorId, String maxBytes, String enabled) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
+        if ((maxBytes == null || maxBytes.isBlank()) && (enabled == null || enabled.isBlank())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "至少需要提供一项共享空间配置");
+        }
+        if (maxBytes != null && !maxBytes.isBlank()) {
+            runtimeConfigCommand.updateValue(
+                    "share.max-bytes", maxBytes, "管理员更新共享空间容量", operatorId);
+        }
+        if (enabled != null && !enabled.isBlank()) {
+            runtimeConfigCommand.updateValue(
+                    "share.enabled", enabled, "管理员更新共享空间启用状态", operatorId);
+        }
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "SHARED_SPACE_CONFIG_UPDATE",
+                "shared_space_config",
+                SHARED_SPACE_CONFIG_AUDIT_ID,
+                Map.of(
+                        "maxBytes", maxBytes == null ? "" : maxBytes, "enabled", enabled == null ? "" : enabled));
+    }
+
+    /**
+     * 设置角色的共享空间权限。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void setRolePermission(UUID operatorId, UUID roleId, Boolean canBrowse, Boolean canUpload,
+            Boolean canDownload, Boolean canDeleteOwn, Boolean canDeleteAny,
+            Boolean canMoveTo, Boolean canMoveFrom, Boolean canCreateFolder) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
+        // 角色标识来自请求体：不校验存在性会写入永远匹配不到角色的幽灵权限行。
+        if (!roleLookup.existsById(roleId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "角色不存在");
+        }
+        SharedSpacePermission perm = permissionRepository.findByRoleId(roleId)
+                .orElseGet(() -> {
+                    SharedSpacePermission p = new SharedSpacePermission();
+                    p.setRoleId(roleId);
+                    return p;
+                });
+        if (canBrowse != null) perm.setCanBrowse(canBrowse);
+        if (canUpload != null) perm.setCanUpload(canUpload);
+        if (canDownload != null) perm.setCanDownload(canDownload);
+        if (canDeleteOwn != null) perm.setCanDeleteOwn(canDeleteOwn);
+        if (canDeleteAny != null) perm.setCanDeleteAny(canDeleteAny);
+        if (canMoveTo != null) perm.setCanMoveTo(canMoveTo);
+        if (canMoveFrom != null) perm.setCanMoveFrom(canMoveFrom);
+        if (canCreateFolder != null) perm.setCanCreateFolder(canCreateFolder);
+        permissionRepository.save(perm);
+        Map<String, Object> auditPayload = new HashMap<>();
+        auditPayload.put("canBrowse", canBrowse);
+        auditPayload.put("canUpload", canUpload);
+        auditPayload.put("canDownload", canDownload);
+        auditPayload.put("canDeleteOwn", canDeleteOwn);
+        auditPayload.put("canDeleteAny", canDeleteAny);
+        auditPayload.put("canMoveTo", canMoveTo);
+        auditPayload.put("canMoveFrom", canMoveFrom);
+        auditPayload.put("canCreateFolder", canCreateFolder);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "SHARED_SPACE_PERMISSION_UPDATE",
+                "shared_space_permissions",
+                roleId,
+                auditPayload);
+        log.info("共享空间权限更新: roleId={}", roleId);
+    }
+
+    /**
+     * 查询全部角色的共享空间权限矩阵。
+     *
+     * <p>管理端只能逐角色写入、看不到整体配置，等于无法确认"谁还能删别人文件"。
+     * 未配置过的角色按全 false 返回，避免把"没配"误读成"已关闭"或"已授权"。</p>
+     *
+     * @param operatorId 操作者用户标识
+     * @return 按角色编码排序的权限矩阵
+     */
+    @Transactional(readOnly = true)
+    public List<SharedSpaceRolePermissionDto> listRolePermissions(UUID operatorId) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
+        Map<UUID, SharedSpacePermission> configured = permissionRepository.findAll().stream()
+                .collect(Collectors.toMap(SharedSpacePermission::getRoleId, p -> p, (l, r) -> l));
+        return roleLookup.listAll().stream()
+                .sorted(Comparator.comparing(RoleLookup.RoleRef::code, String.CASE_INSENSITIVE_ORDER))
+                .map(role -> {
+                    SharedSpacePermission perm = configured.get(role.id());
+                    return perm == null
+                            ? new SharedSpaceRolePermissionDto(
+                                    role.id(), role.code(), false, false, false,
+                                    false, false, false, false, false)
+                            : new SharedSpaceRolePermissionDto(
+                                    role.id(), role.code(), perm.isCanBrowse(),
+                                    perm.isCanUpload(), perm.isCanDownload(),
+                                    perm.isCanDeleteOwn(), perm.isCanDeleteAny(),
+                                    perm.isCanMoveTo(), perm.isCanMoveFrom(),
+                                    perm.isCanCreateFolder());
+                })
+                .toList();
+    }
+}
