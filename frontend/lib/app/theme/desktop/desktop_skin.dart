@@ -241,7 +241,28 @@ abstract final class DesktopMetrics {
 
   /// `.playerbar`（more.css 终值）高度与最大宽度。
   static const double playerBarHeight = 66;
-  static const double playerBarMaxWidth = 1080;
+  // CSS 的 1080px 是描边面板宽度；Flutter 这层容器还包了左右各 20px
+  // 的外边距，因此最大布局宽度需要额外计入 40px。
+  static const double playerBarMaxWidth = 1120;
+  static const double playerBarCompactMaxWidth = 888;
+  static const double playerBarWideMargin = 20;
+  static const double playerBarCompactMargin = 14;
+  static const double playerBarCompactBreakpoint = 1180;
+  static const double playerBarNarrowBreakpoint = 860;
+  static const double playerBarVisualizerBreakpoint = 1360;
+  static const double playerBarWideTrackWidth = 270;
+  static const double playerBarCompactTrackWidth = 200;
+  static const double playerBarNarrowTrackWidth = 150;
+  static const double playerBarWideCenterMinWidth = 280;
+  static const double playerBarCompactCenterMinWidth = 200;
+  static const double playerBarNarrowCenterMinWidth = 120;
+  static const double playerBarCenterMaxWidth = 600;
+  static const double playerBarWideSectionGap = 12;
+  static const double playerBarNarrowSectionGap = 8;
+  static const double playerBarControlGap = 6;
+  static const double playerBarSeekTimeWidth = 36;
+  static const double playerBarSeekGap = 8;
+  static const double playerBarSeekHeight = 14;
   static const double playerBarBottom = 14;
 
   /// `.root --pb-space`：所有页面为浮动播放条预留的底部空间。

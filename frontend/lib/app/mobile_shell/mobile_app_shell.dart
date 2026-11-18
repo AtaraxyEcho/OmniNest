@@ -67,7 +67,10 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
       mobilePlatform: isMobilePlatform,
       width: width,
     )) {
-      return MobileShellScope(hosted: false, child: _moduleContent());
+      // 桌面形态的入场动画由外层 `DesktopShellHost._RouteEnter` 统一承载
+      // （淡入 + 上移 12px + 模糊收束）；这里再叠一层横向
+      // `ModuleSwitchTransition` 就是两套位移与两层 Opacity 同跑、方向打架。
+      return MobileShellScope(hosted: false, child: widget.navigationShell);
     }
     final branch = widget.navigationShell.currentIndex;
     final selectionActive = ref.watch(

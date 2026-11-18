@@ -20,6 +20,10 @@ public class PhotoFileDetector {
             "raw", "cr2", "nef", "arw", "dng", "orf", "rw2", "raf"
     );
 
+    private static final Set<String> VIDEO_EXTENSIONS = Set.of(
+            "mp4", "mkv", "webm", "mov", "m4v", "avi", "flv", "wmv", "ts", "m2ts"
+    );
+
     /**
      * 判断文件是否可被 Thumbnailator 解码生成缩略图。
      * RAW/HEIC/AVIF/SVG 等格式 JVM ImageIO 不支持，需跳过缩略图生成。
@@ -33,6 +37,11 @@ public class PhotoFileDetector {
      */
     public boolean isRaw(String fileName) {
         return RAW_EXTENSIONS.contains(extension(fileName));
+    }
+
+    /** 判断文件是否为 Photos 支持导入的视频类型。 */
+    public boolean isVideo(String fileName) {
+        return VIDEO_EXTENSIONS.contains(extension(fileName));
     }
 
     /**

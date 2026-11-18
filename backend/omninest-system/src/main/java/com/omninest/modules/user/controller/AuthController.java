@@ -18,6 +18,7 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapSetupReques
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorFinalizeRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorLoginRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
+import com.omninest.modules.user.dto.TwoFactorDtos.RequiredPasswordChangeRequest;
 import com.omninest.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -100,6 +101,34 @@ public class AuthController {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "该账号登录尝试过多，请稍后再试");
         }
         AuthTokenResponse token = authService.login(request, clientPlatform, deviceId, deviceName, ip,
+                httpRequest.getHeader("User-Agent"));
+        if (Boolean.TRUE.equals(token.twoFactorRequired())) {
+            return ApiResponse.success(token);
+        }
+        return issueResponse(token, clientPlatform, response);
+    }
+
+    @Operation(summary = "首次登录修改临时密码", description = "管理员创建的账户在首次登录验证密码后必须先设置个人密码")
+    @PostMapping("/api/v1/auth/login/password-change")
+    ApiResponse<AuthTokenResponse> completeRequiredPasswordChange(
+            @Valid @RequestBody RequiredPasswordChangeRequest request,
+            @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
+            @RequestHeader(name = DEVICE_ID_HEADER, required = false) String deviceId,
+            @RequestHeader(name = DEVICE_NAME_HEADER, required = false) String deviceName,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":password-change", 10, Duration.ofMinutes(15))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "密码修改请求过于频繁，请稍后再试");
+        }
+        AuthTokenResponse token = authService.completeRequiredPasswordChange(
+                request.challengeToken(),
+                request.newPassword(),
+                clientPlatform,
+                deviceId,
+                deviceName,
+                ip,
                 httpRequest.getHeader("User-Agent"));
         if (Boolean.TRUE.equals(token.twoFactorRequired())) {
             return ApiResponse.success(token);

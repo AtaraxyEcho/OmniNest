@@ -3,7 +3,6 @@ package com.omninest.modules.photos.repository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.data.repository.query.Param;
 
 /**
@@ -11,7 +10,6 @@ import org.springframework.data.repository.query.Param;
  *
  * @author OmniNest
  */
-@NoRepositoryBean
 public interface PhotoItemTimelineQueries {
 
     /**

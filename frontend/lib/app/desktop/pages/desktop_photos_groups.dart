@@ -8,25 +8,38 @@ part of 'desktop_photos_page.dart';
 class _PhotoGroups extends StatelessWidget {
   const _PhotoGroups({
     required this.photos,
+    required this.displayOrders,
     required this.loading,
+    required this.onRetry,
+    this.error,
     required this.density,
     required this.selection,
     required this.onActivate,
     required this.onToggleSelect,
     required this.onSelectMany,
+    required this.onOrderChanged,
+    required this.onResetOrder,
   });
 
   final List<PhotoItem> photos;
+  final Map<String, List<String>> displayOrders;
   final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
   final double density;
   final Set<String> selection;
-  final ValueChanged<PhotoItem> onActivate;
+  final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
   final ValueChanged<PhotoItem> onToggleSelect;
   final ValueChanged<List<PhotoItem>> onSelectMany;
+  final _PhotoOrderChanged onOrderChanged;
+  final Future<void> Function(String contextKey) onResetOrder;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    if (error != null) {
+      return DesktopErrorView(message: error!, onRetry: onRetry);
+    }
     if (loading) {
       return DesktopSkeletonPhotoGrid(targetHeight: density);
     }
@@ -39,6 +52,7 @@ class _PhotoGroups extends StatelessWidget {
       );
     }
     final groups = _groupByDay(photos);
+    final browsePhotos = applyPhotoLibraryDisplayOrder(photos, displayOrders);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -57,14 +71,26 @@ class _PhotoGroups extends StatelessWidget {
                           ).format(entry.key!),
                   count: entry.value.length,
                   onSelectAll: () => onSelectMany(entry.value),
+                  onReset:
+                      displayOrders.containsKey(
+                            photoOrderContextForDay(entry.key),
+                          )
+                          ? () =>
+                              onResetOrder(photoOrderContextForDay(entry.key))
+                          : null,
                 ),
                 const SizedBox(height: 12),
                 _JustifiedPhotos(
-                  photos: entry.value,
+                  photos: applyPhotoDisplayOrder(
+                    entry.value,
+                    displayOrders[photoOrderContextForDay(entry.key)],
+                  ),
                   targetHeight: density,
                   selection: selection,
-                  onActivate: onActivate,
+                  onActivate: (photo, _) => onActivate(photo, browsePhotos),
                   onToggleSelect: onToggleSelect,
+                  orderContext: photoOrderContextForDay(entry.key),
+                  onOrderChanged: onOrderChanged,
                 ),
               ],
             ),
@@ -79,9 +105,7 @@ class _PhotoGroups extends StatelessWidget {
     for (final item in items) {
       final taken = item.dateTaken ?? item.createdAt;
       final key =
-          taken == null
-              ? DateTime(1970)
-              : DateTime(taken.year, taken.month, taken.day);
+          taken == null ? null : DateTime(taken.year, taken.month, taken.day);
       groups.putIfAbsent(key, () => <PhotoItem>[]).add(item);
     }
     return groups;
@@ -93,11 +117,13 @@ class _GroupHead extends StatelessWidget {
     required this.label,
     required this.count,
     required this.onSelectAll,
+    this.onReset,
   });
 
   final String label;
   final int count;
   final VoidCallback onSelectAll;
+  final VoidCallback? onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +143,10 @@ class _GroupHead extends StatelessWidget {
             style: DesktopType.caption(skin.text3),
           ),
         ),
+        if (onReset != null) ...[
+          DesktopLink(label: l10n.desktopPhotosResetOrder, onPressed: onReset),
+          const SizedBox(width: 12),
+        ],
         DesktopLink(label: l10n.photosSelectAll, onPressed: onSelectAll),
       ],
     );

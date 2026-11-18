@@ -138,15 +138,17 @@ class AdminListEmptyState extends StatelessWidget {
   }
 }
 
-/// 列表加载指示：居中转圈，不再渲染与表头同形的骨架行。
+/// 桌面列表加载时保留表格节奏；移动端继续使用轻量加载指示。
 class AdminListSkeleton extends StatelessWidget {
   const AdminListSkeleton({this.rows = 8, super.key});
 
-  // ignore: unused_field
   final int rows;
 
   @override
   Widget build(BuildContext context) {
+    if (DesktopShellScope.isHosted(context)) {
+      return DesktopSkeletonRows(count: rows);
+    }
     return const Center(
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 48),

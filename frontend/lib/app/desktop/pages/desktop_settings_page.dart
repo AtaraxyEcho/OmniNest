@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -8,13 +10,14 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/desktop/desktop_backdrop_scope.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
-import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
@@ -34,6 +37,11 @@ import 'package:omninest/features/notifications/application/notification_prefere
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_two_factor_card.dart';
+import 'package:omninest/features/music/application/music_scan_job_controller.dart';
+import 'package:omninest/features/music/music_portal.dart';
+import 'package:omninest/features/music/presentation/widgets/music_platform_login.dart'
+    show PlatformLoginSheet;
 import 'package:omninest/features/portal/portal_weather.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart'
     show weatherApiProvider;
@@ -42,8 +50,10 @@ import 'package:omninest/features/portal/data/weather_api.dart'
 import 'package:omninest/platform/file_pick.dart';
 
 part 'desktop_settings_backdrop.dart';
+part 'desktop_settings_backdrop_library.dart';
 part 'desktop_settings_more.dart';
 part 'desktop_settings_weather.dart';
+part 'desktop_settings_storage.dart';
 
 /// 桌面设置页（样例 `Settings.tsx`）。
 ///
@@ -965,73 +975,6 @@ class _KvRow extends StatelessWidget {
   }
 }
 
-class _StorageSection extends ConsumerWidget {
-  const _StorageSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final stats = ref.watch(fileStorageStatsProvider).asData?.value;
-    final used = stats == null ? '—' : formatFileSize(stats.usedBytes);
-    final unlimited = stats?.isQuotaUnlimited ?? true;
-    final total =
-        stats == null || unlimited ? null : formatFileSize(stats.quotaBytes);
-    final ratio = stats == null || unlimited ? 0.0 : stats.usageRatio;
-    return _Card(
-      title: l10n.desktopStorage,
-      subtitle:
-          unlimited
-              ? l10n.desktopStorageUnlimited(used)
-              : l10n.desktopStorageUsage(used, total!),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(used, style: DesktopType.bigNum(skin.text)),
-              const SizedBox(width: 8),
-              Text(
-                unlimited ? '' : '· $total',
-                style: DesktopType.dense(skin.text3),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: skin.raise3,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: ratio.clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: skin.accent,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            stats == null
-                ? '—'
-                : stats.quotaBytes <= 0
-                ? l10n.desktopStorageUnlimited(used)
-                : '${(ratio * 100).round()}%',
-            style: DesktopType.caption(skin.text3),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Card extends StatelessWidget {
   const _Card({required this.title, required this.child, this.subtitle});
 
@@ -1044,7 +987,7 @@ class _Card extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
       decoration: BoxDecoration(
         color: skin.panel,
         borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),

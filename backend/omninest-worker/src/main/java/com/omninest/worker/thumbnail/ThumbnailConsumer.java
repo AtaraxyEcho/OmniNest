@@ -8,6 +8,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.photos.service.PhotoSourceFileService;
 import com.omninest.modules.photos.service.PhotoThumbnailService;
 import com.omninest.modules.photos.service.PhotoAdminService;
+import com.omninest.worker.photos.PhotoVideoPosterService;
 import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -39,6 +40,7 @@ public class ThumbnailConsumer {
     private final PhotoSourceFileService photoSourceFileService;
     private final PhotoThumbnailService photoThumbnailService;
     private final PhotoAdminService photoAdminService;
+    private final PhotoVideoPosterService photoVideoPosterService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final FilePostProcessingTaskTracker taskTracker;
 
@@ -54,8 +56,9 @@ public class ThumbnailConsumer {
                 channel.basicAck(deliveryTag, false);
                 return;
             }
-            if (!isSupportedImage(event.mimeType())) {
-                log.debug("跳过非图片文件缩略图生成: fileNodeId={}, mimeType={}", event.fileNodeId(), event.mimeType());
+            boolean video = PhotoVideoPosterService.supportsVideoFileName(event.fileName());
+            if (!video && !isSupportedImage(event.mimeType())) {
+                log.debug("跳过不支持的媒体缩略图生成: fileNodeId={}, mimeType={}", event.fileNodeId(), event.mimeType());
                 taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "UNSUPPORTED_MIME"));
                 channel.basicAck(deliveryTag, false);
                 return;
@@ -82,18 +85,34 @@ public class ThumbnailConsumer {
 
             log.info("开始生成缩略图: fileNodeId={}, fileName={}", event.fileNodeId(), event.fileName());
             UUID thumbnailId = null;
-            // provider 无关取源：MinIO 托管与本地媒体挂载的照片统一走受控暂存。
-            try (PhotoSourceFileService.StagedPhotoFile source = photoSourceFileService.stageReadable(
-                    event.ownerUserId(), event.fileNodeId())) {
-                thumbnailId = photoThumbnailService.generateAndStoreFile(
-                        event.ownerUserId(), event.fileNodeId(), source.path(), source.fileName());
-                if (thumbnailId != null) {
+            PhotoVideoPosterService.VideoPoster videoPoster = null;
+            if (video) {
+                videoPoster = photoVideoPosterService.generateAndStore(event.ownerUserId(), event.fileNodeId());
+                thumbnailId = videoPoster == null ? null : videoPoster.coverFileId();
+            } else {
+                // provider 无关取源：MinIO 托管与本地媒体挂载的照片统一走受控暂存。
+                try (PhotoSourceFileService.StagedPhotoFile source = photoSourceFileService.stageReadable(
+                        event.ownerUserId(), event.fileNodeId())) {
+                    thumbnailId = photoThumbnailService.generateAndStoreFile(
+                            event.ownerUserId(), event.fileNodeId(), source.path(), source.fileName());
+                }
+            }
+            if (thumbnailId != null) {
+                if (videoPoster != null) {
+                    photoAdminService.attachVideoPoster(
+                            event.ownerUserId(),
+                            event.fileNodeId(),
+                            thumbnailId,
+                            videoPoster.width(),
+                            videoPoster.height()
+                    );
+                } else {
                     photoAdminService.attachCoverIfMissing(
                             event.ownerUserId(), event.fileNodeId(), thumbnailId);
-                    log.info("缩略图生成完成: fileNodeId={}, thumbnailId={}", event.fileNodeId(), thumbnailId);
-                } else {
-                    log.info("缩略图生成跳过（不支持的格式）: fileNodeId={}", event.fileNodeId());
                 }
+                log.info("缩略图生成完成: fileNodeId={}, thumbnailId={}", event.fileNodeId(), thumbnailId);
+            } else {
+                log.info("缩略图生成跳过（不支持的格式）: fileNodeId={}", event.fileNodeId());
             }
             taskTracker.complete(tracked.taskId(), Map.of("thumbnailId", thumbnailId == null ? "" : thumbnailId.toString()));
             channel.basicAck(deliveryTag, false);
@@ -125,4 +144,5 @@ public class ThumbnailConsumer {
         String lower = mimeType.toLowerCase(Locale.ROOT);
         return IMAGE_MIME_PREFIXES.stream().anyMatch(lower::startsWith);
     }
+
 }

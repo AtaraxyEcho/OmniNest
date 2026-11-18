@@ -131,6 +131,89 @@ void _showStorageLocationDetail(
   AdminStorageLocation location, {
   required bool canManage,
 }) {
+  if (DesktopShellScope.isHosted(context)) {
+    showDesktopDrawer<void>(
+      context,
+      width: 520,
+      builder:
+          (drawerContext) => DesktopDrawerFrame(
+            title: location.name,
+            eyebrow: l10n.adminStorageManagement,
+            subtitle: location.healthStatus,
+            footer: Wrap(
+              spacing: 8,
+              children: [
+                if (canManage)
+                  DesktopButton(
+                    label:
+                        location.enabled
+                            ? l10n.adminStorageDisableAction
+                            : l10n.adminStorageEnableAction,
+                    variant: DesktopButtonVariant.soft,
+                    onPressed: () {
+                      closeDesktopModal(drawerContext);
+                      _toggleStorageLocation(
+                        context,
+                        ref,
+                        l10n,
+                        location,
+                        enabled: !location.enabled,
+                      );
+                    },
+                  ),
+                if (canManage)
+                  DesktopButton(
+                    label: l10n.adminStorageDeleteAction,
+                    icon: DesktopIcons.trash,
+                    variant: DesktopButtonVariant.danger,
+                    onPressed: () {
+                      closeDesktopModal(drawerContext);
+                      _deleteStorageLocation(context, ref, l10n, location);
+                    },
+                  ),
+                DesktopButton(
+                  label: l10n.coreClose,
+                  onPressed: () => closeDesktopModal(drawerContext),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DetailKeyValueRow(
+                  label: l10n.adminStorageFieldProvider,
+                  value: providerTypeLabel(l10n, location.providerType),
+                ),
+                _DetailKeyValueRow(
+                  label: l10n.adminStorageFieldManagement,
+                  value: location.managementMode,
+                  mono: true,
+                ),
+                _DetailKeyValueRow(
+                  label: l10n.adminMountKey,
+                  value: location.mountKey,
+                  mono: true,
+                ),
+                _DetailKeyValueRow(
+                  label: l10n.adminStorageFieldPath,
+                  value: location.relativeRoot,
+                  mono: true,
+                ),
+                _DetailKeyValueRow(
+                  label: l10n.adminStorageFieldScope,
+                  value: scopeTypeLabel(l10n, location.scopeType),
+                ),
+                _DetailKeyValueRow(
+                  label: l10n.adminStorageFieldNode,
+                  value: location.nodeId,
+                  mono: true,
+                ),
+              ],
+            ),
+          ),
+    );
+    return;
+  }
   showWorkstationDialog<void>(
     context: context,
     builder:
@@ -243,9 +326,7 @@ Future<void> _toggleStorageLocation(
     if (context.mounted) {
       showOmniFeedback(
         context,
-        l10n.adminLoadFailed(
-          userFacingErrorText(error, l10n: l10n),
-        ),
+        l10n.adminLoadFailed(userFacingErrorText(error, l10n: l10n)),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -270,9 +351,7 @@ Future<void> _deleteStorageLocation(
     if (context.mounted) {
       showOmniFeedback(
         context,
-        l10n.adminLoadFailed(
-          userFacingErrorText(error, l10n: l10n),
-        ),
+        l10n.adminLoadFailed(userFacingErrorText(error, l10n: l10n)),
         severity: OmniFeedbackSeverity.error,
       );
     }

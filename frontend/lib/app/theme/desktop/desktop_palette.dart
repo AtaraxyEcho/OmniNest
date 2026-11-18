@@ -77,11 +77,14 @@ abstract final class DesktopPalette {
   static const Color kindImage = Color(0xFF8CC5A2);
   static const Color kindText = Color(0xFFA9A4D6);
 
+  /// 存储分布图的类别色，对应样例 `data.ts:157` 的固定类别色。
+  static const Color storageVideo = Color(0xFFC58C5C);
+  static const Color storagePhotos = Color(0xFF6F9A93);
+  static const Color storageMusic = Color(0xFF8B7AA5);
+  static const Color storageDocuments = Color(0xFF6D8BB0);
+
   // ── 环境光斑（样例 .blob.b3）───────────────────────────────────────
   static const Color ambientCool = Color(0xFF5D6FA8);
-
-  /// 登录画幅的底色（样例 `.root[data-theme="dark"] .auth` 的径向渐变起点）。
-  static const Color authAura = Color(0xFF14201D);
 
   /// 样例 `.grain` 的 5% 叠加噪点。
   static const Color grain = Color(0x0DFFFFFF);

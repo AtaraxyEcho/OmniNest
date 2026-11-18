@@ -20,8 +20,8 @@ Future<bool?> showDesktopMusicMetadataDrawer({
 }) {
   return showDesktopDrawer<bool>(
     context,
-    width: 520,
-    barrierDismissible: false,
+    width: 480,
+    barrierDismissible: true,
     builder: (_) => _DesktopMusicMetadataDrawer(track: track),
   );
 }

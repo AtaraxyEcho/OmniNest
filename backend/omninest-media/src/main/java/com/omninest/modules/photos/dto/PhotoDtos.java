@@ -212,11 +212,13 @@ public final class PhotoDtos {
 
     public record PhotoDashboardDto(
             long totalPhotos,
+            long totalVideos,
             long totalAlbums,
             long totalFavorites,
             long trashCount,
             List<PhotoItemDto> recentPhotos,
-            List<PhotoItemDto> favoritePhotos
+            List<PhotoItemDto> favoritePhotos,
+            long itemsAddedToday
     ) {}
 
     /** 回收站批量操作逐项结果。 */

@@ -185,9 +185,8 @@ public class InitialSetupService {
                 normalizeTimezone(request.defaultTimezone())
         );
         systemInstanceRepository.save(systemInstance);
-        // 管理员主动绑定 2FA 时保留 V002 的管理员强制策略；只有明确未绑定且环境
-        // 也未要求时才清空 required-roles。
-        seedTwoFactorRuntimePolicy(bindTwoFactor);
+        // 清除历史上的普通管理员强制策略，同时确保旧配置只记录超管规则。
+        seedTwoFactorRuntimePolicy();
         log.info("首次安装已创建超级管理员: username={}, twoFactor={}", username, bindTwoFactor);
         return backupCodes;
     }
@@ -196,9 +195,10 @@ public class InitialSetupService {
      * 把安装期的两步验证姿态写入配置中心，使运行期强制策略与部署选择一致；
      * 安装期无认证上下文，使用配置中心的内部播种入口，不走管理 API 的权限路径。
      */
-    private void seedTwoFactorRuntimePolicy(boolean required) {
-        String value = required ? TwoFactorPolicyService.DEFAULT_REQUIRED_ROLES : "";
-        configCenterService.seedSystemConfigValue(TwoFactorPolicyService.REQUIRED_ROLES_KEY, value);
+    private void seedTwoFactorRuntimePolicy() {
+        configCenterService.seedSystemConfigValue(
+                TwoFactorPolicyService.REQUIRED_ROLES_KEY,
+                TwoFactorPolicyService.DEFAULT_REQUIRED_ROLES);
     }
 
     private void requireSetupStillRequired() {

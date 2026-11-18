@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
@@ -51,11 +52,15 @@ class _DesktopSeriesDetailPageState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final backdropVisible = desktopBackdropVisibleForRoute(
+      ref,
+      DesktopRoutes.seriesDetail(widget.seriesId),
+    );
     final detailAsync = ref.watch(movieSeriesDetailProvider(widget.seriesId));
     return detailAsync.when(
       loading:
           () => ColoredBox(
-            color: skin.bg,
+            color: backdropVisible ? Colors.transparent : skin.bg,
             child: const Center(
               child: SizedBox(
                 width: 320,
@@ -92,7 +97,7 @@ class _DesktopSeriesDetailPageState
           (_SeriesTab.subtitles, l10n.desktopSeriesSubtitles),
         ];
         return ColoredBox(
-          color: skin.bg,
+          color: backdropVisible ? Colors.transparent : skin.bg,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

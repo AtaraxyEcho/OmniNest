@@ -37,7 +37,7 @@ class LoginPageGenericError extends LoginPageError {
   const LoginPageGenericError();
 }
 
-/// 登录页流程状态：提交中标志、错误类别与 2FA 挑战。
+/// 登录页流程状态：提交中标志、错误类别与认证续接挑战。
 class LoginPageState {
   const LoginPageState({this.submitting = false, this.error, this.challenge});
 
@@ -53,7 +53,7 @@ class LoginPageController extends Notifier<LoginPageState> {
   LoginPageState build() => const LoginPageState();
 
   /// 提交凭据登录。返回 true 表示登录完成（调用方负责导航）；
-  /// false 表示已进入 2FA 挑战或失败，详情已写入 state。
+  /// false 表示已进入认证续接挑战或失败，详情已写入 state。
   Future<bool> submit({
     required String username,
     required String password,
@@ -63,7 +63,7 @@ class LoginPageController extends Notifier<LoginPageState> {
       final result = await ref
           .read(authSessionProvider.notifier)
           .signInWithCredentials(username: username, password: password);
-      if (result.requiresTwoFactor) {
+      if (result.requiresChallenge) {
         if (!ref.mounted) {
           return false;
         }
@@ -84,6 +84,58 @@ class LoginPageController extends Notifier<LoginPageState> {
     } catch (_) {
       if (ref.mounted) {
         state = const LoginPageState(error: LoginPageGenericError());
+      }
+      return false;
+    }
+  }
+
+  /// 首次改密完成后若服务端要求 2FA，则切到下一挑战，否则允许登录页导航。
+  Future<bool> completeRequiredPasswordChange({
+    required String challengeToken,
+    required String newPassword,
+  }) async {
+    final currentChallenge = state.challenge;
+    state = LoginPageState(submitting: true, challenge: currentChallenge);
+    try {
+      final result = await ref
+          .read(authSessionProvider.notifier)
+          .completeRequiredPasswordChange(
+            challengeToken: challengeToken,
+            newPassword: newPassword,
+          );
+      if (result.requiresChallenge) {
+        if (!ref.mounted) {
+          return false;
+        }
+        state = LoginPageState(challenge: result.challenge);
+        return false;
+      }
+      if (ref.mounted) {
+        state = const LoginPageState();
+      }
+      return true;
+    } on DioException catch (error) {
+      if (ref.mounted) {
+        state = LoginPageState(
+          error: _mapDioError(error),
+          challenge: currentChallenge,
+        );
+      }
+      return false;
+    } on AppException catch (error) {
+      if (ref.mounted) {
+        state = LoginPageState(
+          error: LoginPageMessage(error.message),
+          challenge: currentChallenge,
+        );
+      }
+      return false;
+    } catch (_) {
+      if (ref.mounted) {
+        state = LoginPageState(
+          error: const LoginPageGenericError(),
+          challenge: currentChallenge,
+        );
       }
       return false;
     }

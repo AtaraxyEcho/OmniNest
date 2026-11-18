@@ -15,6 +15,7 @@ import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_action.dart';
+import 'package:omninest/features/files/application/media_import_queue_controller.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -434,12 +435,19 @@ class TasksPanelState extends ConsumerState<TasksPanel> {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(taskListProvider);
+    final mediaImports = ref.watch(mediaImportQueueProvider);
     final shell = ref.read(desktopShellProvider.notifier);
     // 与后端角标同口径：只算 RUNNING + QUEUED（样例 `Shell.tsx:147`）。
     // RETRY_WAIT 仍会出现在下面的列表里，只是不计数。
     final active =
-        tasks.where((task) => task.isRunning || task.isQueued).length;
-    final failed = tasks.where((task) => task.isFailed).length;
+        tasks.where((task) => task.isRunning || task.isQueued).length +
+        mediaImports.where((task) => task.isActive).length;
+    final failed =
+        tasks.where((task) => task.isFailed).length +
+        mediaImports.where((task) => task.isFailed).length;
+    final visibleMediaImports = mediaImports.reversed.take(8).toList();
+    final totalRows = visibleMediaImports.length + tasks.length;
+    final visibleTaskCount = totalRows > 8 ? 8 : totalRows;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -475,19 +483,128 @@ class TasksPanelState extends ConsumerState<TasksPanel> {
         const SizedBox(height: 8),
         Flexible(
           child:
-              tasks.isEmpty
+              tasks.isEmpty && mediaImports.isEmpty
                   ? DesktopEmpty(
                     message: l10n.desktopNothingRunning,
                     icon: DesktopIcons.check,
                   )
                   : ListView.builder(
                     shrinkWrap: true,
-                    itemCount: tasks.length > 8 ? 8 : tasks.length,
+                    itemCount: visibleTaskCount,
                     itemBuilder:
-                        (context, index) => DesktopTaskRow(task: tasks[index]),
+                        (context, index) =>
+                            index < visibleMediaImports.length
+                                ? DesktopMediaImportTaskRow(
+                                  task: visibleMediaImports[index],
+                                )
+                                : DesktopTaskRow(
+                                  task:
+                                      tasks[index - visibleMediaImports.length],
+                                ),
                   ),
         ),
       ],
+    );
+  }
+}
+
+class DesktopMediaImportTaskRow extends ConsumerWidget {
+  const DesktopMediaImportTaskRow({required this.task, super.key});
+
+  final MediaImportQueueTask task;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final tone = switch (task.status) {
+      MediaImportQueueStatus.failed => skin.bad,
+      MediaImportQueueStatus.completed => skin.ok,
+      MediaImportQueueStatus.uploading ||
+      MediaImportQueueStatus.processing => skin.accent,
+      MediaImportQueueStatus.queued ||
+      MediaImportQueueStatus.cancelled => skin.text3,
+    };
+    final label = switch (task.status) {
+      MediaImportQueueStatus.queued => l10n.desktopTaskStatusQueued,
+      MediaImportQueueStatus.uploading ||
+      MediaImportQueueStatus.processing => l10n.desktopTaskStatusRunning,
+      MediaImportQueueStatus.completed => l10n.desktopTaskStatusCompleted,
+      MediaImportQueueStatus.failed => l10n.desktopTaskStatusFailed,
+      MediaImportQueueStatus.cancelled => l10n.desktopTaskStatusCancelled,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: skin.line)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              task.status == MediaImportQueueStatus.completed
+                  ? DesktopIcons.check
+                  : task.status == MediaImportQueueStatus.failed
+                  ? DesktopIcons.info
+                  : DesktopIcons.download,
+              size: 15,
+              color: tone,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.rowTitle(skin.text),
+                ),
+                Text(label, style: DesktopType.caption(skin.text3)),
+                if (task.status == MediaImportQueueStatus.uploading ||
+                    task.status == MediaImportQueueStatus.processing)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: DesktopProgress(fraction: task.progress),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          DesktopChip(label, tone: tone),
+          if (task.canRetry) ...[
+            const SizedBox(width: 8),
+            DesktopButton(
+              label: l10n.desktopRetry,
+              icon: DesktopIcons.retry,
+              variant: DesktopButtonVariant.soft,
+              onPressed:
+                  () => ref
+                      .read(mediaImportQueueProvider.notifier)
+                      .retry(task.id),
+            ),
+          ] else if (task.isActive) ...[
+            const SizedBox(width: 8),
+            DesktopButton.iconOnly(
+              icon: DesktopIcons.close,
+              tooltip: l10n.desktopCancel,
+              onPressed:
+                  () => ref
+                      .read(mediaImportQueueProvider.notifier)
+                      .cancel(task.id),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

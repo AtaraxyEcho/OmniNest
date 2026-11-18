@@ -31,7 +31,7 @@ void main() {
   }) async {
     final bytes =
         (await rootBundle.load(
-          'assets/backdrops/default_wallpaper_poster.jpg',
+          'assets/backdrops/default_wallpaper.jpg',
         )).buffer.asUint8List();
     await HttpOverrides.runZoned(
       () async {

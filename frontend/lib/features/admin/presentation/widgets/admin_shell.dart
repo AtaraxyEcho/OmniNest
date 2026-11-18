@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -111,6 +113,7 @@ class AdminShell extends ConsumerWidget {
           return PopScope(
             canPop: true,
             child: Scaffold(
+              backgroundColor: isWide ? Colors.transparent : scheme.surface,
               extendBody: true,
               bottomNavigationBar:
                   isWide
@@ -390,10 +393,7 @@ class _AdminBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
-      child: const SizedBox.expand(),
-    );
+    return const SizedBox.expand();
   }
 }
 
@@ -593,16 +593,21 @@ class _AdminSearchSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(width: 288, height: 32, child: _AdminSearchField());
+    return const SizedBox(
+      width: 288,
+      height: 32,
+      child: _AdminSearchField(desktop: true),
+    );
   }
 }
 
 /// 自持 Consumer 的搜索框：移动端会被放进独立对话框路由子树，
 /// 不复用顶栏 WidgetRef，避免跨子树 ref 生命周期违规。
 class _AdminSearchField extends ConsumerStatefulWidget {
-  const _AdminSearchField({this.autofocus = false});
+  const _AdminSearchField({this.autofocus = false, this.desktop = false});
 
   final bool autofocus;
+  final bool desktop;
 
   @override
   ConsumerState<_AdminSearchField> createState() => _AdminSearchFieldState();
@@ -611,11 +616,13 @@ class _AdminSearchField extends ConsumerStatefulWidget {
 class _AdminSearchFieldState extends ConsumerState<_AdminSearchField>
     with RouteTopAware {
   final FocusNode _focusNode = FocusNode();
+  late final TextEditingController _controller;
   late final TopBarSearchFocusHandle _searchFocusHandle;
 
   @override
   void initState() {
     super.initState();
+    _controller = TextEditingController(text: ref.read(adminSearchProvider));
     _searchFocusHandle = TopBarSearchFocusRegistry.instance.register(
       TopBarSearchFocusEntry(
         focus: _focusNode.requestFocus,
@@ -627,6 +634,7 @@ class _AdminSearchFieldState extends ConsumerState<_AdminSearchField>
   @override
   void dispose() {
     _searchFocusHandle.dispose();
+    _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -634,7 +642,49 @@ class _AdminSearchFieldState extends ConsumerState<_AdminSearchField>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
+    ref.listen<String>(adminSearchProvider, (_, query) {
+      if (!_focusNode.hasFocus && _controller.text != query) {
+        _controller.value = TextEditingValue(
+          text: query,
+          selection: TextSelection.collapsed(offset: query.length),
+        );
+      }
+    });
+    if (widget.desktop) {
+      return DesktopTextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        autofocus: widget.autofocus,
+        height: 32,
+        hint: l10n.adminSearchHint,
+        prefixIcon: DesktopIcons.search,
+        keyboardType: TextInputType.webSearch,
+        textInputAction: TextInputAction.search,
+        onChanged:
+            (query) =>
+                ref.read(adminSearchProvider.notifier).updateQuery(query),
+        trailing: Tooltip(
+          message: l10n.adminSearchHint,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _focusNode.requestFocus(),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  topBarSearchKeycapLabel,
+                  style: DesktopType.nano(DesktopSkin.of(context).text3),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return TextField(
+      controller: _controller,
       autofocus: widget.autofocus,
       focusNode: _focusNode,
       keyboardType: TextInputType.webSearch,
@@ -643,7 +693,7 @@ class _AdminSearchFieldState extends ConsumerState<_AdminSearchField>
           (query) => ref.read(adminSearchProvider.notifier).updateQuery(query),
       decoration: workstationInputDecoration(
         context,
-        hintText: AppLocalizations.of(context).adminSearchHint,
+        hintText: l10n.adminSearchHint,
       ).copyWith(
         // 快捷键帽移入框内：等宽 mono 徽标，点击聚焦输入框。
         suffixIcon: Tooltip(

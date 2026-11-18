@@ -1,9 +1,110 @@
 part of 'desktop_movies_page.dart';
 
+class _CinemaSkeleton extends StatelessWidget {
+  const _CinemaSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final height = (MediaQuery.sizeOf(context).height * 0.52).clamp(
+      380.0,
+      560.0,
+    );
+    return Container(
+      height: height,
+      margin: const EdgeInsets.only(bottom: 30),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+      ),
+      child: DesktopSkeletonBox(
+        height: height,
+        radius: DesktopMetrics.radiusHero,
+      ),
+    );
+  }
+}
+
+/// 空片库仍保留影院横幅的版位，避免加载完成后标题与内容整体上移。
+class _CinemaPlaceholder extends StatelessWidget {
+  const _CinemaPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final height = (MediaQuery.sizeOf(context).height * 0.52).clamp(
+      380.0,
+      560.0,
+    );
+    return Container(
+      height: height,
+      margin: const EdgeInsets.only(bottom: 30),
+      decoration: BoxDecoration(
+        color: skin.panel,
+        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+        border: Border.all(color: skin.line),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.56),
+                    Colors.black.withValues(alpha: 0.18),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: (MediaQuery.sizeOf(context).width * 0.04).clamp(28.0, 64.0),
+            bottom: (MediaQuery.sizeOf(context).height * 0.06).clamp(
+              34.0,
+              66.0,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(DesktopIcons.film, size: 24, color: skin.text3),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.videoSeriesFeatured.toUpperCase(),
+                    style: DesktopType.eyebrow(skin.text3),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.desktopMoviesEmptyLibraryTitle,
+                    style: DesktopType.display(skin.text),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.desktopMoviesEmptyLibraryBody,
+                    style: DesktopType.body(skin.text2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Cinema extends StatefulWidget {
-  const _Cinema({required this.items});
+  const _Cinema({required this.items, required this.continueWatching});
 
   final List<MovieVideoItem> items;
+  final List<MovieContinueWatching> continueWatching;
 
   @override
   State<_Cinema> createState() => _CinemaState();
@@ -51,7 +152,6 @@ class _CinemaState extends State<_Cinema> {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final l10n = AppLocalizations.of(context);
     final height = (MediaQuery.sizeOf(context).height * 0.52).clamp(
       380.0,
       560.0,
@@ -62,7 +162,7 @@ class _CinemaState extends State<_Cinema> {
       onExit: (_) => _paused = false,
       child: Container(
         height: height,
-        margin: const EdgeInsets.only(bottom: 26),
+        margin: const EdgeInsets.only(bottom: 30),
         decoration: BoxDecoration(
           color: DesktopPalette.stageBlack,
           borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
@@ -99,10 +199,16 @@ class _CinemaState extends State<_Cinema> {
               ),
             const _CinemaShade(),
             Positioned(
-              left: 56,
-              right: 56,
-              bottom: 56,
-              child: _CinemaCopy(key: ValueKey(active.id), item: active),
+              left: (MediaQuery.sizeOf(context).width * 0.04).clamp(28.0, 64.0),
+              bottom: (MediaQuery.sizeOf(context).height * 0.06).clamp(
+                34.0,
+                66.0,
+              ),
+              child: _CinemaCopy(
+                key: ValueKey(active.id),
+                item: active,
+                progress: _progressFor(active),
+              ),
             ),
             if (widget.items.length > 1)
               Positioned(
@@ -140,19 +246,19 @@ class _CinemaState extends State<_Cinema> {
                   ],
                 ),
               ),
-            if (widget.items.length > 1)
-              Positioned(
-                right: 28,
-                bottom: 46,
-                child: Text(
-                  l10n.videoSeriesFeatured.toUpperCase(),
-                  style: DesktopType.nano(Colors.white.withValues(alpha: 0.55)),
-                ),
-              ),
           ],
         ),
       ),
     );
+  }
+
+  MovieContinueWatching? _progressFor(MovieVideoItem item) {
+    for (final entry in widget.continueWatching) {
+      if (entry.id == item.id) {
+        return entry;
+      }
+    }
+    return null;
   }
 }
 
@@ -189,14 +295,22 @@ class _CinemaShade extends StatelessWidget {
 }
 
 class _CinemaCopy extends StatelessWidget {
-  const _CinemaCopy({required this.item, super.key});
+  const _CinemaCopy({required this.item, this.progress, super.key});
 
   final MovieVideoItem item;
+  final MovieContinueWatching? progress;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final meta = _metaLine(item);
+    final progressItem = progress;
+    final progressLabel =
+        progressItem == null
+            ? l10n.videoSeriesFeatured.toUpperCase()
+            : '${l10n.videoSectionContinueWatching.toUpperCase()} · '
+                '${progressItem.progressPercent.round()}% · '
+                '${l10n.videoHeroMinutesLeft(((progressItem.durationSeconds - progressItem.positionSeconds).clamp(0, progressItem.durationSeconds) / 60).round())}';
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 600),
       child: Column(
@@ -227,7 +341,7 @@ class _CinemaCopy extends StatelessWidget {
             delay: const Duration(milliseconds: 100),
             duration: DesktopMotion.slow,
             child: Text(
-              l10n.videoSeriesFeatured.toUpperCase(),
+              progressLabel,
               style: DesktopType.eyebrow(Colors.white.withValues(alpha: 0.70)),
             ),
           ),
@@ -278,7 +392,10 @@ class _CinemaCopy extends StatelessWidget {
             child: Row(
               children: [
                 DesktopButton(
-                  label: l10n.desktopPlayTitle(item.title),
+                  label:
+                      progressItem == null
+                          ? l10n.videoPlay
+                          : l10n.videoHeroResume,
                   icon: DesktopIcons.play,
                   variant: DesktopButtonVariant.primary,
                   large: true,

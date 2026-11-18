@@ -21,13 +21,6 @@ class _DensitySlider extends StatelessWidget {
             min: 150,
             max: 320,
             onChanged: (next) => onChanged(next.clamp(150, 320)),
-            thumbColor: skin.accent,
-            trackFill: false,
-            thumbAlwaysVisible: true,
-            thumbGlow: true,
-            growTrackOnActive: false,
-            thumbRadius: 7,
-            thumbInset: 7,
             keyboardStep: 1,
           ),
         ),
@@ -87,69 +80,86 @@ class _PhotoTile extends StatelessWidget {
                           spreadRadius: 3,
                         ),
                       ]
+                      : hovered
+                      ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          offset: const Offset(0, 14),
+                          blurRadius: 32,
+                          spreadRadius: -14,
+                        ),
+                      ]
                       : const <BoxShadow>[],
             ),
-            child: DesktopTilt(
-              maxDegrees: 4,
-              radius: radius,
-              onTap: onTap == null ? null : () => onTap!(photo),
-              child: SizedBox(
-                height: height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DesktopCover(
-                      url: photo.coverUrl,
-                      kind: DesktopCoverKind.network,
-                      fallbackIcon: DesktopIcons.image,
-                      cacheKey: 'desktop-photo-${photo.id}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: GestureDetector(
+                onTap: onTap == null ? null : () => onTap!(photo),
+                child: AnimatedScale(
+                  // `.ph:hover` 保留样例的轻微缩放和暗色投影，不使用
+                  // 指针跟随 shine、彩色外发光或透视倾斜。
+                  scale: hovered && !selected ? 1.015 : 1,
+                  duration: DesktopMotion.of(context, DesktopMotion.lift),
+                  curve: DesktopMotion.spring,
+                  child: SizedBox(
+                    height: height,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        DesktopCover(
+                          url: photo.coverUrl,
+                          kind: DesktopCoverKind.network,
+                          fallbackIcon: DesktopIcons.image,
+                          cacheKey: 'desktop-photo-${photo.id}',
+                        ),
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Color(0x59000000)],
+                              stops: [0.62, 1.0],
+                            ),
+                          ),
+                        ),
+                        if (showCaption)
+                          Positioned(
+                            left: 10,
+                            right: 10,
+                            bottom: 8,
+                            child: Text(
+                              photo.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DesktopType.caption(Colors.white),
+                            ),
+                          ),
+                        if (showFavorite && photo.favorite)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Icon(
+                              DesktopIcons.heart,
+                              size: 15,
+                              color: skin.liked,
+                            ),
+                          ),
+                        if (showSelectionControls)
+                          Positioned(
+                            top: 9,
+                            left: 9,
+                            child: _SelectCheck(
+                              selected: selected,
+                              visible: hovered || selected || selectionActive,
+                              onTap:
+                                  onToggleSelect == null
+                                      ? null
+                                      : () => onToggleSelect!(photo),
+                            ),
+                          ),
+                      ],
                     ),
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Color(0x59000000)],
-                          stops: [0.62, 1.0],
-                        ),
-                      ),
-                    ),
-                    if (showCaption)
-                      Positioned(
-                        left: 10,
-                        right: 10,
-                        bottom: 8,
-                        child: Text(
-                          photo.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.caption(Colors.white),
-                        ),
-                      ),
-                    if (showFavorite && photo.favorite)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Icon(
-                          DesktopIcons.heart,
-                          size: 15,
-                          color: skin.liked,
-                        ),
-                      ),
-                    if (showSelectionControls)
-                      Positioned(
-                        top: 9,
-                        left: 9,
-                        child: _SelectCheck(
-                          selected: selected,
-                          visible: hovered || selected || selectionActive,
-                          onTap:
-                              onToggleSelect == null
-                                  ? null
-                                  : () => onToggleSelect!(photo),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -364,11 +374,13 @@ class _PhotoSelectionBar extends StatelessWidget {
 class _AlbumShelf extends StatelessWidget {
   const _AlbumShelf({
     required this.albums,
+    required this.loading,
     required this.onOpen,
     required this.onCreate,
   });
 
   final List<PhotoAlbum> albums;
+  final bool loading;
   final ValueChanged<PhotoAlbum> onOpen;
   final VoidCallback onCreate;
 
@@ -384,7 +396,35 @@ class _AlbumShelf extends StatelessWidget {
           spacing: 26,
           runSpacing: 26,
           children: [
-            SizedBox(width: width, child: _CreateAlbumCard(onCreate: onCreate)),
+            if (loading)
+              for (var i = 0; i < 5; i++)
+                SizedBox(
+                  width: width,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 4 / 3,
+                        child: DesktopSkeletonBox(
+                          radius: DesktopMetrics.radius,
+                          index: i * 3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FractionallySizedBox(
+                        widthFactor: 0.58,
+                        alignment: Alignment.centerLeft,
+                        child: DesktopSkeletonBox(height: 14, index: i * 3 + 1),
+                      ),
+                      const SizedBox(height: 6),
+                      FractionallySizedBox(
+                        widthFactor: 0.34,
+                        alignment: Alignment.centerLeft,
+                        child: DesktopSkeletonBox(height: 11, index: i * 3 + 2),
+                      ),
+                    ],
+                  ),
+                ),
             for (var i = 0; i < albums.length; i++)
               SizedBox(
                 width: width,
@@ -393,6 +433,7 @@ class _AlbumShelf extends StatelessWidget {
                   child: _AlbumCard(album: albums[i], onOpen: onOpen),
                 ),
               ),
+            SizedBox(width: width, child: _CreateAlbumCard(onCreate: onCreate)),
           ],
         );
       },
@@ -413,11 +454,10 @@ class _AlbumCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DesktopTilt(
-          maxDegrees: 5,
+        DesktopHoverLift(
           onTap: () => onOpen(album),
           child: AspectRatio(
-            aspectRatio: 1,
+            aspectRatio: 4 / 3,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -458,39 +498,50 @@ class _AlbumCard extends StatelessWidget {
   }
 }
 
-class _CreateAlbumCard extends StatelessWidget {
+class _CreateAlbumCard extends StatefulWidget {
   const _CreateAlbumCard({required this.onCreate});
 
   final VoidCallback onCreate;
 
   @override
+  State<_CreateAlbumCard> createState() => _CreateAlbumCardState();
+}
+
+class _CreateAlbumCardState extends State<_CreateAlbumCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
+    final color = _hovered ? skin.accent : skin.text3;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DesktopTilt(
-          maxDegrees: 2,
-          onTap: onCreate,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: skin.raise,
-                borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-                border: Border.all(color: skin.line2),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(DesktopIcons.plus, size: 28, color: skin.accent),
-                  const SizedBox(height: 10),
-                  Text(
-                    l10n.photosNewAlbum,
-                    style: DesktopType.bodyStrong(skin.text),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            onTap: widget.onCreate,
+            behavior: HitTestBehavior.opaque,
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: CustomPaint(
+                painter: _CreateAlbumBorder(color: color),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(DesktopIcons.plus, size: 22, color: color),
+                      const SizedBox(height: 10),
+                      Text(
+                        l10n.photosNewAlbum,
+                        style: DesktopType.bodyStrong(color),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -498,6 +549,52 @@ class _CreateAlbumCard extends StatelessWidget {
       ],
     );
   }
+}
+
+/// 样例新建相册卡只在悬停时强调虚线与文字颜色，不使用图片卡的光效。
+class _CreateAlbumBorder extends CustomPainter {
+  const _CreateAlbumBorder({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final inset = 0.5;
+    final path =
+        Path()..addRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              inset,
+              inset,
+              size.width - inset * 2,
+              size.height - inset * 2,
+            ),
+            const Radius.circular(DesktopMetrics.radiusSmall),
+          ),
+        );
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
+    final dashed = Path();
+    for (final metric in path.computeMetrics()) {
+      for (var distance = 0.0; distance < metric.length; distance += 8) {
+        dashed.addPath(
+          metric.extractPath(
+            distance,
+            (distance + 4).clamp(0.0, metric.length),
+          ),
+          Offset.zero,
+        );
+      }
+    }
+    canvas.drawPath(dashed, paint);
+  }
+
+  @override
+  bool shouldRepaint(_CreateAlbumBorder oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _NewAlbumDrawer extends StatefulWidget {
@@ -521,7 +618,6 @@ class _NewAlbumDrawerState extends State<_NewAlbumDrawer> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
     final name = _name.text.trim();
     final duplicate = widget.takenNames.any(
       (taken) => taken.toLowerCase() == name.toLowerCase(),
@@ -551,32 +647,14 @@ class _NewAlbumDrawerState extends State<_NewAlbumDrawer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l10n.photosAlbumName, style: DesktopType.fieldLabel(skin.text2)),
-          const SizedBox(height: 7),
-          TextField(
+          DesktopTextField(
             controller: _name,
+            label: l10n.photosAlbumName,
+            helper: l10n.desktopPhotosAlbumCollectionNote,
+            error: duplicate ? l10n.desktopPhotosAlbumDuplicate : null,
             autofocus: true,
             maxLength: 60,
             onChanged: (_) => setState(() {}),
-            style: DesktopType.body(skin.text),
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: l10n.photosAlbumNameHint,
-              hintStyle: DesktopType.body(skin.text3),
-            ),
-          ),
-          if (duplicate)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                l10n.desktopPhotosAlbumDuplicate,
-                style: DesktopType.caption(DesktopPalette.danger),
-              ),
-            ),
-          const SizedBox(height: 14),
-          Text(
-            l10n.desktopPhotosAlbumCollectionNote,
-            style: DesktopType.caption(skin.text3),
           ),
         ],
       ),

@@ -103,7 +103,11 @@ class DesktopGlassSurface extends StatelessWidget {
         filterConfig: ImageFilterConfig(
           desktopGlassFilter(blur: blur, saturation: saturation),
         ),
-        child: child,
+        child: RepaintBoundary(
+          // 子内容单独成层：按钮 hover、进度更新这类局部重绘不会再顺着
+          // `BackdropFilter` 把这一格的背板重新取样 + 重新高斯一遍。
+          child: child,
+        ),
       ),
     );
   }

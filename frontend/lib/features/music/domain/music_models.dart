@@ -291,6 +291,8 @@ class MusicDashboard {
     required this.albumCount,
     required this.artistCount,
     required this.playHistoryCount,
+    required this.weekListeningSeconds,
+    required this.itemsAddedToday,
     required this.recentTracks,
     required this.recentAlbums,
     required this.featuredArtists,
@@ -302,6 +304,8 @@ class MusicDashboard {
       albumCount: 0,
       artistCount: 0,
       playHistoryCount: 0,
+      weekListeningSeconds: 0,
+      itemsAddedToday: 0,
       recentTracks: [],
       recentAlbums: [],
       featuredArtists: [],
@@ -314,6 +318,8 @@ class MusicDashboard {
       albumCount: _asInt(json['albumCount']),
       artistCount: _asInt(json['artistCount']),
       playHistoryCount: _asInt(json['playHistoryCount']),
+      weekListeningSeconds: _asInt(json['weekListeningSeconds']),
+      itemsAddedToday: _asInt(json['itemsAddedToday']),
       recentTracks:
           _asMapList(json['recentTracks']).map(MusicTrack.fromJson).toList(),
       recentAlbums:
@@ -329,9 +335,25 @@ class MusicDashboard {
   final int albumCount;
   final int artistCount;
   final int playHistoryCount;
+  final int weekListeningSeconds;
+  final int itemsAddedToday;
   final List<MusicTrack> recentTracks;
   final List<MusicAlbum> recentAlbums;
   final List<MusicArtist> featuredArtists;
+
+  MusicDashboard copyWith({int? weekListeningSeconds}) {
+    return MusicDashboard(
+      trackCount: trackCount,
+      albumCount: albumCount,
+      artistCount: artistCount,
+      playHistoryCount: playHistoryCount,
+      weekListeningSeconds: weekListeningSeconds ?? this.weekListeningSeconds,
+      itemsAddedToday: itemsAddedToday,
+      recentTracks: recentTracks,
+      recentAlbums: recentAlbums,
+      featuredArtists: featuredArtists,
+    );
+  }
 }
 
 class MusicSearchResult {

@@ -442,10 +442,14 @@ bool _isUnlimitedQuota(AdminConfigEntry entry) {
 }
 
 bool _isSensitiveConfigEntry(AdminConfigEntry entry) {
+  if (entry.sensitive) {
+    return true;
+  }
   const sensitiveDisplayCodes = {
     'config.integration.tmdb.apiKey',
     'config.integration.tmdb.accessToken',
     'config.integration.qweather.privateKey',
+    'config.integration.mail.password',
   };
   const sensitiveKeys = {
     'media.tmdb.key',
@@ -456,6 +460,7 @@ bool _isSensitiveConfigEntry(AdminConfigEntry entry) {
     'media.metadata-provider.tmdb.access-token',
     'reader.metadata-provider.google-books.api-key',
     'weather.qweather.private-key',
+    'notification.email.password',
   };
   return sensitiveDisplayCodes.contains(entry.displayCode) ||
       sensitiveKeys.contains(entry.key);

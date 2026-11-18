@@ -215,7 +215,8 @@ public final class MovieDtos {
             MovieStatsDto stats,
             List<MovieVideoItemDto> recentlyAdded,
             List<MovieContinueWatchingDto> continueWatching,
-            List<MovieSeriesDto> series
+            List<MovieSeriesDto> series,
+            long itemsAddedToday
     ) {
     }
 

@@ -323,34 +323,38 @@ class DesktopCard extends StatelessWidget {
           filterConfig: ImageFilterConfig(
             desktopGlassFilter(blur: 24, saturation: 1.3),
           ),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: skin.panel,
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-              border: Border.all(color: skin.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (title != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title!,
-                            style: DesktopType.cardTitle(skin.text),
+          // 卡内交互（按钮 hover、滑杆、进度）与卡片的背板模糊隔离成两层：
+          // 否则任一处重绘都要把 24σ 的全卡面积重糊一次。
+          child: RepaintBoundary(
+            child: Container(
+              padding: padding,
+              decoration: BoxDecoration(
+                color: skin.panel,
+                borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+                border: Border.all(color: skin.line),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (title != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title!,
+                              style: DesktopType.cardTitle(skin.text),
+                            ),
                           ),
-                        ),
-                        if (action != null) action!,
-                      ],
+                          if (action != null) action!,
+                        ],
+                      ),
                     ),
-                  ),
-                child,
-              ],
+                  child,
+                ],
+              ),
             ),
           ),
         ),
@@ -436,7 +440,15 @@ class DesktopKeyValues extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.key, style: DesktopType.dense(skin.text3)),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 132),
+                    child: Text(
+                      entry.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.dense(skin.text3),
+                    ),
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(

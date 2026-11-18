@@ -2,10 +2,16 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/file_media_import_task.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 abstract interface class FileRepository {
+  Future<List<FileMediaImportTask>> requestMediaImports({
+    required List<String> fileNodeIds,
+    required String mediaType,
+  });
+
   Future<List<FileNode>> listFiles({String? parentId, String? category});
 
   Future<FileNodePage> listFilesPage({
@@ -144,6 +150,8 @@ abstract interface class FileRepository {
   });
 
   Future<FileStorageStats> storageStats();
+
+  Future<FileDuplicateSummary> scanDuplicates();
 
   Future<FileUploadPolicy> uploadPolicy();
 

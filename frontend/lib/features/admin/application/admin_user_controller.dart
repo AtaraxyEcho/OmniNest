@@ -22,6 +22,7 @@ class AdminUserState {
     required this.users,
     this.query = '',
     this.roleFilter = 'ALL',
+    this.statusFilter = 'ALL',
     this.selectedIds = const {},
     this.page = 0,
     this.pageSize = defaultPageSize,
@@ -39,6 +40,7 @@ class AdminUserState {
   final List<AdminUser> users;
   final String query;
   final String roleFilter;
+  final String statusFilter;
   final Set<String> selectedIds;
 
   final int page;
@@ -59,6 +61,7 @@ class AdminUserState {
     List<AdminUser>? users,
     String? query,
     String? roleFilter,
+    String? statusFilter,
     Set<String>? selectedIds,
     bool clearSelection = false,
     int? page,
@@ -71,6 +74,7 @@ class AdminUserState {
       users: users ?? this.users,
       query: query ?? this.query,
       roleFilter: roleFilter ?? this.roleFilter,
+      statusFilter: statusFilter ?? this.statusFilter,
       selectedIds: clearSelection ? const {} : selectedIds ?? this.selectedIds,
       page: page ?? this.page,
       pageSize: pageSize ?? this.pageSize,
@@ -99,6 +103,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     int pageSize,
     String query,
     String roleFilter,
+    String statusFilter,
     String sortField,
     bool sortAscending,
     bool resetSelection,
@@ -138,6 +143,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     int? pageSize,
     String? query,
     String? roleFilter,
+    String? statusFilter,
     String? sortField,
     bool? sortAscending,
     bool resetSelection = false,
@@ -151,6 +157,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
             pageSize ?? latest?.pageSize ?? AdminUserState.defaultPageSize,
         query: query ?? latest?.query ?? '',
         roleFilter: roleFilter ?? latest?.roleFilter ?? 'ALL',
+        statusFilter: statusFilter ?? latest?.statusFilter ?? 'ALL',
         sortField:
             sortField ?? latest?.sortField ?? AdminUserState.defaultSortField,
         sortAscending: sortAscending ?? latest?.sortAscending ?? true,
@@ -165,6 +172,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     final targetSize = pageSize ?? current.pageSize;
     final targetQuery = query ?? current.query;
     final targetRole = roleFilter ?? current.roleFilter;
+    final targetStatus = statusFilter ?? current.statusFilter;
     final targetSortField = sortField ?? current.sortField;
     final targetAscending = sortAscending ?? current.sortAscending;
     try {
@@ -173,6 +181,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
         size: targetSize,
         query: targetQuery,
         role: targetRole,
+        status: targetStatus,
         sort: targetSortField,
         dir: targetAscending ? 'asc' : 'desc',
       );
@@ -184,6 +193,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
           users: result.items,
           query: targetQuery,
           roleFilter: targetRole,
+          statusFilter: targetStatus,
           page: targetPage,
           pageSize: targetSize,
           totalElements: result.total,
@@ -207,6 +217,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
             pageSize: dropped.pageSize,
             query: dropped.query,
             roleFilter: dropped.roleFilter,
+            statusFilter: dropped.statusFilter,
             sortField: dropped.sortField,
             sortAscending: dropped.sortAscending,
             resetSelection: dropped.resetSelection,
@@ -238,13 +249,27 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     _fetch(page: 0, roleFilter: role, resetSelection: true);
   }
 
+  void setStatusFilter(String status) {
+    final current = state.asData?.value;
+    if (current == null || current.statusFilter == status) {
+      return;
+    }
+    _fetch(page: 0, statusFilter: status, resetSelection: true);
+  }
+
   /// 一次清空搜索词与角色筛选，避免空态下需要分别操作两处。
   void clearFilters() {
     if (state.asData?.value == null) {
       return;
     }
     _searchDebounce?.cancel();
-    _fetch(page: 0, query: '', roleFilter: 'ALL', resetSelection: true);
+    _fetch(
+      page: 0,
+      query: '',
+      roleFilter: 'ALL',
+      statusFilter: 'ALL',
+      resetSelection: true,
+    );
   }
 
   /// 切换服务端排序；同字段同方向不重复请求，变更后回第一页并清空
@@ -286,6 +311,21 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
 
   Future<void> updateUserStatus(String userId, String status) async {
     await _api.updateUserStatus(userId, status);
+    await _fetch();
+  }
+
+  Future<void> updateUserProfile({
+    required String userId,
+    required String displayName,
+    required String? email,
+    bool? requirePasswordChange,
+  }) async {
+    await _api.updateUserProfile(
+      userId: userId,
+      displayName: displayName,
+      email: email,
+      requirePasswordChange: requirePasswordChange,
+    );
     await _fetch();
   }
 

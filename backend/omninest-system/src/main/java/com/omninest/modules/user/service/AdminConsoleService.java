@@ -182,7 +182,8 @@ public class AdminConsoleService {
                 metrics.folderCount(),
                 metrics.objectCount(),
                 metrics.usedBytes(),
-                externalStorageAdministration.countAccounts()
+                externalStorageAdministration.countAccounts(),
+                metrics.categoryBreakdown()
         );
     }
 
@@ -232,6 +233,7 @@ public class AdminConsoleService {
         return new AdminAnalyticsDto(
                 toDailyMetrics(analyticsRepository.dailyUserGrowth(days, zoneId)),
                 toDailyTaskMetrics(analyticsRepository.dailyTaskThroughput(days, zoneId)),
+                toDailyMetrics(analyticsRepository.dailyUploads(days, zoneId)),
                 toDailyMetrics(analyticsRepository.dailyStorageGrowth(days, zoneId)),
                 systemLoadSnapshot()
         );

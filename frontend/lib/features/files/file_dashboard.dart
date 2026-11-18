@@ -23,6 +23,7 @@ export 'package:omninest/features/files/domain/file_manager_models.dart'
         ExternalStorageAccount,
         FileShareLink,
         FileShareRecipient,
+        FileDuplicateSummary,
         FileStorageStats,
         FileVersion,
         FileTypeStats,

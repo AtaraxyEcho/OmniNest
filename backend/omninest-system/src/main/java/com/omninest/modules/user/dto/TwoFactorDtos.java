@@ -44,6 +44,16 @@ public final class TwoFactorDtos {
     ) {
     }
 
+    /** 管理员创建账户后的首次登录改密请求。 */
+    @Schema(description = "首次登录修改临时密码请求")
+    public record RequiredPasswordChangeRequest(
+            @Schema(description = "登录接口返回的短效改密挑战令牌")
+            @NotBlank(message = "挑战令牌不能为空") String challengeToken,
+            @Schema(description = "用户设置的新密码")
+            @NotBlank(message = "新密码不能为空") String newPassword
+    ) {
+    }
+
     /** 强制角色注册引导：生成秘钥请求。 */
     @Schema(description = "两步验证注册引导生成秘钥请求")
     public record TwoFactorBootstrapSetupRequest(

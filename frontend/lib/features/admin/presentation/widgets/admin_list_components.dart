@@ -12,6 +12,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_desktop_kit.dart';

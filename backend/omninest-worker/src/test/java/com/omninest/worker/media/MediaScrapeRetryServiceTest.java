@@ -78,7 +78,9 @@ class MediaScrapeRetryServiceTest {
                 2026,
                 null,
                 null,
-                false
+                false,
+                null,
+                null
         );
     }
 }

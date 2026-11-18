@@ -12,6 +12,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/desktop_shell_scope.dart';
+import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>((ref) {
@@ -21,10 +23,15 @@ final profileTwoFactorStatusProvider =
 
 /// 个人资料安全分区的两步验证管理行：状态展示、自助开启向导、密码复核关闭。
 class ProfileTwoFactorCard extends ConsumerWidget {
-  const ProfileTwoFactorCard({this.framed = true, super.key});
+  const ProfileTwoFactorCard({
+    this.framed = true,
+    this.showTitle = true,
+    super.key,
+  });
 
   /// 桌面分区内由凭证卡提供表面；移动端底部弹层补一层内边距。
   final bool framed;
+  final bool showTitle;
 
   Widget _wrap({required Widget child}) {
     if (!framed) {
@@ -84,15 +91,16 @@ class ProfileTwoFactorCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      l10n.profileTwoFactorTitle,
-                      style: TextStyle(
-                        fontSize: AppTypography.bodyMedium,
-                        fontWeight: FontWeight.w500,
-                        color: scheme.onSurface,
+                    if (showTitle)
+                      Text(
+                        l10n.profileTwoFactorTitle,
+                        style: TextStyle(
+                          fontSize: AppTypography.bodyMedium,
+                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
+                    if (showTitle) const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: TextStyle(
@@ -104,16 +112,32 @@ class ProfileTwoFactorCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              WorkstationActionButton(
-                label:
-                    value.enabled
-                        ? l10n.profileTwoFactorManageAction
-                        : l10n.profileTwoFactorEnableAction,
-                onPressed:
-                    value.enabled
-                        ? () => _showDisableDialog(context, ref)
-                        : () => _showEnableDialog(context, ref),
-              ),
+              if (DesktopShellScope.isHosted(context))
+                DesktopButton(
+                  label:
+                      value.enabled
+                          ? l10n.profileTwoFactorManageAction
+                          : l10n.profileTwoFactorEnableAction,
+                  variant:
+                      value.enabled
+                          ? DesktopButtonVariant.soft
+                          : DesktopButtonVariant.primary,
+                  onPressed:
+                      value.enabled
+                          ? () => _showDisableDialog(context, ref)
+                          : () => _showEnableDialog(context, ref),
+                )
+              else
+                WorkstationActionButton(
+                  label:
+                      value.enabled
+                          ? l10n.profileTwoFactorManageAction
+                          : l10n.profileTwoFactorEnableAction,
+                  onPressed:
+                      value.enabled
+                          ? () => _showDisableDialog(context, ref)
+                          : () => _showEnableDialog(context, ref),
+                ),
             ],
           );
         },

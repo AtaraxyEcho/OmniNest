@@ -679,12 +679,14 @@ class MovieDashboard {
     required this.recentlyAdded,
     required this.continueWatching,
     required this.series,
+    this.itemsAddedToday = 0,
   });
 
   final MovieStats stats;
   final List<MovieVideoItem> recentlyAdded;
   final List<MovieContinueWatching> continueWatching;
   final List<MovieSeries> series;
+  final int itemsAddedToday;
 
   factory MovieDashboard.empty() {
     return const MovieDashboard(
@@ -697,6 +699,7 @@ class MovieDashboard {
       recentlyAdded: [],
       continueWatching: [],
       series: [],
+      itemsAddedToday: 0,
     );
   }
 
@@ -713,6 +716,7 @@ class MovieDashboard {
           ).map(MovieContinueWatching.fromJson).toList(),
       series:
           MovieJson.asList(json['series']).map(MovieSeries.fromJson).toList(),
+      itemsAddedToday: MovieJson.asInt(json['itemsAddedToday']),
     );
   }
 }

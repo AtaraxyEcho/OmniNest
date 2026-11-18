@@ -52,6 +52,8 @@ import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -148,7 +150,17 @@ public class MovieLibraryService {
         List<MovieVideoItemDto> recentlyAdded = videoItemDtoConverter.toVideoDtos(ownerUserId, recentItems);
         List<MediaPlaybackProgress> progresses = progressService.latest(ownerUserId, MediaPlaybackType.VIDEO);
         List<MovieContinueWatchingDto> continueWatching = toContinueWatchingDtos(ownerUserId, progresses);
-        return new MovieDashboardDto(stats, recentlyAdded, continueWatching, List.of());
+        ZoneId zone = ZoneId.systemDefault();
+        Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
+        long itemsAddedToday = videoItemRepository.countReadableOriginalsByMediaTypeCreatedSince(
+                ownerUserId,
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                readableLibraryIds,
+                MediaType.MOVIE.getValue(),
+                todayStart
+        );
+        return new MovieDashboardDto(stats, recentlyAdded, continueWatching, List.of(), itemsAddedToday);
     }
 
     /**

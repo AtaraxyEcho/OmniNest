@@ -54,8 +54,9 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox>
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final base = skin.raise2;
-    final highlight = Color.lerp(base, skin.text, 0.08)!;
+    final base = Color.lerp(skin.bg2, skin.text, skin.isDark ? 0.09 : 0.08)!;
+    final highlight =
+        Color.lerp(base, Colors.white, skin.isDark ? 0.075 : 0.85)!;
     final childIndex = widget.index + 1;
     final phase =
         childIndex % 3 == 0 ? 0.225 : (childIndex % 2 == 0 ? 0.1125 : 0.0);

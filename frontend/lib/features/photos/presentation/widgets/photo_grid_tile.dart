@@ -89,6 +89,31 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
                     : const _Placeholder(),
           ),
 
+          if (photo.isVideo)
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x66000000),
+                      shape: BoxShape.circle,
+                      border: Border.fromBorderSide(
+                        BorderSide(color: Color(0x66FFFFFF)),
+                      ),
+                    ),
+                    child: SizedBox.square(
+                      dimension: 42,
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 26,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // 悬停/多选/选中时的遮罩层
           Positioned.fill(
             child: IgnorePointer(

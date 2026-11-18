@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
@@ -34,7 +36,10 @@ class DesktopBookDetailPage extends ConsumerWidget {
     final bookAsync = ref.watch(parsedBookProvider(itemId));
 
     return ColoredBox(
-      color: skin.bg,
+      color:
+          desktopBackdropVisibleForRoute(ref, DesktopRoutes.bookDetail(itemId))
+              ? Colors.transparent
+              : skin.bg,
       child: detail.when(
         loading:
             () => const Center(

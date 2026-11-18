@@ -14,6 +14,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicArtistDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicDashboardDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicCoverUploadDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryRequest;
+import com.omninest.modules.music.dto.MusicDtos.MusicListeningDurationRequest;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicRecentItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaylistDto;
@@ -347,9 +348,19 @@ public class MusicController {
 
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/music/play-history")
-    ApiResponse<Void> playHistory(@Valid @RequestBody RecordMusicPlayHistoryRequest request) {
-        musicLibraryService.recordPlayHistory(currentUserContext.requireCurrentUserId(), request);
-        return ApiResponse.success();
+    ApiResponse<UUID> playHistory(@Valid @RequestBody RecordMusicPlayHistoryRequest request) {
+        return ApiResponse.success(
+                musicLibraryService.recordPlayHistory(currentUserContext.requireCurrentUserId(), request));
+    }
+
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
+    @PutMapping("/api/v1/music/play-history/{historyId}/duration")
+    ApiResponse<Integer> updateListeningDuration(
+            @PathVariable UUID historyId,
+            @Valid @RequestBody MusicListeningDurationRequest request
+    ) {
+        return ApiResponse.success(musicLibraryService.updateListeningDuration(
+                currentUserContext.requireCurrentUserId(), historyId, request));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")

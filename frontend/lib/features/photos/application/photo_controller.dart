@@ -26,6 +26,7 @@ export 'package:omninest/features/photos/application/photo_album_picker_controll
 export 'package:omninest/features/photos/application/photo_browse_scope.dart';
 export 'package:omninest/features/photos/application/photo_center_models.dart';
 export 'package:omninest/features/photos/application/photo_detail_memory_cache.dart';
+export 'package:omninest/features/photos/application/photo_paged_list_controller.dart';
 export 'package:omninest/features/photos/application/photo_period_controller.dart';
 export 'package:omninest/features/photos/application/photo_repository_providers.dart';
 export 'package:omninest/features/photos/platform/photo_save_channel.dart';
@@ -38,16 +39,6 @@ part 'photo_center_providers.dart';
 part 'photo_center_collection_loaders.dart';
 
 enum _ImportTaskPollOutcome { completed, failed, pending, unavailable }
-
-final photoListProvider = FutureProvider<PhotoPage>((ref) {
-  ref.watch(sessionEpochProvider);
-  return ref.watch(photoRepositoryProvider).listPhotos();
-});
-
-final photoFavoritesProvider = FutureProvider<PhotoPage>((ref) {
-  ref.watch(sessionEpochProvider);
-  return ref.watch(photoRepositoryProvider).listFavorites();
-});
 
 final photoAlbumsProvider = FutureProvider<List<PhotoAlbum>>((ref) {
   ref.watch(sessionEpochProvider);

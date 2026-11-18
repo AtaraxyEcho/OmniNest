@@ -13,6 +13,7 @@ class _ConfigChange {
     required this.to,
     required this.at,
     this.sensitive = false,
+    this.rollbackAvailable = true,
   });
 
   final int id;
@@ -26,6 +27,7 @@ class _ConfigChange {
   final String to;
   final DateTime at;
   final bool sensitive;
+  final bool rollbackAvailable;
 
   /// 展示值：敏感项与空值都换成不可回写的占位。
   String display(String value) {
@@ -73,14 +75,32 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
 
   String _valueOf(AdminConfigEntry entry) => _draft[entry.key] ?? entry.value;
 
-  bool _isDirty(AdminConfigEntry entry) =>
-      _draft.containsKey(entry.key) && _draft[entry.key] != entry.value;
+  bool _isDirty(AdminConfigEntry entry) {
+    if (!_draft.containsKey(entry.key)) {
+      return false;
+    }
+    final value = _draft[entry.key]!;
+    if (_isSensitiveConfigEntry(entry)) {
+      return value.isEmpty ? entry.sensitiveConfigured : true;
+    }
+    return value != entry.value;
+  }
+
+  bool _modifiedFromDefault(AdminConfigEntry entry) {
+    if (!_draft.containsKey(entry.key)) {
+      return entry.modifiedFromDefault;
+    }
+    final value = _draft[entry.key]!;
+    return _isSensitiveConfigEntry(entry)
+        ? value.isNotEmpty
+        : value != entry.defaultValue;
+  }
 
   int get _dirtyCount => widget.view.items.where(_isDirty).length;
 
   bool _passesFilter(AdminConfigEntry entry) => switch (_filter) {
     _ConfigFilter.all => true,
-    _ConfigFilter.modified => _isDirty(entry),
+    _ConfigFilter.modified => _modifiedFromDefault(entry) || _isDirty(entry),
     _ConfigFilter.restart => entry.refreshScope == 'RESTART_REQUIRED',
     _ConfigFilter.secrets => _isSensitiveConfigEntry(entry),
   };
@@ -120,19 +140,71 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
           return (_group == 'ALL' || _configGroup(l10n, item) == _group) &&
               _passesFilter(item);
         }).toList();
+    final modifiedCount = all.where((item) => item.modifiedFromDefault).length;
+    final modifiedFilterCount =
+        all
+            .where((item) => _modifiedFromDefault(item) || _isDirty(item))
+            .length;
+    final parameterList = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (visible.isEmpty)
+          _emptyState(l10n, skin)
+        else
+          for (final entry in groups.entries)
+            if ((_group == 'ALL' || entry.key == _group) &&
+                entry.value.any(_passesFilter)) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      _configGroupIcon(entry.value.first.category),
+                      size: 14,
+                      color: skin.text3,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      entry.key.toUpperCase(),
+                      style: DesktopType.eyebrow(skin.text3),
+                    ),
+                  ],
+                ),
+              ),
+              for (final item in entry.value)
+                if (_passesFilter(item)) _row(context, l10n, skin, item),
+            ],
+        const SizedBox(height: 12),
+        _historyCard(l10n, skin),
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AdminCard(
           title: l10n.adminConfigCenter,
-          count: visible.length,
-          subtitle: l10n.adminConfigCenterSubtitle,
+          subtitle: l10n.desktopConfigOverview(all.length, modifiedCount),
           childGap: 14,
-          action: DesktopButton(
-            label: l10n.desktopConfigExport,
-            icon: DesktopIcons.download,
-            onPressed: all.isEmpty ? null : () => _export(all),
+          action: Wrap(
+            spacing: 8,
+            children: [
+              DesktopButton(
+                label: l10n.desktopConfigExport,
+                icon: DesktopIcons.download,
+                variant: DesktopButtonVariant.ghost,
+                onPressed: all.isEmpty ? null : () => _export(all),
+              ),
+              DesktopButton(
+                label: l10n.desktopConfigRestoreDefaults,
+                icon: DesktopIcons.restore,
+                variant: DesktopButtonVariant.ghost,
+                onPressed:
+                    modifiedCount == 0 && _dirtyCount == 0
+                        ? null
+                        : () => _stageDefaults(all),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -160,7 +232,7 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
                   _filterChip(
                     l10n.desktopConfigFilterModified,
                     _ConfigFilter.modified,
-                    all.where(_isDirty).length,
+                    modifiedFilterCount,
                   ),
                   _filterChip(
                     l10n.adminRestartRequired,
@@ -178,95 +250,63 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              if (visible.isEmpty)
-                _emptyState(l10n, skin)
-              else
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 900;
-                    final list = Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final entry in groups.entries)
-                          if ((_group == 'ALL' || entry.key == _group) &&
-                              entry.value.any(_passesFilter)) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
-                              child: Text(
-                                entry.key.toUpperCase(),
-                                style: DesktopType.eyebrow(skin.text3),
-                              ),
-                            ),
-                            for (final item in entry.value)
-                              if (_passesFilter(item))
-                                _row(context, l10n, skin, item),
-                          ],
-                      ],
-                    );
-                    if (!wide) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _railButton(
-                                  l10n.desktopFilterAll,
-                                  'ALL',
-                                  all.length,
-                                ),
-                                for (final name in names) ...[
-                                  const SizedBox(width: 6),
-                                  _chipButton(
-                                    name,
-                                    groups[name]!.length,
-                                    dirty: groups[name]!.any(_isDirty),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          list,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 210,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _railButton(
-                                l10n.desktopFilterAll,
-                                'ALL',
-                                all.length,
-                              ),
-                              for (final name in names)
-                                _railButton(
-                                  name,
-                                  name,
-                                  groups[name]!.length,
-                                  dirty: groups[name]!.any(_isDirty),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(child: list),
-                      ],
-                    );
-                  },
-                ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        _historyCard(l10n, skin),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 900;
+            if (!wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _railButton(l10n.desktopFilterAll, 'ALL', all.length),
+                        for (final name in names) ...[
+                          const SizedBox(width: 6),
+                          _chipButton(
+                            name,
+                            groups[name]!.length,
+                            dirty: groups[name]!.any(_isDirty),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  parameterList,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 210,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _railButton(l10n.desktopFilterAll, 'ALL', all.length),
+                      for (final name in names)
+                        _railButton(
+                          name,
+                          name,
+                          groups[name]!.length,
+                          dirty: groups[name]!.any(_isDirty),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 22),
+                Expanded(child: parameterList),
+              ],
+            );
+          },
+        ),
         if (_dirtyCount > 0) ...[
           const SizedBox(height: 14),
           Container(
@@ -326,6 +366,29 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
       ],
     );
   }
+
+  void _stageDefaults(List<AdminConfigEntry> entries) {
+    setState(() {
+      for (final entry in entries) {
+        if (entry.editable) {
+          _draft[entry.key] = entry.defaultValue;
+        }
+      }
+    });
+  }
+
+  IconData _configGroupIcon(String category) => switch (category) {
+    'media' => DesktopIcons.film,
+    'reader' => DesktopIcons.book,
+    'music' => DesktopIcons.music,
+    'photo' => DesktopIcons.image,
+    'storage' => DesktopIcons.server,
+    'upload' => DesktopIcons.upload,
+    'security' || 'auth' => DesktopIcons.shield,
+    'weather' => DesktopIcons.cloudSun,
+    'backdrop' => DesktopIcons.wallpaper,
+    _ => DesktopIcons.settings,
+  };
 
   Widget _filterChip(String label, _ConfigFilter filter, int count) {
     return DesktopChipButton(
@@ -479,13 +542,13 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  entry.description.isEmpty
-                      ? entry.key
-                      : '${entry.key} · ${entry.description}',
+                  _configDescription(l10n, entry),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: DesktopType.caption(skin.text3),
                 ),
+                const SizedBox(height: 2),
+                Text(entry.key, style: DesktopType.micro(skin.text3)),
               ],
             ),
           ),
@@ -579,6 +642,8 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
             to: next,
             at: DateTime.now(),
             sensitive: _isSensitiveConfigEntry(entry),
+            rollbackAvailable:
+                !_isSensitiveConfigEntry(entry) || !entry.sensitiveConfigured,
           ),
         );
         saved++;
@@ -613,6 +678,9 @@ class _DesktopConfigPanelState extends ConsumerState<_DesktopConfigPanel> {
   }
 
   Future<void> _rollback(_ConfigChange change) async {
+    if (!change.rollbackAvailable) {
+      return;
+    }
     final l10n = AppLocalizations.of(context);
     final actions = ref.read(adminOperationsActionsProvider);
     setState(() => _rollingBack = true);

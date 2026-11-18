@@ -42,9 +42,10 @@ class _DesktopRolesPanel extends ConsumerWidget {
             icon: DesktopIcons.plus,
             variant: DesktopButtonVariant.soft,
             onPressed:
-                () => showWorkstationDialog(
-                  context: context,
-                  builder: (context) => const _CreateRoleDialog(),
+                () => showDesktopDrawer<void>(
+                  context,
+                  width: 620,
+                  builder: (_) => const _CreateRoleDialog(drawerMode: true),
                 ),
           ),
           child:
@@ -135,12 +136,14 @@ class _DesktopRoleCard extends ConsumerWidget {
             onTap:
                 locked
                     ? null
-                    : () => showWorkstationDialog(
-                      context: context,
+                    : () => showDesktopDrawer<void>(
+                      context,
+                      width: 620,
                       builder:
-                          (context) => _RolePermissionDialog(
+                          (_) => _RolePermissionDialog(
                             role: role,
                             permissions: permissions,
+                            drawerMode: true,
                           ),
                     ),
             behavior: HitTestBehavior.opaque,
@@ -266,12 +269,14 @@ class _DesktopRoleCard extends ConsumerWidget {
                         onPressed:
                             locked
                                 ? null
-                                : () => showWorkstationDialog(
-                                  context: context,
+                                : () => showDesktopDrawer<void>(
+                                  context,
+                                  width: 620,
                                   builder:
-                                      (context) => _RolePermissionDialog(
+                                      (_) => _RolePermissionDialog(
                                         role: role,
                                         permissions: permissions,
+                                        drawerMode: true,
                                       ),
                                 ),
                       ),

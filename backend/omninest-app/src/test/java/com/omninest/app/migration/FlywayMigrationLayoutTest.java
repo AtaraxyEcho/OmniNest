@@ -38,7 +38,8 @@ class FlywayMigrationLayoutTest {
         Assertions.assertThat(scriptNames).isNotEmpty();
         Assertions.assertThat(scriptNames).containsExactly(
                 "V001__init_schema.sql",
-                "V002__builtin_catalog.sql"
+                "V002__builtin_catalog.sql",
+                "V003__user_initial_password_change_policy.sql"
         );
         Assertions.assertThat(scriptNames)
                 .allMatch(name -> MIGRATION_NAME.matcher(name).matches());

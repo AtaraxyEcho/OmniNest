@@ -15,6 +15,7 @@ import 'package:omninest/features/files/application/file_download_url_provider.d
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/file_media_import_task.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -81,6 +82,12 @@ abstract class FileApiBase {
 
   FileStorageStats parseStorageStatsResponse(Map<String, dynamic>? body) {
     return _responseParser.parseStorageStatsResponse(body);
+  }
+
+  FileDuplicateSummary parseDuplicateSummaryResponse(
+    Map<String, dynamic>? body,
+  ) {
+    return _responseParser.parseDuplicateSummaryResponse(body);
   }
 
   FileUploadPolicy parseUploadPolicyResponse(Map<String, dynamic>? body) {

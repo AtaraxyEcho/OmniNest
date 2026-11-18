@@ -42,6 +42,20 @@ class FileStorageStats {
   }
 }
 
+class FileDuplicateSummary {
+  const FileDuplicateSummary({
+    required this.duplicateFileCount,
+    required this.duplicateGroupCount,
+    required this.reclaimableBytes,
+    required this.filesWithoutVerifiedHash,
+  });
+
+  final int duplicateFileCount;
+  final int duplicateGroupCount;
+  final int reclaimableBytes;
+  final int filesWithoutVerifiedHash;
+}
+
 class FileUploadPolicy {
   const FileUploadPolicy({
     required this.directUploadMaxBytes,

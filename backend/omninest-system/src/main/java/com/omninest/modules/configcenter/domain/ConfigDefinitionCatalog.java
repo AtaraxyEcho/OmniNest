@@ -151,8 +151,6 @@ public final class ConfigDefinitionCatalog {
                 "config.logRetention.retentionDays", "日志归档与临时文件保留天数", 1, 365));
         add(values, string("log-retention.scan-paths", "logs", "general", ConfigSurface.GENERAL,
                 "config.logRetention.scanPaths", "保留清理扫描目录（逗号分隔的运行目录相对路径）", false, 500));
-        add(values, string("auth.two-factor.required-roles", "SUPER_ADMIN,ADMIN", "auth", ConfigSurface.GENERAL,
-                "config.auth.twoFactorRequiredRoles", "强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）", false, 200));
         add(values, bool("weather.enabled", true, "weather", ConfigSurface.INTEGRATION,
                 "config.weather.enabled", "是否启用天气服务"));
 

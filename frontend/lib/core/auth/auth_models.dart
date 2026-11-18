@@ -125,7 +125,7 @@ DateTime? _parseOptionalDateTime(dynamic value) {
   return _parseDateTime(value);
 }
 
-/// 登录两步验证挑战：密码已通过，等待第二步验证码或注册引导。
+/// 登录续接挑战：密码已通过，等待首次改密、第二步验证码或强制注册引导。
 class AuthChallenge {
   const AuthChallenge({
     required this.challengeToken,
@@ -143,14 +143,16 @@ class AuthChallenge {
 
   final String challengeToken;
 
-  /// verify=已启用待验证；enroll=强制角色待注册。
+  /// password_change=首次改密；verify=已启用待验证；enroll=超管强制注册。
   final String type;
   final DateTime? expiresAt;
 
   bool get isEnrollment => type == 'enroll';
+
+  bool get isPasswordChange => type == 'password_change';
 }
 
-/// 登录结果：正常令牌，或需要两步验证的挑战。
+/// 登录结果：正常令牌，或需要继续完成认证的挑战。
 class AuthLoginResult {
   const AuthLoginResult({this.token, this.challenge});
 
@@ -164,7 +166,7 @@ class AuthLoginResult {
   final AuthTokenResponse? token;
   final AuthChallenge? challenge;
 
-  bool get requiresTwoFactor => challenge != null;
+  bool get requiresChallenge => challenge != null;
 }
 
 /// 两步验证秘钥视图（扫码 URI 与手输秘钥）。

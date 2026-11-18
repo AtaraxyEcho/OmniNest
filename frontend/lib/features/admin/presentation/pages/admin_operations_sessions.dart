@@ -127,7 +127,9 @@ class _SessionDetailDialog extends StatelessWidget {
 }
 
 class AdminSessionsPage extends ConsumerStatefulWidget {
-  const AdminSessionsPage({super.key});
+  const AdminSessionsPage({this.embedded = false, super.key});
+
+  final bool embedded;
 
   @override
   ConsumerState<AdminSessionsPage> createState() => _AdminSessionsPageState();
@@ -152,6 +154,8 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
   String _status = 'ALL';
   String _platform = 'ALL';
   String _query = '';
+  final TextEditingController _desktopSearchController =
+      TextEditingController();
   int _page = 0;
   AdminListSort _sessionSort = const AdminListSort(
     columnKey: 'lastActiveAt',
@@ -165,12 +169,17 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
   void initState() {
     super.initState();
     _query = ref.read(adminSearchProvider);
+    _desktopSearchController.text = _query;
     ref.listenManual<String>(adminSearchProvider, (_, next) {
       _searchTimer?.cancel();
       _searchTimer = Timer(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         setState(() {
           _query = next.trim();
+          _desktopSearchController.value = TextEditingValue(
+            text: _query,
+            selection: TextSelection.collapsed(offset: _query.length),
+          );
           _page = 0;
         });
       });
@@ -180,6 +189,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
   @override
   void dispose() {
     _searchTimer?.cancel();
+    _desktopSearchController.dispose();
     super.dispose();
   }
 
@@ -231,6 +241,9 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
     if (DesktopShellScope.isHosted(context)) {
       return _DesktopSessionsPanel(
         page: page,
+        embedded: widget.embedded,
+        searchController: _desktopSearchController,
+        onSearch: _onDesktopSearchChanged,
         busy: busy,
         status: _status,
         platform: _platform,
@@ -592,6 +605,18 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
         !ResponsiveBreakpoints.isCompact(MediaQuery.sizeOf(context).width) &&
         MediaQuery.sizeOf(context).height >= 620;
     return useExpanded ? content : SingleChildScrollView(child: content);
+  }
+
+  void _onDesktopSearchChanged(String value) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        _query = value.trim();
+        _page = 0;
+        _selectedSessionIds.clear();
+      });
+    });
   }
 
   AdminStatusTag _sessionStatusTag(

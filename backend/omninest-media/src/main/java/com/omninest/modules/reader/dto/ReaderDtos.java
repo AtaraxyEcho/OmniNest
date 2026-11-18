@@ -171,7 +171,8 @@ public final class ReaderDtos {
     public record ReaderDashboardDto(
             ReaderOverviewDto overview,
             List<ReaderItemDto> continueReading,
-            List<ReaderItemDto> recentItems
+            List<ReaderItemDto> recentItems,
+            long itemsAddedToday
     ) {
     }
 

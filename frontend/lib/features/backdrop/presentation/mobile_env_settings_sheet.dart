@@ -386,7 +386,7 @@ class _EnvPreview extends StatelessWidget {
       return ColoredBox(color: context.env.line12);
     }
     if (value.sourceType == AppBackdropSourceType.bundled) {
-      // 内置默认壁纸是打包视频，预览用随包封面帧。
+      // 内置默认壁纸直接用随包照片预览。
       return const BundledWallpaperPoster();
     }
     final thumbnail = value.thumbnailPath;

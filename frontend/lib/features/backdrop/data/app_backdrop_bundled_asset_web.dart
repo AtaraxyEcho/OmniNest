@@ -8,9 +8,9 @@ class AppBackdropBundledAssetInstaller {
     final now = DateTime.now();
     return AppBackdropAsset(
       id: bundledDefaultWallpaperId,
-      path: _videoUrl,
+      path: _imageUrl,
       title: 'OmniNest',
-      mediaType: AppBackdropMediaType.video,
+      mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,
       fileSize: 0,
       modifiedAt: now,
@@ -20,11 +20,11 @@ class AppBackdropBundledAssetInstaller {
     );
   }
 
-  /// Flutter Web 把 `assets/backdrops/x.mp4` 发布到 `<base href>assets/assets/backdrops/x.mp4`。
+  /// Flutter Web 把打包图片发布到 `<base href>assets/assets/backdrops/` 下。
   ///
   /// 取 `document.baseURI` 而不是 `Uri.base`：使用路径策略时 `Uri.base` 指向
   /// 当前路由，子路径部署下会把资产解析到错误目录；`<base href>` 才是资产根。
-  String get _videoUrl {
+  String get _imageUrl {
     final base = Uri.tryParse(web.document.baseURI) ?? Uri.base;
     return base.resolve('assets/$bundledDefaultWallpaperAssetPath').toString();
   }

@@ -87,6 +87,22 @@ class PhotoItem {
       motionVideoUrl != null &&
       motionVideoUrl!.isNotEmpty;
 
+  /// 视频与照片共用时间线条目；媒体类型从文件扩展名稳定识别，无需单独迁移字段。
+  bool get isVideo =>
+      providerMetadata?['mediaKind'] == 'VIDEO' ||
+      const <String>{
+        'mp4',
+        'mkv',
+        'webm',
+        'mov',
+        'm4v',
+        'avi',
+        'flv',
+        'wmv',
+        'ts',
+        'm2ts',
+      }.contains(format.toLowerCase());
+
   factory PhotoItem.fromJson(Map<String, dynamic> json) {
     return PhotoItem(
       id: json['id']?.toString() ?? '',
@@ -411,9 +427,11 @@ class PhotoAlbumPage {
 class PhotoDashboard {
   const PhotoDashboard({
     required this.totalPhotos,
+    this.totalVideos = 0,
     required this.totalAlbums,
     required this.totalFavorites,
     this.trashCount = 0,
+    this.itemsAddedToday = 0,
     required this.recentPhotos,
     required this.favoritePhotos,
   });
@@ -421,6 +439,7 @@ class PhotoDashboard {
   factory PhotoDashboard.empty() {
     return const PhotoDashboard(
       totalPhotos: 0,
+      totalVideos: 0,
       totalAlbums: 0,
       totalFavorites: 0,
       recentPhotos: [],
@@ -429,18 +448,22 @@ class PhotoDashboard {
   }
 
   final int totalPhotos;
+  final int totalVideos;
   final int totalAlbums;
   final int totalFavorites;
   final int trashCount;
+  final int itemsAddedToday;
   final List<PhotoItem> recentPhotos;
   final List<PhotoItem> favoritePhotos;
 
   factory PhotoDashboard.fromJson(Map<String, dynamic> json) {
     return PhotoDashboard(
       totalPhotos: _asInt(json['totalPhotos']),
+      totalVideos: _asInt(json['totalVideos']),
       totalAlbums: _asInt(json['totalAlbums']),
       totalFavorites: _asInt(json['totalFavorites']),
       trashCount: _asInt(json['trashCount']),
+      itemsAddedToday: _asInt(json['itemsAddedToday']),
       recentPhotos:
           _asList(json['recentPhotos']).map(PhotoItem.fromJson).toList(),
       favoritePhotos:

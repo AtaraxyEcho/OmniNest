@@ -58,6 +58,7 @@ public class AdminUserService {
             "email", "email",
             "status", "status",
             "usedbytes", "usedBytes",
+            "lastloginat", "lastLoginAt",
             "quotabytes", "quotaBytes",
             "createdat", "createdAt");
 
@@ -89,12 +90,23 @@ public class AdminUserService {
      * @return 用户分页
      */
     @Transactional(readOnly = true)
-    public Page<AuthUserDto> listUsers(int page, int size, String query, String role, String sort, String dir) {
+    public Page<AuthUserDto> listUsers(
+            int page, int size, String query, String role, String sort, String dir) {
+        return listUsers(page, size, query, role, "", sort, dir);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuthUserDto> listUsers(
+            int page, int size, String query, String role, String status, String sort, String dir) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size <= 0 ? 50 : size), 100);
         PageRequest pageable = PageRequest.of(safePage, safeSize, userSort(sort, dir));
-        Page<AuthUser> users = authUserRepository.searchAdminUsers(
-                userSearchPattern(query), roleFilter(role), pageable);
+        String searchPattern = userSearchPattern(query);
+        String roleCode = roleFilter(role);
+        String statusCode = statusFilter(status);
+        Page<AuthUser> users = statusCode.isEmpty()
+                ? authUserRepository.searchAdminUsers(searchPattern, roleCode, pageable)
+                : authUserRepository.searchAdminUsersByStatus(searchPattern, roleCode, statusCode, pageable);
         Set<UUID> roleIds = users.getContent()
                 .stream()
                 .flatMap(user -> user.getRoles().stream())
@@ -158,6 +170,47 @@ public class AdminUserService {
                 createUserInTransaction(request, actor, actorUserId, username, passwordHash));
     }
 
+    /**
+     * 管理端修改用户展示名称与邮箱，并同步使资料缓存失效。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AuthUserDto updateUserProfile(
+            UUID userId,
+            String displayName,
+            String email,
+            Boolean requirePasswordChange) {
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
+        AuthUser target = authUserRepository.findWithRolesById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
+        adminActorGuard.requireSuperAdminForAdminTarget(actor, target, "修改管理员账户资料");
+        boolean revokeSessions = Boolean.TRUE.equals(requirePasswordChange)
+                && !target.isPasswordChangeRequired();
+        if (requirePasswordChange != null) {
+            target.setPasswordChangeRequired(requirePasswordChange);
+        }
+        if (requirePasswordChange != null) {
+            authUserRepository.save(target);
+        }
+        if (revokeSessions) {
+            userSessionRevocationService.revokeAll(List.of(userId), "管理员要求用户修改密码");
+        }
+        AuthUserDto saved = currentUserService.updateProfileByAdmin(userId, displayName, email);
+        List<String> changedFields = new ArrayList<>(List.of("displayName", "email"));
+        if (requirePasswordChange != null) {
+            changedFields.add("passwordChangeRequired");
+        }
+        auditLogService.recordWithMetadata(
+                actor.getId(),
+                "ADMIN_USER_PROFILE_UPDATE", "auth_users", userId,
+                Map.of("fields", changedFields));
+        return saved;
+    }
+
+    /** 保留旧签名，兼容既有服务调用方。 */
+    public AuthUserDto updateUserProfile(UUID userId, String displayName, String email) {
+        return updateUserProfile(userId, displayName, email, null);
+    }
+
     private AuthUserDto createUserInTransaction(AdminCreateUserRequest request, AuthUser actor,
                                                 UUID actorUserId, String username, String passwordHash) {
         AuthUser user = new AuthUser();
@@ -166,7 +219,10 @@ public class AdminUserService {
         user.setDisplayName(normalizeDisplayName(request.displayName(), username));
         user.setEmail(normalizeEmail(request.email()));
         user.setStatus(normalizeStatus(request.status()));
-        user.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
+        user.setPasswordChangeRequired(!Boolean.FALSE.equals(request.requirePasswordChange()));
+        user.setQuotaBytes(request.quotaBytes() == null
+                ? storageQuotaService.getDefaultQuotaBytes()
+                : request.quotaBytes());
         resolveRolesForActor(actor, request.roles()).forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         auditLogService.recordWithMetadata(
@@ -352,6 +408,18 @@ public class AdminUserService {
         return normalized;
     }
 
+    /** 仅接受实体状态常量，避免把任意字符串传入列表过滤条件。 */
+    private String statusFilter(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status.trim())) {
+            return "";
+        }
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("ACTIVE", "DISABLED").contains(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户状态筛选值无效");
+        }
+        return normalized;
+    }
+
     private Set<AuthRole> resolveRoles(Set<String> requestedRoles) {
         Set<String> roleCodes = requestedRoles == null || requestedRoles.isEmpty()
                 ? Set.of(Roles.MEMBER)
@@ -409,6 +477,9 @@ public class AdminUserService {
         String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase(Locale.ROOT);
         if (username.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名不能为空");
+        }
+        if (!username.matches("^[a-z][a-z0-9._-]{2,23}$")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名须为 3 到 24 位并以小写字母开头");
         }
         return username;
     }

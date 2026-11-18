@@ -29,6 +29,7 @@ public class PhotoAutoImportService implements MediaImportHandler {
     );
 
     private final PhotoAdminService photoAdminService;
+    private final PhotoFileDetector fileDetector;
 
     @Override
     public String module() {
@@ -37,13 +38,17 @@ public class PhotoAutoImportService implements MediaImportHandler {
 
     @Override
     public boolean supports(FileUploadedEvent event) {
-        return isImageFile(event.mimeType());
+        return isImageFile(event.mimeType()) || fileDetector.isVideo(event.fileName());
     }
 
     @Override
     public MediaImportResult importFile(FileUploadedEvent event) {
-        photoAdminService.importSinglePhoto(event.ownerUserId(), event.fileNodeId());
-        log.info("照片自动导入完成: fileNodeId={}, fileName={}",
+        if (fileDetector.isVideo(event.fileName())) {
+            photoAdminService.importSingleVideo(event.ownerUserId(), event.fileNodeId());
+        } else {
+            photoAdminService.importSinglePhoto(event.ownerUserId(), event.fileNodeId());
+        }
+        log.info("Photos 媒体自动导入完成: fileNodeId={}, fileName={}",
                 event.fileNodeId(), event.fileName());
         return new MediaImportResult(module(), event.fileNodeId());
     }

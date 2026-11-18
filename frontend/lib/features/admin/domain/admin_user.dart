@@ -12,7 +12,9 @@ class AdminUser {
     this.email,
     this.avatarUrl,
     this.createdAt,
+    this.lastLoginAt,
     this.twoFactorEnabled = false,
+    this.passwordChangeRequired = false,
   });
 
   factory AdminUser.fromJson(Map<String, dynamic> json) {
@@ -29,7 +31,9 @@ class AdminUser {
       quotaBytes: _intValue(json['quotaBytes']),
       usedBytes: _intValue(json['usedBytes']),
       createdAt: json['createdAt']?.toString(),
+      lastLoginAt: json['lastLoginAt']?.toString(),
       twoFactorEnabled: json['twoFactorEnabled'] == true,
+      passwordChangeRequired: json['passwordChangeRequired'] == true,
     );
   }
 
@@ -47,9 +51,13 @@ class AdminUser {
 
   /// 创建时间（后端 ISO-8601 字符串）；旧负载缺省为空。
   final String? createdAt;
+  final String? lastLoginAt;
 
   /// 是否已确认启用两步验证；仅管理列表端点填充。
   final bool twoFactorEnabled;
+
+  /// 是否要求该用户首次登录时修改管理员生成的临时密码。
+  final bool passwordChangeRequired;
 
   String get title =>
       displayName == null || displayName!.isEmpty ? username : displayName!;
@@ -103,6 +111,8 @@ class AdminCreateUserInput {
     this.displayName,
     this.email,
     this.status = 'ACTIVE',
+    this.quotaBytes,
+    this.requirePasswordChange = true,
   });
 
   final String username;
@@ -111,6 +121,8 @@ class AdminCreateUserInput {
   final String password;
   final Set<String> roles;
   final String status;
+  final int? quotaBytes;
+  final bool requirePasswordChange;
 
   Map<String, dynamic> toJson() {
     return {
@@ -120,6 +132,8 @@ class AdminCreateUserInput {
       'password': password,
       'roles': roles.toList(),
       'status': status,
+      'requirePasswordChange': requirePasswordChange,
+      if (quotaBytes != null) 'quotaBytes': quotaBytes,
     };
   }
 }

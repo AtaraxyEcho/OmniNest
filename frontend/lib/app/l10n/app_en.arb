@@ -324,9 +324,17 @@
   "changePasswordNewPassword": "New Password",
   "changePasswordEnterNew": "Please enter new password",
   "changePasswordMinLength": "Password must be at least 8 characters",
+  "changePasswordStrengthTooShort": "Too short",
   "changePasswordMaxLength": "Password must be at most 64 characters and 72 UTF-8 bytes",
   "changePasswordConfirmNew": "Confirm New Password",
   "loginTwoFactorTitle": "Two-Factor Verification",
+  "loginInitialPasswordChangeTitle": "Choose a new password",
+  "loginInitialPasswordChangeSubtitle": "Your administrator gave you a temporary password. Replace it to continue.",
+  "loginInitialPasswordLabel": "New password",
+  "loginInitialPasswordConfirmLabel": "Confirm new password",
+  "loginInitialPasswordMismatch": "The passwords do not match.",
+  "loginInitialPasswordLength": "Use 8 to 64 characters.",
+  "loginInitialPasswordChangeAction": "Save password and continue",
   "loginTwoFactorSubtitle": "Enter the 6-digit code from your authenticator app to sign in",
   "loginTwoFactorCodeLabel": "Verification code",
   "loginTwoFactorCodeHint": "Enter the 6-digit code",
@@ -1573,6 +1581,7 @@
   "portalLocalBackdropLocalOnly": "Backdrop paths are stored only in SQLite on this device. Use short loops with common codecs; playback pauses when the page is hidden or the app enters the background. Web uses the default theme backdrop.",
   "adminOpenMenu": "Open admin menu",
   "adminStorageOverview": "Storage Overview",
+  "adminStorageUsageTitle": "Usage",
   "adminPercentUsed": "{percent}% used",
   "@adminPercentUsed": {
     "placeholders": {
@@ -1601,6 +1610,19 @@
       "count": {}
     }
   },
+  "adminStorageFolderCount": "{count} folders",
+  "@adminStorageFolderCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminStorageObjectCount": "{count} objects",
+  "@adminStorageObjectCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminStorageUsageTotal": "Total used",
   "adminOverviewTasksTotal": "{count} tasks",
   "@adminOverviewTasksTotal": {
     "placeholders": {
@@ -1706,6 +1728,8 @@
   "adminResetTwoFactor": "Reset two-factor",
   "adminResetTwoFactorSuccess": "Two-factor reset. All sessions of this user were ended.",
   "adminResetTwoFactorConfirmMessage": "Clear {name}'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.",
+  "adminRequirePasswordChangeLabel": "Require a new password at first sign-in",
+  "adminRequirePasswordChangeHint": "The user must replace this temporary password before accessing OmniNest.",
   "adminEditRolesHint": "Assign one or more system roles. Changing roles immediately updates the user's permissions and visible menus.",
   "adminCreateRole": "New custom role",
   "adminRolePermissionsSaved": "Role permissions updated",
@@ -1804,6 +1828,12 @@
   "adminTaskOwner": "Owner",
   "adminTaskExecutionStatus": "Status",
   "adminTaskListSubtitle": "Failed, cancelled and DLQ status support re-queue.",
+  "adminTaskSearchHint": "Search title, type, owner or error",
+  "adminDlqSearchHint": "Search title, type or error",
+  "adminDlqDiscardAll": "Discard all",
+  "adminTaskFilterSucceeded": "Succeeded",
+  "adminLoginAuditSearchHint": "Search user, device, IP or reason",
+  "adminSessionSearchHint": "Search user, device or IP",
   "adminNoBackgroundTasks": "No background tasks.",
   "adminNotSet": "Not set",
   "adminProgress": "Progress",
@@ -2160,6 +2190,20 @@
   "adminStorageFieldNode": "Node",
   "adminStorageParentDir": "Up one level",
   "adminStorageManagementSubtitle": "Manage MinIO buckets and local media locations; use local locations for 4K playback.",
+  "adminStorageAddAction": "Add",
+  "adminStorageAddLocation": "Add storage location",
+  "adminStorageAddLocationHint": "Mount keys come from the deployment allowlist.",
+  "adminStorageDisplayName": "Display name",
+  "adminStorageSectionLabel": "Storage",
+  "adminStorageVisibleTo": "Visible to",
+  "adminStorageScopeEveryone": "Everyone (system)",
+  "adminStorageScopeOneUser": "One user",
+  "adminStorageMountAction": "Mount",
+  "adminStorageNameHint": "e.g. Family media",
+  "adminStorageMountRoot": "Mount root",
+  "adminStorageBrowseFailed": "Could not load directories.",
+  "adminStorageCreated": "Storage location added.",
+  "adminStorageAdvancedLibraries": "Library sources and mount controls",
   "adminBucketConfig": "Bucket Config",
   "adminMinioBuckets": "MinIO Buckets",
   "adminRecentRecords": "Recent records",
@@ -2171,6 +2215,15 @@
   "adminExternalStorageSubtitle": "Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.",
   "adminOAuthAppsTitle": "OAuth apps",
   "adminOAuthAppsSubtitle": "Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.",
+  "adminOAuthProviderAccountTitle": "{provider} account",
+  "@adminOAuthProviderAccountTitle": {
+    "placeholders": {
+      "provider": { "type": "String" }
+    }
+  },
+  "adminOAuthSecretStorageHint": "Stored encrypted. Never shown again.",
+  "adminOAuthNotConfigured": "Not configured",
+  "adminConfigure": "Configure",
   "adminOAuthRedirectHint": "Must exactly match the redirect URI registered in the provider console; usually this site's callback URL.",
   "adminNoOAuthApps": "No OAuth apps configured yet.",
   "adminNewConnection": "New Connection",
@@ -2363,6 +2416,7 @@
   "adminAccountList": "Account List",
   "adminAccountListSubtitle": "Filter accounts by username, nickname, email and role.",
   "adminCreateUser": "Create User",
+  "adminCreateAccountEyebrow": "Create account",
   "adminSearchUsers": "Search username, nickname or email",
   "adminAll": "All",
   "adminNoMatchingUsers": "No matching users.",
@@ -2425,6 +2479,9 @@
   "adminBatchQuotaHint": "Will set the same storage quota for all selected users. Super admins and users with insufficient space will be skipped.",
   "adminQuotaGib": "Quota (GiB)",
   "adminQuotaHint": "e.g. 50",
+  "adminQuotaDefaultHint": "Leave blank to use the configured system default. Custom values: 1–10000 GiB.",
+  "adminQuotaRangeError": "Enter a quota between 1 and 10000 GiB",
+  "adminPasswordShareHint": "Share the initial password with the user through a private channel.",
   "adminSaving": "Saving",
   "adminSave": "Save",
   "adminValidQuotaRequired": "Please enter a valid quota value",
@@ -2465,6 +2522,8 @@
   "adminCreating": "Creating",
   "adminCreate": "Create",
   "adminUsername": "Username",
+  "adminAccount": "Account",
+  "adminAccountFormatError": "Use 3–24 characters: start with a lowercase letter, then lowercase letters, numbers, dot, dash or underscore.",
   "adminEnterUsername": "Please enter username",
   "adminDisplayName": "Display Name",
   "adminEmail": "Email",
@@ -2666,6 +2725,9 @@
   "adminOverviewRefresh5m": "5m",
   "adminRecalculate": "Recalculate",
   "adminRecalculateDone": "Updated storage for {count} users",
+  "adminUploads14Days": "Uploads, last 14 days",
+  "adminRecalculateStorageTitle": "Recalculate storage",
+  "adminRecalculateStorageSubtitle": "Rebuilds per-user usage from the object store.",
   "@adminRecalculateDone": {
     "placeholders": {
       "count": {}
@@ -6022,10 +6084,13 @@
   "desktopNavAdmin": "Admin",
   "desktopNavSettings": "Settings",
   "desktopPinned": "Pinned",
+  "desktopPinnedEveningDrift": "Evening Drift",
+  "desktopPinnedGoldenHour": "Golden hour",
   "desktopPinnedContinue": "Continue watching",
   "desktopPinnedFavorites": "Favorites",
   "desktopPinnedRecent": "Recently added",
   "desktopStorage": "Storage",
+  "desktopStorageCloudTitle": "OmniCloud",
   "desktopStorageUsage": "{used} of {total}",
   "@desktopStorageUsage": {
     "placeholders": {
@@ -6038,6 +6103,32 @@
     }
   },
   "desktopStorageUnlimited": "{used} used · no quota",
+  "desktopStorageNoQuota": "No quota",
+  "desktopStorageVideo": "Video",
+  "desktopStoragePhotos": "Photos",
+  "desktopStorageMusic": "Music",
+  "desktopStorageDocuments": "Documents",
+  "desktopStorageFindDuplicates": "Find duplicates",
+  "desktopStorageDuplicatesUnavailable": "Duplicate scanning is not available in this build.",
+  "desktopStorageDuplicateScanFound": "Found {size} of duplicates",
+  "@desktopStorageDuplicateScanFound": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopStorageDuplicateScanNone": "No duplicate files found.",
+  "desktopStorageDuplicateScanNonePartial": "No duplicates found among files with verified hashes.",
+  "desktopStorageDuplicateScanSkipped": "{count} files could not be checked because their verified content hash is missing.",
+  "@desktopStorageDuplicateScanSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopStorageNoBreakdown": "No storage categories are available.",
   "@desktopStorageUnlimited": {
     "placeholders": {
       "used": {
@@ -6431,14 +6522,10 @@
       }
     }
   },
-  "desktopStatListeningSub": "{n} plays recently",
-  "@desktopStatListeningSub": {
-    "placeholders": {
-      "n": {
-        "type": "int"
-      }
-    }
-  },
+  "desktopStatListeningSub": "This week",
+  "desktopStatHours": "h",
+  "desktopStatLibraryAddedToday": "+{count} today",
+  "@desktopStatLibraryAddedToday": {"placeholders": {"count": {"type": "int"}}},
   "desktopForYou": "For you",
   "desktopSortRecent": "Recent",
   "desktopSortRating": "Rating",
@@ -6494,6 +6581,15 @@
   "desktopRecentlyAdded": "Recently added",
   "desktopMusicLibraryEyebrow": "Your library",
   "desktopSeeAll": "See all",
+  "desktopMoviesFeatureFilms": "Feature films",
+  "desktopMoviesTitlesCount": "{count} TITLES",
+  "@desktopMoviesTitlesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopUpNext": "Up next",
   "desktopOpenQueue": "Open queue",
   "desktopSeeAllCount": "See all ({count})",
@@ -6773,6 +6869,18 @@
   "photosTabPlaces": "Places",
   "photosNoPlaces": "No locations yet. Photos with GPS data show up here.",
   "desktopPhotosPlaceCount": "{count} photos",
+  "desktopPhotosOrderSaved": "Photo order saved",
+  "desktopPhotosMovedCount": "{count, plural, =1{Moved 1 photo} other{Moved {count} photos}}",
+  "@desktopPhotosMovedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopPhotosOrderReset": "Photo order reset",
+  "desktopPhotosResetOrder": "Reset order",
+  "desktopPhotosOrderSaveFailed": "Could not save photo order. Try again.",
   "desktopPhotosSelect": "Select photo",
   "desktopPhotosClearSelection": "Clear selection",
   "desktopPhotosFavorited": "{count, plural, =1{Added 1 photo to favorites} other{Added {count} photos to favorites}}",
@@ -6902,6 +7010,19 @@
       }
     }
   },
+  "desktopConfigOverview": "{count} parameters · {modified} changed from defaults",
+  "@desktopConfigOverview": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "modified": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopConfigRestoreDefaults": "Restore defaults",
+  "desktopConfigSecretRollbackUnavailable": "The previous secret is hidden and cannot be restored here.",
   "adminConfigReadOnly": "Read-only",
   "adminConfigOn": "On",
   "adminConfigOff": "Off",
@@ -7054,6 +7175,7 @@
   "desktopMoviesEmptyFavoritesBody": "Heart a title on its page to keep it here.",
   "desktopMoviesEmptyHistoryTitle": "Nothing here yet",
   "desktopMoviesEmptyHistoryBody": "Titles you start watching will show up here.",
+  "desktopMoviesEmptyLibraryTitle": "Your movie library is empty",
   "desktopMoviesEmptyLibraryBody": "Import a film or series and it will show up here.",
   "desktopMoviesWatchlist": "Watchlist",
   "desktopMoviesEmptyWatchlistTitle": "Your watchlist is empty",
@@ -7071,5 +7193,65 @@
   "photosDownload": "Download",
   "photosSavedCount": "Saved {count}",
   "photosDownloadNeedsOriginal": "Open a photo first - list data has no original file URL",
-  "@photosSavedCount": {"placeholders": {"count": {"type": "int"}}}
+  "@photosSavedCount": {"placeholders": {"count": {"type": "int"}}},
+  "adminSortLabel": "Sort",
+  "adminSortName": "Name",
+  "adminSortStorageUsed": "Storage used",
+  "adminSortLastActive": "Last active",
+  "adminGeneratePassword": "Generate password",
+  "adminShowPassword": "Show password",
+  "adminHidePassword": "Hide password",
+  "adminAccountEnabled": "Account enabled",
+  "adminDisabledAccountsCannotSignIn": "Disabled accounts cannot sign in.",
+  "adminUserCreated": "User created",
+  "adminRoleCreated": "Role created",
+  "desktopMoviesEmptySeriesTitle": "No series yet",
+  "desktopMoviesEmptySeriesBody": "Series added to your library will appear here.",
+  "desktopMoviesEmptyAnimeTitle": "No anime yet",
+  "desktopMoviesEmptyAnimeBody": "Anime series added to your library will appear here.",
+  "filesLocalLibrary": "Local library",
+  "musicScanStatusLabel": "Scanning",
+  "musicScanQueued": "Music scan started",
+  "desktopServicesOther": "Other",
+  "desktopLastFmScrobbling": "Last.fm scrobbling",
+  "desktopLastFmUnavailable": "Last.fm scrobbling is not available on this server.",
+  "adminNotConfigured": "Unavailable",
+  "adminSystemLogs": "System logs",
+  "adminSystemLogSource": "Source",
+  "adminSystemLogMessage": "Message",
+  "adminSystemLogsUnavailable": "System log streaming is not available from this server.",
+  "desktopMediaImportMoviesTitle": "Add movies and shows",
+  "desktopMediaImportMoviesHint": "MKV, MP4, MOV and AVI files in My files. Match titles with metadata after import.",
+  "desktopMediaImportPhotosTitle": "Add photos and videos",
+  "desktopMediaImportPhotosHint": "JPG, HEIC, PNG, RAW and video files in My files. Existing files are deduplicated when imported.",
+  "desktopMediaImportMusicTitle": "Add music",
+  "desktopMediaImportMusicHint": "FLAC, MP3, AAC and WAV files in My files. Tags and cover art are read during import.",
+  "desktopMediaImportFromFiles": "From My files",
+  "desktopMediaImportFromDevice": "From this device",
+  "desktopMediaImportDeviceHint": "Choose files from this computer. They are uploaded to My files first, then imported.",
+  "desktopMediaImportChooseFiles": "Choose files",
+  "desktopMediaImportTaskMovies": "Reading media info",
+  "desktopMediaImportTaskPhotos": "Generating thumbnails",
+  "desktopMediaImportTaskMusic": "Scanning audio",
+  "desktopViewTasks": "View tasks",
+  "desktopSessionSignedOut": "Signed out {device}",
+  "@desktopSessionSignedOut": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopMediaImportQueued": "{count, plural, =1{1 import queued} other{{count} imports queued}}",
+  "@desktopMediaImportQueued": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopMediaImportNoFiles": "No files chosen yet.",
+  "desktopMediaImportNoCompatibleFiles": "No compatible files in this folder.",
+  "desktopMediaImportMatchMetadata": "Match metadata after import",
+  "desktopMediaImportMetadataHint": "Fetch posters, synopsis and cast details after import."
 }

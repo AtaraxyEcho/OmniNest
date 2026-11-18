@@ -193,6 +193,13 @@ class DesktopEqualizer extends StatefulWidget {
 
 class _DesktopEqualizerState extends State<DesktopEqualizer>
     with SingleTickerProviderStateMixin {
+  /// 三根 3px 柱 + 两道 2px 间隙 = 13px，即样例 `.eq` 的实占宽度。
+  /// 盒子宽度曾按 `size * 0.55` 推算（`size=13` 时只有 7.15px），三根柱连同
+  /// 间隙要 13px，每帧都抛一次 `RenderFlex overflowed`。
+  static const double _barWidth = 3;
+  static const double _gapWidth = 2;
+  static const double _boxWidth = _barWidth * 3 + _gapWidth * 2;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: DesktopMotion.beat,
@@ -221,7 +228,7 @@ class _DesktopEqualizerState extends State<DesktopEqualizer>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: widget.size * 0.55,
+      width: _boxWidth,
       height: widget.size,
       child: AnimatedBuilder(
         animation: _controller,
@@ -232,9 +239,10 @@ class _DesktopEqualizerState extends State<DesktopEqualizer>
             children: [
               for (var i = 0; i < 3; i++)
                 Padding(
-                  padding: const EdgeInsets.only(right: 2),
+                  // 末根不带尾隙：三根柱加两道间隙正好等于盒子宽度。
+                  padding: EdgeInsets.only(right: i < 2 ? _gapWidth : 0),
                   child: Container(
-                    width: 3,
+                    width: _barWidth,
                     height: _heightAt(_controller.value, i),
                     decoration: BoxDecoration(
                       color: widget.color,

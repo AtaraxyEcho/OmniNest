@@ -70,6 +70,13 @@ public interface MusicPlayHistoryRepository extends JpaRepository<MusicPlayHisto
      */
     long countByOwnerUserId(UUID ownerUserId);
 
+    /** 汇总指定时间后的实际聆听秒数。 */
+    @Query("SELECT COALESCE(SUM(h.playDuration), 0L) FROM MusicPlayHistory h "
+            + "WHERE h.ownerUserId = :ownerUserId AND h.playedAt >= :since")
+    long sumPlayDurationByOwnerSince(@Param("ownerUserId") UUID ownerUserId, @Param("since") Instant since);
+
+    Optional<MusicPlayHistory> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+
     /**
      * 删除用户指定本地曲目的播放历史。
      *

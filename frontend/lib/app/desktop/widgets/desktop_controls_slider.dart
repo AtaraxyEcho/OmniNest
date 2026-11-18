@@ -9,6 +9,7 @@ class DesktopSlider extends StatefulWidget {
     this.min = 0,
     this.onCommit,
     this.width,
+    this.height = 16,
     this.trackColor,
     this.fillColor,
     this.thumbColor,
@@ -28,6 +29,7 @@ class DesktopSlider extends StatefulWidget {
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onCommit;
   final double? width;
+  final double height;
   final Color? trackColor;
   final Color? fillColor;
   final Color? thumbColor;
@@ -125,7 +127,7 @@ class _DesktopSliderState extends State<DesktopSlider> {
           onExit: (_) => setState(() => _hovered = false),
           child: SizedBox(
             width: widget.width,
-            height: 16,
+            height: widget.height,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;

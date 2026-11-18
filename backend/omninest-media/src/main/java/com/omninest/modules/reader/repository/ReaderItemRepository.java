@@ -3,6 +3,7 @@ package com.omninest.modules.reader.repository;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.reader.domain.ReaderItem;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -85,6 +86,20 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
                    OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
             """)
     long countVisibleItems(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
+
+    @Query("""
+            SELECT COUNT(ri) FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND ri.createdAt >= :since
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
+            """)
+    long countVisibleItemsCreatedSince(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("since") Instant since
+    );
 
     /**
      * 分页查询用户可见的阅读条目。

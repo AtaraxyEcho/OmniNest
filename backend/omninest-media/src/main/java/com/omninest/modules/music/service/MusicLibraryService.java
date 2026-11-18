@@ -24,6 +24,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicAlbumDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicArtistDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicDashboardDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryRequest;
+import com.omninest.modules.music.dto.MusicDtos.MusicListeningDurationRequest;
 import com.omninest.modules.music.dto.MusicDtos.MusicRecentItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryDto;
 import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
@@ -38,6 +39,10 @@ import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.music.service.platform.MusicPlatform;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -125,6 +130,8 @@ public class MusicLibraryService {
                 albumRepository.countVisibleActive(ownerUserId, sharedType),
                 artistRepository.countVisibleActive(ownerUserId, sharedType),
                 playHistoryRepository.countByOwnerUserId(ownerUserId),
+                playHistoryRepository.sumPlayDurationByOwnerSince(ownerUserId, currentWeekStart()),
+                trackRepository.countVisibleCreatedSince(ownerUserId, sharedType, currentDayStart()),
                 toTrackSummaryDtos(ownerUserId, trackRepository.findTopVisibleByUpdatedAtDesc(
                         ownerUserId, sharedType, top12)),
                 albumRepository.findTopVisibleActiveByUpdatedAtDesc(ownerUserId, sharedType, top12).stream()
@@ -480,17 +487,46 @@ public class MusicLibraryService {
      * @param request 类型化播放历史请求
      */
     @Transactional(rollbackFor = Exception.class)
-    public void recordPlayHistory(UUID ownerUserId, RecordMusicPlayHistoryRequest request) {
+    public UUID recordPlayHistory(UUID ownerUserId, RecordMusicPlayHistoryRequest request) {
         String playableKey = request.playableKey().trim();
         if (playableKey.startsWith("local:")) {
-            recordLocalHistory(ownerUserId, playableKey, request);
-            return;
+            return recordLocalHistory(ownerUserId, playableKey, request);
         }
         if (playableKey.startsWith("online:")) {
-            recordOnlineHistory(ownerUserId, playableKey, request);
-            return;
+            return recordOnlineHistory(ownerUserId, playableKey, request);
         }
         throw new BusinessException(ErrorCode.PARAM_ERROR, "音乐播放键格式不正确");
+    }
+
+    /**
+     * 按播放会话更新实际聆听时长，客户端重试使用累计值以保持幂等。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param historyId 播放历史会话 ID
+     * @param request 累计实际聆听秒数
+     * @return 服务端保存的累计秒数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int updateListeningDuration(
+            UUID ownerUserId,
+            UUID historyId,
+            MusicListeningDurationRequest request
+    ) {
+        MusicPlayHistory history = playHistoryRepository.findByIdAndOwnerUserId(historyId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "播放历史会话不存在"));
+        int listenedSeconds = request.listenedSeconds();
+        long elapsedSeconds = Math.max(0, Duration.between(history.getPlayedAt(), Instant.now()).getSeconds());
+        if (listenedSeconds > elapsedSeconds + 1) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "实际聆听时长不能超过会话经过时间");
+        }
+        int storedSeconds = history.getPlayDuration() == null ? 0 : history.getPlayDuration();
+        if (listenedSeconds <= storedSeconds) {
+            return storedSeconds;
+        }
+        history.setPlayDuration(listenedSeconds);
+        playHistoryRepository.save(history);
+        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
+        return listenedSeconds;
     }
 
     /**
@@ -566,7 +602,7 @@ public class MusicLibraryService {
                 .orElse(null);
     }
 
-    private void recordLocalHistory(
+    private UUID recordLocalHistory(
             UUID ownerUserId,
             String playableKey,
             RecordMusicPlayHistoryRequest request
@@ -589,9 +625,10 @@ public class MusicLibraryService {
         history.setPlayDuration(request.playDuration());
         history.setPlayedAt(Instant.now());
         savePlayHistory(ownerUserId, history);
+        return history.getId();
     }
 
-    private void recordOnlineHistory(
+    private UUID recordOnlineHistory(
             UUID ownerUserId,
             String playableKey,
             RecordMusicPlayHistoryRequest request
@@ -616,6 +653,19 @@ public class MusicLibraryService {
         history.setPlayDuration(request.playDuration());
         history.setPlayedAt(Instant.now());
         savePlayHistory(ownerUserId, history);
+        return history.getId();
+    }
+
+    private Instant currentWeekStart() {
+        return LocalDate.now(ZoneId.systemDefault())
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant();
+    }
+
+    private Instant currentDayStart() {
+        ZoneId zone = ZoneId.systemDefault();
+        return LocalDate.now(zone).atStartOfDay(zone).toInstant();
     }
 
     private void savePlayHistory(UUID ownerUserId, MusicPlayHistory history) {

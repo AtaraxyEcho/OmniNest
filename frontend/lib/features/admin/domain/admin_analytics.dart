@@ -2,6 +2,7 @@ class AdminAnalytics {
   const AdminAnalytics({
     required this.userGrowth,
     required this.taskThroughput,
+    this.dailyUploads = const [],
     required this.storageGrowth,
     required this.currentLoad,
   });
@@ -10,6 +11,7 @@ class AdminAnalytics {
     return AdminAnalytics(
       userGrowth: _dailyMetrics(json['userGrowth']),
       taskThroughput: _taskMetrics(json['taskThroughput']),
+      dailyUploads: _dailyMetrics(json['dailyUploads']),
       storageGrowth: _dailyMetrics(json['storageGrowth']),
       currentLoad: SystemLoadSnapshot.fromJson(_map(json['currentLoad'])),
     );
@@ -17,6 +19,7 @@ class AdminAnalytics {
 
   final List<DailyMetric> userGrowth;
   final List<DailyTaskMetric> taskThroughput;
+  final List<DailyMetric> dailyUploads;
   final List<DailyMetric> storageGrowth;
   final SystemLoadSnapshot currentLoad;
 }

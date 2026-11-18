@@ -375,6 +375,8 @@ class AdminOperationsApi {
     required String name,
     required String mountKey,
     required String relativeRoot,
+    required String scopeType,
+    String? scopeId,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/admin/storage/locations',
@@ -382,7 +384,8 @@ class AdminOperationsApi {
         'name': name,
         'mountKey': mountKey,
         'relativeRoot': relativeRoot,
-        'scopeType': 'SYSTEM',
+        'scopeType': scopeType,
+        if (scopeId != null) 'scopeId': scopeId,
         'enabled': true,
       },
     );
@@ -595,6 +598,26 @@ class AdminOperationsApi {
       parseData(response.data),
       AdminLoginAuditItem.fromJson,
     );
+  }
+
+  Future<AdminSystemLogPage> systemLogPage({
+    required int page,
+    required int size,
+    String level = '',
+    String source = '',
+    String query = '',
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/logs/system/page',
+      queryParameters: {
+        'page': page,
+        'size': size,
+        'level': level,
+        'source': source,
+        'query': query,
+      },
+    );
+    return AdminSystemLogPage.fromJson(parseData(response.data));
   }
 
   Future<int> cleanupAuditLogs(int retentionDays) async {

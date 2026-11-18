@@ -51,6 +51,18 @@ class AuthClient {
     return AuthTokenResponse.fromJson(data);
   }
 
+  /// 管理员创建账户后的首次登录改密；成功后返回登录令牌或后续 2FA 挑战。
+  Future<AuthLoginResult> completeRequiredPasswordChange({
+    required String challengeToken,
+    required String newPassword,
+  }) async {
+    final data = await _postUnwrapped('/auth/login/password-change', {
+      'challengeToken': challengeToken,
+      'newPassword': newPassword,
+    });
+    return AuthLoginResult.fromJson(data);
+  }
+
   /// 注册引导：用 enroll 挑战令牌生成 TOTP 秘钥。
   Future<TwoFactorSetupData> bootstrapTwoFactorSetup({
     required String challengeToken,

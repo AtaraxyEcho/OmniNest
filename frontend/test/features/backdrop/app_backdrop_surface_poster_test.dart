@@ -13,7 +13,7 @@ void main() {
       id: bundledDefaultWallpaperId,
       path: bundledDefaultWallpaperAssetPath,
       title: 'OmniNest',
-      mediaType: AppBackdropMediaType.video,
+      mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,
       fileSize: 0,
       modifiedAt: DateTime(2026),
@@ -40,21 +40,19 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('内置默认壁纸是打包视频：封面帧垫底且视频层同时挂载', (tester) async {
+  testWidgets('内置默认壁纸直接使用随包照片，不创建视频播放器', (tester) async {
     await pumpBundledSurface(tester);
 
-    // 视频首帧受解码与打开耗时影响，封面帧必须先铺满，避免露出舞台底色。
     expect(
       find.image(const AssetImage(bundledDefaultWallpaperPosterAssetPath)),
       findsOneWidget,
     );
-    expect(find.byType(AppBackdropVideoView), findsOneWidget);
+    expect(find.byType(AppBackdropVideoView), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('历史 v2 图片档的内置壁纸行回退封面帧而不是错误底纹', (tester) async {
-    // 升级前的数据库里存着 mediaType=image 的内置行，素材文件已随 v3 删除。
-    // 这一行要到下一次 ensureBundledBackdrop 才会被覆盖，期间不能显示错误图标。
+  testWidgets('旧路径内置壁纸记录仍显示当前随包照片', (tester) async {
+    // 旧版设置可能保留先前的资源地址；内置记录显示稳定的当前打包资产。
     final legacy = AppBackdropAsset(
       id: bundledDefaultWallpaperId,
       path: 'assets/backdrops/default_desktop.jpg',

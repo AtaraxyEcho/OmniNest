@@ -14,8 +14,10 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
@@ -327,7 +329,23 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                       const SizedBox(height: 12),
                       Expanded(
                         child:
-                            grid
+                            state == null && async.isLoading
+                                ? SingleChildScrollView(
+                                  child:
+                                      grid
+                                          ? const _FileGridSkeleton()
+                                          : const DesktopSkeletonRows(count: 8),
+                                )
+                                : state == null && async.hasError
+                                ? DesktopErrorView(
+                                  message: errorReason(async.error!, l10n),
+                                  onRetry:
+                                      () => ref.invalidate(
+                                        fileBrowserControllerProvider,
+                                      ),
+                                  minHeightFactor: 0.24,
+                                )
+                                : grid
                                 ? SingleChildScrollView(
                                   child: _FileGrid(
                                     items: items,

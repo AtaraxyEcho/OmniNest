@@ -9,14 +9,22 @@ import 'package:omninest/app/desktop/desktop_player_bar.dart'
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_media_import_dialog.dart'
+    show
+        DesktopMediaImportKind,
+        DesktopMediaImportSelection,
+        showDesktopMediaImportDialog;
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_pager.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_track_hue.dart';
@@ -28,11 +36,20 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 // 不带 show 白名单：控制器动作是**无名扩展**，show 会把它们一并滤掉。
+import 'package:omninest/features/files/media_import_ui.dart'
+    show MediaImportButton, MediaImportButtonState;
+import 'package:omninest/features/files/application/file_browser_controller.dart';
+import 'package:omninest/features/files/application/media_import_queue_controller.dart';
+import 'package:omninest/features/files/application/media_import_service.dart'
+    show MediaImportBatchResult;
+import 'package:omninest/features/music/application/music_scan_job_controller.dart';
 import 'package:omninest/features/music/music_portal.dart';
+import 'package:omninest/features/video/application/media_import_task_waiter.dart';
 
 // 页面骨架、主视觉和曲目行分开放置，以职责拆分满足单文件长度守卫。
 part 'desktop_music_widgets.dart';
 part 'desktop_music_rows.dart';
+part 'desktop_music_loading.dart';
 
 /// 桌面音乐页（样例 `Music.tsx` 的 Home/Tracks/Albums）。
 ///
@@ -50,11 +67,191 @@ class DesktopMusicPage extends ConsumerStatefulWidget {
 class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   DesktopMusicTab _tab = DesktopMusicTab.home;
   final TextEditingController _search = TextEditingController();
+  final GlobalKey<MediaImportButtonState> _mediaImportKey =
+      GlobalKey<MediaImportButtonState>();
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  Widget _importAction(BuildContext context, AppLocalizations l10n) {
+    final appContainer = ProviderScope.containerOf(context, listen: false);
+    bool isCurrentSession(int epoch) =>
+        appContainer.read(sessionEpochProvider) == epoch;
+
+    Future<void> completeImport(
+      MediaImportBatchResult result, {
+      required int sessionEpoch,
+    }) async {
+      if (result.imported.isEmpty || !isCurrentSession(sessionEpoch)) return;
+      final taskWaiter = appContainer.read(mediaImportTaskWaiterProvider);
+      for (final file in result.imported) {
+        if (!isCurrentSession(sessionEpoch)) return;
+        final taskId = file.mediaAutoImportTaskId;
+        if (taskId == null || taskId.isEmpty) continue;
+        try {
+          await taskWaiter.waitForTerminal(taskId);
+        } on Object catch (error) {
+          if (isCurrentSession(sessionEpoch) && mounted && context.mounted) {
+            showDesktopToast(
+              context,
+              failureToast(l10n, l10n.filesImport, error),
+              kind: DesktopToastKind.warn,
+            );
+          }
+        }
+        if (!isCurrentSession(sessionEpoch)) return;
+      }
+      if (!isCurrentSession(sessionEpoch)) return;
+      await appContainer
+          .read(musicScanJobControllerProvider.notifier)
+          .startScan();
+      if (!isCurrentSession(sessionEpoch)) return;
+      await appContainer.read(musicCenterControllerProvider.notifier).refresh();
+    }
+
+    return MediaImportButton(
+      key: _mediaImportKey,
+      subsystemDirectory: 'Music',
+      allowSharedSpace: false,
+      acceptedExtensions: const <String>[
+        'mp3',
+        'flac',
+        'aac',
+        'm4a',
+        'ogg',
+        'opus',
+        'wav',
+        'wma',
+      ],
+      label: l10n.filesImport,
+      onPressedOverride: () => unawaited(_openImportDialog(context, l10n)),
+      buttonBuilder:
+          (context, {required onPressed, required busy}) => DesktopButton(
+            label: l10n.filesImport,
+            icon: DesktopIcons.download,
+            variant: DesktopButtonVariant.soft,
+            onPressed: onPressed,
+            busy: busy,
+          ),
+      onFilesPicked: (files, spaceType) {
+        final importSessionEpoch = appContainer.read(sessionEpochProvider);
+        ref
+            .read(mediaImportQueueProvider.notifier)
+            .enqueue(
+              files: files,
+              directoryName: 'Music',
+              spaceType: spaceType,
+              reuseExistingFiles: false,
+              titleForFile:
+                  (file) =>
+                      '${l10n.desktopMediaImportTaskMusic} · ${file.name}',
+              onComplete: (result) async {
+                await completeImport(result, sessionEpoch: importSessionEpoch);
+                if (!isCurrentSession(importSessionEpoch) ||
+                    !mounted ||
+                    !context.mounted) {
+                  return;
+                }
+                if (result.failures.isEmpty) {
+                  showDesktopToast(
+                    context,
+                    l10n.importComplete(result.imported.length),
+                    icon: DesktopIcons.check,
+                  );
+                } else {
+                  showDesktopToast(
+                    context,
+                    l10n.importFailed,
+                    kind: DesktopToastKind.warn,
+                  );
+                }
+              },
+            );
+        showDesktopToast(
+          context,
+          l10n.desktopMediaImportQueued(files.length),
+          icon: DesktopIcons.download,
+          actionLabel: l10n.desktopViewTasks,
+          onAction:
+              () => appContainer
+                  .read(desktopShellProvider.notifier)
+                  .setPanel(DesktopPanel.tasks),
+        );
+      },
+      onImportComplete: () async {
+        await appContainer
+            .read(musicScanJobControllerProvider.notifier)
+            .startScan();
+        if (!context.mounted) return;
+        await appContainer
+            .read(musicCenterControllerProvider.notifier)
+            .refresh();
+      },
+    );
+  }
+
+  Future<void> _openImportDialog(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) async {
+    final selection = await showDesktopMediaImportDialog(
+      context,
+      kind: DesktopMediaImportKind.music,
+    );
+    if (!mounted || !context.mounted || selection == null) return;
+    if (selection.deviceFiles.isNotEmpty) {
+      await _mediaImportKey.currentState?.importFiles(selection.deviceFiles);
+      return;
+    }
+    if (selection.fileNodeIds.isNotEmpty) {
+      await _importExistingFiles(context, l10n, selection);
+    }
+  }
+
+  Future<void> _importExistingFiles(
+    BuildContext context,
+    AppLocalizations l10n,
+    DesktopMediaImportSelection selection,
+  ) async {
+    try {
+      final tasks = await ref
+          .read(fileBrowserControllerProvider.notifier)
+          .requestMediaImports(
+            fileNodeIds: selection.fileNodeIds,
+            mediaType: 'MUSIC',
+          );
+      if (!mounted || !context.mounted) return;
+      showDesktopToast(
+        context,
+        l10n.importProcessing(tasks.length),
+        kind: DesktopToastKind.info,
+      );
+      final taskWaiter = ref.read(mediaImportTaskWaiterProvider);
+      for (final task in tasks) {
+        try {
+          await taskWaiter.waitForTerminal(task.taskId);
+        } on Object catch (error) {
+          if (!mounted || !context.mounted) return;
+          showDesktopToast(
+            context,
+            failureToast(l10n, l10n.filesImport, error),
+            kind: DesktopToastKind.warn,
+          );
+        }
+        if (!mounted || !context.mounted) return;
+      }
+      await ref.read(musicCenterControllerProvider.notifier).refresh();
+    } on Object catch (error) {
+      if (!mounted || !context.mounted) return;
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.filesImport, error),
+        kind: DesktopToastKind.error,
+      );
+    }
   }
 
   Future<void> _openPlaylist(MusicPlaylist playlist) async {
@@ -250,12 +447,20 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final state = ref.watch(musicCenterControllerProvider).asData?.value;
+    final musicAsync = ref.watch(musicCenterControllerProvider);
+    final state = musicAsync.asData?.value;
     final actions = ref.watch(musicPortalActionsProvider);
     final selectedPlaylist =
         state?.section == MusicSection.playlistDetail
             ? state?.selectedPlaylist
             : null;
+    Widget initialContent() =>
+        musicAsync.hasError
+            ? DesktopErrorView(
+              message: errorReason(musicAsync.error!, l10n),
+              onRetry: () => ref.invalidate(musicCenterControllerProvider),
+            )
+            : _MusicLoadingSkeleton(tab: _tab);
 
     final labels = <DesktopMusicTab, String>{
       DesktopMusicTab.home: l10n.desktopNavHome,
@@ -313,6 +518,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                         .toUpperCase(),
                 title: l10n.desktopNavMusic,
                 actions: [
+                  _importAction(context, l10n),
                   DesktopSeg<DesktopMusicTab>(
                     options: DesktopMusicTab.values,
                     value: _tab,
@@ -322,6 +528,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 ],
               ),
               switch (_tab) {
+                DesktopMusicTab.home when state == null => initialContent(),
                 DesktopMusicTab.home => _Home(
                   state: state,
                   playlists: state?.playlists ?? const <MusicPlaylist>[],
@@ -338,11 +545,14 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   onPlayQueueItem:
                       (index) => actions.playQueueAt(index).ignore(),
                 ),
+                DesktopMusicTab.playlists when state == null =>
+                  initialContent(),
                 DesktopMusicTab.playlists => _PlaylistGrid(
                   playlists: state?.playlists ?? const <MusicPlaylist>[],
                   onOpen: _openPlaylist,
                   onCreate: () => _editPlaylist(),
                 ),
+                DesktopMusicTab.tracks when state == null => initialContent(),
                 DesktopMusicTab.tracks => _TracksView(
                   tracks: state?.tracks ?? const [],
                   search: _search,
@@ -350,6 +560,8 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   currentId: state?.currentItem?.playableKey,
                   playing: state?.isPlaying ?? false,
                 ),
+                DesktopMusicTab.favorites when state == null =>
+                  initialContent(),
                 DesktopMusicTab.favorites => _TracksView(
                   tracks:
                       state?.tracks
@@ -362,6 +574,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   playing: state?.isPlaying ?? false,
                   showControls: false,
                 ),
+                DesktopMusicTab.albums when state == null => initialContent(),
                 DesktopMusicTab.albums => _AlbumGrid(
                   albums: state?.albums ?? const [],
                   emptyLabel: l10n.musicNoAlbums,

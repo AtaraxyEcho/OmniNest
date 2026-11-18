@@ -1,6 +1,16 @@
 part of 'file_browser_controller.dart';
 
 extension FileBrowserSelectionActions on FileBrowserController {
+  Future<List<FileMediaImportTask>> requestMediaImports({
+    required List<String> fileNodeIds,
+    required String mediaType,
+  }) {
+    return _repository.requestMediaImports(
+      fileNodeIds: fileNodeIds,
+      mediaType: mediaType,
+    );
+  }
+
   // ── 乐观更新 ──────────────────────────────────────────────────────────
   //
   // 样例的收藏 / 删除 / 重命名都是「先动界面，再等网络」：`.f-row.sel .keep`

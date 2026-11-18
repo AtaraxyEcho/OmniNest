@@ -7,6 +7,7 @@ import com.omninest.modules.user.dto.AdminBatchUpdateUserStatusRequest;
 import com.omninest.modules.user.dto.AdminBatchUserStatusResult;
 import com.omninest.modules.user.dto.AdminOperationsDto;
 import com.omninest.modules.user.dto.AdminCreateUserRequest;
+import com.omninest.modules.user.dto.AdminUpdateUserProfileRequest;
 import com.omninest.modules.user.dto.AdminUpdateUserStatusRequest;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.service.AdminUserDeletionService;
@@ -33,8 +34,8 @@ public class AdminUserController {
     private final AdminUserService adminUserService;
     private final AdminUserDeletionService adminUserDeletionService;
 
-    @Operation(summary = "分页查询用户列表", description = "支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤与白名单字段排序"
-            + "（sort 取值 username/email/status/usedBytes/quotaBytes/createdAt，dir 取值 asc/desc）")
+    @Operation(summary = "分页查询用户列表", description = "支持按用户名、展示名、邮箱模糊搜索，按角色与状态过滤，并按白名单字段排序"
+            + "（sort 取值 username/email/status/usedBytes/quotaBytes/createdAt/lastLoginAt，dir 取值 asc/desc）")
     @GetMapping("/api/v1/admin/users")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_USER_READ + "')")
     ApiResponse<PageResponse<AuthUserDto>> listUsers(
@@ -42,10 +43,11 @@ public class AdminUserController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(defaultValue = "") String query,
             @RequestParam(defaultValue = "") String role,
+            @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "username") String sort,
             @RequestParam(defaultValue = "asc") String dir
     ) {
-        var result = adminUserService.listUsers(page, size, query, role, sort, dir);
+        var result = adminUserService.listUsers(page, size, query, role, status, sort, dir);
         return ApiResponse.success(PageResponse.of(
                 result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
@@ -55,6 +57,21 @@ public class AdminUserController {
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_USER_MANAGE + "')")
     ApiResponse<AuthUserDto> createUser(@Valid @RequestBody AdminCreateUserRequest request) {
         return ApiResponse.success(adminUserService.createUser(request));
+    }
+
+    @Operation(summary = "更新用户展示名称与邮箱")
+    @PatchMapping("/api/v1/admin/users/{userId}/profile")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_USER_MANAGE + "')")
+    ApiResponse<AuthUserDto> updateUserProfile(
+            @PathVariable UUID userId,
+            @Valid @RequestBody AdminUpdateUserProfileRequest request
+    ) {
+        return ApiResponse.success(
+                adminUserService.updateUserProfile(
+                        userId,
+                        request.displayName(),
+                        request.email(),
+                        request.requirePasswordChange()));
     }
 
     @Operation(summary = "更新用户状态（启用/禁用）")

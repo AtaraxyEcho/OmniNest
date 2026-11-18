@@ -970,47 +970,15 @@ class _TracksViewState extends State<_TracksView> {
                   children: [
                     SizedBox(
                       width: 320,
-                      child: TextField(
+                      child: DesktopTextField(
                         key: const ValueKey<String>('desktop-music-search'),
                         controller: widget.search,
                         onChanged: (value) {
                           setState(() => _page = 0);
                         },
-                        style: DesktopType.dense(skin.text),
-                        cursorColor: skin.accent,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: l10n.desktopMusicSearchHint,
-                          hintStyle: DesktopType.dense(skin.text3),
-                          prefixIcon: Icon(
-                            DesktopIcons.search,
-                            size: 15,
-                            color: skin.text3,
-                          ),
-                          filled: true,
-                          fillColor: skin.raise,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 11,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              DesktopMetrics.radiusButton,
-                            ),
-                            borderSide: BorderSide(color: skin.line2),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              DesktopMetrics.radiusButton,
-                            ),
-                            borderSide: BorderSide(color: skin.line2),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              DesktopMetrics.radiusButton,
-                            ),
-                            borderSide: BorderSide(color: skin.accent),
-                          ),
-                        ),
+                        hint: l10n.desktopMusicSearchHint,
+                        prefixIcon: DesktopIcons.search,
+                        height: 36,
                       ),
                     ),
                     DesktopChipButton(

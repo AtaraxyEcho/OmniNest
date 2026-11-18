@@ -88,8 +88,14 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                       DesktopButton(
                         label: l10n.adminRollback,
                         variant: DesktopButtonVariant.ghost,
+                        tooltip:
+                            change.rollbackAvailable
+                                ? null
+                                : l10n.desktopConfigSecretRollbackUnavailable,
                         onPressed:
-                            _rollingBack ? null : () => _rollback(change),
+                            _rollingBack || !change.rollbackAvailable
+                                ? null
+                                : () => _rollback(change),
                       ),
                     ],
                   ),

@@ -13,6 +13,7 @@ import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/files/domain/file_media_import_task.dart';
 import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';

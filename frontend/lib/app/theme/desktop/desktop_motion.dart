@@ -20,6 +20,9 @@ abstract final class DesktopMotion {
   /// CSS `ease-out`，ken-burns 与缓慢推镜。
   static const Cubic easeOut = Cubic(0.25, 0.1, 0.25, 1);
 
+  /// CSS 关键字 `ease-out`，用于和样例原生 CSS 动画一致的缓慢推镜。
+  static const Cubic cssEaseOut = Cubic(0, 0, 0.58, 1);
+
   // 样例里另有 6 条专用曲线，之前只用了上面的通用档近似。
   /// 抽屉 `dr-in` 的 `cubic-bezier(.22,.9,.24,1)`。
   static const Cubic drawerCurve = Cubic(0.22, 0.9, 0.24, 1);
@@ -39,6 +42,18 @@ abstract final class DesktopMotion {
   // ── 时长（样例实测）─────────────────────────────────────────────────
   /// `.tb-btn` 的背景/颜色过渡。
   static const Duration fast = Duration(milliseconds: 200);
+
+  /// Photos 样例长按 300ms 后进入照片排序拖动。
+  static const Duration photoReorderHold = Duration(milliseconds: 300);
+
+  /// Photos FLIP 顺序交换动效时长。
+  static const Duration photoReorderFlip = Duration(milliseconds: 460);
+
+  /// Photos 拖动结束后影像回到目标位置的时长。
+  static const Duration photoReorderSettle = Duration(milliseconds: 420);
+
+  /// Photos 连续换位的迟滞，防止指针停在边界时反复交换。
+  static const Duration photoReorderSwapCooldown = Duration(milliseconds: 260);
 
   /// `--spring` 的悬停缩放。
   static const Duration springHover = Duration(milliseconds: 250);
@@ -116,6 +131,9 @@ abstract final class DesktopMotion {
 
   /// 登录画幅文案入场（样例 `.art-copy h1 { animation: rise 1s }`）。
   static const Duration authCopy = Duration(seconds: 1);
+
+  /// 登录壁纸缓慢推镜（样例 `.auth-art .img { animation: kenburns 30s }`）。
+  static const Duration authKenBurns = Duration(seconds: 30);
 
   /// 徽标出现时的弹入（样例 `pop .5s`）。
   static const Duration badge = Duration(milliseconds: 500);
@@ -275,16 +293,23 @@ class _DesktopRiseState extends State<DesktopRise>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final t = DesktopMotion.ease.transform(_progress);
+        final t = DesktopMotion.ease.transform(_progress).clamp(0.0, 1.0);
         return Opacity(
-          opacity: t.clamp(0.0, 1.0),
+          opacity: t,
           child: Transform.translate(
             offset: Offset((1 - t) * widget.offsetX, (1 - t) * widget.offset),
             child: child,
           ),
         );
       },
-      child: widget.child,
+      // 淡入期间的 `Opacity` 会把子树的 display list 直接录进自己的
+      // saveLayer；没有边界时，卡片内部任何一帧变化都会连带整块内容重录。
+      //
+      // 不在这里做「动画结束后换成裸 child」的短路：那会在渡入完成的那一帧
+      // 把渲染树拓扑从 Opacity→Transform→边界 改成裸边界，`desktop_files_view_test`
+      // 的悬停断言实测会被这一次拓扑切换打断（行内动作停在 opacity 0），
+      // 而 Opacity(1) 与恒等 Transform 本身不产生层也无像素差，收益为零。
+      child: RepaintBoundary(child: widget.child),
     );
   }
 }

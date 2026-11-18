@@ -55,6 +55,10 @@ class _DesktopLogsPanel extends StatelessWidget {
     required this.auditPage,
     required this.loginPage,
     required this.tabIndex,
+    this.showTabs = true,
+    this.embedded = false,
+    required this.searchController,
+    required this.onSearch,
     required this.auditFilter,
     required this.loginFilter,
     required this.filterOptions,
@@ -72,6 +76,10 @@ class _DesktopLogsPanel extends StatelessWidget {
   final AdminPage<AdminAuditLog>? auditPage;
   final AdminPage<AdminLoginAuditItem>? loginPage;
   final int tabIndex;
+  final bool showTabs;
+  final bool embedded;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
   final String auditFilter;
   final String loginFilter;
   final List<String> filterOptions;
@@ -96,6 +104,109 @@ class _DesktopLogsPanel extends StatelessWidget {
     final options =
         auditMode ? filterOptions : const <String>['ALL', 'SUCCESS', 'FAILED'];
 
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (embedded)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 320,
+                child: DesktopTextField(
+                  controller: searchController,
+                  hint: l10n.adminLoginAuditSearchHint,
+                  prefixIcon: DesktopIcons.search,
+                  height: 36,
+                  onChanged: onSearch,
+                ),
+              ),
+              DesktopButton(
+                label: l10n.adminListExportCsv,
+                icon: DesktopIcons.download,
+                variant: DesktopButtonVariant.ghost,
+                onPressed: onExport,
+              ),
+              DesktopButton(
+                label: l10n.adminCleanup,
+                icon: DesktopIcons.trash,
+                variant: DesktopButtonVariant.ghost,
+                onPressed: onCleanup,
+              ),
+            ],
+          ),
+        if (showTabs) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: DesktopSeg<int>(
+              options: const [0, 1],
+              value: tabIndex,
+              small: true,
+              labelOf:
+                  (value) =>
+                      value == 0
+                          ? '${l10n.adminTabAudit} · ${auditPage?.totalElements ?? '-'}'
+                          : '${l10n.adminTabLoginLog} · ${loginPage?.totalElements ?? '-'}',
+              onChanged: onTab,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final value in options.take(14))
+              DesktopChipButton(
+                label: _logFilterLabel(l10n, value),
+                selected: filter == value,
+                onTap: () => onFilter(value),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                Text(error, style: DesktopType.caption(skin.bad)),
+                const SizedBox(height: 6),
+                DesktopLink(label: l10n.coreRetry, onPressed: onRetry),
+              ],
+            ),
+          )
+        else if (page == null || page.items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: Text(
+                l10n.adminNoMatch,
+                style: DesktopType.caption(skin.text3),
+              ),
+            ),
+          )
+        else if (auditMode)
+          for (var i = 0; i < auditPage!.items.length; i++)
+            _DesktopAuditRow(
+              log: auditPage!.items[i],
+              first: i == 0,
+              onTap: () => onAuditDetail(auditPage!.items[i]),
+            )
+        else
+          for (var i = 0; i < loginPage!.items.length; i++)
+            _DesktopLoginRow(log: loginPage!.items[i], first: i == 0),
+        AdminPager(
+          page: page?.page ?? 0,
+          totalPages: page?.totalPages ?? 1,
+          summary: auditMode ? l10n.adminTabAudit : l10n.adminTabLoginLog,
+          onPageChanged: onPage,
+        ),
+      ],
+    );
+    if (embedded) return content;
     return AdminCard(
       title: l10n.adminLogCenter,
       subtitle: l10n.adminLogCenterSubtitle,
@@ -117,76 +228,7 @@ class _DesktopLogsPanel extends StatelessWidget {
         ],
       ),
       childGap: 14,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: DesktopSeg<int>(
-              options: const [0, 1],
-              value: tabIndex,
-              small: true,
-              labelOf:
-                  (value) =>
-                      value == 0
-                          ? '${l10n.adminTabAudit} · ${auditPage?.totalElements ?? '-'}'
-                          : '${l10n.adminTabLoginLog} · ${loginPage?.totalElements ?? '-'}',
-              onChanged: onTab,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final value in options.take(14))
-                DesktopChipButton(
-                  label: _logFilterLabel(l10n, value),
-                  selected: filter == value,
-                  onTap: () => onFilter(value),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(
-                children: [
-                  Text(error, style: DesktopType.caption(skin.bad)),
-                  const SizedBox(height: 6),
-                  DesktopLink(label: l10n.coreRetry, onPressed: onRetry),
-                ],
-              ),
-            )
-          else if (page == null || page.items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Center(
-                child: Text(
-                  l10n.adminNoMatch,
-                  style: DesktopType.caption(skin.text3),
-                ),
-              ),
-            )
-          else if (auditMode)
-            for (var i = 0; i < auditPage!.items.length; i++)
-              _DesktopAuditRow(
-                log: auditPage!.items[i],
-                first: i == 0,
-                onTap: () => onAuditDetail(auditPage!.items[i]),
-              )
-          else
-            for (var i = 0; i < loginPage!.items.length; i++)
-              _DesktopLoginRow(log: loginPage!.items[i], first: i == 0),
-          AdminPager(
-            page: page?.page ?? 0,
-            totalPages: page?.totalPages ?? 1,
-            summary: auditMode ? l10n.adminTabAudit : l10n.adminTabLoginLog,
-            onPageChanged: onPage,
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 }

@@ -1,6 +1,7 @@
 package com.omninest.modules.user.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.omninest.modules.quota.port.StorageCategoryMetric;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +62,8 @@ public record AdminConsoleSummaryDto(
             @Schema(description = "文件夹数量", example = "200") long folderCount,
             @Schema(description = "对象数量", example = "5200") long objectCount,
             @Schema(description = "已用存储（字节）", example = "10737418240") long usedBytes,
-            @Schema(description = "外部存储账户数", example = "2") long externalAccountCount
+            @Schema(description = "外部存储账户数", example = "2") long externalAccountCount,
+            @Schema(description = "按实际对象 MIME 汇总的用量分布") List<StorageCategoryMetric> categoryBreakdown
     ) {
     }
 

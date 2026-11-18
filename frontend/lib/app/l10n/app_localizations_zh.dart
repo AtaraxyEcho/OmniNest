@@ -876,6 +876,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changePasswordMinLength => '密码至少 8 位';
 
   @override
+  String get changePasswordStrengthTooShort => '太短';
+
+  @override
   String get changePasswordMaxLength => '密码最多 64 位，且不超过 72 个 UTF-8 字节';
 
   @override
@@ -883,6 +886,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get loginTwoFactorTitle => '两步验证';
+
+  @override
+  String get loginInitialPasswordChangeTitle => '请设置新密码';
+
+  @override
+  String get loginInitialPasswordChangeSubtitle => '管理员提供的是临时密码，请先替换后继续使用。';
+
+  @override
+  String get loginInitialPasswordLabel => '新密码';
+
+  @override
+  String get loginInitialPasswordConfirmLabel => '确认新密码';
+
+  @override
+  String get loginInitialPasswordMismatch => '两次输入的密码不一致。';
+
+  @override
+  String get loginInitialPasswordLength => '密码长度需为 8 到 64 个字符。';
+
+  @override
+  String get loginInitialPasswordChangeAction => '保存密码并继续';
 
   @override
   String get loginTwoFactorSubtitle => '输入验证器 App 中的 6 位验证码完成登录';
@@ -3600,6 +3624,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageOverview => '存储概览';
 
   @override
+  String get adminStorageUsageTitle => '用量';
+
+  @override
   String adminPercentUsed(Object percent) {
     return '$percent% 已使用';
   }
@@ -3643,6 +3670,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String adminStorageFileCount(Object count) {
     return '$count 个文件';
   }
+
+  @override
+  String adminStorageFolderCount(Object count) {
+    return '$count 个文件夹';
+  }
+
+  @override
+  String adminStorageObjectCount(Object count) {
+    return '$count 个对象';
+  }
+
+  @override
+  String get adminStorageUsageTotal => '总已用空间';
 
   @override
   String adminOverviewTasksTotal(Object count) {
@@ -3844,6 +3884,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String adminResetTwoFactorConfirmMessage(Object name) {
     return '清除 $name 的动态口令秘钥与备份码，并退出其全部会话。用于认证器丢失或凭据加密密钥轮换后的恢复；该用户之后可用密码登录并重新开启两步验证。';
   }
+
+  @override
+  String get adminRequirePasswordChangeLabel => '首次登录时要求修改密码';
+
+  @override
+  String get adminRequirePasswordChangeHint =>
+      '用户必须先替换管理员生成的临时密码，才能访问 OmniNest。';
 
   @override
   String get adminEditRolesHint => '可多选分配系统角色。变更角色将立即调整该用户的权限策略与可见菜单。';
@@ -4105,6 +4152,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminTaskListSubtitle => '失败、取消、死信状态支持重新入队。';
+
+  @override
+  String get adminTaskSearchHint => '搜索任务标题、类型、所有者或错误';
+
+  @override
+  String get adminDlqSearchHint => '搜索任务标题、类型或错误';
+
+  @override
+  String get adminDlqDiscardAll => '全部丢弃';
+
+  @override
+  String get adminTaskFilterSucceeded => '成功';
+
+  @override
+  String get adminLoginAuditSearchHint => '搜索用户、设备、IP 或原因';
+
+  @override
+  String get adminSessionSearchHint => '搜索用户、设备或 IP';
 
   @override
   String get adminNoBackgroundTasks => '当前没有后台任务。';
@@ -4962,6 +5027,48 @@ class AppLocalizationsZh extends AppLocalizations {
       '管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。';
 
   @override
+  String get adminStorageAddAction => '添加';
+
+  @override
+  String get adminStorageAddLocation => '添加存储位置';
+
+  @override
+  String get adminStorageAddLocationHint => '挂载键来自部署允许列表。';
+
+  @override
+  String get adminStorageDisplayName => '显示名称';
+
+  @override
+  String get adminStorageSectionLabel => '存储';
+
+  @override
+  String get adminStorageVisibleTo => '可见范围';
+
+  @override
+  String get adminStorageScopeEveryone => '所有人（系统级）';
+
+  @override
+  String get adminStorageScopeOneUser => '单个用户';
+
+  @override
+  String get adminStorageMountAction => '挂载';
+
+  @override
+  String get adminStorageNameHint => '例如：家庭媒体';
+
+  @override
+  String get adminStorageMountRoot => '挂载根目录';
+
+  @override
+  String get adminStorageBrowseFailed => '无法读取目录列表。';
+
+  @override
+  String get adminStorageCreated => '已添加存储位置。';
+
+  @override
+  String get adminStorageAdvancedLibraries => '媒体库源与挂载控制';
+
+  @override
   String get adminBucketConfig => '桶配置';
 
   @override
@@ -4995,6 +5102,20 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get adminOAuthAppsSubtitle =>
       '实例级集成配置：为 OneDrive / Google 等连接器登记应用凭据，用户连接的 OAuth 授权依赖此项。';
+
+  @override
+  String adminOAuthProviderAccountTitle(String provider) {
+    return '$provider 账户';
+  }
+
+  @override
+  String get adminOAuthSecretStorageHint => '密钥会加密保存，之后不会再次显示。';
+
+  @override
+  String get adminOAuthNotConfigured => '尚未配置';
+
+  @override
+  String get adminConfigure => '配置';
 
   @override
   String get adminOAuthRedirectHint => '需与提供方控制台注册的重定向 URI 完全一致，通常为本站回调地址。';
@@ -5403,6 +5524,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminCreateUser => '创建用户';
 
   @override
+  String get adminCreateAccountEyebrow => '创建账户';
+
+  @override
   String get adminSearchUsers => '搜索用户名、昵称或邮箱';
 
   @override
@@ -5508,6 +5632,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminQuotaHint => '例如：50';
 
   @override
+  String get adminQuotaDefaultHint => '留空时使用系统配置的默认值；自定义范围为 1–10000 GiB。';
+
+  @override
+  String get adminQuotaRangeError => '请输入 1–10000 GiB 范围内的配额';
+
+  @override
+  String get adminPasswordShareHint => '请通过私密渠道将初始密码告知用户。';
+
+  @override
   String get adminSaving => '保存中';
 
   @override
@@ -5558,6 +5691,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminUsername => '用户名';
+
+  @override
+  String get adminAccount => '账户';
+
+  @override
+  String get adminAccountFormatError =>
+      '使用 3–24 个字符：以小写字母开头，后续可使用小写字母、数字、点、短横线或下划线。';
 
   @override
   String get adminEnterUsername => '请输入用户名';
@@ -6028,6 +6168,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String adminRecalculateDone(Object count) {
     return '已更新 $count 位用户的存储用量';
   }
+
+  @override
+  String get adminUploads14Days => '最近 14 天上传量';
+
+  @override
+  String get adminRecalculateStorageTitle => '重新计算存储';
+
+  @override
+  String get adminRecalculateStorageSubtitle => '根据对象存储重新计算每位用户的用量。';
 
   @override
   String get adminApiResponseFormat => 'Admin 响应格式不正确';
@@ -12902,6 +13051,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopPinned => '固定';
 
   @override
+  String get desktopPinnedEveningDrift => '暮色漂流';
+
+  @override
+  String get desktopPinnedGoldenHour => '黄金时刻';
+
+  @override
   String get desktopPinnedContinue => '继续观看';
 
   @override
@@ -12914,6 +13069,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopStorage => '存储';
 
   @override
+  String get desktopStorageCloudTitle => 'OmniCloud';
+
+  @override
   String desktopStorageUsage(String used, String total) {
     return '$used / $total';
   }
@@ -12922,6 +13080,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String desktopStorageUnlimited(String used) {
     return '已用 $used · 无配额';
   }
+
+  @override
+  String get desktopStorageNoQuota => '无配额';
+
+  @override
+  String get desktopStorageVideo => '视频';
+
+  @override
+  String get desktopStoragePhotos => '照片';
+
+  @override
+  String get desktopStorageMusic => '音乐';
+
+  @override
+  String get desktopStorageDocuments => '文档';
+
+  @override
+  String get desktopStorageFindDuplicates => '查找重复文件';
+
+  @override
+  String get desktopStorageDuplicatesUnavailable => '当前版本暂不支持重复文件扫描。';
+
+  @override
+  String desktopStorageDuplicateScanFound(String size) {
+    return '重复文件可释放 $size';
+  }
+
+  @override
+  String get desktopStorageDuplicateScanNone => '没有发现重复文件。';
+
+  @override
+  String get desktopStorageDuplicateScanNonePartial => '在已验证摘要的文件中没有发现重复项。';
+
+  @override
+  String desktopStorageDuplicateScanSkipped(String count) {
+    return '$count 个文件缺少已验证的内容摘要，未参与扫描。';
+  }
+
+  @override
+  String get desktopStorageNoBreakdown => '暂无文件类别统计。';
 
   @override
   String get desktopOfflineBar => '当前离线。播放进度与阅读位置会先存本地，恢复连接后自动同步。';
@@ -13600,8 +13798,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String desktopStatListeningSub(int n) {
-    return '最近播放 $n 次';
+  String get desktopStatListeningSub => '本周聆听';
+
+  @override
+  String get desktopStatHours => '小时';
+
+  @override
+  String desktopStatLibraryAddedToday(int count) {
+    return '今日新增 $count 项';
   }
 
   @override
@@ -13665,6 +13869,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopSeeAll => '查看全部';
+
+  @override
+  String get desktopMoviesFeatureFilms => '电影';
+
+  @override
+  String desktopMoviesTitlesCount(int count) {
+    return '$count 部影片';
+  }
 
   @override
   String get desktopUpNext => '接下来播放';
@@ -14162,6 +14374,23 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get desktopPhotosOrderSaved => '照片顺序已保存';
+
+  @override
+  String desktopPhotosMovedCount(int count) {
+    return '已移动 $count 张照片';
+  }
+
+  @override
+  String get desktopPhotosOrderReset => '照片顺序已重置';
+
+  @override
+  String get desktopPhotosResetOrder => '重置顺序';
+
+  @override
+  String get desktopPhotosOrderSaveFailed => '照片顺序保存失败，请重试。';
+
+  @override
   String get desktopPhotosSelect => '选择照片';
 
   @override
@@ -14412,6 +14641,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String desktopConfigUnsaved(int count) {
     return '$count 项未保存';
   }
+
+  @override
+  String desktopConfigOverview(int count, int modified) {
+    return '$count 项参数 · $modified 项偏离默认值';
+  }
+
+  @override
+  String get desktopConfigRestoreDefaults => '恢复默认值';
+
+  @override
+  String get desktopConfigSecretRollbackUnavailable => '旧密钥已隐藏，无法在此恢复。';
 
   @override
   String get adminConfigReadOnly => '只读';
@@ -14766,6 +15006,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopMoviesEmptyHistoryBody => '开始观看的影片会出现在这里。';
 
   @override
+  String get desktopMoviesEmptyLibraryTitle => '影视片库还是空的';
+
+  @override
   String get desktopMoviesEmptyLibraryBody => '导入影片或剧集后就会出现在这里。';
 
   @override
@@ -14815,4 +15058,149 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosDownloadNeedsOriginal => '请先打开照片——列表数据没有原图地址';
+
+  @override
+  String get adminSortLabel => '排序';
+
+  @override
+  String get adminSortName => '名称';
+
+  @override
+  String get adminSortStorageUsed => '存储用量';
+
+  @override
+  String get adminSortLastActive => '最近活跃';
+
+  @override
+  String get adminGeneratePassword => '生成密码';
+
+  @override
+  String get adminShowPassword => '显示密码';
+
+  @override
+  String get adminHidePassword => '隐藏密码';
+
+  @override
+  String get adminAccountEnabled => '账户启用';
+
+  @override
+  String get adminDisabledAccountsCannotSignIn => '停用的账户无法登录。';
+
+  @override
+  String get adminUserCreated => '用户已创建';
+
+  @override
+  String get adminRoleCreated => '角色已创建';
+
+  @override
+  String get desktopMoviesEmptySeriesTitle => '暂无剧集';
+
+  @override
+  String get desktopMoviesEmptySeriesBody => '添加到片库的剧集会显示在这里。';
+
+  @override
+  String get desktopMoviesEmptyAnimeTitle => '暂无动漫';
+
+  @override
+  String get desktopMoviesEmptyAnimeBody => '添加到片库的动漫剧集会显示在这里。';
+
+  @override
+  String get filesLocalLibrary => '本地曲库';
+
+  @override
+  String get musicScanStatusLabel => '扫描中';
+
+  @override
+  String get musicScanQueued => '已开始扫描音乐';
+
+  @override
+  String get desktopServicesOther => '其他服务';
+
+  @override
+  String get desktopLastFmScrobbling => 'Last.fm 收听记录同步';
+
+  @override
+  String get desktopLastFmUnavailable => '此服务器尚未提供 Last.fm 同步。';
+
+  @override
+  String get adminNotConfigured => '暂不可用';
+
+  @override
+  String get adminSystemLogs => '系统日志';
+
+  @override
+  String get adminSystemLogSource => '来源';
+
+  @override
+  String get adminSystemLogMessage => '消息';
+
+  @override
+  String get adminSystemLogsUnavailable => '此服务端尚未提供系统日志流接口。';
+
+  @override
+  String get desktopMediaImportMoviesTitle => '添加电影和剧集';
+
+  @override
+  String get desktopMediaImportMoviesHint =>
+      '从我的文件中选择 MKV、MP4、MOV 和 AVI 文件，导入后可匹配影片元数据。';
+
+  @override
+  String get desktopMediaImportPhotosTitle => '添加照片和视频';
+
+  @override
+  String get desktopMediaImportPhotosHint =>
+      '从我的文件中选择 JPG、HEIC、PNG、RAW 或视频文件，导入时会识别重复文件。';
+
+  @override
+  String get desktopMediaImportMusicTitle => '添加音乐';
+
+  @override
+  String get desktopMediaImportMusicHint =>
+      '从我的文件中选择 FLAC、MP3、AAC 和 WAV 文件，导入时会读取标签和封面。';
+
+  @override
+  String get desktopMediaImportFromFiles => '从我的文件';
+
+  @override
+  String get desktopMediaImportFromDevice => '从此设备';
+
+  @override
+  String get desktopMediaImportDeviceHint => '选择此电脑中的文件。文件会先上传到我的文件，再加入媒体库。';
+
+  @override
+  String get desktopMediaImportChooseFiles => '选择文件';
+
+  @override
+  String get desktopMediaImportTaskMovies => '读取媒体信息';
+
+  @override
+  String get desktopMediaImportTaskPhotos => '生成缩略图';
+
+  @override
+  String get desktopMediaImportTaskMusic => '扫描音频';
+
+  @override
+  String get desktopViewTasks => '查看任务';
+
+  @override
+  String desktopSessionSignedOut(String device) {
+    return '已退出设备 $device';
+  }
+
+  @override
+  String desktopMediaImportQueued(int count) {
+    return '已加入后台导入队列：$count 个文件';
+  }
+
+  @override
+  String get desktopMediaImportNoFiles => '尚未选择文件。';
+
+  @override
+  String get desktopMediaImportNoCompatibleFiles => '此文件夹中没有兼容的文件。';
+
+  @override
+  String get desktopMediaImportMatchMetadata => '导入后匹配元数据';
+
+  @override
+  String get desktopMediaImportMetadataHint => '导入后获取海报、简介和演职人员信息。';
 }

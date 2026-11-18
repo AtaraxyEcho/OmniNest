@@ -2,6 +2,7 @@ package com.omninest.modules.music.repository;
 
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.MusicTrack;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -501,6 +502,21 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     long countVisibleToUser(
             @Param("userId") UUID userId,
             @Param("sharedType") SpaceType sharedType);
+
+    @Query("""
+            select count(distinct t) from MusicTrack t
+            join FileNode f on t.fileNodeId = f.id
+            where f.deleted = false
+              and t.createdAt >= :since
+              and (
+                t.ownerUserId = :userId
+                or (:sharedType is not null and f.spaceType = :sharedType)
+              )
+            """)
+    long countVisibleCreatedSince(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("since") Instant since);
 
     /**
      * 查询用户可见的最近更新曲目，口径与 {@link #findTracksVisibleToUser} 一致。

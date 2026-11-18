@@ -13,9 +13,9 @@ public record AuthTokenResponse(
         @Schema(description = "刷新令牌", example = "eyJhbGciOiJIUzI1NiJ9...") String refreshToken,
         @Schema(description = "刷新令牌过期时间", example = "2026-06-14T12:00:00Z") String refreshExpiresAt,
         @Schema(description = "当前用户信息") AuthUserDto user,
-        @Schema(description = "是否需要两步验证；为 true 时不签发令牌") Boolean twoFactorRequired,
-        @Schema(description = "两步验证挑战令牌（5 分钟有效）") String challengeToken,
-        @Schema(description = "挑战类型：verify=已启用待验证，enroll=强制角色待注册") String challengeType,
+        @Schema(description = "是否需要继续登录挑战；为 true 时不签发业务令牌") Boolean twoFactorRequired,
+        @Schema(description = "登录挑战令牌（5 分钟有效）") String challengeToken,
+        @Schema(description = "挑战类型：password_change / verify / enroll") String challengeType,
         @Schema(description = "挑战令牌过期时间") String challengeExpiresAt,
         @Schema(description = "一次性备份码，仅注册引导启用成功时返回") List<String> backupCodes
 ) {

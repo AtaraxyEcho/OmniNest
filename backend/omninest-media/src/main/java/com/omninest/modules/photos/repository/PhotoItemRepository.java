@@ -20,13 +20,19 @@ import org.springframework.data.repository.query.Param;
  * <p>查询按浏览、时间线、回收站与关系图谱拆到独立片段接口，
  * 由本接口组合后对业务服务保持原方法集不变。</p>
  *
+ * <p>片段接口一律不加 {@code @NoRepositoryBean}：Spring Data 的片段探测会排除带该注解的接口，
+ * 其方法随之退回派生查询解析，像 {@link PhotoItemImportLockQuery} 这种依赖
+ * {@code *Impl} 自定义实现的方法会直接让上下文启动失败。该约定由
+ * {@code RepositoryFragmentArchitectureTest} 守护。</p>
+ *
  * @author OmniNest
  */
 public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
         PhotoItemBrowseQueries,
         PhotoItemTimelineQueries,
         PhotoItemTrashQueries,
-        PhotoItemRelationQueries {
+        PhotoItemRelationQueries,
+        PhotoItemImportLockQuery {
 
     /**
      * 按用户查询照片列表，按创建时间倒序
@@ -112,6 +118,29 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
     Optional<PhotoItem> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
 
     /**
+     * 判断用户是否已有同内容的有效媒体条目。
+     *
+     * @param ownerUserId 媒体所有者
+     * @param contentHash 内容 SHA-256
+     * @return 已存在时返回 true
+     */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1
+                  FROM omni.photo_items p
+                  JOIN omni.file_nodes f ON f.id = p.file_node_id
+                 WHERE p.owner_user_id = :ownerUserId
+                   AND f.is_deleted = false
+                   AND p.deleted_at IS NULL
+                   AND LOWER(p.provider_metadata ->> 'contentHash') = LOWER(:contentHash)
+            )
+            """, nativeQuery = true)
+    boolean existsActiveByOwnerUserIdAndContentHash(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("contentHash") String contentHash
+    );
+
+    /**
      * 查询用户所有照片的文件节点ID列表
      */
     @Query("""
@@ -173,6 +202,24 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
               AND photo.deletedAt IS NULL
             """)
     long countByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    @Query("""
+            SELECT COUNT(photo) FROM PhotoItem photo
+            JOIN FileNode file ON photo.fileNodeId = file.id
+            WHERE photo.ownerUserId = :ownerUserId
+              AND file.deleted = false
+              AND photo.deletedAt IS NULL
+              AND photo.createdAt >= :since
+              AND (photo.format IS NULL OR LOWER(photo.format) NOT IN :videoFormats)
+            """)
+    long countActivePhotosCreatedSince(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("videoFormats") Collection<String> videoFormats,
+            @Param("since") Instant since
+    );
+
+    /** 按文件扩展名统计用户导入到 Photos 的视频条目。 */
+    long countByOwnerUserIdAndFormatIn(UUID ownerUserId, Collection<String> formats);
 
     /**
      * 分页查询用户照片标识，供长时间批处理控制单批内存占用。

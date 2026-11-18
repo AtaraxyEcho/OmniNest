@@ -13,6 +13,7 @@ class AdminUserApi {
     int size = 50,
     String query = '',
     String role = 'ALL',
+    String status = 'ALL',
     String sort = 'username',
     String dir = 'asc',
   }) async {
@@ -23,6 +24,7 @@ class AdminUserApi {
         'size': size,
         if (query.trim().isNotEmpty) 'query': query.trim(),
         if (role.isNotEmpty && role != 'ALL') 'role': role,
+        if (status.isNotEmpty && status != 'ALL') 'status': status,
         'sort': sort,
         'dir': dir,
       },
@@ -42,6 +44,24 @@ class AdminUserApi {
     final response = await apiClient.dio.patch<Map<String, dynamic>>(
       '/admin/users/$userId/status',
       data: {'status': status},
+    );
+    return parseUserResponse(response.data);
+  }
+
+  Future<AdminUser> updateUserProfile({
+    required String userId,
+    required String displayName,
+    required String? email,
+    bool? requirePasswordChange,
+  }) async {
+    final response = await apiClient.dio.patch<Map<String, dynamic>>(
+      '/admin/users/$userId/profile',
+      data: {
+        'displayName': displayName,
+        'email': email ?? '',
+        if (requirePasswordChange != null)
+          'requirePasswordChange': requirePasswordChange,
+      },
     );
     return parseUserResponse(response.data);
   }

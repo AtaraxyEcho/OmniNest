@@ -136,6 +136,19 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
               title: l10n.desktopNavReader,
               subtitle: l10n.desktopReaderSubtitle,
               actions: [
+                ReaderLibraryImportAction(
+                  style: ImportButtonStyle.outlinedButton,
+                  label: l10n.filesImport,
+                  buttonBuilder:
+                      (context, {required onPressed, required busy}) =>
+                          DesktopButton(
+                            label: l10n.filesImport,
+                            icon: DesktopIcons.upload,
+                            variant: DesktopButtonVariant.soft,
+                            onPressed: onPressed,
+                            busy: busy,
+                          ),
+                ),
                 DesktopSeg<_ReaderView>(
                   options: _ReaderView.values,
                   value: _view,
@@ -146,10 +159,6 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                               : l10n.desktopReaderLibraryView,
                   small: true,
                   onChanged: (value) => setState(() => _view = value),
-                ),
-                ReaderLibraryImportAction(
-                  style: ImportButtonStyle.outlinedButton,
-                  label: l10n.readerImportBooks,
                 ),
               ],
             ),

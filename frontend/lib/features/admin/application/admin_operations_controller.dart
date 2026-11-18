@@ -312,6 +312,20 @@ final adminLoginAuditPageProvider = FutureProvider.autoDispose
           );
     });
 
+final adminSystemLogPageProvider = FutureProvider.autoDispose
+    .family<AdminSystemLogPage, AdminSystemLogPageQuery>((ref, query) {
+      ref.watch(sessionEpochProvider);
+      return ref
+          .watch(adminOperationsApiProvider)
+          .systemLogPage(
+            page: query.page,
+            size: query.size,
+            level: query.level == 'ALL' ? '' : query.level,
+            source: query.source == 'ALL' ? '' : query.source,
+            query: query.query,
+          );
+    });
+
 final activeAdminAnalyticsDaysProvider = Provider<Set<int>>((ref) => <int>{});
 
 final adminAnalyticsProvider = FutureProvider.autoDispose
@@ -591,11 +605,15 @@ class AdminOperationsActions {
     required String name,
     required String mountKey,
     required String relativeRoot,
+    required String scopeType,
+    String? scopeId,
   }) async {
     final location = await _api.createStorageLocation(
       name: name,
       mountKey: mountKey,
       relativeRoot: relativeRoot,
+      scopeType: scopeType,
+      scopeId: scopeId,
     );
     scheduleStorageRelatedRefresh();
     return location;

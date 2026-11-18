@@ -7,7 +7,9 @@ import 'package:omninest/app/desktop/desktop_brand.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -75,7 +77,10 @@ class _DesktopLoginPageState extends ConsumerState<DesktopLoginPage> {
     final state = ref.watch(loginPageControllerProvider);
     final challenge = state.challenge;
     final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 900;
+    final wide = width > 900;
+    // 对应样例 `grid-template-columns: minmax(0, 1.25fr) minmax(420px, 560px)`：
+    // 右栏在 900px 断点以上由 420px 起步，达到 560px 后固定，左画幅只占余量。
+    final formPaneWidth = (width / 2.25).clamp(420.0, 560.0);
 
     final card = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
@@ -90,9 +95,11 @@ class _DesktopLoginPageState extends ConsumerState<DesktopLoginPage> {
                 onToggleObscure: () => setState(() => _obscure = !_obscure),
                 onSubmit: _submit,
               )
-              : challenge.isEnrollment
+              : challenge.isEnrollment || challenge.isPasswordChange
               ? LoginTwoFactorPanel(
+                key: ValueKey<String>(challenge.challengeToken),
                 challenge: challenge,
+                errorMessage: _errorText(state.error, l10n),
                 onLoginSucceeded: _succeeded,
                 onBackToLogin:
                     () =>
@@ -127,10 +134,12 @@ class _DesktopLoginPageState extends ConsumerState<DesktopLoginPage> {
                 children: [
                   const Expanded(flex: 5, child: _AuthArt()),
                   SizedBox(
-                    width: 560,
+                    width: formPaneWidth,
                     child: Center(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: formPaneWidth * 0.07,
+                        ),
                         child: animatedCard,
                       ),
                     ),
@@ -163,177 +172,95 @@ class _AuthArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 画幅不吃照片：样例的左半是一个环境画幅，本应用没有"默认壁纸"这一
-        // 概念，用同语言的光场交代纵深，避免登录页与工作区的环境光脱节。
-        //
-        // 圆心与停靠点照抄 `.root[data-theme="dark"] .auth`：
-        // `radial-gradient(circle at 80% 20%, #14201d, #0b0e11 60%)`。
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0.6, -0.6),
-              radius: 1.1,
-              colors: [DesktopPalette.authAura, DesktopPalette.bgDark],
-              stops: [0.0, 0.6],
+    // 样例 `.auth-art { overflow: hidden }`：推镜只改变图片绘制范围，
+    // 裁切在左画幅边界完成，不能覆盖或挤占右侧表单列。
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: MotionToken.reduced(
+                context,
+                DesktopMotion.authKenBurns,
+              ),
+              curve: DesktopMotion.cssEaseOut,
+              builder:
+                  (context, progress, child) => Transform.scale(
+                    scale: 1 + 0.14 * progress,
+                    child: FractionalTranslation(
+                      translation: Offset(-0.015 * progress, -0.01 * progress),
+                      child: child,
+                    ),
+                  ),
+              // 样例 .auth-art .img 使用 30s kenburns，终态为 1.14 倍并向左上轻移。
+              child: const BundledWallpaperPoster(),
             ),
           ),
-        ),
-        const _AuthAura(),
-        // 底部压暗保证白色文案在任何强调色下都可读（样例 .art-shade 的第二层）。
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [
-                skin.bg.withValues(alpha: 0.80),
-                skin.bg.withValues(alpha: 0.10),
-                skin.bg.withValues(alpha: 0),
+          // 样例先绘制底部渐暗，再将水平渐暗层绘制在其上方。
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0xcc05080a), Color(0x0005080a)],
+                stops: const [0.0, 0.55],
+              ),
+            ),
+          ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color(0x8c05080a), Color(0x1a05080a)],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(56, 40, 56, 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const DesktopBrandLockup(color: DesktopPalette.onStage),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: DesktopRise(
+                      delay: const Duration(milliseconds: 300),
+                      duration: DesktopMotion.authCopy,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Text(
+                          l10n.desktopAuthArtTitle,
+                          style: DesktopType.displayXl(
+                            DesktopPalette.onStage,
+                            MediaQuery.sizeOf(context).width,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                DesktopRise(
+                  delay: const Duration(milliseconds: 500),
+                  duration: DesktopMotion.authCopy,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Text(
+                      l10n.desktopAuthArtSubtitle,
+                      style: DesktopType.medium(
+                        DesktopPalette.onStage.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+                ),
               ],
-              stops: const [0.0, 0.42, 0.62],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(56, 40, 56, 48),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const DesktopBrandLockup(color: DesktopPalette.onStage),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DesktopRise(
-                    delay: const Duration(milliseconds: 300),
-                    duration: DesktopMotion.authCopy,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: Text(
-                        l10n.desktopAuthArtTitle,
-                        style: DesktopType.displayXl(
-                          DesktopPalette.onStage,
-                          MediaQuery.sizeOf(context).width,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DesktopRise(
-                    delay: const Duration(milliseconds: 500),
-                    duration: DesktopMotion.authCopy,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: Text(
-                        l10n.desktopAuthArtSubtitle,
-                        style: DesktopType.medium(
-                          DesktopPalette.onStage.withValues(alpha: 0.75),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 登录画幅的两团环境光，与工作区的 `.blob` 同一语言（强调色 + 暖色），
-/// 只是不做模糊封面层：没有封面可模糊时再叠一层噪声只会脏画面。
-class _AuthAura extends StatefulWidget {
-  const _AuthAura();
-
-  @override
-  State<_AuthAura> createState() => _AuthAuraState();
-}
-
-class _AuthAuraState extends State<_AuthAura>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _drift = AnimationController(
-    vsync: this,
-    duration: DesktopMotion.floatCycle,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (!(WidgetsBinding
-        .instance
-        .platformDispatcher
-        .accessibilityFeatures
-        .disableAnimations)) {
-      _drift.repeat(reverse: true);
-    } else {
-      _drift.value = 0.4;
-    }
-  }
-
-  @override
-  void dispose() {
-    _drift.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return AnimatedBuilder(
-      animation: _drift,
-      builder: (context, _) {
-        final t = _drift.value;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Align(
-              alignment: Alignment(-0.9 - 0.2 * t, -0.8 + 0.25 * t),
-              child: FractionallySizedBox(
-                widthFactor: 0.95,
-                heightFactor: 0.95,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        skin.accent.withValues(alpha: 0.26),
-                        skin.accent.withValues(alpha: 0),
-                      ],
-                      stops: const [0.0, 0.68],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment(0.9 - 0.2 * t, 1.1 - 0.3 * t),
-              child: FractionallySizedBox(
-                widthFactor: 1.05,
-                heightFactor: 1.05,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        skin.warm.withValues(alpha: 0.16),
-                        skin.warm.withValues(alpha: 0),
-                      ],
-                      stops: const [0.0, 0.68],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -441,44 +368,13 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: DesktopType.fieldLabel(skin.text2)),
-        const SizedBox(height: 6),
-        Container(
-          height: DesktopMetrics.fieldHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: skin.raise,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
-            border: Border.all(color: skin.line2),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  obscureText: obscure,
-                  autofocus: autofocus,
-                  cursorColor: skin.accent,
-                  onSubmitted: (_) => onSubmitted?.call(),
-                  style: DesktopType.field(skin.text),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-        ),
-      ],
+    return DesktopTextField(
+      controller: controller,
+      label: label,
+      obscure: obscure,
+      autofocus: autofocus,
+      trailing: trailing,
+      onSubmitted: (_) => onSubmitted?.call(),
     );
   }
 }

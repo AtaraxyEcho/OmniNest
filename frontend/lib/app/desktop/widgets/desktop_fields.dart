@@ -26,6 +26,7 @@ class DesktopTextField extends StatefulWidget {
     this.required = false,
     this.maxLength,
     this.keyboardType,
+    this.textInputAction,
     this.inputFormatters,
     this.counterBuilder,
     this.onChanged,
@@ -67,6 +68,7 @@ class DesktopTextField extends StatefulWidget {
   final int? maxLength;
 
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final List<TextInputFormatter>? inputFormatters;
 
   /// 自带计数的自定义文案（样例 `· {n} lines`），入参是当前文本。
@@ -210,6 +212,7 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
           textAlignVertical: multiline ? TextAlignVertical.top : null,
           maxLength: widget.maxLength,
           keyboardType: widget.keyboardType,
+          textInputAction: widget.textInputAction,
           // Material 自带计数器会挤进 34 高的小框；计数由 [counterBuilder]
           // 画在 label 行右侧（样例 `· {n} lines`）。
           buildCounter:

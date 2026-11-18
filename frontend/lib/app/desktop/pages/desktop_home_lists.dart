@@ -7,6 +7,8 @@ import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
@@ -14,6 +16,7 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
@@ -33,9 +36,34 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final dashboard = ref.watch(photoDashboardProvider).asData?.value;
+    final dashboardAsync = ref.watch(photoDashboardProvider);
+    final dashboard = dashboardAsync.asData?.value;
     final photos =
         (dashboard?.recentPhotos ?? const <PhotoItem>[]).take(7).toList();
+    if (dashboard == null && dashboardAsync.hasError) {
+      return DesktopErrorView(
+        message: errorReason(dashboardAsync.error!, l10n),
+        onRetry: () => ref.invalidate(photoDashboardProvider),
+        minHeightFactor: 0.22,
+      );
+    }
+    if (dashboard == null && dashboardAsync.isLoading) {
+      return SizedBox(
+        height: 200,
+        child: Row(
+          children: [
+            for (var index = 0; index < 7; index++)
+              Expanded(
+                flex: const [160, 120, 220, 140, 180, 140, 160][index],
+                child: Padding(
+                  padding: EdgeInsets.only(right: index == 6 ? 0 : 10),
+                  child: DesktopSkeletonBox(radius: 14, index: index),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     if (photos.isEmpty) {
       return DesktopEmpty(
         message: l10n.desktopHomeEmptyPhotos,
@@ -123,12 +151,22 @@ class DesktopRecentFiles extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
+    final recentAsync = ref.watch(fileRecentEntriesProvider);
     final files =
-        (ref.watch(fileRecentEntriesProvider).asData?.value ??
-                const <FileNode>[])
+        (recentAsync.asData?.value ?? const <FileNode>[])
             .where((node) => !node.isFolder)
             .take(5)
             .toList();
+    if (recentAsync.hasError && !recentAsync.hasValue) {
+      return DesktopErrorView(
+        message: errorReason(recentAsync.error!, l10n),
+        onRetry: () => ref.invalidate(fileRecentEntriesProvider),
+        minHeightFactor: 0.22,
+      );
+    }
+    if (recentAsync.isLoading && !recentAsync.hasValue) {
+      return const DesktopSkeletonRows(count: 5);
+    }
     if (files.isEmpty) {
       return DesktopEmpty(
         message: l10n.desktopHomeEmptyFiles,

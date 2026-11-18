@@ -43,6 +43,22 @@ class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   Future<AppBackdropAsset?> install() async => null;
 }
 
+/// 记录落盘次数并拖延每次写入，复现拖杆时「写库 + 远端 PATCH」的往返成本。
+class _CountingBackdropRepository extends AppBackdropRepository {
+  // 父类的位置参数名是私有字段 `_db`，跨库无法写成 super 形参。
+  // ignore: use_super_parameters
+  _CountingBackdropRepository(LocalDatabase database) : super(database);
+
+  int saveCount = 0;
+
+  @override
+  Future<void> saveSettings(AppBackdropSettings settings) async {
+    saveCount++;
+    await Future<void>.delayed(const Duration(milliseconds: 8));
+    await super.saveSettings(settings);
+  }
+}
+
 class _FakeBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
   Future<AppBackdropAsset?> install() async {
@@ -51,7 +67,7 @@ class _FakeBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
       id: bundledDefaultWallpaperId,
       path: bundledDefaultWallpaperAssetPath,
       title: 'OmniNest',
-      mediaType: AppBackdropMediaType.video,
+      mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,
       fileSize: 100,
       modifiedAt: now,
@@ -898,6 +914,117 @@ void main() {
         state.backdrops.where((backdrop) => backdrop.id == 'server-retry'),
         isNotEmpty,
       );
+    });
+  });
+
+  group('AppBackdropController 设置合并落盘', () {
+    test('连续拖动只落最后一格，内存态全程跟手且不回弹', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = _CountingBackdropRepository(database);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+
+      // 模拟一帧一格地拖到 20%：每次推送后内存态必须立刻到位，
+      // 而不是排队等 20 次「写库 + 回读 + 远端 PATCH」。
+      final drag = <Future<void>>[];
+      for (var step = 1; step <= 20; step++) {
+        drag.add(notifier.setDimAmount(step / 100));
+        expect(
+          container
+              .read(appBackdropControllerProvider)
+              .requireValue
+              .settings
+              .dimAmount,
+          closeTo(step / 100, 1e-9),
+        );
+      }
+      await Future.wait(drag);
+
+      // 落盘收敛在最后一格；中间的 19 个值既不落库也不把滑柄拽回去。
+      expect((await repository.loadSettings()).dimAmount, closeTo(0.20, 1e-9));
+      expect(
+        container
+            .read(appBackdropControllerProvider)
+            .requireValue
+            .settings
+            .dimAmount,
+        closeTo(0.20, 1e-9),
+      );
+      expect(repository.saveCount, lessThan(20));
+    });
+
+    test('暗化 90% 与模糊 24px 落库后不再被截断回调', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.setDimAmount(0.90);
+      await notifier.setBlurAmount(24);
+
+      final persisted = await repository.loadSettings();
+      // 滑杆行程是 0-90% / 0-24px，领域层曾把上限写死成 0.86 / 18。
+      expect(persisted.dimAmount, closeTo(0.90, 1e-9));
+      expect(persisted.blurAmount, closeTo(24, 1e-9));
     });
   });
 

@@ -1772,6 +1772,12 @@ abstract class AppLocalizations {
   /// **'Password must be at least 8 characters'**
   String get changePasswordMinLength;
 
+  /// No description provided for @changePasswordStrengthTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Too short'**
+  String get changePasswordStrengthTooShort;
+
   /// No description provided for @changePasswordMaxLength.
   ///
   /// In en, this message translates to:
@@ -1789,6 +1795,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Two-Factor Verification'**
   String get loginTwoFactorTitle;
+
+  /// No description provided for @loginInitialPasswordChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a new password'**
+  String get loginInitialPasswordChangeTitle;
+
+  /// No description provided for @loginInitialPasswordChangeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your administrator gave you a temporary password. Replace it to continue.'**
+  String get loginInitialPasswordChangeSubtitle;
+
+  /// No description provided for @loginInitialPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get loginInitialPasswordLabel;
+
+  /// No description provided for @loginInitialPasswordConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get loginInitialPasswordConfirmLabel;
+
+  /// No description provided for @loginInitialPasswordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The passwords do not match.'**
+  String get loginInitialPasswordMismatch;
+
+  /// No description provided for @loginInitialPasswordLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 8 to 64 characters.'**
+  String get loginInitialPasswordLength;
+
+  /// No description provided for @loginInitialPasswordChangeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save password and continue'**
+  String get loginInitialPasswordChangeAction;
 
   /// No description provided for @loginTwoFactorSubtitle.
   ///
@@ -6895,6 +6943,12 @@ abstract class AppLocalizations {
   /// **'Storage Overview'**
   String get adminStorageOverview;
 
+  /// No description provided for @adminStorageUsageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get adminStorageUsageTitle;
+
   /// No description provided for @adminPercentUsed.
   ///
   /// In en, this message translates to:
@@ -6972,6 +7026,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} files'**
   String adminStorageFileCount(Object count);
+
+  /// No description provided for @adminStorageFolderCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} folders'**
+  String adminStorageFolderCount(Object count);
+
+  /// No description provided for @adminStorageObjectCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} objects'**
+  String adminStorageObjectCount(Object count);
+
+  /// No description provided for @adminStorageUsageTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total used'**
+  String get adminStorageUsageTotal;
 
   /// No description provided for @adminOverviewTasksTotal.
   ///
@@ -7320,6 +7392,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear {name}\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.'**
   String adminResetTwoFactorConfirmMessage(Object name);
+
+  /// No description provided for @adminRequirePasswordChangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Require a new password at first sign-in'**
+  String get adminRequirePasswordChangeLabel;
+
+  /// No description provided for @adminRequirePasswordChangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The user must replace this temporary password before accessing OmniNest.'**
+  String get adminRequirePasswordChangeHint;
 
   /// No description provided for @adminEditRolesHint.
   ///
@@ -7818,6 +7902,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed, cancelled and DLQ status support re-queue.'**
   String get adminTaskListSubtitle;
+
+  /// No description provided for @adminTaskSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search title, type, owner or error'**
+  String get adminTaskSearchHint;
+
+  /// No description provided for @adminDlqSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search title, type or error'**
+  String get adminDlqSearchHint;
+
+  /// No description provided for @adminDlqDiscardAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard all'**
+  String get adminDlqDiscardAll;
+
+  /// No description provided for @adminTaskFilterSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeeded'**
+  String get adminTaskFilterSucceeded;
+
+  /// No description provided for @adminLoginAuditSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search user, device, IP or reason'**
+  String get adminLoginAuditSearchHint;
+
+  /// No description provided for @adminSessionSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search user, device or IP'**
+  String get adminSessionSearchHint;
 
   /// No description provided for @adminNoBackgroundTasks.
   ///
@@ -9439,6 +9559,90 @@ abstract class AppLocalizations {
   /// **'Manage MinIO buckets and local media locations; use local locations for 4K playback.'**
   String get adminStorageManagementSubtitle;
 
+  /// No description provided for @adminStorageAddAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get adminStorageAddAction;
+
+  /// No description provided for @adminStorageAddLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Add storage location'**
+  String get adminStorageAddLocation;
+
+  /// No description provided for @adminStorageAddLocationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount keys come from the deployment allowlist.'**
+  String get adminStorageAddLocationHint;
+
+  /// No description provided for @adminStorageDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get adminStorageDisplayName;
+
+  /// No description provided for @adminStorageSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage'**
+  String get adminStorageSectionLabel;
+
+  /// No description provided for @adminStorageVisibleTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible to'**
+  String get adminStorageVisibleTo;
+
+  /// No description provided for @adminStorageScopeEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone (system)'**
+  String get adminStorageScopeEveryone;
+
+  /// No description provided for @adminStorageScopeOneUser.
+  ///
+  /// In en, this message translates to:
+  /// **'One user'**
+  String get adminStorageScopeOneUser;
+
+  /// No description provided for @adminStorageMountAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount'**
+  String get adminStorageMountAction;
+
+  /// No description provided for @adminStorageNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Family media'**
+  String get adminStorageNameHint;
+
+  /// No description provided for @adminStorageMountRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount root'**
+  String get adminStorageMountRoot;
+
+  /// No description provided for @adminStorageBrowseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load directories.'**
+  String get adminStorageBrowseFailed;
+
+  /// No description provided for @adminStorageCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage location added.'**
+  String get adminStorageCreated;
+
+  /// No description provided for @adminStorageAdvancedLibraries.
+  ///
+  /// In en, this message translates to:
+  /// **'Library sources and mount controls'**
+  String get adminStorageAdvancedLibraries;
+
   /// No description provided for @adminBucketConfig.
   ///
   /// In en, this message translates to:
@@ -9504,6 +9708,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.'**
   String get adminOAuthAppsSubtitle;
+
+  /// No description provided for @adminOAuthProviderAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{provider} account'**
+  String adminOAuthProviderAccountTitle(String provider);
+
+  /// No description provided for @adminOAuthSecretStorageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored encrypted. Never shown again.'**
+  String get adminOAuthSecretStorageHint;
+
+  /// No description provided for @adminOAuthNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured'**
+  String get adminOAuthNotConfigured;
+
+  /// No description provided for @adminConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure'**
+  String get adminConfigure;
 
   /// No description provided for @adminOAuthRedirectHint.
   ///
@@ -10259,6 +10487,12 @@ abstract class AppLocalizations {
   /// **'Create User'**
   String get adminCreateUser;
 
+  /// No description provided for @adminCreateAccountEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get adminCreateAccountEyebrow;
+
   /// No description provided for @adminSearchUsers.
   ///
   /// In en, this message translates to:
@@ -10445,6 +10679,24 @@ abstract class AppLocalizations {
   /// **'e.g. 50'**
   String get adminQuotaHint;
 
+  /// No description provided for @adminQuotaDefaultHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank to use the configured system default. Custom values: 1–10000 GiB.'**
+  String get adminQuotaDefaultHint;
+
+  /// No description provided for @adminQuotaRangeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a quota between 1 and 10000 GiB'**
+  String get adminQuotaRangeError;
+
+  /// No description provided for @adminPasswordShareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the initial password with the user through a private channel.'**
+  String get adminPasswordShareHint;
+
   /// No description provided for @adminSaving.
   ///
   /// In en, this message translates to:
@@ -10528,6 +10780,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Username'**
   String get adminUsername;
+
+  /// No description provided for @adminAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get adminAccount;
+
+  /// No description provided for @adminAccountFormatError.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 3–24 characters: start with a lowercase letter, then lowercase letters, numbers, dot, dash or underscore.'**
+  String get adminAccountFormatError;
 
   /// No description provided for @adminEnterUsername.
   ///
@@ -11416,6 +11680,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Updated storage for {count} users'**
   String adminRecalculateDone(Object count);
+
+  /// No description provided for @adminUploads14Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploads, last 14 days'**
+  String get adminUploads14Days;
+
+  /// No description provided for @adminRecalculateStorageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalculate storage'**
+  String get adminRecalculateStorageTitle;
+
+  /// No description provided for @adminRecalculateStorageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilds per-user usage from the object store.'**
+  String get adminRecalculateStorageSubtitle;
 
   /// No description provided for @adminApiResponseFormat.
   ///
@@ -24232,6 +24514,18 @@ abstract class AppLocalizations {
   /// **'Pinned'**
   String get desktopPinned;
 
+  /// No description provided for @desktopPinnedEveningDrift.
+  ///
+  /// In en, this message translates to:
+  /// **'Evening Drift'**
+  String get desktopPinnedEveningDrift;
+
+  /// No description provided for @desktopPinnedGoldenHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Golden hour'**
+  String get desktopPinnedGoldenHour;
+
   /// No description provided for @desktopPinnedContinue.
   ///
   /// In en, this message translates to:
@@ -24256,6 +24550,12 @@ abstract class AppLocalizations {
   /// **'Storage'**
   String get desktopStorage;
 
+  /// No description provided for @desktopStorageCloudTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'OmniCloud'**
+  String get desktopStorageCloudTitle;
+
   /// No description provided for @desktopStorageUsage.
   ///
   /// In en, this message translates to:
@@ -24267,6 +24567,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{used} used · no quota'**
   String desktopStorageUnlimited(String used);
+
+  /// No description provided for @desktopStorageNoQuota.
+  ///
+  /// In en, this message translates to:
+  /// **'No quota'**
+  String get desktopStorageNoQuota;
+
+  /// No description provided for @desktopStorageVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get desktopStorageVideo;
+
+  /// No description provided for @desktopStoragePhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get desktopStoragePhotos;
+
+  /// No description provided for @desktopStorageMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Music'**
+  String get desktopStorageMusic;
+
+  /// No description provided for @desktopStorageDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get desktopStorageDocuments;
+
+  /// No description provided for @desktopStorageFindDuplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'Find duplicates'**
+  String get desktopStorageFindDuplicates;
+
+  /// No description provided for @desktopStorageDuplicatesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate scanning is not available in this build.'**
+  String get desktopStorageDuplicatesUnavailable;
+
+  /// No description provided for @desktopStorageDuplicateScanFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Found {size} of duplicates'**
+  String desktopStorageDuplicateScanFound(String size);
+
+  /// No description provided for @desktopStorageDuplicateScanNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No duplicate files found.'**
+  String get desktopStorageDuplicateScanNone;
+
+  /// No description provided for @desktopStorageDuplicateScanNonePartial.
+  ///
+  /// In en, this message translates to:
+  /// **'No duplicates found among files with verified hashes.'**
+  String get desktopStorageDuplicateScanNonePartial;
+
+  /// No description provided for @desktopStorageDuplicateScanSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files could not be checked because their verified content hash is missing.'**
+  String desktopStorageDuplicateScanSkipped(String count);
+
+  /// No description provided for @desktopStorageNoBreakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'No storage categories are available.'**
+  String get desktopStorageNoBreakdown;
 
   /// No description provided for @desktopOfflineBar.
   ///
@@ -25531,8 +25903,20 @@ abstract class AppLocalizations {
   /// No description provided for @desktopStatListeningSub.
   ///
   /// In en, this message translates to:
-  /// **'{n} plays recently'**
-  String desktopStatListeningSub(int n);
+  /// **'This week'**
+  String get desktopStatListeningSub;
+
+  /// No description provided for @desktopStatHours.
+  ///
+  /// In en, this message translates to:
+  /// **'h'**
+  String get desktopStatHours;
+
+  /// No description provided for @desktopStatLibraryAddedToday.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} today'**
+  String desktopStatLibraryAddedToday(int count);
 
   /// No description provided for @desktopForYou.
   ///
@@ -25641,6 +26025,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'See all'**
   String get desktopSeeAll;
+
+  /// No description provided for @desktopMoviesFeatureFilms.
+  ///
+  /// In en, this message translates to:
+  /// **'Feature films'**
+  String get desktopMoviesFeatureFilms;
+
+  /// No description provided for @desktopMoviesTitlesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} TITLES'**
+  String desktopMoviesTitlesCount(int count);
 
   /// No description provided for @desktopUpNext.
   ///
@@ -26560,6 +26956,36 @@ abstract class AppLocalizations {
   /// **'{count} photos'**
   String desktopPhotosPlaceCount(int count);
 
+  /// No description provided for @desktopPhotosOrderSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo order saved'**
+  String get desktopPhotosOrderSaved;
+
+  /// No description provided for @desktopPhotosMovedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Moved 1 photo} other{Moved {count} photos}}'**
+  String desktopPhotosMovedCount(int count);
+
+  /// No description provided for @desktopPhotosOrderReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo order reset'**
+  String get desktopPhotosOrderReset;
+
+  /// No description provided for @desktopPhotosResetOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset order'**
+  String get desktopPhotosResetOrder;
+
+  /// No description provided for @desktopPhotosOrderSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save photo order. Try again.'**
+  String get desktopPhotosOrderSaveFailed;
+
   /// No description provided for @desktopPhotosSelect.
   ///
   /// In en, this message translates to:
@@ -27039,6 +27465,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} unsaved'**
   String desktopConfigUnsaved(int count);
+
+  /// No description provided for @desktopConfigOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} parameters · {modified} changed from defaults'**
+  String desktopConfigOverview(int count, int modified);
+
+  /// No description provided for @desktopConfigRestoreDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore defaults'**
+  String get desktopConfigRestoreDefaults;
+
+  /// No description provided for @desktopConfigSecretRollbackUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The previous secret is hidden and cannot be restored here.'**
+  String get desktopConfigSecretRollbackUnavailable;
 
   /// No description provided for @adminConfigReadOnly.
   ///
@@ -27718,6 +28162,12 @@ abstract class AppLocalizations {
   /// **'Titles you start watching will show up here.'**
   String get desktopMoviesEmptyHistoryBody;
 
+  /// No description provided for @desktopMoviesEmptyLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your movie library is empty'**
+  String get desktopMoviesEmptyLibraryTitle;
+
   /// No description provided for @desktopMoviesEmptyLibraryBody.
   ///
   /// In en, this message translates to:
@@ -27807,6 +28257,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open a photo first - list data has no original file URL'**
   String get photosDownloadNeedsOriginal;
+
+  /// No description provided for @adminSortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get adminSortLabel;
+
+  /// No description provided for @adminSortName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get adminSortName;
+
+  /// No description provided for @adminSortStorageUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage used'**
+  String get adminSortStorageUsed;
+
+  /// No description provided for @adminSortLastActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Last active'**
+  String get adminSortLastActive;
+
+  /// No description provided for @adminGeneratePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate password'**
+  String get adminGeneratePassword;
+
+  /// No description provided for @adminShowPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get adminShowPassword;
+
+  /// No description provided for @adminHidePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get adminHidePassword;
+
+  /// No description provided for @adminAccountEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Account enabled'**
+  String get adminAccountEnabled;
+
+  /// No description provided for @adminDisabledAccountsCannotSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled accounts cannot sign in.'**
+  String get adminDisabledAccountsCannotSignIn;
+
+  /// No description provided for @adminUserCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'User created'**
+  String get adminUserCreated;
+
+  /// No description provided for @adminRoleCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Role created'**
+  String get adminRoleCreated;
+
+  /// No description provided for @desktopMoviesEmptySeriesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No series yet'**
+  String get desktopMoviesEmptySeriesTitle;
+
+  /// No description provided for @desktopMoviesEmptySeriesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Series added to your library will appear here.'**
+  String get desktopMoviesEmptySeriesBody;
+
+  /// No description provided for @desktopMoviesEmptyAnimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No anime yet'**
+  String get desktopMoviesEmptyAnimeTitle;
+
+  /// No description provided for @desktopMoviesEmptyAnimeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Anime series added to your library will appear here.'**
+  String get desktopMoviesEmptyAnimeBody;
+
+  /// No description provided for @filesLocalLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Local library'**
+  String get filesLocalLibrary;
+
+  /// No description provided for @musicScanStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning'**
+  String get musicScanStatusLabel;
+
+  /// No description provided for @musicScanQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Music scan started'**
+  String get musicScanQueued;
+
+  /// No description provided for @desktopServicesOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get desktopServicesOther;
+
+  /// No description provided for @desktopLastFmScrobbling.
+  ///
+  /// In en, this message translates to:
+  /// **'Last.fm scrobbling'**
+  String get desktopLastFmScrobbling;
+
+  /// No description provided for @desktopLastFmUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Last.fm scrobbling is not available on this server.'**
+  String get desktopLastFmUnavailable;
+
+  /// No description provided for @adminNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get adminNotConfigured;
+
+  /// No description provided for @adminSystemLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'System logs'**
+  String get adminSystemLogs;
+
+  /// No description provided for @adminSystemLogSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get adminSystemLogSource;
+
+  /// No description provided for @adminSystemLogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get adminSystemLogMessage;
+
+  /// No description provided for @adminSystemLogsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'System log streaming is not available from this server.'**
+  String get adminSystemLogsUnavailable;
+
+  /// No description provided for @desktopMediaImportMoviesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add movies and shows'**
+  String get desktopMediaImportMoviesTitle;
+
+  /// No description provided for @desktopMediaImportMoviesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'MKV, MP4, MOV and AVI files in My files. Match titles with metadata after import.'**
+  String get desktopMediaImportMoviesHint;
+
+  /// No description provided for @desktopMediaImportPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photos and videos'**
+  String get desktopMediaImportPhotosTitle;
+
+  /// No description provided for @desktopMediaImportPhotosHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JPG, HEIC, PNG, RAW and video files in My files. Existing files are deduplicated when imported.'**
+  String get desktopMediaImportPhotosHint;
+
+  /// No description provided for @desktopMediaImportMusicTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add music'**
+  String get desktopMediaImportMusicTitle;
+
+  /// No description provided for @desktopMediaImportMusicHint.
+  ///
+  /// In en, this message translates to:
+  /// **'FLAC, MP3, AAC and WAV files in My files. Tags and cover art are read during import.'**
+  String get desktopMediaImportMusicHint;
+
+  /// No description provided for @desktopMediaImportFromFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'From My files'**
+  String get desktopMediaImportFromFiles;
+
+  /// No description provided for @desktopMediaImportFromDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'From this device'**
+  String get desktopMediaImportFromDevice;
+
+  /// No description provided for @desktopMediaImportDeviceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose files from this computer. They are uploaded to My files first, then imported.'**
+  String get desktopMediaImportDeviceHint;
+
+  /// No description provided for @desktopMediaImportChooseFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose files'**
+  String get desktopMediaImportChooseFiles;
+
+  /// No description provided for @desktopMediaImportTaskMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading media info'**
+  String get desktopMediaImportTaskMovies;
+
+  /// No description provided for @desktopMediaImportTaskPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating thumbnails'**
+  String get desktopMediaImportTaskPhotos;
+
+  /// No description provided for @desktopMediaImportTaskMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning audio'**
+  String get desktopMediaImportTaskMusic;
+
+  /// No description provided for @desktopViewTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'View tasks'**
+  String get desktopViewTasks;
+
+  /// No description provided for @desktopSessionSignedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out {device}'**
+  String desktopSessionSignedOut(String device);
+
+  /// No description provided for @desktopMediaImportQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 import queued} other{{count} imports queued}}'**
+  String desktopMediaImportQueued(int count);
+
+  /// No description provided for @desktopMediaImportNoFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'No files chosen yet.'**
+  String get desktopMediaImportNoFiles;
+
+  /// No description provided for @desktopMediaImportNoCompatibleFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'No compatible files in this folder.'**
+  String get desktopMediaImportNoCompatibleFiles;
+
+  /// No description provided for @desktopMediaImportMatchMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Match metadata after import'**
+  String get desktopMediaImportMatchMetadata;
+
+  /// No description provided for @desktopMediaImportMetadataHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch posters, synopsis and cast details after import.'**
+  String get desktopMediaImportMetadataHint;
 }
 
 class _AppLocalizationsDelegate

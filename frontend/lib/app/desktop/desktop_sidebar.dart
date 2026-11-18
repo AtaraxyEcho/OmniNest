@@ -96,7 +96,11 @@ class DesktopSidebar extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final shell = ref.watch(desktopShellProvider);
     final expanded = shell.sidebarExpanded;
-    final compact = ref.watch(desktopAppearanceProvider).compact;
+    // 只订阅「紧凑」这一位：整份 watch 会让拖动环境光强度滑杆时每帧重建
+    // 整条侧栏（含每个导航项的图标与文字）。
+    final compact = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.compact),
+    );
     final canAdmin = ref.watch(canAccessAdminConsoleProvider);
     final storage = ref.watch(fileStorageStatsProvider).asData?.value;
 
@@ -147,7 +151,7 @@ class DesktopSidebar extends ConsumerWidget {
                 // 右侧带数量角标，点击分别进入音乐 / 相册 / 影视。
                 _SidebarItem(
                   icon: DesktopIcons.music,
-                  label: 'Evening Drift',
+                  label: l10n.desktopPinnedEveningDrift,
                   count: 42,
                   active: false,
                   expanded: expanded,
@@ -157,7 +161,7 @@ class DesktopSidebar extends ConsumerWidget {
                 ),
                 _SidebarItem(
                   icon: DesktopIcons.image,
-                  label: 'Golden hour',
+                  label: l10n.desktopPinnedGoldenHour,
                   count: 42,
                   active: false,
                   expanded: expanded,
@@ -167,7 +171,7 @@ class DesktopSidebar extends ConsumerWidget {
                 ),
                 _SidebarItem(
                   icon: DesktopIcons.film,
-                  label: 'Continue watching',
+                  label: l10n.desktopPinnedContinue,
                   count: 3,
                   active: false,
                   expanded: expanded,

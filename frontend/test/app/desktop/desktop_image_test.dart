@@ -13,7 +13,7 @@ void main() {
   testWidgets('图片解码前铺一层渐变微光，不是死板灰块', (tester) async {
     final bytes =
         (await rootBundle.load(
-          'assets/backdrops/default_wallpaper_poster.jpg',
+          'assets/backdrops/default_wallpaper.jpg',
         )).buffer.asUint8List();
 
     await HttpOverrides.runZoned(

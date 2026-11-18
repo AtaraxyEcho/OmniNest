@@ -263,6 +263,10 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
       setState(() => _error = l10n.changePasswordMinLength);
       return;
     }
+    if (next.length > 64 || utf8.encode(next).length > 72) {
+      setState(() => _error = l10n.changePasswordMaxLength);
+      return;
+    }
     if (next != _confirm.text) {
       setState(() => _error = l10n.changePasswordMismatch);
       return;
@@ -301,40 +305,15 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
 
   Future<void> _revoke(UserSession session) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDesktopDialog<bool>(
-      context,
-      builder:
-          (dialogContext) => DesktopDialog(
-            width: 440,
-            eyebrow: l10n.desktopSecuritySessions,
-            title: l10n.profileRevokeSessionConfirm,
-            content: Text(
-              l10n.profileRevokeSessionMessage,
-              style: DesktopType.dense(DesktopSkin.of(context).text2),
-            ),
-            actions: [
-              DesktopButton(
-                label: l10n.filesCancel,
-                onPressed: () => closeDesktopModal(dialogContext, false),
-              ),
-              DesktopButton(
-                label: l10n.profileSessionsRevoke,
-                icon: DesktopIcons.signOut,
-                variant: DesktopButtonVariant.danger,
-                onPressed: () => closeDesktopModal(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true || !mounted) {
-      return;
-    }
     try {
       await ref.read(profileCommandServiceProvider).revokeSession(session.id);
+      if (!mounted) return;
       ref.invalidate(userSessionsProvider);
-      if (mounted) {
-        showDesktopToast(context, l10n.profileSessionRevoked);
-      }
+      showDesktopToast(
+        context,
+        l10n.desktopSessionSignedOut(session.effectiveDeviceName),
+        icon: DesktopIcons.signOut,
+      );
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -352,37 +331,48 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final sessions = ref.watch(userSessionsProvider);
+    final orderedSessions = [...?sessions.asData?.value]..sort(
+      (left, right) => (right.current ? 1 : 0).compareTo(left.current ? 1 : 0),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Card(
-          title: l10n.changePasswordConfirm,
-          subtitle: l10n.changePasswordMinLength,
+          title: l10n.profileChangePassword,
+          subtitle: l10n.profileChangePasswordSubtitle,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DesktopTextField(
                 keyName: 'settings-current-password',
                 controller: _current,
-                hint: l10n.changePasswordOldPassword,
+                label: l10n.changePasswordOldPassword,
                 obscure: true,
-                height: 38,
+                required: true,
+                height: 40,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               DesktopTextField(
                 keyName: 'settings-new-password',
                 controller: _next,
-                hint: l10n.changePasswordNewPassword,
+                label: l10n.changePasswordNewPassword,
                 obscure: true,
-                height: 38,
+                required: true,
+                height: 40,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
+              _PasswordStrengthMeter(score: _passwordStrength),
+              const SizedBox(height: 14),
               DesktopTextField(
                 keyName: 'settings-confirm-password',
                 controller: _confirm,
-                hint: l10n.changePasswordConfirmNew,
+                label: l10n.changePasswordConfirmNew,
                 obscure: true,
-                height: 38,
+                required: true,
+                height: 40,
+                onChanged: (_) => setState(() {}),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
@@ -396,11 +386,16 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
                   icon: DesktopIcons.lock,
                   variant: DesktopButtonVariant.primary,
                   busy: _saving,
-                  onPressed: _saving ? null : _submit,
+                  onPressed: _canSubmitPasswordChange ? _submit : null,
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 18),
+        _Card(
+          title: l10n.profileTwoFactorTitle,
+          child: const ProfileTwoFactorCard(framed: false, showTitle: false),
         ),
         const SizedBox(height: 18),
         _Card(
@@ -410,14 +405,13 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (sessions.isLoading && !sessions.hasValue)
-                Text(
-                  l10n.profileSessionManagementSubtitle,
-                  style: DesktopType.caption(skin.text3),
-                )
-              else if (sessions.hasError)
-                Text(
-                  l10n.profileSessionsLoadFailed,
-                  style: DesktopType.caption(DesktopPalette.bad),
+                const DesktopSkeletonRows(count: 3)
+              else if (sessions.hasError && !sessions.hasValue)
+                DesktopErrorView(
+                  message: l10n.profileSessionsLoadFailed,
+                  onRetry: () => ref.invalidate(userSessionsProvider),
+                  retryLabel: l10n.commonRetry,
+                  minHeightFactor: 0.16,
                 )
               else if ((sessions.asData?.value ?? const <UserSession>[])
                   .isEmpty)
@@ -426,66 +420,171 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
                   style: DesktopType.caption(skin.text3),
                 )
               else
-                for (final session in sessions.asData!.value)
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: skin.line)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          session.current
-                              ? DesktopIcons.device
-                              : DesktopIcons.cloud,
-                          size: 15,
-                          color: session.current ? skin.accent : skin.text3,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      session.deviceName?.isNotEmpty == true
-                                          ? session.deviceName!
-                                          : session.clientPlatform,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: DesktopType.bodyStrong(skin.text),
-                                    ),
-                                  ),
-                                  if (session.current) ...[
-                                    const SizedBox(width: 8),
-                                    DesktopChip(l10n.profileSessionsCurrent),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${session.ipAddress} · ${session.lastActiveAt}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.caption(skin.text3),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!session.current)
-                          DesktopButton(
-                            label: l10n.profileSessionsRevoke,
-                            icon: DesktopIcons.signOut,
-                            variant: DesktopButtonVariant.ghost,
-                            onPressed: () => _revoke(session),
-                          ),
-                      ],
-                    ),
+                for (var index = 0; index < orderedSessions.length; index++)
+                  _SettingsSessionRow(
+                    session: orderedSessions[index],
+                    first: index == 0,
+                    onSignOut: () => _revoke(orderedSessions[index]),
                   ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  int get _passwordStrength {
+    final password = _next.text;
+    return [
+      password.length > 7,
+      RegExp(r'[A-Z]').hasMatch(password),
+      RegExp(r'[0-9]').hasMatch(password),
+      RegExp(r'[^A-Za-z0-9]').hasMatch(password),
+    ].where((matched) => matched).length;
+  }
+
+  bool get _canSubmitPasswordChange =>
+      !_saving &&
+      _current.text.isNotEmpty &&
+      _passwordStrength >= 2 &&
+      _next.text.length <= 64 &&
+      utf8.encode(_next.text).length <= 72 &&
+      _next.text == _confirm.text;
+}
+
+class _SettingsSessionRow extends StatelessWidget {
+  const _SettingsSessionRow({
+    required this.session,
+    required this.first,
+    required this.onSignOut,
+  });
+
+  final UserSession session;
+  final bool first;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final activity =
+        session.current
+            ? l10n.profileSessionCurrent
+            : _sessionActivityText(l10n, session.lastActiveAt);
+    final platform = session.clientPlatform.trim();
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: first ? null : Border(top: BorderSide(color: skin.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        session.effectiveDeviceName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.bodyStrong(skin.text),
+                      ),
+                    ),
+                    if (session.current) ...[
+                      const SizedBox(width: 8),
+                      DesktopChip(l10n.profileSessionsCurrent),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [if (platform.isNotEmpty) platform, activity].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ],
+            ),
+          ),
+          if (!session.current) ...[
+            const SizedBox(width: 20),
+            DesktopButton(
+              label: l10n.desktopSignOut,
+              variant: DesktopButtonVariant.ghost,
+              onPressed: onSignOut,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _sessionActivityText(AppLocalizations l10n, String lastActiveAt) {
+  final activeAt = DateTime.tryParse(lastActiveAt)?.toLocal();
+  if (activeAt == null) return lastActiveAt;
+  final difference = DateTime.now().difference(activeAt);
+  if (difference.inMinutes < 1) return l10n.tasksTimeMinutesAgo(0);
+  if (difference.inMinutes < 60) {
+    return l10n.tasksTimeMinutesAgo(difference.inMinutes);
+  }
+  if (difference.inHours < 24) {
+    return l10n.tasksTimeHoursAgo(difference.inHours);
+  }
+  if (difference.inDays == 1) return l10n.musicHistoryYesterday;
+  if (difference.inDays < 7) return l10n.tasksTimeDaysAgo(difference.inDays);
+  final month = activeAt.month.toString().padLeft(2, '0');
+  final day = activeAt.day.toString().padLeft(2, '0');
+  return activeAt.year == DateTime.now().year
+      ? '$month-$day'
+      : '${activeAt.year}-$month-$day';
+}
+
+class _PasswordStrengthMeter extends StatelessWidget {
+  const _PasswordStrengthMeter({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final tone = switch (score) {
+      0 => skin.line,
+      1 => DesktopPalette.bad,
+      2 => DesktopPalette.warn,
+      _ => skin.accent,
+    };
+    final label = switch (score) {
+      0 => l10n.changePasswordStrengthTooShort,
+      1 => l10n.setupPasswordStrengthWeak,
+      2 => l10n.setupPasswordStrengthFair,
+      3 => l10n.setupPasswordStrengthGood,
+      _ => l10n.setupPasswordStrengthStrong,
+    };
+    return Row(
+      children: [
+        for (var index = 0; index < 4; index++) ...[
+          if (index > 0) const SizedBox(width: 5),
+          Expanded(
+            child: AnimatedContainer(
+              duration: DesktopMotion.fast,
+              curve: DesktopMotion.ease,
+              height: 4,
+              decoration: BoxDecoration(
+                color: index < score ? tone : skin.line,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 56,
+          child: Text(label, style: DesktopType.caption(skin.text3)),
         ),
       ],
     );
@@ -499,112 +598,202 @@ class _ServicesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final music = ref.watch(musicCenterControllerProvider).asData?.value;
+    final scan = ref.watch(musicScanJobControllerProvider);
+    final platformUser = music?.neteaseUserInfo;
+    final localTracks = music?.dashboard.trackCount ?? 0;
+    final scanDetail =
+        scan.job == null
+            ? l10n.musicScanIdleHint
+            : l10n.musicScanStatus(
+              scan.job!.id,
+              scan.job!.status,
+              scan.job!.progress,
+              scan.job!.scannedFiles,
+            );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Card(
+          title: l10n.musicPlatformLoginTitle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ServiceRow(
+                title: l10n.musicPlatformNeteaseName,
+                detail:
+                    platformUser == null
+                        ? l10n.musicPlatformNeteaseQrHint
+                        : '${platformUser.nickname.isEmpty ? l10n.musicPlatformAnonymousUser : platformUser.nickname} · ${l10n.musicPlatformUserId(platformUser.userId)}',
+                trailing:
+                    platformUser == null
+                        ? DesktopButton(
+                          label: l10n.musicPlatformQrAction,
+                          icon: DesktopIcons.link,
+                          variant: DesktopButtonVariant.primary,
+                          onPressed: () => PlatformLoginSheet.show(context),
+                        )
+                        : DesktopButton(
+                          label: l10n.musicPlatformLogout,
+                          icon: DesktopIcons.signOut,
+                          variant: DesktopButtonVariant.ghost,
+                          onPressed: () => _disconnectMusic(context, ref),
+                        ),
+              ),
+              const SizedBox(height: 4),
+              _ServiceRow(
+                title: l10n.filesLocalLibrary,
+                detail: '$localTracks · $scanDetail',
+                trailing: DesktopButton(
+                  label:
+                      scan.polling
+                          ? l10n.musicScanStatusLabel
+                          : l10n.musicStartScan,
+                  icon: scan.polling ? DesktopIcons.clock : DesktopIcons.retry,
+                  variant: DesktopButtonVariant.soft,
+                  onPressed:
+                      scan.polling ? null : () => _startMusicScan(context, ref),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _Card(
+          title: l10n.desktopServicesOther,
+          child: _ServiceRow(
+            title: l10n.desktopLastFmScrobbling,
+            detail: l10n.desktopLastFmUnavailable,
+            trailing: DesktopChip(l10n.adminNotConfigured),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _disconnectMusic(BuildContext context, WidgetRef ref) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDesktopDialog<bool>(
+    context,
+    builder:
+        (dialogContext) => DesktopDialog(
+          width: 440,
+          eyebrow: l10n.musicPlatformLoginTitle,
+          title: l10n.musicPlatformLogoutConfirmTitle,
+          content: Text(l10n.musicPlatformLogoutConfirmMessage),
+          actions: [
+            DesktopButton(
+              label: l10n.filesCancel,
+              onPressed: () => closeDesktopModal(dialogContext, false),
+            ),
+            DesktopButton(
+              label: l10n.musicPlatformLogout,
+              icon: DesktopIcons.signOut,
+              variant: DesktopButtonVariant.danger,
+              onPressed: () => closeDesktopModal(dialogContext, true),
+            ),
+          ],
+        ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .platformLogout('netease');
+    if (context.mounted) {
+      showDesktopToast(
+        context,
+        l10n.musicPlatformLogoutSuccess,
+        icon: DesktopIcons.check,
+      );
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.musicPlatformLogout, error),
+        kind: DesktopToastKind.error,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+}
+
+Future<void> _startMusicScan(BuildContext context, WidgetRef ref) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDesktopDialog<bool>(
+    context,
+    builder:
+        (dialogContext) => DesktopDialog(
+          width: 440,
+          eyebrow: l10n.musicPlatformLoginTitle,
+          title: l10n.musicStartScan,
+          content: Text(l10n.musicScanStartConfirmMessage),
+          actions: [
+            DesktopButton(
+              label: l10n.filesCancel,
+              onPressed: () => closeDesktopModal(dialogContext, false),
+            ),
+            DesktopButton(
+              label: l10n.musicStartScan,
+              icon: DesktopIcons.retry,
+              variant: DesktopButtonVariant.primary,
+              onPressed: () => closeDesktopModal(dialogContext, true),
+            ),
+          ],
+        ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  await ref.read(musicScanJobControllerProvider.notifier).startScan();
+  if (!context.mounted) return;
+  final scan = ref.read(musicScanJobControllerProvider);
+  if (scan.errorMessage != null) {
+    showDesktopToast(
+      context,
+      scan.errorMessage!,
+      kind: DesktopToastKind.error,
+      icon: DesktopIcons.info,
+    );
+  } else {
+    showDesktopToast(context, l10n.musicScanQueued, icon: DesktopIcons.check);
+  }
+}
+
+class _ServiceRow extends StatelessWidget {
+  const _ServiceRow({required this.title, required this.detail, this.trailing});
+
+  final String title;
+  final String detail;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final state = ref.watch(fileBrowserControllerProvider).asData?.value;
-    final accounts =
-        state?.externalAccounts ?? const <ExternalStorageAccount>[];
-    final controller = ref.read(fileBrowserControllerProvider.notifier);
-    return _Card(
-      title: l10n.desktopConnectedServices,
-      subtitle: l10n.filesExternalStorageDesc,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: skin.line)),
+      ),
+      child: Row(
         children: [
-          if (accounts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.filesExternalEmptyMessage,
-                    style: DesktopType.dense(skin.text3),
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10,
-                    children: [
-                      DesktopButton(
-                        label: l10n.filesExternalStorage,
-                        icon: DesktopIcons.server,
-                        variant: DesktopButtonVariant.primary,
-                        onPressed:
-                            () => desktopPush(
-                              context,
-                              '/files?section=externalStorage',
-                            ),
-                      ),
-                      DesktopButton(
-                        label: l10n.desktopServicesRefresh,
-                        icon: DesktopIcons.retry,
-                        variant: DesktopButtonVariant.ghost,
-                        onPressed:
-                            () => unawaited(
-                              controller.loadSection(
-                                FileManagerSection.externalStorage,
-                              ),
-                            ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            )
-          else
-            for (final account in accounts)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: skin.line)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: DesktopType.bodyStrong(skin.text)),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.caption(skin.text3),
                 ),
-                child: Row(
-                  children: [
-                    Icon(DesktopIcons.cloud, size: 16, color: skin.accent),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            account.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.bodyStrong(skin.text),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            account.provider,
-                            style: DesktopType.caption(skin.text3),
-                          ),
-                        ],
-                      ),
-                    ),
-                    DesktopChip(account.status),
-                    const SizedBox(width: 8),
-                    DesktopButton(
-                      label: l10n.filesTestConnection,
-                      icon: DesktopIcons.check,
-                      variant: DesktopButtonVariant.ghost,
-                      onPressed:
-                          () => unawaited(
-                            controller.testExternalStorageConnection(
-                              account.id,
-                            ),
-                          ),
-                    ),
-                    const SizedBox(width: 6),
-                    DesktopButton(
-                      label: l10n.desktopFilesDisable,
-                      icon: DesktopIcons.close,
-                      variant: DesktopButtonVariant.ghost,
-                      onPressed:
-                          () => unawaited(
-                            controller.disableExternalStorage(account),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );

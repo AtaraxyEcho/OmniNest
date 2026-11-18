@@ -4,15 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/platform/file_pick.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/space_selector_sheet.dart';
 import 'package:omninest/features/files/application/media_import_file_picker.dart';
+import 'package:omninest/features/files/application/media_import_queue_controller.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
-import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
@@ -23,6 +27,14 @@ enum ImportButtonStyle { textButton, iconButton, filledButton, outlinedButton }
 typedef MediaImportFilePicker =
     Future<List<XFile>> Function(List<XTypeGroup> acceptedTypeGroups);
 
+/// 允许外壳用本地设计系统绘制入口，同时继续复用媒体导入流程。
+typedef MediaImportButtonBuilder =
+    Widget Function(
+      BuildContext context, {
+      required VoidCallback? onPressed,
+      required bool busy,
+    });
+
 /// 提供可替换的文件选择入口，便于隔离原生选择器并覆盖测试场景。
 final mediaImportFilePickerProvider = Provider<MediaImportFilePicker>((ref) {
   return pickMediaImportFiles;
@@ -30,8 +42,8 @@ final mediaImportFilePickerProvider = Provider<MediaImportFilePicker>((ref) {
 
 /// 可复用的媒体导入按钮。
 ///
-/// 默认流程：文件选择 → 空间选择 → 目录解析 → 上传 → 完成回调。
-/// 提供 [onFilesPicked] 时改为后台队列模式：选择后立即返回，不阻塞当前页。
+/// 桌面设备导入进入后台队列并立即返回；紧凑界面保留适合移动端的进度反馈。
+/// 提供 [onFilesPicked] 时由调用方接管排队与导入完成处理。
 class MediaImportButton extends ConsumerStatefulWidget {
   const MediaImportButton({
     required this.subsystemDirectory,
@@ -45,7 +57,9 @@ class MediaImportButton extends ConsumerStatefulWidget {
     this.reuseExistingFiles = false,
     this.enableCamera = false,
     this.onFilesPicked,
+    this.onPressedOverride,
     this.label,
+    this.buttonBuilder,
     super.key,
   });
 
@@ -88,14 +102,20 @@ class MediaImportButton extends ConsumerStatefulWidget {
   /// 但跳过阻塞式上传对话框；上传、扫描与入库由调用方异步完成。
   final void Function(List<XFile> files, String spaceType)? onFilesPicked;
 
+  /// 页面需要先选择导入来源时覆盖默认设备文件选择动作。
+  final VoidCallback? onPressedOverride;
+
   /// 按钮文案；不传则使用通用「导入文件」。
   final String? label;
 
+  /// 覆盖按钮外观，不改变文件选择、上传、取消和完成反馈流程。
+  final MediaImportButtonBuilder? buttonBuilder;
+
   @override
-  ConsumerState<MediaImportButton> createState() => _MediaImportButtonState();
+  ConsumerState<MediaImportButton> createState() => MediaImportButtonState();
 }
 
-class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
+class MediaImportButtonState extends ConsumerState<MediaImportButton> {
   bool _busy = false;
   bool _routeClosing = false;
 
@@ -103,10 +123,15 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final buttonLabel = widget.label ?? l10n.importFiles;
+    final onPressed = _busy ? null : widget.onPressedOverride ?? _handleImport;
+    final buttonBuilder = widget.buttonBuilder;
+    if (buttonBuilder != null) {
+      return buttonBuilder(context, onPressed: onPressed, busy: _busy);
+    }
 
     return switch (widget.style) {
       ImportButtonStyle.textButton => TextButton.icon(
-        onPressed: _busy ? null : _handleImport,
+        onPressed: onPressed,
         icon: _ImportButtonIcon(
           busy: _busy,
           color: widget.color,
@@ -115,7 +140,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
         label: Text(buttonLabel),
       ),
       ImportButtonStyle.iconButton => IconButton(
-        onPressed: _busy ? null : _handleImport,
+        onPressed: onPressed,
         icon: _ImportButtonIcon(
           busy: _busy,
           color: widget.color,
@@ -124,7 +149,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
         tooltip: buttonLabel,
       ),
       ImportButtonStyle.filledButton => FilledButton.icon(
-        onPressed: _busy ? null : _handleImport,
+        onPressed: onPressed,
         icon: _ImportButtonIcon(
           busy: _busy,
           color: widget.color ?? Theme.of(context).colorScheme.onPrimary,
@@ -133,7 +158,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
         label: Text(buttonLabel),
       ),
       ImportButtonStyle.outlinedButton => OutlinedButton.icon(
-        onPressed: _busy ? null : _handleImport,
+        onPressed: onPressed,
         style: OutlinedButton.styleFrom(foregroundColor: widget.color),
         icon: _ImportButtonIcon(
           busy: _busy,
@@ -152,55 +177,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     try {
       final files = await _pickImportFiles(l10n);
       if (files.isEmpty || !mounted) return;
-
-      final unsupportedFiles = _unsupportedFiles(files);
-      if (unsupportedFiles.isNotEmpty) {
-        if (!mounted || !context.mounted) return;
-        _showSnack(
-          l10n.importUnsupportedFormat(
-            _unsupportedFileNames(unsupportedFiles),
-            _supportedExtensionNames(),
-          ),
-        );
-        return;
-      }
-
-      final spaceSelection = await showSpaceSelectorSheet(
-        context,
-        allowShared: widget.allowSharedSpace,
-      );
-      if (spaceSelection == null || !mounted) return;
-
-      final spaceType =
-          spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
-
-      final onFilesPicked = widget.onFilesPicked;
-      if (onFilesPicked != null) {
-        onFilesPicked(files, spaceType);
-        return;
-      }
-      final importService = ref.read(mediaImportServiceProvider);
-      final isCompact = ResponsiveBreakpoints.isCompact(
-        MediaQuery.sizeOf(context).width,
-      );
-
-      if (isCompact) {
-        await _showProgressSheet(
-          context,
-          importService: importService,
-          files: files,
-          spaceType: spaceType,
-          l10n: l10n,
-        );
-      } else {
-        await _showProgressDialog(
-          context,
-          importService: importService,
-          files: files,
-          spaceType: spaceType,
-          l10n: l10n,
-        );
-      }
+      await _processPickedFiles(files, l10n);
     } on Object {
       if (mounted && context.mounted) {
         _showSnack(l10n.importFailed);
@@ -210,6 +187,107 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  /// 通过与普通按钮相同的校验、上传与完成反馈流程导入外部选择器中的文件。
+  Future<void> importFiles(List<XFile> files) async {
+    if (_busy || files.isEmpty) return;
+    setState(() => _busy = true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await _processPickedFiles(files, l10n);
+    } on Object {
+      if (mounted && context.mounted) {
+        _showSnack(l10n.importFailed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _processPickedFiles(
+    List<XFile> files,
+    AppLocalizations l10n,
+  ) async {
+    if (!mounted || !context.mounted) return;
+    final unsupportedFiles = _unsupportedFiles(files);
+    if (unsupportedFiles.isNotEmpty) {
+      _showSnack(
+        l10n.importUnsupportedFormat(
+          _unsupportedFileNames(unsupportedFiles),
+          _supportedExtensionNames(),
+        ),
+      );
+      return;
+    }
+
+    final spaceSelection = await showSpaceSelectorSheet(
+      context,
+      allowShared: widget.allowSharedSpace,
+    );
+    if (spaceSelection == null || !mounted) return;
+
+    final spaceType =
+        spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+    final onFilesPicked = widget.onFilesPicked;
+    if (onFilesPicked != null) {
+      onFilesPicked(files, spaceType);
+      return;
+    }
+
+    final isCompact = ResponsiveBreakpoints.isCompact(
+      MediaQuery.sizeOf(context).width,
+    );
+    if (isCompact) {
+      final importService = ref.read(mediaImportServiceProvider);
+      await _showProgressSheet(
+        context,
+        importService: importService,
+        files: files,
+        spaceType: spaceType,
+        l10n: l10n,
+      );
+    } else {
+      _enqueueDesktopImport(files, spaceType, l10n);
+    }
+  }
+
+  void _enqueueDesktopImport(
+    List<XFile> files,
+    String spaceType,
+    AppLocalizations l10n,
+  ) {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final epoch = container.read(sessionEpochProvider);
+    container
+        .read(mediaImportQueueProvider.notifier)
+        .enqueue(
+          files: files,
+          directoryName: widget.subsystemDirectory,
+          spaceType: spaceType,
+          reuseExistingFiles: widget.reuseExistingFiles,
+          titleForFile: (file) => '${widget.subsystemDirectory} · ${file.name}',
+          onComplete: (result) async {
+            if (!mounted ||
+                !context.mounted ||
+                container.read(sessionEpochProvider) != epoch) {
+              return;
+            }
+            await _handleImportComplete(result, l10n);
+          },
+        );
+    showDesktopToast(
+      context,
+      l10n.desktopMediaImportQueued(files.length),
+      icon: DesktopIcons.download,
+      actionLabel: l10n.desktopViewTasks,
+      onAction:
+          () => container
+              .read(desktopShellProvider.notifier)
+              .setPanel(DesktopPanel.tasks),
+    );
   }
 
   void _showSnack(String message) {
@@ -298,36 +376,6 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
               l10n: l10n,
               onComplete: (result) => _completeImport(sheetContext, result),
               onClose: () => _closeProgressRoute(sheetContext),
-            ),
-          ),
-    );
-    await _handleImportComplete(result, l10n);
-  }
-
-  Future<void> _showProgressDialog(
-    BuildContext context, {
-    required MediaImportService importService,
-    required List<XFile> files,
-    required String spaceType,
-    required AppLocalizations l10n,
-  }) async {
-    _routeClosing = false;
-    final result = await showFilesDialog<MediaImportBatchResult>(
-      context: context,
-      dismissible: false,
-      builder:
-          (dialogContext) => FilesDialogFrame(
-            width: 360,
-            title: l10n.filesImportRunning,
-            body: _ImportProgressContent(
-              importService: importService,
-              files: files,
-              subsystemDirectory: widget.subsystemDirectory,
-              spaceType: spaceType,
-              reuseExistingFiles: widget.reuseExistingFiles,
-              l10n: l10n,
-              onComplete: (result) => _completeImport(dialogContext, result),
-              onClose: () => _closeProgressRoute(dialogContext),
             ),
           ),
     );

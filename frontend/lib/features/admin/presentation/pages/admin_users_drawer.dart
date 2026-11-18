@@ -1,7 +1,7 @@
 part of 'admin_users_page.dart';
 
-/// 用户编辑抽屉（样例 `AdminIdentity` 的 `Drawer`）：角色与配额同屏，
-/// 保存时只提交真正变化的字段。姓名/邮箱后端没有更新接口，不摆假字段。
+/// 用户编辑抽屉（样例 `AdminIdentity` 的 `Drawer`）：资料、角色、配额与状态同屏，
+/// 保存时只提交真正变化的字段。
 class _EditUserDrawer extends ConsumerStatefulWidget {
   const _EditUserDrawer({required this.user});
 
@@ -13,17 +13,30 @@ class _EditUserDrawer extends ConsumerStatefulWidget {
 
 class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
   late final Set<String> _roles = {...widget.user.roles};
+  late final TextEditingController _displayName = TextEditingController(
+    text: widget.user.displayName ?? widget.user.username,
+  );
+  late final TextEditingController _account = TextEditingController(
+    text: widget.user.username,
+  );
+  late final TextEditingController _email = TextEditingController(
+    text: widget.user.email ?? '',
+  );
   late final TextEditingController _quota = TextEditingController(
     text:
         widget.user.isQuotaUnlimited
             ? ''
             : _gib(widget.user.quotaBytes).toStringAsFixed(1),
   );
+  late bool _enabled = widget.user.status == AdminUserStatus.active;
   bool _saving = false;
   String? _error;
 
   @override
   void dispose() {
+    _displayName.dispose();
+    _account.dispose();
+    _email.dispose();
     _quota.dispose();
     super.dispose();
   }
@@ -69,6 +82,29 @@ class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          DesktopTextField(
+            controller: _displayName,
+            label: l10n.adminDisplayName,
+            required: true,
+            maxLength: 120,
+            keyName: 'admin-edit-display-name',
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _account,
+            label: l10n.adminAccount,
+            enabled: false,
+            keyName: 'admin-edit-account',
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _email,
+            label: l10n.adminEmail,
+            keyboardType: TextInputType.emailAddress,
+            maxLength: 255,
+            keyName: 'admin-edit-email',
+          ),
+          const SizedBox(height: 22),
           Text(l10n.adminRole, style: DesktopType.bodyStrong(skin.text)),
           const SizedBox(height: 4),
           Text(l10n.adminEditRolesHint, style: DesktopType.caption(skin.text3)),
@@ -119,6 +155,38 @@ class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
           ),
           const SizedBox(height: 6),
           Text(l10n.adminQuotaUnlimited, style: DesktopType.nano(skin.text3)),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: skin.line)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.adminAccountEnabled,
+                        style: DesktopType.rowTitle(skin.text),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.adminDisabledAccountsCannotSignIn,
+                        style: DesktopType.caption(skin.text3),
+                      ),
+                    ],
+                  ),
+                ),
+                DesktopToggle(
+                  value: _enabled,
+                  label: l10n.adminAccountEnabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                ),
+              ],
+            ),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 14),
             Text(_error!, style: DesktopType.caption(skin.bad)),
@@ -134,10 +202,15 @@ class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
       setState(() => _error = l10n.adminSelectAtLeastOneRole);
       return;
     }
+    if (_displayName.text.trim().isEmpty) {
+      setState(() => _error = l10n.adminEnterDisplayName);
+      return;
+    }
     final quotaText = _quota.text.trim();
     final quotaGiB = quotaText.isEmpty ? null : double.tryParse(quotaText);
-    if (quotaText.isNotEmpty && (quotaGiB == null || quotaGiB < 0)) {
-      setState(() => _error = l10n.adminQuotaHint);
+    if (quotaText.isNotEmpty &&
+        (quotaGiB == null || quotaGiB < 1 || quotaGiB > 10000)) {
+      setState(() => _error = l10n.adminQuotaRangeError);
       return;
     }
     setState(() {
@@ -146,6 +219,17 @@ class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
     });
     final controller = ref.read(adminUserControllerProvider.notifier);
     try {
+      final nextDisplayName = _displayName.text.trim();
+      final nextEmail = _email.text.trim();
+      if (nextDisplayName !=
+              (widget.user.displayName ?? widget.user.username) ||
+          nextEmail != (widget.user.email ?? '')) {
+        await controller.updateUserProfile(
+          userId: widget.user.id,
+          displayName: nextDisplayName,
+          email: nextEmail.isEmpty ? null : nextEmail,
+        );
+      }
       if (!_setEquals(_roles, widget.user.roles)) {
         await controller.updateUserRoles(widget.user.id, _roles);
       }
@@ -153,6 +237,11 @@ class _EditUserDrawerState extends ConsumerState<_EditUserDrawer> {
           quotaGiB == null ? null : (quotaGiB * 1024 * 1024 * 1024).round();
       if (targetBytes != null && targetBytes != widget.user.quotaBytes) {
         await controller.updateUserQuota(widget.user.id, targetBytes);
+      }
+      final nextStatus =
+          _enabled ? AdminUserStatus.active : AdminUserStatus.disabled;
+      if (nextStatus != widget.user.status) {
+        await controller.updateUserStatus(widget.user.id, nextStatus);
       }
       if (mounted) {
         closeDesktopModal(context, true);

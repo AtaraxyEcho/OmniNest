@@ -161,7 +161,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
       return;
     }
     try {
-      await _api.recordPlayableHistory(
+      final historyId = await _api.recordPlayableHistory(
         playableKey: item.playableKey,
         title: item.track.title,
         artistName: item.track.artistName,
@@ -169,6 +169,12 @@ extension MusicPlaybackHelpers on MusicCenterController {
         coverUrl: item.track.coverUrl ?? '',
         durationSeconds: item.track.durationSeconds,
       );
+      if (historyId != null) {
+        await attachListeningHistoryToPlaybackSession(
+          historyId,
+          item.playableKey,
+        );
+      }
     } on Object catch (error) {
       _partialErrors.add(userFacingErrorText(error));
     }

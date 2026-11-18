@@ -184,12 +184,17 @@ class PhotoViewerTopBar extends StatelessWidget {
                     ),
                     visualDensity: VisualDensity.compact,
                   ),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).photosEdit,
-                    onPressed: onEdit,
-                    icon: Icon(Icons.edit_outlined, color: iconColor, size: 20),
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  if (!photo.isVideo)
+                    IconButton(
+                      tooltip: AppLocalizations.of(context).photosEdit,
+                      onPressed: onEdit,
+                      icon: Icon(
+                        Icons.edit_outlined,
+                        color: iconColor,
+                        size: 20,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   IconButton(
                     tooltip: AppLocalizations.of(context).photosSlideshow,
                     onPressed: onSlideshow,
@@ -333,11 +338,12 @@ class PhotoViewerBottomActions extends StatelessWidget {
                 onPressed: onDownload,
                 icon: Icon(Icons.download_outlined, color: iconColor, size: 22),
               ),
-              IconButton(
-                tooltip: l10n.photosEdit,
-                onPressed: onEdit,
-                icon: Icon(Icons.edit_outlined, color: iconColor, size: 22),
-              ),
+              if (!photo.isVideo)
+                IconButton(
+                  tooltip: l10n.photosEdit,
+                  onPressed: onEdit,
+                  icon: Icon(Icons.edit_outlined, color: iconColor, size: 22),
+                ),
               IconButton(
                 tooltip: l10n.photosAddToAlbum,
                 onPressed: onAddToAlbum,
@@ -519,11 +525,12 @@ class PhotoViewerHostedActions extends StatelessWidget {
         tooltip: l10n.photosDownloadPhoto,
         onTap: onDownload,
       ),
-      _HostedViewerActionButton(
-        icon: Icons.edit_outlined,
-        tooltip: l10n.photosEdit,
-        onTap: onEdit,
-      ),
+      if (!photo.isVideo)
+        _HostedViewerActionButton(
+          icon: Icons.edit_outlined,
+          tooltip: l10n.photosEdit,
+          onTap: onEdit,
+        ),
       _HostedViewerActionButton(
         icon: Icons.add_rounded,
         tooltip: l10n.photosAddToAlbum,

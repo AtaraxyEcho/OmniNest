@@ -46,6 +46,22 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final compact = viewportWidth <= DesktopMetrics.playerBarCompactBreakpoint;
+    final narrow = viewportWidth <= DesktopMetrics.playerBarNarrowBreakpoint;
+    final trackCellWidth =
+        narrow
+            ? DesktopMetrics.playerBarNarrowTrackWidth
+            : compact
+            ? DesktopMetrics.playerBarCompactTrackWidth
+            : DesktopMetrics.playerBarWideTrackWidth;
+    final sectionGap =
+        narrow
+            ? DesktopMetrics.playerBarNarrowSectionGap
+            : DesktopMetrics.playerBarWideSectionGap;
+    final showVolume = !compact;
+    final showVisualizer =
+        viewportWidth >= DesktopMetrics.playerBarVisualizerBreakpoint;
     final snapshot = ref.watch(musicPortalSnapshotProvider).asData?.value;
     final track = snapshot?.activeTrack;
     final playing = snapshot?.isPlaying ?? false;
@@ -85,11 +101,19 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
         saturation: 1.7,
         child: Container(
           width: double.infinity,
-          constraints: const BoxConstraints(
-            maxWidth: DesktopMetrics.playerBarMaxWidth,
+          constraints: BoxConstraints(
+            maxWidth:
+                compact
+                    ? DesktopMetrics.playerBarCompactMaxWidth
+                    : DesktopMetrics.playerBarMaxWidth,
           ),
           height: DesktopMetrics.playerBarHeight,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
+          margin: EdgeInsets.symmetric(
+            horizontal:
+                compact
+                    ? DesktopMetrics.playerBarCompactMargin
+                    : DesktopMetrics.playerBarWideMargin,
+          ),
           padding: const EdgeInsets.fromLTRB(8, 0, 14, 0),
           decoration: BoxDecoration(
             color: skin.panel,
@@ -107,10 +131,11 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                       return Row(
                         children: [
                           SizedBox(
-                            width: 270,
+                            width: trackCellWidth,
                             child: _TrackCell(
                               track: track,
                               playing: playing,
+                              showArtist: !narrow,
                               onOpen:
                                   () => desktopPush(
                                     context,
@@ -118,13 +143,13 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                   ),
                             ),
                           ),
+                          SizedBox(width: sectionGap),
                           DesktopIconButton(
                             icon:
                                 favorite
                                     ? DesktopIcons.heartFilled
                                     : DesktopIcons.heart,
                             tooltip: l10n.desktopFavorite,
-                            size: 30,
                             color: favorite ? skin.liked : null,
                             onPressed:
                                 current == null
@@ -136,156 +161,195 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                         )
                                         .toggleFavorite(current),
                           ),
+                          SizedBox(width: sectionGap),
                           Expanded(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 600),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    height: 34,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        DesktopIconButton(
-                                          icon: switch (mode) {
-                                            MusicPlayMode.sequential =>
-                                              DesktopIcons.listOrder,
-                                            MusicPlayMode.shuffle =>
-                                              DesktopIcons.shuffle,
-                                            MusicPlayMode.repeatOne =>
-                                              DesktopIcons.repeatOne,
-                                          },
-                                          size: 28,
-                                          iconSize: 15,
-                                          active:
-                                              mode != MusicPlayMode.sequential,
-                                          tooltip:
-                                              '${switch (mode) {
-                                                MusicPlayMode.sequential => l10n.desktopPlayInOrder,
-                                                MusicPlayMode.shuffle => l10n.desktopShuffle,
-                                                MusicPlayMode.repeatOne => l10n.desktopRepeatOne,
-                                              }} — ${l10n.desktopClickToSwitch}',
-                                          onPressed:
-                                              () =>
-                                                  ref
-                                                      .read(
-                                                        musicCenterControllerProvider
-                                                            .notifier,
-                                                      )
-                                                      .cyclePlayMode(),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        DesktopIconButton(
-                                          icon: DesktopIcons.previous,
-                                          size: 28,
-                                          iconSize: 18,
-                                          tooltip: l10n.desktopPrevious,
-                                          onPressed:
-                                              () => actions.previousTrack(),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        _PlayButton(
-                                          playing: playing,
-                                          onPressed:
-                                              () => actions.togglePlayback(),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        DesktopIconButton(
-                                          icon: DesktopIcons.next,
-                                          size: 28,
-                                          iconSize: 18,
-                                          tooltip: l10n.desktopNext,
-                                          onPressed: () => actions.nextTrack(),
-                                        ),
-                                      ],
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minWidth:
+                                      narrow
+                                          ? DesktopMetrics
+                                              .playerBarNarrowCenterMinWidth
+                                          : compact
+                                          ? DesktopMetrics
+                                              .playerBarCompactCenterMinWidth
+                                          : DesktopMetrics
+                                              .playerBarWideCenterMinWidth,
+                                  maxWidth:
+                                      DesktopMetrics.playerBarCenterMaxWidth,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      height: 34,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          DesktopIconButton(
+                                            icon: switch (mode) {
+                                              MusicPlayMode.sequential =>
+                                                DesktopIcons.listOrder,
+                                              MusicPlayMode.shuffle =>
+                                                DesktopIcons.shuffle,
+                                              MusicPlayMode.repeatOne =>
+                                                DesktopIcons.repeatOne,
+                                            },
+                                            size: 28,
+                                            iconSize: 15,
+                                            active:
+                                                mode !=
+                                                MusicPlayMode.sequential,
+                                            tooltip:
+                                                '${switch (mode) {
+                                                  MusicPlayMode.sequential => l10n.desktopPlayInOrder,
+                                                  MusicPlayMode.shuffle => l10n.desktopShuffle,
+                                                  MusicPlayMode.repeatOne => l10n.desktopRepeatOne,
+                                                }} — ${l10n.desktopClickToSwitch}',
+                                            onPressed:
+                                                () =>
+                                                    ref
+                                                        .read(
+                                                          musicCenterControllerProvider
+                                                              .notifier,
+                                                        )
+                                                        .cyclePlayMode(),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          DesktopIconButton(
+                                            icon: DesktopIcons.previous,
+                                            size: 28,
+                                            iconSize: 18,
+                                            tooltip: l10n.desktopPrevious,
+                                            onPressed:
+                                                () => actions.previousTrack(),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          _PlayButton(
+                                            playing: playing,
+                                            onPressed:
+                                                () => actions.togglePlayback(),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          DesktopIconButton(
+                                            icon: DesktopIcons.next,
+                                            size: 28,
+                                            iconSize: 18,
+                                            tooltip: l10n.desktopNext,
+                                            onPressed:
+                                                () => actions.nextTrack(),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  // 关键：只有这一行随 16ms 播放位置流重建。此前 StreamBuilder 包住
-                                  // 整个 Row（封面、按钮、频谱），音乐播放时每帧重建几十个 widget，
-                                  // 连带玻璃面板的 child 每帧换新，backdrop 层也跟着重录。
-                                  _PlayerSeekBar(
-                                    timeline: timeline!,
-                                    scrubSeconds: _scrubSeconds,
-                                    durationSeconds: durationSeconds,
-                                    onScrub:
-                                        (value) => setState(
-                                          () => _scrubSeconds = value,
-                                        ),
-                                    onCommit: (value) {
-                                      setState(() => _scrubSeconds = null);
-                                      timeline.seek(
-                                        Duration(
-                                          milliseconds: (value * 1000).round(),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
+                                    // 关键：只有这一行随 16ms 播放位置流重建。此前 StreamBuilder 包住
+                                    // 整个 Row（封面、按钮、频谱），音乐播放时每帧重建几十个 widget，
+                                    // 连带玻璃面板的 child 每帧换新，backdrop 层也跟着重录。
+                                    Transform.translate(
+                                      offset: const Offset(0, -2),
+                                      child: _PlayerSeekBar(
+                                        timeline: timeline!,
+                                        scrubSeconds: _scrubSeconds,
+                                        durationSeconds: durationSeconds,
+                                        onScrub:
+                                            (value) => setState(
+                                              () => _scrubSeconds = value,
+                                            ),
+                                        onCommit: (value) {
+                                          setState(() => _scrubSeconds = null);
+                                          timeline.seek(
+                                            Duration(
+                                              milliseconds:
+                                                  (value * 1000).round(),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: sectionGap),
                           // 样例 `.pb-viz`：extra.css 默认 `display:none`，
                           // 只有 ≥1360 宽才显示 64×26、85% 不透明度。
-                          if (MediaQuery.sizeOf(context).width >= 1360)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: SizedBox(
-                                width: 64,
-                                height: 26,
-                                child: Opacity(
-                                  opacity: 0.85,
-                                  child: DesktopVisualizer(
-                                    playing: playing,
-                                    color: skin.accent,
-                                    bars: 14,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showVisualizer) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: SizedBox(
+                                    width: 64,
+                                    height: 26,
+                                    child: Opacity(
+                                      opacity: 0.85,
+                                      child: DesktopVisualizer(
+                                        playing: playing,
+                                        color: skin.accent,
+                                        bars: 14,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          const SizedBox(width: 8),
-                          DesktopIconButton(
-                            icon: DesktopIcons.queue,
-                            tooltip: l10n.desktopDockQueue,
-                            active: ref.watch(desktopShellProvider).dockOpen,
-                            onPressed:
-                                () => shellController.setDockTab(
-                                  DesktopDockTab.queue,
+                                SizedBox(
+                                  width: DesktopMetrics.playerBarControlGap,
                                 ),
-                          ),
-                          DesktopIconButton(
-                            icon:
-                                volume <= 0
-                                    ? DesktopIcons.mute
-                                    : DesktopIcons.volume,
-                            tooltip: l10n.desktopMute,
-                            onPressed:
-                                engine == null
-                                    ? null
-                                    : () => engine.setVolume(
-                                      volume <= 0 ? _lastAudibleVolume : 0,
+                              ],
+                              DesktopIconButton(
+                                icon: DesktopIcons.queue,
+                                tooltip: l10n.desktopDockQueue,
+                                active:
+                                    ref.watch(desktopShellProvider).dockOpen,
+                                onPressed:
+                                    () => shellController.setDockTab(
+                                      DesktopDockTab.queue,
                                     ),
-                          ),
-                          const SizedBox(width: 4),
-                          DesktopSlider(
-                            width: 92,
-                            value: volume,
-                            max: 100,
-                            onChanged: (value) => engine?.setVolume(value),
-                          ),
-                          const SizedBox(width: 4),
-                          DesktopIconButton(
-                            icon: DesktopIcons.expand,
-                            tooltip: l10n.desktopOpenNowPlaying,
-                            onPressed:
-                                () => desktopPush(
-                                  context,
-                                  DesktopRoutes.nowPlaying,
+                              ),
+                              SizedBox(
+                                width: DesktopMetrics.playerBarControlGap,
+                              ),
+                              DesktopIconButton(
+                                icon:
+                                    volume <= 0
+                                        ? DesktopIcons.mute
+                                        : DesktopIcons.volume,
+                                tooltip: l10n.desktopMute,
+                                onPressed:
+                                    engine == null
+                                        ? null
+                                        : () => engine.setVolume(
+                                          volume <= 0 ? _lastAudibleVolume : 0,
+                                        ),
+                              ),
+                              if (showVolume) ...[
+                                SizedBox(
+                                  width: DesktopMetrics.playerBarControlGap,
                                 ),
+                                DesktopSlider(
+                                  width: 92,
+                                  value: volume,
+                                  max: 100,
+                                  onChanged:
+                                      (value) => engine?.setVolume(value),
+                                ),
+                              ],
+                              SizedBox(
+                                width: DesktopMetrics.playerBarControlGap,
+                              ),
+                              DesktopIconButton(
+                                icon: DesktopIcons.expand,
+                                tooltip: l10n.desktopOpenNowPlaying,
+                                onPressed:
+                                    () => desktopPush(
+                                      context,
+                                      DesktopRoutes.nowPlaying,
+                                    ),
+                              ),
+                            ],
                           ),
                         ],
                       );
@@ -350,11 +414,13 @@ class _TrackCell extends StatelessWidget {
   const _TrackCell({
     required this.track,
     required this.playing,
+    required this.showArtist,
     required this.onOpen,
   });
 
   final MusicPortalTrack track;
   final bool playing;
+  final bool showArtist;
   final VoidCallback onOpen;
 
   @override
@@ -387,13 +453,15 @@ class _TrackCell extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: DesktopType.denseStrong(skin.text),
                         ),
-                        const SizedBox(height: 1),
-                        Text(
-                          track.artistName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.micro(skin.text3),
-                        ),
+                        if (showArtist) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            track.artistName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.micro(skin.text3),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -596,7 +664,7 @@ class _PlayerSeekBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     return SizedBox(
-      height: 18,
+      height: DesktopMetrics.playerBarSeekHeight,
       child: StreamBuilder<Duration>(
         stream: timeline.positionStream,
         initialData: timeline.position,
@@ -607,7 +675,7 @@ class _PlayerSeekBar extends StatelessWidget {
           return Row(
             children: [
               SizedBox(
-                width: 38,
+                width: DesktopMetrics.playerBarSeekTimeWidth,
                 child: Text(
                   formatDesktopClock(
                     Duration(milliseconds: (positionSeconds * 1000).round()),
@@ -616,18 +684,19 @@ class _PlayerSeekBar extends StatelessWidget {
                   style: DesktopType.numeric(skin.text3).copyWith(height: 1),
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: DesktopMetrics.playerBarSeekGap),
               Expanded(
                 child: DesktopSlider(
+                  height: DesktopMetrics.playerBarSeekHeight,
                   value: positionSeconds,
                   max: durationSeconds <= 0 ? 1 : durationSeconds.toDouble(),
                   onChanged: durationSeconds <= 0 ? (_) {} : onScrub,
                   onCommit: durationSeconds <= 0 ? null : onCommit,
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: DesktopMetrics.playerBarSeekGap),
               SizedBox(
-                width: 38,
+                width: DesktopMetrics.playerBarSeekTimeWidth,
                 child: Text(
                   formatDesktopClock(Duration(seconds: durationSeconds)),
                   textAlign: TextAlign.center,

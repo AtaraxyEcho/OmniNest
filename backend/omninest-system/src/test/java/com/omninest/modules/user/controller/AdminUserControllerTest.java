@@ -26,11 +26,12 @@ class AdminUserControllerTest {
 
     @Test
     void listUsersDelegatesSearchAndRoleFilters() {
-        when(adminUserService.listUsers(1, 25, "alice", "MEMBER", "username", "asc")).thenReturn(Page.empty());
+        when(adminUserService.listUsers(1, 25, "alice", "MEMBER", "", "username", "asc"))
+                .thenReturn(Page.empty());
 
-        controller.listUsers(1, 25, "alice", "MEMBER", "username", "asc");
+        controller.listUsers(1, 25, "alice", "MEMBER", "", "username", "asc");
 
-        verify(adminUserService).listUsers(1, 25, "alice", "MEMBER", "username", "asc");
+        verify(adminUserService).listUsers(1, 25, "alice", "MEMBER", "", "username", "asc");
     }
 
     @Test

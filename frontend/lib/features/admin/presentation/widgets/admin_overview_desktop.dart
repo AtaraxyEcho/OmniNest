@@ -1,34 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
-import 'package:omninest/features/admin/presentation/widgets/admin_desktop_kit.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/features/admin/application/admin_operations_controller.dart';
+import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_desktop_kit.dart';
+import 'package:omninest/features/files/application/file_browser_controller.dart';
 
 /// 概览的桌面排版（样例 `Admin.tsx` 的 `Overview`）：
-/// 四张指标卡 + 系统健康 + 角色 + 存储资产，全部用桌面卡片与衬线数值。
-///
-/// 数据只取 `AdminConsoleSummary`；没有数据源的区块（样例的 14 天上传柱图、
-/// 存储重算动作）不摆空壳。
-class DesktopAdminOverview extends StatelessWidget {
-  const DesktopAdminOverview({required this.summary, super.key});
+/// 四张指标卡、真实上传趋势、系统健康、角色与存储重算操作。
+class DesktopAdminOverview extends ConsumerWidget {
+  const DesktopAdminOverview({
+    required this.summary,
+    this.analytics,
+    this.analyticsError,
+    this.onRetryAnalytics,
+    super.key,
+  });
 
   final AdminConsoleSummary summary;
+  final AdminAnalytics? analytics;
+  final String? analyticsError;
+  final VoidCallback? onRetryAnalytics;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final users = summary.users;
     final tasks = summary.tasks;
     final storage = summary.storage;
+    final accountStorage = ref.watch(fileStorageStatsProvider).asData?.value;
+    final uploadMetrics = analytics?.dailyUploads ?? const <DailyMetric>[];
+    final uploadsThisWeek = uploadMetrics
+        .skip(uploadMetrics.length > 7 ? uploadMetrics.length - 7 : 0)
+        .fold<int>(0, (total, item) => total + item.value);
     final stats = <(String, String, String)>[
       (
         l10n.adminUsers,
@@ -38,7 +56,9 @@ class DesktopAdminOverview extends StatelessWidget {
       (
         l10n.adminItems,
         '${storage.fileCount}',
-        '${storage.folderCount} ${l10n.filesFolders.toLowerCase()}',
+        analytics == null
+            ? '— ${l10n.desktopStatThisWeek}'
+            : '+$uploadsThisWeek ${l10n.desktopStatThisWeek}',
       ),
       (
         l10n.adminNavTasks,
@@ -46,9 +66,17 @@ class DesktopAdminOverview extends StatelessWidget {
         '${tasks.queued} ${l10n.adminQueued.toLowerCase()}',
       ),
       (
-        l10n.desktopStorage,
-        formatFileSize(storage.usedBytes),
-        '${storage.objectCount} objects',
+        l10n.adminStorageLabel,
+        accountStorage == null ? '—' : formatFileSize(accountStorage.usedBytes),
+        accountStorage == null
+            ? '—'
+            : accountStorage.isQuotaUnlimited
+            ? l10n.desktopStorageUnlimited(
+              formatFileSize(accountStorage.usedBytes),
+            )
+            : l10n.desktopStatOfTotal(
+              formatFileSize(accountStorage.quotaBytes),
+            ),
       ),
     ];
     return Column(
@@ -56,7 +84,7 @@ class DesktopAdminOverview extends StatelessWidget {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1100 ? 4 : 2;
+            final columns = constraints.maxWidth >= 960 ? 4 : 2;
             final width = (constraints.maxWidth - (columns - 1) * 14) / columns;
             return Wrap(
               spacing: 14,
@@ -78,7 +106,13 @@ class DesktopAdminOverview extends StatelessWidget {
             );
           },
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
+        _UploadsCard(
+          analytics: analytics,
+          error: analyticsError,
+          onRetry: onRetryAnalytics,
+        ),
+        const SizedBox(height: 16),
         AdminCard(
           title: l10n.adminSystemHealth,
           action: DesktopLink(
@@ -100,7 +134,7 @@ class DesktopAdminOverview extends StatelessWidget {
                     ],
                   ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         AdminCard(
           title: l10n.adminRoles,
           child: Wrap(
@@ -112,42 +146,183 @@ class DesktopAdminOverview extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        AdminCard(
-          title: l10n.adminStorageOverview,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    formatFileSize(storage.usedBytes),
-                    style: DesktopType.adminStatValue(skin.text),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    l10n.adminStorageFileCount(storage.fileCount),
-                    style: DesktopType.caption(skin.text3),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              DesktopKeyValues(
-                entries: [
-                  MapEntry(l10n.filesFolders, '${storage.folderCount}'),
-                  MapEntry('Objects', '${storage.objectCount}'),
-                  MapEntry(
-                    l10n.filesExternalStorage,
-                    '${storage.externalAccountCount}',
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+        const SizedBox(height: 16),
+        const _RecalculateStorageCard(),
       ],
+    );
+  }
+}
+
+class _UploadsCard extends StatelessWidget {
+  const _UploadsCard({required this.analytics, this.error, this.onRetry});
+
+  final AdminAnalytics? analytics;
+  final String? error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final metrics = analytics?.dailyUploads ?? const <DailyMetric>[];
+    final maxCount = metrics.fold<int>(
+      0,
+      (current, item) => item.value > current ? item.value : current,
+    );
+    if (error != null) {
+      return AdminCard(
+        title: l10n.adminUploads14Days,
+        action: DesktopLink(label: l10n.coreRetry, onPressed: onRetry),
+        child: Text(error!, style: DesktopType.caption(skin.bad)),
+      );
+    }
+    return AdminCard(
+      title: l10n.adminUploads14Days,
+      child: SizedBox(
+        height: 112,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < metrics.length; index++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: index == 0 ? 0 : 3,
+                    right: index == metrics.length - 1 ? 0 : 3,
+                  ),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Tooltip(
+                      message:
+                          '${metrics[index].date} · ${metrics[index].value}',
+                      child: Container(
+                        width: double.infinity,
+                        height:
+                            maxCount == 0
+                                ? 2
+                                : (metrics[index].value / maxCount * 112).clamp(
+                                  2.0,
+                                  112.0,
+                                ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              skin.accent,
+                              skin.accent.withValues(alpha: 0.36),
+                            ],
+                          ),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(6),
+                            bottom: Radius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (metrics.isEmpty)
+              for (var index = 0; index < 14; index++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: index == 0 ? 0 : 3,
+                      right: index == 13 ? 0 : 3,
+                    ),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: DesktopSkeletonBox(
+                        height: 18 + ((index * 23) % 66),
+                        radius: 5,
+                        index: index + 30,
+                      ),
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecalculateStorageCard extends ConsumerStatefulWidget {
+  const _RecalculateStorageCard();
+
+  @override
+  ConsumerState<_RecalculateStorageCard> createState() =>
+      _RecalculateStorageCardState();
+}
+
+class _RecalculateStorageCardState
+    extends ConsumerState<_RecalculateStorageCard> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _busy = true);
+    try {
+      final count =
+          await ref.read(adminOperationsActionsProvider).recalculateStorage();
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminRecalculateDone(count),
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        userFacingErrorText(error, l10n: l10n),
+        severity: OmniFeedbackSeverity.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      decoration: BoxDecoration(
+        color: skin.raise,
+        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+        border: Border.all(color: skin.line),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.adminRecalculateStorageTitle,
+                  style: DesktopType.cardTitle(skin.text),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.adminRecalculateStorageSubtitle,
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          DesktopButton(
+            label: l10n.adminRecalculate,
+            busy: _busy,
+            onPressed: _busy ? null : _run,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -410,6 +410,7 @@ class _MovieMobileTopBar extends StatelessWidget {
               }
               return MediaImportButton(
                 subsystemDirectory: 'Media',
+                allowSharedSpace: false,
                 acceptedExtensions: const <String>[
                   'mp4',
                   'mkv',

@@ -118,6 +118,30 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     state = AsyncData(value);
   }
 
+  void addWeekListeningSeconds(int seconds) {
+    final current = _currentState;
+    if (seconds <= 0 || current == null) {
+      return;
+    }
+    _replaceState(
+      current.copyWith(
+        dashboard: current.dashboard.copyWith(
+          weekListeningSeconds:
+              current.dashboard.weekListeningSeconds + seconds,
+        ),
+      ),
+    );
+  }
+
+  Future<void> attachListeningHistoryToPlaybackSession(
+    String historyId,
+    String playableKey,
+  ) {
+    return ref
+        .read(musicPlaybackSessionProvider.notifier)
+        .attachListeningHistory(historyId, playableKey);
+  }
+
   /// 取数或远端动作完成后的回写基准。
   ///
   /// 完成回调不得把 `await` 之前抓的 `MusicCenterState` 快照整份发布：那段窗口里发生的

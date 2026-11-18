@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -47,11 +48,15 @@ class _DesktopMovieDetailPageState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final backdropVisible = desktopBackdropVisibleForRoute(
+      ref,
+      DesktopRoutes.movieDetail(widget.videoItemId),
+    );
     final detail = ref.watch(movieDetailProvider(widget.videoItemId));
     final item = detail.asData?.value;
     if (item == null) {
       return ColoredBox(
-        color: skin.bg,
+        color: backdropVisible ? Colors.transparent : skin.bg,
         child: Center(
           child:
               detail.hasError
@@ -90,7 +95,7 @@ class _DesktopMovieDetailPageState
     ].take(8).toList(growable: false);
 
     return ColoredBox(
-      color: skin.bg,
+      color: backdropVisible ? Colors.transparent : skin.bg,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

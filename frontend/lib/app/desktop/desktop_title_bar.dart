@@ -18,6 +18,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/files/application/media_import_queue_controller.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 
 /// 样例 `.avatar` 的第二停色：`color-mix(in oklab, accent 45%, #6b4a8a)` 的基色。
@@ -40,7 +41,10 @@ class DesktopTitleBar extends ConsumerWidget {
     final historyController = ref.read(desktopHistoryProvider.notifier);
     final unread = ref.watch(unreadCountProvider);
     final tasks = ref.watch(activeTaskSummaryProvider).asData?.value;
-    final running = tasks?.activeCount ?? 0;
+    final mediaImports = ref.watch(mediaImportQueueProvider);
+    final running =
+        (tasks?.activeCount ?? 0) +
+        mediaImports.where((task) => task.isActive).length;
     final themeMode = ref.watch(appearanceControllerProvider);
     final isDark =
         themeMode == ThemeMode.dark ||

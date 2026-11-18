@@ -9,6 +9,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_lists.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_sections.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_sky.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -73,32 +74,46 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
                 : null;
         return (
           count: dashboard?.stats.movieCount ?? 0,
+          addedToday: dashboard?.itemsAddedToday ?? 0,
           resumeId: resume?.id,
           resumeTitle: resume?.title,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
         );
       }),
     );
-    final photoCount = ref.watch(
-      photoDashboardProvider.select(
-        (state) => state.asData?.value.totalPhotos ?? 0,
-      ),
+    final photoSnapshot = ref.watch(
+      photoDashboardProvider.select((state) {
+        return (
+          count: state.asData?.value.totalPhotos ?? 0,
+          addedToday: state.asData?.value.itemsAddedToday ?? 0,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
+        );
+      }),
     );
-    final readerTotal = ref.watch(
-      readerDashboardProvider.select(
-        (state) => state.asData?.value.overview.totalItems ?? 0,
-      ),
+    final readerSnapshot = ref.watch(
+      readerDashboardProvider.select((state) {
+        return (
+          total: state.asData?.value.overview.totalItems ?? 0,
+          addedToday: state.asData?.value.itemsAddedToday ?? 0,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
+        );
+      }),
     );
-    final readingStreak = ref.watch(
-      readerStatsProvider.select(
-        (state) => state.asData?.value.currentStreak ?? 0,
-      ),
+    final readingStats = ref.watch(
+      readerStatsProvider.select((state) {
+        return (
+          streak: state.asData?.value.currentStreak ?? 0,
+          longest: state.asData?.value.longestStreak ?? 0,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
+        );
+      }),
     );
-    final longestReadingStreak = ref.watch(
-      readerStatsProvider.select(
-        (state) => state.asData?.value.longestStreak ?? 0,
-      ),
-    );
-    final storage = ref.watch(fileStorageStatsProvider).asData?.value;
+    final storageAsync = ref.watch(fileStorageStatsProvider);
+    final storage = storageAsync.asData?.value;
     final musicSnapshot = ref.watch(
       musicPortalSnapshotProvider.select((state) {
         final music = state.asData?.value;
@@ -106,8 +121,11 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
         return (
           trackId: track?.id,
           trackTitle: track?.title,
-          playCount: music?.recentPlayCount ?? 0,
+          listeningHours: (music?.weekListeningSeconds ?? 0) / 3600,
+          itemsAddedToday: music?.itemsAddedToday ?? 0,
           trackCount: music?.trackCount ?? 0,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
         );
       }),
     );
@@ -129,9 +147,24 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
             : l10n.desktopGreetingEvening;
     final libraryTotal =
         movieSnapshot.count +
-        photoCount +
+        photoSnapshot.count +
         musicSnapshot.trackCount +
-        readerTotal;
+        readerSnapshot.total;
+    final libraryAddedToday =
+        movieSnapshot.addedToday +
+        photoSnapshot.addedToday +
+        musicSnapshot.itemsAddedToday +
+        readerSnapshot.addedToday;
+    final homeContentLoading =
+        movieSnapshot.loading ||
+        photoSnapshot.loading ||
+        musicSnapshot.loading ||
+        readerSnapshot.loading;
+    final homeContentFailed =
+        movieSnapshot.failed ||
+        photoSnapshot.failed ||
+        musicSnapshot.failed ||
+        readerSnapshot.failed;
 
     return Scrollbar(
       controller: _scroll,
@@ -159,7 +192,9 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
                 dateLabel: DateFormat.MMMMEEEEd(locale).format(now),
                 greeting: l10n.desktopGreeting(greeting, name),
                 lead:
-                    movieSnapshot.resumeTitle == null
+                    homeContentFailed
+                        ? l10n.photosOperationFailed
+                        : movieSnapshot.resumeTitle == null
                         ? l10n.desktopHomeLeadQuiet(libraryTotal)
                         : l10n.desktopHomeLeadResume(
                           libraryTotal,
@@ -167,6 +202,15 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
                         ),
                 hour: hour,
                 weather: weather,
+                contentLoading: homeContentLoading,
+                contentFailed: homeContentFailed,
+                retryLabel: l10n.commonRetry,
+                onRetryContent: () {
+                  ref.invalidate(movieDashboardProvider);
+                  ref.invalidate(photoDashboardProvider);
+                  ref.invalidate(musicPortalSnapshotProvider);
+                  ref.invalidate(readerDashboardProvider);
+                },
                 reduceMotion: reduceMotion,
                 resumeLabel:
                     movieSnapshot.resumeTitle == null
@@ -193,12 +237,40 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
             const SizedBox(height: 22),
             _StatsRow(
               libraryTotal: libraryTotal,
-              photoCount: photoCount,
-              movieCount: movieSnapshot.count,
-              playCount: musicSnapshot.playCount,
-              readingStreak: readingStreak,
-              longestReadingStreak: longestReadingStreak,
+              libraryAddedToday: libraryAddedToday,
+              listeningHours: musicSnapshot.listeningHours,
+              readingStreak: readingStats.streak,
+              longestReadingStreak: readingStats.longest,
               storage: storage,
+              loading: [
+                movieSnapshot.loading ||
+                    photoSnapshot.loading ||
+                    musicSnapshot.loading ||
+                    readerSnapshot.loading,
+                musicSnapshot.loading,
+                readingStats.loading,
+                storageAsync.isLoading && !storageAsync.hasValue,
+              ],
+              failed: [
+                movieSnapshot.failed ||
+                    photoSnapshot.failed ||
+                    musicSnapshot.failed ||
+                    readerSnapshot.failed,
+                musicSnapshot.failed,
+                readingStats.failed,
+                storageAsync.hasError && !storageAsync.hasValue,
+              ],
+              retry: [
+                () {
+                  ref.invalidate(movieDashboardProvider);
+                  ref.invalidate(photoDashboardProvider);
+                  ref.invalidate(musicPortalSnapshotProvider);
+                  ref.invalidate(readerDashboardProvider);
+                },
+                () => ref.invalidate(musicPortalSnapshotProvider),
+                () => ref.invalidate(readerStatsProvider),
+                () => ref.invalidate(fileStorageStatsProvider),
+              ],
             ),
             DesktopSection(
               eyebrow: l10n.desktopPickUpWhereYouLeft,
@@ -290,6 +362,10 @@ class _TwoColumns extends StatelessWidget {
 class _HeroSky extends StatelessWidget {
   const _HeroSky({
     required this.showSky,
+    required this.contentLoading,
+    required this.contentFailed,
+    required this.retryLabel,
+    required this.onRetryContent,
     required this.dateLabel,
     required this.greeting,
     required this.lead,
@@ -304,6 +380,10 @@ class _HeroSky extends StatelessWidget {
 
   /// 是否绘制实时天象；自定义壁纸在场时为 false。
   final bool showSky;
+  final bool contentLoading;
+  final bool contentFailed;
+  final String retryLabel;
+  final VoidCallback onRetryContent;
 
   final String dateLabel;
   final String greeting;
@@ -398,37 +478,69 @@ class _HeroSky extends StatelessWidget {
                   style: DesktopType.displayXl(DesktopPalette.onStage, width),
                 ),
                 const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Text(
-                    lead,
-                    style: DesktopType.medium(
-                      DesktopPalette.onStage.withValues(alpha: 0.82),
+                if (contentLoading) ...[
+                  const SizedBox(
+                    width: 440,
+                    child: DesktopSkeletonBox(height: 16, radius: 5),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      const DesktopSkeletonBox(
+                        width: 150,
+                        height: 44,
+                        radius: 14,
+                      ),
+                      const SizedBox(width: 10),
+                      const DesktopSkeletonBox(
+                        width: 136,
+                        height: 44,
+                        radius: 14,
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: Text(
+                      lead,
+                      style: DesktopType.medium(
+                        DesktopPalette.onStage.withValues(alpha: 0.82),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 22),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    if (resumeLabel != null)
-                      DesktopButton(
-                        label: resumeLabel!,
-                        icon: DesktopIcons.play,
-                        variant: DesktopButtonVariant.primary,
-                        large: true,
-                        onPressed: onResume,
-                      ),
+                  const SizedBox(height: 22),
+                  if (contentFailed)
                     DesktopButton(
-                      label: listenLabel,
-                      icon: DesktopIcons.music,
+                      label: retryLabel,
+                      icon: DesktopIcons.retry,
                       variant: DesktopButtonVariant.glass,
                       large: true,
-                      onPressed: onStartListening,
+                      onPressed: onRetryContent,
+                    )
+                  else
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        if (resumeLabel != null)
+                          DesktopButton(
+                            label: resumeLabel!,
+                            icon: DesktopIcons.play,
+                            variant: DesktopButtonVariant.primary,
+                            large: true,
+                            onPressed: onResume,
+                          ),
+                        DesktopButton(
+                          label: listenLabel,
+                          icon: DesktopIcons.music,
+                          variant: DesktopButtonVariant.glass,
+                          large: true,
+                          onPressed: onStartListening,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                ],
               ],
             ),
           ),
@@ -640,21 +752,25 @@ class _WeatherCard extends ConsumerWidget {
 class _StatsRow extends StatelessWidget {
   const _StatsRow({
     required this.libraryTotal,
-    required this.photoCount,
-    required this.movieCount,
-    required this.playCount,
+    required this.libraryAddedToday,
+    required this.listeningHours,
     required this.readingStreak,
     required this.longestReadingStreak,
     required this.storage,
+    required this.loading,
+    required this.failed,
+    required this.retry,
   });
 
   final int libraryTotal;
-  final int photoCount;
-  final int movieCount;
-  final int playCount;
+  final int libraryAddedToday;
+  final double listeningHours;
   final int readingStreak;
   final int longestReadingStreak;
   final FileStorageStats? storage;
+  final List<bool> loading;
+  final List<bool> failed;
+  final List<VoidCallback> retry;
 
   @override
   Widget build(BuildContext context) {
@@ -666,14 +782,22 @@ class _StatsRow extends StatelessWidget {
         label: l10n.desktopStatLibrary,
         value: '$libraryTotal',
         numericValue: libraryTotal.toDouble(),
-        caption: l10n.desktopStatLibrarySub(photoCount, movieCount),
+        caption: l10n.desktopStatLibraryAddedToday(libraryAddedToday),
+        loading: loading[0],
+        failed: failed[0],
+        onRetry: retry[0],
       ),
       _StatCard(
         icon: DesktopIcons.music,
         label: l10n.desktopStatListening,
-        value: '$playCount',
-        numericValue: playCount.toDouble(),
-        caption: l10n.desktopStatListeningSub(playCount),
+        value: listeningHours.toStringAsFixed(1),
+        numericValue: listeningHours,
+        decimals: 1,
+        unit: l10n.desktopStatHours,
+        caption: l10n.desktopStatListeningSub,
+        loading: loading[1],
+        failed: failed[1],
+        onRetry: retry[1],
       ),
       _StatCard(
         icon: DesktopIcons.book,
@@ -682,6 +806,9 @@ class _StatsRow extends StatelessWidget {
         numericValue: readingStreak.toDouble(),
         unit: l10n.desktopStatDays,
         caption: l10n.desktopStatLongestStreakCaption(longestReadingStreak),
+        loading: loading[2],
+        failed: failed[2],
+        onRetry: retry[2],
       ),
       _StatCard(
         icon: DesktopIcons.cloud,
@@ -694,6 +821,9 @@ class _StatsRow extends StatelessWidget {
             storage == null || storage!.isQuotaUnlimited
                 ? l10n.desktopStatNoQuota
                 : l10n.desktopStatOfTotal(formatFileSize(storage!.quotaBytes)),
+        loading: loading[3],
+        failed: failed[3],
+        onRetry: retry[3],
       ),
     ];
     return Padding(
@@ -730,6 +860,9 @@ class _StatCard extends StatelessWidget {
     this.unit,
     this.numericValue,
     this.decimals = 0,
+    required this.loading,
+    required this.failed,
+    required this.onRetry,
   });
 
   final IconData icon;
@@ -741,10 +874,37 @@ class _StatCard extends StatelessWidget {
   /// 有值时从 0 滚到目标值（样例 `CountUp`，1100ms 三次缓出）。
   final double? numericValue;
   final int decimals;
+  final bool loading;
+  final bool failed;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    if (loading) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+          border: Border.all(color: skin.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const DesktopSkeletonBox(width: 30, height: 30, radius: 9),
+            const SizedBox(height: 14),
+            const DesktopSkeletonBox(width: 76, height: 11, radius: 5),
+            const SizedBox(height: 5),
+            const DesktopSkeletonBox(width: 104, height: 30, radius: 6),
+            const SizedBox(height: 4),
+            const DesktopSkeletonBox(width: 116, height: 11, radius: 5),
+          ],
+        ),
+      );
+    }
     return DesktopHover(
       enabled: false,
       builder:
@@ -771,41 +931,52 @@ class _StatCard extends StatelessWidget {
                 const SizedBox(height: 14),
                 Text(label, style: DesktopType.caption(skin.text3)),
                 const SizedBox(height: 2),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Flexible(
-                      child:
-                          numericValue == null
-                              ? Text(
-                                value,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.statValue(skin.text),
-                              )
-                              : TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: numericValue),
-                                duration: DesktopMotion.progress,
-                                curve: Curves.easeOutCubic,
-                                builder:
-                                    (context, animated, _) => Text(
-                                      animated.toStringAsFixed(decimals),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: DesktopType.statValue(skin.text),
-                                    ),
-                              ),
-                    ),
-                    if (unit != null) ...[
-                      const SizedBox(width: 4),
-                      Text(unit!, style: DesktopType.caption(skin.text3)),
+                if (failed)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text('—', style: DesktopType.statValue(skin.text)),
+                      const Spacer(),
+                      DesktopLink(label: l10n.commonRetry, onPressed: onRetry),
                     ],
-                  ],
-                ),
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child:
+                            numericValue == null
+                                ? Text(
+                                  value,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.statValue(skin.text),
+                                )
+                                : TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: numericValue),
+                                  duration: DesktopMotion.progress,
+                                  curve: Curves.easeOutCubic,
+                                  builder:
+                                      (context, animated, _) => Text(
+                                        animated.toStringAsFixed(decimals),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: DesktopType.statValue(skin.text),
+                                      ),
+                                ),
+                      ),
+                      if (unit != null) ...[
+                        const SizedBox(width: 4),
+                        Text(unit!, style: DesktopType.caption(skin.text3)),
+                      ],
+                    ],
+                  ),
                 const SizedBox(height: 2),
                 Text(
-                  caption,
+                  failed ? l10n.photosOperationFailed : caption,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: DesktopType.caption(skin.text3),

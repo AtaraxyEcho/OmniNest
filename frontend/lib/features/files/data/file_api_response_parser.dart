@@ -80,6 +80,18 @@ class FileApiResponseParser {
     return _parseStorageStats(parseData(body));
   }
 
+  FileDuplicateSummary parseDuplicateSummaryResponse(
+    Map<String, dynamic>? body,
+  ) {
+    final data = parseData(body);
+    return FileDuplicateSummary(
+      duplicateFileCount: asInt(data['duplicateFileCount']),
+      duplicateGroupCount: asInt(data['duplicateGroupCount']),
+      reclaimableBytes: asInt(data['reclaimableBytes']),
+      filesWithoutVerifiedHash: asInt(data['filesWithoutVerifiedHash']),
+    );
+  }
+
   FileUploadPolicy parseUploadPolicyResponse(Map<String, dynamic>? body) {
     final data = parseData(body);
     return FileUploadPolicy(

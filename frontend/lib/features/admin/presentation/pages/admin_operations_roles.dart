@@ -325,7 +325,9 @@ class _PermissionMatrixPreview extends StatelessWidget {
 
 /// 新建自定义角色弹窗：ROLE_ 前缀校验 + 权限模板克隆。
 class _CreateRoleDialog extends ConsumerStatefulWidget {
-  const _CreateRoleDialog();
+  const _CreateRoleDialog({this.drawerMode = false});
+
+  final bool drawerMode;
 
   @override
   ConsumerState<_CreateRoleDialog> createState() => _CreateRoleDialogState();
@@ -362,6 +364,109 @@ class _CreateRoleDialogState extends ConsumerState<_CreateRoleDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    if (widget.drawerMode) {
+      final skin = DesktopSkin.of(context);
+      return DesktopDrawerFrame(
+        eyebrow: l10n.adminRoles,
+        title: l10n.adminCreateRole,
+        footer: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DesktopButton(
+              label: l10n.coreCancel,
+              variant: DesktopButtonVariant.ghost,
+              onPressed: _submitting ? null : () => closeDesktopModal(context),
+            ),
+            const SizedBox(width: 8),
+            DesktopButton(
+              label: l10n.adminCreate,
+              icon: DesktopIcons.plus,
+              variant: DesktopButtonVariant.primary,
+              busy: _submitting,
+              onPressed: _submitting ? null : _submit,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DesktopTextField(
+              controller: _codeController,
+              label: l10n.adminRoleCode,
+              required: true,
+              hint: 'ROLE_MEDIA_OPERATOR',
+              helper: l10n.adminRoleCodeRule,
+              maxLength: 66,
+              keyName: 'admin-create-role-code',
+              onChanged: (value) {
+                final normalized = value.toUpperCase();
+                if (normalized != value) {
+                  _codeController.value = TextEditingValue(
+                    text: normalized,
+                    selection: TextSelection.collapsed(
+                      offset: normalized.length,
+                    ),
+                  );
+                }
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 14),
+            DesktopTextField(
+              controller: _nameController,
+              label: l10n.adminRoleDisplayName,
+              required: true,
+              maxLength: 120,
+              keyName: 'admin-create-role-name',
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 14),
+            DesktopTextField(
+              controller: _descriptionController,
+              label: l10n.adminRoleDescription,
+              maxLength: 500,
+              maxLines: 3,
+              height: 84,
+              keyName: 'admin-create-role-description',
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.adminRolePermissionsTitle,
+                    style: DesktopType.bodyStrong(skin.text),
+                  ),
+                ),
+                Text(
+                  l10n.adminPermissionSelectedCount(
+                    '${_selected.length}',
+                    '${_permissions.length}',
+                  ),
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            AdminPermissionTreePicker(
+              permissions: _permissions,
+              selected: _selected,
+              onTogglePermission:
+                  (permission) => setState(() {
+                    if (!_selected.remove(permission.code)) {
+                      _selected.add(permission.code);
+                    }
+                  }),
+              onToggleModule: _toggleModule,
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 14),
+              Text(_errorMessage!, style: DesktopType.caption(skin.bad)),
+            ],
+          ],
+        ),
+      );
+    }
     return WorkstationDialogFrame(
       title: l10n.adminCreateRole,
       width: 640,
@@ -487,7 +592,17 @@ class _CreateRoleDialogState extends ConsumerState<_CreateRoleDialog> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
+    if (widget.drawerMode) {
+      final l10n = AppLocalizations.of(context);
+      if (!_codePattern.hasMatch(_codeController.text.trim())) {
+        setState(() => _errorMessage = l10n.adminRoleCodeRule);
+        return;
+      }
+      if (_nameController.text.trim().isEmpty) {
+        setState(() => _errorMessage = l10n.adminRoleNameRequired);
+        return;
+      }
+    } else if (!_formKey.currentState!.validate()) {
       return;
     }
     setState(() {
@@ -509,7 +624,16 @@ class _CreateRoleDialogState extends ConsumerState<_CreateRoleDialog> {
         await actions.updateRolePermissions(code, _selected);
       }
       if (mounted) {
-        Navigator.of(context).pop();
+        if (widget.drawerMode) {
+          closeDesktopModal(context);
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).adminRoleCreated,
+            severity: OmniFeedbackSeverity.success,
+          );
+        } else {
+          Navigator.of(context).pop();
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -527,10 +651,15 @@ class _CreateRoleDialogState extends ConsumerState<_CreateRoleDialog> {
 }
 
 class _RolePermissionDialog extends ConsumerStatefulWidget {
-  const _RolePermissionDialog({required this.role, required this.permissions});
+  const _RolePermissionDialog({
+    required this.role,
+    required this.permissions,
+    this.drawerMode = false,
+  });
 
   final AdminRoleDetail role;
   final List<AdminPermissionDetail> permissions;
+  final bool drawerMode;
 
   @override
   ConsumerState<_RolePermissionDialog> createState() =>
@@ -548,6 +677,81 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
     final scheme = Theme.of(context).colorScheme;
     final enabledPermissions =
         widget.permissions.where((item) => item.enabled).toList();
+    final permissionPicker = AdminPermissionTreePicker(
+      permissions: widget.permissions,
+      selected: _selected,
+      onTogglePermission:
+          (permission) => setState(() {
+            if (!_selected.remove(permission.code)) {
+              _selected.add(permission.code);
+            }
+          }),
+      onToggleModule: _toggleModule,
+    );
+    if (widget.drawerMode) {
+      final skin = DesktopSkin.of(context);
+      return DesktopDrawerFrame(
+        eyebrow: l10n.adminRoles,
+        title: l10n.adminConfigureRolePermissions(widget.role.name),
+        subtitle: widget.role.code,
+        footer: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DesktopButton(
+              label: l10n.coreCancel,
+              variant: DesktopButtonVariant.ghost,
+              onPressed: _submitting ? null : () => closeDesktopModal(context),
+            ),
+            const SizedBox(width: 8),
+            DesktopButton(
+              label: l10n.adminSave,
+              icon: DesktopIcons.check,
+              variant: DesktopButtonVariant.primary,
+              busy: _submitting,
+              onPressed: _submitting ? null : _submit,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.adminPermissionSelectedCount(
+                      '${_selected.length}',
+                      '${widget.permissions.length}',
+                    ),
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                ),
+                DesktopLink(
+                  label: l10n.adminPermissionSelectAll,
+                  onPressed:
+                      () => setState(
+                        () => _selected.addAll(
+                          enabledPermissions.map((item) => item.code),
+                        ),
+                      ),
+                ),
+                const SizedBox(width: 12),
+                DesktopLink(
+                  label: l10n.adminPermissionClear,
+                  onPressed: () => setState(_selected.clear),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            permissionPicker,
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: DesktopType.caption(skin.bad)),
+            ],
+          ],
+        ),
+      );
+    }
     return WorkstationDialogFrame(
       title: l10n.adminConfigureRolePermissions(widget.role.name),
       headerLabel: widget.role.code,
@@ -595,19 +799,7 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
           Flexible(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 440),
-              child: SingleChildScrollView(
-                child: AdminPermissionTreePicker(
-                  permissions: widget.permissions,
-                  selected: _selected,
-                  onTogglePermission:
-                      (permission) => setState(() {
-                        if (!_selected.remove(permission.code)) {
-                          _selected.add(permission.code);
-                        }
-                      }),
-                  onToggleModule: _toggleModule,
-                ),
-              ),
+              child: SingleChildScrollView(child: permissionPicker),
             ),
           ),
           if (_error != null) ...[

@@ -48,34 +48,54 @@ extension _PhotoDetailStage on _PhotoDetailBodyState {
                     curve: MotionToken.curve,
                     child:
                         imageUrl != null && imageUrl.isNotEmpty
-                            ? Hero(
-                              tag: 'photo-cover-${photo.id}',
-                              // Default Material flight + InteractiveViewer
-                              // Transform can leave a diagonal white seam.
-                              // Fly the destination child without extra chrome.
-                              flightShuttleBuilder:
-                                  (
-                                    flightContext,
-                                    animation,
-                                    flightDirection,
-                                    fromHeroContext,
-                                    toHeroContext,
-                                  ) => (toHeroContext.widget as Hero).child,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  imageRadius,
-                                ),
-                                clipBehavior: Clip.hardEdge,
-                                child: InteractiveViewer(
-                                  minScale: 1,
-                                  maxScale: 5,
-                                  clipBehavior: Clip.hardEdge,
-                                  child: SizedBox.expand(
-                                    child: _ProgressivePhotoImage(photo: photo),
+                            ? photo.isVideo
+                                ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    imageRadius,
                                   ),
-                                ),
-                              ),
-                            )
+                                  child: PhotoVideoPlayer(
+                                    key: ValueKey('photo-video-${photo.id}'),
+                                    url: resolveServerApiUrl(
+                                      ref
+                                          .read(apiClientProvider)
+                                          .dio
+                                          .options
+                                          .baseUrl,
+                                      imageUrl,
+                                    ),
+                                    onError: _handlePhotoVideoPlayError,
+                                  ),
+                                )
+                                : Hero(
+                                  tag: 'photo-cover-${photo.id}',
+                                  // Default Material flight + InteractiveViewer
+                                  // Transform can leave a diagonal white seam.
+                                  // Fly the destination child without extra chrome.
+                                  flightShuttleBuilder:
+                                      (
+                                        flightContext,
+                                        animation,
+                                        flightDirection,
+                                        fromHeroContext,
+                                        toHeroContext,
+                                      ) => (toHeroContext.widget as Hero).child,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(
+                                      imageRadius,
+                                    ),
+                                    clipBehavior: Clip.hardEdge,
+                                    child: InteractiveViewer(
+                                      minScale: 1,
+                                      maxScale: 5,
+                                      clipBehavior: Clip.hardEdge,
+                                      child: SizedBox.expand(
+                                        child: _ProgressivePhotoImage(
+                                          photo: photo,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
                             : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [

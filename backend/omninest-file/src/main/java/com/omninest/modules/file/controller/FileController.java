@@ -27,6 +27,7 @@ import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.FileDuplicateSummaryDto;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
 import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.dto.FileNodeDto;
@@ -46,6 +47,8 @@ import com.omninest.modules.file.dto.FileUploadPartsDto;
 import com.omninest.modules.file.dto.FileUploadPolicyDto;
 import com.omninest.modules.file.dto.FileUploadQueueItemDto;
 import com.omninest.modules.file.dto.FileUploadSessionDto;
+import com.omninest.modules.file.dto.MediaImportTaskDto;
+import com.omninest.modules.file.dto.RequestMediaImportDto;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.SaveFileVersionRequest;
 import com.omninest.modules.file.dto.PermissionRequest;
@@ -56,6 +59,7 @@ import com.omninest.modules.file.dto.UpdateExternalStorageRequest;
 import com.omninest.modules.file.service.ExternalStorageAccountService;
 import com.omninest.modules.file.service.FileFavoriteService;
 import com.omninest.modules.file.service.FileManagerService;
+import com.omninest.modules.file.service.FileMediaImportRequestService;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.service.FileShareAccessService;
@@ -106,6 +110,7 @@ public class FileController {
     private final FileUploadQueueService fileUploadQueueService;
     private final ExternalStorageAccountService externalStorageAccountService;
     private final FileStorageMetricsService fileStorageMetricsService;
+    private final FileMediaImportRequestService fileMediaImportRequestService;
     private final CurrentUserContext currentUserContext;
     private final ClientIpResolver clientIpResolver;
 
@@ -234,6 +239,16 @@ public class FileController {
                 fileId,
                 body != null ? body.targetParentId() : null
         ));
+    }
+
+    @Operation(summary = "重新导入文件库媒体", description = "将已存在的媒体文件重新加入影视、相册或音乐识别队列")
+    @PostMapping("/api/v1/files/media-imports")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<List<MediaImportTaskDto>> requestMediaImports(
+            @Valid @RequestBody RequestMediaImportDto body
+    ) {
+        return ApiResponse.success(fileMediaImportRequestService.request(
+                currentUserContext.requireCurrentUserId(), body));
     }
 
 
@@ -643,6 +658,15 @@ public class FileController {
     ApiResponse<FileStorageStatsDto> storageStats() {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileStorageMetricsService.userStorageStats(ownerUserId));
+    }
+
+    @Operation(summary = "查找重复文件", description = "汇总当前用户个人空间中服务端 SHA-256 相同的活动文件")
+    @GetMapping("/api/v1/files/duplicates/summary")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<FileDuplicateSummaryDto> duplicateFileSummary() {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(
+                fileStorageMetricsService.personalDuplicateSummary(ownerUserId));
     }
 
     @Operation(summary = "获取上传策略", description = "获取文件上传的策略配置（大小限制、允许类型等）")

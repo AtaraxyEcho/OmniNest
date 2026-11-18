@@ -36,8 +36,12 @@ import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.time.Instant;
 import java.util.Objects;
@@ -337,6 +341,58 @@ public class PhotoAdminService {
     }
 
     /**
+     * 导入单个视频作为 Photos 时间线媒体项。视频不执行 EXIF、RAW 预览或图像分析，
+     * 只登记来源文件并投递独立的封面提取任务。
+     */
+    public void importSingleVideo(UUID ownerUserId, UUID fileNodeId) {
+        FileDescriptor file = fileMetadataQueryService.findActiveById(fileNodeId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
+        if (!ownerUserId.equals(file.ownerUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "只能导入本人文件中的视频");
+        }
+        if (!fileDetector.isVideo(file.name())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "视频格式不受支持");
+        }
+        String contentHash = contentHashForVideo(ownerUserId, file);
+        transactionTemplate.executeWithoutResult(status -> {
+            boolean sameFileImported = photoItemRepository
+                    .findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId)
+                    .isPresent();
+            if (!sameFileImported && contentHash != null) {
+                photoItemRepository.lockContentHashForImport(ownerUserId, contentHash);
+                if (photoItemRepository.existsActiveByOwnerUserIdAndContentHash(ownerUserId, contentHash)) {
+                    return;
+                }
+            }
+            if (!sameFileImported) {
+                PhotoItem video = new PhotoItem();
+                video.setId(UUID.randomUUID());
+                video.setOwnerUserId(ownerUserId);
+                video.setFileNodeId(fileNodeId);
+                video.setTitle(PhotoAdminSupport.titleFromFileName(file.name()));
+                video.setFormat(fileDetector.extension(file.name()));
+                video.setFileSize(file.sizeBytes());
+                video.setMetadataStatus(MetadataStatus.PENDING.getValue());
+                Map<String, Object> providerMetadata = new HashMap<>();
+                providerMetadata.put("mediaKind", "VIDEO");
+                if (contentHash != null) {
+                    providerMetadata.put("contentHash", contentHash);
+                }
+                video.setProviderMetadata(providerMetadata);
+                photoItemRepository.save(video);
+            }
+            filePostProcessingTaskService.enqueueThumbnailIfAbsent(thumbnailEvent(file, ownerUserId));
+            syncEventService.invalidate(
+                    ownerUserId,
+                    SyncScope.PHOTOS,
+                    "PHOTO_LIBRARY",
+                    Map.of("source", "VIDEO_IMPORT", "fileNodeId", fileNodeId.toString())
+            );
+            invalidateDashboardCache(ownerUserId);
+        });
+    }
+
+    /**
      * 将异步缩略图任务生成的派生文件回填到照片记录，避免首次导入时永久缺少封面。
      *
      * @param ownerUserId 照片所有者
@@ -360,6 +416,43 @@ public class PhotoAdminService {
                             "PHOTO_LIBRARY",
                             Map.of("source", "THUMBNAIL", "fileNodeId", fileNodeId.toString())
                     );
+                });
+    }
+
+    /** 将视频封面和探测到的原始分辨率回填到时间线条目。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void attachVideoPoster(
+            UUID ownerUserId,
+            UUID fileNodeId,
+            UUID coverFileId,
+            Integer width,
+            Integer height
+    ) {
+        photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId)
+                .ifPresent(video -> {
+                    boolean changed = false;
+                    if (video.getCoverFileId() == null && coverFileId != null) {
+                        video.setCoverFileId(coverFileId);
+                        changed = true;
+                    }
+                    if (video.getWidth() == null && width != null && width > 0) {
+                        video.setWidth(width);
+                        changed = true;
+                    }
+                    if (video.getHeight() == null && height != null && height > 0) {
+                        video.setHeight(height);
+                        changed = true;
+                    }
+                    if (changed) {
+                        photoItemRepository.save(video);
+                        invalidateDashboardCache(ownerUserId);
+                        syncEventService.invalidate(
+                                ownerUserId,
+                                SyncScope.PHOTOS,
+                                "PHOTO_LIBRARY",
+                                Map.of("source", "VIDEO_POSTER", "fileNodeId", fileNodeId.toString())
+                        );
+                    }
                 });
     }
 
@@ -391,6 +484,11 @@ public class PhotoAdminService {
         if (photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id()).isPresent()) {
             return null;
         }
+        String contentHash = fileContentHash(file.id());
+        if (contentHash != null
+                && photoItemRepository.existsActiveByOwnerUserIdAndContentHash(ownerUserId, contentHash)) {
+            return null;
+        }
         return photoImportPreparer.prepare(ownerUserId, file);
     }
 
@@ -419,6 +517,13 @@ public class PhotoAdminService {
             return;
         }
         PhotoItem photo = prepared.photo();
+        String contentHash = photoContentHash(photo);
+        if (contentHash != null) {
+            photoItemRepository.lockContentHashForImport(ownerUserId, contentHash);
+            if (photoItemRepository.existsActiveByOwnerUserIdAndContentHash(ownerUserId, contentHash)) {
+                return;
+            }
+        }
         photoItemRepository.save(photo);
         if (prepared.enqueuePostProcessing()) {
             // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
@@ -439,6 +544,44 @@ public class PhotoAdminService {
         if ("webp".equals(fileDetector.extension(file.name()))) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "当前 Photos 不支持 WebP 文件");
         }
+    }
+
+    private String fileContentHash(UUID fileNodeId) {
+        String contentHash = fileMetadataQueryService
+                .findContentSha256ByFileNodeIds(List.of(fileNodeId))
+                .get(fileNodeId);
+        return normalizeContentHash(contentHash);
+    }
+
+    private String contentHashForVideo(UUID ownerUserId, FileDescriptor file) {
+        String storedHash = fileContentHash(file.id());
+        if (storedHash != null) {
+            return storedHash;
+        }
+        try (FileContentStream content = fileQueryService.openReadableFileContent(ownerUserId, file.id())) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = content.inputStream().read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "视频内容摘要计算失败");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 算法不可用", exception);
+        }
+    }
+
+    private String photoContentHash(PhotoItem photo) {
+        Object value = photo.getProviderMetadata().get("contentHash");
+        return value instanceof String contentHash ? normalizeContentHash(contentHash) : null;
+    }
+
+    private String normalizeContentHash(String contentHash) {
+        return contentHash == null || contentHash.isBlank()
+                ? null
+                : contentHash.toLowerCase(Locale.ROOT);
     }
 
     private void invalidateDashboardCache(UUID ownerUserId) {

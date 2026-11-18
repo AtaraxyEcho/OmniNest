@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
-    show ImportButtonStyle, MediaImportButton;
+    show ImportButtonStyle, MediaImportButton, MediaImportButtonBuilder;
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 
@@ -13,6 +13,7 @@ class ReaderLibraryImportAction extends ConsumerWidget {
   const ReaderLibraryImportAction({
     this.style = ImportButtonStyle.iconButton,
     this.label,
+    this.buttonBuilder,
     super.key,
   });
 
@@ -20,6 +21,10 @@ class ReaderLibraryImportAction extends ConsumerWidget {
 
   /// Button label; defaults to the generic "Import files" string.
   final String? label;
+
+  /// Desktop shells supply their own sample-matched button while retaining the
+  /// shared Reader import queue and validation flow.
+  final MediaImportButtonBuilder? buttonBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,6 +52,7 @@ class ReaderLibraryImportAction extends ConsumerWidget {
       style: style,
       color: color,
       label: label,
+      buttonBuilder: buttonBuilder,
     );
     return SizedBox(
       width: isIcon ? 40 : null,

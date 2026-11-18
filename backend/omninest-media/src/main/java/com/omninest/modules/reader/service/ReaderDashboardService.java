@@ -64,6 +64,9 @@ public class ReaderDashboardService {
     public ReaderDashboardDto getDashboard(UUID ownerUserId) {
         SpaceType sharedType = sharedVisibility(ownerUserId);
         long totalItems = itemRepository.countVisibleItems(ownerUserId, sharedType);
+        ZoneId zone = ZoneId.systemDefault();
+        Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
+        long itemsAddedToday = itemRepository.countVisibleItemsCreatedSince(ownerUserId, sharedType, todayStart);
         long inProgressCount = progressRepository.countVisibleInProgress(ownerUserId, sharedType);
 
         // 继续阅读只取前 12 条；概览计数使用独立 COUNT，不能停在 12。
@@ -84,7 +87,7 @@ public class ReaderDashboardService {
 
         ReaderOverviewDto overview = new ReaderOverviewDto(
                 (int) totalItems, (int) inProgressCount, dailyReading(ownerUserId));
-        return new ReaderDashboardDto(overview, continueReading, recentItems);
+        return new ReaderDashboardDto(overview, continueReading, recentItems, itemsAddedToday);
     }
 
     /**

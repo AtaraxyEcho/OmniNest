@@ -34,6 +34,7 @@ import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -63,6 +64,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoLibraryService {
+    private static final List<String> VIDEO_FORMATS = List.of(
+            "mp4", "mkv", "webm", "mov", "m4v", "avi", "flv", "wmv", "ts", "m2ts");
 
     /** 时间线/分组预览页上限：卡片预览不宜一次拉过多。 */
     private static final int PREVIEW_PAGE_MAX = 100;
@@ -105,10 +108,15 @@ public class PhotoLibraryService {
      * 从数据库加载照片仪表盘数据。
      */
     private PhotoDashboardDto loadDashboard(UUID ownerUserId) {
-        long totalPhotos = photoItemRepository.countByOwnerUserId(ownerUserId);
+        long totalVideos = photoItemRepository.countByOwnerUserIdAndFormatIn(ownerUserId, VIDEO_FORMATS);
+        long totalPhotos = photoItemRepository.countByOwnerUserId(ownerUserId) - totalVideos;
         long totalAlbums = albumRepository.countByOwnerUserId(ownerUserId);
         long trashCount = photoItemRepository.countByOwnerUserIdAndDeletedAtIsNotNull(ownerUserId);
         long totalFavorites = favoriteRepository.countByOwnerUserId(ownerUserId);
+        ZoneId zoneId = systemInstanceConfigService.timeZone();
+        Instant todayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant();
+        long itemsAddedToday = photoItemRepository.countActivePhotosCreatedSince(
+                ownerUserId, VIDEO_FORMATS, todayStart);
 
         List<PhotoItem> recent = photoItemRepository.findTopNByOwnerUserIdOrderByCreatedAtDesc(ownerUserId, 12);
         List<UUID> recentIds = recent.stream().map(PhotoItem::getId).toList();
@@ -137,11 +145,13 @@ public class PhotoLibraryService {
                 .collect(Collectors.toSet());
         return new PhotoDashboardDto(
                 totalPhotos,
+                totalVideos,
                 totalAlbums,
                 totalFavorites,
                 trashCount,
                 photoDtoAssembler.mapPhotoItemDtos(ownerUserId, recent, recentFavoriteIds),
-                photoDtoAssembler.mapPhotoItemDtos(ownerUserId, favorites, favoriteItemIds)
+                photoDtoAssembler.mapPhotoItemDtos(ownerUserId, favorites, favoriteItemIds),
+                itemsAddedToday
         );
     }
 

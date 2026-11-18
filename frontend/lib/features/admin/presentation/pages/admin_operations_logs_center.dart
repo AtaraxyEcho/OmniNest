@@ -2,7 +2,16 @@
 part of 'admin_operations_pages.dart';
 
 class AdminLogsPage extends ConsumerStatefulWidget {
-  const AdminLogsPage({super.key});
+  const AdminLogsPage({
+    this.initialTab = 0,
+    this.hideDesktopTabSelector = false,
+    this.embedded = false,
+    super.key,
+  });
+
+  final int initialTab;
+  final bool hideDesktopTabSelector;
+  final bool embedded;
 
   @override
   ConsumerState<AdminLogsPage> createState() => _AdminLogsPageState();
@@ -13,6 +22,8 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
   late final TabController _tabController;
   Timer? _searchTimer;
   String _query = '';
+  final TextEditingController _desktopSearchController =
+      TextEditingController();
   String _auditAction = 'ALL';
   String _loginResult = 'ALL';
   int _auditPage = 0;
@@ -40,14 +51,22 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
   void initState() {
     super.initState();
     _query = ref.read(adminSearchProvider);
-    _tabController = TabController(length: 2, vsync: this)
-      ..addListener(_handleTabChanged);
+    _desktopSearchController.text = _query;
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 1),
+    )..addListener(_handleTabChanged);
     ref.listenManual<String>(adminSearchProvider, (_, next) {
       _searchTimer?.cancel();
       _searchTimer = Timer(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         setState(() {
           _query = next.trim();
+          _desktopSearchController.value = TextEditingValue(
+            text: _query,
+            selection: TextSelection.collapsed(offset: _query.length),
+          );
           _auditPage = 0;
           _loginPage = 0;
         });
@@ -58,9 +77,30 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
   @override
   void dispose() {
     _searchTimer?.cancel();
+    _desktopSearchController.dispose();
     _tabController.removeListener(_handleTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminLogsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _tabController.index = widget.initialTab.clamp(0, 1);
+    }
+  }
+
+  void _onDesktopSearchChanged(String value) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        _query = value.trim();
+        _auditPage = 0;
+        _loginPage = 0;
+      });
+    });
   }
 
   void _handleTabChanged() {
@@ -142,6 +182,10 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
         auditPage: auditPage,
         loginPage: loginPage,
         tabIndex: _tabController.index,
+        showTabs: !widget.hideDesktopTabSelector,
+        embedded: widget.embedded,
+        searchController: _desktopSearchController,
+        onSearch: _onDesktopSearchChanged,
         auditFilter: _auditAction,
         loginFilter: _loginResult,
         filterOptions: currentOptions,

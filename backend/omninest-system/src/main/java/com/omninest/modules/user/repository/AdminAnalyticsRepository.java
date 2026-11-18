@@ -43,6 +43,40 @@ public class AdminAnalyticsRepository {
     }
 
     /**
+     * 近 N 个本地自然日新增的文件节点数（空日期补零）。
+     *
+     * <p>按文件节点统计可包含本地上传与外部导入，并排除系统生成的派生文件；
+     * 不依赖不可逆的对象存储事件日志，也不会把目录计入上传量。</p>
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> dailyUploads(int days, String zoneId) {
+        Query query = entityManager.createNativeQuery("""
+                select to_char(series_day, 'YYYY-MM-DD') as date, coalesce(cnt, 0) as value
+                from generate_series(
+                    date_trunc('day', now() AT TIME ZONE :zoneId) - make_interval(days => :days - 1),
+                    date_trunc('day', now() AT TIME ZONE :zoneId),
+                    interval '1 day'
+                ) series_day
+                left join (
+                    select date_trunc('day', created_at AT TIME ZONE :zoneId) as d,
+                           count(*) as cnt
+                    from omni.file_nodes
+                    where created_at >= (
+                              date_trunc('day', now() AT TIME ZONE :zoneId)
+                              - make_interval(days => :days - 1)
+                          ) AT TIME ZONE :zoneId
+                      and node_type = 'FILE'
+                      and source_type <> 'DERIVED'
+                    group by d
+                ) t on t.d = series_day
+                order by series_day
+                """);
+        query.setParameter("days", days);
+        query.setParameter("zoneId", zoneId);
+        return query.getResultList();
+    }
+
+    /**
      * 近 N 天每日任务状态分布（空日期补零）。
      */
     @SuppressWarnings("unchecked")

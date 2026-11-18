@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
@@ -33,13 +34,23 @@ class AdminOverviewPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final adminColors = context.adminColors;
     // value：定时刷新失效重建期间保留上一份数据，不闪空趋势图。
-    final analytics = ref.watch(adminAnalyticsProvider(7)).value;
+    final desktop = DesktopShellScope.isHosted(context);
+    final analyticsState = ref.watch(adminAnalyticsProvider(desktop ? 14 : 7));
+    final analytics = analyticsState.asData?.value;
     // 挂载期间保活定时刷新轮询器；页面卸载即停。
     ref.watch(adminOverviewPollerProvider);
 
     // 桌面统一壳托管时走桌面排版：四张指标卡 + 健康/角色/存储。
-    if (DesktopShellScope.isHosted(context)) {
-      return DesktopAdminOverview(summary: summary);
+    if (desktop) {
+      return DesktopAdminOverview(
+        summary: summary,
+        analytics: analytics,
+        analyticsError:
+            analyticsState.hasError
+                ? errorReason(analyticsState.error!, l10n)
+                : null,
+        onRetryAnalytics: () => ref.invalidate(adminAnalyticsProvider(14)),
+      );
     }
 
     return AdminSectionEntrance(

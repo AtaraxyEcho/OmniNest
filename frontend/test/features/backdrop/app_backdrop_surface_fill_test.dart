@@ -12,17 +12,16 @@ import 'package:omninest/features/backdrop/presentation/app_backdrop_surface.dar
 /// 固有尺寸排版，`BoxFit` 完全不生效——16:9 素材放进更宽的窗口时左右各留一条
 /// 舞台底色（暗色）硬边，`cover` / `fill` 都退化成同一副 letterbox 观感。
 ///
-/// 内置默认壁纸换成视频后，这一层由封面帧（`Image.asset`）承担同样的职责：
-/// 它是视频就绪前唯一的可见内容，同样必须拿到紧约束。
+/// 内置默认壁纸使用随包静态照片，同样必须拿到紧约束。
 void main() {
   // 比 16:9 更宽的视口：只有真正铺满才不会露出左右底色。
   const viewport = Size(2400, 1000);
 
-  AppBackdropAsset bundledVideoAsset() => AppBackdropAsset(
+  AppBackdropAsset bundledImageAsset() => AppBackdropAsset(
     id: bundledDefaultWallpaperId,
     path: bundledDefaultWallpaperAssetPath,
     title: 'OmniNest',
-    mediaType: AppBackdropMediaType.video,
+    mediaType: AppBackdropMediaType.image,
     sourceType: AppBackdropSourceType.bundled,
     fileSize: 0,
     modifiedAt: DateTime(2026),
@@ -40,7 +39,7 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: AppBackdropSurface(
-              asset: bundledVideoAsset(),
+              asset: bundledImageAsset(),
               settings: AppBackdropSettings(fit: fit),
               policy: AppBackdropPolicy.portal,
               environmentBlurSigma: 0,
@@ -50,8 +49,6 @@ void main() {
         ),
       ),
     );
-    // 不 pumpAndSettle：视频会话会在 post-frame 打开一个必然失败的播放器，
-    // 本用例只关心封面帧拿到的约束。
     await tester.pump();
   }
 

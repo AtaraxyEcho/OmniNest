@@ -4,7 +4,16 @@ part of 'admin_operations_pages.dart';
 // （_TaskDetailDialog）拆分至 admin_operations_task_dialogs.dart。
 
 class AdminTasksPage extends ConsumerStatefulWidget {
-  const AdminTasksPage({super.key});
+  const AdminTasksPage({
+    this.initialTab = 0,
+    this.hideDesktopTabSelector = false,
+    this.embedded = false,
+    super.key,
+  });
+
+  final int initialTab;
+  final bool hideDesktopTabSelector;
+  final bool embedded;
 
   @override
   ConsumerState<AdminTasksPage> createState() => _AdminTasksPageState();
@@ -15,6 +24,8 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   late final TabController _tabController;
   Timer? _searchTimer;
   String _query = '';
+  final TextEditingController _desktopSearchController =
+      TextEditingController();
   String _status = 'ALL';
   String _taskType = 'ALL';
   int _page = 0;
@@ -32,13 +43,22 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   void initState() {
     super.initState();
     _query = ref.read(adminSearchProvider);
-    _tabController = TabController(length: 2, vsync: this);
+    _desktopSearchController.text = _query;
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 1),
+    );
     ref.listenManual<String>(adminSearchProvider, (_, next) {
       _searchTimer?.cancel();
       _searchTimer = Timer(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         setState(() {
           _query = next.trim();
+          _desktopSearchController.value = TextEditingValue(
+            text: _query,
+            selection: TextSelection.collapsed(offset: _query.length),
+          );
           _page = 0;
         });
       });
@@ -48,8 +68,28 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
   @override
   void dispose() {
     _searchTimer?.cancel();
+    _desktopSearchController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminTasksPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _tabController.index = widget.initialTab.clamp(0, 1);
+    }
+  }
+
+  void _onDesktopSearchChanged(String value) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        _query = value.trim();
+        _page = 0;
+      });
+    });
   }
 
   @override
@@ -218,7 +258,12 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
         status: _status,
         taskType: _taskType,
         taskTypes: taskTypes,
+        query: _query,
+        searchController: _desktopSearchController,
+        onSearch: _onDesktopSearchChanged,
         tabIndex: _tabController.index,
+        showTabs: !widget.hideDesktopTabSelector,
+        embedded: widget.embedded,
         busy: busy,
         onFilters:
             (status, taskType) => setState(() {
@@ -234,6 +279,8 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
               _selectedTaskIds.clear();
             }),
         onRefresh: () => ref.invalidate(adminTaskPageProvider),
+        onExport: () => _exportTaskPage(page),
+        onDiscardAllDlq: _discardAllDlq,
         onRetry: _retryTask,
         onCancel: _cancelTask,
         onDetail: _showTaskDetail,
@@ -396,6 +443,89 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
       ],
     );
     return useExpanded ? content : SingleChildScrollView(child: content);
+  }
+
+  Future<void> _exportTaskPage(AdminPage<AdminTaskRecord> page) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final path = await saveAdminCsvToDisk(
+        suggestedName: 'omninest-tasks.csv',
+        csv: adminCsvDocument(
+          header: const [
+            'id',
+            'type',
+            'description',
+            'status',
+            'owner',
+            'created_at',
+            'updated_at',
+            'error',
+          ],
+          rows: [
+            for (final task in page.items)
+              [
+                task.id,
+                task.taskType,
+                task.description,
+                task.status,
+                task.ownerLabel ?? '',
+                task.createdAt,
+                task.updatedAt,
+                task.errorSummary ?? '',
+              ],
+          ],
+        ),
+      );
+      if (!mounted || path == null) return;
+      showOmniFeedback(
+        context,
+        l10n.adminCsvExported,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        errorReason(error, l10n),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  Future<void> _discardAllDlq() async {
+    final l10n = AppLocalizations.of(context);
+    final tasks = ref.read(adminDlqProvider).asData?.value ?? const [];
+    final ids = tasks.map((task) => task.id).toList(growable: false);
+    if (ids.isEmpty) return;
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminDlqDiscardAll,
+      message: l10n.adminBatchDiscardConfirmMessage('${ids.length}'),
+      confirmLabel: l10n.adminDlqDiscardAll,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      final result = await ref
+          .read(adminOperationsActionsProvider)
+          .batchDiscardDlq(ids);
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
+        severity:
+            result.failedIds.isEmpty
+                ? OmniFeedbackSeverity.success
+                : OmniFeedbackSeverity.warning,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        errorReason(error, l10n),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 
   Widget _buildTabView(Widget tasks, Widget dlq, {required bool useExpanded}) {

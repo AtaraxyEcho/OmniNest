@@ -914,6 +914,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Password must be at least 8 characters';
 
   @override
+  String get changePasswordStrengthTooShort => 'Too short';
+
+  @override
   String get changePasswordMaxLength =>
       'Password must be at most 64 characters and 72 UTF-8 bytes';
 
@@ -922,6 +925,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginTwoFactorTitle => 'Two-Factor Verification';
+
+  @override
+  String get loginInitialPasswordChangeTitle => 'Choose a new password';
+
+  @override
+  String get loginInitialPasswordChangeSubtitle =>
+      'Your administrator gave you a temporary password. Replace it to continue.';
+
+  @override
+  String get loginInitialPasswordLabel => 'New password';
+
+  @override
+  String get loginInitialPasswordConfirmLabel => 'Confirm new password';
+
+  @override
+  String get loginInitialPasswordMismatch => 'The passwords do not match.';
+
+  @override
+  String get loginInitialPasswordLength => 'Use 8 to 64 characters.';
+
+  @override
+  String get loginInitialPasswordChangeAction => 'Save password and continue';
 
   @override
   String get loginTwoFactorSubtitle =>
@@ -3713,6 +3738,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageOverview => 'Storage Overview';
 
   @override
+  String get adminStorageUsageTitle => 'Usage';
+
+  @override
   String adminPercentUsed(Object percent) {
     return '$percent% used';
   }
@@ -3756,6 +3784,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminStorageFileCount(Object count) {
     return '$count files';
   }
+
+  @override
+  String adminStorageFolderCount(Object count) {
+    return '$count folders';
+  }
+
+  @override
+  String adminStorageObjectCount(Object count) {
+    return '$count objects';
+  }
+
+  @override
+  String get adminStorageUsageTotal => 'Total used';
 
   @override
   String adminOverviewTasksTotal(Object count) {
@@ -3966,6 +4007,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminResetTwoFactorConfirmMessage(Object name) {
     return 'Clear $name\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.';
   }
+
+  @override
+  String get adminRequirePasswordChangeLabel =>
+      'Require a new password at first sign-in';
+
+  @override
+  String get adminRequirePasswordChangeHint =>
+      'The user must replace this temporary password before accessing OmniNest.';
 
   @override
   String get adminEditRolesHint =>
@@ -4236,6 +4285,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminTaskListSubtitle =>
       'Failed, cancelled and DLQ status support re-queue.';
+
+  @override
+  String get adminTaskSearchHint => 'Search title, type, owner or error';
+
+  @override
+  String get adminDlqSearchHint => 'Search title, type or error';
+
+  @override
+  String get adminDlqDiscardAll => 'Discard all';
+
+  @override
+  String get adminTaskFilterSucceeded => 'Succeeded';
+
+  @override
+  String get adminLoginAuditSearchHint => 'Search user, device, IP or reason';
+
+  @override
+  String get adminSessionSearchHint => 'Search user, device or IP';
 
   @override
   String get adminNoBackgroundTasks => 'No background tasks.';
@@ -5139,6 +5206,50 @@ class AppLocalizationsEn extends AppLocalizations {
       'Manage MinIO buckets and local media locations; use local locations for 4K playback.';
 
   @override
+  String get adminStorageAddAction => 'Add';
+
+  @override
+  String get adminStorageAddLocation => 'Add storage location';
+
+  @override
+  String get adminStorageAddLocationHint =>
+      'Mount keys come from the deployment allowlist.';
+
+  @override
+  String get adminStorageDisplayName => 'Display name';
+
+  @override
+  String get adminStorageSectionLabel => 'Storage';
+
+  @override
+  String get adminStorageVisibleTo => 'Visible to';
+
+  @override
+  String get adminStorageScopeEveryone => 'Everyone (system)';
+
+  @override
+  String get adminStorageScopeOneUser => 'One user';
+
+  @override
+  String get adminStorageMountAction => 'Mount';
+
+  @override
+  String get adminStorageNameHint => 'e.g. Family media';
+
+  @override
+  String get adminStorageMountRoot => 'Mount root';
+
+  @override
+  String get adminStorageBrowseFailed => 'Could not load directories.';
+
+  @override
+  String get adminStorageCreated => 'Storage location added.';
+
+  @override
+  String get adminStorageAdvancedLibraries =>
+      'Library sources and mount controls';
+
+  @override
   String get adminBucketConfig => 'Bucket Config';
 
   @override
@@ -5172,6 +5283,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminOAuthAppsSubtitle =>
       'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.';
+
+  @override
+  String adminOAuthProviderAccountTitle(String provider) {
+    return '$provider account';
+  }
+
+  @override
+  String get adminOAuthSecretStorageHint =>
+      'Stored encrypted. Never shown again.';
+
+  @override
+  String get adminOAuthNotConfigured => 'Not configured';
+
+  @override
+  String get adminConfigure => 'Configure';
 
   @override
   String get adminOAuthRedirectHint =>
@@ -5587,6 +5713,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCreateUser => 'Create User';
 
   @override
+  String get adminCreateAccountEyebrow => 'Create account';
+
+  @override
   String get adminSearchUsers => 'Search username, nickname or email';
 
   @override
@@ -5693,6 +5822,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminQuotaHint => 'e.g. 50';
 
   @override
+  String get adminQuotaDefaultHint =>
+      'Leave blank to use the configured system default. Custom values: 1–10000 GiB.';
+
+  @override
+  String get adminQuotaRangeError => 'Enter a quota between 1 and 10000 GiB';
+
+  @override
+  String get adminPasswordShareHint =>
+      'Share the initial password with the user through a private channel.';
+
+  @override
   String get adminSaving => 'Saving';
 
   @override
@@ -5743,6 +5883,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminUsername => 'Username';
+
+  @override
+  String get adminAccount => 'Account';
+
+  @override
+  String get adminAccountFormatError =>
+      'Use 3–24 characters: start with a lowercase letter, then lowercase letters, numbers, dot, dash or underscore.';
 
   @override
   String get adminEnterUsername => 'Please enter username';
@@ -6235,6 +6382,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminRecalculateDone(Object count) {
     return 'Updated storage for $count users';
   }
+
+  @override
+  String get adminUploads14Days => 'Uploads, last 14 days';
+
+  @override
+  String get adminRecalculateStorageTitle => 'Recalculate storage';
+
+  @override
+  String get adminRecalculateStorageSubtitle =>
+      'Rebuilds per-user usage from the object store.';
 
   @override
   String get adminApiResponseFormat => 'Admin response format is incorrect';
@@ -13362,6 +13519,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopPinned => 'Pinned';
 
   @override
+  String get desktopPinnedEveningDrift => 'Evening Drift';
+
+  @override
+  String get desktopPinnedGoldenHour => 'Golden hour';
+
+  @override
   String get desktopPinnedContinue => 'Continue watching';
 
   @override
@@ -13374,6 +13537,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopStorage => 'Storage';
 
   @override
+  String get desktopStorageCloudTitle => 'OmniCloud';
+
+  @override
   String desktopStorageUsage(String used, String total) {
     return '$used of $total';
   }
@@ -13382,6 +13548,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String desktopStorageUnlimited(String used) {
     return '$used used · no quota';
   }
+
+  @override
+  String get desktopStorageNoQuota => 'No quota';
+
+  @override
+  String get desktopStorageVideo => 'Video';
+
+  @override
+  String get desktopStoragePhotos => 'Photos';
+
+  @override
+  String get desktopStorageMusic => 'Music';
+
+  @override
+  String get desktopStorageDocuments => 'Documents';
+
+  @override
+  String get desktopStorageFindDuplicates => 'Find duplicates';
+
+  @override
+  String get desktopStorageDuplicatesUnavailable =>
+      'Duplicate scanning is not available in this build.';
+
+  @override
+  String desktopStorageDuplicateScanFound(String size) {
+    return 'Found $size of duplicates';
+  }
+
+  @override
+  String get desktopStorageDuplicateScanNone => 'No duplicate files found.';
+
+  @override
+  String get desktopStorageDuplicateScanNonePartial =>
+      'No duplicates found among files with verified hashes.';
+
+  @override
+  String desktopStorageDuplicateScanSkipped(String count) {
+    return '$count files could not be checked because their verified content hash is missing.';
+  }
+
+  @override
+  String get desktopStorageNoBreakdown =>
+      'No storage categories are available.';
 
   @override
   String get desktopOfflineBar =>
@@ -14070,8 +14279,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String desktopStatListeningSub(int n) {
-    return '$n plays recently';
+  String get desktopStatListeningSub => 'This week';
+
+  @override
+  String get desktopStatHours => 'h';
+
+  @override
+  String desktopStatLibraryAddedToday(int count) {
+    return '+$count today';
   }
 
   @override
@@ -14137,6 +14352,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get desktopSeeAll => 'See all';
+
+  @override
+  String get desktopMoviesFeatureFilms => 'Feature films';
+
+  @override
+  String desktopMoviesTitlesCount(int count) {
+    return '$count TITLES';
+  }
 
   @override
   String get desktopUpNext => 'Up next';
@@ -14642,6 +14865,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get desktopPhotosOrderSaved => 'Photo order saved';
+
+  @override
+  String desktopPhotosMovedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Moved $count photos',
+      one: 'Moved 1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get desktopPhotosOrderReset => 'Photo order reset';
+
+  @override
+  String get desktopPhotosResetOrder => 'Reset order';
+
+  @override
+  String get desktopPhotosOrderSaveFailed =>
+      'Could not save photo order. Try again.';
+
+  @override
   String get desktopPhotosSelect => 'Select photo';
 
   @override
@@ -14913,6 +15160,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String desktopConfigUnsaved(int count) {
     return '$count unsaved';
   }
+
+  @override
+  String desktopConfigOverview(int count, int modified) {
+    return '$count parameters · $modified changed from defaults';
+  }
+
+  @override
+  String get desktopConfigRestoreDefaults => 'Restore defaults';
+
+  @override
+  String get desktopConfigSecretRollbackUnavailable =>
+      'The previous secret is hidden and cannot be restored here.';
 
   @override
   String get adminConfigReadOnly => 'Read-only';
@@ -15285,6 +15544,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Titles you start watching will show up here.';
 
   @override
+  String get desktopMoviesEmptyLibraryTitle => 'Your movie library is empty';
+
+  @override
   String get desktopMoviesEmptyLibraryBody =>
       'Import a film or series and it will show up here.';
 
@@ -15337,4 +15599,163 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get photosDownloadNeedsOriginal =>
       'Open a photo first - list data has no original file URL';
+
+  @override
+  String get adminSortLabel => 'Sort';
+
+  @override
+  String get adminSortName => 'Name';
+
+  @override
+  String get adminSortStorageUsed => 'Storage used';
+
+  @override
+  String get adminSortLastActive => 'Last active';
+
+  @override
+  String get adminGeneratePassword => 'Generate password';
+
+  @override
+  String get adminShowPassword => 'Show password';
+
+  @override
+  String get adminHidePassword => 'Hide password';
+
+  @override
+  String get adminAccountEnabled => 'Account enabled';
+
+  @override
+  String get adminDisabledAccountsCannotSignIn =>
+      'Disabled accounts cannot sign in.';
+
+  @override
+  String get adminUserCreated => 'User created';
+
+  @override
+  String get adminRoleCreated => 'Role created';
+
+  @override
+  String get desktopMoviesEmptySeriesTitle => 'No series yet';
+
+  @override
+  String get desktopMoviesEmptySeriesBody =>
+      'Series added to your library will appear here.';
+
+  @override
+  String get desktopMoviesEmptyAnimeTitle => 'No anime yet';
+
+  @override
+  String get desktopMoviesEmptyAnimeBody =>
+      'Anime series added to your library will appear here.';
+
+  @override
+  String get filesLocalLibrary => 'Local library';
+
+  @override
+  String get musicScanStatusLabel => 'Scanning';
+
+  @override
+  String get musicScanQueued => 'Music scan started';
+
+  @override
+  String get desktopServicesOther => 'Other';
+
+  @override
+  String get desktopLastFmScrobbling => 'Last.fm scrobbling';
+
+  @override
+  String get desktopLastFmUnavailable =>
+      'Last.fm scrobbling is not available on this server.';
+
+  @override
+  String get adminNotConfigured => 'Unavailable';
+
+  @override
+  String get adminSystemLogs => 'System logs';
+
+  @override
+  String get adminSystemLogSource => 'Source';
+
+  @override
+  String get adminSystemLogMessage => 'Message';
+
+  @override
+  String get adminSystemLogsUnavailable =>
+      'System log streaming is not available from this server.';
+
+  @override
+  String get desktopMediaImportMoviesTitle => 'Add movies and shows';
+
+  @override
+  String get desktopMediaImportMoviesHint =>
+      'MKV, MP4, MOV and AVI files in My files. Match titles with metadata after import.';
+
+  @override
+  String get desktopMediaImportPhotosTitle => 'Add photos and videos';
+
+  @override
+  String get desktopMediaImportPhotosHint =>
+      'JPG, HEIC, PNG, RAW and video files in My files. Existing files are deduplicated when imported.';
+
+  @override
+  String get desktopMediaImportMusicTitle => 'Add music';
+
+  @override
+  String get desktopMediaImportMusicHint =>
+      'FLAC, MP3, AAC and WAV files in My files. Tags and cover art are read during import.';
+
+  @override
+  String get desktopMediaImportFromFiles => 'From My files';
+
+  @override
+  String get desktopMediaImportFromDevice => 'From this device';
+
+  @override
+  String get desktopMediaImportDeviceHint =>
+      'Choose files from this computer. They are uploaded to My files first, then imported.';
+
+  @override
+  String get desktopMediaImportChooseFiles => 'Choose files';
+
+  @override
+  String get desktopMediaImportTaskMovies => 'Reading media info';
+
+  @override
+  String get desktopMediaImportTaskPhotos => 'Generating thumbnails';
+
+  @override
+  String get desktopMediaImportTaskMusic => 'Scanning audio';
+
+  @override
+  String get desktopViewTasks => 'View tasks';
+
+  @override
+  String desktopSessionSignedOut(String device) {
+    return 'Signed out $device';
+  }
+
+  @override
+  String desktopMediaImportQueued(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count imports queued',
+      one: '1 import queued',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get desktopMediaImportNoFiles => 'No files chosen yet.';
+
+  @override
+  String get desktopMediaImportNoCompatibleFiles =>
+      'No compatible files in this folder.';
+
+  @override
+  String get desktopMediaImportMatchMetadata => 'Match metadata after import';
+
+  @override
+  String get desktopMediaImportMetadataHint =>
+      'Fetch posters, synopsis and cast details after import.';
 }

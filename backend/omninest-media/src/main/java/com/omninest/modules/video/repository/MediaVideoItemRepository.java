@@ -161,6 +161,27 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
     @Query("""
             select count(i) from MediaVideoItem i
             join FileNode file on i.fileNodeId = file.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and i.createdAt >= :since
+              and file.deleted = false
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    long countReadableOriginalsByMediaTypeCreatedSince(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType,
+            @Param("since") Instant since
+    );
+
+    @Query("""
+            select count(i) from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
             where i.metadataStatus = :metadataStatus
               and i.sourceVideoItemId is null
               and file.deleted = false

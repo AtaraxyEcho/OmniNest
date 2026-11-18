@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.data.repository.query.Param;
 
 /**
@@ -13,7 +12,6 @@ import org.springframework.data.repository.query.Param;
  *
  * @author OmniNest
  */
-@NoRepositoryBean
 public interface PhotoItemRelationQueries {
 
     // ─── 关系图谱边聚合 ───

@@ -19,6 +19,51 @@ import org.springframework.stereotype.Repository;
 public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
 
     /**
+     * 按当前用户个人空间中活动文件的服务端 SHA-256 摘要统计重复副本。
+     *
+     * <p>共享空间、回收站、历史版本、派生资源和本地只读索引不属于设置页的个人云盘扫描范围。
+     * 未写入有效 SHA-256 的文件单独计数，使调用方不会把部分扫描结果描述为完整结果。</p>
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 重复文件数、重复组数、可释放字节及未核对文件数
+     */
+    @Query(value = """
+            with active_files as (
+                select n.size_bytes, f.sha256
+                from omni.file_nodes n
+                left join omni.file_objects f on f.id = n.current_object_id
+                where n.owner_user_id = :ownerUserId
+                  and n.space_type = 'PERSONAL'
+                  and n.is_deleted = false
+                  and n.node_type = 'FILE'
+                  and n.current_object_id is not null
+                  and (n.source_type is null
+                       or n.source_type not in ('DERIVED', 'LOCAL_FILESYSTEM'))
+            ),
+            duplicate_groups as (
+                select sha256,
+                       count(*) - 1 as duplicate_file_count,
+                       sum(size_bytes) - max(size_bytes) as reclaimable_bytes
+                from active_files
+                where sha256 is not null and trim(sha256) <> ''
+                group by sha256
+                having count(*) > 1
+            )
+            select coalesce((select sum(duplicate_file_count) from duplicate_groups), 0)
+                       as "duplicateFileCount",
+                   coalesce((select count(*) from duplicate_groups), 0)
+                       as "duplicateGroupCount",
+                   coalesce((select sum(reclaimable_bytes) from duplicate_groups), 0)
+                       as "reclaimableBytes",
+                   coalesce((select count(*) from active_files
+                             where sha256 is null or trim(sha256) = ''), 0)
+                       as "filesWithoutVerifiedHash"
+            """, nativeQuery = true)
+    FileDuplicateSummaryProjection summarizePersonalDuplicates(
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
+    /**
      * 按节点类型统计未删除节点数。
      *
      * @param nodeType 节点类型
@@ -42,6 +87,14 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
      */
     @Query("select coalesce(sum(f.sizeBytes), 0) from FileObject f")
     long sumFileObjectSizeBytes();
+
+    /**
+     * 按对象自身 MIME 类型聚合字节数，使类别总和与系统对象用量使用同一存储口径。
+     *
+     * @return MIME 类型与对象字节数
+     */
+    @Query("select f.mimeType, coalesce(sum(f.sizeBytes), 0) from FileObject f group by f.mimeType")
+    List<Object[]> sumFileObjectSizeBytesByMimeType();
 
     /**
      * 按用户和空间类型统计文件夹数。

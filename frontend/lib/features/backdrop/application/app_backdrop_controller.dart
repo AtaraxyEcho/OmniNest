@@ -92,7 +92,16 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   final Map<String, String> _localVideoPaths = <String, String>{};
 
   static const Duration _urlRefreshLead = Duration(minutes: 2);
+
+  /// 正在跑的落盘循环；非空时新值只覆盖 [_latestPendingSettings] 槽位。
   Future<void>? _settingsMutation;
+
+  /// 待落盘的最新设置（合并槽位）。
+  ///
+  /// 滑杆拖动时 `onChanged` 以帧级频率触发，落盘一次却要几十毫秒（写库 +
+  /// 全表回读 + 远端 PATCH）。逐帧入队会让队尾的 UI 状态延迟数秒，滑柄像
+  /// 慢动作；这里只保留最新值，旧值直接丢弃。
+  AppBackdropSettings? _latestPendingSettings;
 
   static const Duration _processingPollInterval = Duration(seconds: 3);
   static const Duration _processingPollTimeout = Duration(minutes: 10);
@@ -465,19 +474,33 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 更新背景暗化强度。
+  ///
+  /// 按 1% 量化：滑杆的有效行程只有 90 档，未量化的浮点尾数会让每个像素
+  /// 位移都变成一次真实写入。
   Future<void> setDimAmount(double value) async {
+    final normalized = (value * 100).roundToDouble() / 100;
     final current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
-    await _persistSettings(current.settings.copyWith(dimAmount: value));
+    if ((current.settings.dimAmount - normalized).abs() < 1e-4) {
+      return;
+    }
+    await _persistSettings(current.settings.copyWith(dimAmount: normalized));
   }
 
   /// 更新背景模糊强度。
+  ///
+  /// 按 0.5px 量化：sigma 每变一点就要重跑一次全屏高斯，半像素以下的抖动
+  /// 肉眼不可辨却照样付整帧的模糊成本。
   Future<void> setBlurAmount(double value) async {
+    final normalized = (value * 2).roundToDouble() / 2;
     final current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
-    await _persistSettings(current.settings.copyWith(blurAmount: value));
+    if ((current.settings.blurAmount - normalized).abs() < 1e-3) {
+      return;
+    }
+    await _persistSettings(current.settings.copyWith(blurAmount: normalized));
   }
 
   /// 更新视频静音设置。
@@ -585,9 +608,8 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     AppBackdropRepository repository,
   ) async {
     try {
-      final bundledAsset = await ref
-          .read(appBackdropBundledAssetInstallerProvider)
-          .install();
+      final bundledAsset =
+          await ref.read(appBackdropBundledAssetInstallerProvider).install();
       if (bundledAsset != null) {
         await repository.ensureBundledBackdrop(bundledAsset);
       }
@@ -631,27 +653,67 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 串行写设置:先本地镜像即时生效,再同步服务端,最后回读状态。
+  ///
+  /// 内存态在调用瞬间同步发布（不经过任何 await），滑杆滑柄因此与指针
+  /// 同帧到位；真正的落盘交给单条循环按「最新值」合并执行。
   Future<void> _applySettings(AppBackdropSettings settings) {
-    final previous = _settingsMutation ?? Future<void>.value();
-    final next = previous.then((_) => _applySettingsUnlocked(settings));
-    _settingsMutation = next.catchError((Object _) {});
-    return next;
+    final current = state.asData?.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(settings: settings));
+    }
+    _latestPendingSettings = settings;
+    return _settingsMutation ??= _drainSettingsQueue();
+  }
+
+  /// 逐轮取走槽位里的最新值落盘，直到槽位清空。
+  ///
+  /// `finally` 里清 [_settingsMutation] 必须留在本函数内：它与循环退出在同
+  /// 一次同步执行里完成，之后到达的写入一定会看到空槽并重开一轮，不会滞留在
+  /// 已经退出的循环之后。
+  Future<void> _drainSettingsQueue() async {
+    try {
+      while (_latestPendingSettings != null && ref.mounted) {
+        final target = _latestPendingSettings!;
+        _latestPendingSettings = null;
+        try {
+          await _applySettingsUnlocked(target);
+        } on Object {
+          // 单次持久化异常不中断后续合并值，避免拖动被一次失败整段丢弃。
+        }
+      }
+    } finally {
+      _settingsMutation = null;
+    }
   }
 
   Future<void> _applySettingsUnlocked(AppBackdropSettings settings) async {
     await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
-    state = AsyncData(
-      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    // 落盘期间用户又拖到了新位置：旧值既不回写 state（会把滑柄拽回去），
+    // 也不发远端 PATCH（下一轮会带着最新值覆盖），直接让位给下一轮。
+    if (_latestPendingSettings != null || !ref.mounted) {
+      return;
+    }
+    final loaded = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
     );
+    if (_latestPendingSettings != null || !ref.mounted) {
+      return;
+    }
+    state = AsyncData(loaded);
     final prefs = ref.read(backdropPreferencesProvider).asData?.value;
     if (prefs == settings) {
       return;
     }
     await ref.read(backdropPreferencesProvider.notifier).save(settings);
+    if (_latestPendingSettings != null || !ref.mounted) {
+      return;
+    }
     final after = await _loadCurrentState(
       ref.read(appBackdropRepositoryProvider),
     );
-    if (state.asData?.value != after) {
+    if (_latestPendingSettings == null &&
+        ref.mounted &&
+        state.asData?.value != after) {
       state = AsyncData(after);
     }
   }

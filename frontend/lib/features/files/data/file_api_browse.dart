@@ -1,6 +1,34 @@
 part of 'file_api.dart';
 
 mixin FileApiBrowse on FileApiBase {
+  Future<FileDuplicateSummary> scanDuplicates() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/duplicates/summary',
+    );
+    return parseDuplicateSummaryResponse(response.data);
+  }
+
+  Future<List<FileMediaImportTask>> requestMediaImports({
+    required List<String> fileNodeIds,
+    required String mediaType,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/files/media-imports',
+      data: {'fileNodeIds': fileNodeIds, 'mediaType': mediaType},
+    );
+    final data = parseEnvelope(response.data)['data'];
+    if (data is! List) {
+      throw const AppException(
+        code: AppErrorCodes.invalidResponse,
+        message: AppErrorCodes.invalidResponse,
+      );
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(FileMediaImportTask.fromJson)
+        .toList(growable: false);
+  }
+
   /// 按 ID 获取单个文件节点，供搜索结果等精确跳转使用。
   Future<FileNode> getFileNode(String fileId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

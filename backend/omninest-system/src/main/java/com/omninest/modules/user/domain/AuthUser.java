@@ -44,6 +44,9 @@ public class AuthUser {
     @Column(nullable = false, length = 32)
     private String status = UserStatus.ACTIVE.getValue();
 
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             schema = "omni",

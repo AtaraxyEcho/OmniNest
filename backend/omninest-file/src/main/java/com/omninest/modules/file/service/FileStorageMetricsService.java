@@ -6,15 +6,19 @@ import com.omninest.common.user.UserAccountSummary;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileStorageStatsDto;
+import com.omninest.modules.file.dto.FileDuplicateSummaryDto;
 import com.omninest.modules.file.dto.FileTypeStatsDto;
 import com.omninest.modules.file.repository.FileMetricsRepository;
+import com.omninest.modules.file.repository.FileDuplicateSummaryProjection;
 import com.omninest.modules.file.repository.FileUserUsageProjection;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
+import com.omninest.modules.quota.port.StorageCategoryMetric;
 import com.omninest.modules.quota.port.StorageMetricsSnapshot;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,12 +50,55 @@ public class FileStorageMetricsService implements StorageMetricsQuery {
     @Transactional(readOnly = true)
     @Override
     public StorageMetricsSnapshot systemMetrics() {
+        Map<String, Long> categoryBytes = new LinkedHashMap<>();
+        for (Object[] row : fileMetricsRepository.sumFileObjectSizeBytesByMimeType()) {
+            String mimeType = row[0] != null ? row[0].toString() : null;
+            String category = resolveSystemCategory(mimeType);
+            long bytes = ((Number) row[1]).longValue();
+            categoryBytes.merge(category, bytes, Long::sum);
+        }
+        List<StorageCategoryMetric> breakdown = categoryBytes.entrySet().stream()
+                .map(entry -> new StorageCategoryMetric(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparingInt(metric -> systemCategoryOrder(metric.category())))
+                .toList();
         return new StorageMetricsSnapshot(
                 fileMetricsRepository.countFileNodesByType(NodeType.FILE.getValue()),
                 fileMetricsRepository.countFileNodesByType(NodeType.FOLDER.getValue()),
                 fileMetricsRepository.countFileObjects(),
-                fileMetricsRepository.sumFileObjectSizeBytes()
+                fileMetricsRepository.sumFileObjectSizeBytes(),
+                breakdown
         );
+    }
+
+    private String resolveSystemCategory(String mimeType) {
+        String value = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
+        if (value.startsWith("video/")) {
+            return "video";
+        }
+        if (value.startsWith("image/")) {
+            return "photos";
+        }
+        if (value.startsWith("audio/")) {
+            return "music";
+        }
+        if (value.startsWith("text/")
+                || value.contains("pdf")
+                || value.contains("document")
+                || value.contains("spreadsheet")
+                || value.contains("presentation")) {
+            return "docs";
+        }
+        return "other";
+    }
+
+    private int systemCategoryOrder(String category) {
+        return switch (category) {
+            case "video" -> 0;
+            case "photos" -> 1;
+            case "music" -> 2;
+            case "docs" -> 3;
+            default -> 4;
+        };
     }
 
     /**
@@ -88,6 +135,23 @@ public class FileStorageMetricsService implements StorageMetricsQuery {
                 () -> loadUserStorageStats(ownerUserId),
                 FileStorageStatsDto.class
         );
+    }
+
+    /**
+     * 查询当前用户个人空间内可验证的重复文件摘要。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 当前活动文件的重复内容汇总
+     */
+    @Transactional(readOnly = true)
+    public FileDuplicateSummaryDto personalDuplicateSummary(UUID ownerUserId) {
+        FileDuplicateSummaryProjection summary =
+                fileMetricsRepository.summarizePersonalDuplicates(ownerUserId);
+        return new FileDuplicateSummaryDto(
+                summary.getDuplicateFileCount(),
+                summary.getDuplicateGroupCount(),
+                summary.getReclaimableBytes(),
+                summary.getFilesWithoutVerifiedHash());
     }
 
     private FileStorageStatsDto loadUserStorageStats(UUID ownerUserId) {

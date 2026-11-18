@@ -336,7 +336,7 @@ class MusicApi {
   }
 
   /// 记录可播放对象播放历史（自动写回）：无能力时静默 no-op。
-  Future<void> recordPlayableHistory({
+  Future<String?> recordPlayableHistory({
     required String playableKey,
     required String title,
     required String artistName,
@@ -347,7 +347,7 @@ class MusicApi {
     int playDuration = 0,
   }) async {
     if (!apiClient.hasPermission(activityWritePermission)) {
-      return;
+      return null;
     }
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/music/play-history',
@@ -361,7 +361,20 @@ class MusicApi {
         'durationSeconds': durationSeconds,
       },
     );
-    parseEnvelope(response.data);
+    final data = parseEnvelope(response.data)['data'];
+    return data is String ? data : null;
+  }
+
+  Future<int> updateListeningDuration(
+    String historyId,
+    int listenedSeconds,
+  ) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/music/play-history/${Uri.encodeComponent(historyId)}/duration',
+      data: {'listenedSeconds': listenedSeconds},
+    );
+    final data = parseEnvelope(response.data)['data'];
+    return data is num ? data.toInt() : listenedSeconds;
   }
 
   Future<MusicTrack?> lastPlayed() async {

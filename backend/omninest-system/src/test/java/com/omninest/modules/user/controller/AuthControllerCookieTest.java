@@ -283,6 +283,7 @@ class AuthControllerCookieTest {
                 1024,
                 0,
                 null,
+                null,
                 null
         );
         return new AuthTokenResponse(

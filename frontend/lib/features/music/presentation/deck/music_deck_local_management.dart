@@ -25,6 +25,7 @@ class _LocalManagementContent extends ConsumerWidget {
               // 不使用主题 primary（模块语境下为绿色）。
               MediaImportButton(
                 subsystemDirectory: 'Music',
+                allowSharedSpace: false,
                 acceptedExtensions: const [
                   'mp3',
                   'flac',

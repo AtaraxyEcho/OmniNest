@@ -43,51 +43,62 @@ class DesktopDock extends ConsumerWidget {
           ),
         ),
       ),
-      child: SizedBox(
-        width: DesktopMetrics.dockWidth,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+      child: ClipRect(
+        child: OverflowBox(
+          // Dock 本身按样例从 0 到 348px 动画；内容保持完整规格，避免
+          // 收放途中把页签行压窄后触发 RenderFlex 溢出。
+          alignment: Alignment.centerLeft,
+          minWidth: DesktopMetrics.dockWidth,
+          maxWidth: DesktopMetrics.dockWidth,
+          child: SizedBox(
+            width: DesktopMetrics.dockWidth,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: DesktopSeg<DesktopDockTab>(
-                      options: DesktopDockTab.values,
-                      value: shell.dockTab,
-                      small: true,
-                      labelOf:
-                          (tab) =>
-                              tab == DesktopDockTab.details
-                                  ? l10n.desktopDockDetails
-                                  : l10n.desktopDockQueue,
-                      onChanged: controller.setDockTab,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DesktopSeg<DesktopDockTab>(
+                          options: DesktopDockTab.values,
+                          value: shell.dockTab,
+                          small: true,
+                          labelOf:
+                              (tab) =>
+                                  tab == DesktopDockTab.details
+                                      ? l10n.desktopDockDetails
+                                      : l10n.desktopDockQueue,
+                          onChanged: controller.setDockTab,
+                        ),
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.close,
+                        tooltip: l10n.desktopClosePanel,
+                        onPressed: () => controller.setDock(false),
+                      ),
+                    ],
                   ),
-                  DesktopIconButton(
-                    icon: DesktopIcons.close,
-                    tooltip: l10n.desktopClosePanel,
-                    onPressed: () => controller.setDock(false),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (shell.dockTab == DesktopDockTab.details)
+                            _DetailsBody(detail: shell.detail)
+                          else
+                            const _QueueBody(),
+                          const SizedBox(
+                            height: DesktopMetrics.playerBarClearance,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (shell.dockTab == DesktopDockTab.details)
-                        _DetailsBody(detail: shell.detail)
-                      else
-                        const _QueueBody(),
-                      const SizedBox(height: DesktopMetrics.playerBarClearance),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -192,27 +203,23 @@ class _DetailsBody extends StatelessWidget {
         if (data.primary != null || data.secondary != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 if (data.primary != null)
-                  Expanded(
-                    child: DesktopButton(
-                      label: data.primary!.label,
-                      icon: data.primary!.icon,
-                      variant: DesktopButtonVariant.primary,
-                      onPressed: data.primary!.onPressed,
-                    ),
+                  DesktopButton(
+                    label: data.primary!.label,
+                    icon: data.primary!.icon,
+                    variant: DesktopButtonVariant.primary,
+                    onPressed: data.primary!.onPressed,
                   ),
-                if (data.primary != null && data.secondary != null)
-                  const SizedBox(width: 8),
                 if (data.secondary != null)
-                  Expanded(
-                    child: DesktopButton(
-                      label: data.secondary!.label,
-                      icon: data.secondary!.icon,
-                      variant: DesktopButtonVariant.soft,
-                      onPressed: data.secondary!.onPressed,
-                    ),
+                  DesktopButton(
+                    label: data.secondary!.label,
+                    icon: data.secondary!.icon,
+                    variant: DesktopButtonVariant.soft,
+                    onPressed: data.secondary!.onPressed,
                   ),
               ],
             ),

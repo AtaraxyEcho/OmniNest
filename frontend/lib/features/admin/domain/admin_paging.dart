@@ -41,6 +41,9 @@ typedef AdminLoginAuditPageQuery =
       String dir,
     });
 
+typedef AdminSystemLogPageQuery =
+    ({int page, int size, String level, String source, String query});
+
 /// 批量操作逐项执行结果：成功条数与失败条目的 ID。
 typedef AdminBatchResult = ({int successCount, List<String> failedIds});
 

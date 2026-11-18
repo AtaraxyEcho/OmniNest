@@ -67,6 +67,13 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   StreamSubscription<bool>? _completedSub;
   StreamSubscription<MusicAudioLog>? _logSub;
   StreamSubscription<Duration>? _positionSub;
+  String? _listeningPlayableKey;
+  String? _listeningHistoryId;
+  Duration? _lastListeningPosition;
+  final Stopwatch _listeningClock = Stopwatch();
+  int _listenedMilliseconds = 0;
+  int _reportedListeningSeconds = 0;
+  Future<void>? _listeningWriteFuture;
   late MusicProgressRepository _progressRepository;
   String? _loadedUrl;
   MusicPlayableItem? _loadedItem;
@@ -96,6 +103,11 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     _loadedUrl = null;
     _loadedItem = null;
     _lastSavedSecond = -1;
+    _listeningPlayableKey = null;
+    _listeningHistoryId = null;
+    _listenedMilliseconds = 0;
+    _reportedListeningSeconds = 0;
+    _resetListeningBaseline(null, playing: false);
     _volumeBeforeDuck = null;
     _completedSub = _player.stream.completed.listen((completed) {
       if (!completed) {
@@ -112,6 +124,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     );
     _registerSystemMediaSession();
     ref.listen(musicCenterControllerProvider, (previous, next) {
+      _syncListeningState(next);
       _syncSystemMediaState(force: true);
     });
     unawaited(
@@ -325,12 +338,16 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   }
 
   void _flushPlaybackQueue() {
+    _resetListeningBaseline(null, playing: false);
+    unawaited(_reportListeningDuration());
     unawaited(
       ref.read(musicCenterControllerProvider.notifier).flushPlaybackQueue(),
     );
   }
 
   Future<AppExitResponse> _flushPlaybackQueueBeforeExit() async {
+    _resetListeningBaseline(null, playing: false);
+    await _reportListeningDuration();
     await ref.read(musicCenterControllerProvider.notifier).flushPlaybackQueue();
     return AppExitResponse.exit;
   }
@@ -532,6 +549,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   }
 
   void _handlePosition(Duration position) {
+    _recordListeningPosition(position);
     if (!_player.state.playing || _loadedItem == null) {
       return;
     }
@@ -541,6 +559,158 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     }
     _lastSavedSecond = second;
     unawaited(_persistCurrent());
+  }
+
+  Future<void> attachListeningHistory(
+    String historyId,
+    String playableKey,
+  ) async {
+    if (!ref.mounted || _listeningPlayableKey != playableKey) {
+      return;
+    }
+    _listeningHistoryId = historyId;
+    _listenedMilliseconds = 0;
+    _reportedListeningSeconds = 0;
+    final center = ref.read(musicCenterControllerProvider).asData?.value;
+    final playing = center?.isPlaying == true && _player.state.playing;
+    _resetListeningBaseline(
+      playing ? _player.state.position : null,
+      playing: playing,
+    );
+    await _reportListeningDuration();
+  }
+
+  void _syncListeningState(AsyncValue<MusicCenterState> next) {
+    final center = next.asData?.value;
+    if (center == null) {
+      return;
+    }
+    final key = center.currentItem?.playableKey;
+    if (key != _listeningPlayableKey) {
+      unawaited(_reportListeningDuration());
+      _listeningPlayableKey = key;
+      _listeningHistoryId = null;
+      _listenedMilliseconds = 0;
+      _reportedListeningSeconds = 0;
+    }
+    final playing = key != null && center.isPlaying && _player.state.playing;
+    _resetListeningBaseline(
+      playing ? _player.state.position : null,
+      playing: playing,
+    );
+    if (!playing) {
+      unawaited(_reportListeningDuration());
+    }
+  }
+
+  void _recordListeningPosition(Duration position) {
+    if (!ref.mounted) {
+      return;
+    }
+    final center = ref.read(musicCenterControllerProvider).asData?.value;
+    final key = center?.currentItem?.playableKey;
+    final playing =
+        center?.isPlaying == true &&
+        _player.state.playing &&
+        key != null &&
+        key == _listeningPlayableKey &&
+        key == _loadedItem?.playableKey;
+    if (!playing) {
+      _resetListeningBaseline(null, playing: false);
+      return;
+    }
+    final previousPosition = _lastListeningPosition;
+    final elapsedMilliseconds = _listeningClock.elapsedMilliseconds;
+    if (previousPosition != null &&
+        elapsedMilliseconds > 0 &&
+        elapsedMilliseconds <= 5000) {
+      final positionDelta =
+          position.inMilliseconds - previousPosition.inMilliseconds;
+      final expectedMaximum =
+          (elapsedMilliseconds * _player.state.speed + 1000).round();
+      if (positionDelta > 0 && positionDelta <= expectedMaximum) {
+        _listenedMilliseconds += elapsedMilliseconds;
+      }
+    }
+    _resetListeningBaseline(position, playing: true);
+    final listenedSeconds = _listenedMilliseconds ~/ 1000;
+    if (_listeningHistoryId != null &&
+        listenedSeconds - _reportedListeningSeconds >= 15) {
+      unawaited(_reportListeningDuration());
+    }
+  }
+
+  void _resetListeningBaseline(Duration? position, {required bool playing}) {
+    _listeningClock.stop();
+    _listeningClock.reset();
+    _lastListeningPosition = position;
+    if (playing) {
+      _listeningClock.start();
+    }
+  }
+
+  Future<void> _reportListeningDuration() {
+    final activeWrite = _listeningWriteFuture;
+    if (activeWrite != null) {
+      return activeWrite;
+    }
+    final historyId = _listeningHistoryId;
+    final playableKey = _listeningPlayableKey;
+    final listenedSeconds = _listenedMilliseconds ~/ 1000;
+    if (historyId == null ||
+        playableKey == null ||
+        listenedSeconds <= _reportedListeningSeconds) {
+      return Future<void>.value();
+    }
+    final previousReportedSeconds = _reportedListeningSeconds;
+    final future = _writeListeningDuration(
+      historyId,
+      playableKey,
+      listenedSeconds,
+      previousReportedSeconds,
+    );
+    _listeningWriteFuture = future;
+    return future;
+  }
+
+  Future<void> _writeListeningDuration(
+    String historyId,
+    String playableKey,
+    int listenedSeconds,
+    int previousReportedSeconds,
+  ) async {
+    var saved = false;
+    try {
+      final storedSeconds = await ref
+          .read(musicApiProvider)
+          .updateListeningDuration(historyId, listenedSeconds);
+      if (!ref.mounted) {
+        return;
+      }
+      final addedSeconds = storedSeconds - previousReportedSeconds;
+      if (addedSeconds > 0) {
+        ref
+            .read(musicCenterControllerProvider.notifier)
+            .addWeekListeningSeconds(addedSeconds);
+      }
+      if (_listeningHistoryId == historyId &&
+          _listeningPlayableKey == playableKey) {
+        _reportedListeningSeconds = storedSeconds;
+      }
+      saved = true;
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        devLog('[MusicListening] 时长上报失败: ${error.runtimeType}');
+      }
+    } finally {
+      _listeningWriteFuture = null;
+      if (saved &&
+          _listeningHistoryId == historyId &&
+          _listeningPlayableKey == playableKey &&
+          _listenedMilliseconds ~/ 1000 - _reportedListeningSeconds >= 15) {
+        unawaited(_reportListeningDuration());
+      }
+    }
   }
 
   Future<void> _handleCompleted() async {

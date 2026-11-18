@@ -95,12 +95,19 @@ class _DesktopTasksPanel extends StatelessWidget {
     required this.status,
     required this.taskType,
     required this.taskTypes,
+    required this.query,
+    required this.searchController,
+    required this.onSearch,
     required this.tabIndex,
+    this.showTabs = true,
+    this.embedded = false,
     required this.busy,
     required this.onFilters,
     required this.onTab,
     required this.onPage,
     required this.onRefresh,
+    required this.onExport,
+    required this.onDiscardAllDlq,
     required this.onRetry,
     required this.onCancel,
     required this.onDetail,
@@ -113,12 +120,19 @@ class _DesktopTasksPanel extends StatelessWidget {
   final String status;
   final String taskType;
   final List<String> taskTypes;
+  final String query;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
   final int tabIndex;
+  final bool showTabs;
+  final bool embedded;
   final bool busy;
   final void Function(String status, String taskType) onFilters;
   final ValueChanged<int> onTab;
   final ValueChanged<int> onPage;
   final VoidCallback onRefresh;
+  final VoidCallback onExport;
+  final VoidCallback onDiscardAllDlq;
   final ValueChanged<String> onRetry;
   final ValueChanged<String> onCancel;
   final ValueChanged<AdminTaskRecord> onDetail;
@@ -129,21 +143,51 @@ class _DesktopTasksPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final dlqItems = dlq.value ?? const <AdminDlqTask>[];
+    final allDlqItems = dlq.value ?? const <AdminDlqTask>[];
+    final normalizedQuery = query.toLowerCase();
+    final dlqItems = allDlqItems
+        .where((task) {
+          return normalizedQuery.isEmpty ||
+              task.taskType.toLowerCase().contains(normalizedQuery) ||
+              (task.errorSummary ?? '').toLowerCase().contains(
+                normalizedQuery,
+              ) ||
+              task.id.toLowerCase().contains(normalizedQuery);
+        })
+        .toList(growable: false);
 
-    return AdminCard(
-      title: l10n.adminBackgroundTasks,
-      count: page.totalElements,
-      subtitle: l10n.adminBackgroundTasksSubtitle,
-      action: DesktopIconButton(
-        icon: DesktopIcons.restore,
-        tooltip: l10n.adminRefresh,
-        onPressed: busy ? null : onRefresh,
-      ),
-      childGap: 14,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (embedded)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 6,
+              children: [
+                if (tabIndex == 0)
+                  DesktopButton(
+                    label: l10n.adminListExportCsv,
+                    icon: DesktopIcons.download,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: onExport,
+                  )
+                else
+                  DesktopButton(
+                    label: l10n.adminDlqDiscardAll,
+                    icon: DesktopIcons.trash,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: allDlqItems.isEmpty ? null : onDiscardAllDlq,
+                  ),
+                DesktopIconButton(
+                  icon: DesktopIcons.restore,
+                  tooltip: l10n.adminRefresh,
+                  onPressed: busy ? null : onRefresh,
+                ),
+              ],
+            ),
+          ),
+        if (showTabs)
           Align(
             alignment: Alignment.centerLeft,
             child: DesktopSeg<int>(
@@ -155,86 +199,131 @@ class _DesktopTasksPanel extends StatelessWidget {
               onChanged: onTab,
             ),
           ),
-          if (tabIndex == 0) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final value in const [
-                  'ALL',
-                  'QUEUED',
-                  'RETRY_WAIT',
-                  'RUNNING',
-                  'COMPLETED',
-                  'FAILED',
-                  'CANCELLED',
-                  'DLQ',
-                  'DISCARDED',
-                ])
-                  DesktopChipButton(
-                    label: value == 'ALL' ? l10n.adminAll : value,
-                    selected: status == value,
-                    onTap: () => onFilters(value, taskType),
-                  ),
-                const SizedBox(width: 10),
-                for (final value in taskTypes)
-                  DesktopChipButton(
-                    label: value == 'ALL' ? l10n.adminAll : value,
-                    selected: taskType == value,
-                    onTap: () => onFilters(status, value),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (page.items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Center(
-                  child: Text(
-                    l10n.adminNoMatch,
+        if (tabIndex == 0) ...[
+          if (showTabs) const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 320,
+                child: DesktopTextField(
+                  controller: searchController,
+                  hint:
+                      tabIndex == 0
+                          ? l10n.adminTaskSearchHint
+                          : l10n.adminDlqSearchHint,
+                  prefixIcon: DesktopIcons.search,
+                  height: 36,
+                  onChanged: onSearch,
+                ),
+              ),
+              for (final value in const [
+                'ALL',
+                'ACTIVE',
+                'SUCCEEDED',
+                'FAILED',
+                'CANCELLED',
+              ])
+                DesktopChipButton(
+                  label: switch (value) {
+                    'ALL' => l10n.adminAll,
+                    'ACTIVE' => l10n.adminActive,
+                    'SUCCEEDED' => l10n.adminTaskFilterSucceeded,
+                    'FAILED' => l10n.adminFailedTasks,
+                    _ => l10n.filesStatusCancelled,
+                  },
+                  selected: status == value,
+                  onTap: () => onFilters(value, taskType),
+                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.adminFilterTaskType,
                     style: DesktopType.caption(skin.text3),
                   ),
-                ),
-              )
-            else
-              for (var i = 0; i < page.items.length; i++)
-                _DesktopTaskRow(
-                  task: page.items[i],
-                  first: i == 0,
-                  onRetry: () => onRetry(page.items[i].id),
-                  onCancel: () => onCancel(page.items[i].id),
-                  onDetail: () => onDetail(page.items[i]),
-                ),
-            AdminPager(
-              page: page.page,
-              totalPages: page.totalPages,
-              summary: l10n.adminTotalTasks,
-              onPageChanged: onPage,
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            if (dlqItems.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Center(
-                  child: Text(
-                    l10n.adminDlqEmptyHealthy,
-                    style: DesktopType.caption(skin.text3),
+                  const SizedBox(width: 8),
+                  DesktopSelect<String>(
+                    value: taskType,
+                    variant: DesktopSelectVariant.small,
+                    options: [
+                      for (final value in taskTypes)
+                        DesktopSelectOption(
+                          value: value,
+                          label: value == 'ALL' ? l10n.adminAll : value,
+                        ),
+                    ],
+                    onChanged: (value) => onFilters(status, value),
                   ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (page.items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  l10n.adminNoMatch,
+                  style: DesktopType.caption(skin.text3),
                 ),
-              )
-            else
-              for (var i = 0; i < dlqItems.length; i++)
-                _DesktopDlqRow(
-                  task: dlqItems[i],
-                  first: i == 0,
-                  onRetry: () => onRetryDlq(dlqItems[i].id),
-                  onDiscard: () => onDiscardDlq(dlqItems[i]),
+              ),
+            )
+          else
+            for (var i = 0; i < page.items.length; i++)
+              _DesktopTaskRow(
+                task: page.items[i],
+                first: i == 0,
+                onRetry: () => onRetry(page.items[i].id),
+                onCancel: () => onCancel(page.items[i].id),
+                onDetail: () => onDetail(page.items[i]),
+              ),
+          AdminPager(
+            page: page.page,
+            totalPages: page.totalPages,
+            summary: l10n.adminTotalTasks,
+            onPageChanged: onPage,
+          ),
+        ] else ...[
+          if (showTabs) const SizedBox(height: 12),
+          if (dlqItems.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  allDlqItems.isEmpty
+                      ? l10n.adminDlqEmptyHealthy
+                      : l10n.adminNoMatch,
+                  style: DesktopType.caption(skin.text3),
                 ),
-          ],
+              ),
+            )
+          else
+            for (var i = 0; i < dlqItems.length; i++)
+              _DesktopDlqRow(
+                task: dlqItems[i],
+                first: i == 0,
+                onRetry: () => onRetryDlq(dlqItems[i].id),
+                onDiscard: () => onDiscardDlq(dlqItems[i]),
+              ),
         ],
+      ],
+    );
+    if (embedded) return content;
+    return AdminCard(
+      title: l10n.adminBackgroundTasks,
+      count: page.totalElements,
+      subtitle: l10n.adminBackgroundTasksSubtitle,
+      action: DesktopIconButton(
+        icon: DesktopIcons.restore,
+        tooltip: l10n.adminRefresh,
+        onPressed: busy ? null : onRefresh,
       ),
+      childGap: 14,
+      child: content,
     );
   }
 }
@@ -259,6 +348,16 @@ class _DesktopTaskRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final status = task.status.toUpperCase();
+    final statusLabel = switch (status) {
+      'RUNNING' => l10n.adminTaskStatusRunning,
+      'COMPLETED' => l10n.adminTaskFilterSucceeded,
+      'FAILED' => l10n.adminFailedTasks,
+      'CANCELLED' => l10n.filesStatusCancelled,
+      'QUEUED' => l10n.adminQueued,
+      'RETRY_WAIT' => l10n.adminTaskStatusRetryWait,
+      'DLQ' => l10n.adminTaskStatusDlq,
+      _ => status,
+    };
     final tone =
         status == 'FAILED' || status == 'DLQ'
             ? skin.bad
@@ -266,6 +365,8 @@ class _DesktopTaskRow extends StatelessWidget {
             ? skin.ok
             : status == 'RUNNING'
             ? skin.accent
+            : status == 'RETRY_WAIT'
+            ? skin.warm
             : skin.text3;
     final meta = <String>[
       task.taskType,
@@ -274,96 +375,83 @@ class _DesktopTaskRow extends StatelessWidget {
       _shortDateTime(task.updatedAt),
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        border: first ? null : Border(top: BorderSide(color: skin.line)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onDetail,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: first ? null : Border(top: BorderSide(color: skin.line)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                status == 'COMPLETED'
+                    ? DesktopIcons.check
+                    : status == 'FAILED' || status == 'DLQ'
+                    ? DesktopIcons.info
+                    : status == 'RUNNING'
+                    ? DesktopIcons.retry
+                    : DesktopIcons.clock,
+                size: 14,
+                color: tone,
+              ),
             ),
-            child: Icon(
-              status == 'COMPLETED'
-                  ? DesktopIcons.check
-                  : status == 'FAILED' || status == 'DLQ'
-                  ? DesktopIcons.info
-                  : DesktopIcons.clock,
-              size: 14,
-              color: tone,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.description.isEmpty ? task.taskType : task.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DesktopType.rowTitle(skin.text),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  task.errorSummary ?? meta,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DesktopType.caption(
-                    task.errorSummary == null ? skin.text3 : skin.bad,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.description.isEmpty ? task.taskType : task.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DesktopType.rowTitle(skin.text),
                   ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 120, child: _DesktopPill(label: status, tone: tone)),
-          SizedBox(
-            width: 96,
-            child:
-                task.status == 'RUNNING'
-                    ? _DesktopProgress(value: task.progress / 100)
-                    : Text(
-                      task.progress > 0 ? '${task.progress}%' : '—',
-                      style: DesktopType.numeric(skin.text3),
+                  const SizedBox(height: 2),
+                  Text(
+                    task.errorSummary ?? meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DesktopType.caption(
+                      task.errorSummary == null ? skin.text3 : skin.bad,
                     ),
-          ),
-          SizedBox(
-            width: 150,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (task.canRetry)
-                  DesktopButton(
-                    label: l10n.adminRetry,
-                    variant: DesktopButtonVariant.soft,
-                    onPressed: onRetry,
                   ),
-                if (task.canCancel) ...[
-                  if (task.canRetry) const SizedBox(width: 6),
-                  DesktopButton(
-                    label: l10n.adminTaskCancel,
-                    variant: DesktopButtonVariant.ghost,
-                    onPressed: onCancel,
-                  ),
+                  if (status == 'RUNNING') ...[
+                    const SizedBox(height: 6),
+                    _DesktopProgress(value: task.progress / 100),
+                  ],
                 ],
-                const SizedBox(width: 4),
-                DesktopIconButton(
-                  icon: DesktopIcons.eye,
-                  size: 28,
-                  iconSize: 14,
-                  tooltip: l10n.adminTaskDetailTitle,
-                  onPressed: onDetail,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            _DesktopPill(label: statusLabel, tone: tone),
+            const SizedBox(width: 8),
+            if (task.canRetry)
+              DesktopButton(
+                label: l10n.adminRetry,
+                variant: DesktopButtonVariant.soft,
+                onPressed: onRetry,
+              ),
+            if (task.canCancel) ...[
+              if (task.canRetry) const SizedBox(width: 6),
+              DesktopButton(
+                label: l10n.adminTaskCancel,
+                variant: DesktopButtonVariant.ghost,
+                onPressed: onCancel,
+              ),
+            ],
+            const SizedBox(width: 4),
+          ],
+        ),
       ),
     );
   }

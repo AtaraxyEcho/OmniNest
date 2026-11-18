@@ -14,8 +14,8 @@ import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 应用级背景渲染层。
 ///
-/// 图片素材三端统一走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
-/// 内置默认壁纸是随包分发的视频,封面帧(打包静图)始终垫在视频层之下。
+/// 服务端图片素材走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
+/// 内置默认壁纸与各端登录页使用同一张打包静态图片。
 class AppBackdropSurface extends ConsumerWidget {
   const AppBackdropSurface({
     required this.asset,
@@ -242,9 +242,6 @@ class AppBackdropSurface extends ConsumerWidget {
       );
     }
     if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // 内置素材已是视频，走到这里只可能是历史行（v2 图片档）。封面帧就是同一段
-      // 素材的首帧，直接垫上比露错误底纹更接近预期；下一个启动周期的
-      // ensureBundledBackdrop 会用新元数据覆盖这一行。
       return BundledWallpaperPoster(
         key: const ValueKey<String>('backdrop-bundled-poster'),
         fit: fit,
@@ -261,7 +258,7 @@ class AppBackdropSurface extends ConsumerWidget {
     BoxFit fit,
   ) {
     if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // 视频首帧就绪前与播放失败后都垫封面帧，避免默认壁纸位置露出舞台底色。
+      // 旧版内置视频记录升级期间仍用当前默认照片垫底，避免画面闪黑。
       return BundledWallpaperPoster(
         key: const ValueKey<String>('backdrop-bundled-poster'),
         fit: fit,

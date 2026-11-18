@@ -22,6 +22,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/features/photos/application/photo_display_order_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
 part 'desktop_photo_viewer_filmstrip.dart';
@@ -56,6 +57,7 @@ class _DesktopPhotoViewerPageState
   bool _slideshow = false;
   bool _pointerInsideViewer = false;
   bool _shareOpen = false;
+  bool _loadingMoreBrowsePhotos = false;
   Timer? _slideTimer;
 
   @override
@@ -97,6 +99,17 @@ class _DesktopPhotoViewerPageState
         ref.watch(photoListProvider).asData?.value.items ?? const <PhotoItem>[];
     final list =
         browseScope.contains(_currentId) ? browseScope.photos : libraryPhotos;
+    final browseSource =
+        browseScope.contains(_currentId)
+            ? browseScope.source
+            : PhotoBrowseSource.library;
+    final canLoadNextPage = switch (browseSource) {
+      PhotoBrowseSource.library =>
+        ref.watch(photoListProvider).asData?.value.hasMore ?? false,
+      PhotoBrowseSource.favorites =>
+        ref.watch(photoFavoritesProvider).asData?.value.hasMore ?? false,
+      _ => false,
+    };
     final index = list.indexWhere((photo) => photo.id == _currentId);
     final fallback = index >= 0 ? list[index] : null;
     final detail = ref.watch(photoDetailProvider(_currentId)).asData?.value;
@@ -188,7 +201,10 @@ class _DesktopPhotoViewerPageState
                   alignment: Alignment.centerRight,
                   icon: DesktopIcons.chevron,
                   tooltip: l10n.desktopPhotosNext,
-                  onPressed: list.length > 1 ? () => _step(1) : null,
+                  onPressed:
+                      list.length > 1 || canLoadNextPage
+                          ? () => _step(1)
+                          : null,
                 ),
                 if (list.length > 1)
                   Positioned(
@@ -295,8 +311,74 @@ class _DesktopPhotoViewerPageState
       return;
     }
     final index = list.indexWhere((photo) => photo.id == _currentId);
+    final source =
+        browseScope.contains(_currentId)
+            ? browseScope.source
+            : PhotoBrowseSource.library;
+    if (delta > 0 && index == list.length - 1) {
+      final hasMore = switch (source) {
+        PhotoBrowseSource.library =>
+          ref.read(photoListProvider).asData?.value.hasMore ?? false,
+        PhotoBrowseSource.favorites =>
+          ref.read(photoFavoritesProvider).asData?.value.hasMore ?? false,
+        _ => false,
+      };
+      if (hasMore) {
+        unawaited(
+          _loadMoreBrowsePhotos(source: source, previousLength: list.length),
+        );
+        return;
+      }
+    }
     final next = list[(math.max(index, 0) + delta + list.length) % list.length];
     _select(next.id);
+  }
+
+  Future<void> _loadMoreBrowsePhotos({
+    required PhotoBrowseSource source,
+    required int previousLength,
+  }) async {
+    if (_loadingMoreBrowsePhotos) return;
+    setState(() => _loadingMoreBrowsePhotos = true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      switch (source) {
+        case PhotoBrowseSource.library:
+          await ref.read(photoListProvider.notifier).loadMore();
+        case PhotoBrowseSource.favorites:
+          await ref.read(photoFavoritesProvider.notifier).loadMore();
+        case PhotoBrowseSource.album ||
+            PhotoBrowseSource.timeline ||
+            PhotoBrowseSource.locations ||
+            PhotoBrowseSource.tag:
+          return;
+      }
+      if (!mounted) return;
+      final orders = ref.read(photoDisplayOrderProvider);
+      final updatedPhotos = switch (source) {
+        PhotoBrowseSource.library => applyPhotoLibraryDisplayOrder(
+          ref.read(photoListProvider).asData?.value.items ?? const [],
+          orders,
+        ),
+        PhotoBrowseSource.favorites => applyPhotoDisplayOrder(
+          ref.read(photoFavoritesProvider).asData?.value.items ?? const [],
+          orders['favorites'],
+        ),
+        _ => const <PhotoItem>[],
+      };
+      if (updatedPhotos.length <= previousLength) return;
+      ref.read(photoBrowseScopeProvider.notifier).set(updatedPhotos, source);
+      _step(1);
+    } on Object catch (error) {
+      if (!mounted) return;
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.modulePhotosTitle, error),
+        kind: DesktopToastKind.error,
+      );
+    } finally {
+      if (mounted) setState(() => _loadingMoreBrowsePhotos = false);
+    }
   }
 
   void _select(String id) {

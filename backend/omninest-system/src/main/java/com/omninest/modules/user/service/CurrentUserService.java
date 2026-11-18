@@ -370,9 +370,21 @@ public class CurrentUserService implements UserProfileCacheEvictor {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto updateProfile(UUID userId, String displayName, String email) {
+        return updateProfile(userId, displayName, email, true);
+    }
+
+    /**
+     * 管理端修改用户基础资料。操作者权限由管理服务校验；停用账号仍可由管理员修正资料。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AuthUserDto updateProfileByAdmin(UUID userId, String displayName, String email) {
+        return updateProfile(userId, displayName, email, false);
+    }
+
+    private AuthUserDto updateProfile(UUID userId, String displayName, String email, boolean requireActive) {
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        if (!UserStatus.ACTIVE.getValue().equals(user.getStatus())) {
+        if (requireActive && !UserStatus.ACTIVE.getValue().equals(user.getStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不可用");
         }
         String nextDisplayName = displayName == null ? null : normalizeDisplayName(displayName);
@@ -388,7 +400,9 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             changedFields.add("email");
         }
         if (changedFields.isEmpty()) {
-            return currentUser();
+            return authUserRepository.findWithRolesAndPermissionsById(userId)
+                    .map(this::toDto)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         }
         authUserRepository.save(user);
         // 提交后再淘汰，避免提交窗口内被并发读回填旧资料。

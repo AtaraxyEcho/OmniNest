@@ -1,5 +1,41 @@
 part of 'admin_users_page.dart';
 
+Widget _adminQuotaInput(
+  BuildContext context, {
+  required TextEditingController controller,
+  required String label,
+  required String hint,
+  bool autofocus = false,
+}) {
+  const keyboardType = TextInputType.numberWithOptions(decimal: true);
+  if (Theme.of(context).extension<DesktopSkin>() != null) {
+    return DesktopTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      autofocus: autofocus,
+      keyboardType: keyboardType,
+      trailing: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Text(
+          'GiB',
+          style: DesktopType.caption(DesktopSkin.of(context).text3),
+        ),
+      ),
+    );
+  }
+  return TextField(
+    controller: controller,
+    autofocus: autofocus,
+    keyboardType: keyboardType,
+    decoration: InputDecoration(
+      labelText: label,
+      hintText: hint,
+      suffixText: 'GiB',
+    ),
+  );
+}
+
 class _BatchQuotaDialog extends ConsumerStatefulWidget {
   const _BatchQuotaDialog();
 
@@ -43,14 +79,11 @@ class _BatchQuotaDialogState extends ConsumerState<_BatchQuotaDialog> {
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
+          _adminQuotaInput(
+            context,
             controller: _controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: l10n.adminQuotaGib,
-              hintText: l10n.adminQuotaHint,
-              suffixText: 'GiB',
-            ),
+            label: l10n.adminQuotaGib,
+            hint: l10n.adminQuotaHint,
             autofocus: true,
           ),
           if (_errorMessage != null) ...[
@@ -113,11 +146,7 @@ class _BatchQuotaDialogState extends ConsumerState<_BatchQuotaDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () =>
-              _errorMessage =
-                  userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _errorMessage = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {
@@ -180,14 +209,11 @@ class _EditQuotaDialogState extends ConsumerState<_EditQuotaDialog> {
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
+          _adminQuotaInput(
+            context,
             controller: _controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: l10n.adminNewQuotaGib,
-              hintText: l10n.adminQuotaHint,
-              suffixText: 'GiB',
-            ),
+            label: l10n.adminNewQuotaGib,
+            hint: l10n.adminQuotaHint,
             autofocus: true,
           ),
           if (_errorMessage != null) ...[
@@ -245,11 +271,7 @@ class _EditQuotaDialogState extends ConsumerState<_EditQuotaDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () =>
-              _errorMessage =
-                  userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _errorMessage = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {
@@ -371,11 +393,7 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () =>
-              _errorMessage =
-                  userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _errorMessage = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {
@@ -385,6 +403,7 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
   }
 }
 
+/// 移动管理页沿用全屏宽度的表单对话框；桌面入口使用右侧抽屉。
 class _CreateUserDialog extends ConsumerStatefulWidget {
   const _CreateUserDialog();
 
@@ -394,20 +413,20 @@ class _CreateUserDialog extends ConsumerStatefulWidget {
 
 class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _displayNameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _username = TextEditingController();
+  final _displayName = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   String _role = AdminRoles.member;
   bool _submitting = false;
-  String? _errorMessage;
+  String? _error;
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _displayNameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _username.dispose();
+    _displayName.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -424,36 +443,36 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextFormField(
-              controller: _usernameController,
+              controller: _username,
               decoration: InputDecoration(labelText: l10n.adminUsername),
-              validator: _requiredValidator(l10n.adminEnterUsername),
+              validator:
+                  (value) =>
+                      value == null || value.trim().isEmpty
+                          ? l10n.adminEnterUsername
+                          : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _displayNameController,
+              controller: _displayName,
               decoration: InputDecoration(labelText: l10n.adminDisplayName),
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _emailController,
+              controller: _email,
               decoration: InputDecoration(labelText: l10n.adminEmail),
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _passwordController,
+              controller: _password,
               decoration: InputDecoration(labelText: l10n.adminInitialPassword),
               obscureText: true,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return l10n.adminEnterInitialPassword;
                 }
-                if (value.length < 8) {
-                  return l10n.adminPasswordMinChars;
-                }
-                if (value.length > 24) {
-                  return l10n.adminPasswordMaxChars;
-                }
+                if (value.length < 8) return l10n.adminPasswordMinChars;
+                if (value.length > 64) return l10n.adminPasswordMaxChars;
                 return null;
               },
             ),
@@ -472,10 +491,10 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                   ),
               ],
             ),
-            if (_errorMessage != null) ...[
+            if (_error != null) ...[
               const SizedBox(height: 14),
               Text(
-                _errorMessage!,
+                _error!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: context.adminColors.error,
                 ),
@@ -489,36 +508,377 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
           onPressed: _submitting ? null : () => Navigator.of(context).pop(),
           child: Text(l10n.coreCancel),
         ),
-        FilledButton.icon(
+        FilledButton(
           onPressed: _submitting ? null : _submit,
-          icon:
-              _submitting
-                  ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.person_add_alt_1_rounded),
-          label: Text(_submitting ? l10n.adminCreating : l10n.adminCreate),
+          child: Text(_submitting ? l10n.adminCreating : l10n.adminCreate),
         ),
       ],
     );
   }
 
-  String? Function(String?) _requiredValidator(String message) {
-    return (value) {
-      if (value == null || value.trim().isEmpty) {
-        return message;
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(adminUserControllerProvider.notifier)
+          .createUser(
+            AdminCreateUserInput(
+              username: _username.text.trim(),
+              displayName: _nullable(_displayName.text),
+              email: _nullable(_email.text),
+              password: _password.text,
+              roles: {_role},
+            ),
+          );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = userFacingErrorText(error, l10n: l10n));
       }
-      return null;
-    };
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String? _nullable(String value) => value.trim().isEmpty ? null : value.trim();
+}
+
+class _CreateUserDrawer extends ConsumerStatefulWidget {
+  const _CreateUserDrawer();
+
+  @override
+  ConsumerState<_CreateUserDrawer> createState() => _CreateUserDrawerState();
+}
+
+class _CreateUserDrawerState extends ConsumerState<_CreateUserDrawer> {
+  final _usernameController = TextEditingController();
+  final _displayNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _quotaController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String _role = AdminRoles.member;
+  bool _enabled = true;
+  bool _requirePasswordChange = true;
+  bool _showPassword = false;
+  bool _submitting = false;
+  bool _quotaInitialized = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _displayNameController.dispose();
+    _emailController.dispose();
+    _quotaController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final configState = ref.watch(adminConfigsProvider);
+    if (!_quotaInitialized && configState.asData != null) {
+      final defaultValue =
+          configState.asData!.value.items
+              .where((entry) => entry.key == 'storage.quota.default')
+              .firstOrNull
+              ?.value;
+      final defaultGiB = int.tryParse(defaultValue ?? '10');
+      if (defaultGiB != null && defaultGiB >= 1 && defaultGiB <= 10000) {
+        _quotaController.text = '$defaultGiB';
+      }
+      _quotaInitialized = true;
+    }
+    final rolesAsync = ref.watch(adminRolesProvider);
+    final availableRoles =
+        rolesAsync.asData?.value.roles
+            .where((role) => role.enabled && role.code != AdminRoles.superAdmin)
+            .toList() ??
+        const <AdminRoleDetail>[];
+    final roleCodes =
+        availableRoles.isEmpty
+            ? AdminRoles.manageableRoles
+            : availableRoles.map((role) => role.code).toList();
+    if (!roleCodes.contains(_role) && roleCodes.isNotEmpty) {
+      _role = roleCodes.first;
+    }
+    final selectedRole =
+        availableRoles.where((role) => role.code == _role).firstOrNull;
+    final accountText = _usernameController.text.trim();
+    final accountValid = RegExp(
+      r'^[a-z][a-z0-9._-]{2,23}$',
+    ).hasMatch(accountText.toLowerCase());
+    return DesktopDrawerFrame(
+      eyebrow: l10n.adminCreateAccountEyebrow,
+      title: l10n.adminCreateUser,
+      footer: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DesktopButton(
+            label: l10n.coreCancel,
+            variant: DesktopButtonVariant.ghost,
+            onPressed: _submitting ? null : () => closeDesktopModal(context),
+          ),
+          const SizedBox(width: 8),
+          DesktopButton(
+            label: l10n.adminCreateUser,
+            icon: DesktopIcons.plus,
+            variant: DesktopButtonVariant.primary,
+            busy: _submitting,
+            onPressed: _submitting ? null : _submit,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DesktopTextField(
+            controller: _displayNameController,
+            label: l10n.adminDisplayName,
+            required: true,
+            maxLength: 120,
+            keyName: 'admin-create-display-name',
+            error:
+                _displayNameController.text.trim().isEmpty &&
+                        _errorMessage == l10n.adminEnterDisplayName
+                    ? l10n.adminEnterDisplayName
+                    : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _usernameController,
+            label: l10n.adminAccount,
+            required: true,
+            maxLength: 24,
+            keyName: 'admin-create-username',
+            error:
+                _errorMessage == l10n.adminEnterUsername
+                    ? l10n.adminEnterUsername
+                    : accountText.isNotEmpty && !accountValid
+                    ? l10n.adminAccountFormatError
+                    : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _emailController,
+            label: l10n.adminEmail,
+            keyboardType: TextInputType.emailAddress,
+            maxLength: 255,
+            keyName: 'admin-create-email',
+          ),
+          const SizedBox(height: 14),
+          Text(l10n.adminRoleLabel, style: DesktopType.bodyStrong(skin.text)),
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final role in roleCodes)
+                DesktopChipButton(
+                  label:
+                      availableRoles
+                          .where((item) => item.code == role)
+                          .firstOrNull
+                          ?.name ??
+                      adminRoleDisplayName(l10n, role),
+                  selected: _role == role,
+                  onTap: () => setState(() => _role = role),
+                ),
+            ],
+          ),
+          if (selectedRole != null && selectedRole.description.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              selectedRole.description,
+              style: DesktopType.caption(skin.text3),
+            ),
+          ],
+          const SizedBox(height: 20),
+          DesktopTextField(
+            controller: _quotaController,
+            label: l10n.adminQuotaGib,
+            hint: l10n.adminQuotaHint,
+            helper: l10n.adminQuotaDefaultHint,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            keyName: 'admin-create-quota',
+            error:
+                _errorMessage == l10n.adminQuotaRangeError
+                    ? _errorMessage
+                    : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            l10n.adminInitialPassword,
+            style: DesktopType.caption(skin.text),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: DesktopTextField(
+                  controller: _passwordController,
+                  obscure: !_showPassword,
+                  maxLength: 64,
+                  keyName: 'admin-create-password',
+                  error:
+                      _errorMessage == l10n.adminEnterInitialPassword ||
+                              _errorMessage == l10n.adminPasswordMinChars ||
+                              _errorMessage == l10n.adminPasswordMaxChars
+                          ? _errorMessage
+                          : null,
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 7),
+              DesktopButton(
+                label:
+                    _showPassword
+                        ? l10n.adminHidePassword
+                        : l10n.adminShowPassword,
+                variant: DesktopButtonVariant.soft,
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+              ),
+              const SizedBox(width: 6),
+              DesktopButton(
+                label: l10n.adminGeneratePassword,
+                icon: DesktopIcons.retry,
+                variant: DesktopButtonVariant.soft,
+                onPressed: _generatePassword,
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            l10n.adminPasswordShareHint,
+            style: DesktopType.caption(skin.text3),
+          ),
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: skin.line)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.adminRequirePasswordChangeLabel,
+                        style: DesktopType.rowTitle(skin.text),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.adminRequirePasswordChangeHint,
+                        style: DesktopType.caption(skin.text3),
+                      ),
+                    ],
+                  ),
+                ),
+                DesktopToggle(
+                  value: _requirePasswordChange,
+                  label: l10n.adminRequirePasswordChangeLabel,
+                  onChanged:
+                      (value) => setState(() => _requirePasswordChange = value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: skin.line)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.adminAccountEnabled,
+                        style: DesktopType.rowTitle(skin.text),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.adminDisabledAccountsCannotSignIn,
+                        style: DesktopType.caption(skin.text3),
+                      ),
+                    ],
+                  ),
+                ),
+                DesktopToggle(
+                  value: _enabled,
+                  label: l10n.adminAccountEnabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                ),
+              ],
+            ),
+          ),
+          if (_errorMessage != null &&
+              _errorMessage != l10n.adminEnterUsername &&
+              _errorMessage != l10n.adminEnterDisplayName &&
+              _errorMessage != l10n.adminAccountFormatError &&
+              _errorMessage != l10n.adminQuotaRangeError &&
+              _errorMessage != l10n.adminEnterInitialPassword &&
+              _errorMessage != l10n.adminPasswordMinChars &&
+              _errorMessage != l10n.adminPasswordMaxChars) ...[
+            const SizedBox(height: 14),
+            Text(_errorMessage!, style: DesktopType.caption(skin.bad)),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
+    final l10n = AppLocalizations.of(context);
+    final password = _passwordController.text;
+    final displayName = _displayNameController.text.trim();
+    final account = _usernameController.text.trim().toLowerCase();
+    final quotaText = _quotaController.text.trim();
+    final quotaGiB = quotaText.isEmpty ? null : double.tryParse(quotaText);
+    if (displayName.isEmpty) {
+      setState(() => _errorMessage = l10n.adminEnterDisplayName);
       return;
     }
-    final l10n = AppLocalizations.of(context);
+    if (_usernameController.text.trim().isEmpty) {
+      setState(() => _errorMessage = l10n.adminEnterUsername);
+      return;
+    }
+    if (!RegExp(r'^[a-z][a-z0-9._-]{2,23}$').hasMatch(account)) {
+      setState(() => _errorMessage = l10n.adminAccountFormatError);
+      return;
+    }
+    if (quotaText.isNotEmpty &&
+        (quotaGiB == null || quotaGiB < 1 || quotaGiB > 10000)) {
+      setState(() => _errorMessage = l10n.adminQuotaRangeError);
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _errorMessage = l10n.adminEnterInitialPassword);
+      return;
+    }
+    if (password.length < 8) {
+      setState(() => _errorMessage = l10n.adminPasswordMinChars);
+      return;
+    }
+    if (password.length > 64) {
+      setState(() => _errorMessage = l10n.adminPasswordMaxChars);
+      return;
+    }
     setState(() {
       _submitting = true;
       _errorMessage = null;
@@ -528,29 +888,52 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
           .read(adminUserControllerProvider.notifier)
           .createUser(
             AdminCreateUserInput(
-              username: _usernameController.text.trim(),
-              displayName: _blankToNull(_displayNameController.text),
+              username: account,
+              displayName: displayName,
               email: _blankToNull(_emailController.text),
               password: _passwordController.text,
               roles: {_role},
+              quotaBytes:
+                  quotaGiB == null
+                      ? null
+                      : (quotaGiB * 1024 * 1024 * 1024).round(),
+              status:
+                  _enabled ? AdminUserStatus.active : AdminUserStatus.disabled,
+              requirePasswordChange: _requirePasswordChange,
             ),
           );
       if (mounted) {
-        Navigator.of(context).pop();
+        closeDesktopModal(context, true);
+        showOmniFeedback(
+          context,
+          l10n.adminUserCreated,
+          severity: OmniFeedbackSeverity.success,
+        );
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () =>
-              _errorMessage =
-                  userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _errorMessage = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _generatePassword() {
+    const alphabet =
+        'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#%';
+    final random = Random.secure();
+    setState(() {
+      _passwordController.text =
+          List.generate(
+            16,
+            (_) => alphabet[random.nextInt(alphabet.length)],
+          ).join();
+      _showPassword = true;
+      _errorMessage = null;
+    });
   }
 
   String? _blankToNull(String value) {

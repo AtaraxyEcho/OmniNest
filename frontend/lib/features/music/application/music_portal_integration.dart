@@ -69,6 +69,8 @@ class MusicPortalSnapshot {
     required this.recentTracks,
     required this.recentPlayCount,
     required this.trackCount,
+    required this.weekListeningSeconds,
+    required this.itemsAddedToday,
     required this.isPlaying,
   });
 
@@ -79,6 +81,8 @@ class MusicPortalSnapshot {
   final List<MusicPortalTrack> recentTracks;
   final int recentPlayCount;
   final int trackCount;
+  final int weekListeningSeconds;
+  final int itemsAddedToday;
   final bool isPlaying;
 }
 
@@ -252,6 +256,8 @@ MusicPortalSnapshot projectMusicPortalSnapshot(MusicCenterState center) {
     ),
     recentPlayCount: center.recentItems.length,
     trackCount: center.dashboard.trackCount,
+    weekListeningSeconds: center.dashboard.weekListeningSeconds,
+    itemsAddedToday: center.dashboard.itemsAddedToday,
     isPlaying: center.isPlaying && center.currentTrack != null,
   );
 }

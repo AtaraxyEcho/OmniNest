@@ -255,7 +255,7 @@ class InitialSetupServiceTest {
         Mockito.verify(twoFactorService).provisionForNewUser(createdUserId, "SECRET32", "123456");
         Mockito.verify(configCenterService).seedSystemConfigValue(
                 TwoFactorPolicyService.REQUIRED_ROLES_KEY,
-                "SUPER_ADMIN,ADMIN"
+                "SUPER_ADMIN"
         );
     }
 
@@ -281,7 +281,7 @@ class InitialSetupServiceTest {
     }
 
     @Test
-    void seedsVoluntaryPolicyWhenTwoFactorDisabled() {
+    void keepsSuperAdminTwoFactorPolicyWhenSetupDoesNotRequireImmediateEnrollment() {
         SystemInstance systemInstance = requiredInstance();
         Mockito.when(systemInstanceRepository.findByIdForUpdate(SystemInstance.SINGLETON_ID))
                 .thenReturn(Optional.of(systemInstance));
@@ -301,7 +301,7 @@ class InitialSetupServiceTest {
         Mockito.verify(twoFactorService, Mockito.never()).provisionForNewUser(any(), any(), any());
         Mockito.verify(configCenterService).seedSystemConfigValue(
                 TwoFactorPolicyService.REQUIRED_ROLES_KEY,
-                ""
+                "SUPER_ADMIN"
         );
     }
 

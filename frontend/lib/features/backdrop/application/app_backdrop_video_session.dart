@@ -213,15 +213,31 @@ class AppBackdropVideoSession {
     _path = normalizedPath;
     _muted = muted;
     _sceneActive = active;
+    // 远程流落盘成本机缓存后，`_path` 会从签名 URL 换成临时文件：资源身份
+    // 变了，但说的是同一段视频。按身份变化走销毁重开会黑一帧、重建一次硬件
+    // 解码器；这里只把会话重新挂到新路径上，当前播放接着跑完，下次重开才用
+    // 本地文件。
+    final isRemoteToLocalUpgrade =
+        identityChanged &&
+        _ready &&
+        _openError == null &&
+        _player != null &&
+        oldPath.startsWith('http') &&
+        normalizedPath.isNotEmpty &&
+        !normalizedPath.startsWith('http');
     if (identityChanged) {
       _unregisterPath(oldPath);
       _registerPath(normalizedPath);
-      _generation++;
-      _cancelRetry();
-      _openAttempts = 0;
-      _openError = null;
-      _activePath = null;
-      unawaited(_disposeCurrentSession());
+      if (!isRemoteToLocalUpgrade) {
+        _generation++;
+        _cancelRetry();
+        _openAttempts = 0;
+        _openError = null;
+        _activePath = null;
+        unawaited(_disposeCurrentSession());
+      } else {
+        _activePath = normalizedPath;
+      }
     } else if (oldPath != normalizedPath) {
       _unregisterPath(oldPath);
       _registerPath(normalizedPath);
@@ -449,7 +465,13 @@ class AppBackdropVideoSession {
           return null;
         }
         ensureMediaKitReady();
-        final player = Player();
+        // 壁纸是 4K 长循环、常年不关：把 demuxer 缓存从默认 32MB 收到 16MB，
+        // 一台机器只留这一条会话语义不变，省下的常驻内存留给前景页。
+        final player = Player(
+          configuration: const PlayerConfiguration(
+            bufferSize: 16 * 1024 * 1024,
+          ),
+        );
         final controller = VideoController(player);
         try {
           await player.setVolume(_muted ? 0 : 100);

@@ -104,7 +104,12 @@ public class TaskRecordAdminRepository {
             boolean ascending
     ) {
         String filters = """
-                where (:status = '' or t.status = :status)
+                where (
+                    :status = ''
+                    or (:status = 'ACTIVE' and t.status in ('QUEUED', 'RETRY_WAIT', 'RUNNING'))
+                    or (:status = 'SUCCEEDED' and t.status = 'COMPLETED')
+                    or t.status = :status
+                  )
                   and (:taskType = '' or t.task_type = :taskType)
                   and (
                     :searchPattern = ''

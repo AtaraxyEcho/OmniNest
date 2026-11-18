@@ -197,6 +197,26 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     }
   }
 
+  /// 完成管理员创建账户后的首次改密，并进入账户启用的后续验证阶段。
+  Future<AuthLoginResult> completeRequiredPasswordChange({
+    required String challengeToken,
+    required String newPassword,
+  }) async {
+    final result = await ref
+        .read(authClientProvider)
+        .completeRequiredPasswordChange(
+          challengeToken: challengeToken,
+          newPassword: newPassword,
+        );
+    final session = result.token;
+    if (session != null) {
+      await _applySession(session);
+    } else {
+      state = const AsyncData(AuthSessionState.unauthenticated());
+    }
+    return result;
+  }
+
   /// 两步验证登录第二步：验证码或备份码换取并建立会话。
   Future<void> signInWithTwoFactor({
     required String challengeToken,

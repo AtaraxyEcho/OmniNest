@@ -59,8 +59,11 @@ public class AuthService {
     public static final String TOKEN_USE_TWO_FACTOR_SETUP = "2fa_setup";
     /** 两步验证挑战令牌类型：注册引导已确认，待换取登录令牌。 */
     public static final String TOKEN_USE_TWO_FACTOR_FINALIZE = "2fa_finalize";
+    /** 首次登录改密挑战令牌。 */
+    public static final String TOKEN_USE_PASSWORD_CHANGE = "password_change";
     public static final String CHALLENGE_TYPE_VERIFY = "verify";
     public static final String CHALLENGE_TYPE_ENROLL = "enroll";
+    public static final String CHALLENGE_TYPE_PASSWORD_CHANGE = "password_change";
     private static final Duration TWO_FACTOR_CHALLENGE_TTL = Duration.ofMinutes(5);
     /** 登录挑战与两步验证引导的失效文案：与刷新令牌失效区分，避免误导用户去重登。 */
     private static final String CHALLENGE_INVALID = "登录凭证已失效，请重新登录";
@@ -157,6 +160,9 @@ public class AuthService {
                                    String deviceId, String deviceName,
                                    String ipAddress, String userAgent) {
         AuthUser profile = authenticatePassword(request, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+        if (profile.isPasswordChangeRequired()) {
+            return buildPasswordChangeChallengeResponse(profile.getId());
+        }
         if (twoFactorService.isEnabled(profile.getId())) {
             return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_VERIFY);
         }
@@ -167,6 +173,53 @@ public class AuthService {
         }
         log.info("用户登录成功: userId={}, platform={}, ip={}", profile.getId(), clientPlatform, ipAddress);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+    }
+
+    /** 管理员创建账户的首次登录必须先替换临时密码，再进入正常验证流程。 */
+    public AuthTokenResponse completeRequiredPasswordChange(
+            String challengeToken,
+            String newPassword,
+            String clientPlatform,
+            String deviceId,
+            String deviceName,
+            String ipAddress,
+            String userAgent
+    ) {
+        Jwt challengeJwt = decodeChallengeToken(challengeToken, TOKEN_USE_PASSWORD_CHANGE);
+        UUID userId = parseUserId(challengeJwt.getSubject(), CHALLENGE_INVALID);
+        requireUserLoginAttemptBudget(userId, "user:%s:password-change", 5, Duration.ofMinutes(15));
+        String jti = challengeJwt.getClaimAsString("jti");
+        reserveChallengeToken(jti);
+        try {
+            AuthUser snapshot = loadActiveUserWithRoles(userId);
+            if (!snapshot.isPasswordChangeRequired()) {
+                throw new BusinessException(ErrorCode.UNAUTHORIZED, CHALLENGE_INVALID);
+            }
+            passwordPolicy.validate(snapshot.getUsername(), newPassword);
+            String passwordHash = passwordEncoder.encode(newPassword);
+            transactionTemplate.executeWithoutResult(status -> {
+                AuthUser managed = authUserRepository.findById(userId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, CHALLENGE_INVALID));
+                if (!"ACTIVE".equals(managed.getStatus()) || !managed.isPasswordChangeRequired()) {
+                    throw new BusinessException(ErrorCode.UNAUTHORIZED, CHALLENGE_INVALID);
+                }
+                managed.setPasswordHash(passwordHash);
+                managed.setPasswordChangeRequired(false);
+                authUserRepository.save(managed);
+            });
+
+            AuthUser profile = loadActiveUserWithRoles(userId);
+            if (twoFactorService.isEnabled(userId)) {
+                return buildChallengeResponse(userId, CHALLENGE_TYPE_VERIFY);
+            }
+            if (twoFactorPolicyService.isRequired(profile)) {
+                return buildChallengeResponse(userId, CHALLENGE_TYPE_ENROLL);
+            }
+            return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+        } catch (RuntimeException exception) {
+            releaseChallengeToken(jti);
+            throw exception;
+        }
     }
 
     /**
@@ -346,6 +399,26 @@ public class AuthService {
                 true,
                 challengeToken,
                 challengeType,
+                formatInstant(expiresAt),
+                null
+        );
+    }
+
+    /** 创建短效首次改密挑战，不签发业务访问令牌或刷新会话。 */
+    public AuthTokenResponse buildPasswordChangeChallengeResponse(UUID userId) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(TWO_FACTOR_CHALLENGE_TTL);
+        String challengeToken = encodeChallengeToken(userId, TOKEN_USE_PASSWORD_CHANGE, now, expiresAt);
+        return new AuthTokenResponse(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                challengeToken,
+                CHALLENGE_TYPE_PASSWORD_CHANGE,
                 formatInstant(expiresAt),
                 null
         );

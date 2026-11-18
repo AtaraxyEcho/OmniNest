@@ -212,8 +212,11 @@ class AdminConfigEntry {
     this.surface = 'GENERAL',
     this.displayCode = '',
     this.editable = true,
+    this.sensitive = false,
     this.sensitiveConfigured = false,
     this.allowedValues = const [],
+    this.defaultValue = '',
+    this.modifiedFromDefault = false,
   });
 
   factory AdminConfigEntry.fromJson(Map<String, dynamic> json) {
@@ -228,8 +231,11 @@ class AdminConfigEntry {
       surface: json['surface']?.toString() ?? 'GENERAL',
       displayCode: json['displayCode']?.toString() ?? '',
       editable: json['editable'] != false,
+      sensitive: json['sensitive'] == true,
       sensitiveConfigured: json['sensitiveConfigured'] == true,
       allowedValues: _strings(json['allowedValues']),
+      defaultValue: json['defaultValue']?.toString() ?? '',
+      modifiedFromDefault: json['modifiedFromDefault'] == true,
     );
   }
 
@@ -243,8 +249,11 @@ class AdminConfigEntry {
   final String surface;
   final String displayCode;
   final bool editable;
+  final bool sensitive;
   final bool sensitiveConfigured;
   final List<String> allowedValues;
+  final String defaultValue;
+  final bool modifiedFromDefault;
 }
 
 class AdminConfigHistory {
@@ -390,6 +399,71 @@ class AdminLogManagementView {
   }
 
   final List<AdminAuditLog> items;
+}
+
+/// 当前 API 进程缓存的脱敏运行日志。
+class AdminSystemLogItem {
+  const AdminSystemLogItem({
+    required this.id,
+    required this.timestamp,
+    required this.level,
+    required this.source,
+    required this.message,
+  });
+
+  factory AdminSystemLogItem.fromJson(Map<String, dynamic> json) {
+    return AdminSystemLogItem(
+      id: json['id']?.toString() ?? '',
+      timestamp: json['timestamp']?.toString() ?? '',
+      level: json['level']?.toString() ?? 'INFO',
+      source: json['source']?.toString() ?? '',
+      message: json['message']?.toString() ?? '',
+    );
+  }
+
+  final String id;
+  final String timestamp;
+  final String level;
+  final String source;
+  final String message;
+}
+
+class AdminSystemLogPage {
+  const AdminSystemLogPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
+    required this.levelCounts,
+    required this.sources,
+  });
+
+  factory AdminSystemLogPage.fromJson(Map<String, dynamic> json) {
+    final rawCounts = json['levelCounts'];
+    return AdminSystemLogPage(
+      items: _list(json['items']).map(AdminSystemLogItem.fromJson).toList(),
+      page: _int(json['page']),
+      size: _int(json['size']),
+      totalElements: _int(json['totalElements']),
+      totalPages: _int(json['totalPages']),
+      levelCounts:
+          rawCounts is Map
+              ? rawCounts.map(
+                (key, value) => MapEntry(key.toString(), _int(value)),
+              )
+              : const <String, int>{},
+      sources: _strings(json['sources']),
+    );
+  }
+
+  final List<AdminSystemLogItem> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+  final Map<String, int> levelCounts;
+  final List<String> sources;
 }
 
 class AdminAuditLog {

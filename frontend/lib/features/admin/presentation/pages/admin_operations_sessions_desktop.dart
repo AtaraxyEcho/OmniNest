@@ -7,6 +7,9 @@ part of 'admin_operations_pages.dart';
 class _DesktopSessionsPanel extends StatelessWidget {
   const _DesktopSessionsPanel({
     required this.page,
+    this.embedded = false,
+    required this.searchController,
+    required this.onSearch,
     required this.busy,
     required this.status,
     required this.platform,
@@ -22,6 +25,9 @@ class _DesktopSessionsPanel extends StatelessWidget {
   });
 
   final AdminPage<AdminSessionItem> page;
+  final bool embedded;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
   final bool busy;
   final String status;
   final String platform;
@@ -41,94 +47,115 @@ class _DesktopSessionsPanel extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     final activeCount = page.items.where((item) => item.isActive).length;
 
-    return Column(
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AdminCard(
-          title: l10n.adminSessionList,
-          count: page.totalElements,
-          subtitle: l10n.adminSessionListSubtitle,
-          action: DesktopButton(
-            label: l10n.adminCleanup,
-            icon: DesktopIcons.trash,
-            variant: DesktopButtonVariant.soft,
-            onPressed: busy ? null : onCleanup,
-          ),
-          childGap: 14,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        if (embedded)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  DesktopChipButton(
-                    label: l10n.adminAll,
-                    selected: status == 'ALL',
-                    onTap: () => onStatus('ALL'),
-                  ),
-                  for (final value in const ['ACTIVE', 'REVOKED', 'EXPIRED'])
-                    DesktopChipButton(
-                      label: _statusLabel(l10n, value),
-                      selected: status == value,
-                      onTap: () => onStatus(value),
-                    ),
-                  const SizedBox(width: 10),
-                  DesktopChipButton(
-                    label: l10n.adminAll,
-                    selected: platform == 'ALL',
-                    onTap: () => onPlatform('ALL'),
-                  ),
-                  for (final value in platforms.where((item) => item != 'ALL'))
-                    DesktopChipButton(
-                      label: value,
-                      selected: platform == value,
-                      onTap: () => onPlatform(value),
-                    ),
-                  const SizedBox(width: 10),
-                  for (final days in const [7, 30, 90, 365])
-                    DesktopChipButton(
-                      label: l10n.adminRetentionDays('$days'),
-                      selected: retentionDays == days,
-                      onTap: () => onRetention(days),
-                    ),
-                ],
+              SizedBox(
+                width: 320,
+                child: DesktopTextField(
+                  controller: searchController,
+                  hint: l10n.adminSessionSearchHint,
+                  prefixIcon: DesktopIcons.search,
+                  height: 36,
+                  onChanged: onSearch,
+                ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '${l10n.adminActiveSessions}: $activeCount / ${page.totalElements}',
-                style: DesktopType.caption(skin.text3),
-              ),
-              const SizedBox(height: 4),
-              if (page.items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text(
-                      l10n.adminNoSessions,
-                      style: DesktopType.caption(skin.text3),
-                    ),
-                  ),
-                )
-              else
-                for (var i = 0; i < page.items.length; i++)
-                  _DesktopSessionRow(
-                    session: page.items[i],
-                    first: i == 0,
-                    onDetail: () => onDetail(page.items[i]),
-                    onRevoke: () => onRevoke(page.items[i]),
-                  ),
-              AdminPager(
-                page: page.page,
-                totalPages: page.totalPages,
-                summary: l10n.adminSessionList,
-                onPageChanged: onPage,
+              DesktopButton(
+                label: l10n.adminCleanup,
+                icon: DesktopIcons.trash,
+                variant: DesktopButtonVariant.ghost,
+                onPressed: busy ? null : onCleanup,
               ),
             ],
           ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            DesktopChipButton(
+              label: l10n.adminAll,
+              selected: status == 'ALL',
+              onTap: () => onStatus('ALL'),
+            ),
+            for (final value in const ['ACTIVE', 'REVOKED', 'EXPIRED'])
+              DesktopChipButton(
+                label: _statusLabel(l10n, value),
+                selected: status == value,
+                onTap: () => onStatus(value),
+              ),
+            const SizedBox(width: 10),
+            DesktopChipButton(
+              label: l10n.adminAll,
+              selected: platform == 'ALL',
+              onTap: () => onPlatform('ALL'),
+            ),
+            for (final value in platforms.where((item) => item != 'ALL'))
+              DesktopChipButton(
+                label: value,
+                selected: platform == value,
+                onTap: () => onPlatform(value),
+              ),
+            const SizedBox(width: 10),
+            for (final days in const [7, 30, 90, 365])
+              DesktopChipButton(
+                label: l10n.adminRetentionDays('$days'),
+                selected: retentionDays == days,
+                onTap: () => onRetention(days),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${l10n.adminActiveSessions}: $activeCount / ${page.totalElements}',
+          style: DesktopType.caption(skin.text3),
+        ),
+        const SizedBox(height: 4),
+        if (page.items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: Text(
+                l10n.adminNoSessions,
+                style: DesktopType.caption(skin.text3),
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < page.items.length; i++)
+            _DesktopSessionRow(
+              session: page.items[i],
+              first: i == 0,
+              onDetail: () => onDetail(page.items[i]),
+              onRevoke: () => onRevoke(page.items[i]),
+            ),
+        AdminPager(
+          page: page.page,
+          totalPages: page.totalPages,
+          summary: l10n.adminSessionList,
+          onPageChanged: onPage,
         ),
       ],
+    );
+    if (embedded) return content;
+    return AdminCard(
+      title: l10n.adminSessionList,
+      count: page.totalElements,
+      subtitle: l10n.adminSessionListSubtitle,
+      action: DesktopButton(
+        label: l10n.adminCleanup,
+        icon: DesktopIcons.trash,
+        variant: DesktopButtonVariant.soft,
+        onPressed: busy ? null : onCleanup,
+      ),
+      childGap: 14,
+      child: content,
     );
   }
 }

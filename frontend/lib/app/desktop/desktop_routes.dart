@@ -28,6 +28,7 @@ abstract final class DesktopRoutes {
   static const String adminOperations = '/admin/ops';
 
   static String movieDetail(String id) => '/video/$id';
+  static String seriesDetail(String id) => '/video/series/$id';
   static String moviePlay(String id, {bool fromStart = false}) =>
       '/video/$id/play${fromStart ? '?fromStart=1' : ''}';
   static String photoDetail(String id) => '/photos/$id';

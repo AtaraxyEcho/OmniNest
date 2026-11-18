@@ -472,6 +472,12 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         boolean sensitiveConfigured = definition.sensitive()
                 && entry.getConfigValue() != null
                 && !entry.getConfigValue().isBlank();
+        String defaultValue = definition.sensitive()
+                ? ""
+                : Objects.requireNonNullElse(definition.defaultValue(), "");
+        boolean modifiedFromDefault = definition.sensitive()
+                ? sensitiveConfigured
+                : !Objects.equals(entry.getConfigValue(), definition.defaultValue());
         return new ConfigEntryDto(
                 entry.getConfigKey(),
                 definition.sensitive() ? null : entry.getConfigValue(),
@@ -483,8 +489,11 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                 definition.surface().name(),
                 definition.displayCode(),
                 true,
+                definition.sensitive(),
                 sensitiveConfigured,
-                definition.allowedValues()
+                definition.allowedValues(),
+                defaultValue,
+                modifiedFromDefault
         );
     }
 

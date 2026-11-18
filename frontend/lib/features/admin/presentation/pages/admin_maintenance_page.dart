@@ -607,35 +607,59 @@ class _GeoImportDialogState extends State<_GeoImportDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final hasDesktopSkin = Theme.of(context).extension<DesktopSkin>() != null;
     return WorkstationDialogFrame(
       title: l10n.adminMaintenanceGeoImport,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _dumpDate,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: l10n.adminMaintenanceGeoDumpDate,
-              hintText: l10n.adminMaintenanceGeoDumpDateHint,
-              errorText:
+          if (hasDesktopSkin)
+            DesktopTextField(
+              controller: _dumpDate,
+              autofocus: true,
+              label: l10n.adminMaintenanceGeoDumpDate,
+              hint: l10n.adminMaintenanceGeoDumpDateHint,
+              error:
                   _showRequired
                       ? l10n.adminMaintenanceGeoDumpDateRequired
                       : null,
+              onChanged: (_) {
+                if (_showRequired) {
+                  setState(() => _showRequired = false);
+                }
+              },
+            )
+          else
+            TextField(
+              controller: _dumpDate,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: l10n.adminMaintenanceGeoDumpDate,
+                hintText: l10n.adminMaintenanceGeoDumpDateHint,
+                errorText:
+                    _showRequired
+                        ? l10n.adminMaintenanceGeoDumpDateRequired
+                        : null,
+              ),
+              onChanged: (_) {
+                if (_showRequired) {
+                  setState(() => _showRequired = false);
+                }
+              },
             ),
-            onChanged: (_) {
-              if (_showRequired) {
-                setState(() => _showRequired = false);
-              }
-            },
-          ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _sourceHash,
-            decoration: InputDecoration(
-              labelText: l10n.adminMaintenanceGeoSourceHash,
+          if (hasDesktopSkin)
+            DesktopTextField(
+              controller: _sourceHash,
+              label: l10n.adminMaintenanceGeoSourceHash,
+            )
+          else
+            TextField(
+              controller: _sourceHash,
+              decoration: InputDecoration(
+                labelText: l10n.adminMaintenanceGeoSourceHash,
+              ),
             ),
-          ),
         ],
       ),
       actions: [
@@ -677,16 +701,25 @@ class _GeoBackfillDialogState extends State<_GeoBackfillDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final hasDesktopSkin = Theme.of(context).extension<DesktopSkin>() != null;
     return WorkstationDialogFrame(
       title: l10n.adminMaintenanceGeoBackfill,
-      body: TextField(
-        controller: _batchSize,
-        autofocus: true,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: l10n.adminMaintenanceGeoBatchSize,
-        ),
-      ),
+      body:
+          hasDesktopSkin
+              ? DesktopTextField(
+                controller: _batchSize,
+                autofocus: true,
+                label: l10n.adminMaintenanceGeoBatchSize,
+                keyboardType: TextInputType.number,
+              )
+              : TextField(
+                controller: _batchSize,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: l10n.adminMaintenanceGeoBatchSize,
+                ),
+              ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

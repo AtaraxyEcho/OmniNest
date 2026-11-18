@@ -44,7 +44,10 @@ class _DesktopUsersPanelState extends ConsumerState<_DesktopUsersPanel> {
     final controller = ref.read(adminUserControllerProvider.notifier);
     final state = widget.state;
     final users = state.users;
-    final filtered = state.query.isNotEmpty || state.roleFilter != 'ALL';
+    final filtered =
+        state.query.isNotEmpty ||
+        state.roleFilter != 'ALL' ||
+        state.statusFilter != 'ALL';
 
     return AdminCard(
       title: l10n.adminUsers,
@@ -54,19 +57,23 @@ class _DesktopUsersPanelState extends ConsumerState<_DesktopUsersPanel> {
         icon: DesktopIcons.plus,
         variant: DesktopButtonVariant.soft,
         onPressed:
-            () => showWorkstationDialog(
-              context: context,
-              builder: (context) => const _CreateUserDialog(),
+            () => showDesktopDrawer<bool>(
+              context,
+              width: 480,
+              builder: (_) => const _CreateUserDrawer(),
             ),
       ),
       childGap: 14,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: 280,
+                width: 260,
                 child: DesktopTextField(
                   keyName: 'admin-users-search',
                   controller: _search,
@@ -79,33 +86,86 @@ class _DesktopUsersPanelState extends ConsumerState<_DesktopUsersPanel> {
                   },
                 ),
               ),
-              const SizedBox(width: 14),
-              Flexible(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      DesktopChipButton(
-                        label: l10n.adminAllRoles,
-                        selected: state.roleFilter == 'ALL',
-                        onTap: () => controller.setRoleFilter('ALL'),
-                      ),
-                      for (final role in const [
-                        AdminRoles.superAdmin,
-                        AdminRoles.admin,
-                        AdminRoles.member,
-                        AdminRoles.guest,
-                      ])
-                        DesktopChipButton(
-                          label: adminRoleDisplayName(l10n, role),
-                          selected: state.roleFilter == role,
-                          onTap: () => controller.setRoleFilter(role),
-                        ),
-                    ],
+              _UserFilterGroup(
+                label: l10n.adminRole,
+                children: [
+                  DesktopChipButton(
+                    label: l10n.adminAllRoles,
+                    selected: state.roleFilter == 'ALL',
+                    onTap: () => controller.setRoleFilter('ALL'),
                   ),
-                ),
+                  for (final role in const [
+                    AdminRoles.superAdmin,
+                    AdminRoles.admin,
+                    AdminRoles.member,
+                    AdminRoles.guest,
+                  ])
+                    DesktopChipButton(
+                      label: adminRoleDisplayName(l10n, role),
+                      selected: state.roleFilter == role,
+                      onTap: () => controller.setRoleFilter(role),
+                    ),
+                ],
+              ),
+              _UserFilterGroup(
+                label: l10n.adminStatusColumn,
+                children: [
+                  DesktopChipButton(
+                    label: l10n.adminAll,
+                    selected: state.statusFilter == 'ALL',
+                    onTap: () => controller.setStatusFilter('ALL'),
+                  ),
+                  DesktopChipButton(
+                    label: l10n.adminUserStatusActive,
+                    selected: state.statusFilter == AdminUserStatus.active,
+                    onTap:
+                        () =>
+                            controller.setStatusFilter(AdminUserStatus.active),
+                  ),
+                  DesktopChipButton(
+                    label: l10n.adminUserStatusDisabled,
+                    selected: state.statusFilter == AdminUserStatus.disabled,
+                    onTap:
+                        () => controller.setStatusFilter(
+                          AdminUserStatus.disabled,
+                        ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.adminSortLabel,
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 160,
+                    child: DesktopSelect<String>(
+                      keyName: 'admin-users-sort',
+                      variant: DesktopSelectVariant.small,
+                      value: state.sortField,
+                      options: [
+                        DesktopSelectOption(
+                          value: 'username',
+                          label: l10n.adminSortName,
+                        ),
+                        DesktopSelectOption(
+                          value: 'usedBytes',
+                          label: l10n.adminSortStorageUsed,
+                        ),
+                        DesktopSelectOption(
+                          value: 'lastLoginAt',
+                          label: l10n.adminSortLastActive,
+                        ),
+                      ],
+                      onChanged:
+                          (value) =>
+                              controller.setSort(value, value == 'username'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -151,6 +211,26 @@ class _DesktopUsersPanelState extends ConsumerState<_DesktopUsersPanel> {
   }
 }
 
+class _UserFilterGroup extends StatelessWidget {
+  const _UserFilterGroup({required this.label, required this.children});
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: DesktopType.caption(skin.text3)),
+        const SizedBox(width: 7),
+        Wrap(spacing: 5, runSpacing: 5, children: children),
+      ],
+    );
+  }
+}
+
 class _DesktopUserRow extends ConsumerWidget {
   const _DesktopUserRow({required this.user, required this.first});
 
@@ -167,7 +247,8 @@ class _DesktopUserRow extends ConsumerWidget {
     final meta = <String>[
       '@${user.username}',
       if (user.twoFactorEnabled) '2FA',
-      if (_shortDate(user.createdAt).isNotEmpty) _shortDate(user.createdAt),
+      if (_shortDate(user.lastLoginAt ?? user.createdAt).isNotEmpty)
+        _shortDate(user.lastLoginAt ?? user.createdAt),
     ].join(' · ');
 
     return Container(
@@ -243,7 +324,7 @@ class _DesktopUserRow extends ConsumerWidget {
                     onPressed:
                         () => showDesktopDrawer<bool>(
                           context,
-                          width: 440,
+                          width: 480,
                           builder: (_) => _EditUserDrawer(user: user),
                         ),
                   ),

@@ -19,6 +19,27 @@ public record AuthUserDto(
         @Schema(description = "存储配额（字节）", example = "10737418240") long quotaBytes,
         @Schema(description = "已用存储（字节）", example = "1073741824") long usedBytes,
         @Schema(description = "创建时间") Instant createdAt,
-        @Schema(description = "是否已确认启用两步验证；仅管理用户列表填充，其余场景为空") Boolean twoFactorEnabled
+        @Schema(description = "最近登录时间") Instant lastLoginAt,
+        @Schema(description = "是否已确认启用两步验证；仅管理用户列表填充，其余场景为空") Boolean twoFactorEnabled,
+        @Schema(description = "是否要求用户首次登录后修改密码") Boolean passwordChangeRequired
 ) {
+    public AuthUserDto(
+            UUID id,
+            String username,
+            String displayName,
+            String avatarUrl,
+            String email,
+            String status,
+            String role,
+            Set<String> roles,
+            Set<String> permissions,
+            long quotaBytes,
+            long usedBytes,
+            Instant createdAt,
+            Instant lastLoginAt,
+            Boolean twoFactorEnabled
+    ) {
+        this(id, username, displayName, avatarUrl, email, status, role, roles, permissions,
+                quotaBytes, usedBytes, createdAt, lastLoginAt, twoFactorEnabled, null);
+    }
 }

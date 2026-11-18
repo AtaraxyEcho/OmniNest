@@ -86,7 +86,9 @@ public final class AuthUserMapper {
                 user.getQuotaBytes(),
                 user.getUsedBytes(),
                 user.getCreatedAt(),
-                twoFactorEnabled
+                user.getLastLoginAt(),
+                twoFactorEnabled,
+                user.isPasswordChangeRequired()
         );
     }
 

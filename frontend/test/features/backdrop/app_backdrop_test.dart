@@ -246,18 +246,13 @@ void main() {
   });
 
   group('AppBackdropRepository', () {
-    test('默认壁纸视频与封面帧都已按打包资源分发', () async {
-      final video = await rootBundle.load(bundledDefaultWallpaperAssetPath);
-      final poster = await rootBundle.load(
-        bundledDefaultWallpaperPosterAssetPath,
-      );
+    test('默认壁纸照片已打包且可以解码', () async {
+      final wallpaper = await rootBundle.load(bundledDefaultWallpaperAssetPath);
 
-      // 断言只服务「资源确实打进包」这一个意图，不锁具体码率：
-      // 默认壁纸是随包视频，封面帧只用于首帧就绪前垫底与瓦片预览。
-      expect(video.lengthInBytes, greaterThan(1024 * 1024));
-      expect(poster.lengthInBytes, greaterThan(20 * 1024));
-      // 封面帧必须能被引擎解码，否则视频首帧前会露出舞台底色。
-      final codec = await ui.instantiateImageCodec(poster.buffer.asUint8List());
+      expect(wallpaper.lengthInBytes, greaterThan(1024 * 1024));
+      final codec = await ui.instantiateImageCodec(
+        wallpaper.buffer.asUint8List(),
+      );
       final frame = (await codec.getNextFrame()).image;
       expect(frame.width, greaterThan(0));
       expect(frame.height, greaterThan(0));
@@ -270,11 +265,11 @@ void main() {
       addTearDown(database.close);
       final bundled = AppBackdropAsset(
         id: bundledDefaultWallpaperId,
-        path: 'D:/App/backdrops/default.mp4',
+        path: bundledDefaultWallpaperAssetPath,
         title: 'OmniNest',
-        mediaType: AppBackdropMediaType.video,
+        mediaType: AppBackdropMediaType.image,
         sourceType: AppBackdropSourceType.bundled,
-        fileSize: 5950165,
+        fileSize: 0,
         modifiedAt: DateTime(2026),
         createdAt: DateTime(2026),
         updatedAt: DateTime(2026),
@@ -305,11 +300,11 @@ void main() {
       addTearDown(database.close);
       final bundled = AppBackdropAsset(
         id: bundledDefaultWallpaperId,
-        path: 'D:/App/backdrops/default.mp4',
+        path: bundledDefaultWallpaperAssetPath,
         title: 'OmniNest',
-        mediaType: AppBackdropMediaType.video,
+        mediaType: AppBackdropMediaType.image,
         sourceType: AppBackdropSourceType.bundled,
-        fileSize: 5950165,
+        fileSize: 0,
         modifiedAt: DateTime(2026),
         createdAt: DateTime(2026),
         updatedAt: DateTime(2026),

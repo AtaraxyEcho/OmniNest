@@ -9,6 +9,7 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/desktop/desktop_ambient.dart';
 import 'package:omninest/app/desktop/desktop_appearance_sheet.dart';
 import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
+import 'package:omninest/app/desktop/desktop_backdrop_scope.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/app/desktop/desktop_command_palette.dart';
 import 'package:omninest/app/desktop/desktop_dock.dart';
@@ -112,6 +113,10 @@ class DesktopShellHost extends ConsumerStatefulWidget {
 class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   bool _appearanceOpen = false;
 
+  /// 本帧是否已经排过一次路由后同步（delegate 与 routeInformationProvider
+  /// 会在同一次 go 里先后通知）。
+  bool _routeSyncScheduled = false;
+
   /// 当前 location 取 routerDelegate 的**匹配结果**。
   ///
   /// 守卫 redirect（未登录 → /login?redirect=…）之后，delegate 持有最终
@@ -151,12 +156,17 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 
   void _onRouteChanged() {
-    if (!mounted) {
+    if (!mounted || _routeSyncScheduled) {
       return;
     }
+    // delegate 与 routeInformationProvider 会在同一次 go 里各通知一次；
+    // `_routeSyncScheduled` 把同帧的两次合并成一次帧后记录 + setState。
+    _routeSyncScheduled = true;
     // delegate 可能在路由子树构建过程中 notify；provider 写入与 setState
     // 一律延到帧后，避免「构建期修改 provider」断言。
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 先解锁再判存活：dispose 后残留的锁会让下一次路由变化被静默吞掉。
+      _routeSyncScheduled = false;
       if (!mounted) {
         return;
       }
@@ -320,15 +330,16 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(appearanceControllerProvider);
-    final appearance = ref.watch(desktopAppearanceProvider);
+    // 根级 Theme 只依赖强调色。整份 watch 会让拖动「环境光」滑杆时每改一格
+    // 都重新 resolve 一份 ThemeData，把全应用所有 `Theme.of` 依赖者拖进重建。
+    final accent = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.accent),
+    );
     final isDark =
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
-    final theme = DesktopTheme.resolve(
-      isDark: isDark,
-      accent: appearance.accent,
-    );
+    final theme = DesktopTheme.resolve(isDark: isDark, accent: accent);
     final mode = desktopShellModeForPath(_routePath);
 
     return Theme(
@@ -362,6 +373,14 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
                           onCloseAppearance:
                               () => setState(() => _appearanceOpen = false),
                           child: widget.child,
+                        )
+                        : mode == DesktopShellMode.immersive
+                        ? DesktopWindowChrome(
+                          child: _DesktopImmersiveCanvas(
+                            path: _path,
+                            ambientImage: _ambientImage(),
+                            child: widget.child,
+                          ),
                         )
                         : DesktopWindowChrome(
                           child: ColoredBox(
@@ -399,18 +418,21 @@ class _Workspace extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final appearance = ref.watch(desktopAppearanceProvider);
     final shell = ref.watch(desktopShellProvider);
     final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;
     // 自定义壁纸在场时环境光整体让位（样例 `.bd-on .ambient { display:none }`）：
     // 两者叠在一起会把壁纸压成一层灰雾，暗纱也会重复叠加两次。
+    // 只订阅这一位布尔：拖动暗化/模糊滑杆时 state 每帧都变，整份 watch 会把
+    // 标题栏、侧栏、内容区、详情坞与播放条全部拖进每帧重建。
+    final backdropConfigured = ref.watch(
+      appBackdropControllerProvider.select(
+        (async) => async.asData?.value.hasActiveBackdrop ?? false,
+      ),
+    );
+    final backdropScope = ref.watch(desktopBackdropScopeProvider);
     final backdropActive =
-        ref
-            .watch(appBackdropControllerProvider)
-            .asData
-            ?.value
-            .hasActiveBackdrop ??
-        false;
+        backdropConfigured &&
+        desktopBackdropAppliesToRoute(backdropScope, path);
 
     // 工作区整体是一个 BackdropGroup：标题栏、卡片、吸顶表头等玻璃面板
     // 因此共享同一次 backdrop 取样，不再各自捕获一遍背后的场景。各面板
@@ -422,12 +444,7 @@ class _Workspace extends ConsumerWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (!backdropActive)
-                DesktopAmbient(
-                  imageUrl: ambientImage,
-                  intensity: appearance.ambient,
-                  reduceMotion: appearance.reduceMotion,
-                ),
+              if (!backdropActive) _AmbientLayer(imageUrl: ambientImage),
               DesktopBackdropLayer(path: path),
               Column(
                 children: [
@@ -486,6 +503,72 @@ class _Workspace extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 沉浸路由仍属于桌面窗口画布；壁纸层放在页面内容下方，范围切换与常规工作区一致。
+class _DesktopImmersiveCanvas extends ConsumerWidget {
+  const _DesktopImmersiveCanvas({
+    required this.path,
+    required this.ambientImage,
+    required this.child,
+  });
+
+  final String path;
+  final String? ambientImage;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final skin = DesktopSkin.of(context);
+    final backdropConfigured = ref.watch(
+      appBackdropControllerProvider.select(
+        (async) => async.asData?.value.hasActiveBackdrop ?? false,
+      ),
+    );
+    final backdropScope = ref.watch(desktopBackdropScopeProvider);
+    final backdropActive =
+        backdropConfigured &&
+        desktopBackdropAppliesToRoute(backdropScope, path);
+    return BackdropGroup(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: skin.bg),
+          if (backdropActive)
+            DesktopBackdropLayer(path: path)
+          else
+            _AmbientLayer(imageUrl: ambientImage),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// 环境光层：只订阅「强度」与「减动效」两位。
+///
+/// 外观抽屉与设置页的强度滑杆每拖一格都会写一次外观偏好；若在 `_Workspace`
+/// 里 watch 整份外观，整条壳层（标题栏、侧栏、内容区、播放条）会跟着每帧
+/// 重建，而真正要变的只有这一层的整层 opacity。
+class _AmbientLayer extends ConsumerWidget {
+  const _AmbientLayer({required this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final intensity = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.ambient),
+    );
+    final reduceMotion = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.reduceMotion),
+    );
+    return DesktopAmbient(
+      imageUrl: imageUrl,
+      intensity: intensity,
+      reduceMotion: reduceMotion,
     );
   }
 }
@@ -562,40 +645,44 @@ class _RouteEnterState extends State<_RouteEnter>
       parent: _controller,
       curve: DesktopMotion.ease,
     );
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final t = animation.value;
-        final content = Opacity(
-          opacity: t.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, (1 - t) * 12),
-            child: child,
-          ),
-        );
-        final blur = (1 - t) * 4;
-        final entered =
-            blur < 0.05
-                ? content
-                : ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(
-                    sigmaX: blur,
-                    sigmaY: blur,
-                    tileMode: TileMode.decal,
-                  ),
-                  child: content,
-                );
-        // 崩溃边界与进度条都挂在内容槽上：错误就地变 `.route-err`，
-        // 切换中在顶部扫一条 2px 强调条。
-        return DesktopRouteContainer(
-          path: widget.path,
-          loading: _loading,
-          child: entered,
-        );
-      },
-      // 入场 600ms 内整页 display list 不再每帧重录（4σ 仍逐帧跑，因为
-      // sigma 随进度变，省不掉；但只需作用在缓存的画面上）。
-      child: RepaintBoundary(child: widget.child),
+    // 崩溃边界与进度条挂在动画**外面**：放进 builder 里会让
+    // `DesktopErrorBoundary.build` 在入场的 36 帧里每帧去接管并还原全局
+    // `ErrorWidget.builder`、每帧再注册一次帧后回调，2px 扫描条也顺带被
+    // 4σ 糊掉。
+    return DesktopRouteContainer(
+      path: widget.path,
+      loading: _loading,
+      child: AnimatedBuilder(
+        animation: animation,
+        // 入场 600ms 内整页 display list 不再每帧重录（σ 随进度变，模糊本身
+        // 省不掉；但只需作用在缓存的画面上）。
+        child: RepaintBoundary(child: widget.child),
+        builder: (context, child) {
+          final t = animation.value.clamp(0.0, 1.0);
+          final content = Opacity(
+            opacity: t,
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * 12),
+              child: child,
+            ),
+          );
+          final blur = (1 - t) * 4;
+          // 只保留肉眼可辨的一段模糊。ease(0.22,0.8,0.24,1) 下 4px 在
+          // 220ms 就跌到 0.5px 以下，按 0.05 收尾等于再白跑 380ms（约 23 帧）
+          // 的亚像素全屏高斯——每帧两张离屏纹理，肉眼收益为零。
+          if (blur < 0.5) {
+            return content;
+          }
+          return ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: blur,
+              sigmaY: blur,
+              tileMode: TileMode.decal,
+            ),
+            child: content,
+          );
+        },
+      ),
     );
   }
 }
@@ -634,15 +721,15 @@ class _DesktopThemeScopeState extends ConsumerState<DesktopThemeScope> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final themeMode = ref.watch(appearanceControllerProvider);
-    final appearance = ref.watch(desktopAppearanceProvider);
+    // 同壳层：登录/启动页的根级 Theme 也只跟强调色走。
+    final accent = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.accent),
+    );
     final isDark =
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
-    final theme = DesktopTheme.resolve(
-      isDark: isDark,
-      accent: appearance.accent,
-    );
+    final theme = DesktopTheme.resolve(isDark: isDark, accent: accent);
     return Theme(
       data: theme,
       child: DefaultTextStyle(

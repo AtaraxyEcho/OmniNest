@@ -7,12 +7,15 @@ import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
@@ -25,7 +28,32 @@ class DesktopContinueRail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final dashboard = ref.watch(movieDashboardProvider).asData?.value;
+    final dashboardAsync = ref.watch(movieDashboardProvider);
+    final dashboard = dashboardAsync.asData?.value;
+    if (dashboard == null && dashboardAsync.hasError) {
+      return DesktopErrorView(
+        message: errorReason(dashboardAsync.error!, l10n),
+        onRetry: () => ref.invalidate(movieDashboardProvider),
+        minHeightFactor: 0.22,
+      );
+    }
+    if (dashboard == null && dashboardAsync.isLoading) {
+      return SizedBox(
+        height: 340 * 9 / 16 + 16,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 12, top: 4),
+          itemCount: 4,
+          separatorBuilder:
+              (context, index) => const SizedBox(width: DesktopMetrics.railGap),
+          itemBuilder:
+              (context, index) => const SizedBox(
+                width: 340,
+                child: DesktopSkeletonBox(height: 191, radius: 16),
+              ),
+        ),
+      );
+    }
     final resume =
         dashboard?.continueWatching ?? const <MovieContinueWatching>[];
     final fresh = dashboard?.recentlyAdded ?? const <MovieVideoItem>[];
@@ -325,8 +353,62 @@ class DesktopListeningRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final snapshot = ref.watch(musicPortalSnapshotProvider).asData?.value;
+    final snapshotAsync = ref.watch(musicPortalSnapshotProvider);
+    final snapshot = snapshotAsync.asData?.value;
     final tracks = snapshot?.recentTracks ?? const <MusicPortalTrack>[];
+    if (snapshot == null && snapshotAsync.hasError) {
+      return DesktopErrorView(
+        message: errorReason(snapshotAsync.error!, l10n),
+        onRetry: () => ref.invalidate(musicPortalSnapshotProvider),
+        minHeightFactor: 0.22,
+      );
+    }
+    if (snapshot == null && snapshotAsync.isLoading) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 16.0;
+          final count = constraints.maxWidth < 420 ? 3 : 4;
+          final side = (constraints.maxWidth - gap * (count - 1)) / count;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (var index = 0; index < count; index++)
+                SizedBox(
+                  width: side,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: DesktopSkeletonBox(radius: 14, index: index * 3),
+                      ),
+                      const SizedBox(height: 10),
+                      FractionallySizedBox(
+                        widthFactor: 0.72,
+                        alignment: Alignment.centerLeft,
+                        child: DesktopSkeletonBox(
+                          height: 12,
+                          index: index * 3 + 1,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      FractionallySizedBox(
+                        widthFactor: 0.48,
+                        alignment: Alignment.centerLeft,
+                        child: DesktopSkeletonBox(
+                          height: 10,
+                          index: index * 3 + 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    }
     if (tracks.isEmpty) {
       return DesktopEmpty(
         message: l10n.desktopHomeEmptyMusic,
@@ -432,13 +514,60 @@ class DesktopReadingCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final dashboard = ref.watch(readerDashboardProvider).asData?.value;
+    final dashboardAsync = ref.watch(readerDashboardProvider);
+    final dashboard = dashboardAsync.asData?.value;
     final book =
         (dashboard?.continueReading.isNotEmpty ?? false)
             ? dashboard!.continueReading.first
             : (dashboard?.recentItems.isNotEmpty ?? false)
             ? dashboard!.recentItems.first
             : null;
+    if (book == null && dashboardAsync.hasError) {
+      return DesktopErrorView(
+        message: errorReason(dashboardAsync.error!, l10n),
+        onRetry: () => ref.invalidate(readerDashboardProvider),
+        minHeightFactor: 0.22,
+      );
+    }
+    if (book == null && dashboardAsync.isLoading) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: skin.line),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 116,
+              child: AspectRatio(
+                aspectRatio: 2 / 3,
+                child: DesktopSkeletonBox(radius: 8),
+              ),
+            ),
+            const SizedBox(width: 22),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const DesktopSkeletonBox(width: 120, height: 10),
+                  const SizedBox(height: 10),
+                  const DesktopSkeletonBox(width: 210, height: 22),
+                  const SizedBox(height: 8),
+                  const DesktopSkeletonBox(width: 130, height: 12),
+                  const SizedBox(height: 16),
+                  const DesktopSkeletonBox(height: 5, radius: 3),
+                  const SizedBox(height: 18),
+                  const DesktopSkeletonBox(width: 104, height: 34),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     if (book == null) {
       return DesktopEmpty(
         message: l10n.desktopHomeEmptyBook,

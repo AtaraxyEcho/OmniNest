@@ -284,9 +284,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _error = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {
@@ -349,9 +347,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = userFacingErrorText(error, l10n: l10n),
-        );
+        setState(() => _error = userFacingErrorText(error, l10n: l10n));
       }
     } finally {
       if (mounted) {

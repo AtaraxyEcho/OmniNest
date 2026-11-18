@@ -11,6 +11,7 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -20,6 +21,7 @@ import 'package:omninest/features/admin/application/admin_console_controller.dar
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/application/admin_user_controller.dart';
 import 'package:omninest/features/admin/domain/admin_user.dart';
+import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_desktop_kit.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';

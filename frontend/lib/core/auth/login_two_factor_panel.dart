@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/auth/login_page_controller.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -14,12 +15,14 @@ import 'package:omninest/core/feedback/omni_feedback.dart';
 class LoginTwoFactorPanel extends ConsumerStatefulWidget {
   const LoginTwoFactorPanel({
     required this.challenge,
+    required this.errorMessage,
     required this.onLoginSucceeded,
     required this.onBackToLogin,
     super.key,
   });
 
   final AuthChallenge challenge;
+  final String? errorMessage;
   final VoidCallback onLoginSucceeded;
   final VoidCallback onBackToLogin;
 
@@ -33,6 +36,7 @@ enum _EnrollStep { password, scan, codes }
 class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _submitting = false;
   bool _codesSaved = false;
@@ -45,6 +49,7 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
   void dispose() {
     _codeController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -59,14 +64,18 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            widget.challenge.isEnrollment
+            widget.challenge.isPasswordChange
+                ? l10n.loginInitialPasswordChangeTitle
+                : widget.challenge.isEnrollment
                 ? l10n.twoFactorEnrollTitle
                 : l10n.loginTwoFactorTitle,
             style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            widget.challenge.isEnrollment
+            widget.challenge.isPasswordChange
+                ? l10n.loginInitialPasswordChangeSubtitle
+                : widget.challenge.isEnrollment
                 ? l10n.twoFactorEnrollSubtitle
                 : l10n.loginTwoFactorSubtitle,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -74,7 +83,9 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
             ),
           ),
           const SizedBox(height: 24),
-          if (widget.challenge.isEnrollment)
+          if (widget.challenge.isPasswordChange)
+            ..._buildInitialPasswordFields(l10n)
+          else if (widget.challenge.isEnrollment)
             switch (_enrollStep) {
               _EnrollStep.password => _buildEnrollPasswordStep(l10n),
               _EnrollStep.scan => _buildEnrollScanStep(l10n),
@@ -82,9 +93,9 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
             }
           else
             ..._buildVerifyFields(l10n),
-          if (_errorMessage != null) ...[
+          if (widget.errorMessage != null || _errorMessage != null) ...[
             const SizedBox(height: 18),
-            _ErrorBanner(message: _errorMessage!),
+            _ErrorBanner(message: _errorMessage ?? widget.errorMessage!),
           ],
           const SizedBox(height: 16),
           TextButton.icon(
@@ -95,6 +106,94 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildInitialPasswordFields(AppLocalizations l10n) {
+    return [
+      TextFormField(
+        key: const Key('initialPasswordField'),
+        controller: _passwordController,
+        autofocus: true,
+        obscureText: _obscurePassword,
+        textInputAction: TextInputAction.next,
+        decoration: InputDecoration(
+          labelText: l10n.loginInitialPasswordLabel,
+          prefixIcon: const Icon(Icons.lock_outline_rounded),
+          suffixIcon: IconButton(
+            tooltip:
+                _obscurePassword
+                    ? l10n.loginShowPassword
+                    : l10n.loginHidePassword,
+            onPressed:
+                () => setState(() => _obscurePassword = !_obscurePassword),
+            icon: Icon(
+              _obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        key: const Key('initialPasswordConfirmField'),
+        controller: _confirmPasswordController,
+        obscureText: true,
+        autofocus: false,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _submitInitialPasswordChange(),
+        decoration: InputDecoration(
+          labelText: l10n.loginInitialPasswordConfirmLabel,
+          prefixIcon: const Icon(Icons.lock_reset_rounded),
+        ),
+      ),
+      const SizedBox(height: 20),
+      FilledButton.icon(
+        key: const Key('initialPasswordChangeButton'),
+        onPressed: _submitting ? null : _submitInitialPasswordChange,
+        icon:
+            _submitting
+                ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(Icons.check_rounded),
+        label: Text(l10n.loginInitialPasswordChangeAction),
+      ),
+    ];
+  }
+
+  Future<void> _submitInitialPasswordChange() async {
+    final password = _passwordController.text;
+    final confirmation = _confirmPasswordController.text;
+    final l10n = AppLocalizations.of(context);
+    if (password.length < 8 || password.length > 64) {
+      setState(() => _errorMessage = l10n.loginInitialPasswordLength);
+      return;
+    }
+    if (password != confirmation) {
+      setState(() => _errorMessage = l10n.loginInitialPasswordMismatch);
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+    final completed = await ref
+        .read(loginPageControllerProvider.notifier)
+        .completeRequiredPasswordChange(
+          challengeToken: widget.challenge.challengeToken,
+          newPassword: password,
+        );
+    if (!mounted) {
+      return;
+    }
+    if (completed) {
+      widget.onLoginSucceeded();
+    } else {
+      setState(() => _submitting = false);
+    }
   }
 
   // ── 已启用：验证码登录 ──

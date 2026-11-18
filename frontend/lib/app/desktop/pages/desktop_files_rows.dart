@@ -483,6 +483,56 @@ class _FileGrid extends StatelessWidget {
   }
 }
 
+class _FileGridSkeleton extends StatelessWidget {
+  const _FileGridSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = ((constraints.maxWidth + 12) / (168 + 12))
+            .floor()
+            .clamp(2, 8);
+        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 18,
+          children: [
+            for (var i = 0; i < columns * 2; i++)
+              SizedBox(
+                width: width,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DesktopSkeletonBox(height: 128, radius: 12, index: i * 3),
+                    const SizedBox(height: 10),
+                    FractionallySizedBox(
+                      widthFactor: 0.72,
+                      child: DesktopSkeletonBox(
+                        height: 11,
+                        radius: 5.5,
+                        index: i * 3 + 1,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    FractionallySizedBox(
+                      widthFactor: 0.42,
+                      child: DesktopSkeletonBox(
+                        height: 9,
+                        radius: 4.5,
+                        index: i * 3 + 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _FileTile extends StatelessWidget {
   const _FileTile({
     required this.node,

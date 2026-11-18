@@ -1,5 +1,87 @@
 part of 'desktop_movies_page.dart';
 
+class _MoviesLoadingTracks extends StatelessWidget {
+  const _MoviesLoadingTracks({required this.tab});
+
+  final DesktopMoviesTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (tab != DesktopMoviesTab.forYou) {
+      final title = switch (tab) {
+        DesktopMoviesTab.continueWatching => l10n.desktopContinueWatching,
+        DesktopMoviesTab.movies => l10n.desktopMoviesFeatureFilms,
+        DesktopMoviesTab.series => l10n.videoSectionSeries,
+        DesktopMoviesTab.anime => l10n.videoSectionAnime,
+        DesktopMoviesTab.favorites => l10n.photosTabFavorites,
+        DesktopMoviesTab.watchlist => l10n.desktopWatchlist,
+        DesktopMoviesTab.history => l10n.desktopHistory,
+        DesktopMoviesTab.forYou => l10n.desktopForYou,
+      };
+      return DesktopSection(title: title, child: _MoviePosterGridSkeleton());
+    }
+    return Column(
+      children: [
+        for (final title in [
+          l10n.desktopContinueWatching,
+          l10n.desktopMoviesFeatureFilms,
+          l10n.videoSectionSeries,
+          l10n.videoSectionAnime,
+        ])
+          DesktopSection(
+            title: title,
+            child: SizedBox(
+              height: 226,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 5,
+                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                itemBuilder:
+                    (context, index) => SizedBox(
+                      width: 148,
+                      child: DesktopSkeletonBox(
+                        height: 222,
+                        radius: 12,
+                        index: index,
+                      ),
+                    ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MoviePosterGridSkeleton extends StatelessWidget {
+  const _MoviePosterGridSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = _posterGridColumns(context, constraints.maxWidth);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 8),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 22,
+            mainAxisSpacing: 22,
+            childAspectRatio: 2 / 3,
+          ),
+          itemCount: columns * 2,
+          itemBuilder:
+              (context, index) =>
+                  DesktopSkeletonBox(height: 300, radius: 12, index: index),
+        );
+      },
+    );
+  }
+}
+
 /// 海报右上角的「加入待看清单」（样例 `Movies.tsx:38` 的菜单项与
 /// `MovieDetail.tsx:65` 的按钮）。清单与其他设备同步，卡片自己读 provider，
 /// 不必把回调从页面一路穿到网格里。

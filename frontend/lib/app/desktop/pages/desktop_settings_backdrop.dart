@@ -12,36 +12,157 @@ class _BackdropSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final async = ref.watch(appBackdropControllerProvider);
-    return async.when(
-      loading:
-          () => DesktopCard(
-            child: SizedBox(
-              height: 120,
-              child: Center(
-                child: Text(
-                  l10n.portalLocalBackdropProcessing,
-                  style: DesktopType.caption(DesktopSkin.of(context).text3),
-                ),
-              ),
-            ),
-          ),
-      error:
-          (error, stack) => DesktopCard(
-            child: DesktopEmpty(
-              icon: DesktopIcons.image,
-              message: l10n.portalLocalBackdropLoadFailed,
-            ),
-          ),
-      data:
-          (state) => Column(
+    // 只订阅「首次加载中 / 加载失败」两位。拖动暗化与模糊滑杆时 state 每帧
+    // 都变，整段 watch 会把取景框、素材库网格与展示方式卡一起拖进每帧重建。
+    final status = ref.watch(
+      appBackdropControllerProvider.select(
+        (async) => (
+          loading: async.isLoading && !async.hasValue,
+          failed: async.hasError && !async.hasValue,
+        ),
+      ),
+    );
+    if (status.loading) {
+      return const _BackdropLoadingSkeleton();
+    }
+    if (status.failed) {
+      return DesktopCard(
+        child: DesktopEmpty(
+          icon: DesktopIcons.image,
+          message: l10n.portalLocalBackdropLoadFailed,
+          actionLabel: l10n.commonRetry,
+          onAction: () => ref.invalidate(appBackdropControllerProvider),
+        ),
+      );
+    }
+    // 三张卡各自订阅自己需要的切片：滑杆只在展示方式卡里，取景框只跟选中
+    // 素材与暗化/模糊有关，素材库只在素材集合变化时才重建。
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BackdropMasterCard(),
+        _BackdropLibraryCard(),
+        _BackdropPresentationCard(),
+      ],
+    );
+  }
+}
+
+class _BackdropLoadingSkeleton extends StatelessWidget {
+  const _BackdropLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DesktopCard(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _BackdropMasterCard(state: state),
-              _BackdropLibraryCard(state: state),
-              _BackdropPresentationCard(state: state),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DesktopSkeletonBox(width: 164, height: 14),
+                        SizedBox(height: 7),
+                        DesktopSkeletonBox(width: 280, height: 10),
+                      ],
+                    ),
+                  ),
+                  DesktopSkeletonBox(width: 40, height: 22, radius: 12),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const AspectRatio(
+                aspectRatio: 16 / 6.2,
+                child: DesktopSkeletonBox(radius: 12),
+              ),
+              const SizedBox(height: 10),
+              const Row(
+                children: [
+                  Expanded(child: DesktopSkeletonBox(width: 160, height: 12)),
+                  SizedBox(width: 16),
+                  DesktopSkeletonBox(width: 110, height: 10),
+                ],
+              ),
             ],
           ),
+        ),
+        DesktopCard(
+          title: l10n.desktopBackdropLibrary,
+          action: const DesktopSkeletonBox(width: 82, height: 32, radius: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const DesktopSkeletonBox(width: 390, height: 11),
+              const SizedBox(height: 14),
+              const Row(
+                children: [
+                  DesktopSkeletonBox(width: 260, height: 30, radius: 12),
+                  Spacer(),
+                  DesktopSkeletonBox(width: 190, height: 10),
+                ],
+              ),
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 12.0;
+                  final columns = ((constraints.maxWidth + gap) / (150 + gap))
+                      .floor()
+                      .clamp(1, 6);
+                  final width =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (var index = 0; index < columns * 2; index++)
+                        SizedBox(
+                          width: width,
+                          child: AspectRatio(
+                            aspectRatio: 16 / 10,
+                            child: DesktopSkeletonBox(radius: 10, index: index),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        DesktopCard(
+          title: l10n.desktopBackdropPresentation,
+          child: Column(
+            children: [
+              for (final width in [190.0, 170.0, 150.0, 210.0, 160.0])
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DesktopSkeletonBox(width: 98, height: 12),
+                            SizedBox(height: 6),
+                            DesktopSkeletonBox(width: 180, height: 9),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      DesktopSkeletonBox(width: width, height: 30, radius: 12),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -91,12 +212,14 @@ class _BackdropRow extends StatelessWidget {
 }
 
 class _BackdropMasterCard extends ConsumerWidget {
-  const _BackdropMasterCard({required this.state});
-
-  final AppBackdropState state;
+  const _BackdropMasterCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(appBackdropControllerProvider).value;
+    if (state == null) {
+      return const SizedBox.shrink();
+    }
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final notifier = ref.read(appBackdropControllerProvider.notifier);
@@ -137,6 +260,9 @@ class _BackdropMasterCard extends ConsumerWidget {
                       BackdropTilePreview(
                         backdrop: selected,
                         maxDecodeWidth: 1440,
+                        // 取景框是默认作用域下唯一能看到模糊效果的地方；
+                        // 视频壁纸在壁纸层不做全屏模糊，这里同样不糊。
+                        blurSigma: selected.isVideo ? 0 : settings.blurAmount,
                       ),
                     if (selected != null && settings.dimAmount > 0.01)
                       ColoredBox(
@@ -236,407 +362,15 @@ class _BackdropMasterCard extends ConsumerWidget {
   );
 }
 
-enum _BackdropFilterKind { all, still, motion, mine }
-
-class _BackdropLibraryCard extends ConsumerStatefulWidget {
-  const _BackdropLibraryCard({required this.state});
-
-  final AppBackdropState state;
-
-  @override
-  ConsumerState<_BackdropLibraryCard> createState() =>
-      _BackdropLibraryCardState();
-}
-
-class _BackdropLibraryCardState extends ConsumerState<_BackdropLibraryCard> {
-  _BackdropFilterKind _filter = _BackdropFilterKind.all;
-
-  static const double _quotaBytes = 1024 * 1024 * 1024;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final notifier = ref.read(appBackdropControllerProvider.notifier);
-    final state = widget.state;
-
-    bool isMine(AppBackdropAsset asset) =>
-        asset.sourceType != AppBackdropSourceType.bundled;
-    bool isStill(AppBackdropAsset asset) =>
-        asset.mediaType != AppBackdropMediaType.video;
-
-    final items = state.backdrops
-        .where((asset) {
-          return switch (_filter) {
-            _BackdropFilterKind.all => true,
-            _BackdropFilterKind.still => isStill(asset),
-            _BackdropFilterKind.motion => !isStill(asset),
-            _BackdropFilterKind.mine => isMine(asset),
-          };
-        })
-        .toList(growable: false);
-    final mine = state.backdrops.where(isMine).toList(growable: false);
-    final used = state.backdrops.fold<int>(
-      0,
-      (sum, asset) => sum + asset.fileSize,
-    );
-    final pct = used <= 0 ? 0.0 : (used / _quotaBytes).clamp(0.0, 1.0);
-
-    return DesktopCard(
-      title: l10n.desktopBackdropLibrary,
-      action: DesktopButton(
-        label: l10n.portalLocalBackdropAddFiles,
-        icon: DesktopIcons.upload,
-        variant: DesktopButtonVariant.primary,
-        busy: state.uploading,
-        onPressed: () => unawaited(notifier.addBackdropFiles()),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              l10n.desktopBackdropLibraryDesc,
-              style: DesktopType.caption(skin.text3),
-            ),
-          ),
-          Row(
-            children: [
-              DesktopSeg<_BackdropFilterKind>(
-                options: _BackdropFilterKind.values,
-                value: _filter,
-                small: true,
-                labelOf:
-                    (value) => switch (value) {
-                      _BackdropFilterKind.all =>
-                        l10n.portalLocalBackdropFilterAll,
-                      _BackdropFilterKind.still =>
-                        l10n.desktopBackdropFilterStatic,
-                      _BackdropFilterKind.motion =>
-                        l10n.desktopBackdropFilterMotion,
-                      _BackdropFilterKind.mine =>
-                        l10n.desktopBackdropFilterMine,
-                    },
-                onChanged: (value) => setState(() => _filter = value),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 120,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: pct,
-                    minHeight: 4,
-                    backgroundColor: skin.raise3,
-                    valueColor: AlwaysStoppedAnimation<Color>(skin.accent),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${formatFileSize(used)} / 1 GB',
-                style: DesktopType.caption(skin.text3),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const gap = 12.0;
-              final columns = ((constraints.maxWidth + gap) / (150 + gap))
-                  .floor()
-                  .clamp(1, 6);
-              final tileWidth =
-                  (constraints.maxWidth - gap * (columns - 1)) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  SizedBox(
-                    width: tileWidth,
-                    child: _BackdropAddTile(
-                      label: l10n.portalLocalBackdropDropHint,
-                      onTap: () => unawaited(notifier.addBackdropFiles()),
-                    ),
-                  ),
-                  for (final asset in items)
-                    SizedBox(
-                      width: tileWidth,
-                      child: _BackdropTile(
-                        asset: asset,
-                        selected: state.selectedBackdropId == asset.id,
-                        removable: isMine(asset),
-                        onSelect:
-                            () => unawaited(notifier.selectBackdrop(asset.id)),
-                        onRemove:
-                            () => unawaited(notifier.removeBackdrop(asset.id)),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 18),
-              child: Text(
-                _filter == _BackdropFilterKind.mine
-                    ? l10n.desktopBackdropNoUploads
-                    : l10n.portalLocalBackdropFilterEmpty,
-                style: DesktopType.caption(skin.text3),
-              ),
-            ),
-          if (mine.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Row(
-                children: [
-                  Text(
-                    l10n.portalLocalBackdropCount(mine.length),
-                    style: DesktopType.caption(skin.text3),
-                  ),
-                  const Spacer(),
-                  DesktopButton(
-                    label: l10n.desktopBackdropClearUploads,
-                    onPressed: () => _confirmClear(context, ref, mine.length),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmClear(
-    BuildContext context,
-    WidgetRef ref,
-    int count,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showDesktopDialog<bool>(
-      context,
-      builder:
-          (dialogContext) => DesktopDialog(
-            title: l10n.desktopBackdropClearUploads,
-            content: Text(
-              l10n.desktopBackdropClearUploadsBody(count),
-              style: DesktopType.body(DesktopSkin.of(dialogContext).text2),
-            ),
-            actions: [
-              DesktopButton(
-                label: l10n.desktopCancel,
-                onPressed: () => closeDesktopModal(dialogContext, false),
-              ),
-              DesktopButton(
-                label: l10n.desktopBackdropClearUploads,
-                variant: DesktopButtonVariant.danger,
-                onPressed: () => closeDesktopModal(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true) {
-      return;
-    }
-    await ref.read(appBackdropControllerProvider.notifier).clearBackdrops();
-  }
-}
-
-class _BackdropAddTile extends StatelessWidget {
-  const _BackdropAddTile({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return AspectRatio(
-      aspectRatio: 16 / 10,
-      child: DesktopHover(
-        builder:
-            (context, hovered) => GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: DesktopMotion.of(context, DesktopMotion.fast),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(DesktopMetrics.radius),
-                  border: Border.all(
-                    color: hovered ? skin.accent : skin.line2,
-                    width: 1.5,
-                  ),
-                  color: hovered ? skin.raise : Colors.transparent,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      DesktopIcons.plus,
-                      size: 22,
-                      color: hovered ? skin.accent : skin.text3,
-                    ),
-                    const SizedBox(height: 6),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.micro(
-                          hovered ? skin.accent : skin.text3,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-      ),
-    );
-  }
-}
-
-class _BackdropTile extends StatelessWidget {
-  const _BackdropTile({
-    required this.asset,
-    required this.selected,
-    required this.removable,
-    required this.onSelect,
-    required this.onRemove,
-  });
-
-  final AppBackdropAsset asset;
-  final bool selected;
-  final bool removable;
-  final VoidCallback onSelect;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(
-          aspectRatio: 16 / 10,
-          child: DesktopHover(
-            builder:
-                (context, hovered) => GestureDetector(
-                  onTap: onSelect,
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: DesktopMotion.of(context, DesktopMotion.fast),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radius,
-                      ),
-                      border: Border.all(
-                        color: selected ? skin.accent : Colors.transparent,
-                        width: 2,
-                      ),
-                      boxShadow:
-                          selected
-                              ? [
-                                BoxShadow(
-                                  color: skin.accent.withValues(alpha: 0.22),
-                                  blurRadius: 0,
-                                  spreadRadius: 3,
-                                ),
-                              ]
-                              : null,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radius - 2,
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          BackdropTilePreview(backdrop: asset),
-                          // 类型角标（样例 `.bd-kind`）。
-                          Positioned(
-                            left: 6,
-                            top: 6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: DesktopPalette.onStage.withValues(
-                                  alpha: 0.65,
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  DesktopMetrics.radiusPill,
-                                ),
-                              ),
-                              child: Text(
-                                _kindLabel(l10n, asset),
-                                style: DesktopType.micro(Colors.white),
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            Positioned(
-                              right: 6,
-                              bottom: 6,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  color: skin.accent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  DesktopIcons.check,
-                                  size: 13,
-                                  color: skin.accentInk,
-                                ),
-                              ),
-                            ),
-                          if (removable && hovered)
-                            Positioned(
-                              right: 4,
-                              top: 4,
-                              child: DesktopIconButton(
-                                icon: DesktopIcons.trash,
-                                size: 24,
-                                iconSize: 13,
-                                tooltip: l10n.portalLocalBackdropRemove,
-                                onPressed: onRemove,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          asset.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.caption(skin.text2),
-        ),
-      ],
-    );
-  }
-}
-
 class _BackdropPresentationCard extends ConsumerWidget {
-  const _BackdropPresentationCard({required this.state});
-
-  final AppBackdropState state;
+  const _BackdropPresentationCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(appBackdropControllerProvider).value;
+    if (state == null) {
+      return const SizedBox.shrink();
+    }
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final notifier = ref.read(appBackdropControllerProvider.notifier);

@@ -10,6 +10,7 @@ import java.util.List;
 public record AdminAnalyticsDto(
         @Schema(description = "用户增长趋势") List<DailyMetric> userGrowth,
         @Schema(description = "任务吞吐量趋势") List<DailyTaskMetric> taskThroughput,
+        @Schema(description = "每日新增文件数") List<DailyMetric> dailyUploads,
         @Schema(description = "存储增长趋势") List<DailyMetric> storageGrowth,
         @Schema(description = "当前系统负载快照") SystemLoadSnapshot currentLoad
 ) {

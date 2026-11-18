@@ -67,9 +67,8 @@ class AdminExternalStoragePage extends ConsumerWidget {
                 return apps.when(
                   loading: () => const _EmptyText('…'),
                   error:
-                      (error, _) => _EmptyText(
-                        userFacingErrorText(error, l10n: l10n),
-                      ),
+                      (error, _) =>
+                          _EmptyText(userFacingErrorText(error, l10n: l10n)),
                   data:
                       (items) =>
                           items.isEmpty
@@ -242,10 +241,36 @@ const List<AppDropdownItem<String>> _oauthConnectorItems = [
   AppDropdownItem<String>(value: 'DROPBOX', label: 'Dropbox'),
 ];
 
-Future<void> _showOAuthAppDialog(BuildContext context) {
+const List<(String, String)> _desktopOAuthProviders = [
+  ('GDRIVE', 'Google Drive'),
+  ('ONEDRIVE', 'OneDrive'),
+  ('DROPBOX', 'Dropbox'),
+];
+
+Future<void> _showOAuthAppDialog(
+  BuildContext context, {
+  String? connectorCode,
+  AdminConnectorOAuthApp? existingApp,
+}) {
+  if (DesktopShellScope.isHosted(context)) {
+    return showDesktopDrawer<void>(
+      context,
+      width: 460,
+      builder:
+          (_) => _OAuthAppDialog(
+            drawerMode: true,
+            connectorCode: connectorCode,
+            existingApp: existingApp,
+          ),
+    );
+  }
   return showWorkstationDialog<void>(
     context: context,
-    builder: (_) => const _OAuthAppDialog(),
+    builder:
+        (_) => _OAuthAppDialog(
+          connectorCode: connectorCode,
+          existingApp: existingApp,
+        ),
   );
 }
 
@@ -255,7 +280,15 @@ Future<void> _showOAuthAppDialog(BuildContext context) {
 /// 作用域内、await showDialog 返回后立即 dispose，而对话框退场动画期间
 /// TextField 仍会访问控制器，触发 used after disposed 断言并连带布局溢出。
 class _OAuthAppDialog extends ConsumerStatefulWidget {
-  const _OAuthAppDialog();
+  const _OAuthAppDialog({
+    this.drawerMode = false,
+    this.connectorCode,
+    this.existingApp,
+  });
+
+  final bool drawerMode;
+  final String? connectorCode;
+  final AdminConnectorOAuthApp? existingApp;
 
   @override
   ConsumerState<_OAuthAppDialog> createState() => _OAuthAppDialogState();
@@ -267,6 +300,7 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
   final _redirectController = TextEditingController();
   String _connectorCode = 'ONEDRIVE';
   bool _enabled = true;
+  bool _secretVisible = false;
   bool _saving = false;
   String? _errorMessage;
   String? _lastGeneratedRedirect;
@@ -274,12 +308,27 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
   @override
   void initState() {
     super.initState();
+    final existing = widget.existingApp;
+    _connectorCode =
+        widget.connectorCode ?? existing?.connectorCode ?? 'ONEDRIVE';
+    _clientIdController.text = existing?.clientId ?? '';
+    _redirectController.text = existing?.redirectUri ?? '';
+    _enabled = existing?.enabled ?? true;
+    _clientIdController.addListener(_refreshFormState);
+    _clientSecretController.addListener(_refreshFormState);
+    _redirectController.addListener(_refreshFormState);
     // 回调地址预填属于一次性副作用，避开 build 与 initState 的 ref 限制。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(_syncRedirectPrefill);
       }
     });
+  }
+
+  void _refreshFormState() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// 根据当前 API 基地址推导该连接器的 OAuth 回调地址。
@@ -308,6 +357,9 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
 
   @override
   void dispose() {
+    _clientIdController.removeListener(_refreshFormState);
+    _clientSecretController.removeListener(_refreshFormState);
+    _redirectController.removeListener(_refreshFormState);
     _clientIdController.dispose();
     _clientSecretController.dispose();
     _redirectController.dispose();
@@ -331,7 +383,11 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
             enabled: _enabled,
           );
       if (mounted) {
-        Navigator.of(context).pop();
+        if (widget.drawerMode) {
+          closeDesktopModal(context);
+        } else {
+          Navigator.of(context).pop();
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -349,6 +405,119 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final providerName =
+        _desktopOAuthProviders
+            .where((item) => item.$1 == _connectorCode)
+            .map((item) => item.$2)
+            .firstOrNull ??
+        _connectorCode;
+    final canSave =
+        !_saving &&
+        _clientIdController.text.trim().isNotEmpty &&
+        _redirectController.text.trim().isNotEmpty &&
+        (widget.existingApp != null ||
+            _clientSecretController.text.trim().isNotEmpty);
+    if (widget.drawerMode) {
+      return DesktopDrawerFrame(
+        title:
+            widget.connectorCode == null
+                ? l10n.adminOAuthAppsTitle
+                : l10n.adminOAuthProviderAccountTitle(providerName),
+        eyebrow: l10n.adminExternalStorageIntegration,
+        subtitle: l10n.adminOAuthAppsSubtitle,
+        footer: Wrap(
+          spacing: 8,
+          children: [
+            DesktopButton(
+              label: l10n.adminCancel,
+              onPressed: _saving ? null : () => closeDesktopModal(context),
+            ),
+            DesktopButton(
+              label: _saving ? l10n.adminSaving : l10n.adminSave,
+              variant: DesktopButtonVariant.primary,
+              busy: _saving,
+              onPressed: canSave ? _submit : null,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.connectorCode == null) ...[
+              Text(
+                l10n.adminType,
+                style: DesktopType.fieldLabel(DesktopSkin.of(context).text2),
+              ),
+              const SizedBox(height: 6),
+              DesktopSelect<String>(
+                value: _connectorCode,
+                options: [
+                  for (final item in _oauthConnectorItems)
+                    DesktopSelectOption(value: item.value, label: item.label),
+                ],
+                onChanged:
+                    (value) => setState(() {
+                      _connectorCode = value;
+                      _syncRedirectPrefill();
+                    }),
+              ),
+              const SizedBox(height: 16),
+            ],
+            DesktopTextField(
+              controller: _clientIdController,
+              label: l10n.adminExternalStorageClientId,
+              required: true,
+              autofocus: true,
+            ),
+            const SizedBox(height: 14),
+            DesktopTextField(
+              controller: _clientSecretController,
+              label: l10n.adminExternalStorageClientSecret,
+              obscure: !_secretVisible,
+              helper: l10n.adminOAuthSecretStorageHint,
+              trailing: DesktopIconButton(
+                icon: _secretVisible ? DesktopIcons.eyeOff : DesktopIcons.eye,
+                tooltip:
+                    _secretVisible
+                        ? l10n.adminHidePassword
+                        : l10n.adminShowPassword,
+                onPressed:
+                    () => setState(() => _secretVisible = !_secretVisible),
+              ),
+            ),
+            const SizedBox(height: 14),
+            DesktopTextField(
+              controller: _redirectController,
+              label: l10n.adminExternalStorageRedirectUri,
+              helper: l10n.adminOAuthRedirectHint,
+              required: true,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Text(
+                  l10n.adminEnabled,
+                  style: DesktopType.body(DesktopSkin.of(context).text),
+                ),
+                const Spacer(),
+                DesktopToggle(
+                  label: l10n.adminEnabled,
+                  value: _enabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                ),
+              ],
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: DesktopType.caption(DesktopSkin.of(context).bad),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     return WorkstationDialogFrame(
       title: l10n.adminOAuthAppsTitle,
       width: 480,
@@ -417,7 +586,7 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
           child: Text(l10n.adminCancel),
         ),
         FilledButton(
-          onPressed: _saving ? null : _submit,
+          onPressed: canSave ? _submit : null,
           child: Text(_saving ? l10n.adminSaving : l10n.adminSave),
         ),
       ],

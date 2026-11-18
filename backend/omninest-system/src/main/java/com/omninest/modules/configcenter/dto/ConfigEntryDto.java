@@ -16,8 +16,11 @@ public record ConfigEntryDto(
         @Schema(description = "管理界面归属", example = "GENERAL") String surface,
         @Schema(description = "前端本地化编码") String displayCode,
         @Schema(description = "是否允许编辑") boolean editable,
+        @Schema(description = "是否为敏感配置项") boolean sensitive,
         @Schema(description = "敏感值是否已配置") boolean sensitiveConfigured,
-        @Schema(description = "允许的枚举值") List<String> allowedValues
+        @Schema(description = "允许的枚举值") List<String> allowedValues,
+        @Schema(description = "非敏感配置的默认值；敏感配置始终返回空字符串") String defaultValue,
+        @Schema(description = "当前值是否偏离默认值") boolean modifiedFromDefault
 ) {
     public ConfigEntryDto(
             String key,
@@ -30,7 +33,7 @@ public record ConfigEntryDto(
     ) {
         this(
                 key, value, valueType, category, refreshScope, updatedAt, description,
-                "GENERAL", key, true, false, List.of()
+                "GENERAL", key, true, false, false, List.of(), "", false
         );
     }
 }

@@ -176,6 +176,8 @@ public final class MusicDtos {
             long albumCount,
             long artistCount,
             long playHistoryCount,
+            long weekListeningSeconds,
+            long itemsAddedToday,
             List<MusicTrackDto> recentTracks,
             List<MusicAlbumDto> recentAlbums,
             List<MusicArtistDto> featuredArtists
@@ -206,6 +208,10 @@ public final class MusicDtos {
             @Min(0) Integer durationSeconds,
             @Size(max = 255) String mediaMid
     ) {
+    }
+
+    /** 客户端累计上报的单次播放实际聆听秒数。 */
+    public record MusicListeningDurationRequest(@NotNull @Min(0) Integer listenedSeconds) {
     }
 
     /** 本地和在线音乐统一最近播放项。 */

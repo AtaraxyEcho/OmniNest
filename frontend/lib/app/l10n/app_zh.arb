@@ -324,9 +324,17 @@
   "changePasswordNewPassword": "新密码",
   "changePasswordEnterNew": "请输入新密码",
   "changePasswordMinLength": "密码至少 8 位",
+  "changePasswordStrengthTooShort": "太短",
   "changePasswordMaxLength": "密码最多 64 位，且不超过 72 个 UTF-8 字节",
   "changePasswordConfirmNew": "确认新密码",
   "loginTwoFactorTitle": "两步验证",
+  "loginInitialPasswordChangeTitle": "请设置新密码",
+  "loginInitialPasswordChangeSubtitle": "管理员提供的是临时密码，请先替换后继续使用。",
+  "loginInitialPasswordLabel": "新密码",
+  "loginInitialPasswordConfirmLabel": "确认新密码",
+  "loginInitialPasswordMismatch": "两次输入的密码不一致。",
+  "loginInitialPasswordLength": "密码长度需为 8 到 64 个字符。",
+  "loginInitialPasswordChangeAction": "保存密码并继续",
   "loginTwoFactorSubtitle": "输入验证器 App 中的 6 位验证码完成登录",
   "loginTwoFactorCodeLabel": "验证码",
   "loginTwoFactorCodeHint": "请输入 6 位验证码",
@@ -1447,6 +1455,7 @@
   "portalLocalBackdropLocalOnly": "背景路径只保存在当前设备的 SQLite 中。动态背景建议使用短循环和常见编码；系统会在页面隐藏或进入后台时暂停播放。Web 使用默认主题背景。",
   "adminOpenMenu": "打开管理菜单",
   "adminStorageOverview": "存储概览",
+  "adminStorageUsageTitle": "用量",
   "adminPercentUsed": "{percent}% 已使用",
   "@adminPercentUsed": {
     "placeholders": {
@@ -1475,6 +1484,19 @@
       "count": {}
     }
   },
+  "adminStorageFolderCount": "{count} 个文件夹",
+  "@adminStorageFolderCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminStorageObjectCount": "{count} 个对象",
+  "@adminStorageObjectCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminStorageUsageTotal": "总已用空间",
   "adminOverviewTasksTotal": "{count} 个任务",
   "@adminOverviewTasksTotal": {
     "placeholders": {
@@ -1580,6 +1602,8 @@
   "adminResetTwoFactor": "重置两步验证",
   "adminResetTwoFactorSuccess": "已重置两步验证，并结束该用户的全部会话。",
   "adminResetTwoFactorConfirmMessage": "清除 {name} 的动态口令秘钥与备份码，并退出其全部会话。用于认证器丢失或凭据加密密钥轮换后的恢复；该用户之后可用密码登录并重新开启两步验证。",
+  "adminRequirePasswordChangeLabel": "首次登录时要求修改密码",
+  "adminRequirePasswordChangeHint": "用户必须先替换管理员生成的临时密码，才能访问 OmniNest。",
   "adminEditRolesHint": "可多选分配系统角色。变更角色将立即调整该用户的权限策略与可见菜单。",
   "adminCreateRole": "新增自定义角色",
   "adminRolePermissionsSaved": "角色权限已更新",
@@ -1678,6 +1702,12 @@
   "adminTaskOwner": "归属人",
   "adminTaskExecutionStatus": "执行状态",
   "adminTaskListSubtitle": "失败、取消、死信状态支持重新入队。",
+  "adminTaskSearchHint": "搜索任务标题、类型、所有者或错误",
+  "adminDlqSearchHint": "搜索任务标题、类型或错误",
+  "adminDlqDiscardAll": "全部丢弃",
+  "adminTaskFilterSucceeded": "成功",
+  "adminLoginAuditSearchHint": "搜索用户、设备、IP 或原因",
+  "adminSessionSearchHint": "搜索用户、设备或 IP",
   "adminNoBackgroundTasks": "当前没有后台任务。",
   "adminNotSet": "未设置",
   "adminProgress": "进度",
@@ -2020,6 +2050,20 @@
   "adminStorageFieldNode": "节点",
   "adminStorageParentDir": "上一级",
   "adminStorageManagementSubtitle": "管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。",
+  "adminStorageAddAction": "添加",
+  "adminStorageAddLocation": "添加存储位置",
+  "adminStorageAddLocationHint": "挂载键来自部署允许列表。",
+  "adminStorageDisplayName": "显示名称",
+  "adminStorageSectionLabel": "存储",
+  "adminStorageVisibleTo": "可见范围",
+  "adminStorageScopeEveryone": "所有人（系统级）",
+  "adminStorageScopeOneUser": "单个用户",
+  "adminStorageMountAction": "挂载",
+  "adminStorageNameHint": "例如：家庭媒体",
+  "adminStorageMountRoot": "挂载根目录",
+  "adminStorageBrowseFailed": "无法读取目录列表。",
+  "adminStorageCreated": "已添加存储位置。",
+  "adminStorageAdvancedLibraries": "媒体库源与挂载控制",
   "adminBucketConfig": "桶配置",
   "adminMinioBuckets": "MinIO Buckets",
   "adminRecentRecords": "最近记录",
@@ -2031,6 +2075,15 @@
   "adminExternalStorageSubtitle": "监管全部用户的外部存储连接并配置实例级 OAuth 应用；连接的创建与导入由用户在文件 → 外部存储完成。",
   "adminOAuthAppsTitle": "OAuth 应用",
   "adminOAuthAppsSubtitle": "实例级集成配置：为 OneDrive / Google 等连接器登记应用凭据，用户连接的 OAuth 授权依赖此项。",
+  "adminOAuthProviderAccountTitle": "{provider} 账户",
+  "@adminOAuthProviderAccountTitle": {
+    "placeholders": {
+      "provider": { "type": "String" }
+    }
+  },
+  "adminOAuthSecretStorageHint": "密钥会加密保存，之后不会再次显示。",
+  "adminOAuthNotConfigured": "尚未配置",
+  "adminConfigure": "配置",
   "adminOAuthRedirectHint": "需与提供方控制台注册的重定向 URI 完全一致，通常为本站回调地址。",
   "adminNoOAuthApps": "尚未配置 OAuth 应用。",
   "adminNewConnection": "新增连接",
@@ -2237,6 +2290,7 @@
   "adminAccountList": "账号列表",
   "adminAccountListSubtitle": "按用户名、昵称、邮箱和角色筛选账号。",
   "adminCreateUser": "创建用户",
+  "adminCreateAccountEyebrow": "创建账户",
   "adminSearchUsers": "搜索用户名、昵称或邮箱",
   "adminAll": "全部",
   "adminNoMatchingUsers": "当前没有匹配用户。",
@@ -2299,6 +2353,9 @@
   "adminBatchQuotaHint": "将为所有选中的用户设置相同的存储配额。超级管理员和空间不足的用户将被跳过。",
   "adminQuotaGib": "配额 (GiB)",
   "adminQuotaHint": "例如：50",
+  "adminQuotaDefaultHint": "留空时使用系统配置的默认值；自定义范围为 1–10000 GiB。",
+  "adminQuotaRangeError": "请输入 1–10000 GiB 范围内的配额",
+  "adminPasswordShareHint": "请通过私密渠道将初始密码告知用户。",
   "adminSaving": "保存中",
   "adminSave": "保存",
   "adminValidQuotaRequired": "请输入有效的配额值",
@@ -2339,6 +2396,8 @@
   "adminCreating": "创建中",
   "adminCreate": "创建",
   "adminUsername": "用户名",
+  "adminAccount": "账户",
+  "adminAccountFormatError": "使用 3–24 个字符：以小写字母开头，后续可使用小写字母、数字、点、短横线或下划线。",
   "adminEnterUsername": "请输入用户名",
   "adminDisplayName": "展示名称",
   "adminEmail": "邮箱",
@@ -2540,6 +2599,9 @@
   "adminOverviewRefresh5m": "5分钟",
   "adminRecalculate": "重算用量",
   "adminRecalculateDone": "已更新 {count} 位用户的存储用量",
+  "adminUploads14Days": "最近 14 天上传量",
+  "adminRecalculateStorageTitle": "重新计算存储",
+  "adminRecalculateStorageSubtitle": "根据对象存储重新计算每位用户的用量。",
   "@adminRecalculateDone": {
     "placeholders": {
       "count": {}
@@ -5884,12 +5946,41 @@
   "desktopNavAdmin": "管理",
   "desktopNavSettings": "设置",
   "desktopPinned": "固定",
+  "desktopPinnedEveningDrift": "暮色漂流",
+  "desktopPinnedGoldenHour": "黄金时刻",
   "desktopPinnedContinue": "继续观看",
   "desktopPinnedFavorites": "我的收藏",
   "desktopPinnedRecent": "最近添加",
   "desktopStorage": "存储",
+  "desktopStorageCloudTitle": "OmniCloud",
   "desktopStorageUsage": "{used} / {total}",
   "desktopStorageUnlimited": "已用 {used} · 无配额",
+  "desktopStorageNoQuota": "无配额",
+  "desktopStorageVideo": "视频",
+  "desktopStoragePhotos": "照片",
+  "desktopStorageMusic": "音乐",
+  "desktopStorageDocuments": "文档",
+  "desktopStorageFindDuplicates": "查找重复文件",
+  "desktopStorageDuplicatesUnavailable": "当前版本暂不支持重复文件扫描。",
+  "desktopStorageDuplicateScanFound": "重复文件可释放 {size}",
+  "@desktopStorageDuplicateScanFound": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopStorageDuplicateScanNone": "没有发现重复文件。",
+  "desktopStorageDuplicateScanNonePartial": "在已验证摘要的文件中没有发现重复项。",
+  "desktopStorageDuplicateScanSkipped": "{count} 个文件缺少已验证的内容摘要，未参与扫描。",
+  "@desktopStorageDuplicateScanSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopStorageNoBreakdown": "暂无文件类别统计。",
   "desktopOfflineBar": "当前离线。播放进度与阅读位置会先存本地，恢复连接后自动同步。",
   "desktopDockDetails": "详情",
   "desktopDockQueue": "队列",
@@ -6107,7 +6198,10 @@
   "desktopRouteRetry": "重试",
   "desktopQueueHint": "拖动排序 · 双击播放",
   "desktopStatLibrarySub": "{photos} 张照片 · {movies} 部影视",
-  "desktopStatListeningSub": "最近播放 {n} 次",
+  "desktopStatListeningSub": "本周聆听",
+  "desktopStatHours": "小时",
+  "desktopStatLibraryAddedToday": "今日新增 {count} 项",
+  "@desktopStatLibraryAddedToday": {"placeholders": {"count": {"type": "int"}}},
   "desktopForYou": "为你推荐",
   "desktopSortRecent": "最近",
   "desktopSortRating": "评分",
@@ -6153,6 +6247,15 @@
   "desktopRecentlyAdded": "最近添加",
   "desktopMusicLibraryEyebrow": "你的曲库",
   "desktopSeeAll": "查看全部",
+  "desktopMoviesFeatureFilms": "电影",
+  "desktopMoviesTitlesCount": "{count} 部影片",
+  "@desktopMoviesTitlesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopUpNext": "接下来播放",
   "desktopOpenQueue": "打开队列",
   "desktopSeeAllCount": "查看全部（{count}）",
@@ -6323,6 +6426,18 @@
   "photosTabPlaces": "地点",
   "photosNoPlaces": "还没有地点。带 GPS 的照片会出现在这里。",
   "desktopPhotosPlaceCount": "{count} 张照片",
+  "desktopPhotosOrderSaved": "照片顺序已保存",
+  "desktopPhotosMovedCount": "已移动 {count} 张照片",
+  "@desktopPhotosMovedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopPhotosOrderReset": "照片顺序已重置",
+  "desktopPhotosResetOrder": "重置顺序",
+  "desktopPhotosOrderSaveFailed": "照片顺序保存失败，请重试。",
   "desktopPhotosSelect": "选择照片",
   "desktopPhotosClearSelection": "取消选择",
   "desktopPhotosFavorited": "已收藏 {count} 张照片",
@@ -6431,6 +6546,19 @@
   "desktopConfigDiscard": "放弃",
   "desktopConfigSaveChanges": "保存修改",
   "desktopConfigUnsaved": "{count} 项未保存",
+  "desktopConfigOverview": "{count} 项参数 · {modified} 项偏离默认值",
+  "@desktopConfigOverview": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "modified": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopConfigRestoreDefaults": "恢复默认值",
+  "desktopConfigSecretRollbackUnavailable": "旧密钥已隐藏，无法在此恢复。",
   "adminConfigReadOnly": "只读",
   "adminConfigOn": "开",
   "adminConfigOff": "关",
@@ -6552,6 +6680,7 @@
   "desktopMoviesEmptyFavoritesBody": "在详情页点心形即可收藏到这里。",
   "desktopMoviesEmptyHistoryTitle": "这里还是空的",
   "desktopMoviesEmptyHistoryBody": "开始观看的影片会出现在这里。",
+  "desktopMoviesEmptyLibraryTitle": "影视片库还是空的",
   "desktopMoviesEmptyLibraryBody": "导入影片或剧集后就会出现在这里。",
   "desktopMoviesWatchlist": "待看清单",
   "desktopMoviesEmptyWatchlistTitle": "待看清单为空",
@@ -6568,5 +6697,65 @@
   "@desktopMoviesMarkedUnwatched": {"placeholders": {"title": {"type": "String"}}},
   "photosDownload": "下载",
   "photosSavedCount": "已保存 {count} 张",
-  "photosDownloadNeedsOriginal": "请先打开照片——列表数据没有原图地址"
+  "photosDownloadNeedsOriginal": "请先打开照片——列表数据没有原图地址",
+  "adminSortLabel": "排序",
+  "adminSortName": "名称",
+  "adminSortStorageUsed": "存储用量",
+  "adminSortLastActive": "最近活跃",
+  "adminGeneratePassword": "生成密码",
+  "adminShowPassword": "显示密码",
+  "adminHidePassword": "隐藏密码",
+  "adminAccountEnabled": "账户启用",
+  "adminDisabledAccountsCannotSignIn": "停用的账户无法登录。",
+  "adminUserCreated": "用户已创建",
+  "adminRoleCreated": "角色已创建",
+  "desktopMoviesEmptySeriesTitle": "暂无剧集",
+  "desktopMoviesEmptySeriesBody": "添加到片库的剧集会显示在这里。",
+  "desktopMoviesEmptyAnimeTitle": "暂无动漫",
+  "desktopMoviesEmptyAnimeBody": "添加到片库的动漫剧集会显示在这里。",
+  "filesLocalLibrary": "本地曲库",
+  "musicScanStatusLabel": "扫描中",
+  "musicScanQueued": "已开始扫描音乐",
+  "desktopServicesOther": "其他服务",
+  "desktopLastFmScrobbling": "Last.fm 收听记录同步",
+  "desktopLastFmUnavailable": "此服务器尚未提供 Last.fm 同步。",
+  "adminNotConfigured": "暂不可用",
+  "adminSystemLogs": "系统日志",
+  "adminSystemLogSource": "来源",
+  "adminSystemLogMessage": "消息",
+  "adminSystemLogsUnavailable": "此服务端尚未提供系统日志流接口。",
+  "desktopMediaImportMoviesTitle": "添加电影和剧集",
+  "desktopMediaImportMoviesHint": "从我的文件中选择 MKV、MP4、MOV 和 AVI 文件，导入后可匹配影片元数据。",
+  "desktopMediaImportPhotosTitle": "添加照片和视频",
+  "desktopMediaImportPhotosHint": "从我的文件中选择 JPG、HEIC、PNG、RAW 或视频文件，导入时会识别重复文件。",
+  "desktopMediaImportMusicTitle": "添加音乐",
+  "desktopMediaImportMusicHint": "从我的文件中选择 FLAC、MP3、AAC 和 WAV 文件，导入时会读取标签和封面。",
+  "desktopMediaImportFromFiles": "从我的文件",
+  "desktopMediaImportFromDevice": "从此设备",
+  "desktopMediaImportDeviceHint": "选择此电脑中的文件。文件会先上传到我的文件，再加入媒体库。",
+  "desktopMediaImportChooseFiles": "选择文件",
+  "desktopMediaImportTaskMovies": "读取媒体信息",
+  "desktopMediaImportTaskPhotos": "生成缩略图",
+  "desktopMediaImportTaskMusic": "扫描音频",
+  "desktopViewTasks": "查看任务",
+  "desktopSessionSignedOut": "已退出设备 {device}",
+  "@desktopSessionSignedOut": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopMediaImportQueued": "已加入后台导入队列：{count} 个文件",
+  "@desktopMediaImportQueued": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopMediaImportNoFiles": "尚未选择文件。",
+  "desktopMediaImportNoCompatibleFiles": "此文件夹中没有兼容的文件。",
+  "desktopMediaImportMatchMetadata": "导入后匹配元数据",
+  "desktopMediaImportMetadataHint": "导入后获取海报、简介和演职人员信息。"
 }

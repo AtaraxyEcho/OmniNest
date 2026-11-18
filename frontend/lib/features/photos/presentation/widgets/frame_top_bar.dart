@@ -10,7 +10,6 @@ import 'package:omninest/core/widgets/responsive_search_field.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
-import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';

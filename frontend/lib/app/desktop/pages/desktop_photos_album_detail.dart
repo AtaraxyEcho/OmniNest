@@ -8,6 +8,7 @@ class _DesktopAlbumDetail extends ConsumerStatefulWidget {
     required this.onShare,
     required this.onDelete,
     required this.onOpenPhoto,
+    required this.onOrderChanged,
   });
 
   final String albumId;
@@ -15,6 +16,7 @@ class _DesktopAlbumDetail extends ConsumerStatefulWidget {
   final ValueChanged<PhotoAlbum> onShare;
   final ValueChanged<PhotoAlbum> onDelete;
   final void Function(PhotoItem photo, List<PhotoItem> photos) onOpenPhoto;
+  final _PhotoOrderChanged onOrderChanged;
 
   @override
   ConsumerState<_DesktopAlbumDetail> createState() =>
@@ -156,9 +158,39 @@ class _DesktopAlbumDetailState extends ConsumerState<_DesktopAlbumDetail> {
     });
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final orderContext = 'album:${widget.albumId}';
+    final orders = ref.watch(photoDisplayOrderProvider);
+    final orderedPhotos = applyPhotoDisplayOrder(_photos, orders[orderContext]);
     final album = _album;
     if (_loading && album == null) {
-      return const DesktopSkeletonPhotoGrid(targetHeight: 200);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const DesktopSkeletonBox(width: 112, height: 12),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const DesktopSkeletonBox(width: 240, height: 30),
+                    const SizedBox(height: 8),
+                    const DesktopSkeletonBox(width: 120, height: 12),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              const DesktopSkeletonBox(width: 84, height: 34),
+              const SizedBox(width: 8),
+              const DesktopSkeletonBox(width: 96, height: 34),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const DesktopSkeletonPhotoGrid(targetHeight: 200),
+        ],
+      );
     }
     if (album == null) {
       return DesktopEmpty(
@@ -230,11 +262,13 @@ class _DesktopAlbumDetailState extends ConsumerState<_DesktopAlbumDetail> {
           IgnorePointer(
             ignoring: _loadingMore,
             child: _JustifiedPhotos(
-              photos: _photos,
+              photos: orderedPhotos,
               targetHeight: 200,
               selection: const <String>{},
-              onActivate: (photo) => widget.onOpenPhoto(photo, _photos),
+              onActivate: (photo, photos) => widget.onOpenPhoto(photo, photos),
               onToggleSelect: (_) {},
+              orderContext: orderContext,
+              onOrderChanged: widget.onOrderChanged,
               showCaption: false,
               showFavorite: false,
               showSelectionControls: false,

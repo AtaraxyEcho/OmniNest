@@ -210,6 +210,8 @@ class _HarnessMusicCenterController extends MusicCenterController {
         albumCount: 24,
         artistCount: 9,
         playHistoryCount: 128,
+        weekListeningSeconds: 0,
+        itemsAddedToday: 0,
         recentTracks: tracks.take(3).toList(growable: false),
         recentAlbums: const [],
         featuredArtists: const [],

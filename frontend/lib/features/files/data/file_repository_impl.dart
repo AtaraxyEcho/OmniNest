@@ -4,6 +4,7 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/file_media_import_task.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -11,6 +12,17 @@ class FileRepositoryImpl implements FileRepository {
   const FileRepositoryImpl(this.fileApi);
 
   final FileApi fileApi;
+
+  @override
+  Future<List<FileMediaImportTask>> requestMediaImports({
+    required List<String> fileNodeIds,
+    required String mediaType,
+  }) {
+    return fileApi.requestMediaImports(
+      fileNodeIds: fileNodeIds,
+      mediaType: mediaType,
+    );
+  }
 
   @override
   Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
@@ -296,6 +308,11 @@ class FileRepositoryImpl implements FileRepository {
   @override
   Future<FileStorageStats> storageStats() {
     return fileApi.storageStats();
+  }
+
+  @override
+  Future<FileDuplicateSummary> scanDuplicates() {
+    return fileApi.scanDuplicates();
   }
 
   @override

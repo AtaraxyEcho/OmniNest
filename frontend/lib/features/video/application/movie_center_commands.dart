@@ -147,6 +147,16 @@ extension MovieCenterCommands on MovieCenterController {
     }
   }
 
+  Future<void> createScrapeTaskForFileNodeId(String fileNodeId) async {
+    try {
+      await _api.createScrapeTask(fileNodeId: fileNodeId);
+      await refresh();
+    } on Exception catch (error) {
+      _setError(userFacingErrorText(error));
+      rethrow;
+    }
+  }
+
   Future<void> probeItem(MovieVideoItem item) async {
     try {
       await _api.probeItem(item.id);

@@ -5,12 +5,14 @@ class ReaderDashboard {
     required this.overview,
     required this.continueReading,
     required this.recentItems,
+    this.itemsAddedToday = 0,
   });
 
   factory ReaderDashboard.empty() => ReaderDashboard(
     overview: ReaderOverview.empty(),
     continueReading: const [],
     recentItems: const [],
+    itemsAddedToday: 0,
   );
 
   factory ReaderDashboard.fromJson(Map<String, dynamic> json) {
@@ -25,12 +27,14 @@ class ReaderDashboard {
           _asMapList(json['continueReading']).map(ReaderItem.fromJson).toList(),
       recentItems:
           _asMapList(json['recentItems']).map(ReaderItem.fromJson).toList(),
+      itemsAddedToday: _asInt(json['itemsAddedToday']),
     );
   }
 
   final ReaderOverview overview;
   final List<ReaderItem> continueReading;
   final List<ReaderItem> recentItems;
+  final int itemsAddedToday;
 }
 
 class ReaderOverview {

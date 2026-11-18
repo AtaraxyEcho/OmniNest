@@ -134,7 +134,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final challenge = loginState.challenge;
     if (challenge != null) {
       return LoginTwoFactorPanel(
+        key: ValueKey<String>(challenge.challengeToken),
         challenge: challenge,
+        errorMessage: _errorText(
+          loginState.error,
+          AppLocalizations.of(context),
+        ),
         onLoginSucceeded: _onTwoFactorLoginSucceeded,
         onBackToLogin:
             () =>

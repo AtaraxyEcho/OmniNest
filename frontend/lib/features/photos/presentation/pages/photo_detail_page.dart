@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -14,6 +15,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_video_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -24,6 +26,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/network/api_url_resolver.dart';
 import 'package:omninest/core/services/app_image_cache_policy.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
@@ -280,7 +283,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       final sourceUrl = item.sourceUrl;
       final coverUrl = item.coverUrl;
       final hasSource = sourceUrl != null && sourceUrl.isNotEmpty;
-      if (hasSource) {
+      if (hasSource && !item.isVideo) {
         _precacheViewerImage(
           sourceUrl,
           cacheKey: item.sourceCacheKey,
@@ -332,6 +335,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       final detail = await repository.getPhoto(photoId);
       memoryCache.put(detail);
       if (!mounted) {
+        return;
+      }
+      if (detail.isVideo) {
         return;
       }
       final sourceUrl = detail.sourceUrl;
@@ -407,6 +413,15 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     showOmniFeedback(
       context,
       AppLocalizations.of(context).photosMotionPlayFailed,
+      severity: OmniFeedbackSeverity.error,
+    );
+  }
+
+  void _handlePhotoVideoPlayError() {
+    if (!mounted) return;
+    showOmniFeedback(
+      context,
+      AppLocalizations.of(context).filesCannotLoadVideo,
       severity: OmniFeedbackSeverity.error,
     );
   }

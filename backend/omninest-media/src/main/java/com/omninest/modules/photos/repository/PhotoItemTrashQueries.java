@@ -9,7 +9,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.data.repository.query.Param;
 
 /**
@@ -17,7 +16,6 @@ import org.springframework.data.repository.query.Param;
  *
  * @author OmniNest
  */
-@NoRepositoryBean
 public interface PhotoItemTrashQueries {
 
     // ─── 回收站 ───

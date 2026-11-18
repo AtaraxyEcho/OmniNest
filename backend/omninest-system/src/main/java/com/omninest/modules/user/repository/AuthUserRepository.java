@@ -101,6 +101,33 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             Pageable pageable
     );
 
+    @Query(value = """
+            select user from AuthUser user
+            where user.status = :status
+              and (:searchPattern = ''
+                   or lower(user.username) like :searchPattern
+                   or lower(user.displayName) like :searchPattern
+                   or lower(user.email) like :searchPattern)
+              and (:roleCode = ''
+                   or exists (select role.id from user.roles role where role.code = :roleCode))
+            """,
+            countQuery = """
+                    select count(user) from AuthUser user
+                    where user.status = :status
+                      and (:searchPattern = ''
+                           or lower(user.username) like :searchPattern
+                           or lower(user.displayName) like :searchPattern
+                           or lower(user.email) like :searchPattern)
+                      and (:roleCode = ''
+                           or exists (select role.id from user.roles role where role.code = :roleCode))
+                    """)
+    Page<AuthUser> searchAdminUsersByStatus(
+            @Param("searchPattern") String searchPattern,
+            @Param("roleCode") String roleCode,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
     boolean existsByUsername(String username);
 
     boolean existsByRoles_Code(String roleCode);

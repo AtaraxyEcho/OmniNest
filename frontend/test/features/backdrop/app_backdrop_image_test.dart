@@ -54,7 +54,7 @@ void main() {
     expect(find.byType(ColoredBox), findsWidgets);
   });
 
-  testWidgets('url 为空时使用 fallbackAsset(内置壁纸封面帧场景)', (tester) async {
+  testWidgets('url 为空时使用 fallbackAsset(内置壁纸图片场景)', (tester) async {
     await pumpBackdrop(
       tester,
       url: '',

@@ -184,6 +184,7 @@ class AdminStorageStats {
     required this.objectCount,
     required this.usedBytes,
     required this.externalAccountCount,
+    this.categoryBreakdown = const <AdminStorageCategoryMetric>[],
   });
 
   factory AdminStorageStats.fromJson(Map<String, dynamic> json) {
@@ -193,6 +194,10 @@ class AdminStorageStats {
       objectCount: _intValue(json['objectCount']),
       usedBytes: _intValue(json['usedBytes']),
       externalAccountCount: _intValue(json['externalAccountCount']),
+      categoryBreakdown:
+          _list(
+            json['categoryBreakdown'],
+          ).map(AdminStorageCategoryMetric.fromJson).toList(),
     );
   }
 
@@ -201,6 +206,24 @@ class AdminStorageStats {
   final int objectCount;
   final int usedBytes;
   final int externalAccountCount;
+  final List<AdminStorageCategoryMetric> categoryBreakdown;
+}
+
+class AdminStorageCategoryMetric {
+  const AdminStorageCategoryMetric({
+    required this.category,
+    required this.usedBytes,
+  });
+
+  factory AdminStorageCategoryMetric.fromJson(Map<String, dynamic> json) {
+    return AdminStorageCategoryMetric(
+      category: json['category'] as String? ?? 'other',
+      usedBytes: _intValue(json['usedBytes']),
+    );
+  }
+
+  final String category;
+  final int usedBytes;
 }
 
 class AdminHealthItem {
