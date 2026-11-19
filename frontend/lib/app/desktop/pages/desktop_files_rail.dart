@@ -6,7 +6,7 @@ part of 'desktop_files_page.dart';
 /// `--panel` 半透明底、1px 边线、`backdrop-filter: blur(20px)`），
 /// 内部再排分区标题与导航行。此前这里只画了透明的行，轨道落在页面底色上，
 /// 与样例的层级差一整层容器，所以面板在这里收口。
-class _FilesRail extends StatelessWidget {
+class _FilesRail extends StatefulWidget {
   const _FilesRail({
     required this.state,
     required this.section,
@@ -23,19 +23,39 @@ class _FilesRail extends StatelessWidget {
   final ValueChanged<FileNode> onOpenFolder;
 
   /// 目录树/根条目接收拖放：ids 落到 targetParentId（空串表示根）。
-  final void Function(List<String> ids, String targetParentId) onMoveFiles;
+  final Future<void> Function(List<String> ids, String targetParentId)
+  onMoveFiles;
+
+  @override
+  State<_FilesRail> createState() => _FilesRailState();
+}
+
+class _FilesRailState extends State<_FilesRail> {
+  final GlobalKey<_FolderTreeState> _folderTreeKey =
+      GlobalKey<_FolderTreeState>();
+
+  Future<void> _moveFiles(List<String> ids, String targetParentId) async {
+    try {
+      await widget.onMoveFiles(ids, targetParentId);
+    } finally {
+      if (mounted) {
+        _folderTreeKey.currentState?.refreshAfterMove();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final currentId =
-        state != null && state!.section == FileManagerSection.allFiles
-            ? state!.breadcrumbs.isEmpty
+        widget.state != null &&
+                widget.state!.section == FileManagerSection.allFiles
+            ? widget.state!.breadcrumbs.isEmpty
                 ? null
-                : state!.breadcrumbs.last.id
+                : widget.state!.breadcrumbs.last.id
             : null;
-    final canDrop = section == FileManagerSection.allFiles;
+    final canDrop = widget.section == FileManagerSection.allFiles;
     return DesktopGlassSurface(
       borderRadius: BorderRadius.circular(_FilesRailGeometry.radius),
       blur: _FilesRailGeometry.blur,
@@ -55,69 +75,71 @@ class _FilesRail extends StatelessWidget {
               label: l10n.desktopFilesAll,
               icon: DesktopIcons.folderFilled,
               active:
-                  section == FileManagerSection.allFiles && currentId == null,
-              onTap: () => onSection(FileManagerSection.allFiles),
-              onDropFiles: canDrop ? (ids) => onMoveFiles(ids, '') : null,
+                  widget.section == FileManagerSection.allFiles &&
+                  currentId == null,
+              onTap: () => widget.onSection(FileManagerSection.allFiles),
+              onDropFiles: canDrop ? (ids) => _moveFiles(ids, '') : null,
             ),
             _FolderTree(
-              state: state,
+              key: _folderTreeKey,
+              state: widget.state,
               currentId: currentId,
-              onOpen: onOpenFolder,
-              onSection: () => onSection(FileManagerSection.allFiles),
-              onMoveFiles: onMoveFiles,
+              onOpen: widget.onOpenFolder,
+              onSection: () => widget.onSection(FileManagerSection.allFiles),
+              onMoveFiles: _moveFiles,
             ),
             _RailItem(
               label: l10n.filesRecent,
               icon: DesktopIcons.clock,
-              active: section == FileManagerSection.recent,
-              onTap: () => onSection(FileManagerSection.recent),
+              active: widget.section == FileManagerSection.recent,
+              onTap: () => widget.onSection(FileManagerSection.recent),
             ),
             _RailItem(
               label: l10n.filesFavorites,
               icon: DesktopIcons.star,
-              count: state?.favoriteFiles.length,
-              active: section == FileManagerSection.favorites,
-              onTap: () => onSection(FileManagerSection.favorites),
+              count: widget.state?.favoriteFiles.length,
+              active: widget.section == FileManagerSection.favorites,
+              onTap: () => widget.onSection(FileManagerSection.favorites),
             ),
             _RailGroupLabel(l10n.desktopFilesGroupSharing, gap: true),
             _RailItem(
               label: l10n.desktopFilesSharedByMe,
               icon: DesktopIcons.link,
-              count: state?.myShares.length,
+              count: widget.state?.myShares.length,
               active:
-                  section == FileManagerSection.myShares ||
-                  section == FileManagerSection.shareManagement,
-              onTap: () => onSection(FileManagerSection.myShares),
+                  widget.section == FileManagerSection.myShares ||
+                  widget.section == FileManagerSection.shareManagement,
+              onTap: () => widget.onSection(FileManagerSection.myShares),
             ),
             _RailItem(
               label: l10n.filesSharedWithMe,
               icon: DesktopIcons.user,
-              count: state?.sharedWithMe.length,
-              active: section == FileManagerSection.sharedWithMe,
-              onTap: () => onSection(FileManagerSection.sharedWithMe),
+              count: widget.state?.sharedWithMe.length,
+              active: widget.section == FileManagerSection.sharedWithMe,
+              onTap: () => widget.onSection(FileManagerSection.sharedWithMe),
             ),
             _RailItem(
               label: l10n.filesSharedSpace,
               icon: DesktopIcons.users,
-              active: section == FileManagerSection.sharedSpace,
-              onTap: () => onSection(FileManagerSection.sharedSpace),
+              active: widget.section == FileManagerSection.sharedSpace,
+              onTap: () => widget.onSection(FileManagerSection.sharedSpace),
             ),
             _RailGroupLabel(l10n.desktopFilesGroupSources, gap: true),
             _RailItem(
               label: l10n.filesExternalStorage,
               icon: DesktopIcons.server,
-              count: state?.externalAccounts.length,
-              active: section == FileManagerSection.externalStorage,
-              onTap: () => onSection(FileManagerSection.externalStorage),
+              count: widget.state?.externalAccounts.length,
+              active: widget.section == FileManagerSection.externalStorage,
+              onTap: () => widget.onSection(FileManagerSection.externalStorage),
             ),
             _RailItem(
               label: l10n.filesRecycleBin,
               icon: DesktopIcons.trash,
-              count: state?.recycleBin.length,
-              active: section == FileManagerSection.recycleBin,
-              onTap: () => onSection(FileManagerSection.recycleBin),
+              count: widget.state?.recycleBin.length,
+              active: widget.section == FileManagerSection.recycleBin,
+              onTap: () => widget.onSection(FileManagerSection.recycleBin),
             ),
-            if (stats != null) _RailStorageCard(stats: stats!),
+            if (widget.stats != null) _RailStorageCard(stats: widget.stats!),
           ],
         ),
       ),
@@ -187,7 +209,7 @@ class _RailItem extends StatefulWidget {
   final bool active;
   final VoidCallback onTap;
   final int? count;
-  final void Function(List<String> ids)? onDropFiles;
+  final Future<void> Function(List<String> ids)? onDropFiles;
 
   @override
   State<_RailItem> createState() => _RailItemState();
@@ -264,9 +286,9 @@ class _RailItemState extends State<_RailItem> {
     }
     return DragTarget<List<String>>(
       onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
-      onAcceptWithDetails: (details) {
+      onAcceptWithDetails: (details) async {
         setState(() => _dropping = false);
-        onDropFiles(details.data);
+        await onDropFiles(details.data);
       },
       onMove: (_) {
         if (!_dropping) {
@@ -293,6 +315,7 @@ class _RailItemState extends State<_RailItem> {
 /// 作为失效依据——列表一变化就丢掉该层缓存并重取，避免"列表有、树没有"。
 class _FolderTree extends ConsumerStatefulWidget {
   const _FolderTree({
+    super.key,
     required this.state,
     required this.currentId,
     required this.onOpen,
@@ -304,7 +327,8 @@ class _FolderTree extends ConsumerStatefulWidget {
   final String? currentId;
   final ValueChanged<FileNode> onOpen;
   final VoidCallback onSection;
-  final void Function(List<String> ids, String targetParentId) onMoveFiles;
+  final Future<void> Function(List<String> ids, String targetParentId)
+  onMoveFiles;
 
   @override
   ConsumerState<_FolderTree> createState() => _FolderTreeState();
@@ -315,6 +339,7 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   final Set<String> _open = <String>{};
   final Map<String, FocusNode> _focusNodes = <String, FocusNode>{};
   final Map<String, String> _parentSignatures = <String, String>{};
+  final Map<String, int> _fetchGenerations = <String, int>{};
   bool _loadedRoot = false;
   String? _lastParentKey;
 
@@ -359,11 +384,13 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   }
 
   Future<void> _fetch(String key) async {
+    final generation = (_fetchGenerations[key] ?? 0) + 1;
+    _fetchGenerations[key] = generation;
     try {
       final nodes = await ref
           .read(fileBrowserControllerProvider.notifier)
           .listFolderOptions(key.isEmpty ? null : key);
-      if (!mounted) {
+      if (!mounted || _fetchGenerations[key] != generation) {
         return;
       }
       setState(() {
@@ -371,7 +398,7 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
         _loadedRoot = true;
       });
     } on Object {
-      if (mounted) {
+      if (mounted && _fetchGenerations[key] == generation) {
         setState(() => _loadedRoot = true);
       }
     }
@@ -416,10 +443,24 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
       }
       return;
     }
-    if (known != signature || parentChanged) {
+    if (known != signature) {
+      // 文件夹移动会同时改变来源与目标层。刷新树上当前可见的每层，避免
+      // 只刷新当前列表所在目录而把另一侧已展开的子树留在旧状态。
+      _scheduleReloadVisibleLayers();
+    } else if (parentChanged && _children.containsKey(parentKey)) {
       _scheduleReload(parentKey);
     }
   }
+
+  void _scheduleReloadVisibleLayers() {
+    final visibleKeys = <String>{'', ..._open};
+    for (final key in visibleKeys) {
+      _scheduleReload(key);
+    }
+  }
+
+  /// 树内跨分支移动不会改变当前主列表层级；在移动请求结束后显式重取已展开节点。
+  void refreshAfterMove() => _scheduleReloadVisibleLayers();
 
   void _scheduleReload(String key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -531,6 +572,9 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
                 onTap: () => _toggle(folder),
                 behavior: HitTestBehavior.opaque,
                 child: SizedBox(
+                  key: ValueKey<String>(
+                    'desktop-files-tree-chevron-${folder.id}',
+                  ),
                   width: 20,
                   height: 28,
                   child: Center(
@@ -579,9 +623,9 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
               details.data.isNotEmpty && !details.data.contains(folder.id),
       onMove: (_) => _scheduleHoverExpand(folder),
       onLeave: (_) => _cancelHoverExpand(),
-      onAcceptWithDetails: (details) {
+      onAcceptWithDetails: (details) async {
         _cancelHoverExpand();
-        widget.onMoveFiles(details.data, folder.id);
+        await widget.onMoveFiles(details.data, folder.id);
       },
       builder:
           (context, candidate, rejected) =>

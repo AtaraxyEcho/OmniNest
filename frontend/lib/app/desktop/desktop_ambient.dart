@@ -140,7 +140,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     }
     final skin = DesktopSkin.of(context);
     // 样例 `.ambient { opacity: ambient/100 }`：强度只作用于整层一次。
-    // 亮暗差异由封面 opacity(.55/.4) 与暗纱 alpha(.86/.7) 各自承担，
+    // 亮暗差异由封面 opacity(.55/.4) 与暗纱整层 opacity(.86/.7) 各自承担，
     // 不再额外乘一个整层系数（那会把亮色的色团/噪点也压暗，偏离样例）。
     final opacity = widget.intensity / 100;
     final hasCover = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
@@ -161,23 +161,25 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             if (hasCover)
               AnimatedBuilder(
                 animation: _drift,
-                builder: (context, child) => Transform(
-                  transform: Matrix4.identity()
-                    ..translateByDouble(
-                      viewport.width * 0.02 * drift,
-                      -viewport.height * 0.02 * drift,
-                      0,
-                      1,
-                    )
-                    ..scaleByDouble(
-                      1.12 * (1 + 0.12 * drift),
-                      1.12 * (1 + 0.12 * drift),
-                      1.12 * (1 + 0.12 * drift),
-                      1,
+                builder:
+                    (context, child) => Transform(
+                      transform:
+                          Matrix4.identity()
+                            ..translateByDouble(
+                              viewport.width * 0.02 * drift,
+                              -viewport.height * 0.02 * drift,
+                              0,
+                              1,
+                            )
+                            ..scaleByDouble(
+                              1.12 * (1 + 0.12 * drift),
+                              1.12 * (1 + 0.12 * drift),
+                              1.12 * (1 + 0.12 * drift),
+                              1,
+                            ),
+                      alignment: Alignment.center,
+                      child: child,
                     ),
-                  alignment: Alignment.center,
-                  child: child,
-                ),
                 child: RepaintBoundary(
                   key: const ValueKey('ambient-cover'),
                   child: _cover(skin),
@@ -223,25 +225,28 @@ class _DesktopAmbientState extends State<DesktopAmbient>
               ),
             ),
             // 静态层：暗纱与噪点只录一次；≤4200 个 1×1 rect 不再每帧重录。
-            RepaintBoundary(
-              key: const ValueKey('ambient-veil'),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment.topCenter,
-                        radius: 1.25,
-                        colors: [Colors.transparent, skin.veil],
-                        stops: const [0.0, 0.85],
+            Opacity(
+              opacity: skin.isDark ? 0.86 : 0.70,
+              child: RepaintBoundary(
+                key: const ValueKey('ambient-veil'),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // CSS 先铺线性实色，再叠径向透明到 veil 的渐变。
+                    ColoredBox(color: skin.veil),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.topCenter,
+                          radius: 1.25,
+                          colors: [Colors.transparent, skin.veil],
+                          stops: const [0.0, 0.85],
+                        ),
                       ),
                     ),
-                  ),
-                  // 直接用皮肤里的暗纱色（已含 .86/.7 的透明度）。
-                  ColoredBox(color: skin.veil),
-                  const CustomPaint(painter: _GrainPainter()),
-                ],
+                    const CustomPaint(painter: _GrainPainter()),
+                  ],
+                ),
               ),
             ),
           ],
@@ -302,9 +307,10 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         final s = (radius + 0.2 * a * unit) / radius;
         return Transform(
           alignment: alignment,
-          transform: Matrix4.identity()
-            ..translateByDouble(a * unit * 0.08, a * unit * 0.06, 0, 1)
-            ..scaleByDouble(s, s, s, 1),
+          transform:
+              Matrix4.identity()
+                ..translateByDouble(a * unit * 0.08, a * unit * 0.06, 0, 1)
+                ..scaleByDouble(s, s, s, 1),
           child: child,
         );
       },
@@ -333,10 +339,7 @@ class _BlobBasePainter extends CustomPainter {
       radius,
       Paint()
         ..shader = RadialGradient(
-          colors: [
-            color.withValues(alpha: alpha),
-            color.withValues(alpha: 0),
-          ],
+          colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
           stops: const [0.0, 0.68],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );

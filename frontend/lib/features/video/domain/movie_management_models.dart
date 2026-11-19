@@ -168,6 +168,7 @@ class VideoLibrarySource {
     required this.lastCandidateCount,
     required this.lastMissingCount,
     required this.version,
+    this.indexedItemCount = 0,
     this.lastScannedAt,
     this.lastSuccessfulScanAt,
     this.lastErrorCode,
@@ -196,6 +197,7 @@ class VideoLibrarySource {
           )?.toLocal(),
       lastScannedCount: MovieJson.asInt(json['lastScannedCount']),
       lastCreatedCount: MovieJson.asInt(json['lastCreatedCount']),
+      indexedItemCount: MovieJson.asInt(json['indexedItemCount']),
       lastCandidateCount: MovieJson.asInt(json['lastCandidateCount']),
       lastMissingCount: MovieJson.asInt(json['lastMissingCount']),
       version: MovieJson.asInt(json['version']),
@@ -217,6 +219,7 @@ class VideoLibrarySource {
   final String? lastErrorCode;
   final int lastScannedCount;
   final int lastCreatedCount;
+  final int indexedItemCount;
   final int lastCandidateCount;
   final int lastMissingCount;
   final int version;

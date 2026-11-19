@@ -203,8 +203,7 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                       onSection: (value) => _goSection(controller, value),
                       onOpenFolder: (folder) => _openFolder(controller, folder),
                       onMoveFiles:
-                          (ids, target) =>
-                              unawaited(controller.moveFilesTo(ids, target)),
+                          (ids, target) => controller.moveFilesTo(ids, target),
                     ),
                   ),
                 ),

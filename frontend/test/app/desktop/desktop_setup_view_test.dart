@@ -53,6 +53,10 @@ void main() {
     expect(find.text('OmniNest'), findsWidgets);
     expect(find.textContaining('multiple storage'), findsOneWidget);
     expect(find.text('First-time setup'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('setup-top-language')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey<String>('setup-token')), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('setup-username')),

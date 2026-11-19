@@ -126,32 +126,49 @@ class _DesktopLoginPageState extends ConsumerState<DesktopLoginPage> {
     );
 
     // 登录路由不套 Scaffold，输入框需要自己提供 Material 祖先。
-    return Material(
+    // 样例深色 `.auth` 在右上角有一层固定径向底色；窄屏隐藏画幅后仍保留
+    // 这层环境光，因此背景不能只交给单色 Material。
+    final background = BoxDecoration(
       color: skin.bg,
-      child:
-          wide
-              ? Row(
-                children: [
-                  const Expanded(flex: 5, child: _AuthArt()),
-                  SizedBox(
-                    width: formPaneWidth,
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: formPaneWidth * 0.07,
+      gradient:
+          skin.isDark
+              ? RadialGradient(
+                center: const Alignment(0.6, -0.6),
+                radius: 1.15,
+                colors: [DesktopPalette.authGlowDark, skin.bg],
+                stops: const [0.0, 0.6],
+              )
+              : null,
+    );
+    return DecoratedBox(
+      decoration: background,
+      child: Material(
+        color: Colors.transparent,
+        child:
+            wide
+                ? Row(
+                  children: [
+                    const Expanded(flex: 5, child: _AuthArt()),
+                    SizedBox(
+                      width: formPaneWidth,
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: formPaneWidth * 0.07,
+                          ),
+                          child: animatedCard,
                         ),
-                        child: animatedCard,
                       ),
                     ),
+                  ],
+                )
+                : Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(28),
+                    child: animatedCard,
                   ),
-                ],
-              )
-              : Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(28),
-                  child: animatedCard,
                 ),
-              ),
+      ),
     );
   }
 

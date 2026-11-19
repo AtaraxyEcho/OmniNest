@@ -49,6 +49,28 @@ void main() {
     expect(find.byType(DesktopTilt), findsNothing);
   });
 
+  testWidgets('专辑分区点入后显示专辑曲目集合页', (tester) async {
+    await pumpMusic(tester);
+    await tester.tap(find.text('Albums').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desktop-music-album-al-1')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop-music-album-detail-al-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Blue Hours'), findsWidgets);
+    expect(find.text('Evening Drift'), findsOneWidget);
+    expect(find.text('Slow Harbour'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+  });
+
   testWidgets('曲目页列出曲名、专辑与时长', (tester) async {
     await pumpMusic(tester);
     // 页头的分段控件在树里排在最前；首页曲目区的标题也叫 Tracks。

@@ -46,14 +46,57 @@ abstract final class DesktopMotion {
   /// Photos 样例长按 300ms 后进入照片排序拖动。
   static const Duration photoReorderHold = Duration(milliseconds: 300);
 
+  /// Photos 样例在长按预备 90ms 后压入所选缩略图。
+  static const Duration photoReorderPressPreview = Duration(milliseconds: 90);
+
+  /// Photos 多选拖动卡片从原位置聚合成堆的时长。
+  static const Duration photoReorderFan = Duration(milliseconds: 560);
+
+  /// Photos 多选堆每张卡片进入时的错开间隔。
+  static const Duration photoReorderFanStagger = Duration(milliseconds: 28);
+
+  /// Photos 拖拽堆计数徽标淡出速度。
+  static const Duration photoReorderFastFade = Duration(milliseconds: 150);
+
   /// Photos FLIP 顺序交换动效时长。
   static const Duration photoReorderFlip = Duration(milliseconds: 460);
+
+  /// Photos 卡片 FLIP 的 `cubic-bezier(.22,.7,.2,1)`。
+  static const Cubic photoReorderFlipCurve = Cubic(0.22, 0.7, 0.2, 1);
 
   /// Photos 拖动结束后影像回到目标位置的时长。
   static const Duration photoReorderSettle = Duration(milliseconds: 420);
 
+  /// Photos 拖放收束的 `cubic-bezier(.22,.7,.2,1)`。
+  static const Cubic photoReorderSettleCurve = Cubic(0.22, 0.7, 0.2, 1);
+
+  /// Photos 多选堆落位时各张卡片展开/淡出的时长。
+  static const Duration photoReorderDrop = Duration(milliseconds: 300);
+
+  /// Photos 拖放后选中照片落位反馈的时长。
+  static const Duration photoReorderLanded = Duration(milliseconds: 500);
+
+  /// Photos 长按时缩略图压入预览的时长。
+  static const Duration photoReorderPressScale = Duration(milliseconds: 280);
+
+  /// Photos 拖动源缩略图淡出速度。
+  static const Duration photoReorderSourceFade = Duration(milliseconds: 350);
+
+  /// Photos 缩略图悬停放大时长。
+  static const Duration photoTileImageHover = Duration(milliseconds: 550);
+
+  /// Photos 拖拽反馈跟随指针的每帧收敛比例，取自样例 `reorder.tsx` 的
+  /// `cx += (px - cx) * 0.22`，让卡片保留极短的惯性而不抢过指针。
+  static const double photoReorderPointerSmoothing = 0.22;
+
+  /// `.ph.pressing` 的按压曲线。
+  static const Cubic photoReorderPressCurve = Cubic(0.3, 0.7, 0.2, 1);
+
   /// Photos 连续换位的迟滞，防止指针停在边界时反复交换。
   static const Duration photoReorderSwapCooldown = Duration(milliseconds: 260);
+
+  /// Photos 拖拽结束后忽略合成点击，避免拖放尾事件打开图片。
+  static const Duration photoReorderClickGuard = Duration(milliseconds: 250);
 
   /// `--spring` 的悬停缩放。
   static const Duration springHover = Duration(milliseconds: 250);
@@ -108,6 +151,12 @@ abstract final class DesktopMotion {
 
   /// Photos 幻灯片下顶栏和胶片条的显隐过渡。
   static const Duration viewerChrome = Duration(milliseconds: 600);
+
+  /// Photos `PhotoViewer` 外层 `.viewer` 的入场淡入。
+  static const Duration photoViewerEnter = Duration(milliseconds: 350);
+
+  /// Video 与 Reader 全局查看器外层的 `.4s fade` 入场。
+  static const Duration immersiveViewerEnter = Duration(milliseconds: 400);
 
   /// Files 触控长按后开始移动文件的识别延迟（桌面鼠标仍立即拖动）。
   static const Duration longPressDrag = Duration(milliseconds: 500);

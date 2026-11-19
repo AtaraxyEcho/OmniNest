@@ -85,6 +85,20 @@ class VideoLibrarySourceServiceTest {
     );
 
     @Test
+    void listReportsCurrentIndexedItemCountInsteadOfLastScanCreatedCount() {
+        VideoLibrarySource source = source("COMPLETED");
+        source.setLastCreatedCount(2);
+        when(sourceRepository.findAllByOrderByNameAsc()).thenReturn(List.of(source));
+        when(videoItemRepository.countByLibrarySourceId(SOURCE_ID)).thenReturn(14L);
+
+        List<VideoLibrarySourceDto> result = service.list(OWNER_ID);
+
+        // 管理页的“已索引片目”是实时库存而不是某一次扫描的创建数量。
+        assertThat(result).singleElement().extracting(VideoLibrarySourceDto::indexedItemCount).isEqualTo(14L);
+        verify(accessService).requireManagePermission(OWNER_ID);
+    }
+
+    @Test
     void deleteEmitsVideoLibraryEventForOperatorDevices() {
         VideoLibrarySource source = source("COMPLETED");
         when(accessService.requireManage(OWNER_ID, SOURCE_ID)).thenReturn(source);
@@ -611,8 +625,12 @@ class VideoLibrarySourceServiceTest {
         source.setName("本地影片");
         source.setRelativeRoot("movies");
         source.setLibraryType(MediaLibraryType.MOVIE.name());
+        source.setImportPolicy(MediaImportPolicy.MANUAL_REVIEW.name());
+        source.setVisibilityType("PRIVATE");
         source.setEnabled(true);
         source.setScanStatus(scanStatus);
+        source.setHealthStatus("AVAILABLE");
+        source.setVersion(1L);
         return source;
     }
 }

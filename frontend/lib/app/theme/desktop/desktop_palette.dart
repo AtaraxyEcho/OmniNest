@@ -20,6 +20,9 @@ abstract final class DesktopPalette {
   // ── 深色主题 ────────────────────────────────────────────────────────
   static const Color bgDark = Color(0xFF0B0E11);
   static const Color bg2Dark = Color(0xFF11151A);
+
+  /// 登录页深色样例的右上角径向起始色（`desktop.css:494`）。
+  static const Color authGlowDark = Color(0xFF14201D);
   static const Color panelSolidDark = Color(0xFF161B20);
 
   /// `.drawer` 通用左侧阴影。

@@ -21,14 +21,16 @@ class _Filmstrip extends StatelessWidget {
     // 暗色的渐变遮罩；缩略图固定 64×44，未选中压到 45% 不透明度，
     // 选中上移 5px 放大 1.12 并套 2px 强调环。
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
             Colors.transparent,
-            DesktopPalette.onStage.withValues(alpha: 0.6),
+            // 样例 polish.css:335 是 `rgba(0,0,0,.35)`，不是白色高光；
+            // 之前误取 `onStage`（白）导致底部整片白色渐变光。
+            const Color(0x59000000),
           ],
         ),
       ),

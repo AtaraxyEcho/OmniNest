@@ -1985,8 +1985,40 @@
   "statusPhaseReview": "审阅阶段",
   "statusPhaseApply": "应用阶段",
   "adminLibrarySourceAdd": "新建库源",
-  "adminLibrarySourcesEmpty": "尚无库源。请先在上方「可信挂载点」启用媒体库，系统会自动建立电影/剧集/动漫三类库源。",
+  "adminLibrarySourcesEmpty": "尚无媒体库源。可初始化默认媒体库，或从可信的服务器存储位置添加库源。",
+  "adminLibrarySetupDefault": "初始化默认媒体库",
+  "adminLibraryDefaultMountUnavailable": "没有可用的可信媒体挂载点。请先在「管理 → 存储」中添加或启用挂载点，再回到这里选择。",
   "adminLibrarySourcesSubtitle": "启用挂载媒体库后自动出现的三类库源；也可在高级设置中手动新建自定义库源。",
+  "adminLibraryMetricSources": "库源",
+  "adminLibraryMetricSourcesHint": "已配置的视频根目录",
+  "adminLibraryMetricIndexedTitles": "已索引片目",
+  "adminLibraryMetricIndexedTitlesHint": "当前归属这些库源的条目",
+  "adminLibraryMetricAwaitingReview": "等待审阅",
+  "adminLibraryMetricAwaitingReviewHint": "可选择并入库的扫描结果",
+  "adminLibraryMetricScansRunning": "扫描进行中",
+  "adminLibraryMetricScansRunningHint": "排队、发现或应用中的扫描",
+  "adminLibraryMetricStorageIssues": "存储异常",
+  "adminLibraryMetricStorageIssuesHint": "已启用且需要处理的库源",
+  "adminLibraryIndexedUnit": "已索引",
+  "adminLibraryPolicyManualReview": "人工审阅",
+  "adminLibraryPolicyAutomaticImport": "自动入库",
+  "adminLibraryReviewCandidates": "审阅候选项",
+  "adminLibraryPauseScan": "暂停扫描",
+  "adminLibraryCancelScan": "取消扫描",
+  "adminLibraryScanProgress": "{phase} · 已发现 {count}",
+  "@adminLibraryScanProgress": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminLibraryOtherMediaTitle": "其他媒体库",
+  "adminLibraryOtherMediaSubtitle": "音乐、照片与阅读器沿用其模块内的既有流程。",
+  "adminLibraryOtherMediaUnavailable": "这些模块提供真实的服务端库源与扫描契约后，统一管理控件将在此处开放。",
   "adminMountLibraryScanAll": "扫描全部",
   "adminMountLibraryScanAllSuccess": "已对 {count} 个库源发起发现扫描",
   "@adminMountLibraryScanAllSuccess": {
@@ -5073,6 +5105,27 @@
   "photosSaturation": "饱和度",
   "photosModuleDisplayName": "光影集",
   "photosSelectAll": "全选",
+  "photosSelectDay": "选择这一天",
+  "photosDeselectDay": "取消选择这一天",
+  "photosItemCount": "{count} 项",
+  "@photosItemCount": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "photosGroupSelectedCount": "已选 {selected} / {total} 项",
+  "@photosGroupSelectedCount": {
+    "placeholders": {
+      "selected": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "photosDeselectAll": "取消全选",
   "photosFrameNavPhotos": "照片",
   "photosFrameNavLocations": "地点",

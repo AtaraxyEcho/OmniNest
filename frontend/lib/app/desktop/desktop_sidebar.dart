@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_focus_outline.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -96,6 +98,7 @@ class DesktopSidebar extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final shell = ref.watch(desktopShellProvider);
     final expanded = shell.sidebarExpanded;
+    final backdropActive = desktopBackdropVisibleForRoute(ref, path);
     // 只订阅「紧凑」这一位：整份 watch 会让拖动环境光强度滑杆时每帧重建
     // 整条侧栏（含每个导航项的图标与文字）。
     final compact = ref.watch(
@@ -104,7 +107,7 @@ class DesktopSidebar extends ConsumerWidget {
     final canAdmin = ref.watch(canAccessAdminConsoleProvider);
     final storage = ref.watch(fileStorageStatsProvider).asData?.value;
 
-    return AnimatedContainer(
+    final rail = AnimatedContainer(
       duration: DesktopMotion.of(context, DesktopMotion.sidebar),
       curve: DesktopMotion.ease,
       width:
@@ -113,7 +116,7 @@ class DesktopSidebar extends ConsumerWidget {
               : DesktopMetrics.sidebarSlimWidth,
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: skin.bg.withValues(alpha: 0.40),
+        color: skin.bg.withValues(alpha: backdropActive ? 0.38 : 0.40),
         border: Border(right: BorderSide(color: skin.line)),
       ),
       // 内容按展开宽度固定排版，收窄时只被裁切：跟样例
@@ -207,6 +210,14 @@ class DesktopSidebar extends ConsumerWidget {
         ),
       ),
     );
+    return backdropActive
+        ? DesktopGlassSurface(
+          borderRadius: BorderRadius.zero,
+          blur: 26,
+          saturation: 1.4,
+          child: rail,
+        )
+        : rail;
   }
 }
 

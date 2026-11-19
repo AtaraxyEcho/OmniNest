@@ -63,7 +63,7 @@ file:
     max-scan-depth: 32
     mounts:
       library:
-        host-path: ${OMNINEST_LOCAL_MEDIA_ROOT:../.omninest/local-media}
+        host-path: ${OMNINEST_LOCAL_MEDIA_ROOT:../.omninest/Movies-Library}
         process-path: ${OMNINEST_LOCAL_MEDIA_PROCESS_ROOT:/mnt/local-media}
 
 reader:

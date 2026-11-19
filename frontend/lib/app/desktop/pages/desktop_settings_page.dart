@@ -16,6 +16,8 @@ import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_focus_outline.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/environment_providers.dart';
@@ -135,69 +137,82 @@ class _DesktopSettingsPageState extends ConsumerState<DesktopSettingsPage> {
             title: l10n.desktopNavSettings,
             // 样例 `Settings.tsx:39` 的 PageHead 只有眉标 + 标题，没有副标题。
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 220,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 980;
+              final nav = SizedBox(
+                width: narrow ? double.infinity : 220,
+                child: Wrap(
+                  direction: narrow ? Axis.horizontal : Axis.vertical,
+                  spacing: narrow ? 6 : 0,
+                  runSpacing: narrow ? 6 : 0,
                   children: [
                     for (final section in DesktopSettingsSection.values)
-                      _NavRow(
-                        label: labels[section] ?? '',
-                        icon: icons[section]!,
-                        active: _section == section,
-                        onTap: () => setState(() => _section = section),
+                      SizedBox(
+                        width: narrow ? null : 220,
+                        child: _NavRow(
+                          label: labels[section] ?? '',
+                          icon: icons[section]!,
+                          active: _section == section,
+                          onTap: () => setState(() => _section = section),
+                        ),
                       ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 40),
-              // `desktop.css:470` 的 220px / minmax(0,760px) / 40px：
-              // 内容列最多 760，剩余宽度留白而不是把字段拉满。
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final bodyWidth =
-                        constraints.maxWidth > 760
-                            ? 760.0
-                            : constraints.maxWidth;
-                    return SizedBox(
-                      width: bodyWidth,
-                      child: KeyedSubtree(
-                        key: ValueKey<DesktopSettingsSection>(_section),
-                        child: DesktopRise(
-                          child: switch (_section) {
-                            DesktopSettingsSection.appearance =>
-                              const _AppearanceSection(),
-                            DesktopSettingsSection.backdrop =>
-                              const _BackdropSection(),
-                            DesktopSettingsSection.profile => _ProfileSection(
-                              name: name,
-                              email: user?.email ?? '',
-                              role: user?.role ?? '',
-                              avatarUrl: user?.avatarUrl,
-                              skin: skin,
-                            ),
-                            DesktopSettingsSection.notifications =>
-                              const _NotificationsSection(),
-                            DesktopSettingsSection.security =>
-                              const _SecuritySection(),
-                            DesktopSettingsSection.services =>
-                              const _ServicesSection(),
-                            DesktopSettingsSection.storage =>
-                              const _StorageSection(),
-                            DesktopSettingsSection.about =>
-                              const _AboutSection(),
-                          },
-                        ),
+              );
+              final body = LayoutBuilder(
+                builder: (context, bodyConstraints) {
+                  final bodyWidth =
+                      bodyConstraints.maxWidth > 760
+                          ? 760.0
+                          : bodyConstraints.maxWidth;
+                  return SizedBox(
+                    width: bodyWidth,
+                    child: KeyedSubtree(
+                      key: ValueKey<DesktopSettingsSection>(_section),
+                      child: DesktopRise(
+                        child: switch (_section) {
+                          DesktopSettingsSection.appearance =>
+                            const _AppearanceSection(),
+                          DesktopSettingsSection.backdrop =>
+                            const _BackdropSection(),
+                          DesktopSettingsSection.profile => _ProfileSection(
+                            name: name,
+                            email: user?.email ?? '',
+                            role: user?.role ?? '',
+                            avatarUrl: user?.avatarUrl,
+                            skin: skin,
+                          ),
+                          DesktopSettingsSection.notifications =>
+                            const _NotificationsSection(),
+                          DesktopSettingsSection.security =>
+                            const _SecuritySection(),
+                          DesktopSettingsSection.services =>
+                            const _ServicesSection(),
+                          DesktopSettingsSection.storage =>
+                            const _StorageSection(),
+                          DesktopSettingsSection.about => const _AboutSection(),
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
+                    ),
+                  );
+                },
+              );
+              if (narrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [nav, const SizedBox(height: 16), body],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  nav,
+                  const SizedBox(width: 40),
+                  Expanded(child: body),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -223,48 +238,52 @@ class _NavRow extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: DesktopHover(
-        builder:
-            (context, hovered) => GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: DesktopMotion.of(context, DesktopMotion.fast),
-                height: DesktopMetrics.navItemHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color:
-                      active
-                          ? skin.raise2
-                          : hovered
-                          ? skin.raise
-                          : Colors.transparent,
-                  borderRadius: BorderRadius.circular(
-                    DesktopMetrics.radiusButton,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      icon,
-                      size: DesktopMetrics.iconSmall,
-                      color: active ? skin.accent : skin.text2,
+      child: DesktopFocusOutline(
+        radius: DesktopMetrics.radiusButton,
+        onActivate: onTap,
+        child: DesktopHover(
+          builder:
+              (context, hovered) => GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.fast),
+                  height: DesktopMetrics.navItemHeight,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color:
+                        active
+                            ? skin.raise2
+                            : hovered
+                            ? skin.raise
+                            : Colors.transparent,
+                    borderRadius: BorderRadius.circular(
+                      DesktopMetrics.radiusButton,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.navItem(
-                          active ? skin.text : skin.text2,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: DesktopMetrics.iconSmall,
+                        color: active ? skin.accent : skin.text2,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.navItem(
+                            active ? skin.text : skin.text2,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+        ),
       ),
     );
   }
@@ -546,39 +565,145 @@ class _ThemeCard extends StatelessWidget {
         dark
             ? Colors.white.withValues(alpha: 0.14)
             : Colors.black.withValues(alpha: 0.12);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: DesktopMotion.of(context, DesktopMotion.fast),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: selected ? skin.raise2 : skin.raise,
-          borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-          border: Border.all(color: selected ? skin.accent : skin.line),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 76,
-              decoration: BoxDecoration(
-                color: preview,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: line),
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: DesktopFocusOutline(
+        radius: 16,
+        onActivate: onTap,
+        child: DesktopHover(
+          builder:
+              (context, hovered) => GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.fast),
+                  transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                  decoration: BoxDecoration(
+                    color: selected ? skin.raise2 : skin.raise,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: selected ? skin.accent : skin.line,
+                      width: selected ? DesktopMetrics.hairlineStrong : 1,
+                    ),
+                    boxShadow:
+                        selected
+                            ? [
+                              BoxShadow(
+                                color: skin.accentWash(0.16),
+                                blurRadius: 0,
+                                spreadRadius: 4,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _ThemePreview(
+                            background: preview,
+                            line: line,
+                            accent: skin.accent,
+                            dark: dark,
+                          ),
+                          const SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              label,
+                              style: DesktopType.bodyStrong(skin.text),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (selected)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: skin.accent,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              DesktopIcons.check,
+                              size: 12,
+                              color: skin.accentInk,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(width: 44, height: 6, color: line),
-                  const SizedBox(height: 6),
-                  Container(width: 26, height: 4, color: line),
-                ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemePreview extends StatelessWidget {
+  const _ThemePreview({
+    required this.background,
+    required this.line,
+    required this.accent,
+    required this.dark,
+  });
+
+  final Color background;
+  final Color line;
+  final Color accent;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = line.withValues(alpha: dark ? 0.25 : 0.35);
+    return SizedBox(
+      height: 84,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          children: [
+            ColoredBox(color: background),
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 22, child: ColoredBox(color: muted)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            height: 20,
+                            child: ColoredBox(
+                              color: accent.withValues(
+                                alpha: dark ? 0.52 : 0.35,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Expanded(child: ColoredBox(color: muted)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    SizedBox(width: 24, child: ColoredBox(color: muted)),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 10),
-            Text(label, style: DesktopType.bodyStrong(skin.text)),
           ],
         ),
       ),
@@ -605,31 +730,69 @@ class _AccentSwatch extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: DesktopFocusOutline(
+          radius: 14,
+          onActivate: onTap,
+          child: AnimatedContainer(
+            duration: DesktopMotion.of(context, DesktopMotion.fast),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: skin.isDark ? accent.dark : accent.light,
-              shape: BoxShape.circle,
+              color: selected ? skin.raise2 : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: selected ? skin.text : skin.line2,
-                width: selected ? 2 : 1,
+                color: selected ? skin.line2 : Colors.transparent,
+                width: DesktopMetrics.hairlineStrong,
               ),
             ),
-            child:
-                selected
-                    ? Icon(DesktopIcons.check, size: 13, color: skin.accentInk)
-                    : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.fast),
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: skin.isDark ? accent.dark : accent.light,
+                    shape: BoxShape.circle,
+                    boxShadow:
+                        selected
+                            ? [
+                              BoxShadow(
+                                color: skin.bg,
+                                blurRadius: 0,
+                                spreadRadius: 3,
+                              ),
+                              BoxShadow(
+                                color: skin.text2,
+                                blurRadius: 0,
+                                spreadRadius: 5,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  alignment: Alignment.center,
+                  child:
+                      selected
+                          ? Icon(
+                            DesktopIcons.check,
+                            size: 13,
+                            color: skin.accentInk,
+                          )
+                          : null,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: DesktopType.caption(selected ? skin.text : skin.text2),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: DesktopType.dense(selected ? skin.text : skin.text2),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -985,36 +1148,46 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
-      decoration: BoxDecoration(
-        color: skin.panel,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: DesktopGlassSurface(
         borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        border: Border.all(color: skin.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        blur: 24,
+        saturation: 1.3,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+          decoration: BoxDecoration(
+            color: skin.panel,
+            borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+            border: Border.all(color: skin.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: DesktopType.panelTitle(skin.text)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 3),
-                      Text(subtitle!, style: DesktopType.caption(skin.text3)),
-                    ],
-                  ],
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: DesktopType.panelTitle(skin.text)),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle!,
+                            style: DesktopType.caption(skin.text3),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 16),
+              child,
             ],
           ),
-          const SizedBox(height: 16),
-          child,
-        ],
+        ),
       ),
     );
   }

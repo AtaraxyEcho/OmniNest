@@ -315,9 +315,10 @@ class _SpinningCoverState extends State<_SpinningCover>
 }
 
 class _AlbumRail extends StatelessWidget {
-  const _AlbumRail({required this.albums});
+  const _AlbumRail({required this.albums, required this.onOpen});
 
   final List<MusicAlbum> albums;
+  final ValueChanged<MusicAlbum> onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -337,7 +338,10 @@ class _AlbumRail extends StatelessWidget {
                   width: width,
                   child: DesktopStagger(
                     index: index,
-                    child: _AlbumCard(album: albums[index]),
+                    child: _AlbumCard(
+                      album: albums[index],
+                      onTap: () => onOpen(albums[index]),
+                    ),
                   ),
                 ),
           ),
@@ -820,10 +824,15 @@ class _PlaylistEditorState extends State<_PlaylistEditor> {
 }
 
 class _AlbumGrid extends StatelessWidget {
-  const _AlbumGrid({required this.albums, required this.emptyLabel});
+  const _AlbumGrid({
+    required this.albums,
+    required this.emptyLabel,
+    required this.onOpen,
+  });
 
   final List<MusicAlbum> albums;
   final String emptyLabel;
+  final ValueChanged<MusicAlbum> onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -851,7 +860,10 @@ class _AlbumGrid extends StatelessWidget {
                 width: width,
                 child: DesktopStagger(
                   index: i,
-                  child: _AlbumCard(album: albums[i]),
+                  child: _AlbumCard(
+                    album: albums[i],
+                    onTap: () => onOpen(albums[i]),
+                  ),
                 ),
               ),
           ],
@@ -862,61 +874,75 @@ class _AlbumGrid extends StatelessWidget {
 }
 
 class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({required this.album});
+  const _AlbumCard({required this.album, required this.onTap});
 
   final MusicAlbum album;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 样例 `.album .cover` 只有静态 14px 圆角 + 柔和投影，没有
-        // `.tilt/.shine` 的指针柔光；这里不再用 DesktopTilt，避免 hover 光晕。
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.6),
-                blurRadius: 30,
-                offset: const Offset(0, 14),
-                spreadRadius: -12,
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: DesktopCover(
-                url: album.coverUrl,
-                kind: DesktopCoverKind.music,
-                fallbackIcon: DesktopIcons.music,
-                cacheKey: 'desktop-album-${album.id}',
-                iconSize: 28,
+    return DesktopHover(
+      builder:
+          (context, hovered) => GestureDetector(
+            key: ValueKey<String>('desktop-music-album-${album.id}'),
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: DesktopMotion.springHover,
+              curve: DesktopMotion.spring,
+              transform: Matrix4.translationValues(0, hovered ? -4 : 0, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 样例 `.album .cover` 只有静态 14px 圆角 + 柔和投影，没有
+                  // `.tilt/.shine` 的指针柔光；这里不再用 DesktopTilt，避免 hover 光晕。
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          blurRadius: 30,
+                          offset: const Offset(0, 14),
+                          spreadRadius: -12,
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: DesktopCover(
+                          url: album.coverUrl,
+                          kind: DesktopCoverKind.music,
+                          fallbackIcon: DesktopIcons.music,
+                          cacheKey: 'desktop-album-${album.id}',
+                          iconSize: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    album.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DesktopType.bodyStrong(skin.text),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    album.artistName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          album.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.bodyStrong(skin.text),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          album.artistName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.caption(skin.text3),
-        ),
-      ],
     );
   }
 }

@@ -31,14 +31,19 @@ class _DensitySlider extends StatelessWidget {
   }
 }
 
-/// 缩略图（样例 `.ph`）：选中时圆角收到 16、整体 scale(.94)、外描一圈主色。
+/// 缩略图（样例 `.ph`）：选中双内环，按压缩放整张 tile，悬停缩放内层图片。
 class _PhotoTile extends StatelessWidget {
   const _PhotoTile({
+    super.key,
     required this.photo,
     required this.height,
     this.onTap,
     this.onToggleSelect,
     this.selected = false,
+    this.pressing = false,
+    this.dragging = false,
+    this.reordering = false,
+    this.landed = false,
     this.selectionActive = false,
     this.showCaption = true,
     this.showFavorite = true,
@@ -50,6 +55,10 @@ class _PhotoTile extends StatelessWidget {
   final ValueChanged<PhotoItem>? onTap;
   final ValueChanged<PhotoItem>? onToggleSelect;
   final bool selected;
+  final bool pressing;
+  final bool dragging;
+  final bool reordering;
+  final bool landed;
 
   /// 已有选中项：所有缩略图的勾选圈一起显形（样例 `.justified:has(.sel)`）。
   final bool selectionActive;
@@ -62,121 +71,266 @@ class _PhotoTile extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return DesktopHover(
       builder: (context, hovered) {
-        final radius = selected ? 16.0 : 10.0;
-        return AnimatedScale(
-          scale: selected ? 0.94 : 1,
-          duration: DesktopMotion.of(context, DesktopMotion.lift),
-          curve: DesktopMotion.spring,
-          child: AnimatedContainer(
-            duration: DesktopMotion.of(context, DesktopMotion.soft),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radius),
-              boxShadow:
-                  selected
-                      ? [
-                        BoxShadow(
-                          color: skin.accent,
-                          blurRadius: 0,
-                          spreadRadius: 3,
-                        ),
-                      ]
-                      : hovered
-                      ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          offset: const Offset(0, 14),
-                          blurRadius: 32,
-                          spreadRadius: -14,
-                        ),
-                      ]
-                      : const <BoxShadow>[],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
+        final radius = selected || dragging ? 12.0 : 10.0;
+        final content = AnimatedContainer(
+          duration: DesktopMotion.of(context, DesktopMotion.soft),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? skin.raise2
+                    : dragging
+                    ? Color.lerp(skin.raise2, skin.accent, 0.16)
+                    : skin.raise2,
+            borderRadius: BorderRadius.circular(radius),
+            border:
+                dragging
+                    ? Border.all(
+                      color: skin.accent.withValues(alpha: 0.5),
+                      width: 1.5,
+                    )
+                    : null,
+            boxShadow:
+                pressing
+                    ? [
+                      BoxShadow(
+                        color: skin.accent.withValues(alpha: 0.7),
+                        blurRadius: 0,
+                        spreadRadius: 3,
+                      ),
+                    ]
+                    : !selected && hovered && !dragging
+                    ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        offset: const Offset(0, 14),
+                        blurRadius: 32,
+                        spreadRadius: -14,
+                      ),
+                    ]
+                    : const <BoxShadow>[],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: AnimatedScale(
+              scale:
+                  pressing ? (selected && selectionActive ? 0.955 : 0.975) : 1,
+              duration: DesktopMotion.of(
+                context,
+                DesktopMotion.photoReorderPressScale,
+              ),
+              curve: DesktopMotion.photoReorderPressCurve,
               child: GestureDetector(
                 onTap: onTap == null ? null : () => onTap!(photo),
-                child: AnimatedScale(
-                  // `.ph:hover` 保留样例的轻微缩放和暗色投影，不使用
-                  // 指针跟随 shine、彩色外发光或透视倾斜。
-                  scale: hovered && !selected ? 1.015 : 1,
-                  duration: DesktopMotion.of(context, DesktopMotion.lift),
-                  curve: DesktopMotion.spring,
-                  child: SizedBox(
-                    height: height,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        DesktopCover(
-                          url: photo.coverUrl,
-                          kind: DesktopCoverKind.network,
-                          fallbackIcon: DesktopIcons.image,
-                          cacheKey: 'desktop-photo-${photo.id}',
+                child: SizedBox(
+                  height: height,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedOpacity(
+                        opacity: dragging ? 0.22 : 1,
+                        duration: DesktopMotion.of(
+                          context,
+                          DesktopMotion.photoReorderSourceFade,
                         ),
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Color(0x59000000)],
-                              stops: [0.62, 1.0],
+                        child: AnimatedScale(
+                          scale:
+                              pressing
+                                  ? 1
+                                  : dragging
+                                  ? 1
+                                  : selected
+                                  ? 1
+                                  : reordering
+                                  ? 0.97
+                                  : hovered
+                                  ? (selectionActive ? 1.03 : 1.05)
+                                  : 1,
+                          duration: DesktopMotion.of(
+                            context,
+                            pressing
+                                ? DesktopMotion.photoReorderPressScale
+                                : DesktopMotion.photoTileImageHover,
+                          ),
+                          curve:
+                              pressing
+                                  ? DesktopMotion.photoReorderPressCurve
+                                  : DesktopMotion.ease,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              selected ? 12 : 10,
+                            ),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.matrix(
+                                desktopColorMatrix(
+                                  brightness: pressing ? 1.06 : 1,
+                                ),
+                              ),
+                              child: DesktopCover(
+                                url: photo.coverUrl,
+                                kind: DesktopCoverKind.network,
+                                fallbackIcon: DesktopIcons.image,
+                                cacheKey: 'desktop-photo-${photo.id}',
+                              ),
                             ),
                           ),
                         ),
-                        if (showCaption)
-                          // 样例 `.ph-cap`：标题只在悬停时淡入，右下留给收藏心。
-                          Positioned(
-                            left: 12,
-                            right: 36,
-                            bottom: 10,
+                      ),
+                      if (!dragging)
+                        Positioned.fill(
+                          child: IgnorePointer(
                             child: AnimatedOpacity(
+                              opacity: selected || hovered ? 1 : 0,
                               duration: DesktopMotion.of(
                                 context,
                                 DesktopMotion.soft,
                               ),
-                              opacity: hovered ? 1 : 0,
-                              child: Text(
-                                photo.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.caption(Colors.white),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient:
+                                      selected
+                                          ? LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Color.lerp(
+                                                Colors.black.withValues(
+                                                  alpha: 0.28,
+                                                ),
+                                                skin.accent,
+                                                0.22,
+                                              )!,
+                                              Colors.transparent,
+                                            ],
+                                            stops: const [0, 0.38],
+                                          )
+                                          : const LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Color(0x59000000),
+                                              Colors.transparent,
+                                              Colors.transparent,
+                                              Color(0x80000000),
+                                            ],
+                                            stops: [0, 0.35, 0.65, 1],
+                                          ),
+                                ),
                               ),
                             ),
                           ),
-                        if (showFavorite && photo.favorite)
-                          // 样例 `.ph .fav`：右下角白色心形。
-                          Positioned(
-                            right: 10,
-                            bottom: 10,
-                            child: Icon(
-                              DesktopIcons.heart,
-                              size: 15,
-                              color: Colors.white,
+                        ),
+                      if (showCaption && !dragging)
+                        // 样例 `.ph-cap`：标题只在悬停时淡入，右下留给收藏心。
+                        Positioned(
+                          left: 12,
+                          right: 36,
+                          bottom: 10,
+                          child: AnimatedOpacity(
+                            duration: DesktopMotion.of(
+                              context,
+                              DesktopMotion.soft,
+                            ),
+                            opacity: hovered ? 1 : 0,
+                            child: Text(
+                              photo.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DesktopType.caption(Colors.white),
                             ),
                           ),
-                        if (showSelectionControls)
-                          Positioned(
-                            top: 9,
-                            left: 9,
-                            child: _SelectCheck(
-                              selected: selected,
-                              visible: hovered || selected || selectionActive,
-                              onTap:
-                                  onToggleSelect == null
-                                      ? null
-                                      : () => onToggleSelect!(photo),
+                        ),
+                      if (showFavorite && photo.favorite && !dragging)
+                        // 样例 `.ph .fav`：右下角白色心形。
+                        Positioned(
+                          right: 10,
+                          bottom: 10,
+                          child: Icon(
+                            DesktopIcons.heart,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                        ),
+                      if (selected && !dragging)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              key: ValueKey<String>(
+                                'desktop-photo-selected-ring-${photo.id}',
+                              ),
+                              painter: _PhotoSelectionRingPainter(
+                                accent: skin.accent,
+                              ),
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                      if (showSelectionControls && !dragging)
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: _SelectCheck(
+                            selected: selected,
+                            visible: hovered || selected || selectionActive,
+                            onTap:
+                                onToggleSelect == null
+                                    ? null
+                                    : () => onToggleSelect!(photo),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
         );
+        return TweenAnimationBuilder<double>(
+          key: ValueKey<bool>(landed),
+          tween: Tween<double>(begin: landed ? 0.82 : 1, end: 1),
+          duration: DesktopMotion.of(context, DesktopMotion.photoReorderSettle),
+          curve: DesktopMotion.riseCurve,
+          child: content,
+          builder:
+              (context, scale, child) => Transform.scale(
+                scale: pressing ? 1 : scale,
+                child: Opacity(
+                  opacity: landed ? ((scale - 0.82) / 0.18).clamp(0.0, 1.0) : 1,
+                  child: child,
+                ),
+              ),
+        );
       },
     );
   }
+}
+
+class _PhotoSelectionRingPainter extends CustomPainter {
+  const _PhotoSelectionRingPainter({required this.accent});
+
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = Radius.circular(12);
+    final accentRect = Offset.zero & size;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(accentRect.deflate(1.5), radius),
+      Paint()
+        ..color = accent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(accentRect.deflate(5), radius),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PhotoSelectionRingPainter oldDelegate) =>
+      accent != oldDelegate.accent;
 }
 
 /// 缩略图左上角的勾选圈（样例 `.check`）：24 圆环，悬停/选中才显形，
@@ -211,8 +365,8 @@ class _SelectCheck extends StatelessWidget {
             onTap: onTap,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -375,297 +529,6 @@ class _PhotoSelectionBar extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AlbumShelf extends StatelessWidget {
-  const _AlbumShelf({
-    required this.albums,
-    required this.loading,
-    required this.onOpen,
-    required this.onCreate,
-  });
-
-  final List<PhotoAlbum> albums;
-  final bool loading;
-  final ValueChanged<PhotoAlbum> onOpen;
-  final VoidCallback onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // desktop.css:346：minmax(220px,1fr) + gap26，246 为两者之和。
-        final available = constraints.maxWidth;
-        final columns = ((available + 26) / 246).floor().clamp(2, 7);
-        final width = (available - (columns - 1) * 26) / columns;
-        return Wrap(
-          spacing: 26,
-          runSpacing: 26,
-          children: [
-            if (loading)
-              for (var i = 0; i < 5; i++)
-                SizedBox(
-                  width: width,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 4 / 3,
-                        child: DesktopSkeletonBox(
-                          radius: DesktopMetrics.radius,
-                          index: i * 3,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      FractionallySizedBox(
-                        widthFactor: 0.58,
-                        alignment: Alignment.centerLeft,
-                        child: DesktopSkeletonBox(height: 14, index: i * 3 + 1),
-                      ),
-                      const SizedBox(height: 6),
-                      FractionallySizedBox(
-                        widthFactor: 0.34,
-                        alignment: Alignment.centerLeft,
-                        child: DesktopSkeletonBox(height: 11, index: i * 3 + 2),
-                      ),
-                    ],
-                  ),
-                ),
-            for (var i = 0; i < albums.length; i++)
-              SizedBox(
-                width: width,
-                child: DesktopStagger(
-                  index: i,
-                  child: _AlbumCard(album: albums[i], onOpen: onOpen),
-                ),
-              ),
-            SizedBox(width: width, child: _CreateAlbumCard(onCreate: onCreate)),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({required this.album, required this.onOpen});
-
-  final PhotoAlbum album;
-  final ValueChanged<PhotoAlbum> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DesktopHoverLift(
-          onTap: () => onOpen(album),
-          child: AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                DesktopCover(
-                  url: album.coverUrl,
-                  kind: DesktopCoverKind.network,
-                  fallbackIcon: DesktopIcons.image,
-                  cacheKey: 'desktop-album-${album.id}',
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Color(0x4D000000)],
-                      stops: [0.70, 1.0],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          album.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.bodyStrong(skin.text),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          l10n.desktopItemCount(album.photoCount),
-          style: DesktopType.caption(skin.text3),
-        ),
-      ],
-    );
-  }
-}
-
-class _CreateAlbumCard extends StatefulWidget {
-  const _CreateAlbumCard({required this.onCreate});
-
-  final VoidCallback onCreate;
-
-  @override
-  State<_CreateAlbumCard> createState() => _CreateAlbumCardState();
-}
-
-class _CreateAlbumCardState extends State<_CreateAlbumCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    final l10n = AppLocalizations.of(context);
-    final color = _hovered ? skin.accent : skin.text3;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: GestureDetector(
-            onTap: widget.onCreate,
-            behavior: HitTestBehavior.opaque,
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
-              child: CustomPaint(
-                painter: _CreateAlbumBorder(color: color),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(DesktopIcons.plus, size: 22, color: color),
-                      const SizedBox(height: 10),
-                      Text(
-                        l10n.photosNewAlbum,
-                        style: DesktopType.bodyStrong(color),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 样例新建相册卡只在悬停时强调虚线与文字颜色，不使用图片卡的光效。
-class _CreateAlbumBorder extends CustomPainter {
-  const _CreateAlbumBorder({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final inset = 0.5;
-    final path =
-        Path()..addRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-              inset,
-              inset,
-              size.width - inset * 2,
-              size.height - inset * 2,
-            ),
-            const Radius.circular(DesktopMetrics.radiusSmall),
-          ),
-        );
-    final paint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
-    final dashed = Path();
-    for (final metric in path.computeMetrics()) {
-      for (var distance = 0.0; distance < metric.length; distance += 8) {
-        dashed.addPath(
-          metric.extractPath(
-            distance,
-            (distance + 4).clamp(0.0, metric.length),
-          ),
-          Offset.zero,
-        );
-      }
-    }
-    canvas.drawPath(dashed, paint);
-  }
-
-  @override
-  bool shouldRepaint(_CreateAlbumBorder oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _NewAlbumDrawer extends StatefulWidget {
-  const _NewAlbumDrawer({required this.takenNames});
-
-  final List<String> takenNames;
-
-  @override
-  State<_NewAlbumDrawer> createState() => _NewAlbumDrawerState();
-}
-
-class _NewAlbumDrawerState extends State<_NewAlbumDrawer> {
-  final TextEditingController _name = TextEditingController();
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final name = _name.text.trim();
-    final duplicate = widget.takenNames.any(
-      (taken) => taken.toLowerCase() == name.toLowerCase(),
-    );
-    return DesktopDrawerFrame(
-      eyebrow: l10n.modulePhotosTitle,
-      title: l10n.photosNewAlbum,
-      footer: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DesktopButton(
-            label: l10n.filesCancel,
-            onPressed: () => closeDesktopModal(context),
-          ),
-          const SizedBox(width: 8),
-          DesktopButton(
-            label: l10n.photosNewAlbum,
-            icon: DesktopIcons.plus,
-            variant: DesktopButtonVariant.primary,
-            onPressed:
-                name.isEmpty || duplicate
-                    ? null
-                    : () => closeDesktopModal(context, name),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DesktopTextField(
-            controller: _name,
-            label: l10n.photosAlbumName,
-            helper: l10n.desktopPhotosAlbumCollectionNote,
-            error: duplicate ? l10n.desktopPhotosAlbumDuplicate : null,
-            autofocus: true,
-            maxLength: 60,
-            onChanged: (_) => setState(() {}),
-          ),
-        ],
       ),
     );
   }

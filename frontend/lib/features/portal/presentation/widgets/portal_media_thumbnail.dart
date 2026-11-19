@@ -61,6 +61,22 @@ class PortalMediaThumbnail extends ConsumerWidget {
             memCacheWidth: _resolveCacheWidth(context, constraints),
             memCacheHeight: cacheHeight,
             filterQuality: FilterQuality.medium,
+            // 签名地址刷新或卡片尺寸变化时沿用上一帧，直到新提供器就绪；
+            // 原型的 `<img>` 也不会先退回一张深色占位卡。
+            imageBuilder:
+                (context, imageProvider) => Image(
+                  image: imageProvider,
+                  fit: fit,
+                  width: width,
+                  height: height,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+            // 原型直接使用 `<img>`，图片可见后没有额外的淡入遮罩；
+            // 占位仍由调用方决定，但不会再叠一段旧版淡入动画。
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholderFadeInDuration: Duration.zero,
             errorListener: (_) {
               // post-frame 通知上层，避免在图片流回调（可发生于 build 期）
               // 中直接触发状态改写。

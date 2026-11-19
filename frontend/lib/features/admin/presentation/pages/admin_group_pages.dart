@@ -298,10 +298,12 @@ class _DesktopOperationsHubState extends ConsumerState<_DesktopOperationsHub> {
             ),
           ),
           const SizedBox(height: 14),
-          if (selected == _DesktopOperationsTab.systemLogs)
-            Expanded(child: body)
-          else
-            body,
+          Expanded(
+            child:
+                selected == _DesktopOperationsTab.systemLogs
+                    ? body
+                    : SingleChildScrollView(child: body),
+          ),
           if (AdminSection.maintenance.isVisibleTo(permissions)) ...[
             const SizedBox(height: 14),
             Align(

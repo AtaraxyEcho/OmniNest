@@ -4909,12 +4909,81 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminLibrarySourceAdd => '新建库源';
 
   @override
-  String get adminLibrarySourcesEmpty =>
-      '尚无库源。请先在上方「可信挂载点」启用媒体库，系统会自动建立电影/剧集/动漫三类库源。';
+  String get adminLibrarySourcesEmpty => '尚无媒体库源。可初始化默认媒体库，或从可信的服务器存储位置添加库源。';
+
+  @override
+  String get adminLibrarySetupDefault => '初始化默认媒体库';
+
+  @override
+  String get adminLibraryDefaultMountUnavailable =>
+      '没有可用的可信媒体挂载点。请先在「管理 → 存储」中添加或启用挂载点，再回到这里选择。';
 
   @override
   String get adminLibrarySourcesSubtitle =>
       '启用挂载媒体库后自动出现的三类库源；也可在高级设置中手动新建自定义库源。';
+
+  @override
+  String get adminLibraryMetricSources => '库源';
+
+  @override
+  String get adminLibraryMetricSourcesHint => '已配置的视频根目录';
+
+  @override
+  String get adminLibraryMetricIndexedTitles => '已索引片目';
+
+  @override
+  String get adminLibraryMetricIndexedTitlesHint => '当前归属这些库源的条目';
+
+  @override
+  String get adminLibraryMetricAwaitingReview => '等待审阅';
+
+  @override
+  String get adminLibraryMetricAwaitingReviewHint => '可选择并入库的扫描结果';
+
+  @override
+  String get adminLibraryMetricScansRunning => '扫描进行中';
+
+  @override
+  String get adminLibraryMetricScansRunningHint => '排队、发现或应用中的扫描';
+
+  @override
+  String get adminLibraryMetricStorageIssues => '存储异常';
+
+  @override
+  String get adminLibraryMetricStorageIssuesHint => '已启用且需要处理的库源';
+
+  @override
+  String get adminLibraryIndexedUnit => '已索引';
+
+  @override
+  String get adminLibraryPolicyManualReview => '人工审阅';
+
+  @override
+  String get adminLibraryPolicyAutomaticImport => '自动入库';
+
+  @override
+  String get adminLibraryReviewCandidates => '审阅候选项';
+
+  @override
+  String get adminLibraryPauseScan => '暂停扫描';
+
+  @override
+  String get adminLibraryCancelScan => '取消扫描';
+
+  @override
+  String adminLibraryScanProgress(String phase, int count) {
+    return '$phase · 已发现 $count';
+  }
+
+  @override
+  String get adminLibraryOtherMediaTitle => '其他媒体库';
+
+  @override
+  String get adminLibraryOtherMediaSubtitle => '音乐、照片与阅读器沿用其模块内的既有流程。';
+
+  @override
+  String get adminLibraryOtherMediaUnavailable =>
+      '这些模块提供真实的服务端库源与扫描契约后，统一管理控件将在此处开放。';
 
   @override
   String get adminMountLibraryScanAll => '扫描全部';
@@ -11212,6 +11281,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosSelectAll => '全选';
+
+  @override
+  String get photosSelectDay => '选择这一天';
+
+  @override
+  String get photosDeselectDay => '取消选择这一天';
+
+  @override
+  String photosItemCount(Object count) {
+    return '$count 项';
+  }
+
+  @override
+  String photosGroupSelectedCount(Object selected, Object total) {
+    return '已选 $selected / $total 项';
+  }
 
   @override
   String get photosDeselectAll => '取消全选';

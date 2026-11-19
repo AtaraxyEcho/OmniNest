@@ -30,9 +30,12 @@ class DesktopCover extends StatelessWidget {
     this.kind = DesktopCoverKind.network,
     this.readerItemId,
     this.fallbackIcon = DesktopIcons.image,
+    this.fallback,
     this.fit = BoxFit.cover,
     this.borderRadius,
     this.cacheKey,
+    this.cacheWidth,
+    this.cacheHeight,
     this.iconSize = 22,
     super.key,
   });
@@ -41,20 +44,28 @@ class DesktopCover extends StatelessWidget {
   final DesktopCoverKind kind;
   final String? readerItemId;
   final IconData fallbackIcon;
+
+  /// 可选的首帧/失败占位。首页照片条需要保持透明，避免出现原型没有的
+  /// 图标卡片闪现；其他调用方继续使用按模块图标回退。
+  final Widget? fallback;
   final BoxFit fit;
   final BorderRadius? borderRadius;
   final String? cacheKey;
+  final int? cacheWidth;
+  final int? cacheHeight;
   final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final fallback = ColoredBox(
-      color: skin.raise2,
-      child: Center(
-        child: Icon(fallbackIcon, size: iconSize, color: skin.text3),
-      ),
-    );
+    final fallback =
+        this.fallback ??
+        ColoredBox(
+          color: skin.raise2,
+          child: Center(
+            child: Icon(fallbackIcon, size: iconSize, color: skin.text3),
+          ),
+        );
     if (kind == DesktopCoverKind.reader && readerItemId != null) {
       return AuthCoverImage(
         itemId: readerItemId!,
@@ -70,6 +81,8 @@ class DesktopCover extends StatelessWidget {
       fit: fit,
       borderRadius: borderRadius,
       cacheKey: cacheKey,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
     );
   }
 }

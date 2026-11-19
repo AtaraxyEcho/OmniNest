@@ -266,8 +266,28 @@ extension FileBrowserSelectionActions on FileBrowserController {
       name: name,
     );
     registerFileEcho([created.id]);
+    _insertCreatedFolderLocally(created);
     await refreshFileNodesForCurrentSection();
     return created;
+  }
+
+  /// 把服务端返回的新目录先合并到当前列表，让主列表和左侧树在同一帧
+  /// 看到相同的真实节点。随后仍会刷新当前页，避免只依赖树层缓存失效。
+  void _insertCreatedFolderLocally(FileNode created) {
+    final current = _currentState;
+    if (current == null ||
+        current.section != FileManagerSection.allFiles ||
+        current.spaceType != created.spaceType.value ||
+        current.parentId != created.parentId ||
+        current.files.any((node) => node.id == created.id)) {
+      return;
+    }
+    _emitState(
+      current.copyWith(
+        files: [...current.files, created],
+        fileTotalElements: current.fileTotalElements + 1,
+      ),
+    );
   }
 
   Future<void> createFolder(String name) async {
@@ -281,12 +301,14 @@ extension FileBrowserSelectionActions on FileBrowserController {
           name: name,
         );
         registerFileEcho([created.id]);
+        _insertCreatedFolderLocally(created);
       } else {
         final created = await _repository.createFolder(
           parentId: current?.parentId,
           name: name,
         );
         registerFileEcho([created.id]);
+        _insertCreatedFolderLocally(created);
       }
       await refreshFileNodesForCurrentSection();
     });

@@ -70,6 +70,7 @@ part 'admin_operations_storage_mounts.dart';
 part 'admin_operations_storage_desktop.dart';
 part 'admin_operations_external_storage.dart';
 part 'admin_operations_library.dart';
+part 'admin_operations_library_desktop.dart';
 part 'admin_operations_sessions.dart';
 part 'admin_operations_dlq.dart';
 part 'admin_maintenance_page.dart';
@@ -82,6 +83,9 @@ class AdminMediaLibraryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (DesktopShellScope.isHosted(context)) {
+      return const _DesktopMediaLibraryPanel();
+    }
     final l10n = AppLocalizations.of(context);
     final permissions =
         ref.watch(authSessionProvider).value?.user?.permissions ??

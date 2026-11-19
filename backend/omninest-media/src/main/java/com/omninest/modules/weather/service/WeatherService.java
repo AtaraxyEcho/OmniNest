@@ -158,6 +158,12 @@ public class WeatherService {
             return WeatherDto.disabled();
         }
 
+        // 天气默认开启但凭据由管理员按需填写。配置尚未完成时直接返回降级
+        // 状态，避免先调用 GeoAPI 再在异步请求里抛配置异常，污染运行日志。
+        if (!hasJwtConfiguration(config)) {
+            return WeatherDto.upstreamError();
+        }
+
         String baseUrl = config.get("weather.qweather.url");
         String rawLocation = (location != null && !location.isBlank()) ? location.trim()
                 : config.get("weather.location");
@@ -689,6 +695,16 @@ public class WeatherService {
     }
 
     // ==================== JWT 生成 ====================
+
+    private boolean hasJwtConfiguration(Map<String, String> config) {
+        return isConfigured(config.get("weather.qweather.project"))
+                && isConfigured(config.get("weather.qweather.credential"))
+                && isConfigured(config.get("weather.qweather.key"));
+    }
+
+    private boolean isConfigured(String value) {
+        return value != null && !value.isBlank();
+    }
 
     /**
      * 生成 JWT Token

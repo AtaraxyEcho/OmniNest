@@ -46,6 +46,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
   });
 
+  testWidgets('胶片条底部遮罩是暗色而非白色光晕', (tester) async {
+    await pumpViewer(tester);
+
+    final darkFilmstrip = find.byWidgetPredicate((widget) {
+      if (widget is! Container) return false;
+      final decoration = widget.decoration;
+      if (decoration is! BoxDecoration) return false;
+      final gradient = decoration.gradient;
+      return gradient is LinearGradient &&
+          gradient.colors.length == 2 &&
+          gradient.colors.first == Colors.transparent &&
+          gradient.colors.last == const Color(0x59000000);
+    });
+    expect(darkFilmstrip, findsOneWidget);
+  });
+
   testWidgets('信息面板展示相机与尺寸', (tester) async {
     await pumpViewer(tester, photoId: 'p-1');
 

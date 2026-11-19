@@ -14,7 +14,14 @@ import 'desktop_test_harness.dart';
 /// 结构树的取子层与落点移动都走仓储扩展方法，测试在仓储层记账；
 /// 其余接口一律抛错，避免把未种子的能力伪装成成功。
 class _TreeRepository implements FileRepository {
-  _TreeRepository(this.children, {required this.root});
+  _TreeRepository(
+    Map<String?, List<FileNode>> children, {
+    required List<FileNode> root,
+  }) : children = <String?, List<FileNode>>{
+         for (final entry in children.entries)
+           entry.key: List<FileNode>.of(entry.value),
+       },
+       root = List<FileNode>.of(root);
 
   final Map<String?, List<FileNode>> children;
   final List<FileNode> root;
@@ -51,6 +58,25 @@ class _TreeRepository implements FileRepository {
     String parentId,
   ) async {
     moves.add((fileIds, parentId));
+    for (final id in fileIds) {
+      FileNode? moving;
+      void removeFrom(List<FileNode> nodes) {
+        final index = nodes.indexWhere((node) => node.id == id);
+        if (index >= 0) moving = nodes.removeAt(index);
+      }
+
+      removeFrom(root);
+      for (final nodes in children.values) {
+        removeFrom(nodes);
+      }
+      if (moving != null) {
+        if (parentId.isEmpty) {
+          root.add(moving!);
+        } else {
+          (children[parentId] ??= <FileNode>[]).add(moving!);
+        }
+      }
+    }
     return const <FileNode>[];
   }
 
@@ -163,13 +189,18 @@ void main() {
     return box != null && box.localToGlobal(Offset.zero).dx < 300;
   });
 
-  Finder nodeChevron(String folderName) => find.descendant(
-    of:
-        find
-            .ancestor(of: find.text(folderName), matching: find.byType(Row))
-            .first,
-    matching: find.byIcon(DesktopIcons.chevron),
-  );
+  Finder nodeChevron(String folderName) {
+    final id = switch (folderName) {
+      'Studio archive' => 'd-1',
+      'Travel selects' => 'd-2',
+      'Spring trip' => 'd-1-1',
+      _ => throw ArgumentError.value(folderName, 'folderName'),
+    };
+    return find.descendant(
+      of: find.byKey(ValueKey<String>('desktop-files-tree-chevron-$id')),
+      matching: find.byIcon(DesktopIcons.chevron),
+    );
+  }
 
   testWidgets('结构树展开按钮拉取子层并按深度缩进', (tester) async {
     final repository = await pumpTree(
@@ -283,5 +314,50 @@ void main() {
     expect(repository.moves, isNotEmpty);
     expect(repository.moves.first.$1, contains('d-1'));
     expect(repository.moves.first.$2, 'd-2');
+  });
+
+  testWidgets('树内跨分支移动后刷新已展开的来源和目标目录', (tester) async {
+    final repository = await pumpTree(
+      tester,
+      children: <String?, List<FileNode>>{
+        'd-1': <FileNode>[child],
+        'd-2': <FileNode>[],
+      },
+    );
+
+    await tester.tap(nodeChevron('Studio archive'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(repository.listedParents, contains('d-1'));
+    final start = tester.getCenter(treeLabel('Spring trip'));
+    final target = tester.getCenter(treeLabel('Travel selects'));
+    final pointer = TestPointer(3, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(pointer.hover(start));
+    await tester.pump();
+    final gesture = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await gesture.moveTo(target);
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(repository.listedParents, contains('d-2'));
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(repository.moves, isNotEmpty);
+    expect(repository.moves.last.$1, <String>['d-1-1']);
+    expect(repository.moves.last.$2, 'd-2');
+    expect(treeLabel('Spring trip'), findsOneWidget);
+    expect(repository.listedParents.where((id) => id == 'd-1').length, 2);
+    expect(repository.listedParents.where((id) => id == 'd-2').length, 2);
+    expect(
+      tester.getTopLeft(treeLabel('Spring trip')).dy,
+      greaterThan(tester.getTopLeft(treeLabel('Travel selects')).dy),
+    );
   });
 }

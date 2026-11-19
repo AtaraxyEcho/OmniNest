@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
-import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 
-/// 样例 `.tilt` + `.shine`：卡片跟随指针做透视倾斜，同时一束柔光在
-/// 指针处扫过。
+/// 样例 `.tilt`：卡片跟随指针做透视倾斜。
 ///
-/// 倾斜角度按样例的 `max`（海报 7°，专辑 5°）换算到 −max..max；柔光是
-/// 以指针为圆心的径向渐变，`soft-light` 混合在 Flutter 里没有等价物，
-/// 用低不透明度的白色叠加逼近（样例本身也只是 0.22 的白）。
+/// 倾斜角度按样例的 `max`（海报 7°，专辑 5°）换算到 −max..max。
+/// 最终样例 CSS 隐藏了 `.shine`，所以这里不再叠加指针追踪光晕；否则
+/// Movies 海报会比样例多一层彩色/白色高光，悬停时的视觉重量也会变重。
 class DesktopTilt extends StatefulWidget {
   const DesktopTilt({
     required this.child,
@@ -47,7 +45,6 @@ class _DesktopTiltState extends State<DesktopTilt> {
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
     final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final nx = (_fraction.dx - 0.5) * 2;
     final ny = (_fraction.dy - 0.5) * 2;
@@ -88,9 +85,9 @@ class _DesktopTiltState extends State<DesktopTilt> {
                     ? [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.55),
-                        blurRadius: 60,
-                        offset: const Offset(0, 30),
-                        spreadRadius: -20,
+                        blurRadius: 34,
+                        offset: const Offset(0, 18),
+                        spreadRadius: -18,
                       ),
                     ]
                     : null,
@@ -107,50 +104,7 @@ class _DesktopTiltState extends State<DesktopTilt> {
               transform: matrix,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(widget.radius),
-                child: Stack(
-                  fit: StackFit.passthrough,
-                  children: [
-                    widget.child,
-                    // `.shine`：指针处的柔光，只在悬停时出现。
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: AnimatedOpacity(
-                          duration: DesktopMotion.of(
-                            context,
-                            const Duration(milliseconds: 300),
-                          ),
-                          opacity: _hovered ? 1 : 0,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: RadialGradient(
-                                center: Alignment(
-                                  _fraction.dx * 2 - 1,
-                                  _fraction.dy * 2 - 1,
-                                ),
-                                radius: 0.9,
-                                colors: [Color(0x38FFFFFF), Color(0x00FFFFFF)],
-                                stops: [0.0, 0.55],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_hovered)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(
-                                widget.radius,
-                              ),
-                              border: Border.all(color: skin.line2),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                child: widget.child,
               ),
             ),
           ),

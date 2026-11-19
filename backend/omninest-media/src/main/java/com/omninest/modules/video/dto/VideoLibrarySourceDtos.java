@@ -112,6 +112,7 @@ public final class VideoLibrarySourceDtos {
      * @param lastErrorCode 上次错误码
      * @param lastScannedCount 上次发现视频数
      * @param lastCreatedCount 上次新建引用数
+     * @param indexedItemCount 当前已入库的视频条目数
      * @param createdAt 创建时间
      * @param updatedAt 更新时间
      */
@@ -132,6 +133,7 @@ public final class VideoLibrarySourceDtos {
             String lastErrorCode,
             int lastScannedCount,
             int lastCreatedCount,
+            long indexedItemCount,
             int lastCandidateCount,
             int lastMissingCount,
             Instant createdAt,

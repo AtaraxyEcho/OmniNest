@@ -5086,11 +5086,86 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminLibrarySourcesEmpty =>
-      'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.';
+      'No media library sources yet. Set up a default library or add a source from a trusted server location.';
+
+  @override
+  String get adminLibrarySetupDefault => 'Set up default libraries';
+
+  @override
+  String get adminLibraryDefaultMountUnavailable =>
+      'No available trusted media mount is configured. Add or enable one under Admin → Storage, then choose it here.';
 
   @override
   String get adminLibrarySourcesSubtitle =>
       'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.';
+
+  @override
+  String get adminLibraryMetricSources => 'Sources';
+
+  @override
+  String get adminLibraryMetricSourcesHint => 'Configured video roots';
+
+  @override
+  String get adminLibraryMetricIndexedTitles => 'Titles indexed';
+
+  @override
+  String get adminLibraryMetricIndexedTitlesHint =>
+      'Current items in these sources';
+
+  @override
+  String get adminLibraryMetricAwaitingReview => 'Awaiting review';
+
+  @override
+  String get adminLibraryMetricAwaitingReviewHint =>
+      'Scans ready for selection';
+
+  @override
+  String get adminLibraryMetricScansRunning => 'Scans running';
+
+  @override
+  String get adminLibraryMetricScansRunningHint =>
+      'Queued, discovering, or applying';
+
+  @override
+  String get adminLibraryMetricStorageIssues => 'Storage issues';
+
+  @override
+  String get adminLibraryMetricStorageIssuesHint =>
+      'Enabled sources needing attention';
+
+  @override
+  String get adminLibraryIndexedUnit => 'indexed';
+
+  @override
+  String get adminLibraryPolicyManualReview => 'Manual review';
+
+  @override
+  String get adminLibraryPolicyAutomaticImport => 'Automatic import';
+
+  @override
+  String get adminLibraryReviewCandidates => 'Review candidates';
+
+  @override
+  String get adminLibraryPauseScan => 'Pause scan';
+
+  @override
+  String get adminLibraryCancelScan => 'Cancel scan';
+
+  @override
+  String adminLibraryScanProgress(String phase, int count) {
+    return '$phase · $count found';
+  }
+
+  @override
+  String get adminLibraryOtherMediaTitle => 'Other media libraries';
+
+  @override
+  String get adminLibraryOtherMediaSubtitle =>
+      'Music, Photos, and Reader use their existing module workflows.';
+
+  @override
+  String get adminLibraryOtherMediaUnavailable =>
+      'Unified administration controls will appear here when those modules expose a real server-side source and scan contract.';
 
   @override
   String get adminMountLibraryScanAll => 'Scan all';
@@ -11580,6 +11655,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosSelectAll => 'Select all';
+
+  @override
+  String get photosSelectDay => 'Select this day';
+
+  @override
+  String get photosDeselectDay => 'Deselect this day';
+
+  @override
+  String photosItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String photosGroupSelectedCount(Object selected, Object total) {
+    return '$selected of $total selected';
+  }
 
   @override
   String get photosDeselectAll => 'Deselect all';

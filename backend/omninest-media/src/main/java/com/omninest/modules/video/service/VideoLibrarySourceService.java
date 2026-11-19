@@ -574,6 +574,9 @@ public class VideoLibrarySourceService {
                 source.getLastErrorCode(),
                 source.getLastScannedCount(),
                 source.getLastCreatedCount(),
+                // 管理台「已索引」必须反映目前仍归属此来源的实体，不能复用
+                // 上一次扫描的新增数；后者会在后续扫描或删除后失真。
+                videoItemRepository.countByLibrarySourceId(source.getId()),
                 source.getLastCandidateCount(),
                 source.getLastMissingCount(),
                 source.getCreatedAt(),

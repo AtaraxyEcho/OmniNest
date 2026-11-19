@@ -111,7 +111,9 @@ public class ReaderMetadataService {
     public static String readerType(ReaderItem item) {
         String value = stringValue(copyMap(item.getExternalIds()).get(READER_TYPE_KEY));
         value = value == null ? null : value.toUpperCase(Locale.ROOT);
-        if (READER_TYPES.contains(value)) {
+        // ImmutableCollections.SetN 不接受 null，缺少 readerType 的旧条目应走
+        // contentKind 的兼容回退，而不是在仪表盘组装 DTO 时中断整页响应。
+        if (value != null && READER_TYPES.contains(value)) {
             return value;
         }
         return "COMIC".equalsIgnoreCase(item.getContentKind()) ? "COMIC" : "BOOK";

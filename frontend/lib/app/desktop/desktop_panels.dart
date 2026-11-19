@@ -15,6 +15,7 @@ import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_action.dart';
+import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
 import 'package:omninest/features/files/application/media_import_queue_controller.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -145,6 +146,8 @@ class NotificationsPanelState extends ConsumerState<NotificationsPanel> {
                       final item = row as NotificationDto;
                       final action = notificationActionFor(item, l10n);
                       final progress = _notifProgress(item);
+                      final title = _notificationTitle(item, l10n);
+                      final message = _notificationMessage(item, l10n);
                       return DesktopHover(
                         builder:
                             (context, hovered) => GestureDetector(
@@ -183,7 +186,7 @@ class NotificationsPanelState extends ConsumerState<NotificationsPanel> {
                                             ),
                                           ),
                                           child: Icon(
-                                            DesktopIcons.bell,
+                                            notificationTypeIcon(item.type),
                                             size: 16,
                                             color:
                                                 item.read
@@ -199,7 +202,7 @@ class NotificationsPanelState extends ConsumerState<NotificationsPanel> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text(
-                                                item.title ?? item.type,
+                                                title,
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                                 // 样例 `.notif strong`：13 / 600。
@@ -211,15 +214,14 @@ class NotificationsPanelState extends ConsumerState<NotificationsPanel> {
                                                   fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                              if ((item.message ?? '')
-                                                  .isNotEmpty)
+                                              if (message != null)
                                                 Padding(
                                                   padding:
                                                       const EdgeInsets.only(
                                                         top: 2,
                                                       ),
                                                   child: Text(
-                                                    item.message!,
+                                                    message,
                                                     maxLines: 2,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -339,6 +341,30 @@ class NotificationsPanelState extends ConsumerState<NotificationsPanel> {
 String _notifTime(BuildContext context, DateTime createdAt) {
   final locale = Localizations.localeOf(context).toLanguageTag();
   return DateFormat.Hm(locale).format(createdAt);
+}
+
+String _notificationTitle(NotificationDto item, AppLocalizations l10n) {
+  final title = item.title?.trim();
+  if (title != null && title.isNotEmpty) {
+    return title;
+  }
+  final typeLabel = notificationTypeLabel(item.type, l10n).trim();
+  // 旧记录可能只有 id/时间而没有 type/title。通知行仍要保留可读的
+  // 标题高度，否则在桌面面板里只剩图标和时间，和样例的三列通知行不符。
+  return typeLabel.isNotEmpty ? typeLabel : l10n.desktopNotifications;
+}
+
+String? _notificationMessage(NotificationDto item, AppLocalizations l10n) {
+  final message = item.message?.trim();
+  if (message != null && message.isNotEmpty) {
+    return message;
+  }
+  final synthesized = synthesizedNotificationText(item, l10n);
+  if (synthesized != null && synthesized.isNotEmpty) {
+    return synthesized;
+  }
+  final description = notificationTypeDescription(item.type, l10n);
+  return description?.isNotEmpty == true ? description : null;
 }
 
 /// 通知行的进度值：0–1，取不到就是 null。

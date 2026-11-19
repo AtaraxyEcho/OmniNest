@@ -57,7 +57,11 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
                 flex: const [160, 120, 220, 140, 180, 140, 160][index],
                 child: Padding(
                   padding: EdgeInsets.only(right: index == 6 ? 0 : 10),
-                  child: DesktopSkeletonBox(radius: 14, index: index),
+                  child: DesktopSkeletonBox(
+                    height: 200,
+                    radius: 14,
+                    index: index,
+                  ),
                 ),
               ),
           ],
@@ -99,15 +103,30 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
           return Row(
             children: [
               for (var index = 0; index < count; index++)
-                AnimatedContainer(
-                  duration: DesktopMotion.of(context, DesktopMotion.photoStrip),
-                  curve: Curves.easeOutCubic,
-                  width: total == 0 ? 0 : available * grow[index] / total,
-                  padding: EdgeInsets.only(right: index == count - 1 ? 0 : gap),
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    onEnter: (_) => setState(() => _hovered = index),
-                    onExit: (_) => setState(() => _hovered = null),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  // 命中区包住卡片的间隙内边缘，宽度动画时指针不会因
+                  // padding 重新布局而短暂离开 MouseRegion。
+                  onEnter: (_) {
+                    if (_hovered != index) {
+                      setState(() => _hovered = index);
+                    }
+                  },
+                  onExit: (_) {
+                    if (_hovered == index) {
+                      setState(() => _hovered = null);
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: DesktopMotion.of(
+                      context,
+                      DesktopMotion.photoStrip,
+                    ),
+                    curve: Curves.easeOutCubic,
+                    width: total == 0 ? 0 : available * grow[index] / total,
+                    padding: EdgeInsets.only(
+                      right: index == count - 1 ? 0 : gap,
+                    ),
                     child: GestureDetector(
                       onTap:
                           () => context.push(
@@ -118,10 +137,18 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            DesktopCover(
-                              url: photos[index].coverUrl,
-                              fallbackIcon: DesktopIcons.image,
-                              cacheKey: photos[index].coverCacheKey,
+                            RepaintBoundary(
+                              child: DesktopCover(
+                                url: photos[index].coverUrl,
+                                fallbackIcon: DesktopIcons.image,
+                                // 原型的 `<Img>` 首帧保持照片条的玻璃/背景层，
+                                // 不先替换成带图标的深色卡片；图片到达后直接覆盖。
+                                fallback: const SizedBox.expand(),
+                                cacheKey: photos[index].coverCacheKey,
+                                // 悬停会改变卡片宽度；固定解码宽度，避免
+                                // LayoutBuilder 每帧生成新的图片提供器而闪回占位。
+                                cacheWidth: 1200,
+                              ),
                             ),
                             AnimatedOpacity(
                               duration: MotionToken.reduced(

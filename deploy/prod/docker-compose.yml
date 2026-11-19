@@ -103,7 +103,7 @@ x-backend-service: &backend-service
     - omninest-geonames:/var/lib/omninest/geonames
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
-    - ${OMNINEST_LOCAL_MEDIA_ROOT:-../.omninest/local-media}:/mnt/local-media:ro
+    - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/Movies-Library}:/mnt/local-media:ro
     # 探测与转码临时文件落到命名卷，避免数 GB 视频写满容器 OverlayFS。
     # 卷名与旧 ffmpeg 容器的 root-owned 卷区分：新卷由镜像目录初始化，属主是 omninest。
     - omninest-probe-cache:/tmp/omninest-probe

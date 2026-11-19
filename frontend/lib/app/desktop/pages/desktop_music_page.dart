@@ -49,6 +49,7 @@ import 'package:omninest/features/video/application/media_import_task_waiter.dar
 part 'desktop_music_widgets.dart';
 part 'desktop_music_rows.dart';
 part 'desktop_music_loading.dart';
+part 'desktop_music_album_detail.dart';
 
 /// 桌面音乐页（样例 `Music.tsx` 的 Home/Tracks/Albums）。
 ///
@@ -65,6 +66,7 @@ class DesktopMusicPage extends ConsumerStatefulWidget {
 
 class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   DesktopMusicTab _tab = DesktopMusicTab.home;
+  MusicAlbum? _selectedAlbum;
   final TextEditingController _search = TextEditingController();
   final GlobalKey<MediaImportButtonState> _mediaImportKey =
       GlobalKey<MediaImportButtonState>();
@@ -339,6 +341,43 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     }
   }
 
+  Future<void> _playAlbumTracks(
+    List<MusicTrack> tracks, {
+    bool shuffle = false,
+  }) async {
+    if (tracks.isEmpty) return;
+    final l10n = AppLocalizations.of(context);
+    final ordered = tracks.toList(growable: true);
+    if (shuffle) ordered.shuffle();
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .playItems(ordered.map(MusicPlayableItem.local).toList());
+    } on Object catch (error) {
+      if (!mounted) return;
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.musicPlay, error),
+        kind: DesktopToastKind.error,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+
+  void _enqueueAlbumTracks(List<MusicTrack> tracks) {
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    for (final track in tracks) {
+      controller.enqueue(MusicPlayableItem.local(track));
+    }
+    if (tracks.isNotEmpty) {
+      showDesktopToast(
+        context,
+        AppLocalizations.of(context).musicPlayNextAdded,
+        icon: DesktopIcons.queue,
+      );
+    }
+  }
+
   Future<void> _editPlaylist({MusicPlaylist? playlist}) async {
     final l10n = AppLocalizations.of(context);
     final taken =
@@ -453,6 +492,13 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         state?.section == MusicSection.playlistDetail
             ? state?.selectedPlaylist
             : null;
+    final selectedAlbum = _selectedAlbum;
+    final albumTracks =
+        selectedAlbum == null
+            ? const <MusicTrack>[]
+            : (state?.tracks ?? const <MusicTrack>[])
+                .where((track) => track.albumTitle == selectedAlbum.title)
+                .toList(growable: false);
     Widget initialContent() =>
         musicAsync.hasError
             ? DesktopErrorView(
@@ -489,7 +535,19 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         child: DesktopPage(
           topPadding: DesktopMetrics.pageTopPaddingCompact,
           children: [
-            if (selectedPlaylist != null)
+            if (selectedAlbum != null)
+              _AlbumDetail(
+                album: selectedAlbum,
+                tracks: albumTracks,
+                currentId: state?.currentItem?.playableKey,
+                playing: state?.isPlaying ?? false,
+                onBack: () => setState(() => _selectedAlbum = null),
+                onPlay: () => _playAlbumTracks(albumTracks),
+                onShuffle: () => _playAlbumTracks(albumTracks, shuffle: true),
+                onAddToQueue: () => _enqueueAlbumTracks(albumTracks),
+                onTrackPlay: (track) => actions.playTrackById(track.id),
+              )
+            else if (selectedPlaylist != null)
               _PlaylistDetail(
                 playlist: selectedPlaylist,
                 tracks: state?.selectedPlaylistTracks ?? const <MusicTrack>[],
@@ -524,7 +582,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                     options: DesktopMusicTab.values,
                     value: _tab,
                     labelOf: (value) => labels[value] ?? '',
-                    onChanged: (value) => setState(() => _tab = value),
+                    onChanged:
+                        (value) => setState(() {
+                          _tab = value;
+                          _selectedAlbum = null;
+                        }),
                   ),
                 ],
               ),
@@ -535,6 +597,8 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   playlists: state?.playlists ?? const <MusicPlaylist>[],
                   onSeeAlbums:
                       () => setState(() => _tab = DesktopMusicTab.albums),
+                  onOpenAlbum:
+                      (album) => setState(() => _selectedAlbum = album),
                   onPlayPlaylist: _openPlaylist,
                   onSeePlaylists:
                       () => setState(() => _tab = DesktopMusicTab.playlists),
@@ -579,6 +643,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 DesktopMusicTab.albums => _AlbumGrid(
                   albums: state?.albums ?? const [],
                   emptyLabel: l10n.musicNoAlbums,
+                  onOpen: (album) => setState(() => _selectedAlbum = album),
                 ),
               },
             ],
@@ -594,6 +659,7 @@ class _Home extends StatelessWidget {
     required this.state,
     required this.playlists,
     required this.onSeeAlbums,
+    required this.onOpenAlbum,
     required this.onPlayPlaylist,
     required this.onSeePlaylists,
     required this.onTogglePlayback,
@@ -604,6 +670,7 @@ class _Home extends StatelessWidget {
   final MusicCenterState? state;
   final List<MusicPlaylist> playlists;
   final VoidCallback onSeeAlbums;
+  final ValueChanged<MusicAlbum> onOpenAlbum;
   final ValueChanged<MusicPlaylist> onPlayPlaylist;
   final VoidCallback onSeePlaylists;
   final VoidCallback onTogglePlayback;
@@ -623,7 +690,7 @@ class _Home extends StatelessWidget {
           title: l10n.musicNavAlbums,
           actionLabel: l10n.desktopSeeAllCount(state?.albums.length ?? 0),
           onAction: onSeeAlbums,
-          child: _AlbumRail(albums: album),
+          child: _AlbumRail(albums: album, onOpen: onOpenAlbum),
         ),
         DesktopSection(
           eyebrow: l10n.desktopMusicLibraryEyebrow,

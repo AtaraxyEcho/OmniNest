@@ -18,6 +18,7 @@ import 'package:omninest/app/desktop/pages/desktop_settings_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_setup_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_photo_viewer_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_photos_page.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/phone_form_factor.dart';
@@ -28,6 +29,7 @@ import 'package:omninest/core/auth/login_page.dart';
 import 'package:omninest/core/auth/redirect_target.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -299,14 +301,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         );
       }),
-      _animatedRoute(
+      _desktopViewerRoute(
         '/video/:videoId/play',
         (state) => MoviePlayerPage(
           videoItemId: state.pathParameters['videoId'] ?? '',
           fromStart: state.uri.queryParameters['fromStart'] == '1',
         ),
+        duration: DesktopMotion.immersiveViewerEnter,
       ),
-      _animatedRoute(
+      _readerRoute(
         '/music/now-playing',
         (state) => DesktopFormSwitch(
           desktop: const DesktopNowPlayingPage(),
@@ -355,6 +358,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               PhotoBrowseSource.library;
           final sourceKey = extra['sourceKey'] as String?;
           return _materialTransition(
+            context,
             state,
             AppRouteSurface.environmental(
               owner: 'route:photos-slideshow',
@@ -381,15 +385,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           month: int.tryParse(state.pathParameters['month'] ?? '') ?? 0,
         ),
       ),
-      _animatedRoute(
-        '/photos/:photoId',
-        (state) => DesktopFormSwitch(
+      _desktopViewerRoute('/photos/:photoId', (state) {
+        final photoId = state.pathParameters['photoId']!;
+        // GoRouter 对同模式的 path 参数变化可能复用同一个 StatefulWidget。
+        // 没有 id key 时查看器 `_currentId` 仍停在第一次长按/打开的照片，
+        // 表现为「取消长按后点另一张，却打开前一张」。
+        return DesktopFormSwitch(
           desktop: DesktopPhotoViewerPage(
-            photoId: state.pathParameters['photoId']!,
+            key: ValueKey<String>('desktop-photo-viewer-$photoId'),
+            photoId: photoId,
           ),
-          mobile: PhotoDetailPage(photoId: state.pathParameters['photoId']!),
-        ),
-      ),
+          mobile: PhotoDetailPage(
+            key: ValueKey<String>('mobile-photo-detail-$photoId'),
+            photoId: photoId,
+          ),
+        );
+      }, duration: DesktopMotion.photoViewerEnter),
       _animatedRoute(
         '/photos/:photoId/edit',
         (state) => PhotoEditorPage(photoId: state.pathParameters['photoId']!),
@@ -411,6 +422,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final token = state.pathParameters['token']!;
           return _materialTransition(
+            context,
             state,
             AppRouteSurface(
               owner: 'route:file-share',
@@ -431,7 +443,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
         ),
       ),
-      _animatedRoute(
+      _desktopViewerRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
           itemId: state.pathParameters['itemId']!,
@@ -441,6 +453,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state.uri.queryParameters['offset'] ?? '',
           ),
         ),
+        duration: DesktopMotion.immersiveViewerEnter,
       ),
       _animatedRoute(
         '/reader/items/:itemId/metadata',
@@ -486,6 +499,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin',
         pageBuilder:
             (context, state) => _materialTransition(
+              context,
               state,
               _routeSurface('/admin', const AdminDashboardPage()),
               pageKey: _adminPageKey,
@@ -495,6 +509,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/:section',
         pageBuilder:
             (context, state) => _materialTransition(
+              context,
               state,
               _routeSurface(
                 '/admin/:section',
@@ -527,8 +542,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-/// 构建带淡入+微滑过渡的 GoRoute。
-/// 阅读模块内部页面路由：无过渡动画（样例切视图即时切换）。
+/// 无路由级动效的覆盖层路由。
+///
+/// Music Now Playing 自己实现了样例的 `npin/.npout`（700/400ms）；再让
+/// Navigator 参与一次过渡会造成两次缩放，因此必须只保留页面自身动效。
 GoRoute _readerRoute(
   String path,
   Widget Function(GoRouterState state) builder,
@@ -547,6 +564,37 @@ GoRoute _readerRoute(
   );
 }
 
+/// 全局查看器的单层淡入路由。
+///
+/// React 样例分别在 Photos 的 `.viewer` 与 Video/Reader 的 `.video` /
+/// `.bookview` 上定义淡入；平台默认路由动画既不稳定也会在不同入口显得
+/// 突兀。这里把动画附着在 Navigator 生命周期上，退出时采用同一条曲线，
+/// 使查看器的异步内容加载不会重新触发入场。
+GoRoute _desktopViewerRoute(
+  String path,
+  Widget Function(GoRouterState state) builder, {
+  required Duration duration,
+}) {
+  return GoRoute(
+    path: path,
+    pageBuilder:
+        (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: duration,
+          reverseTransitionDuration: duration,
+          child: _routeSurface(path, builder(state)),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: DesktopMotion.ease,
+              reverseCurve: DesktopMotion.ease,
+            );
+            return FadeTransition(opacity: curved, child: child);
+          },
+        ),
+  );
+}
+
 GoRoute _animatedRoute(
   String path,
   Widget Function(GoRouterState state) builder,
@@ -554,8 +602,14 @@ GoRoute _animatedRoute(
   return GoRoute(
     path: path,
     pageBuilder:
-        (context, state) =>
-            _materialTransition(state, _routeSurface(path, builder(state))),
+        (context, state) => _materialTransition(
+          context,
+          state,
+          _routeSurface(path, builder(state)),
+          desktopNoTransition:
+              desktopShellModeForPath(state.uri.path) ==
+              DesktopShellMode.chrome,
+        ),
   );
 }
 
@@ -600,12 +654,22 @@ ScopedSearchId? _searchScopeFromQuery(String? raw) {
 const LocalKey _adminPageKey = ValueKey<String>('admin-dashboard');
 
 /// 使用 Navigator 托管的页面过渡，避免动画监听器持有已失活的路由子树。
-MaterialPage<void> _materialTransition(
+Page<void> _materialTransition(
+  BuildContext context,
   GoRouterState state,
   Widget child, {
   LocalKey? pageKey,
+  bool desktopNoTransition = false,
 }) {
-  return buildAppRoutePage(key: pageKey ?? state.pageKey, child: child);
+  final key = pageKey ?? state.pageKey;
+  if (desktopNoTransition &&
+      !shouldUseResponsiveMobileShell(
+        mobilePlatform: isMobilePlatform,
+        width: MediaQuery.sizeOf(context).width,
+      )) {
+    return NoTransitionPage<void>(key: key, child: child);
+  }
+  return buildAppRoutePage(key: key, child: child);
 }
 
 /// 构建由 Navigator 管理生命周期和平台过渡的应用页面。

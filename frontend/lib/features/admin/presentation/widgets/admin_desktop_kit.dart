@@ -39,7 +39,9 @@ class AdminCard extends StatelessWidget {
       // 样例 `.card { padding: 22px 24px }`。
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       decoration: BoxDecoration(
-        color: skin.raise,
+        // 原型 `.card` 使用半透明 panel；`raise` 会让管理页在背景库
+        // 开启时退化成几乎不见的深色块，浅色主题也失去层次。
+        color: skin.panel,
         borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
         border: Border.all(color: skin.line),
       ),
@@ -100,7 +102,7 @@ class AdminStatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: skin.raise,
+        color: skin.panel,
         borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
         border: Border.all(color: skin.line),
       ),

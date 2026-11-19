@@ -66,9 +66,10 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
       accentInk:
           isDark ? DesktopPalette.accentInkDark : DesktopPalette.accentInkLight,
       warm: isDark ? DesktopPalette.warmDark : DesktopPalette.warmLight,
-      // 样例 `desktop.css:170-171`：`.amb-veil` 深色 .86、浅色 .7。
+      // `--veil` 自身带 .72/.8 alpha；`.amb-veil` 再以 .86/.7 作为整层
+      // opacity 合成，两个值不能互相替代。
       veil: (isDark ? DesktopPalette.veilDark : DesktopPalette.veilLight)
-          .withValues(alpha: isDark ? 0.86 : 0.70),
+          .withValues(alpha: isDark ? 0.72 : 0.80),
       ambientOpacity: isDark ? 1 : 0.55,
       shadow: [
         BoxShadow(
@@ -229,6 +230,9 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
 abstract final class DesktopMetrics {
   /// `.titlebar` 高度。
   static const double titleBarHeight = 46;
+
+  /// `desktop.css:500`：窗口低于该宽度时标题栏改为 auto / 1fr / auto。
+  static const double titleBarCompactBreakpoint = 1180;
 
   /// `.sidebar` 展开宽度。
   static const double sidebarWidth = 232;

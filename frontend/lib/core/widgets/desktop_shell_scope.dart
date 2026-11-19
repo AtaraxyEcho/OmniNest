@@ -12,11 +12,16 @@ import 'package:flutter/widgets.dart';
 class DesktopShellScope extends InheritedWidget {
   const DesktopShellScope({
     required this.hosted,
+    this.backdropActive = false,
     required super.child,
     super.key,
   });
 
   final bool hosted;
+
+  /// 当前壳层是否已经在绘制背景库。页面内容使用这一位决定是否让出
+  /// 实时天象/实底，避免各页面各自读取异步背景状态造成一帧分歧。
+  final bool backdropActive;
 
   /// 当前页面是否由桌面统一壳承载。
   static bool isHosted(BuildContext context) {
@@ -26,8 +31,16 @@ class DesktopShellScope extends InheritedWidget {
         false;
   }
 
+  static bool isBackdropActive(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<DesktopShellScope>()
+            ?.backdropActive ??
+        false;
+  }
+
   @override
   bool updateShouldNotify(DesktopShellScope oldWidget) {
-    return hosted != oldWidget.hosted;
+    return hosted != oldWidget.hosted ||
+        backdropActive != oldWidget.backdropActive;
   }
 }

@@ -2111,8 +2111,40 @@
   "statusPhaseReview": "Review phase",
   "statusPhaseApply": "Apply phase",
   "adminLibrarySourceAdd": "Add library source",
-  "adminLibrarySourcesEmpty": "No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.",
+  "adminLibrarySourcesEmpty": "No media library sources yet. Set up a default library or add a source from a trusted server location.",
+  "adminLibrarySetupDefault": "Set up default libraries",
+  "adminLibraryDefaultMountUnavailable": "No available trusted media mount is configured. Add or enable one under Admin → Storage, then choose it here.",
   "adminLibrarySourcesSubtitle": "Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.",
+  "adminLibraryMetricSources": "Sources",
+  "adminLibraryMetricSourcesHint": "Configured video roots",
+  "adminLibraryMetricIndexedTitles": "Titles indexed",
+  "adminLibraryMetricIndexedTitlesHint": "Current items in these sources",
+  "adminLibraryMetricAwaitingReview": "Awaiting review",
+  "adminLibraryMetricAwaitingReviewHint": "Scans ready for selection",
+  "adminLibraryMetricScansRunning": "Scans running",
+  "adminLibraryMetricScansRunningHint": "Queued, discovering, or applying",
+  "adminLibraryMetricStorageIssues": "Storage issues",
+  "adminLibraryMetricStorageIssuesHint": "Enabled sources needing attention",
+  "adminLibraryIndexedUnit": "indexed",
+  "adminLibraryPolicyManualReview": "Manual review",
+  "adminLibraryPolicyAutomaticImport": "Automatic import",
+  "adminLibraryReviewCandidates": "Review candidates",
+  "adminLibraryPauseScan": "Pause scan",
+  "adminLibraryCancelScan": "Cancel scan",
+  "adminLibraryScanProgress": "{phase} · {count} found",
+  "@adminLibraryScanProgress": {
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminLibraryOtherMediaTitle": "Other media libraries",
+  "adminLibraryOtherMediaSubtitle": "Music, Photos, and Reader use their existing module workflows.",
+  "adminLibraryOtherMediaUnavailable": "Unified administration controls will appear here when those modules expose a real server-side source and scan contract.",
   "adminMountLibraryScanAll": "Scan all",
   "adminMountLibraryScanAllSuccess": "Discovery scan started for {count} library sources",
   "@adminMountLibraryScanAllSuccess": {
@@ -5204,6 +5236,27 @@
   "photosSaturation": "Saturation",
   "photosModuleDisplayName": "Lightbox",
   "photosSelectAll": "Select all",
+  "photosSelectDay": "Select this day",
+  "photosDeselectDay": "Deselect this day",
+  "photosItemCount": "{count} items",
+  "@photosItemCount": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "photosGroupSelectedCount": "{selected} of {total} selected",
+  "@photosGroupSelectedCount": {
+    "placeholders": {
+      "selected": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "photosDeselectAll": "Deselect all",
   "photosFrameNavPhotos": "Photos",
   "photosFrameNavLocations": "Locations",

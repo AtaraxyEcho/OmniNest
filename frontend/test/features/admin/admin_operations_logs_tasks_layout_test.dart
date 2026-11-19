@@ -4,15 +4,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/data/admin_operations_api.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
+import 'package:omninest/features/admin/domain/admin_section.dart';
+import 'package:omninest/features/admin/presentation/pages/admin_group_pages.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
+import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 
 class _MockAdminOperationsApi extends Mock implements AdminOperationsApi {}
+
+class _OperationsSession extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async => AuthSessionState(
+    user: UserProfile(
+      id: 'admin',
+      username: 'admin',
+      role: 'SUPER_ADMIN',
+      roles: const {'SUPER_ADMIN'},
+      permissions: const {'task:admin', 'system:config:read'},
+    ),
+    expiresAt: DateTime.now().add(const Duration(hours: 1)),
+  );
+
+  @override
+  Future<bool> refreshSession() async => true;
+}
+
+void _ignoreAdminTab(AdminSection section) {}
 
 void main() {
   testWidgets('任务页在短桌面窗口中使用滚动布局', (tester) async {
@@ -67,6 +91,60 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(SingleChildScrollView), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('运维工作区内嵌任务页在 360px 高窗口不溢出', (tester) async {
+    tester.view.physicalSize = const Size(1280, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const query = (
+      page: 0,
+      size: 10,
+      status: 'ALL',
+      taskType: 'ALL',
+      query: '',
+      sort: 'updatedAt',
+      dir: 'desc',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionProvider.overrideWith(_OperationsSession.new),
+          adminTaskPageProvider(query).overrideWith(
+            (ref) async => AdminPage<AdminTaskRecord>(
+              items: [_taskRecord('ops-task', 'RUNNING')],
+              page: 0,
+              size: 10,
+              totalElements: 1,
+              totalPages: 1,
+            ),
+          ),
+          adminDlqProvider.overrideWith((ref) async => const <AdminDlqTask>[]),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(
+            body: DesktopShellScope(
+              hosted: true,
+              child: AdminGroupPage(
+                group: AdminSectionGroup.operations,
+                initialSection: AdminSection.tasks,
+                onTabChanged: _ignoreAdminTab,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(AdminGroupPage), findsOneWidget);
   });
 
   testWidgets('任务页勾选可重试任务出现批量操作条且禁用已完成行', (tester) async {

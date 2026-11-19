@@ -9,6 +9,7 @@ import 'package:omninest/app/desktop/desktop_shell.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_player_bar.dart';
 import 'package:omninest/app/desktop/desktop_sidebar.dart';
+import 'package:omninest/app/desktop/desktop_title_bar.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_boundary.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
@@ -70,6 +71,9 @@ void main() {
         '/profile',
         '/notifications',
         '/music/now-playing',
+        '/photos/p-1',
+        '/reader/items/book-1',
+        '/video/v-1',
         '/video/v-1/play',
       ])
         GoRoute(
@@ -152,6 +156,31 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Aoi Trio'), findsOneWidget);
+  });
+
+  testWidgets('账户菜单按样例提供背景库入口，不显示额外 Appearance 项', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desktop-account-button')),
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(find.text('Backdrop library'), findsOneWidget);
+    expect(find.text('Appearance'), findsNothing);
+  });
+
+  testWidgets('宽屏标题栏搜索胶囊按样例三栏网格保持窗口居中', (tester) async {
+    await pumpShell(tester);
+
+    final search = find.byKey(
+      const ValueKey<String>('desktop-titlebar-search'),
+    );
+    final rect = tester.getRect(search);
+    expect(rect.width, 520);
+    // `.titlebar` 的内容盒从 14px 左内距开始，CSS grid 的中心因此是
+    // `(14 + viewportWidth) / 2`，而不是窗口几何中心。
+    expect(rect.center.dx, closeTo((14 + kDesktopViewport.width) / 2, 1));
   });
 
   testWidgets('播放条只有一层玻璃：描边面板与模糊背板同宽同高', (tester) async {
@@ -542,7 +571,7 @@ void main() {
     expect(find.text('route:/video'), findsOneWidget);
   });
 
-  testWidgets('沉浸路由让位：播放页满铺，无侧栏与播放条', (tester) async {
+  testWidgets('沉浸路由全屏覆盖：隐藏标题栏、侧栏、播放条和窗口控件', (tester) async {
     await pumpShell(tester);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(DesktopShellHost)),
@@ -550,13 +579,23 @@ void main() {
     expect(container.read(desktopShellProvider).sidebarExpanded, isTrue);
 
     final router = GoRouter.of(tester.element(find.text('route:/portal')));
-    router.go('/video/v-1/play');
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 320));
+    for (final path in const [
+      '/video/v-1/play',
+      '/photos/p-1',
+      '/reader/items/book-1',
+      '/music/now-playing',
+      '/video/v-1',
+    ]) {
+      router.go(path);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 320));
 
-    expect(find.text('route:/video/v-1/play'), findsOneWidget);
-    expect(find.byType(DesktopSidebar), findsNothing);
-    expect(find.text('OmniNest'), findsNothing);
+      expect(find.text('route:$path'), findsOneWidget, reason: path);
+      expect(find.byType(DesktopTitleBar), findsNothing, reason: path);
+      expect(find.byType(DesktopSidebar), findsNothing, reason: path);
+      expect(find.byType(DesktopPlayerBar), findsNothing, reason: path);
+      expect(find.text('OmniNest'), findsNothing, reason: path);
+    }
   });
 
   test('路由 → 壳层姿态的判定覆盖公开页、沉浸页与常规页', () {

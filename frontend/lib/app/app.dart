@@ -142,7 +142,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
                   definitelySignedOut &&
                   gatesUnauthenticatedRender(
                     isAuthenticated: false,
-                    path: router.routerDelegate.currentConfiguration.uri.path,
+                    path: desktopActiveRoutePath(router),
                   ),
           child: BrowserThemeColorBinding(
             child: _buildRouterContent(context, child, fontScalePreset),
@@ -220,9 +220,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     if (!mobileForm) {
       final router = ref.read(appRouterProvider);
       final standaloneRoute =
-          desktopShellModeForPath(
-            router.routerDelegate.currentConfiguration.uri.path,
-          ) ==
+          desktopShellModeForPath(desktopActiveRoutePath(router)) ==
           DesktopShellMode.standalone;
       if (standaloneRoute) {
         content = TooltipVisibility(
@@ -237,9 +235,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     } else {
       final router = ref.read(appRouterProvider);
       final standaloneRoute =
-          desktopShellModeForPath(
-            router.routerDelegate.currentConfiguration.uri.path,
-          ) ==
+          desktopShellModeForPath(desktopActiveRoutePath(router)) ==
           DesktopShellMode.standalone;
       if (standaloneRoute) {
         content = TooltipVisibility(visible: false, child: content);

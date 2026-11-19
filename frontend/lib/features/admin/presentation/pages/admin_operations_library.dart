@@ -23,11 +23,43 @@ String _scanStatusLabel(AppLocalizations l10n, String status) {
     'READY' => l10n.statusScanReady,
     'QUEUED' => l10n.statusScanQueued,
     'DISCOVERING' || 'SCANNING' => l10n.statusScanDiscovering,
+    'APPLYING' => l10n.statusScanApplying,
     'FAILED' => l10n.statusScanFailed,
     'CANCELLED' => l10n.statusScanCancelled,
     'PAUSED' => l10n.statusScanPaused,
+    'PARTIAL' => l10n.statusScanPartial,
+    // 后端的 completed 没有独立文案，沿用可用状态表示来源已完成扫描。
+    'COMPLETED' => l10n.statusHealthAvailable,
     'NEVER_SCANNED' => l10n.adminLibraryScanNever,
     _ => status,
+  };
+}
+
+/// 后端 phase 是稳定的协议值；在桌面卡片中必须转换为用户语言，不能直接泄露枚举。
+String _scanPhaseLabel(AppLocalizations l10n, String phase) {
+  return switch (phase) {
+    'DISCOVERY' => l10n.statusScanDiscovering,
+    'APPLY' => l10n.statusScanApplying,
+    _ => _scanStatusLabel(l10n, phase),
+  };
+}
+
+String _libraryVisibilityLabel(
+  AppLocalizations l10n,
+  MediaLibraryVisibility visibility,
+) {
+  return switch (visibility) {
+    MediaLibraryVisibility.private => l10n.videoLibraryVisibilityPrivate,
+    MediaLibraryVisibility.selectedUsers => l10n.videoLibraryVisibilitySelected,
+    MediaLibraryVisibility.allMembers => l10n.videoLibraryVisibilityMembers,
+  };
+}
+
+String _libraryHealthLabel(AppLocalizations l10n, String healthStatus) {
+  return switch (healthStatus.toUpperCase()) {
+    'AVAILABLE' => l10n.statusHealthAvailable,
+    'UNAVAILABLE' || 'DEGRADED' => l10n.statusHealthUnavailable,
+    _ => healthStatus,
   };
 }
 
@@ -120,9 +152,7 @@ class _LibrarySourcesSectionState
       if (mounted) {
         showOmniFeedback(
           context,
-          l10n.adminLoadFailed(
-            userFacingErrorText(error, l10n: l10n),
-          ),
+          l10n.adminLoadFailed(userFacingErrorText(error, l10n: l10n)),
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -150,9 +180,7 @@ class _LibrarySourcesSectionState
       if (mounted) {
         showOmniFeedback(
           context,
-          l10n.adminLoadFailed(
-            userFacingErrorText(error, l10n: l10n),
-          ),
+          l10n.adminLoadFailed(userFacingErrorText(error, l10n: l10n)),
           severity: OmniFeedbackSeverity.error,
         );
       }
@@ -202,9 +230,7 @@ class _LibrarySourcesSectionState
       if (mounted) {
         showOmniFeedback(
           context,
-          l10n.adminLoadFailed(
-            userFacingErrorText(error, l10n: l10n),
-          ),
+          l10n.adminLoadFailed(userFacingErrorText(error, l10n: l10n)),
           severity: OmniFeedbackSeverity.error,
         );
       }

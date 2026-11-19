@@ -123,36 +123,20 @@ class _DesktopPhotoViewerPageState
         onEnter: (_) => _setPointerInsideViewer(true),
         onExit: (_) => _setPointerInsideViewer(false),
         child: ColoredBox(
-          color: const Color(0xFF07090B),
+          color: DesktopPalette.stageBlack,
           child: Stack(
             children: [
-              // 背景：模糊放大的同一张图，压暗后作为环境光。
+              // `.vw-bg` 只做 50% 透明、1.5 饱和与 .8 亮度，不使用全屏模糊。
               Positioned.fill(
                 child: IgnorePointer(
                   child: Opacity(
                     opacity: 0.5,
-                    child: ImageFiltered(
-                      imageFilter: desktopGlassFilter(
-                        blur: 46,
+                    child: ColorFiltered(
+                      colorFilter: desktopColorGrade(
                         saturation: 1.5,
                         brightness: 0.8,
                       ),
                       child: DesktopImage(url: photo?.coverUrl),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0xFF07090B).withValues(alpha: 0.55),
-                        const Color(0xFF07090B).withValues(alpha: 0.2),
-                        const Color(0xFF07090B).withValues(alpha: 0.82),
-                      ],
                     ),
                   ),
                 ),
@@ -167,6 +151,23 @@ class _DesktopPhotoViewerPageState
                   slideshow: _slideshow,
                   onDoubleTap: _toggleZoom,
                   onWheel: _onWheel,
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 64,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x73000000), Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 _TopBar(
                   photo: photo,
@@ -210,7 +211,7 @@ class _DesktopPhotoViewerPageState
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 24,
+                    bottom: 0,
                     child: IgnorePointer(
                       ignoring: _slideshow && !_pointerInsideViewer,
                       child: AnimatedOpacity(
@@ -601,9 +602,13 @@ class _ViewerStage extends StatelessWidget {
       DesktopMotion.viewerKenBurns,
     );
     final animateKenBurns = slideshow && kenBurnsDuration != Duration.zero;
+    final stagePadding =
+        MediaQuery.sizeOf(context).width <= 760
+            ? const EdgeInsets.fromLTRB(12, 68, 12, 84)
+            : const EdgeInsets.fromLTRB(92, 72, 92, 92);
     return Positioned.fill(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(72, 78, 72, 108),
+        padding: stagePadding,
         child: Listener(
           onPointerSignal: onWheel,
           child: GestureDetector(

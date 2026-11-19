@@ -9358,14 +9358,146 @@ abstract class AppLocalizations {
   /// No description provided for @adminLibrarySourcesEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.'**
+  /// **'No media library sources yet. Set up a default library or add a source from a trusted server location.'**
   String get adminLibrarySourcesEmpty;
+
+  /// No description provided for @adminLibrarySetupDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up default libraries'**
+  String get adminLibrarySetupDefault;
+
+  /// No description provided for @adminLibraryDefaultMountUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No available trusted media mount is configured. Add or enable one under Admin → Storage, then choose it here.'**
+  String get adminLibraryDefaultMountUnavailable;
 
   /// No description provided for @adminLibrarySourcesSubtitle.
   ///
   /// In en, this message translates to:
   /// **'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.'**
   String get adminLibrarySourcesSubtitle;
+
+  /// No description provided for @adminLibraryMetricSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources'**
+  String get adminLibraryMetricSources;
+
+  /// No description provided for @adminLibraryMetricSourcesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured video roots'**
+  String get adminLibraryMetricSourcesHint;
+
+  /// No description provided for @adminLibraryMetricIndexedTitles.
+  ///
+  /// In en, this message translates to:
+  /// **'Titles indexed'**
+  String get adminLibraryMetricIndexedTitles;
+
+  /// No description provided for @adminLibraryMetricIndexedTitlesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Current items in these sources'**
+  String get adminLibraryMetricIndexedTitlesHint;
+
+  /// No description provided for @adminLibraryMetricAwaitingReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting review'**
+  String get adminLibraryMetricAwaitingReview;
+
+  /// No description provided for @adminLibraryMetricAwaitingReviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scans ready for selection'**
+  String get adminLibraryMetricAwaitingReviewHint;
+
+  /// No description provided for @adminLibraryMetricScansRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scans running'**
+  String get adminLibraryMetricScansRunning;
+
+  /// No description provided for @adminLibraryMetricScansRunningHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued, discovering, or applying'**
+  String get adminLibraryMetricScansRunningHint;
+
+  /// No description provided for @adminLibraryMetricStorageIssues.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage issues'**
+  String get adminLibraryMetricStorageIssues;
+
+  /// No description provided for @adminLibraryMetricStorageIssuesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled sources needing attention'**
+  String get adminLibraryMetricStorageIssuesHint;
+
+  /// No description provided for @adminLibraryIndexedUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'indexed'**
+  String get adminLibraryIndexedUnit;
+
+  /// No description provided for @adminLibraryPolicyManualReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual review'**
+  String get adminLibraryPolicyManualReview;
+
+  /// No description provided for @adminLibraryPolicyAutomaticImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic import'**
+  String get adminLibraryPolicyAutomaticImport;
+
+  /// No description provided for @adminLibraryReviewCandidates.
+  ///
+  /// In en, this message translates to:
+  /// **'Review candidates'**
+  String get adminLibraryReviewCandidates;
+
+  /// No description provided for @adminLibraryPauseScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause scan'**
+  String get adminLibraryPauseScan;
+
+  /// No description provided for @adminLibraryCancelScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel scan'**
+  String get adminLibraryCancelScan;
+
+  /// No description provided for @adminLibraryScanProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{phase} · {count} found'**
+  String adminLibraryScanProgress(String phase, int count);
+
+  /// No description provided for @adminLibraryOtherMediaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other media libraries'**
+  String get adminLibraryOtherMediaTitle;
+
+  /// No description provided for @adminLibraryOtherMediaSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Music, Photos, and Reader use their existing module workflows.'**
+  String get adminLibraryOtherMediaSubtitle;
+
+  /// No description provided for @adminLibraryOtherMediaUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unified administration controls will appear here when those modules expose a real server-side source and scan contract.'**
+  String get adminLibraryOtherMediaUnavailable;
 
   /// No description provided for @adminMountLibraryScanAll.
   ///
@@ -21057,6 +21189,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select all'**
   String get photosSelectAll;
+
+  /// No description provided for @photosSelectDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Select this day'**
+  String get photosSelectDay;
+
+  /// No description provided for @photosDeselectDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect this day'**
+  String get photosDeselectDay;
+
+  /// No description provided for @photosItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String photosItemCount(Object count);
+
+  /// No description provided for @photosGroupSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {total} selected'**
+  String photosGroupSelectedCount(Object selected, Object total);
 
   /// No description provided for @photosDeselectAll.
   ///

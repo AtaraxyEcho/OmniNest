@@ -201,7 +201,7 @@ class _AdminShellBody extends StatelessWidget {
       isWide ? 40 : 18,
       32,
       isWide ? 40 : 18,
-      isWide ? 40 : 92,
+      isWide ? DesktopMetrics.playerBarClearance : 92,
     );
     // 规范：侧栏切换联动主区 160ms 纯淡入，不做位移动画。
     final content = AnimatedSwitcher(

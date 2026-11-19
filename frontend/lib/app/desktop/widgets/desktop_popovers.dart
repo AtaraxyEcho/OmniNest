@@ -107,9 +107,7 @@ class _DesktopPopoverState extends State<DesktopPopover>
 
 /// 浮层的定位容器：贴顶栏下沿、按锚点右对齐，点击外部关闭。
 class DesktopPanelLayer extends ConsumerWidget {
-  const DesktopPanelLayer({required this.onAppearance, super.key});
-
-  final VoidCallback onAppearance;
+  const DesktopPanelLayer({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -146,7 +144,7 @@ class DesktopPanelLayer extends ConsumerWidget {
             DesktopPanel.account => DesktopPopover(
               width: width,
               padding: const EdgeInsets.all(6),
-              child: _AccountMenu(onAppearance: onAppearance),
+              child: const _AccountMenu(),
             ),
             DesktopPanel.notifications => DesktopPopover(
               width: width,
@@ -165,9 +163,7 @@ class DesktopPanelLayer extends ConsumerWidget {
 }
 
 class _AccountMenu extends ConsumerWidget {
-  const _AccountMenu({required this.onAppearance});
-
-  final VoidCallback onAppearance;
+  const _AccountMenu();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -248,9 +244,11 @@ class _AccountMenu extends ConsumerWidget {
         ),
         DesktopMenuTile(
           enterIndex: 1,
-          icon: DesktopIcons.palette,
-          label: l10n.desktopAppearance,
-          onTap: () => run(onAppearance),
+          icon: DesktopIcons.wallpaper,
+          label: l10n.desktopBackdropLibrary,
+          onTap:
+              () =>
+                  run(() => desktopGo(context, DesktopRoutes.settingsBackdrop)),
         ),
         DesktopMenuTile(
           enterIndex: 3,

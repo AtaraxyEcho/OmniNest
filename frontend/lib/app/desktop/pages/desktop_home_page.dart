@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_lists.dart';
@@ -18,7 +19,7 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
-import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
@@ -139,6 +140,12 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
       realtimeWeatherProvider.select((state) => state.asData?.value),
     );
     final reduceMotion = ref.watch(desktopAppearanceProvider).reduceMotion;
+    // 壳层已经完成了背景素材、作用域与路由的统一判定；首页直接消费这
+    // 一位，避免异步状态切换时 Hero 比壁纸层晚一帧或早一帧。
+    final backdropActive =
+        DesktopShellScope.isHosted(context)
+            ? DesktopShellScope.isBackdropActive(context)
+            : desktopBackdropVisibleForRoute(ref, DesktopRoutes.home);
 
     // hero 的次按钮跟样例一样直呼曲名：泛化的「开始聆听」在播放条已经
     // 有曲目时反而比按钮旁边那行文案更模糊。库空时才退回泛化文案。
@@ -186,13 +193,7 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
               // 样例 `.bd-on .hero-sky .sky { display:none }`：自定义壁纸在场
               // 时首页不再叠实时天象，否则两层天气画面互相打架。
               child: _HeroSky(
-                showSky:
-                    !(ref
-                            .watch(appBackdropControllerProvider)
-                            .asData
-                            ?.value
-                            .hasActiveBackdrop ??
-                        false),
+                showSky: !backdropActive,
                 // 样例眉标只到「周六，11 月 14 日」：年份在首页永不需要，
                 // 带上它会把这行从三格撑成四格，压掉右边天气卡的对齐。
                 dateLabel: DateFormat.MMMMEEEEd(locale).format(now),
@@ -218,13 +219,7 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
                   ref.invalidate(readerDashboardProvider);
                 },
                 reduceMotion: reduceMotion,
-                backdropActive:
-                    ref
-                        .watch(appBackdropControllerProvider)
-                        .asData
-                        ?.value
-                        .hasActiveBackdrop ??
-                    false,
+                backdropActive: backdropActive,
                 resumeLabel:
                     movieSnapshot.resumeTitle == null
                         ? null

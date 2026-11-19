@@ -171,6 +171,7 @@ class _DesktopSetupPageState extends ConsumerState<DesktopSetupPage> {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final themeMode = ref.watch(appearanceControllerProvider);
+    final language = ref.watch(localeControllerProvider);
     final isDark =
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
@@ -255,17 +256,50 @@ class _DesktopSetupPageState extends ConsumerState<DesktopSetupPage> {
           top:
               isDesktopPlatform ? (DesktopMetrics.titleBarHeight - 32) / 2 : 16,
           right: isDesktopPlatform ? 166 : 28,
-          child: Semantics(
-            button: true,
-            label: l10n.desktopToggleTheme,
-            child: DesktopIconButton(
-              icon: isDark ? DesktopIcons.sun : DesktopIcons.moon,
-              iconSize: 17,
-              onPressed:
-                  () => ref
-                      .read(appearanceControllerProvider.notifier)
-                      .setThemeMode(isDark ? ThemeMode.light : ThemeMode.dark),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 样例 `setup-top` 在独立安装页保留一个右上语言 Select；它与
+              // 表单内的默认语言字段共用同一真实 locale controller。
+              DesktopSelect<String>(
+                key: const ValueKey<String>('setup-top-language'),
+                value: language,
+                variant: DesktopSelectVariant.pill,
+                width: 132,
+                icon: DesktopIcons.language,
+                align: DesktopSelectAlign.end,
+                search: false,
+                options: [
+                  DesktopSelectOption(
+                    value: 'zh',
+                    label: l10n.setupLanguageChineseSimplified,
+                  ),
+                  DesktopSelectOption(
+                    value: 'en',
+                    label: l10n.settingsLanguageEnglish,
+                  ),
+                ],
+                onChanged:
+                    (value) => ref
+                        .read(localeControllerProvider.notifier)
+                        .setLanguage(value),
+              ),
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: l10n.desktopToggleTheme,
+                child: DesktopIconButton(
+                  icon: isDark ? DesktopIcons.sun : DesktopIcons.moon,
+                  iconSize: 17,
+                  onPressed:
+                      () => ref
+                          .read(appearanceControllerProvider.notifier)
+                          .setThemeMode(
+                            isDark ? ThemeMode.light : ThemeMode.dark,
+                          ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

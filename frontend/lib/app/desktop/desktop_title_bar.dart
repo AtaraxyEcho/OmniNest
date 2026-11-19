@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/desktop/desktop_brand.dart';
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -27,9 +28,9 @@ const Color _avatarSecond = Color(0xFF6B4A8A);
 /// 桌面标题栏（样例 `.titlebar`）：46px 高，三栏网格
 /// 「品牌与导航 / 搜索胶囊 / 状态与账户」。
 class DesktopTitleBar extends ConsumerWidget {
-  const DesktopTitleBar({required this.onAppearance, super.key});
+  const DesktopTitleBar({required this.path, super.key});
 
-  final VoidCallback onAppearance;
+  final String path;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,10 +51,105 @@ class DesktopTitleBar extends ConsumerWidget {
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+    final backdropActive = desktopBackdropVisibleForRoute(ref, path);
 
     // 无边框窗口没有系统标题栏可拖：整条标题栏自己当拖拽区，
     // 双击按 Windows 惯例切换最大化。子按钮仍拿到自己的点击（手势竞技场里
     // 按钮的 tap 优先，拖动只在空白处成立）。
+    final bar = Container(
+      height: DesktopMetrics.titleBarHeight,
+      decoration: BoxDecoration(
+        color: skin.bg.withValues(alpha: backdropActive ? 0.38 : 0.62),
+        border: Border(bottom: BorderSide(color: skin.line)),
+      ),
+      padding: const EdgeInsets.only(left: 14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact =
+              constraints.maxWidth <= DesktopMetrics.titleBarCompactBreakpoint;
+          final left = _TitleBarLeft(
+            l10n: l10n,
+            shell: shell,
+            history: history,
+            onToggleSidebar: shellController.toggleSidebar,
+            onBack: () {
+              final target = historyController.back();
+              if (target != null && context.mounted) {
+                desktopGo(context, target);
+              }
+            },
+            onForward: () {
+              final target = historyController.forward();
+              if (target != null && context.mounted) {
+                desktopGo(context, target);
+              }
+            },
+          );
+          final search = _SearchPill(
+            key: const ValueKey<String>('desktop-titlebar-search'),
+            label: l10n.desktopSearchPill,
+            onTap: shellController.toggleCommandPalette,
+          );
+          final right = _TitleBarRight(
+            l10n: l10n,
+            shell: shell,
+            isDark: isDark,
+            running: running,
+            unread: unread,
+            onToggleTheme:
+                () => ref
+                    .read(appearanceControllerProvider.notifier)
+                    .setThemeMode(isDark ? ThemeMode.light : ThemeMode.dark),
+            onToggleTasks:
+                () => shellController.togglePanel(DesktopPanel.tasks),
+            onToggleNotifications:
+                () => shellController.togglePanel(DesktopPanel.notifications),
+            onToggleDock: shellController.toggleDock,
+            onToggleAccount:
+                () => shellController.togglePanel(DesktopPanel.account),
+          );
+
+          // `desktop.css:174` 的宽屏网格是 1fr / 280–520px / 1fr。
+          // 左右内容宽度不同也必须保持搜索中心在窗口中心；窄窗则按
+          // `desktop.css:500` 收成 auto / 1fr / auto，避免按钮挤压搜索。
+          return compact
+              ? Row(
+                children: [
+                  left,
+                  const SizedBox(width: 10),
+                  Expanded(child: search),
+                  const SizedBox(width: 10),
+                  right,
+                ],
+              )
+              : Row(
+                children: [
+                  Expanded(
+                    child: Align(alignment: Alignment.centerLeft, child: left),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 280,
+                          maxWidth: 520,
+                        ),
+                        child: search,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: right,
+                    ),
+                  ),
+                ],
+              );
+        },
+      ),
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart:
@@ -70,125 +166,137 @@ class DesktopTitleBar extends ConsumerWidget {
                       .read(windowChromeControllerProvider.notifier)
                       .toggleMaximize()
               : null,
-      child: DesktopGlassSurface(
-        borderRadius: BorderRadius.zero,
-        blur: 30,
-        saturation: 1.6,
-        child: Container(
-          height: DesktopMetrics.titleBarHeight,
-          decoration: BoxDecoration(
-            color: skin.bg.withValues(alpha: 0.62),
-            border: Border(bottom: BorderSide(color: skin.line)),
-          ),
-          padding: const EdgeInsets.only(left: 14),
-          child: Row(
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: DesktopBrandLockup(),
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.sidebar,
-                tooltip: '${l10n.desktopToggleSidebar} (Ctrl+B)',
-                onPressed: shellController.toggleSidebar,
-                active: !shell.sidebarExpanded,
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.left,
-                tooltip: '${l10n.desktopBack} (Alt+←)',
-                onPressed:
-                    history.canGoBack
-                        ? () {
-                          final target = historyController.back();
-                          if (target != null && context.mounted) {
-                            desktopGo(context, target);
-                          }
-                        }
-                        : null,
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.chevron,
-                tooltip: '${l10n.desktopForward} (Alt+→)',
-                onPressed:
-                    history.canGoForward
-                        ? () {
-                          final target = historyController.forward();
-                          if (target != null && context.mounted) {
-                            desktopGo(context, target);
-                          }
-                        }
-                        : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    // 样例 `.titlebar` 中列是 `minmax(280px,520px)`。
-                    constraints: const BoxConstraints(
-                      minWidth: 280,
-                      maxWidth: 520,
-                    ),
-                    child: _SearchPill(
-                      label: l10n.desktopSearchPill,
-                      onTap: shellController.toggleCommandPalette,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              DesktopIconButton(
-                icon: DesktopIcons.moon,
-                glyph: _ThemeGlyph(isDark: isDark),
-                tooltip: l10n.desktopToggleTheme,
-                onPressed:
-                    () => ref
-                        .read(appearanceControllerProvider.notifier)
-                        .setThemeMode(
-                          isDark ? ThemeMode.light : ThemeMode.dark,
-                        ),
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.tasks,
-                tooltip: l10n.desktopBackgroundTasks,
-                active: shell.panel == DesktopPanel.tasks,
-                badge: running,
-                badgeColor: running > 0 ? skin.warm : null,
-                onPressed:
-                    () => shellController.togglePanel(DesktopPanel.tasks),
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.bell,
-                tooltip: l10n.desktopNotifications,
-                active: shell.panel == DesktopPanel.notifications,
-                badge: unread,
-                onPressed:
-                    () =>
-                        shellController.togglePanel(DesktopPanel.notifications),
-              ),
-              DesktopIconButton(
-                icon: DesktopIcons.panel,
-                tooltip: '${l10n.desktopDetailsPanel} (Ctrl+.)',
-                active: shell.dockOpen,
-                onPressed: shellController.toggleDock,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: _AvatarButton(
-                  active: shell.panel == DesktopPanel.account,
-                  onTap:
-                      () => shellController.togglePanel(DesktopPanel.account),
-                ),
-              ),
-              if (isDesktopPlatform) ...[
-                // 样例 `.win-ctl { margin-left: 4px }`：与头像的 8px 内距
-                // 各自独立，不是同一段间距。
-                const SizedBox(width: 4),
-                const DesktopWindowControls(),
-              ],
-            ],
+      child:
+          backdropActive
+              ? DesktopGlassSurface(
+                borderRadius: BorderRadius.zero,
+                blur: 26,
+                saturation: 1.4,
+                child: bar,
+              )
+              : bar,
+    );
+  }
+}
+
+class _TitleBarLeft extends StatelessWidget {
+  const _TitleBarLeft({
+    required this.l10n,
+    required this.shell,
+    required this.history,
+    required this.onToggleSidebar,
+    required this.onBack,
+    required this.onForward,
+  });
+
+  final AppLocalizations l10n;
+  final DesktopShellState shell;
+  final DesktopHistory history;
+  final VoidCallback onToggleSidebar;
+  final VoidCallback onBack;
+  final VoidCallback onForward;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(right: 8),
+          child: DesktopBrandLockup(),
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.sidebar,
+          tooltip: '${l10n.desktopToggleSidebar} (Ctrl+B)',
+          onPressed: onToggleSidebar,
+          active: !shell.sidebarExpanded,
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.left,
+          tooltip: '${l10n.desktopBack} (Alt+←)',
+          onPressed: history.canGoBack ? onBack : null,
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.chevron,
+          tooltip: '${l10n.desktopForward} (Alt+→)',
+          onPressed: history.canGoForward ? onForward : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _TitleBarRight extends StatelessWidget {
+  const _TitleBarRight({
+    required this.l10n,
+    required this.shell,
+    required this.isDark,
+    required this.running,
+    required this.unread,
+    required this.onToggleTheme,
+    required this.onToggleTasks,
+    required this.onToggleNotifications,
+    required this.onToggleDock,
+    required this.onToggleAccount,
+  });
+
+  final AppLocalizations l10n;
+  final DesktopShellState shell;
+  final bool isDark;
+  final int running;
+  final int unread;
+  final VoidCallback onToggleTheme;
+  final VoidCallback onToggleTasks;
+  final VoidCallback onToggleNotifications;
+  final VoidCallback onToggleDock;
+  final VoidCallback onToggleAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DesktopIconButton(
+          icon: DesktopIcons.moon,
+          glyph: _ThemeGlyph(isDark: isDark),
+          tooltip: l10n.desktopToggleTheme,
+          onPressed: onToggleTheme,
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.tasks,
+          tooltip: l10n.desktopBackgroundTasks,
+          active: shell.panel == DesktopPanel.tasks,
+          badge: running,
+          badgeColor: running > 0 ? skin.warm : null,
+          onPressed: onToggleTasks,
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.bell,
+          tooltip: l10n.desktopNotifications,
+          active: shell.panel == DesktopPanel.notifications,
+          badge: unread,
+          onPressed: onToggleNotifications,
+        ),
+        DesktopIconButton(
+          icon: DesktopIcons.panel,
+          tooltip: '${l10n.desktopDetailsPanel} (Ctrl+.)',
+          active: shell.dockOpen,
+          onPressed: onToggleDock,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _AvatarButton(
+            key: const ValueKey<String>('desktop-account-button'),
+            active: shell.panel == DesktopPanel.account,
+            onTap: onToggleAccount,
           ),
         ),
-      ),
+        if (isDesktopPlatform) ...[
+          const SizedBox(width: 4),
+          const DesktopWindowControls(),
+        ],
+      ],
     );
   }
 }
@@ -241,7 +349,7 @@ class _ThemeGlyph extends StatelessWidget {
 }
 
 class _SearchPill extends StatelessWidget {
-  const _SearchPill({required this.label, required this.onTap});
+  const _SearchPill({required this.label, required this.onTap, super.key});
 
   final String label;
   final VoidCallback onTap;
@@ -322,7 +430,7 @@ class _Kbd extends StatelessWidget {
 }
 
 class _AvatarButton extends ConsumerWidget {
-  const _AvatarButton({required this.active, required this.onTap});
+  const _AvatarButton({required this.active, required this.onTap, super.key});
 
   final bool active;
   final VoidCallback onTap;
