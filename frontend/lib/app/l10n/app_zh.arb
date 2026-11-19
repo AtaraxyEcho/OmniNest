@@ -1686,6 +1686,7 @@
   "adminTotalTasks": "任务总数",
   "adminRecentTasks": "最近任务",
   "adminRunningTasks": "运行中",
+  "adminRunningTasksStat": "运行任务",
   "adminExecuting": "正在执行",
   "adminFailedTasks": "失败",
   "adminRetryable": "可重试",
@@ -2590,6 +2591,9 @@
   "adminConfigTitle": "配置中心",
   "adminConfigSubtitle": "管理系统配置项、功能开关和热更新发布状态。",
   "adminStorageTitle": "存储管理",
+  "adminGroupLibrary": "媒体库",
+  "adminMediaLibraryTitle": "媒体库",
+  "adminMediaLibrarySubtitle": "库源、发现扫描与最近一次匹配结果。",
   "adminStorageSubtitle": "管理 MinIO 桶、容量与索引维护。",
   "adminExternalStorageTitle": "外部存储",
   "adminRefresh": "刷新",
@@ -6089,6 +6093,22 @@
   "desktopHomeLeadResume": "媒体库里有 {count} 项内容，《{title}》可以接着看。",
   "desktopHomeLeadQuiet": "媒体库里有 {count} 项内容，一切安静有序。",
   "desktopResumeTitle": "继续播放 {title}",
+  "desktopHeroResumeMeta": "继续观看 · 还剩 {percent}%",
+  "@desktopHeroResumeMeta": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopHeroPlayMeta": "播放 · {artist}",
+  "@desktopHeroPlayMeta": {
+    "placeholders": {
+      "artist": {
+        "type": "String"
+      }
+    }
+  },
   "desktopStartListening": "开始聆听",
   "desktopStatLibrary": "媒体库",
   "desktopStatListening": "聆听",
@@ -6269,6 +6289,7 @@
   "musicNoFavoritesYet": "还没有收藏的曲目",
   "musicNoFavoritesHint": "点亮曲目旁的爱心，就能将它收藏在这里。",
   "desktopMusicPlaying": "正在播放",
+  "desktopMusicPlayingFrom": "正在播放",
   "desktopMusicPaused": "已暂停",
   "desktopColTitle": "标题",
   "desktopColAlbum": "专辑",
@@ -6357,7 +6378,10 @@
   "desktopFilesKindArchive": "压缩包",
   "desktopFilesKindText": "文本",
   "desktopFilesKindOther": "文件",
+  "desktopFilesDateToday": "今天",
+  "desktopFilesDateYesterday": "昨天",
   "desktopPhotosIndex": "第 {index} / {total} 张",
+  "desktopPhotosSingleCapture": "单张拍摄",
   "desktopPhotosInfo": "信息",
   "desktopPhotosTaken": "拍摄时间",
   "desktopPhotosLocation": "位置",

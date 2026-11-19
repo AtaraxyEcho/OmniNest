@@ -124,7 +124,10 @@ class _DesktopVisualizerState extends State<DesktopVisualizer>
     return RepaintBoundary(
       child: CustomPaint(
         painter: _VisualizerPainter(
-          values: _value,
+          // `_tick` 原地改 `_value`，列表引用始终不变；若直接传引用，
+          // `shouldRepaint` 的 `old.values != values` 永远为 false，柱高
+          // 每帧算了却不会画出来——表现就是播放时频谱完全静止。
+          values: List<double>.of(_value),
           color: widget.color,
           devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
         ),

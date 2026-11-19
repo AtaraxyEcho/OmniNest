@@ -1,10 +1,11 @@
-/// 管理台导航分区（样例 `Admin.tsx:15` 的 5 项，顺序一致）。
+/// 管理台导航分区（样例 `Admin.tsx` 的 6 项，顺序一致）。
 ///
 /// 分组即分区：每个分组是一张容器页，内部再用页签/卡片承载细分内容。
 /// 旧版 10 个导航分区降为容器内页签，路由段全部保留为别名，避免深链失效。
 enum AdminSectionGroup {
   overview(pathSegment: 'overview'),
   identity(pathSegment: 'identity'),
+  library(pathSegment: 'library'),
   operations(pathSegment: 'ops'),
   configuration(pathSegment: 'config'),
   storage(pathSegment: 'storage');
@@ -20,6 +21,7 @@ enum AdminSectionGroup {
   AdminSection get primary => switch (this) {
     AdminSectionGroup.overview => AdminSection.overview,
     AdminSectionGroup.identity => AdminSection.users,
+    AdminSectionGroup.library => AdminSection.mediaLibrary,
     AdminSectionGroup.operations => AdminSection.tasks,
     AdminSectionGroup.configuration => AdminSection.config,
     AdminSectionGroup.storage => AdminSection.storage,
@@ -35,6 +37,7 @@ enum AdminSection {
   maintenance(group: AdminSectionGroup.operations, pathSegment: 'maintenance'),
   users(group: AdminSectionGroup.identity, pathSegment: 'users'),
   roles(group: AdminSectionGroup.identity, pathSegment: 'roles'),
+  mediaLibrary(group: AdminSectionGroup.library, pathSegment: 'media-library'),
   config(group: AdminSectionGroup.configuration, pathSegment: 'config'),
   storage(group: AdminSectionGroup.storage, pathSegment: 'storage'),
   externalStorage(
@@ -67,6 +70,7 @@ enum AdminSection {
         'media:library:manage',
       },
       AdminSection.users => {'system:user:read'},
+      AdminSection.mediaLibrary => {'media:library:manage'},
       // 角色页同时依赖 /admin/roles 与 /admin/roles/detail
       AdminSection.roles => {'system:user:read', 'system:config:read'},
     };
@@ -76,7 +80,7 @@ enum AdminSection {
     return permissions.intersection(requiredAnyPermissions).isNotEmpty;
   }
 
-  /// 5 个导航分区的入口；分组下任一页签可见就显示该分区。
+  /// 导航分区的入口；分组下任一页签可见就显示该分区。
   static List<AdminSection> visiblePrimary(Set<String> permissions) {
     return [
       for (final group in AdminSectionGroup.values)

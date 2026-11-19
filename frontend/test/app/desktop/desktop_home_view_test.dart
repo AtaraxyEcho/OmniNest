@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_page.dart';
-import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 
 import 'desktop_test_harness.dart';
@@ -77,7 +76,10 @@ void main() {
     expect(find.text('Evening Drift'), findsWidgets);
     expect(find.text('Field notes.pdf'), findsOneWidget);
     expect(find.text('Import finished'), findsOneWidget);
-    expect(find.text('4382 photos · 128 titles'), findsOneWidget);
+    // 样例 `.stat` 的说明行是“今天新增”；数值位是 1100ms 递增动画，
+    // 固定 600ms 帧上断言会落在中间值，所以核标签与说明。
+    expect(find.text('Library'), findsOneWidget);
+    expect(find.text('+42 today'), findsOneWidget);
   });
 
   testWidgets('hero 用当前时段问候与天气实况，不是写死文案', (tester) async {
@@ -87,9 +89,11 @@ void main() {
     expect(find.text('18°'), findsOneWidget);
     expect(find.text('H 21° · L 12°'), findsOneWidget);
     expect(find.textContaining('Mira Han'), findsOneWidget);
-    expect(find.text('Resume Aperture'), findsOneWidget);
-    // 次按钮跟样例一样直呼当前曲名，而不是泛化的「开始聆听」。
-    expect(find.widgetWithText(DesktopButton, 'Evening Drift'), findsOneWidget);
+    // 样例 `.hero-tile`：小字给进度/艺人，粗体给片名/专辑名。
+    expect(find.text('Aperture'), findsWidgets);
+    expect(find.text('Resume · 64% left'), findsOneWidget);
+    expect(find.text('Play · Aoi Trio'), findsOneWidget);
+    expect(find.text('Evening Drift'), findsWidgets);
   });
 
   testWidgets('浅色主题与强调色档位都真的换色', (tester) async {

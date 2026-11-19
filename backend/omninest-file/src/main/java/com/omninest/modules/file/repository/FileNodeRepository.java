@@ -19,6 +19,34 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
+
+    /**
+     * 目录子项计数投影。
+     *
+     * <p>样例文件列表在目录副标题里显示 "{n} items"；接口只有分页内容，
+     * 逐目录再查一次会变成 N+1，所以按本页目录 id 一次分组统计。</p>
+     */
+    interface ParentChildCount {
+        UUID getParentId();
+
+        long getTotal();
+    }
+
+    /**
+     * 按父目录批量统计未删除的直接子项数量。
+     *
+     * @param parentIds 本页出现的目录 ID 集
+     * @return 每个目录一行 {@code parentId/total}
+     */
+    @Query("""
+            select n.parentId as parentId, count(n) as total
+            from FileNode n
+            where n.parentId in :parentIds
+              and n.deleted = false
+            group by n.parentId
+            """)
+    List<ParentChildCount> countChildrenByParentIds(@Param("parentIds") Collection<UUID> parentIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select node from FileNode node where node.id = :id and node.ownerUserId = :ownerUserId")
     Optional<FileNode> findOwnedForUpdate(@Param("id") UUID id, @Param("ownerUserId") UUID ownerUserId);

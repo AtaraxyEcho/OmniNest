@@ -11,7 +11,7 @@ void main() {
         'challengeExpiresAt': '2026-09-12T12:00:00Z',
       });
 
-      expect(result.requiresTwoFactor, isTrue);
+      expect(result.requiresChallenge, isTrue);
       expect(result.token, isNull);
       expect(result.challenge!.challengeToken, 'challenge-token');
       expect(result.challenge!.isEnrollment, isFalse);
@@ -43,7 +43,7 @@ void main() {
         },
       });
 
-      expect(result.requiresTwoFactor, isFalse);
+      expect(result.requiresChallenge, isFalse);
       expect(result.token, isNotNull);
       expect(result.token!.user.username, 'admin');
     });

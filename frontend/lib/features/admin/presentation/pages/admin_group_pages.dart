@@ -357,6 +357,7 @@ String _tabLabel(AppLocalizations l10n, AdminSection section) {
     AdminSection.maintenance => l10n.adminNavMaintenance,
     AdminSection.users => l10n.adminNavUsers,
     AdminSection.roles => l10n.adminNavRoles,
+    AdminSection.mediaLibrary => l10n.adminGroupLibrary,
     AdminSection.config => l10n.adminNavConfig,
     AdminSection.storage => l10n.adminNavStorage,
     AdminSection.externalStorage => l10n.adminNavExternalStorage,
@@ -401,6 +402,7 @@ class AdminSectionContent extends ConsumerWidget {
           onRetry: () => ref.invalidate(adminExternalStorageProvider),
           builder: (view) => AdminExternalStoragePage(view: view),
         ),
+      AdminSection.mediaLibrary => const AdminMediaLibraryPage(),
       AdminSection.sessions => const AdminSessionsPage(),
       AdminSection.maintenance => const AdminMaintenancePage(),
     };

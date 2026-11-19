@@ -117,6 +117,13 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   /// 会在同一次 go 里先后通知）。
   bool _routeSyncScheduled = false;
 
+  /// 音乐中心状态变化后，同一帧只排一次播放会话同步。
+  ///
+  /// 桌面没有移动端的 MiniPlayerSlot / MusicCenterPage 常驻监听，播放条与
+  /// 沉浸播放页都只改中心状态；不在这里补一次同步，按钮会翻图标但音频
+  /// 引擎始终停在初始状态，表现为「播放器没接上」。
+  bool _playbackSyncScheduled = false;
+
   /// 当前 location 取 routerDelegate 的**匹配结果**。
   ///
   /// 守卫 redirect（未登录 → /login?redirect=…）之后，delegate 持有最终
@@ -144,6 +151,8 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       // 样例是自绘无边框窗口：壳层常驻期间窗口不画原生标题栏，否则
       // 系统的最小化/最大化/关闭会和自绘的那三个按钮同屏出现两套。
       ref.read(windowChromeControllerProvider.notifier).setFrameless(true);
+      // 冷启动时把已恢复的播放计划交给音频会话；后续状态变化由 build 里的监听接管。
+      _schedulePlaybackSync();
     });
   }
 
@@ -172,6 +181,21 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       }
       ref.read(desktopHistoryProvider.notifier).record(_path);
       setState(() {});
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void _schedulePlaybackSync() {
+    if (_playbackSyncScheduled) {
+      return;
+    }
+    _playbackSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _playbackSyncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      ref.read(musicPortalActionsProvider).syncPlayback().ignore();
     });
     WidgetsBinding.instance.scheduleFrame();
   }
@@ -329,6 +353,19 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
 
   @override
   Widget build(BuildContext context) {
+    // 桌面播放条与沉浸播放页只改音乐中心状态；真正开流由播放会话完成。
+    // 这里只盯播放相关的三个字段，避免听歌时长写回时把音频层一起抖动。
+    ref.listen(
+      musicCenterControllerProvider.select((async) {
+        final state = async.asData?.value;
+        return (
+          state?.currentItem?.playableKey,
+          state?.playbackPlan?.url,
+          state?.isPlaying,
+        );
+      }),
+      (_, _) => _schedulePlaybackSync(),
+    );
     final themeMode = ref.watch(appearanceControllerProvider);
     // 根级 Theme 只依赖强调色。整份 watch 会让拖动「环境光」滑杆时每改一格
     // 都重新 resolve 一份 ThemeData，把全应用所有 `Theme.of` 依赖者拖进重建。

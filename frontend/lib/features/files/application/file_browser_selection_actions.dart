@@ -561,11 +561,13 @@ extension FileBrowserSelectionActions on FileBrowserController {
   /// 拖拽落点移动：显式给 id 集（被拖的行未必是当前选中集）。
   ///
   /// 目标就是当前目录时直接返回——否则行会先乐观消失，再被刷新补回来。
+  /// 空串表示根目录（仓储层同样把空 parentId 折成 null）。
   Future<void> moveFilesTo(List<String> ids, String targetParentId) async {
     final current = _currentState;
+    final target = targetParentId.isEmpty ? null : targetParentId;
     if (ids.isEmpty ||
-        ids.contains(targetParentId) ||
-        current?.parentId == targetParentId) {
+        (target != null && ids.contains(target)) ||
+        current?.parentId == target) {
       return;
     }
     registerFileEcho(ids);

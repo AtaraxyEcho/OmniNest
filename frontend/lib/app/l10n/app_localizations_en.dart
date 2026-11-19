@@ -4238,6 +4238,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRunningTasks => 'Running';
 
   @override
+  String get adminRunningTasksStat => 'Running tasks';
+
+  @override
   String get adminExecuting => 'Executing';
 
   @override
@@ -6352,6 +6355,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminStorageTitle => 'Storage Management';
+
+  @override
+  String get adminGroupLibrary => 'Media library';
+
+  @override
+  String get adminMediaLibraryTitle => 'Media library';
+
+  @override
+  String get adminMediaLibrarySubtitle =>
+      'Library sources, discovery scans and recent match results.';
 
   @override
   String get adminStorageSubtitle =>
@@ -13933,6 +13946,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String desktopHeroResumeMeta(int percent) {
+    return 'Resume · $percent% left';
+  }
+
+  @override
+  String desktopHeroPlayMeta(String artist) {
+    return 'Play · $artist';
+  }
+
+  @override
   String get desktopStartListening => 'Start listening';
 
   @override
@@ -14382,6 +14405,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopMusicPlaying => 'Playing now';
 
   @override
+  String get desktopMusicPlayingFrom => 'Playing from';
+
+  @override
   String get desktopMusicPaused => 'Paused';
 
   @override
@@ -14673,9 +14699,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopFilesKindOther => 'File';
 
   @override
+  String get desktopFilesDateToday => 'Today';
+
+  @override
+  String get desktopFilesDateYesterday => 'Yesterday';
+
+  @override
   String desktopPhotosIndex(int index, int total) {
     return '$index of $total';
   }
+
+  @override
+  String get desktopPhotosSingleCapture => 'Single capture';
 
   @override
   String get desktopPhotosInfo => 'Information';

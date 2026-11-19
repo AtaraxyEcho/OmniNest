@@ -102,7 +102,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Scanning the photo library'), findsOneWidget);
     expect(find.text('Aperture · 4K HDR'), findsOneWidget);
-    expect(find.text('RUNNING'), findsWidgets);
+    expect(find.text('Running'), findsWidgets);
     expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Task List'), findsOneWidget);
     expect(find.text('Dead Letter Queue'), findsOneWidget);

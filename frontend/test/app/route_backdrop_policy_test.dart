@@ -31,7 +31,9 @@ void main() {
       );
     });
 
-    test('桌面端保持原有语义：照片/阅读静态快照、影视与系统实底', () {
+    test('桌面端：照片/阅读静态快照，影视与系统页让出壁纸', () {
+      // 样例 `useBackdropActive` 在 scope=all 下不按路由屏蔽壁纸；
+      // 只有播放器/阅读会暂停动态素材（`BackdropLayer` 的 paused）。
       expect(
         routeBackdropPolicy('/photos/albums/1', mobileShell: false),
         AppBackdropPolicy.staticContent,
@@ -42,16 +44,39 @@ void main() {
       );
       expect(
         routeBackdropPolicy('/video/xyz', mobileShell: false),
-        AppBackdropPolicy.work,
+        AppBackdropPolicy.content,
       );
       expect(
         routeBackdropPolicy('/music/history', mobileShell: false),
-        AppBackdropPolicy.work,
+        AppBackdropPolicy.content,
       );
       expect(
         routeBackdropPolicy('/profile', mobileShell: false),
-        AppBackdropPolicy.work,
+        AppBackdropPolicy.content,
       );
+      expect(
+        routeBackdropPolicy('/admin/overview', mobileShell: false),
+        AppBackdropPolicy.content,
+      );
+    });
+
+    test('桌面端所有路由策略都允许壁纸层透出', () {
+      const paths = <String>[
+        '/profile',
+        '/admin/overview',
+        '/video',
+        '/video/xyz',
+        '/music/history',
+        '/photos/albums/1',
+        '/reader/items/9',
+      ];
+      for (final path in paths) {
+        expect(
+          routeBackdropPolicy(path, mobileShell: false).visible,
+          isTrue,
+          reason: '$path should let the shell wallpaper show through',
+        );
+      }
     });
 
     test('环境模式呈现阶梯随档位单调递减', () {

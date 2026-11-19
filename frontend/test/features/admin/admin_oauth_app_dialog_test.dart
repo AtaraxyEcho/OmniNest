@@ -105,10 +105,18 @@ void main() {
       find.widgetWithText(TextField, '客户端 ID'),
       'client-id',
     );
+    // 新建 OAuth 应用必须带密钥（`canSave` 的硬条件），否则保存按钮是禁用的。
+    await tester.enterText(
+      find.widgetWithText(TextField, '客户端密钥'),
+      'client-secret',
+    );
     await tester.enterText(
       find.widgetWithText(TextField, '重定向 URI'),
       'https://cb.example/oauth',
     );
+    // 三个 controller 的 listener 各自 setState；enterText 本身不推进帧，
+    // 不 pump 的话拿到的还是上一次「必填未齐」时禁用的保存按钮。
+    await tester.pump();
     await tester.tap(
       find.descendant(
         of: find.byType(WorkstationDialogFrame),

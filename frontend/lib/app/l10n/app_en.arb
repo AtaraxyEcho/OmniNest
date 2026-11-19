@@ -1812,6 +1812,7 @@
   "adminTotalTasks": "Total Tasks",
   "adminRecentTasks": "Recent tasks",
   "adminRunningTasks": "Running",
+  "adminRunningTasksStat": "Running tasks",
   "adminExecuting": "Executing",
   "adminFailedTasks": "Failed",
   "adminRetryable": "Retryable",
@@ -2716,6 +2717,9 @@
   "adminConfigTitle": "Config Center",
   "adminConfigSubtitle": "Manage system config items, feature flags and hot update release status.",
   "adminStorageTitle": "Storage Management",
+  "adminGroupLibrary": "Media library",
+  "adminMediaLibraryTitle": "Media library",
+  "adminMediaLibrarySubtitle": "Library sources, discovery scans and recent match results.",
   "adminStorageSubtitle": "Manage MinIO buckets, capacity, and index maintenance.",
   "adminExternalStorageTitle": "External Storage",
   "adminRefresh": "Refresh",
@@ -6295,6 +6299,22 @@
     }
   },
   "desktopResumeTitle": "Resume {title}",
+  "desktopHeroResumeMeta": "Resume · {percent}% left",
+  "@desktopHeroResumeMeta": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "desktopHeroPlayMeta": "Play · {artist}",
+  "@desktopHeroPlayMeta": {
+    "placeholders": {
+      "artist": {
+        "type": "String"
+      }
+    }
+  },
   "@desktopResumeTitle": {
     "placeholders": {
       "title": {
@@ -6603,6 +6623,7 @@
   "musicNoFavoritesYet": "No favourites yet",
   "musicNoFavoritesHint": "Heart a track to keep it here.",
   "desktopMusicPlaying": "Playing now",
+  "desktopMusicPlayingFrom": "Playing from",
   "desktopMusicPaused": "Paused",
   "desktopColTitle": "Title",
   "desktopColAlbum": "Album",
@@ -6783,7 +6804,10 @@
   "desktopFilesKindArchive": "Archive",
   "desktopFilesKindText": "Text",
   "desktopFilesKindOther": "File",
+  "desktopFilesDateToday": "Today",
+  "desktopFilesDateYesterday": "Yesterday",
   "desktopPhotosIndex": "{index} of {total}",
+  "desktopPhotosSingleCapture": "Single capture",
   "@desktopPhotosIndex": {
     "placeholders": {
       "index": {

@@ -16,6 +16,7 @@ class FileNodeDto {
     this.coverFileId,
     this.mediaAutoImportTaskId,
     this.favorited = false,
+    this.childCount = 0,
   });
 
   factory FileNodeDto.fromJson(Map<String, dynamic> json) {
@@ -41,6 +42,11 @@ class FileNodeDto {
       coverFileId: json['coverFileId']?.toString(),
       mediaAutoImportTaskId: json['mediaAutoImportTaskId']?.toString(),
       favorited: json['favorited'] == true,
+      childCount: switch (json['childCount']) {
+        final int value => value,
+        final num value => value.toInt(),
+        _ => 0,
+      },
     );
   }
 
@@ -58,6 +64,7 @@ class FileNodeDto {
   final String? coverFileId;
   final String? mediaAutoImportTaskId;
   final bool favorited;
+  final int childCount;
 
   FileNode toDomain() {
     return FileNode(
@@ -76,6 +83,7 @@ class FileNodeDto {
       coverFileId: coverFileId,
       mediaAutoImportTaskId: mediaAutoImportTaskId,
       favorited: favorited,
+      childCount: childCount,
     );
   }
 }

@@ -7,6 +7,21 @@ class _FakeFileRepository
     implements FileRepository {
   @override
   Future<FileMediaInfo> mediaInfo(String fileId) async => const FileMediaInfo();
+
+  @override
+  Future<List<FileMediaImportTask>> requestMediaImports({
+    required List<String> fileNodeIds,
+    required String mediaType,
+  }) async => const <FileMediaImportTask>[];
+
+  @override
+  Future<FileDuplicateSummary> scanDuplicates() async =>
+      const FileDuplicateSummary(
+        duplicateFileCount: 0,
+        duplicateGroupCount: 0,
+        reclaimableBytes: 0,
+        filesWithoutVerifiedHash: 0,
+      );
   @override
   List<FileUploadQueueItem> uploadQueue = const [];
   List<ExternalStorageAccount> externalAccounts = const [];

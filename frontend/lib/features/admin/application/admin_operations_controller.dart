@@ -58,6 +58,9 @@ class AdminSectionRefresher {
       case AdminSection.roles:
         _ref.invalidate(adminRolesProvider);
         _ref.invalidate(sharedSpacePermissionsProvider);
+      case AdminSection.mediaLibrary:
+        // 库源列表自身是独立 provider，切回媒体库分区时重新拉取。
+        _ref.invalidate(videoLibrarySourcesProvider);
       case AdminSection.config:
         _ref.invalidate(adminConfigsProvider);
       case AdminSection.maintenance:

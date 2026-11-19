@@ -28,6 +28,8 @@ import 'package:omninest/features/portal/portal_weather.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
+part 'desktop_home_hero.dart';
+
 /// 桌面首页（样例 `Home.tsx`）：天象 hero + 四指标 + 继续观看 +
 /// 此刻聆听 / 在读 + 最近照片 + 最近文件 / 动态。
 ///
@@ -77,6 +79,8 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
           addedToday: dashboard?.itemsAddedToday ?? 0,
           resumeId: resume?.id,
           resumeTitle: resume?.title,
+          resumeArtUrl: resume?.posterUrl,
+          resumeProgress: resume?.progressPercent ?? 0,
           loading: state.isLoading && !state.hasValue,
           failed: state.hasError && !state.hasValue,
         );
@@ -121,6 +125,8 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
         return (
           trackId: track?.id,
           trackTitle: track?.title,
+          trackArtist: track?.artistName,
+          trackCoverUrl: track?.listCoverUrl ?? track?.coverUrl,
           listeningHours: (music?.weekListeningSeconds ?? 0) / 3600,
           itemsAddedToday: music?.itemsAddedToday ?? 0,
           trackCount: music?.trackCount ?? 0,
@@ -212,11 +218,24 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
                   ref.invalidate(readerDashboardProvider);
                 },
                 reduceMotion: reduceMotion,
+                backdropActive:
+                    ref
+                        .watch(appBackdropControllerProvider)
+                        .asData
+                        ?.value
+                        .hasActiveBackdrop ??
+                    false,
                 resumeLabel:
                     movieSnapshot.resumeTitle == null
                         ? null
                         : l10n.desktopResumeTitle(movieSnapshot.resumeTitle!),
+                resumeTitle: movieSnapshot.resumeTitle,
+                resumeArtUrl: movieSnapshot.resumeArtUrl,
+                resumeProgress: movieSnapshot.resumeProgress,
                 listenLabel: listenLabel,
+                listenArtist:
+                    musicSnapshot.trackArtist ?? l10n.desktopStartListening,
+                listenArtUrl: musicSnapshot.trackCoverUrl,
                 onResume:
                     movieSnapshot.resumeId == null
                         ? null
@@ -355,396 +374,6 @@ class _TwoColumns extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _HeroSky extends StatelessWidget {
-  const _HeroSky({
-    required this.showSky,
-    required this.contentLoading,
-    required this.contentFailed,
-    required this.retryLabel,
-    required this.onRetryContent,
-    required this.dateLabel,
-    required this.greeting,
-    required this.lead,
-    required this.hour,
-    required this.weather,
-    required this.reduceMotion,
-    required this.listenLabel,
-    required this.onStartListening,
-    this.resumeLabel,
-    this.onResume,
-  });
-
-  /// 是否绘制实时天象；自定义壁纸在场时为 false。
-  final bool showSky;
-  final bool contentLoading;
-  final bool contentFailed;
-  final String retryLabel;
-  final VoidCallback onRetryContent;
-
-  final String dateLabel;
-  final String greeting;
-  final String lead;
-  final double hour;
-  final WeatherData? weather;
-  final bool reduceMotion;
-  final String listenLabel;
-  final VoidCallback onStartListening;
-  final String? resumeLabel;
-  final VoidCallback? onResume;
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final height = (MediaQuery.sizeOf(context).height * 0.42).clamp(
-      340.0,
-      460.0,
-    );
-    final isDay = hour >= 5.5 && hour < 20.5;
-    final condition =
-        weather == null
-            ? DesktopSkyCondition.clear
-            : desktopSkyConditionOf(
-              iconCode: weather!.icon,
-              text: weather!.text,
-            );
-    final showWeatherCard = width >= 1180;
-
-    return Container(
-      height: height,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-        boxShadow: DesktopSkin.of(context).shadow,
-      ),
-      foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-        border: Border.all(color: DesktopSkin.of(context).line2),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (showSky)
-            DesktopSky(
-              condition: condition,
-              hour: hour,
-              isDay: isDay,
-              reduceMotion: reduceMotion,
-            ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  DesktopPalette.heroShade,
-                  DesktopPalette.heroShadeClear,
-                ],
-                stops: [0.0, 0.62],
-              ),
-            ),
-          ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  DesktopPalette.heroShadeSoft,
-                  DesktopPalette.heroShadeClear,
-                ],
-                stops: [0.0, 0.5],
-              ),
-            ),
-          ),
-          Positioned(
-            left: (width * 0.034).clamp(28.0, 56.0),
-            right: showWeatherCard ? 330 : 40,
-            bottom: 40,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  dateLabel.toUpperCase(),
-                  style: DesktopType.eyebrow(
-                    DesktopPalette.onStage.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  greeting,
-                  style: DesktopType.displayXl(DesktopPalette.onStage, width),
-                ),
-                const SizedBox(height: 12),
-                if (contentLoading) ...[
-                  const SizedBox(
-                    width: 440,
-                    child: DesktopSkeletonBox(height: 16, radius: 5),
-                  ),
-                  const SizedBox(height: 22),
-                  Row(
-                    children: [
-                      const DesktopSkeletonBox(
-                        width: 150,
-                        height: 44,
-                        radius: 14,
-                      ),
-                      const SizedBox(width: 10),
-                      const DesktopSkeletonBox(
-                        width: 136,
-                        height: 44,
-                        radius: 14,
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Text(
-                      lead,
-                      style: DesktopType.medium(
-                        DesktopPalette.onStage.withValues(alpha: 0.82),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  if (contentFailed)
-                    DesktopButton(
-                      label: retryLabel,
-                      icon: DesktopIcons.retry,
-                      variant: DesktopButtonVariant.glass,
-                      large: true,
-                      onPressed: onRetryContent,
-                    )
-                  else
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        if (resumeLabel != null)
-                          DesktopButton(
-                            label: resumeLabel!,
-                            icon: DesktopIcons.play,
-                            variant: DesktopButtonVariant.primary,
-                            large: true,
-                            onPressed: onResume,
-                          ),
-                        DesktopButton(
-                          label: listenLabel,
-                          icon: DesktopIcons.music,
-                          variant: DesktopButtonVariant.glass,
-                          large: true,
-                          onPressed: onStartListening,
-                        ),
-                      ],
-                    ),
-                ],
-              ],
-            ),
-          ),
-          if (showWeatherCard)
-            Positioned(
-              right: 28,
-              top: 28,
-              child: _WeatherCard(weather: weather, isDay: isDay),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeatherCard extends ConsumerWidget {
-  const _WeatherCard({required this.weather, required this.isDay});
-
-  final WeatherData? weather;
-  final bool isDay;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final onGlass = DesktopPalette.onStage;
-    final data = weather;
-    final time = DateFormat.Hm(
-      Localizations.localeOf(context).toString(),
-    ).format(DesktopHomePage.clock());
-
-    Widget body;
-    if (data == null) {
-      body = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const AppLoading(),
-          const SizedBox(height: 8),
-          Text(
-            l10n.desktopWeatherReading,
-            style: DesktopType.caption(onGlass.withValues(alpha: 0.75)),
-          ),
-        ],
-      );
-    } else if (data.status != 'OK') {
-      body = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(DesktopIcons.cloud, size: 22, color: onGlass),
-          const SizedBox(height: 8),
-          Text(
-            l10n.desktopWeatherUnavailable,
-            style: DesktopType.denseStrong(onGlass),
-          ),
-          const SizedBox(height: 8),
-          DesktopButton(
-            label: l10n.desktopWeatherRefresh,
-            icon: DesktopIcons.retry,
-            variant: DesktopButtonVariant.glass,
-            onPressed: () => ref.invalidate(realtimeWeatherProvider),
-          ),
-        ],
-      );
-    } else {
-      final live = !data.isDegraded;
-      body = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(time, style: DesktopType.display(onGlass)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${data.locationName} · ${data.text}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.caption(
-                        onGlass.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text('${data.temp}°', style: DesktopType.displaySm(onGlass)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: onGlass.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isDay ? DesktopIcons.sun : DesktopIcons.moon,
-                  size: 26,
-                  color: onGlass,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.desktopWeatherHighLow(data.tempMax, data.tempMin),
-                        style: DesktopType.denseStrong(onGlass),
-                      ),
-                      Text(
-                        l10n.desktopWeatherFeels(data.feelsLike),
-                        style: DesktopType.caption(
-                          onGlass.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(DesktopIcons.wind, size: 14, color: onGlass),
-              const SizedBox(width: 5),
-              Text(
-                l10n.desktopWeatherWind(data.windSpeed),
-                style: DesktopType.caption(onGlass.withValues(alpha: 0.85)),
-              ),
-              const Spacer(),
-              Icon(DesktopIcons.drop, size: 14, color: onGlass),
-              const SizedBox(width: 5),
-              Text(
-                l10n.desktopWeatherHumidity(data.humidity),
-                style: DesktopType.caption(onGlass.withValues(alpha: 0.85)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.only(top: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: onGlass.withValues(alpha: 0.16)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: live ? skin.ok : skin.warn,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    live ? l10n.desktopWeatherLive : l10n.desktopWeatherStale,
-                    style: DesktopType.micro(onGlass.withValues(alpha: 0.8)),
-                  ),
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.retry,
-                  size: 24,
-                  iconSize: 12,
-                  color: onGlass,
-                  tooltip: l10n.desktopWeatherRefresh,
-                  onPressed: () => ref.invalidate(realtimeWeatherProvider),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      width: 270,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: onGlass.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: onGlass.withValues(alpha: 0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 50,
-            offset: const Offset(0, 20),
-            spreadRadius: -20,
-          ),
-        ],
-      ),
-      child: body,
     );
   }
 }

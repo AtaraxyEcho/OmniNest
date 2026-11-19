@@ -133,7 +133,7 @@ class _DesktopSettingsPageState extends ConsumerState<DesktopSettingsPage> {
                 '${name.isEmpty ? l10n.desktopAccount : name} · ${l10n.desktopOwner}'
                     .toUpperCase(),
             title: l10n.desktopNavSettings,
-            subtitle: l10n.desktopSettingsSubtitle,
+            // 样例 `Settings.tsx:39` 的 PageHead 只有眉标 + 标题，没有副标题。
           ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

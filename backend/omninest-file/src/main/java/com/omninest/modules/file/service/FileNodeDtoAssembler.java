@@ -48,6 +48,22 @@ class FileNodeDtoAssembler {
             UUID coverFileId,
             boolean favorited
     ) {
+        return toDto(node, uploaderNames, coverFileId, favorited, 0L);
+    }
+
+    /**
+     * 完整装配：收藏态与目录子项计数一并写入。
+     *
+     * <p>{@code childCount} 由调用方按本页目录 id 批量统计；非目录恒传 0，
+     * 避免前端把文件行的 0 当成可展示的子项数。</p>
+     */
+    FileNodeDto toDto(
+            FileNode node,
+            Map<UUID, String> uploaderNames,
+            UUID coverFileId,
+            boolean favorited,
+            long childCount
+    ) {
         UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         return new FileNodeDto(
                 node.getId(),
@@ -65,8 +81,30 @@ class FileNodeDtoAssembler {
                 uploaderNames.get(uploaderId),
                 coverFileId,
                 null,
-                favorited
+                favorited,
+                childCount
         );
+    }
+
+    /**
+     * 批量统计本页目录的直接子项数量，供目录副标题显示 "N items"。
+     */
+    Map<UUID, Long> resolveChildCounts(List<FileNode> nodes) {
+        Set<UUID> folderIds = new HashSet<>();
+        for (FileNode node : nodes) {
+            if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+                folderIds.add(node.getId());
+            }
+        }
+        if (folderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Long> counts = new HashMap<>();
+        for (FileNodeRepository.ParentChildCount row
+                : fileNodeRepository.countChildrenByParentIds(folderIds)) {
+            counts.put(row.getParentId(), row.getTotal());
+        }
+        return counts;
     }
 
     /**

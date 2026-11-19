@@ -17,6 +17,7 @@ import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/file_media_import_task.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 

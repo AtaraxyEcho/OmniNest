@@ -31,6 +31,7 @@ class FileNode {
     this.coverFileId,
     this.mediaAutoImportTaskId,
     this.favorited = false,
+    this.childCount = 0,
   });
 
   final String id;
@@ -55,6 +56,9 @@ class FileNode {
   /// 当前用户是否已收藏该节点；由列表接口按页反查下发。
   final bool favorited;
 
+  /// 目录的直接子项数量；文件恒为 0。列表接口按本页目录 id 批量统计。
+  final int childCount;
+
   FileNode copyWith({bool? favorited, String? name}) {
     return FileNode(
       id: id,
@@ -72,6 +76,7 @@ class FileNode {
       coverFileId: coverFileId,
       mediaAutoImportTaskId: mediaAutoImportTaskId,
       favorited: favorited ?? this.favorited,
+      childCount: childCount,
     );
   }
 }

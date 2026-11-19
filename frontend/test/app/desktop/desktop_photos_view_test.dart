@@ -123,7 +123,7 @@ void main() {
   testWidgets('回收站分区给出保留期说明', (tester) async {
     await pumpPhotos(tester);
 
-    await tester.tap(find.text('Trash').last);
+    await tester.tap(find.text('Trash').first);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 

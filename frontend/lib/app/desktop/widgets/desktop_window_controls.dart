@@ -30,10 +30,12 @@ class DesktopWindowControls extends ConsumerWidget {
       required String label,
       required VoidCallback onTap,
       bool danger = false,
+      Key? key,
     }) {
       return DesktopHover(
         builder:
             (context, hovered) => GestureDetector(
+              key: key,
               onTap: onTap,
               behavior: HitTestBehavior.opaque,
               child: Semantics(
@@ -77,6 +79,10 @@ class DesktopWindowControls extends ConsumerWidget {
                   ? _WindowControlGlyph.restore
                   : _WindowControlGlyph.maximize,
           label: l10n.desktopMaximize,
+          // 字形由 CustomPainter 绘制，测试按 key 区分最大化/还原。
+          key: ValueKey<String>(
+            maximized ? 'window-control-restore' : 'window-control-maximize',
+          ),
           onTap: () => chrome.toggleMaximize(),
         ),
         control(

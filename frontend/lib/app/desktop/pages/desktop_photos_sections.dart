@@ -707,6 +707,11 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        if (photos.length == 1) {
+          // 样例 `.justified.solo`：单张照片不再按 flex 铺满整行，
+          // 而是保持自身比例，并在右侧（窄窗换行）显示一块拍摄信息。
+          return _soloLayout(context, photos.first, width);
+        }
         final rows = _layout(width, photos);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -855,6 +860,39 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos> {
     );
   }
 
+  /// 单张照片：照片按原比例 + `.solo-note` 旁注（polish.css:324-328）。
+  Widget _soloLayout(BuildContext context, PhotoItem photo, double width) {
+    final ratio = _ratioOf(photo);
+    final photoWidth = (widget.targetHeight * ratio).clamp(120.0, width);
+    final noteWidth = (width - photoWidth - 20).clamp(220.0, 320.0);
+    final tile = SizedBox(
+      width: photoWidth,
+      height: widget.targetHeight,
+      child: _PhotoTile(
+        photo: photo,
+        height: widget.targetHeight,
+        onTap:
+            (selectedPhoto) =>
+                widget.onActivate(selectedPhoto, <PhotoItem>[photo]),
+        onToggleSelect: widget.onToggleSelect,
+        selected: widget.selection.contains(photo.id),
+        selectionActive: widget.selection.isNotEmpty,
+        showCaption: widget.showCaption,
+        showFavorite: widget.showFavorite,
+        showSelectionControls: widget.showSelectionControls,
+      ),
+    );
+    return Wrap(
+      spacing: 20,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: [
+        tile,
+        SizedBox(width: noteWidth, child: _SoloNote(photo: photo)),
+      ],
+    );
+  }
+
   List<List<_SizedPhoto>> _layout(double width, List<PhotoItem> photos) {
     final rows = <List<_SizedPhoto>>[];
     var current = <_SizedPhoto>[];
@@ -996,4 +1034,106 @@ class _SizedPhoto {
 
   final PhotoItem photo;
   final double ratio;
+}
+
+/// 样例 `.solo-note`：单张照片旁的拍摄信息块。
+class _SoloNote extends StatelessWidget {
+  const _SoloNote({required this.photo});
+
+  final PhotoItem photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final camera = <String?>[
+      photo.cameraMake,
+      photo.cameraModel,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' ');
+    final exposure = <String?>[
+      photo.aperture,
+      photo.shutterSpeed,
+      photo.iso == null ? null : 'ISO ${photo.iso}',
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          l10n.desktopPhotosSingleCapture.toUpperCase(),
+          style: DesktopType.eyebrow(skin.text3),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          photo.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: DesktopType.panelTitle(skin.text),
+        ),
+        if (_placeLabel(photo) case final place?) ...[
+          const SizedBox(height: 2),
+          Text(place, style: DesktopType.dense(skin.text3)),
+        ],
+        if (camera.isNotEmpty || exposure.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          if (camera.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 74,
+                    child: Text(
+                      l10n.desktopPhotosCamera,
+                      style: DesktopType.secondary(skin.text3),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      camera,
+                      style: DesktopType.secondary(skin.text2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (exposure.isNotEmpty)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 74,
+                  child: Text(
+                    l10n.desktopPhotosExposure,
+                    style: DesktopType.secondary(skin.text3),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    exposure,
+                    style: DesktopType.secondary(skin.text2),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// 样例照片的 `place`：`gpsLocation` 里第一个可读地名。
+String? _placeLabel(PhotoItem photo) {
+  final location = photo.gpsLocation;
+  if (location == null || location.isEmpty) {
+    return null;
+  }
+  for (final key in const ['name', 'displayName', 'locality', 'city']) {
+    final value = location[key];
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
 }

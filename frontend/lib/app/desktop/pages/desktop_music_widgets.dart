@@ -80,6 +80,25 @@ class _FocusHero extends StatelessWidget {
               ),
             ),
           ),
+          // 样例 `.f-viz`：贴底通栏 90px、白色 56 柱、整体 55% 不透明度，
+          // 只作氛围，不接指针。
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 90,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.55,
+                child: DesktopVisualizer(
+                  playing: playing,
+                  color: Colors.white,
+                  bars: 56,
+                  seed: 3,
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(40, 34, 40, 34),
             child: Row(
@@ -98,10 +117,7 @@ class _FocusHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        (playing
-                                ? l10n.desktopMusicPlaying
-                                : l10n.desktopMusicPaused)
-                            .toUpperCase(),
+                        _heroEyebrow(l10n, playing, track),
                         style: DesktopType.eyebrow(
                           Colors.white.withValues(alpha: 0.70),
                         ),
@@ -158,17 +174,6 @@ class _FocusHero extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 24),
-                SizedBox(
-                  width: 160,
-                  height: 64,
-                  child: DesktopVisualizer(
-                    playing: playing,
-                    color: skin.accent,
-                    bars: 48,
-                    seed: 3,
-                  ),
-                ),
               ],
             ),
           ),
@@ -176,6 +181,17 @@ class _FocusHero extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 样例 `.f-copy .eyebrow`：Playing from {album} / Paused · {album}。
+String _heroEyebrow(AppLocalizations l10n, bool playing, MusicTrack? track) {
+  final label =
+      playing ? l10n.desktopMusicPlayingFrom : l10n.desktopMusicPaused;
+  final album = track?.albumTitle.trim() ?? '';
+  if (album.isEmpty) {
+    return label.toUpperCase();
+  }
+  return (playing ? '$label $album' : '$label · $album').toUpperCase();
 }
 
 class _SpinningCover extends StatefulWidget {
@@ -427,17 +443,33 @@ class _PlaylistCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              DesktopTilt(
-                maxDegrees: 5,
-                radius: 14,
+              // 样例歌单卡是 `.album`，没有 `.tilt`：只有封面静态描边 +
+              // 14px 圆角，hover 只上移 4px。此前套 DesktopTilt 会多出
+              // 指针柔光和大块投影，已按源码移除。
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      blurRadius: 30,
+                      offset: const Offset(0, 14),
+                      spreadRadius: -12,
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: DesktopCover(
-                    url: playlist.listCoverUrl,
-                    kind: DesktopCoverKind.music,
-                    fallbackIcon: DesktopIcons.queue,
-                    cacheKey: 'desktop-playlist-${playlist.id}',
-                    iconSize: 28,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: DesktopCover(
+                      url: playlist.listCoverUrl,
+                      kind: DesktopCoverKind.music,
+                      fallbackIcon: DesktopIcons.queue,
+                      cacheKey: 'desktop-playlist-${playlist.id}',
+                      iconSize: 28,
+                    ),
                   ),
                 ),
               ),
@@ -841,17 +873,32 @@ class _AlbumCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        DesktopTilt(
-          maxDegrees: 5,
-          radius: 14,
+        // 样例 `.album .cover` 只有静态 14px 圆角 + 柔和投影，没有
+        // `.tilt/.shine` 的指针柔光；这里不再用 DesktopTilt，避免 hover 光晕。
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 30,
+                offset: const Offset(0, 14),
+                spreadRadius: -12,
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
           child: AspectRatio(
             aspectRatio: 1,
-            child: DesktopCover(
-              url: album.coverUrl,
-              kind: DesktopCoverKind.music,
-              fallbackIcon: DesktopIcons.music,
-              cacheKey: 'desktop-album-${album.id}',
-              iconSize: 28,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: DesktopCover(
+                url: album.coverUrl,
+                kind: DesktopCoverKind.music,
+                fallbackIcon: DesktopIcons.music,
+                cacheKey: 'desktop-album-${album.id}',
+                iconSize: 28,
+              ),
             ),
           ),
         ),

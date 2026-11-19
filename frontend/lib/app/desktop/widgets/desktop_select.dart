@@ -215,22 +215,43 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                               : skin.line2,
                     ),
                   ),
+                  // 未给 width 时触发器放在 Wrap 里，宽度是无界的：
+                  // 这时不能用 Expanded（RenderFlex 会断言 non-zero flex +
+                  // unbounded width），改用松约束让文本按内容宽铺开。
                   child: Row(
+                    mainAxisSize:
+                        widget.width == null
+                            ? MainAxisSize.min
+                            : MainAxisSize.max,
                     children: [
                       if (widget.icon != null) ...[
                         Icon(widget.icon, size: 15, color: skin.text2),
                         const SizedBox(width: 8),
                       ],
-                      Expanded(
-                        child: Text(
-                          current?.label ?? widget.placeholder ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.dense(
-                            current == null ? skin.text3 : skin.text,
+                      if (widget.width == null)
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Text(
+                            current?.label ?? widget.placeholder ?? '',
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.dense(
+                              current == null ? skin.text3 : skin.text,
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: Text(
+                            current?.label ?? widget.placeholder ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.dense(
+                              current == null ? skin.text3 : skin.text,
+                            ),
                           ),
                         ),
-                      ),
                       const SizedBox(width: 6),
                       AnimatedRotation(
                         turns: _open ? 0.5 : 0,

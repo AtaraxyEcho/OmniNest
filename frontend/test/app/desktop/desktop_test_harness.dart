@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/environment_providers.dart';
@@ -19,6 +20,8 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/storage/local_database.dart';
+import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
@@ -26,9 +29,13 @@ import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/features/photos/domain/photo.dart' show PhotoAlbumPage;
+import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/portal/portal_weather.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart'
+    show ReaderCenterController, ReaderCenterState;
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
@@ -50,6 +57,78 @@ class _SeededPhotoController extends PhotoDashboardController {
 class EmptyPhotoController extends PhotoDashboardController {
   @override
   Future<PhotoDashboard> build() async => PhotoDashboard.empty();
+}
+
+/// 照片分页仓储替身：只实现桌面页会读的两条列表，其余调用直接失败，
+/// 避免把未种子的接口伪装成"空数据"。
+class _SeededPhotoRepository implements PhotoRepository {
+  _SeededPhotoRepository({required this.empty});
+
+  final bool empty;
+
+  PhotoPage _page(List<PhotoItem> items) =>
+      empty
+          ? PhotoPage.empty()
+          : PhotoPage(
+            items: items,
+            page: 0,
+            size: 50,
+            totalElements: items.length,
+            totalPages: 1,
+          );
+
+  @override
+  Future<PhotoDashboard> dashboard() async =>
+      empty ? PhotoDashboard.empty() : seededPhotoDashboard;
+
+  @override
+  Future<PhotoPage> listTrash({int page = 0, int size = 50}) async =>
+      PhotoPage.empty();
+
+  @override
+  Future<PhotoAlbumPage> listAlbumsPage({int page = 0, int size = 50}) async =>
+      const PhotoAlbumPage(
+        items: <PhotoAlbum>[],
+        page: 0,
+        size: 50,
+        totalElements: 0,
+        totalPages: 1,
+      );
+
+  @override
+  Future<PhotoPage> listPhotos({
+    int page = 0,
+    String? query,
+    int size = 50,
+    String sort = 'dateTaken,desc',
+  }) async => _page(seededPhotoDashboard.recentPhotos);
+
+  @override
+  Future<PhotoPage> listFavorites({
+    int page = 0,
+    String? query,
+    int size = 50,
+    String sort = 'dateTaken,desc',
+  }) async => _page(seededPhotoDashboard.favoritePhotos);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// 桌面阅读页只读 `readerCenterControllerProvider`（书库/书架/统计共用），
+/// 单独种 dashboard 不够，这里直接给成品 state。
+class _SeededReaderCenter extends ReaderCenterController {
+  @override
+  Future<ReaderCenterState> build() async => ReaderCenterState(
+    dashboard: seededReaderDashboard,
+    items: seededReaderDashboard.recentItems,
+    searchQuery: '',
+  );
+}
+
+class _EmptyReaderCenter extends ReaderCenterController {
+  @override
+  Future<ReaderCenterState> build() async => ReaderCenterState.empty();
 }
 
 class _SeededNotifications extends NotificationController {
@@ -193,6 +272,9 @@ class _NoopMusicActions implements MusicPortalActions {
 const MovieVideoItem seededMovie = MovieVideoItem(
   id: 'v-1',
   fileNodeId: 'f-1',
+  // 电影条目必须带 movieId：详情编辑抽屉用它区分电影与单集表单
+  // （`_isMovie => item.movieId != null`）。
+  movieId: 'm-1',
   mediaType: 'MOVIE',
   title: 'Aperture',
   metadataStatus: 'MATCHED',
@@ -286,7 +368,18 @@ final ReaderItem seededBook = ReaderItem(
 );
 
 final ReaderDashboard seededReaderDashboard = ReaderDashboard(
-  overview: const ReaderOverview(totalItems: 42, continueCount: 9),
+  overview: ReaderOverview(
+    totalItems: 42,
+    continueCount: 9,
+    // 14 天柱图需要真实序列，否则 Reader 总览右侧面板只剩四张卡。
+    dailyReading: [
+      for (var i = 0; i < 14; i++)
+        ReaderDailyReading(
+          date: '2026-11-${(i + 1).toString().padLeft(2, '0')}',
+          minutes: 12 + (i * 7) % 23,
+        ),
+    ],
+  ),
   continueReading: [seededBook],
   recentItems: [seededBook],
 );
@@ -372,6 +465,8 @@ final MusicPortalSnapshot seededMusicSnapshot = MusicPortalSnapshot(
   recentTracks: seededTracks,
   recentPlayCount: 128,
   trackCount: 128,
+  weekListeningSeconds: 12 * 3600,
+  itemsAddedToday: 42,
   isPlaying: true,
 );
 
@@ -455,37 +550,26 @@ List<Override> desktopSeedOverrides({
   AuthSessionNotifier Function()? session,
   MusicPortalActions? musicActions,
 }) => [
+  // 壁纸仓储会读本地库；测试进程没有 path_provider，改用内存库，
+  // 否则长帧用例（视觉基线）会在打开连接时抛 MissingPluginException。
+  localDatabaseProvider.overrideWith((ref) {
+    final database = LocalDatabase(NativeDatabase.memory());
+    ref.onDispose(database.close);
+    return database;
+  }),
   movieDashboardProvider.overrideWith(
     (ref) async => empty ? MovieDashboard.empty() : seededMovieDashboard,
   ),
   photoDashboardProvider.overrideWith(
     empty ? EmptyPhotoController.new : _SeededPhotoController.new,
   ),
-  // 桌面相册页按日分组读列表、收藏与相册三份数据；测试里直接给成品页，
-  // 免得每个用例都去走一遍分页与网络。
-  photoListProvider.overrideWith(
-    (ref) async =>
-        empty
-            ? PhotoPage.empty()
-            : PhotoPage(
-              items: seededPhotoDashboard.recentPhotos,
-              page: 0,
-              size: 50,
-              totalElements: seededPhotoDashboard.recentPhotos.length,
-              totalPages: 1,
-            ),
+  // 桌面相册页按日分组读列表与收藏；分页控制器已改为类，直接在仓储层
+  // 注入成品页，生产控制器照常走 build/loadMore 路径。
+  photoRepositoryProvider.overrideWithValue(
+    _SeededPhotoRepository(empty: empty),
   ),
-  photoFavoritesProvider.overrideWith(
-    (ref) async =>
-        empty
-            ? PhotoPage.empty()
-            : PhotoPage(
-              items: seededPhotoDashboard.favoritePhotos,
-              page: 0,
-              size: 50,
-              totalElements: seededPhotoDashboard.favoritePhotos.length,
-              totalPages: 1,
-            ),
+  readerCenterControllerProvider.overrideWith(
+    empty ? _EmptyReaderCenter.new : _SeededReaderCenter.new,
   ),
   photoAlbumsProvider.overrideWith(
     (ref) async =>

@@ -566,6 +566,18 @@ extension _FilesPageActions on _DesktopFilesPageState {
               onMenu:
                   (position) =>
                       _openRowMenu(context, controller, state, node, position),
+              onFavorite:
+                  state.section == FileManagerSection.recycleBin
+                      ? null
+                      : () => unawaited(
+                        node.favorited
+                            ? controller.removeFavorite(node)
+                            : controller.addFavorite(node),
+                      ),
+              onShare:
+                  state.section == FileManagerSection.recycleBin
+                      ? null
+                      : () => _showShareDialog(context, controller, node),
               // 选中态拖整组，否则只拖按下的这一行（样例 `dragIds` 同此）。
               dragIds:
                   draggable

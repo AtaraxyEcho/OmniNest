@@ -91,8 +91,8 @@ void main() {
     expect(find.text('Aperture'), findsWidgets);
     expect(find.text('★ 8.4'), findsWidgets);
     expect(find.textContaining('1h 46m'), findsWidgets);
-    // 已收藏状态来自 videoFavoriteStatusProvider。
-    expect(find.text('Favorited'), findsOneWidget);
+    // 已收藏状态来自 videoFavoriteStatusProvider；原型是纯图标心形。
+    expect(find.byTooltip('Favorite'), findsWidgets);
   });
 
   testWidgets('有观看进度时按钮变续播并展示进度条', (tester) async {
@@ -216,7 +216,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
 
     expect(find.text('Title'), findsOneWidget);
-    expect(find.text('Original title'), findsOneWidget);
+    expect(find.text('Genre'), findsOneWidget);
     expect(find.text('Aperture'), findsWidgets);
   });
 }

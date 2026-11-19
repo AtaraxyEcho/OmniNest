@@ -1159,7 +1159,8 @@ public class FileUploadSessionService {
                 null,
                 null,
                 mediaAutoImportTaskId,
-                false
+                false,
+                0L
         );
     }
 }

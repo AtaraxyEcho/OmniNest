@@ -7807,6 +7807,12 @@ abstract class AppLocalizations {
   /// **'Running'**
   String get adminRunningTasks;
 
+  /// No description provided for @adminRunningTasksStat.
+  ///
+  /// In en, this message translates to:
+  /// **'Running tasks'**
+  String get adminRunningTasksStat;
+
   /// No description provided for @adminExecuting.
   ///
   /// In en, this message translates to:
@@ -11626,6 +11632,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Storage Management'**
   String get adminStorageTitle;
+
+  /// No description provided for @adminGroupLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Media library'**
+  String get adminGroupLibrary;
+
+  /// No description provided for @adminMediaLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Media library'**
+  String get adminMediaLibraryTitle;
+
+  /// No description provided for @adminMediaLibrarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Library sources, discovery scans and recent match results.'**
+  String get adminMediaLibrarySubtitle;
 
   /// No description provided for @adminStorageSubtitle.
   ///
@@ -25288,6 +25312,18 @@ abstract class AppLocalizations {
   /// **'Resume {title}'**
   String desktopResumeTitle(String title);
 
+  /// No description provided for @desktopHeroResumeMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume · {percent}% left'**
+  String desktopHeroResumeMeta(int percent);
+
+  /// No description provided for @desktopHeroPlayMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Play · {artist}'**
+  String desktopHeroPlayMeta(String artist);
+
   /// No description provided for @desktopStartListening.
   ///
   /// In en, this message translates to:
@@ -26074,6 +26110,12 @@ abstract class AppLocalizations {
   /// **'Playing now'**
   String get desktopMusicPlaying;
 
+  /// No description provided for @desktopMusicPlayingFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Playing from'**
+  String get desktopMusicPlayingFrom;
+
   /// No description provided for @desktopMusicPaused.
   ///
   /// In en, this message translates to:
@@ -26602,11 +26644,29 @@ abstract class AppLocalizations {
   /// **'File'**
   String get desktopFilesKindOther;
 
+  /// No description provided for @desktopFilesDateToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get desktopFilesDateToday;
+
+  /// No description provided for @desktopFilesDateYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get desktopFilesDateYesterday;
+
   /// No description provided for @desktopPhotosIndex.
   ///
   /// In en, this message translates to:
   /// **'{index} of {total}'**
   String desktopPhotosIndex(int index, int total);
+
+  /// No description provided for @desktopPhotosSingleCapture.
+  ///
+  /// In en, this message translates to:
+  /// **'Single capture'**
+  String get desktopPhotosSingleCapture;
 
   /// No description provided for @desktopPhotosInfo.
   ///

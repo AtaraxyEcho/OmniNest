@@ -240,11 +240,13 @@ abstract final class DesktopMetrics {
   static const double dockWidth = 348;
 
   /// `.playerbar`（more.css 终值）高度与最大宽度。
+  ///
+  /// `width: min(1080px, calc(100% - 40px))` 的 1080 是**描边面板本身**的宽度。
+  /// 玻璃层必须和它共用同一个盒子；若在玻璃里再塞 margin，模糊背板会比面板
+  /// 宽 40px，视觉上就是「播放器底下又垫了一层玻璃」。
   static const double playerBarHeight = 66;
-  // CSS 的 1080px 是描边面板宽度；Flutter 这层容器还包了左右各 20px
-  // 的外边距，因此最大布局宽度需要额外计入 40px。
-  static const double playerBarMaxWidth = 1120;
-  static const double playerBarCompactMaxWidth = 888;
+  static const double playerBarMaxWidth = 1080;
+  static const double playerBarCompactMaxWidth = 860;
   static const double playerBarWideMargin = 20;
   static const double playerBarCompactMargin = 14;
   static const double playerBarCompactBreakpoint = 1180;
@@ -266,7 +268,10 @@ abstract final class DesktopMetrics {
   static const double playerBarBottom = 14;
 
   /// `.root --pb-space`：所有页面为浮动播放条预留的底部空间。
-  static const double playerBarClearance = 104;
+  ///
+  /// polish.css:138 终值 116 = 66px 条高 + 14px 底距 + 36px 呼吸空间；
+  /// extra.css:16 的 104 已被 polish.css 覆盖，别再退回去。
+  static const double playerBarClearance = 116;
 
   /// `.page` 最大宽度与上下内边距。
   static const double pageMaxWidth = 1560;

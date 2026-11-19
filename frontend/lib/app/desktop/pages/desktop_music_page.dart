@@ -28,7 +28,6 @@ import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_track_hue.dart';
-import 'package:omninest/app/desktop/widgets/desktop_tilt.dart';
 import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -465,9 +464,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final labels = <DesktopMusicTab, String>{
       DesktopMusicTab.home: l10n.desktopNavHome,
       DesktopMusicTab.tracks: l10n.desktopMusicTracks,
-      DesktopMusicTab.albums: l10n.photosTabAlbums,
-      DesktopMusicTab.playlists: l10n.musicDeckPlaylists,
-      DesktopMusicTab.favorites: l10n.photosFavorite,
+      // 音乐专辑/歌单必须走音乐模块本地化键；误用照片模块的「相册」标签
+      // 会让 Music 页出现一个并不存在的相册栏。
+      DesktopMusicTab.albums: l10n.musicNavAlbums,
+      DesktopMusicTab.playlists: l10n.musicNavPlaylists,
+      DesktopMusicTab.favorites: l10n.musicNavFavorites,
     };
 
     return NotificationListener<ScrollNotification>(
@@ -619,7 +620,7 @@ class _Home extends StatelessWidget {
         _FocusHero(state: state, onTogglePlayback: onTogglePlayback),
         DesktopSection(
           eyebrow: l10n.desktopRecentlyAdded,
-          title: l10n.photosTabAlbums,
+          title: l10n.musicNavAlbums,
           actionLabel: l10n.desktopSeeAllCount(state?.albums.length ?? 0),
           onAction: onSeeAlbums,
           child: _AlbumRail(albums: album),

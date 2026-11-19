@@ -13,6 +13,7 @@ import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_track_hue.dart';
+import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -228,6 +229,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                               sampleRate: track?.sampleRate,
                               fileSize: track?.fileSize,
                               position: timeline.position,
+                              playing: playing,
                               tab: _tab,
                               onTab: (value) => setState(() => _tab = value),
                               lyrics: track?.lyricsRaw,
@@ -345,6 +347,7 @@ class _SidePanel extends ConsumerWidget {
     required this.sampleRate,
     required this.fileSize,
     required this.position,
+    required this.playing,
     required this.tab,
     required this.onTab,
     required this.lyrics,
@@ -363,6 +366,7 @@ class _SidePanel extends ConsumerWidget {
   final int? sampleRate;
   final int? fileSize;
   final Duration position;
+  final bool playing;
   final int tab;
   final ValueChanged<int> onTab;
   final String? lyrics;
@@ -638,6 +642,8 @@ class _SidePanel extends ConsumerWidget {
                         },
                       ))
                   : _NowPlayingAbout(
+                    playing: playing,
+                    color: brushColor,
                     artist: artist,
                     album: album,
                     duration: duration,
@@ -655,6 +661,8 @@ class _SidePanel extends ConsumerWidget {
 
 class _NowPlayingAbout extends StatelessWidget {
   const _NowPlayingAbout({
+    required this.playing,
+    required this.color,
     required this.artist,
     required this.album,
     required this.duration,
@@ -665,6 +673,8 @@ class _NowPlayingAbout extends StatelessWidget {
     required this.onEdit,
   });
 
+  final bool playing;
+  final Color color;
   final String artist;
   final String album;
   final Duration duration;
@@ -738,6 +748,21 @@ class _NowPlayingAbout extends StatelessWidget {
             ),
           ),
         ],
+        // 样例 `Music.tsx:248` 的 `.np-viz-sm`：About 页元数据下方一条
+        // 64 柱、90px、85% 不透明度的动态频谱，颜色跟随当前外观笔刷。
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 90,
+          child: Opacity(
+            opacity: 0.85,
+            child: DesktopVisualizer(
+              playing: playing,
+              color: color,
+              bars: 64,
+              seed: 5,
+            ),
+          ),
+        ),
       ],
     );
   }

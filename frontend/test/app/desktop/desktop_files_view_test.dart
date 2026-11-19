@@ -1,5 +1,6 @@
 import 'dart:ui' show CheckedState, PointerDeviceKind;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -109,7 +110,7 @@ void main() {
   testWidgets('列表按文件夹/文件分组并显示大小与访问态', (tester) async {
     await pumpFiles(tester);
 
-    expect(find.text('All files'), findsWidgets);
+    expect(find.text('My files'), findsWidgets);
     expect(find.text('Studio archive'), findsWidgets);
     expect(find.text('Budget review.pdf'), findsOneWidget);
     expect(find.text('Studio reel.mov'), findsOneWidget);
@@ -210,7 +211,7 @@ void main() {
     );
     expect(
       leftOf(find.text('Modified')),
-      moreOrLessEquals(leftOf(find.text('2026-10-28')), epsilon: 0.5),
+      moreOrLessEquals(leftOf(find.text('Oct 28')), epsilon: 0.5),
     );
 
     List<double> actionOpacities() =>
@@ -381,8 +382,15 @@ void main() {
   testWidgets('拖动行悬停在文件夹上时按 .f-row.drop 高亮', (tester) async {
     await pumpFiles(tester);
 
+    // 桌面拖拽由鼠标即时触发，先发一次 hover 让行切换到 Draggable；
+    // 触摸指针仍走长按，测试不能拿默认 touch 指针冒充鼠标。
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final start = tester.getCenter(find.text('Budget review.pdf'));
+    await tester.sendEventToBinding(pointer.hover(start));
+    await tester.pump();
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('Budget review.pdf')),
+      start,
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await gesture.moveTo(tester.getCenter(find.text('Studio archive')));

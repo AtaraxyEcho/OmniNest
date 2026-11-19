@@ -182,11 +182,19 @@ AppBackdropPolicy routeBackdropPolicy(
     }
     return AppBackdropPolicy.utilitySurface;
   }
-  if (isMedia && !path.startsWith('/video') && !path.startsWith('/music')) {
+  if (isMedia) {
+    // 样例 `useBackdropActive` 在 scope=all 下对任何路由都返回同一份壁纸，
+    // 只有打开播放器/阅读时才把动态素材暂停（`BackdropLayer` 的 paused）。
+    // 影视与音乐浏览页用连续档；照片静态快照。
+    if (path.startsWith('/video') || path.startsWith('/music')) {
+      return AppBackdropPolicy.content;
+    }
     return AppBackdropPolicy.staticContent;
   }
   if (isReader) {
     return AppBackdropPolicy.staticContent;
   }
-  return AppBackdropPolicy.work;
+  // Settings/Admin/Files 等系统页在样例里同样坐在壁纸之上（卡片自带玻璃底），
+  // 不再用实底路由表面把壳层壁纸整块遮掉。
+  return AppBackdropPolicy.content;
 }

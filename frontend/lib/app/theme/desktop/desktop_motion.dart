@@ -67,6 +67,9 @@ abstract final class DesktopMotion {
   /// `.route` 的入场（opacity + 12px 位移 + 4px 模糊）。
   static const Duration route = Duration(milliseconds: 600);
 
+  /// 首页最近照片条的弹性扩张：样例 `.ps { transition: flex-grow .6s }`。
+  static const Duration photoStrip = Duration(milliseconds: 600);
+
   /// `rise` 的默认时长。
   static const Duration rise = Duration(milliseconds: 700);
 

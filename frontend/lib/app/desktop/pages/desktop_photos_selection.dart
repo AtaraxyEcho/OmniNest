@@ -123,25 +123,34 @@ class _PhotoTile extends StatelessWidget {
                           ),
                         ),
                         if (showCaption)
+                          // 样例 `.ph-cap`：标题只在悬停时淡入，右下留给收藏心。
                           Positioned(
-                            left: 10,
-                            right: 10,
-                            bottom: 8,
-                            child: Text(
-                              photo.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(Colors.white),
+                            left: 12,
+                            right: 36,
+                            bottom: 10,
+                            child: AnimatedOpacity(
+                              duration: DesktopMotion.of(
+                                context,
+                                DesktopMotion.soft,
+                              ),
+                              opacity: hovered ? 1 : 0,
+                              child: Text(
+                                photo.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.caption(Colors.white),
+                              ),
                             ),
                           ),
                         if (showFavorite && photo.favorite)
+                          // 样例 `.ph .fav`：右下角白色心形。
                           Positioned(
-                            top: 8,
-                            right: 8,
+                            right: 10,
+                            bottom: 10,
                             child: Icon(
                               DesktopIcons.heart,
                               size: 15,
-                              color: skin.liked,
+                              color: Colors.white,
                             ),
                           ),
                         if (showSelectionControls)

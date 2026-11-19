@@ -71,8 +71,9 @@ void main() {
     await pumpSettings(tester);
 
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Mira Han'), findsOneWidget);
-    expect(find.text('SUPER_ADMIN'), findsOneWidget);
+    // 页头眉标与账户名输入框各出现一次。
+    expect(find.text('Mira Han'), findsWidgets);
+    expect(find.text('SUPER_ADMIN'), findsWidgets);
   });
 
   testWidgets('外观节列出主题、强调色与环境开关', (tester) async {
@@ -95,8 +96,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 
-    expect(find.text('Mira Han'), findsOneWidget);
-    expect(find.text('SUPER_ADMIN'), findsOneWidget);
+    expect(find.text('Mira Han'), findsWidgets);
+    expect(find.text('SUPER_ADMIN'), findsWidgets);
   });
 
   testWidgets('通知节列出偏好开关与免打扰时段', (tester) async {
@@ -115,15 +116,18 @@ void main() {
     expect(find.text('New Password'), findsOneWidget);
     expect(find.text('Studio desktop'), findsOneWidget);
     expect(find.text('This device'), findsOneWidget);
-    expect(find.text('Revoke'), findsOneWidget);
+    // 样例 `Settings.tsx:80`：非当前设备的动作是 Sign out。
+    expect(find.text('Sign out'), findsWidgets);
   });
 
   testWidgets('连接服务节给出空态与入口', (tester) async {
     await pumpSettings(tester, section: 'services');
 
     expect(find.text('Connected services'), findsWidgets);
-    expect(find.text('External Storage'), findsWidgets);
-    expect(find.textContaining('Add a OneDrive'), findsOneWidget);
+    // 当前产品把连接服务落在音乐平台与 Last.fm 上（真实能力），
+    // 不再有 OneDrive/External Storage 占位入口。
+    expect(find.text('Netease Cloud Music'), findsOneWidget);
+    expect(find.text('Last.fm scrobbling'), findsOneWidget);
   });
 
   testWidgets('关于节给出检查更新入口', (tester) async {
@@ -162,6 +166,7 @@ void main() {
     await pumpSettings(tester, section: 'storage');
 
     expect(find.text('Storage'), findsWidgets);
-    expect(find.textContaining('%'), findsWidgets);
+    // 样例 Storage 卡用分段条 + GB 图例，不写百分比。
+    expect(find.textContaining('GB'), findsWidgets);
   });
 }

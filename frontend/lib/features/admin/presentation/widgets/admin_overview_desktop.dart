@@ -61,7 +61,7 @@ class DesktopAdminOverview extends ConsumerWidget {
             : '+$uploadsThisWeek ${l10n.desktopStatThisWeek}',
       ),
       (
-        l10n.adminNavTasks,
+        l10n.adminRunningTasksStat,
         '${tasks.running}',
         '${tasks.queued} ${l10n.adminQueued.toLowerCase()}',
       ),

@@ -11,14 +11,15 @@ void main() {
     'media:library:manage',
   };
 
-  test('导航只有 5 个分区，顺序与样例 Admin.tsx 一致', () {
+  test('导航只有 6 个分区，顺序与样例 Admin.tsx 一致', () {
     final primary = AdminSection.visiblePrimary(allPermissions);
-    expect(primary, hasLength(5));
+    expect(primary, hasLength(6));
     expect(
       primary.map((section) => section.group).toList(),
       <AdminSectionGroup>[
         AdminSectionGroup.overview,
         AdminSectionGroup.identity,
+        AdminSectionGroup.library,
         AdminSectionGroup.operations,
         AdminSectionGroup.configuration,
         AdminSectionGroup.storage,

@@ -18,6 +18,7 @@ void main() {
     'lib/features/music/application/music_platform_qr_session_controller.dart',
     'lib/features/video/application/movie_controller.dart',
     'lib/features/photos/application/photo_controller.dart',
+    'lib/features/photos/application/photo_paged_list_controller.dart',
     'lib/features/photos/application/photo_center_providers.dart',
     'lib/features/reader/application/reader_controller.dart',
     'lib/features/admin/application/admin_console_controller.dart',
@@ -49,8 +50,6 @@ void main() {
   test('常驻内容 provider 的声明体内必须直接 watch 会话世代', () {
     const providerDeclarations = <String, List<String>>{
       'lib/features/photos/application/photo_controller.dart': [
-        'photoListProvider',
-        'photoFavoritesProvider',
         'photoAlbumsProvider',
         'photoLocationGroupsProvider',
         'photoDetailProvider',
@@ -58,6 +57,12 @@ void main() {
       ],
       'lib/features/photos/application/photo_viewer_providers.dart': [
         'photoTagsProvider',
+      ],
+      // 分页列表 provider 的时代接入在共享基类 `_PagedPhotoListController.build`，
+      // 不在 provider 声明块内；对这两个名字改查文件级证据。
+      'lib/features/photos/application/photo_paged_list_controller.dart': [
+        'photoListProvider',
+        'photoFavoritesProvider',
       ],
       'lib/features/notifications/application/notification_type_controller.dart':
           ['notificationTypesProvider', 'allNotificationTypesProvider'],
@@ -84,7 +89,10 @@ void main() {
           start,
           next < 0 ? source.length : next,
         );
-        if (!declaration.contains('sessionEpochProvider')) {
+        final fileLevel =
+            path.endsWith('photo_paged_list_controller.dart') &&
+            source.contains('ref.watch(sessionEpochProvider)');
+        if (!declaration.contains('sessionEpochProvider') && !fileLevel) {
           violations.add('$path#$name');
         }
       }

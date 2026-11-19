@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_overview_desktop.dart';
 
@@ -61,10 +63,15 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      wrapDesktop(
-        const SingleChildScrollView(
-          padding: EdgeInsets.all(24),
-          child: DesktopAdminOverview(summary: summary),
+      ProviderScope(
+        overrides: [
+          fileStorageStatsProvider.overrideWith((ref) async => seededStorage),
+        ],
+        child: wrapDesktop(
+          const SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: DesktopAdminOverview(summary: summary),
+          ),
         ),
       ),
     );
@@ -78,6 +85,6 @@ void main() {
     expect(find.text('View logs'), findsOneWidget);
     expect(find.text('Admin · 1'), findsOneWidget);
     expect(find.textContaining('52,418'), findsNothing);
-    expect(find.textContaining('files'), findsWidgets);
+    expect(find.textContaining('this week'), findsWidgets);
   });
 }

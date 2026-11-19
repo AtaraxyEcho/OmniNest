@@ -278,7 +278,9 @@ void main() {
     await tester.tap(pickButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('夜空中最亮的星.lrc'), findsOneWidget);
+    // 文件名现在是「选择按钮标题 + 待保存状态」两处回显，确认拾取成功
+    // 时两处都要同步，不能只认其中一处。
+    expect(find.text('夜空中最亮的星.lrc'), findsNWidgets(2));
     expect(find.text('[02:02.15]夜空中最亮的星'), findsOneWidget);
     expect(find.text('无法读取所选歌词文件'), findsNothing);
   });

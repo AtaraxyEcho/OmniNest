@@ -143,6 +143,11 @@ class AdminShell extends ConsumerWidget {
                             label: l10n.adminGroupIdentity,
                           ),
                           NavigationDestination(
+                            icon: Icon(Icons.video_library_outlined),
+                            selectedIcon: Icon(Icons.video_library),
+                            label: l10n.adminGroupLibrary,
+                          ),
+                          NavigationDestination(
                             icon: Icon(Icons.task_alt_outlined),
                             selectedIcon: Icon(Icons.task_alt),
                             label: l10n.adminGroupOperations,

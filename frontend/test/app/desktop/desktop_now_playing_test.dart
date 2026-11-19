@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:omninest/app/desktop/desktop_np_style.dart';
 import 'package:omninest/app/desktop/pages/desktop_now_playing_page.dart';
 import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
+import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
 
 import 'desktop_test_harness.dart';
 
@@ -39,6 +40,22 @@ void main() {
     expect(find.textContaining('Aoi Trio'), findsWidgets);
     expect(find.text('04:14'), findsOneWidget);
     expect(find.text('01:36'), findsOneWidget);
+  });
+
+  testWidgets('About 页有 64 柱动态频谱', (tester) async {
+    await pumpNowPlaying(tester);
+
+    expect(find.byType(DesktopVisualizer), findsNothing);
+    await tester.tap(find.text('About'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    final visualizer = tester.widget<DesktopVisualizer>(
+      find.byType(DesktopVisualizer),
+    );
+    expect(visualizer.bars, 64);
+    expect(visualizer.seed, 5);
+    expect(visualizer.playing, isTrue);
   });
 
   testWidgets('外观面板可开合，背景与歌词档位可切换', (tester) async {

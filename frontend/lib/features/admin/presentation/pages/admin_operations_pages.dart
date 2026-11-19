@@ -75,6 +75,31 @@ part 'admin_operations_dlq.dart';
 part 'admin_maintenance_page.dart';
 part 'admin_shared_space_matrix.dart';
 
+/// 样例 Admin 第六分区 Media library（`LibraryManager.tsx`）：
+/// 库源发现、最近一次扫描摘要与媒体库整理入口。
+class AdminMediaLibraryPage extends ConsumerWidget {
+  const AdminMediaLibraryPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final permissions =
+        ref.watch(authSessionProvider).value?.user?.permissions ??
+        const <String>{};
+    final canManage = permissions.contains('media:library:manage');
+    return _PageEntrance(
+      children: [
+        AdminPageHeader(
+          title: l10n.adminMediaLibraryTitle,
+          subtitle: l10n.adminMediaLibrarySubtitle,
+        ),
+        const SizedBox(height: 24),
+        _LibrarySourcesSection(canManage: canManage),
+      ],
+    );
+  }
+}
+
 // ── 详情弹窗共享组件 ──────────────────────────────────────────────────
 
 /// 页面入场动画包装器 — 给定 children 列表，自动施加交错 fade+slide 入场。

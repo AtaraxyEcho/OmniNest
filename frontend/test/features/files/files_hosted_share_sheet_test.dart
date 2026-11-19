@@ -67,6 +67,9 @@ void _stubCreate(
       generatePassword: any(named: 'generatePassword'),
       expiresAt: any(named: 'expiresAt'),
       maxAccessCount: any(named: 'maxAccessCount'),
+      allowDownloads: any(named: 'allowDownloads'),
+      originalQuality: any(named: 'originalQuality'),
+      includeLocation: any(named: 'includeLocation'),
     ),
   ).thenAnswer((_) async {
     if (error != null) {
@@ -127,6 +130,13 @@ Future<void> _tapCreate(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// 托管面板现在有口令/下载/原图/位置四个原型开关；按行标题取对应的那个，
+/// 不能用 `find.byType(MobileEnvSwitch)` 单点，否则多控件 finder 会直接抛错。
+Finder _hostedSwitch(String title) => find.descendant(
+  of: find.ancestor(of: find.text(title), matching: find.byType(Row)),
+  matching: find.byType(MobileEnvSwitch),
+);
+
 void main() {
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -156,7 +166,11 @@ void main() {
       find.byWidgetPredicate((widget) => widget is MobileSegmentedControl),
       findsAtLeastNWidgets(1),
     );
-    expect(find.byType(MobileEnvSwitch), findsOneWidget);
+    // 图片分享会展示媒体策略三件套，加口令开关共四个原型开关。
+    expect(find.byType(MobileEnvSwitch), findsNWidgets(4));
+    for (final title in const <String>['设置密码', '允许下载', '原始画质', '包含位置信息']) {
+      expect(_hostedSwitch(title), findsOneWidget, reason: title);
+    }
     expect(
       find.byType(WorkstationToggle),
       findsNothing,
@@ -169,7 +183,7 @@ void main() {
     _stubCreate(repository, link: _link());
     await _openSheet(tester, repository);
 
-    await tester.tap(find.byType(MobileEnvSwitch));
+    await tester.tap(_hostedSwitch('设置密码'));
     await tester.pumpAndSettle();
     expect(find.text('提取码'), findsOneWidget);
     expect(find.text('随机生成'), findsOneWidget);
@@ -228,6 +242,9 @@ void main() {
         generatePassword: any(named: 'generatePassword'),
         expiresAt: any(named: 'expiresAt'),
         maxAccessCount: any(named: 'maxAccessCount'),
+        allowDownloads: any(named: 'allowDownloads'),
+        originalQuality: any(named: 'originalQuality'),
+        includeLocation: any(named: 'includeLocation'),
       ),
     ).called(1);
   });
@@ -251,6 +268,9 @@ void main() {
         password: any(named: 'password'),
         expiresAt: any(named: 'expiresAt'),
         maxAccessCount: any(named: 'maxAccessCount'),
+        allowDownloads: any(named: 'allowDownloads'),
+        originalQuality: any(named: 'originalQuality'),
+        includeLocation: any(named: 'includeLocation'),
       ),
     ).thenAnswer(
       (_) async => FileShareLink(
@@ -282,6 +302,9 @@ void main() {
         password: null,
         expiresAt: '',
         maxAccessCount: 8,
+        allowDownloads: true,
+        originalQuality: true,
+        includeLocation: true,
       ),
     ).called(1);
     verifyNever(
@@ -292,6 +315,9 @@ void main() {
         generatePassword: any(named: 'generatePassword'),
         expiresAt: any(named: 'expiresAt'),
         maxAccessCount: any(named: 'maxAccessCount'),
+        allowDownloads: any(named: 'allowDownloads'),
+        originalQuality: any(named: 'originalQuality'),
+        includeLocation: any(named: 'includeLocation'),
       ),
     );
     // 地址仍然可复制：编辑设置不得让已发出的链接失效。

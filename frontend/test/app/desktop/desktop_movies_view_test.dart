@@ -47,10 +47,11 @@ void main() {
 
     // 影院首帧：眉标、衬线片名、元信息与两个动作。分辨率徽标随源字段
     // 回落到编码名，种子没有 resolutionWidth，这里不锁它的具体文案。
-    expect(find.text('FEATURED'), findsWidgets);
+    // 原型 `Movies.tsx:52`：有进度时眉标换成 Continue · N% · N min left。
+    expect(find.textContaining('CONTINUE WATCHING · 36%'), findsWidgets);
     expect(find.text('Aperture'), findsWidgets);
     expect(find.textContaining('★ 8.4'), findsWidgets);
-    expect(find.text('Play Aperture'), findsOneWidget);
+    expect(find.text('Resume'), findsWidgets);
     expect(find.text('Details'), findsOneWidget);
     expect(find.text('HD'), findsWidgets);
 

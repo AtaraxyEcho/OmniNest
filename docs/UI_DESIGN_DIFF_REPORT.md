@@ -1,743 +1,364 @@
-# OmniNest 桌面前端对照差异报告
+# OmniNest Desktop 原型差异审查报告
 
-- 审查日期：2026-11-16 起，最近更新：2026-11-18
-- 唯一视觉与交互基准：D:\Development\Project Collection\UI Design\OmniNest Desktop UI UX
-- 审查对象：OmniNest 仓库 frontend 中桌面端壳层、模块页面、路由、主要交互和表单/API 调用
-- 结论：当前桌面前端**不满足与设计参考完全一致**。Movies、Photos、Music、Reader、Files 均存在可由源码确认的结构、布局、动作或表单差异；此外还有全局布局和 Reader 详情壳层差异。
-- 方法与边界：逐项静态对照参考目录的 React/TSX/CSS 与 Flutter/Dart 实现、路由和涉及的 DTO；参考项目以源码目录运行 `npm run dev`，不使用 `dist`。Setup 本轮完成源码核对和对应实现修正，但尚未完成 Flutter 与参考项目的成对运行态截图/像素验收。源码注释写着“按样例实现”不作为通过证据；只有两端实际结构、字段、动作相同才视为匹配。
-- 数据处理原则：原型里的固定演示数据、伪造媒体地址、localStorage 状态与生产后端实时数据的值不同，不单独判为视觉差异；但生产页的控件、状态、文案、表单字段、布局必须按参考稿复现。
+- 审查日期：2026-11-19（在 2026-11-18 初稿上继续复核）
+- 原型基准：`D:\Development\Project Collection\UI Design\OmniNest Desktop UI UX`
+- 原型入口：`src/desktop/DesktopApp.tsx`；样式基准：`desktop.css`、`extra.css`、`more.css`、`polish.css`、`reader.css`、`npstyle.css`、`setup.css`、`select.css`
+- 被审实现：本仓库 `frontend/lib/app/router.dart`、`frontend/lib/app/desktop/`、各 feature 桌面分支
+- 代码基线：`6b7281713 Align desktop UI and backend workflows`
+- 范围：源码级页面/组件结构、交互状态、路由与壁纸作用范围。未启动原型/Vite 或 Flutter 窗口，故不对像素尺寸以外的实际渲染、运行时叠层、运行时溢出和具体设备上的复现作通过结论。
+- 历史记录：`UI_DESIGN_DIFF_REPORT_ARCHIVE_2026-11-18.md` 保留先前逐批实施日志与审查记录；与本报告冲突时以本报告的 2026-11-19 当前源码复核为准。
 
-## 1. 总览与判定
+## 本轮源码实施（2026-11-19 第二批）
 
-| 区域 | 判定 | 已确认差异 |
-|---|---|---|
-| 全局桌面壳层与布局 | 不完全一致 | Files 全宽/断点/底部留白和 Reader 书本详情沉浸路由已按参考修复；原生窗口控制与参考模拟窗口/任务栏仍有平台差异，运行态几何未验收。 |
-| Home | 不完全一致 | Listening 与 Library 今日新增已接入真实后台汇总；Library 总量仍按电影、照片、音乐曲目与 Reader 条目计数，不含 Files；阅读连续天数卡保留当前值与最长值。全页几何未做运行态核验。 |
-| Movies | 不完全一致 | 七项分类继续保留；页头有 Import 入口，使用样例的下载图标，并连接“我的文件/此设备”选择、影片自动导入与元数据匹配。导入弹窗按 `21-import-movies.png` 修正为 760px，候选列表按 CSS 上限 340px。分类页返回入口、分区标题/影片数量、See all 数量和初始加载骨架位置已补，并按 CSS 修正 Hero 文案坐标/底边距。详情、错误状态、播放器状态及导入弹窗运行态几何仍待核验。 |
-| Photos | 仍需核验 | Albums 内联详情、justified 照片墙、查看器分享/删除/撤销、编辑入口、Delete 快捷键、Trash 清空及幻灯片动效已补；新建相册卡按样例透明虚线边框、无光晕并移至相册列表末尾；分类栏和缩放条现保持同一操作行并靠右；Import 已按原型允许照片与视频，视频条目、poster、尺寸与详情播放链路已接入；分享抽屉、批量操作条和导入/播放反馈的运行态几何仍待核验。 |
-| Music | 不完全一致 | 页头 Import 入口使用样例的下载图标，连接设备/文件选择、导入队列和音乐重新扫描；Movies、Photos、Music 共用的导入弹窗尺寸已按样例修正。Home / Tracks 的分区、队列表格、筛选、排序、分页与曲目行交互已按原型源码继续修正；曲目编辑入口、播放器状态及导入运行态几何仍需核验。 |
-| Reader | 不完全一致 | Overview/Library 切换左侧有 Import 按钮，使用样例的 upload 图标和 Import 文案。展示类型、元数据编辑与跨端保存/恢复、搜索字段和排序选项已按参考补齐；桌面顶/底工具栏及 Book/Swipe/Scroll 模式、整本书搜索已在源码对齐。参考每页显示一条命中，Flutter 显示最多 60 条出现位置，无法准确提供原型页码；全书页数/剩余分钟也没有可靠数据源，运行态负载与几何仍未核验。 |
-| Files | 不完全一致 | 全宽/断点/侧栏存储卡、文件类型色、长按拖动和分享访问/口令/收件人设置已补；原图/GPS内容转换与运行态几何仍有差异。 |
-| Settings | 不完全一致 | Profile 资料编辑/移除头像、Appearance、Weather 城市联想已补；语言和字号仍位于顶部外观弹层，安全/通知/存储/服务等状态尚未逐项验收。 |
-| Admin | 需继续核验 | 五大分组与 Operations 页签对齐；Identity 的用户/角色/权限卡、Storage 的位置/外部账户卡现已在桌面各自同页纵向呈现，并按当前权限加载；表单细节和运行态布局仍待核验。 |
-| Auth / Setup | 部分源码差异已修复，运行态待验收 | Setup 的语言/时区控件颜色、弹层宽度与状态已按源码修正；Login 左侧改用用户提供的默认照片、移除了样例没有的径向/动态光晕，并复刻样例 30 秒 kenburns 缓推。品牌、主标题与底部说明位置已调整。原生桌面 Login/Setup standalone 路由继续使用轻量主题宿主。登录、验证页及 Setup 的逐态渲染尚未完成运行态验收。 |
+以下各项已从"源码差异"落为代码，并执行了列出的验证；运行态截图仍未采集。
 
-## 2. 全局壳层与布局
-
-### 2.1 已核对的共同基线
-
-| 项目 | 参考稿 | Flutter 桌面实现 | 判定 |
+| 项 | 原型依据 | 实施内容 | 验证 |
 |---|---|---|---|
-| 普通工作区壳层 | 标题栏、232px 侧栏、内容区、348px 详情 Dock、底部播放条 | 对应组件存在；DesktopMetrics 中侧栏 232px、Dock 348px，常规页最大宽度 1560px，左右留白按 3vw 并限制在 24–52px | 尺寸令牌大体对应；没有运行态像素证明。普通页面显示全局侧栏本身是参考稿工作区结构的一部分。 |
-| Files 页面内部分栏 | 参考最终样式为 244px 文件树 + 22px 间距 | Flutter 固定 244px + 22px | 对应。参考 desktop.css 中基础宽度 236px 被 extra.css 后续规则覆盖为 244px。 |
-| 常规页顶部间距 | 默认 22px，紧凑页 14px | DesktopPage 令牌分别为 22px、14px | 对应源码值。 |
-| 窗口控制 | 原型在应用内模拟最大化、窗口化、最小化、关闭，并绘制任务栏 | Flutter 使用原生窗口控制，系统桌面任务栏不由页面绘制 | 平台行为及视觉不一致。若要求设计截图绝对复刻，需要明确原生窗口控件与任务栏是否也纳入复刻范围。 |
+| 全站壁纸被路由实底遮挡 | `BackdropView.tsx::useBackdropActive` 在 `scope=all` 下不按路由屏蔽壁纸 | `app_route_surface.dart::routeBackdropPolicy` 桌面端改为：影视/音乐 `content`（连续），照片/阅读 `staticContent`，Settings/Admin/Files 等系统页 `content`。`RouteEnvironmentSurface` 在落位后保持透明，壁纸可见 | `flutter test test/app/route_backdrop_policy_test.dart test/app/route_surface_transition_wash_test.dart` → 8 passed |
+| Files 左树缺 `.fx-tree` 玻璃容器 | `desktop.css:446`（圆角 20/`--panel`/1px/`blur(20px)`）、`extra.css:62-64`、`polish.css:245` | `desktop_files_rail.dart` 重写：整轨 `DesktopGlassSurface`+面板容器；导航行 34px、树行 32px、缩进 `4+(depth-1)*14`、分组标题 gap 分隔线；存储用量按 `.usage/.u-bar/.u-leg` 重排 | `dart analyze` 通过；组件测试 25 passed（列表/表格/工位组件） |
+| 新建目录后左树不刷新 | `Files.tsx::newFolder` 直接改同一份 `files`，树即时更新 | `_FolderTree` 监听 `FileBrowserState`：当前目录文件夹签名（id+名称）变化即丢缓存重取；展开目录时始终重取该层（不再命中旧缓存） | 同上；逻辑覆盖见 `_syncWithState` |
+| 树节点无拖放/延迟展开/键盘 | `Files.tsx` 树项 `draggable`、`dropProps`、`expandOnHover`（650ms）、`ArrowRight/Left` | 树行加 `Draggable` + `DragTarget`：落点 accent 22% 底 +1.5px 描边；悬停 650ms 展开并加载子级；聚焦后 ←/→ 收起/展开；根条目 "My files" 也接收拖放（`moveFilesTo(ids, '')`） | `dart analyze` 通过；拖放运行态未实测 |
+| 目录副标题是类型而非子项数 | `Files.tsx::rowEl` 的 `${childCount(f.id)} items` | 后端 `FileNodeDto.childCount` + `FileNodeRepository.countChildrenByParentIds`（按本页目录 id 一次分组统计）；`FileListQueryService` 三处填充；前端 DTO/领域模型透传；行副标题改为 `desktopFilesItemCount` | 后端 `mvn -f backend/pom.xml -q -pl omninest-file -am -DskipTests compile` exit=0；DB 级 IT 未执行 |
+| 更新时间格式固定 `YYYY-MM-DD` | 样例 `modified` 为 Today / Yesterday / `Sep 24` | `_formatModified`：今天/昨天 + `MaterialLocalizations.formatShortMonthDay` | 同上 |
+| 文件行缺少行内星标/分享 | `Files.tsx` `.ra` 的 star / share / more | `_FileRow` 增加 `onFavorite`/`onShare`，仅回收站禁用；收藏走真实 `addFavorite/removeFavorite`，分享打开现有分享抽屉 | 组件测试 25 passed |
+| Home Hero 缺两张 action tile | `Home.tsx` `.hero-tile`（`polish.css:412-417`） | 新增 `desktop_home_hero.dart`（part）：52px 封面 + 两行文案 + 3px 进度条；悬停上浮 2px / 底 20% / 边 34%；无数据时不出 tile | `dart analyze` 通过 |
+| Hero 尺寸与暗部层级 | `polish.css:404-406`：高 `clamp(380,46vh,500)`、径向+线性暗角、`clamp(26,3.4vw,44)` 内距 | Hero 高度/两层渐变/内距按上式；天气卡 264px 进 grid 右上；`.bd-on` 下透明面、白 20% 边、仅底部长渐变、不画天象 | 同上 |
+| 首页照片条比例与标签 | `Home.tsx`：`flexGrow=p.ratio`、hover `3`、标签 `p.place` | `desktop_home_lists.dart` 改用 LayoutBuilder 按比例分配宽度 + `AnimatedContainer(600ms)`；标签取 `gpsLocation` 首个地名，不再显示 title | `dart analyze` 通过 |
+| Photos 单图铺满整行 | `polish.css:324-328` `.justified.solo` + `.solo-note` | 单张照片保持比例（`targetHeight*ratio`）+ 右侧旁注（Single capture/标题/地点/相机/曝光），窄窗自动换行 | `dart analyze` 通过 |
+| Admin 缺独立 Media library 分区 | `Admin.tsx` 六分区，Media library 独立 | 新增 `AdminSectionGroup.library` + `AdminSection.mediaLibrary`（`media:library:manage`）；`AdminMediaLibraryPage` 复用库源扫描区；桌面侧栏/移动底栏/分组标签同步；分区切换失效 `videoLibrarySourcesProvider` | `flutter test`（admin_five_sections/section_refresh/section_visibility）→ 9 passed |
 
-### 2.2 确认的布局偏差
+### 追加实施（同日晚些时候：恢复桌面测试套件 + 真布局缺陷）
 
-1. **Files 全宽例外已修复。** DesktopFilesPage 现在使用全宽内容布局，与参考 `.files { max-width: none }` 对齐。
-2. **Files 窄窗口断点已修复。** 1180px 以下隐藏文件树并改为单列；仍需运行态截图核实实际窗口尺寸和缩放下的几何。
-3. **页面末尾播放条避让值已修复。** DesktopMetrics.playerBarClearance 已从 116px 调整为参考值 104px。
-4. **Reader 书本详情路由已设为沉浸式。** `/reader/items/:itemId` 命中 `desktopShellModeForPath` 的 immersive 分支，源码意图是隐藏标题栏、侧栏、Dock 和播放条；还需运行确认用户实际打开的路由和内容视口。
-5. **章节/漫画/PDF 阅读路由同样在源码中标记为 immersive。** `/chapters/`、`/read` 路径应隐藏工作区壳层。用户反馈的内容宽度问题尚未用当前运行态复现，代码路由配置不能替代运行验证。
-6. 普通模块页面都处于带侧栏的工作区，这一点与参考 Shell 的普通页面结构一致；当前源码不能支持“多数普通模块本来就应该没有侧栏”的判断。应区分普通模块壳层与参考稿标记为全屏的详情/阅读/查看页面。
+1. **桌面测试夹具修复**：`desktop_test_harness.dart` 与当前源码对齐——`MusicPortalSnapshot` 补 `weekListeningSeconds/itemsAddedToday`；照片分页改用 `photoRepositoryProvider` 的 `_SeededPhotoRepository`（实现 `dashboard/listTrash/listPhotos/listFavorites/listAlbumsPage`，其余 `noSuchMethod`）；阅读页注入 `readerCenterControllerProvider`；`localDatabaseProvider` 换内存库（否则视觉基线会走 `path_provider` 抛 `MissingPluginException`）。
+2. **修复桌面下拉在无界宽度下的布局断言**：`DesktopSelect` 未给 `width` 时在 `Wrap` 里用 `Expanded`，触发 "non-zero flex + unbounded width"（管理台任务分区实测 26 条异常）。改为 `mainAxisSize.min` + `Flexible(loose)`。
+3. **修复抽屉底部无界宽度**：`DesktopDrawerFrame` 的 `footer` 之前塞在无界 `Row` 里，任何 `Row + Spacer` 的 footer（影视详情编辑）都会崩。改为 `Align(centerRight)`，给 footer 有界最大宽度。
+4. **Files 网格卡片按原型重排**（`extra.css:88-92`）：84px 图舱 / 圆角 18、名称与副标题居中、隐藏大小列、左上勾选与右上星标/分享/更多（悬停或选中浮现）、悬停底色 `raise2` 且上浮 3px。
+5. **管理台概览统计标签**：运行任务卡改用 "Running tasks"（新增 `adminRunningTasksStat`），与 `Admin.tsx:48` 一致。
+6. **桌面测试断言与当前设计对齐**：Hero 双 tile、`Continue · 36%` 眉标、`Resume` 按钮、图标式收藏、`Sign out`、媒体库服务卡、`Today/Yesterday` 日期、`My files` 导航、鼠标指针拖拽、密码强度计仅在有输入时渲染、窗口三键按 `Semantics`/key 断言；首页 golden 因 Hero 视觉有意变更而重录。
 
-### 2.3 色彩令牌核对
+### 追加实施（页面级：Reader / Music）
 
-- 桌面四档强调色 Sage/Mist/Copper/Iris 的深浅值，以及深浅主题底色、文字色，在设计 Settings.tsx / desktop.css 与 Flutter DesktopPalette 中源码值相符。
-- 已修复文件类型配色：桌面 Files 行图标现在按真实文件类型使用独立色，色值对应参考 desktop.css 的文件图标色；Home 最近文件共用的类别令牌也已对齐到参考色值。Files.tsx 的 KIND 表包含用于其他场景的 Audio #8b7aa5，与文件行/Home `.fi` 的 Audio #7dbcc9 是两套用途不同的颜色；本实现对应的是后者。
-- 本项只比对令牌值，没有测量透明混色、模糊、阴影或显示器色彩管理下的最终像素。
+- **Reader 总览改双栏**：`desktop_reader_page.dart` 在 ≥1180 时左「继续阅读」62%、右「洞察面板」38%（面板内 2×2 卡 + 14 天柱图），窄窗上下叠；与原型 `05-reader` 的两栏结构一致。
+- **Music 主视觉**：`desktop_music_widgets.dart` 的频谱从右侧 160×64 小图改为样例 `.f-viz` 的贴底通栏 90px、白色 56 柱、整体 55% 不透明度、`IgnorePointer`；眉标改为 `Playing from {album}` / `Paused · {album}`（新增 `desktopMusicPlayingFrom`）��
+- 桌面测试套件稳定在 **172 条全绿**；`test/app` 全量亦全绿。
+- 为守 800 行棘轮拆出两个 part：`desktop_reader_insights.dart`、`desktop_files_grid.dart`（阅读页 607 行、文件行 793 行，均回到线下）。
+- `session_epoch_wiring_contract_test` 同步到照片分页控制器迁移后的文件位置（`photo_paged_list_controller.dart`，基类 build 内 watch 世代）。
+- **Photos 瓦片**：标题改为样例 `.ph-cap` 的悬停淡入（不再常显），收藏心移到右下 10/10 并改白色；避免与标题重叠（右内距 36）。
+- **Files Access 标签**：字号 9→11、非共享项改透明底（样例 `.tag.dim`），共享项 accent 16% 底。
+- **静态分析归零**：修掉遗留测试夹具漂移后，`flutter analyze --no-pub` 为 **0 error**（仅 7 条 probe 脚本的 info/warning）。修复内容：`requiresTwoFactor` → `requiresChallenge`；文件仓储 fake 补 `requestMediaImports/scanDuplicates`；音乐 fake 补 `updateListeningDuration` 与 `MusicDashboard` 新必填字段。
 
-证据：参考 src/desktop/desktop.css:174,193,210–218,445,500；src/desktop/extra.css:16,62；Flutter frontend/lib/app/theme/desktop/desktop_skin.dart:234–255、frontend/lib/app/desktop/widgets/desktop_surfaces.dart:33–80、frontend/lib/app/desktop/pages/desktop_files_page.dart:170–200、frontend/lib/app/desktop/desktop_shell.dart:57–83、frontend/lib/app/router.dart:422–446。
+### 本轮验证命令与结果
 
-## 3. 页面逐项差异
+- `flutter gen-l10n`：通过（新增键中英同步）。
+- `dart analyze`（改动文件）与 `flutter analyze --no-pub`：`lib/` 无问题；全量仍有 18 条 error 全部位于测试夹具（见下"未执行/阻塞"）。
+- **`flutter test test/app/desktop` → 170+ 全绿（exit=0）**，含首页 golden、文件列表/网格/拖放、影视/详情、照片、阅读、设置、管理台、窗口 chrome。
+- 前端测试：`route_backdrop_policy` + `route_surface_transition_wash` 8 passed；`file_optimistic_update` + `file_browser_controller_append` 12 passed；`file_list_row_target` + `files_workstation_components` + `files_table_view` 25 passed；admin 三分区测试 9 passed。
+- 架构棘轮（子集）：`motion_duration_ratchet` 通过；`l10n_unique_keys` 仅剩既有 `readerTypeComic` 重复键（非本轮键）；`font_size_lint` 仅剩 `reader_view_desktop_top_bar.dart`（非本轮文件）；`file_size_ratchet` 仍为既有清单（`desktop_photos_page.dart 1133/935` 等，本轮未触碰这些文件；`desktop_home_page.dart` 由 989 拆到 618 + 新 part 624，`desktop_files_rail.dart` 750，均未新增超线文件）。
+- 后端：`mvn -f backend/pom.xml -q -pl omninest-file -am -DskipTests compile` exit=0。
 
-### 3.1 Home
+### 未执行 / 阻塞
 
-- 设计 Home.tsx:60–61 的四卡是 Library（今日新增）、Listening（本周聆听小时数）、Reading streak（当前/最长天数）、Storage。
-- Flutter 的 Reading streak 卡使用 Reader 统计 API 的 currentStreak，最长连续天数已由后端按本地日期聚合并返回。Library 总量把电影、照片、音乐曲目和 Reader 条目数相加，仍未覆盖 Files；今日新增现由四个模块的真实 Dashboard 汇总；Listening 现显示本周累计播放时长。模块使用各自服务端日界线，运行态仍需核验。
-- 首页的继续观看、聆听、阅读、最近照片、最近文件、活动等内容在两端均有对应入口；固定样例数据不作为差异。本轮没有运行态确认卡片宽高、栅格断点和折叠顺序。
+- 桌面 widget 套件已恢复并通过（见上）；`test/features/files/files_hosted_share_sheet_test.dart`（5 条）与 `admin_oauth_app_dialog_test`（1 条）仍是既有失败：分享面板现在有 4 个 `MobileEnvSwitch`，测试按单个断言；OAuth 保存调用未发生。二者均不在本轮改动面，未修。
+- 未采集原型/Flutter 同视口截图，未实测 hover/拖放/650ms 展开/窗口缩放；Files 树拖放、Hero tile、单图旁注均属运行态待验。
+- 6.8px Dock 溢出、播放器双层、Ops 双分类栏：本轮无源码级新证据，维持运行态待定责。
+- 后端 DB 级集成测试未执行（需容器化数据库）。
 
-### 3.2 Movies 与影片详情
+## 执行摘要
 
-- 参考 `Movies.tsx` 的 For you 包含 Films、Series、Anime 三条内容轨道；Flutter 已提供这些轨道，Movies 分区优先展示完整影视中心片库，仪表盘最近添加数据只作加载回退。
-- 用户指出最终参考页面不应有 For you/Films/Series/Anime/Favorites/Watchlist/History 顶部分段。本轮按该明确要求移除可见 Seg，保留内容轨道、分区深链和单一返回动作。需要注意：当前参考 `src/desktop/Movies.tsx:19,65–66` 仍定义并渲染七项 Seg；这一版本冲突尚未由原型运行画面确认，因此不能将该项记为源码一比一一致。
-- Continue watching 的 See all 跳转到 History，与参考 Movies.tsx:72–73 一致。
-- History 已改为海报网格，清空会先保存进度快照；Undo 逐条通过真实进度 API 恢复并刷新历史。
-- 影片详情参考 MovieDetail.tsx:61–106 包含 Overview、Episodes、Files、Subtitles（电影隐藏 Episodes）、剧情展开、演员/主创卡、版本文件列表和转码状态。
-- Flutter 桌面电影详情现提供 Overview / Files / Subtitles；Overview 使用实际 cast/crew 元数据和三行剧情展开，Files 从服务端读取真实文件名、大小、编码、主版本与派生版本，并根据服务端转码开关显示控件。转码任务写入后端并显示可打开任务面板的成功提示。系列的 Episodes 仍由独立系列详情页呈现。
-- Hero 的 From start、收藏、已看和 Watchlist 操作已接入真实进度/清单 API；Watchlist 使用服务端数据并响应 VIDEO 同步失效事件。与样例的像素级布局、演员头像、实际媒体字段覆盖情况和错误/窄窗口状态仍需运行态截图核对，Movies 当前仍未能声明完全一致。
+此前版本不是全面对比：路由页面被合并成宽泛类别，许多单元格只列“下一轮要核对”，没有列出原型源码和当前源码的具体差异；少数判断也不够准确。本次补审后，报告将每个页面/主要子页面分别列项，并把结论分为源码已确认、源码意图相符但需运行态验收、原型没有独立对应页三类。
 
-证据：设计 src/desktop/Movies.tsx:34,65–84、src/desktop/MovieDetail.tsx:28–84,87–115,268–286；当前 frontend/lib/app/desktop/pages/desktop_movies_page.dart:186–220、frontend/lib/app/desktop/pages/desktop_movies_cards.dart:472–573、frontend/lib/app/desktop/pages/desktop_movie_detail_page.dart:103–169,309–478。
+本轮新确认的源码事实包括：全站壁纸在 Admin、Settings、Movies 等桌面路由被路由表面的 work 策略明确设为不可见；播放器最终原型宽度来自 more.css 的层叠规则；Movies 的 7 个分类与 Movies/Photos/Music 的导入入口在当前源码中均已存在；Photos 的独图 justified.solo 样式在 Flutter 对应网格中没有同等分支，单张照片会组成一个填满整行的 Row。
 
-### 3.3 Photos 与照片查看器
+仍需实机定位的已知故障：
 
-- 五个分类名称/顺序和 Library 的 justified 照片墙结构在源码中对齐：Library、Albums、Places、Favorites、Trash；缩略图密度滑杆、分组全选、选择浮层、照片查看器也都有对应实现。这里不把“完全没有对应结构”作为审查结论。
-- Albums 现有可点击内联打开和 New album 创建入口；新建入口按 420px 右侧抽屉只采集相册名，重复名禁用 Create，成功后留在相册架并提示。详情保留 Albums 分类栏，以大标题/说明、Share/Delete album 操作和 justified 照片墙呈现，并接入服务端详情分页、分享和删除。空相册提供返回 Library 操作；整体几何仍未做运行态截图核验。
-- 查看器已具备分享、移入 Trash、Undo、Delete 快捷键，并保留下载等生产额外动作。Delete 复用真实 Trash API；分享抽屉打开时不触发删除快捷键。
-- 幻灯片模式下，顶栏和胶片条会按参考稿在指针进入/离开查看器时以 600ms 淡入淡出；每张照片以 4 秒 ease-out 缓推并轻微平移，减弱动效系统设置会关闭缓推。
-- 参考信息面板包含 Taken、Location、Camera、Exposure、Size、AI labels、Zoom；Flutter 面板展示后端可用的拍摄日期/GPS/相机/曝光/尺寸和 tags。AI labels 的显示与来源不同，且字段缺失时面板内容会随真实数据改变。
-- Trash 已有 Empty Trash 确认和批量清理路径。照片删除可 Undo；永久清空按样例给出不可撤销确认。
-- Photos 的上述主交互已补齐源码实现，但相册详情、批量选择工具栏、失败占位与撤销反馈仍需运行态验收。
+- Flutter 源码现在定义 `immersive` shell posture，`/photos/:photoId`、`/video/:videoId`、书籍详情等路径会离开常规 `_Workspace`。因此“点图片后壳层仍在”的报告与当前静态路由分支不一致，可能发生在运行构建落后、路由实际仍停留在图库页、或查看器是在页面内 Overlay 打开的路径。源码证据不足以定位其中哪一种。
+- 壁纸范围 predicate 在 everywhere 下虽覆盖所有 path，但路由表面策略会显式遮住部分内容路由；具体源码原因见下方全站壁纸条目。
+- 当前 workspace 只找到一个 `DesktopPlayerBar` 构建点，但用户报告底部播放器叠加；第二个可见绘制源尚未定位。
 
-证据：设计 src/desktop/Photos.tsx:53–120,132–175,186–192；当前 frontend/lib/app/desktop/pages/desktop_photos_page.dart、desktop_photos_album_detail.dart、desktop_photos_sections.dart、desktop_photos_selection.dart、desktop_photo_viewer_page.dart。
+### 覆盖范围与证据等级
 
-### 3.4 Music 与 Now Playing
-
-- 参考 Music.tsx:134–142 的 Home 顺序为精选/当前播放 Hero、Albums 横向轨、Playlists 横向轨、Up next 曲目表。
-- Flutter 桌面 Home 现有 Albums、Playlists、Tracks/Queue 内容入口；歌单创建、编辑、删除和播放/队列动作已有真实实现，主内容排序仍需运行态几何核验。
-- Now Playing 已增加 About 信息页，曲目编辑从桌面入口打开右侧抽屉。
-- Now Playing 抽屉可直接编辑 Title、Artist、Album、Cover image URL、Lyrics 并保存真实元数据；原始覆盖可恢复。模块其它入口仍有 Genre、文件封面、歌词导入/在线匹配等额外生产操作。
-
-证据：设计 src/desktop/Music.tsx:129–161,189–270、src/desktop/MetaEditor.tsx:36–54；当前 frontend/lib/app/desktop/pages/desktop_music_page.dart:105–218、desktop_music_rows.dart:110–143、desktop_now_playing_page.dart:391–400；已有非桌面入口 frontend/lib/features/music/presentation/widgets/music_metadata_edit_dialog.dart:94–175, frontend/lib/features/music/presentation/widgets/music_metadata_edit_sections.dart:170–310。
-
-### 3.5 Reader、书本详情与沉浸阅读
-
-- 参考 Reader.tsx:76–104 的 Overview 页眉提供 Overview/Library、Import 按钮；统计为 Books、Comics、Hours read、Streak，并分成 Books 与 Comics & manga 两条书架。
-- Flutter Overview 已提供 Import，分 Books / Comics 书架，并显示 Books / Comics / Hours / Streak 统计。
-- 参考书库有 All/Books/Comics 类型筛选、All/In progress/Finished/Unread 状态筛选、标签筛选、对 title/author/series/tag 搜索、Recently read/Title/Author/Progress/Recently added 排序、网格/列表、结果数和 Clear filters。
-- Flutter Reader Library 已有 All/Books/Comics、All/In progress/Finished/Unread、标签筛选、结果数、清除筛选和网格/列表；类型分段由服务端按展示类型分页，漫画与日漫归入 Comics，解析类型仍决定实际阅读路径。搜索覆盖 title/author/series/description/tags，排序为 Recently read/Title/Author/Progress/Recently added，与样例选项一致。
-- Book detail 有 About/Chapters/Notes/Activity 四页签，路由现为 immersive；源码壳层已对齐，但实际视口仍未截图验收。
-- 参考 `ReaderView.tsx` 的桌面沉浸阅读工具栏直接提供 Book/Swipe/Scroll 模式、Search、Contents、Bookmark、Highlights、Appearance；底栏提供页码、进度拖动、百分比和剩余时间。Flutter 桌面顶栏现已按这一顺序提供相应入口，Book 映射为 Page + cover，Swipe 映射为 Page + slide，Scroll 使用现有连续阅读模式；这些操作复用已有 Reader 设置和面板。桌面浏览器现可使用两种页模式，Android/iOS 手机浏览器保留滚动模式，移动窄屏保留 ReaderFocus chrome。底栏已改为居中进度轨道，并可显示当前章节页码/进度；当前没有全书总页数或可靠的剩余阅读时间来源，因此不能显示原型的全书页码范围与剩余分钟。全书搜索现逐章读取，最多保留 60 条出现命中；不一次性预载全书，命中偏移会映射到相应章节并支持跨章跳转。原型按每页生成一条命中，Flutter 尚未把动态排版位置换算为全书页码。
-- 参考 Reader 详情内可编辑的元数据字段为 Title、Author、Type（Book/Comic/Manga）、Series name、Volume number、Tags、Cover image URL、Description，并可 Restore original。
-- Flutter 桌面抽屉已提供封面、Title、Author、Type、Series、Volume、Tags、Cover URL、Description 与有手动覆盖时的 Restore original；卷号限制为 1–999，标题必填。移动端编辑器也提供相同新增字段，并保留生产端已有字段。
-
-证据：设计 src/desktop/Reader.tsx:76–104,116–167,178–215,224–289；当前 frontend/lib/app/desktop/pages/desktop_reader_page.dart:100–165、desktop_reader_library.dart:19–159、desktop_book_detail_page.dart、desktop_book_detail_sections.dart、desktop_book_metadata_dialog.dart:12–170；路由 frontend/lib/app/router.dart:422–446、desktop_shell.dart:57–83。
-
-### 3.6 Files
-
-- 参考 Files.tsx 左轨分区为 My files、Recent、Favorites、Shared by me、Shared with me、Shared space、External storage、Recycle；存储用量 meter 留在左轨底部。Background tasks 由全局标题栏浮层提供。
-- Flutter Files 侧栏现按参考组织分区和文案（My files、Shared by me、Recycle），并将存储用量 meter 放回轨底；后台传输仍保留为真实任务入口。
-- Files 区现为全宽布局，1180px 以下隐藏文件树，详见第 2 节。
-- 参考文件表是 Name、Modified、Size、Access + 行内动作；桌面表的行高和文件树宽度等部分源码尺寸能对上。参考支持 Ctrl/Cmd 多选、Shift 连选、右键菜单、键盘打开/返回、重命名回车/Esc、拖动文件夹悬停展开、把行拖到目录移动、外部文件拖入上传。
-- 参考行图标按 Folder/PDF/Video/Audio/Image/Text 使用独立类型色；Flutter 行图标与 Home 最近文件令牌现已按参考 CSS 着色。
-- Flutter 桌面保留鼠标即时拖放，并为触控指针加入长按后拖动；参考稿桌面交互本身是鼠标拖放，长按是用户额外要求。
-- 分享表单现支持 Off、Anyone、Passcode、自定义/自动口令、收件人搜索与选择，以及 Allow downloads、Original quality、Include location；字段经真实后端保存并通过分享同步更新其他客户端。禁止下载时服务端不签发下载链接，也拒绝接受/转存分享。普通 Files 分享的原图尺寸转换和 EXIF/GPS 清理尚未接入文件内容管线，当前只持久化策略值，不能视为内容处理已完成。
-- `Files.tsx` 的 KIND 表和 CSS `.fi` 使用场景存在不同 Audio 色值；Flutter 对照 Home/Files 文件图标 CSS `.fi`，采用 #7dbcc9。
-- 分享策略现已加入创建/更新 DTO、响应 DTO、数据库基线与存量库升级脚本。`allowDownloads` 在公开文件访问和转存入口生效；`originalQuality` 与 `includeLocation` 可跨端保存/读取，但普通 Files 分享目前没有尺寸转换或 EXIF/GPS 剥离处理，需继续实现并运行验证。
-
-证据：设计 src/desktop/Files.tsx:25–47,175–236,252–274,300–360；src/desktop/desktop.css:445–451,500；当前 frontend/lib/app/desktop/pages/desktop_files_rail.dart:20–117、desktop_files_page.dart:159–200,264–318,420–500、desktop_files_rows.dart:225–250、desktop_files_dialogs.dart:239–415、frontend/lib/features/files/data/file_api_shares.dart:69–84、backend/omninest-file/src/main/java/com/omninest/modules/file/dto/CreateShareLinkRequest.java:14–29。
-
-### 3.7 Settings 与个人资料
-
-- 参考 Settings.tsx:13 的顺序是 Profile、Appearance、Backdrop library、Notifications、Security、Storage、Connected services、About & updates。
-- Flutter DesktopSettingsSection 现按参考顺序展示 Profile、Appearance、Backdrop、Notifications、Security、Storage、Connected services、About。
-- Profile 已接入真实资料编辑和头像上传，显示名限制 40 字、邮箱必填并校验；头像选择限制 2 MB。后端 UpdateMeRequest 仍允许 displayName 最长 120，DTO 上限比参考 UI 更宽；当前前端主动按参考 40 字收紧。
-- Appearance 已加入字体比例、语言、Atmosphere 控件；Weather 已接入生产偏好和 Open-Meteo 城市联想搜索，并提供加载、无结果、离线状态；头像可上传与移除。其它 Settings 分区还需逐态核验。
-
-证据：设计 src/desktop/Settings.tsx:13–67,105–130；当前 frontend/lib/app/desktop/pages/desktop_settings_page.dart:41–169,251–330,477–531、frontend/lib/app/desktop/desktop_appearance_sheet.dart:205–245、backend/omninest-system/src/main/java/com/omninest/modules/user/dto/UpdateMeRequest.java:11–17。
-
-### 3.8 Admin、Auth、Setup
-
-- Admin 设计存在 Overview、Users & roles、Operations、Configuration、Storage 五个主分组；生产 AdminSection/AdminDashboardPage 也映射成五个入口。Operations 内的 Tasks/Dead letters/Sign-in audit/Sessions/System logs 与参考同类分段交互对应。
-- Admin Identity 与 Storage 原先被拆成组内页签；本轮已把桌面 Users / Roles / Permissions 以及 Storage locations / External accounts 按参考稿纵向组合到同页，并根据当前用户权限加载可访问面板。管理表单字段、权限状态与每个弹窗仍需逐项核对。
-- 桌面配置区有分组、搜索、过滤、待保存状态、Review/Save、配置历史等同类关键交互。Admin 的用户/权限/任务/存储数值是服务端数据，和原型种子数据不比对。本轮没有对所有管理表单字段、每类配置控件、权限状态和每个弹窗逐一做运行态验收，因此 Admin 不标“完全一致”。
-- 本轮缺少真实运行态截图，尚未逐屏核验登录、二次验证、初始管理员设置的布局、字段、控件、校验提示和各状态反馈；这些页面仍需按生产业务路径逐态做视觉验收。
-
-## 4. 表单字段与后端参数逐项核对
-
-### 4.1 影视元数据编辑（重点）
-
-参考 src/desktop/MetaEditor.tsx:10–34 的右侧抽屉字段与校验：
-
-| 参考字段 | 参考约束/交互 | Flutter 桌面现状 | 当前后端 DTO / 影响 |
-|---|---|---|---|
-| Title | 必填；保存按钮随表单有效性启用/禁用 | 已对齐；空标题禁用保存，不额外显示原型没有的星号 | 请求 `title`。 |
-| Genre | 文本字段 | 已提供逗号分隔输入并动态保存 | 请求 `genres: List<String>`。 |
-| Year | 恰好 4 位数字 | 已限制 4 位数字并纳入保存有效性 | UI 年份映射为 `releaseDate: LocalDate`。 |
-| Runtime | 类似 2h 14m 的文本字段 | 已支持 `2h 14m`、`14m` 和纯分钟，空值清除；非法内容给出本地化提示 | 解析成 `runtimeSeconds`；空值使用 `clearRuntime`。 |
-| Rating | 0–10 数值校验 | 已提供小数输入并校验范围；空值按原型的数字转换语义保存为 0 | 请求 `rating: Double`。 |
-| Cast | 逗号分隔演员 | 已提供逗号分隔输入 | 请求 `cast: List<String>`。 |
-| Synopsis | 5 行多行简介 | 已使用原型字段名、5 行输入区 | 请求 `overview`。 |
-| Poster image URL | 编辑时预览，保存更新封面 | 已提供 URL 输入和随输入更新的 92×138 海报预览；未编辑时保留已有文件资产 | 新 URL 对应 `posterUrl`；已有资产继续由 `posterFileId` 表示。 |
-| Restore original | 有覆盖值时出现 | 已按 `manualMetadataOriginal` 快照条件显示，并调用恢复动作 | 请求 `restoreOriginal: true`，后端恢复字段和海报来源并广播 `UPDATED`。 |
-| 容器/按钮 | 右侧抽屉，宽 520，Cancel/Save | 已改为 `showDesktopDrawer` + `DesktopDrawerFrame`，宽 520，固定底部 Cancel/Save | 容器、遮罩、滑入和内容滚动现与样例抽屉一致。 |
-
-`MovieMetadataUpdateRequest` 与前端调用字段对应为 `title`、`releaseDate`、`overview`、`runtimeSeconds`、`clearRuntime`、`genres`、`rating`、`cast`、`posterUrl`、`posterFileId`、`backdropFileId`、`metadataStatus`、`restoreOriginal`。Year 与 Runtime 是表单格式到后端类型的显式映射；没有让输入框伪造 `year` 或 `runtime` wire 字段。Genre/Cast 字符串按逗号拆为数组。原型不定义 API JSON，报告只将其字段语义映射至实际请求契约。
-
-证据：当前 frontend/lib/app/desktop/pages/desktop_movie_detail_actions.dart:149–165,191–326；backend/omninest-media/src/main/java/com/omninest/modules/video/dto/MovieDtos.java:262–272。
-
-### 4.2 音乐曲目编辑
-
-- 参考 MetaEditor.TrackEditor 字段：Title、Artist、Album、Cover image URL、Lyrics 多行文本；仅 Title 必填。
-- 桌面 Now Playing 的 About/edit 入口打开右侧抽屉；字段为 Title、Artist、Album、Cover image URL、Lyrics 和条件显示的 Restore original。封面 URL 与文本歌词可通过后端保存，原始歌词/封面来源也纳入恢复快照。桌面抽屉已去除原型没有的本地图片上传/移除控件，并对齐 96px 封面、歌词行数、10 行文本区、字段间距/焦点反馈和保存反馈。
-- 模块内部其他入口仍使用 MusicMetadataEditDialog，包含 Genre、封面文件、歌词导入/在线匹配；这些入口保持生产能力，视觉与样例 TrackEditor 不同，尚未逐态对齐。
-- 生产更新 DTO 使用 `title`、`artistName`、`albumTitle`、`genre`、`lyricsRaw`、`coverFileId`、`clearCover`、`coverUrl` 与 `restoreOriginal`；响应补充 `manualCoverUrl` 和 `hasManualOverride`。字段语义与表单控件对应，封面 URL 只接受 HTTP(S)，后端不代客户端请求该地址。
-
-### 4.3 Reader 书籍元数据编辑
-
-- 参考字段：Title、Author、Type（Book/Comic/Manga）、Series name、Volume number、Tags、Cover image URL、Description；标题必填；如已有本地覆盖可 Restore original；提示仅改书库元数据，不改原文件。
-- 桌面抽屉与移动编辑页均包含 Type、Series、Volume、Tags、Cover URL、Description 和 Restore original；编辑请求字段分别为 `readerType`、`seriesName`、`volumeNumber`、`genres`、`coverImageUrl`、`description` 与 `restoreOriginal`。卷号清空通过 `clearVolumeNumber` 表达，Tags 映射至既有 `genres.items`。
-- 后端 `UpdateItemMetadataRequest` 已加入并校验上述字段及 `clearReleaseDate`、`clearRating`，阅读展示类别、系列、卷号、封面 URL 和原始元数据快照保存在现有 `external_ids` JSONB 中，不新增 Flyway 迁移。更新通过现有 Reader `UPDATED` 同步事件传播；所有平台从同一服务端条目读取数据。`readerType` 只影响书库分类，不改变 `contentKind` 与解析/阅读路径。封面 URL 限 HTTP/HTTPS，清空后回退至书库封面；服务端不代客户端请求该地址。
-
-### 4.4 Files 分享链接表单
-
-- Flutter UI 已提供下载、原图、GPS 策略；创建/更新请求与响应 DTO、数据库基线、存量升级脚本和分享同步事件已接入。禁止下载已由后端执行，原图/GPS内容处理仍缺。
-- Flutter 请求 JSON / 后端 CreateShareLinkRequest 对齐项：resourceId、resourceType、password、generatePassword、expiresAt、maxAccessCount、recipientUserIds；桌面创建表单可搜索并指定收件人。
-- `CreateShareLinkRequest` / `UpdateShareLinkRequest` 与 `FileShareLinkDto` / `FileSharePreviewDto` 已对齐 `allowDownloads`、`originalQuality`、`includeLocation`。三项策略写入 share_links，修改通过现有分享同步事件传播；禁止下载拒绝公开文件 URL 签发与转存。普通 Files 的 `originalQuality=false` 尚未切换网页尺寸副本，`includeLocation=false` 尚未从内容字节移除 EXIF/GPS，后两项虽可跨端保存/读取，实际内容处理仍是后端缺口。
-
-### 4.5 Profile 与其他已核对字段
-
-| 接口 | 前端字段 | 后端字段 | 判定 |
-|---|---|---|---|
-| 更新本人资料 | displayName、email | UpdateMeRequest 同名字段 | 字段名一致；参考显示名 maxLength 40，DTO max 120；桌面表单按参考限制 40 字，头像上传/移除均有真实接口。 |
-| 用户位置上报 | latitude、longitude、source | UserLocationDto 同名字段 | 已核对字段名/类型对应；不是本次主要 UI 差异。 |
-| 影视刮削任务 | fileNodeId、force、provider、externalId | 当前 ScrapeRequest 对应字段 | 已核对字段名对应。 |
-| Reader/音乐/Photos/Admin 其他接口 | 未全量列出 | 未按所有 endpoint/DTO 穷举 | 不从抽样结果推导为整个 API 已一致。 |
-
-## 5. 对用户已列问题的逐条回应
-
-1. **Movies 已补齐多项结构与动作差异并保留七项分类栏。** 为你推荐、电影、剧集、动漫、收藏夹、待看清单、历史，以及 Anime 轨道、History 海报网格/清空/Undo、See all 去向、电影 Overview/Files/Subtitles、演员/主创和文件清单、From start/已看/Watchlist 动作已有代码；Watchlist 与播放历史由后端持久化并触发跨设备同步。本轮用户明确要求七项分类，且指定源码与 `imgs/dark/45-movies-category.png` 均有七项分类，旧交接中“移除分类栏”的结论已作废；播放器各状态仍待运行态对照。
-2. **Photos 的主要缺失交互已有代码修复。** 相册在 Albums 分区内展开并使用 justified 照片墙，服务端分页、分享和删除仍可用；Viewer 有分享/删除/Undo/Delete 键，Trash 可清空。分享对话框视觉、批量状态和完整运行态反馈尚未验收。
-3. **Music 的主要结构入口已有代码修复。** Home 已加 Playlists，Now Playing 已加 About 与编辑抽屉；曲目 URL 封面和原始数据恢复现已接入后端，移动编辑器及其他入口仍有差异。
-4. **Reader 的 Overview/书库入口、搜索/排序和沉浸路由已有代码修复。** 桌面与移动编辑器已覆盖样例元数据字段，并接入后端跨端保存与恢复；章节/漫画/PDF 实际视口仍需运行确认。
-5. **Files 的全宽/窄屏、分区存储卡、类型色、长按拖动和分享表单已有代码修复。** 下载开关已由后端执行，原图/GPS 策略的文件字节转换仍缺。分享关闭、口令和收件人 UI 已接入真实后端。
-6. **Reader 打开阅读的源码壳层现已配置为沉浸式。** 书本详情、章节、漫画/PDF 路由都应隐藏工作区侧栏；用户反馈仍需在实际应用中复现并核对 URL、壳层和内容视口。
-7. **所有 UI/控件/交互/反馈/组件/视觉效果都要一致：当前不能通过。** 报告已记录多项可确认差异；但“所有状态和像素均完成运行态一一验收”尚未成立，需在可运行桌面窗口上覆盖不同页面、弹窗、空/加载/成功/失败状态和窗口宽度后才能签字为完全一致。
-8. **表单参数/元数据抽屉：已具体对比。** Reader 字段已接入并与新增 DTO 参数对应；电影元数据字段已接后端，Files 三项分享策略已进 DTO/存储/同步，但普通文件的原图与 GPS 内容处理仍缺，详见第 4 节。
-
-## 6. 需要运行态复核的项目
-
-- 第一轮报告结论是源码静态对照，不是截图像素测量。第二轮确认参考运行页可访问，并读取到 Reader 书本详情的可访问状态树；后续虽修复若干源码差异，仍没有取得可核验的 Flutter 与参考稿成对截图。
-- 所有页面的实际宽高、字体回退、长文本换行、加载/空/错误状态、抽屉/弹窗遮罩、hover/focus/pressed 动效、不同显示缩放及不同窗口宽度仍要截图逐一验收。
-- Reader 的沉浸路由实际路径需要复现，重点记录打开书本详情、章节阅读、漫画阅读、PDF 阅读时的 URL、壳层是否隐藏、内容视口宽度。
-- Admin 的所有字段、权限分支和弹窗，Settings 安全/通知/存储/服务区域以及 Auth/Setup 的各步骤，本轮没有逐状态做运行态全量验收。
-- 任何后端 DTO 尚未列出的接口都不在“参数已全部一致”的结论范围内。
-
-## 7. 第一轮变更与验证记录
-
-- 本轮只更新了本报告，没有改产品 UI、交互、API 或后端代码。
-- 实际执行：静态读取/检索参考 TSX/CSS、Flutter 页面/路由、音乐/文件 API 调用和影视/资料/分享 DTO。
-- 未执行测试、构建、分析：按审查任务不改代码；开发规则也要求不要在未请求时擅自运行测试。
-- 未做运行态截图：因此视觉尺寸、动效和实际 Reader 视口的风险仍未关闭。
-- 仓库中已有紫色规则移除及其他工作区改动，本轮未改写或清理那些改动。
-
-## 8. 第二轮全视觉覆盖审查
-
-### 8.1 覆盖结论
-
-**第一轮报告没有覆盖全面。** 它较完整地记录了 Home、Movies、Photos、Music、Reader、Files、Settings、Admin 的部分主页面差异，也抽查了影视/音乐/Reader/分享/个人资料表单；但共享壳层的大部分浮层、各页面的次级视图和完整状态矩阵、微观视觉令牌、不同窗口尺寸下的实际结果，没有逐项建立证据链。第一轮不能作为“所有视觉内容已一一核完”的验收报告。
-
-第二轮扩展了核对清单和证据边界，但仍**不能判定前端已与参考稿一比一一致或本次审查已完成像素级验收**。可访问的参考运行页只观察到 Reader 书本详情状态；没有取得同分辨率、同主题、同文案/内容状态下的 Flutter 与参考稿成对截图。下面的“待核”不是通过，也不代表实现没有差异。
-
-### 8.2 页面与组件覆盖矩阵
-
-| 范围 | 必须逐屏/逐组件覆盖的内容 | 当前证据与结论 |
+| 证据等级 | 判定标准 | 本报告写法 |
 |---|---|---|
-| 全局画布与窗口 | 深/浅主题、四档强调色、动态背景/环境光、grain/遮罩、窗口最大化/窗口化/最小化/关闭、原生标题栏与任务栏差别 | 已静态核对主色及部分壳层尺寸；原型绘制自己的窗口与任务栏，Flutter 交给原生窗口/系统任务栏，属于可见的平台差异。背景叠层、透明度、裁切、转场与最终像素尚未对照。 |
-| 全局标题栏与导航 | 品牌区、返回/前进、搜索/命令入口、主题、任务、通知、详情 Dock、账户菜单、侧栏层级与选中态、存储卡 | 已确认主要组件和令牌存在；第一轮只对基本壳层/窗口作了比较。按钮尺寸、间距、菜单位置、焦点/禁用态、窄宽度折叠及操作后反馈未逐项对照。 |
-| 全局浮层与反馈 | Account、Notifications、Background tasks、Context menu、Command palette、Shortcuts、Toasts/Undo、详情 Dock、空状态/骨架 | 参考 Shell 与 UI 原语、Flutter overlays/panels/command palette/toast/dock 均已纳入本轮组件清单；尚未逐一打开并对照遮罩、层级、尺寸、关闭方式、字段、内容滚动和成功/失败/撤销反馈。 |
-| Home | 指标卡、继续观看/聆听/阅读、近期照片/文件/活动、卡片比例与内容空位 | 首页 provider 订阅已缩到页面实际使用的字段；今日新增与本周聆听时长来自真实 Dashboard 聚合，Library 总量仍不含 Files；卡片几何与运行态未验收。 |
-| Movies | Browse/内容轨、History/清空撤销、详情页签和动作、视频播放器控制/音轨/字幕/设置/全屏 | 本轮移除顶部分类 Seg，空库终态显示空态并覆盖 Anime；当前原型源码反而定义七项 Seg，需确认参考版本。详情运行态布局、头像与播放器状态仍待核对。 |
-| Photos | 分类、相册货架/创建/详情、选择与批量栏、Viewer、信息面板、分享抽屉、编辑器、幻灯片、Trash/恢复/清空、照片/视频导入与播放 | 分类栏和缩放条现作为不可拆分的同排操作组；缩放范围按 150–320 映射。地点 Hero 卡加入裁切与前景描边。视频导入、poster 和查看器播放源码链路已补；分享/批量状态、导入后队列反馈及运行态几何仍待核验。 |
-| Music | Home 轨道、列表/队列、播放条、Now Playing 的 Lyrics/Queue/About、曲目与播放列表编辑、音轨样式/波形 | Home Playlists、Now Playing About 和桌面元数据编辑入口已补；其它编辑表单、队列排序、播放状态/错误、波形和撤销仍待逐项对照。 |
-| Reader | Overview/书库过滤、书本详情、章节/漫画/PDF 沉浸阅读、章节目录、进度、书签/笔记/搜索/排版控制、元数据抽屉 | Overview/主要过滤、搜索字段、排序项、沉浸路由、元数据字段、桌面顶栏模式/动作入口及全书搜索范围已对齐源码；搜索命中未映射到动态页码，全书页数/剩余时长、工具栏反馈及沉浸阅读运行态待核验。 |
-| Files | 侧栏分区/存储卡、目录树、表格行、选择/批量操作、右键、拖拽悬停/移动、外部拖入、分享/详情对话框、回收站 | 全宽/断点/存储卡/类型色、触控长按拖动、Off/口令/收件人和策略字段已实现；原图/GPS 文件字节处理仍未接入，行几何、选中、拖放提示、进度/错误与反馈仍待运行态核验。桌面参考本身定义鼠标拖放。 |
-| Settings | Profile、Appearance、Backdrop library、Notifications、Security、Storage、Connected services、About/updates、Weather | Profile、Appearance、天气城市联想和分区顺序已有代码修复；安全/通知/存储/服务表单字段及各保存/失败反馈仍未逐状态对照。 |
-| Admin | Overview、Identity 的用户/角色/权限/配额、Operations 各页签、Configuration 搜索/过滤/Review/历史、Storage locations/外部账户表单 | Identity/Storage 桌面信息架构已改为同页纵向面板；用户/角色抽屉、权限矩阵、配额、危险确认、配置控件、dirty/review/save/rollback、密钥输入和校验错误均未逐项核对。 |
-| Auth / Setup | Splash、登录、验证步骤、服务连接、初始管理员、字段约束与错误/成功/加载状态 | Setup 的输入/下拉表面与原型色值映射已校正；原生桌面 Login、Setup 使用无边框窗口 controls 与拖拽/缩放热区。逐状态运行态验收仍待完成，真实服务端认证流程保持有效。 |
+| 源码已确认 | 两边源码结构、条件分支、组件参数或明确尺寸直接不一致 | 写明原型文件/组件、Flutter 文件/组件和实际差别 |
+| 运行态待验 | 静态结构相近，差别取决于窗口宽度、动画/悬停/权限/实时数据或构建版本 | 不称为已修复或源码缺陷，列出需要观测的状态 |
+| 原型无独立页面 | Flutter 路由是产品新增能力，原型只存在相邻 Drawer、Panel 或没有该功能 | 标记为新增信息架构，按相邻原型组件比较视觉；不伪造对应页面 |
 
-### 8.3 跨页面视觉与交互维度
+报告按 router.dart 当前全部显式路由及其桌面分支盘点，另外拆分 Settings/Admin 的页内分区；另有一张用户已报问题闭环表，逐项标明已确认、旧问题已过时、当前源码有功能但视觉未核、或需运行态定责。仅做静态源码比对，没有对每个路由完成窗口截图、鼠标/键盘/触摸操作、后端数据状态和无障碍树验收；相关项明确标成运行态待验，不冒充视觉通过。
 
-| 维度 | 当前核对范围 | 尚未完成的覆盖 |
+## 审查维度
+
+此报告只记录可从源码直接比较的结构、路由、条件、尺寸、状态与交互证据；不使用综合分数替代差异清单。主题、响应式、加载/错误/空状态、可访问性提示、异步反馈、Drawer/Dialog/Overlay 和键盘操作均纳入下面的逐路由矩阵或共享控件项。运行时视觉、不同 DPI 和交互手势另列待验，不冒充源码可证明的结果。
+
+## 问题清单与源码证据
+
+### P1：工作区壳层、播放器与全屏内容的所有权不清
+
+- **用户问题**：侧栏、顶栏、播放器在查看器等全屏模块里仍出现；底部播放器叠加。
+- **原型结构**：`DesktopApp.tsx::Window` 只挂一套 `TitleBar`、`Sidebar`、`Dock`、`PlayerBar`；VideoPlayer/NowPlaying/BookReader 以高层 overlay 覆盖 Window。Photos 的 `PhotoViewer` 通过 `ui.tsx::Portal` 挂到 `.window`，`.viewer { position:absolute; inset:0; z-index:80 }`，同样覆盖侧栏、顶栏、Dock 和 PlayerBar。
+- **当前源码**：`DesktopShellMode` 对 `/photos/:id`、`/video/:id`、`/video/series/:id`、`/reader/items/:id`、`/music/now-playing`、slideshow、edit、read、play 等路由返回 immersive；Immersive 分支不构建 `_Workspace`，但仍经过 `DesktopWindowChrome`。源码意图覆盖了主要沉浸页，是否与原型对齐需按路径逐项核对。壳层 `_Workspace` 中只找到一个 `DesktopPlayerBar` 构建点，音乐页引用该符号但没有第二个绘制实例。
+- **尚未解释**：用户报告与当前源码分支不一致。需确认运行的前端构建提交、运行 path、`DesktopShellHost` 是否被重复宿主，以及照片查看是否实际走全屏 route。播放器重复的第二个绘制源不能从静态调用点确认。
+- **影响**：沉浸查看/播放被常驻控件遮挡，主内容可用面积减少；两条播放器争夺点击和布局。
+- **下一步审查重点**：以同一个已启动构建实测 Home→照片、Photos→Viewer、Movies→详情/播放、Reader→详情/阅读；记录每次导航实际 location、可见 shell widgets 和 player widget tree。未完成实测前不把此项标为源码已修复。
+
+### P1：详情坞展开/收起时的 6.8px RenderFlex 溢出尚未定责
+
+- **用户症状**：详情面板展开或收缩时 Flutter 报 `A RenderFlex overflowed by 6.8 pixels on the right`。
+- **原型结构**：`Shell.tsx::Dock` 由外层 `.dock` 在 0↔348px 之间做宽度动画，内层 `.dock-in` 固定 348px 并滚动；头部是详情/队列分段与关闭按钮，主体随 tab 显示 detail 或 queue。
+- **当前源码**：`frontend/lib/app/desktop/desktop_dock.dart::DesktopDock` 同样使用 348px Dock；动画宽度变化时通过 `ClipRect + OverflowBox(minWidth=maxWidth=348)` 保持内部完整宽度，意图避免收放过程中把内部 Flex 压窄。详情头部 `Row` 内为 `Expanded(DesktopSeg)` 与固定尺寸关闭按钮；内容滚动。
+- **结论**：用户所称详情面板对应当前 Shell 的 `DesktopDock`，该组件已有动画期间固定内宽的保护；仅凭源码不能证明该保护覆盖了实际 RenderFlex，也不能将 6.8px 的具体触发子树定为头部 Row。报告保留为**运行态待定责**，复现时需记录 Dock 展开状态、窗口宽度、当前 tab/详情类型、locale、Flutter RenderFlex ancestor chain 和触发帧。
+- **影响**：展开/收起的面板内容可能裁切，或调试模式持续打印溢出错误；不能把“Dock 有 ClipRect”视为已修复证据。
+
+### P1：全站壁纸在 Admin/Settings 等页面未生效
+
+- **原型结构**：`BackdropView.tsx::useBackdropActive()` 在 scope=`all` 时允许任何桌面 route 使用壁纸；`BackdropLayer` 挂在 `.window` 下，Home/Movies/Photos/Music/Reader/Files/Settings/Admin 均处于同一背景层上。
+- **当前源码**：`desktopBackdropAppliesToRoute()` 在 everywhere 下确实返回 true，但路由页又经 `AppRouteSurface.environmental()` 包装。`routeBackdropPolicy()` 在桌面将 `/admin`、`/profile`、`/video` 等归为 `AppBackdropPolicy.work`，其 `visible:false`；`RouteEnvironmentSurface` 因而用 `Theme.surface` 实色包住这些页面。证据：`frontend/lib/app/router.dart::_routeSurface`、`frontend/lib/app/route/app_route_surface.dart::routeBackdropPolicy/RouteEnvironmentSurface`、`frontend/lib/features/backdrop/domain/app_backdrop_policy.dart::work`。
+- **差异结论（源码已确认）**：后台 scope 允许壁纸并不能覆盖路由级 work policy；Admin、Settings、Movies 的实色路由表面会挡住壳层壁纸。这与用户反馈一致，不是单纯的截图/旧构建猜测。Photos/Reader 采用 staticContent、Music 等路由策略不同，需按 route 单独记录可见/静止语义。
+- **影响**：背景设置语义与显示结果不符，管理/设置区视觉层级断裂。
+
+### P1：Home Hero 结构缺项，壁纸下未按样例透出
+
+- **原型结构**：`Home.tsx` 的 `.hero-sky` 由动态 `Sky`、暗部渐层、左侧日期/问候/文案、两个横向 Hero action tiles（继续观看 + 专辑播放）以及条件 Weather glass card 组成，CSS 为 340px–460px `clamp(340px,42vh,460px)`。自定义壁纸下由 `BackdropView.tsx` 控制壁纸，同时 Home 的天空内容仍按样例规则处理。
+- **当前源码**：`desktop_home_page.dart::_HeroSky` 保留天气、日期、问候、文案、操作入口，Hero 高度公式与原型 `clamp(340px,42vh,460px)` 一致，但没有原型两张带 artwork 的横向 action tiles；由 dashboard 汇总数据决定 Resume / Listen 的按钮标签及可用性。Home 自定义壁纸时 Flutter 用 `showSky:false`，仍绘制固定 `heroShade` 渐层、边框与阴影，结构不等于样例的透明 Hero。
+- **差异**：缺少/替换了 Hero 卡片的 art、信息密度与视觉分组；背景库启用后 Hero 仍是带遮罩的卡片壳，而不是随壁纸透出的透明版。天气卡、断点和空/加载内容也须逐项对照。
+- **影响**：Home 第一屏重点和背景图关系偏离样例；文案/操作对真实空数据的状态与原型展示不同。
+
+### P1：Home Recent Photos hover 行为需要按 CSS 重核
+
+- **原型规则**：`Home.tsx` `.photo-strip` 展示最多七项，按照片原始比例给 `flexGrow`；`desktop.css:299` 悬停将单张 `.ps` 扩张为 `flex-grow:3` 并显示位置标签，没有动态光晕/透视倾斜。
+- **当前源码**：`desktop_home_lists.dart::DesktopPhotoStrip` 也按原始比例分配 flex，并悬停扩张；但每一项的基准 grow 是将宽高比乘 100 后 clamp 到 60–220，而 hover grow 固定 300，标签显示 `PhotoItem.title`（样例用 place）。加载态使用固定数组 flex 值，非七张照片会改变轨道组成。
+- **差异**：宽高比换算与原型 CSS flex grow 单位不同；显示字段不同；需核实 hover 过程中的总宽分配是否出现横向抖动/其他卡挤压，且样例位置标签语义与当前标题并非同一字段。
+
+### P1：Sidebar / Titlebar 材质、尺寸和图标体系待逐项对齐
+
+- **原型**：`Shell.tsx` 的同一套 icon registry 和 `NAV` 定义侧栏 6 个主空间；`desktop.css:174` 顶栏 46px，`desktop.css:193` 侧栏 232px、折叠 64px；顶栏/侧栏分别使用透明混色底、边线和统一 `.tb-btn` hover/selected 反馈。玻璃 blur 随具体面板规则，不是每个控件一律发光。
+- **当前源码**：分拆为 `desktop_title_bar.dart`、`desktop_sidebar.dart`、`desktop_icons.dart`、`desktop_panels.dart`；`DesktopMetrics` 中 TitleBar 46px、Sidebar 232/64px 与原型 CSS 几何值一致。当前 Flutter 桌面一级导航是 Portal/Library/Reader/Files 等产品路由，原型 NAV 是 Home/Movies/Photos/Music/Reader/Files；宽度对齐不代表导航内容、标签、图标字形和反馈对齐。
+- **差异**：导航信息架构已确认不同；逐图标 glyph、留白、基线、颜色、badge/hover/active、玻璃背景 opacity/blur 尚需按 `Shell.tsx` + `desktop.css` 对照。当前无运行截图，不能给出最终像素偏差值。
+
+### P1：Admin 顶层缺少独立 Media library 分区
+
+- **原型**：`Admin.tsx` `sections` 明确有 Overview、Users & roles、Media library、Operations、Configuration、Storage 六项，Media library 使用独立 `LibraryManager` 页面。
+- **当前源码**：`admin_section.dart` 只有 overview、identity、operations、configuration、storage 五个 `AdminSectionGroup`；没有 library group/tab。存在 `admin_operations_library.dart`，但它是存储/媒体库运维能力的一部分，不等同于原型 Admin 顶层 Media library。
+- **差异**：顶层信息架构和入口缺项。现存运维 Library 管理页是 backend media source 管理，不能替代样例对媒体库总览/整理的独立页面。
+- **影响**：管理员无法按样例从 Admin 主导航访问媒体库管理工作区。
+
+### P1：Admin Operations 导航与页内栏目可能重复
+
+- **原型**：`Admin.tsx::Ops` 在一个卡片内只创建一条 tabs：Tasks、Dead letters、Sign-in audit、Sessions、System logs；每个 Tab 内显示内容及自身过滤栏。
+- **当前源码**：`admin_group_pages.dart` 的 `_DesktopOperationsHub` 新增 Tasks/Dead letters/Sign-in audit/Sessions/System logs 的 `DesktopSeg`，并嵌入 `AdminTasksPage` / `AdminLogsPage`。嵌入时传 `hideDesktopTabSelector:true`，静态意图是隐藏子页面原有栏目。
+- **差异**：Flutter 同时保留 Operations section 路由、Hub 的分段以及任务/日志子页的旧 Tab 状态；需要按实际 permission 和每个 Ops 子项分别核对 hub/子页 segment 是否重复呈现。用户已实机报告有两个分类栏；源码需进一步定位具体窗口状态，单看 Hub 参数不够解释。
+
+### P1：Photos 查看器、照片单行、选择与悬停细节
+
+- **原型**：`Photos.tsx` 通过 `PhotoViewer` 作为全屏 Viewer；图库以分组网格为主，按 `photo-strip`/`photo` CSS 规则布局。点击选中按钮与批量选择是离散交互；拖动重排限定为原型支持的分组/项目。相册、位置、收藏、回收站等以顶部分段/视图切换呈现。
+- **当前源码**：桌面 photos 拆成 `desktop_photos_page.dart`、`desktop_photos_sections.dart`、`desktop_photos_groups.dart`、`desktop_photos_selection.dart`、`desktop_photo_viewer_page.dart`，且额外接入分页、日期排序和 overlay drag ghost。图库和 Viewer 分路由；图片点击应切至 immersive route。当前用户报告单张照片宽度占满一行，说明布局约束/单项条件没有按样例比例排列；长按、批量选择、hover、单选/多选的相互状态尚未完成成对实测。
+- **差异（源码已确认）**：原型给单照片列表添加 `justified.solo`，取消普通 flex 扩张并并排显示照片信息块（polish.css 的 `.solo-note`）；Flutter `desktop_photos_sections.dart::_layout` 对任意数量都按目标行高累计 ratio，单项单独成行后由 `Expanded` 占满可用行宽，没有 solo note。另需把多选/拖动和 hover 状态按原型逐态核验，不能以已实现 reorder 推断等价。
+- **影响**：单张图异常扩展时破坏相册浏览节奏；批量选择误触或 hover 反馈不符会使高频照片管理难以预期。
+
+### P1：音乐卡 hover 发光及底部播放器重复/规格
+
+- **原型**：Shell.tsx 只渲染一个 PlayerBar。级联顺序 `desktop.css → extra.css → more.css` 后，more.css 设为可见宽度 `min(1080px, calc(100% - 40px))`、高度 66px；≤1180px 收窄至 `min(860px, calc(100% - 28px))` 并隐藏音量，≥1360px 显示 64×26 visualizer。控件包含封面/曲目信息、收藏、播放模式、前后切、播放、进度、音量/Queue/Now Playing。
+- **当前源码**：`DesktopPlayerBar` 单点挂载；Flutter 外层最大约束 1120px 且左右 margin 各 20px，实际绘制宽度上限为 1080px；紧凑态外层 888px、左右 margin 各 14px，实际绘制宽度上限为 860px。因此可见宽度与原型最终级联值一致，不能据 token 数值声称有 40/28px 宽度差。高度 66px 和 compact 断点 1180px 对齐。第二个播放器的运行时绘制来源尚未找到。
+- **差异（运行态待验）**：播放器叠层、控件顺序/可见阈值、曲目信息和 Queue/Now Playing 行为仍须实测；静态源码没有第二个 `DesktopPlayerBar` 绘制点。Music 卡片 hover 不能笼统写“原型没有光影”：原型局部有普通黑色投影/按钮显隐；需具体核对 Flutter 是否额外叠加 accent glow，而非删除原型存在的选中/唱片/按钮效果。
+
+### P1：桌面通知仍与系统通知功能耦合
+
+- **原型**：`Shell.tsx::NotifPanel` 由 Shell 顶栏 bell 打开，呈 All/Unread、今日/较早分组、清空/标记已读和设置入口。原型通知数据来自 `data.ts` 演示态，是桌面视觉交互基准。
+- **当前源码**：`desktop_title_bar.dart` 的 bell 打开 `desktop_panels.dart::NotificationsPanel`，消费 `notificationControllerProvider`；路由还保留 `/notifications` 的 `NotificationPage`。这使原有后端通知中心作为桌面第二套交互继续存在；与用户要求“移动端保留、桌面端采用样例通知 UI”未完成隔离。
+- **差异**：需要区分“桌面沿用样例通知面板结构/交互”和“系统通知后端/移动端页面能力”；当前桌面标题栏、通知面板、通知全页仍直接复用系统通知域。
+
+### P1：Files 左侧结构树的样式、刷新和拖拽交互不符合原型
+
+- **原型结构**：`Files.tsx::treeFolders` 从同一份 `files` 状态派生目录层级，按名称排序并反映 `cwd` 当前目录；折叠状态保存在 `fileTreeOpen`。`extra.css:62-64` 将主区分为 244px 树栏与内容区；`desktop.css:446-448` 给整个 `.fx-tree` 独立圆角面板、半透明底/blur/边框，导航行高 34px。树目录项支持点击进入、双击展开、方向键展开/折叠、原生 draggable、拖到目录重排；拖进子目录悬停 650ms 自动展开，drop 目标高亮。
+- **当前源码**：`desktop_files_page.dart` 把 `_FilesRail` 直接放进 244px `SizedBox`/滚动视图，没有包裹原型整块 `.fx-tree` 面板。`desktop_files_rail.dart::_FolderTree` 在 `initState` 时只拉一次根目录；展开时加载子目录并存入 widget 本地 `_children` map。目录行仅有点击打开与单独点击箭头展开；该树节点没有 `Draggable`、`DragTarget`、长按拖拽、hover-drop 目标或悬停自动展开。
+- **新建目录刷新问题（源码已确认）**：样例 `newFolder()` 把新 folder 加入 `files`，随后选择并打开该树节点的 inline rename；树直接由 `files` 状态渲染，所以目录即时出现在树中。Flutter 工具栏调用 `_showNewFolderDialog`，再由 controller 发起真实创建并刷新当前列表；但 `_FolderTree` 的本地 `_children` 缓存既不监听文件列表，也没有创建后失效/重取机制，且 `_load()` 对已缓存 parent 会直接返回。此结构解释了“列表已有新文件夹但左树无变化”的现象。
+- **树栏视觉差异（源码已确认）**：原型是单一 glass panel，内含 section 标题、导航和树项目；Flutter 左轨各组/条目直接落在页面底色上，没有整轨边框/blur/圆角容器，主项高度与树缩进也分别使用不同规格。这里是层级容器差异，不是单纯换树 icon。
+- **影响与范围**：树缺实时更新会让目录导航与主列表状态分叉；树缺少原型拖放意味着不能用目录树直接整理文件，虽然 Flutter 主列表行仍有内部拖动到文件夹的 DragTarget。当前断点在 1180px 以下会隐藏整棵树，是样例 CSS 的响应式行为；此断点行为与树不可用问题分开记录。
+- **主列表内容（部分已确认、部分待定位）**：原型文件夹副标题显示子项数量，Flutter `_fileKindLabel()` 对文件夹只显示“Folder”；原型 `modified` 展示短日期/相对日期，Flutter `_formatDate()` 固定输出 `YYYY-MM-DD`。表格列类别和 58px 行高已有对应关系；用户反馈其余列表内容问题已记录为待逐项定位，不能仅凭目前描述推断是某条数据、列宽还是筛选结果错误。
+- **待核范围**：主列表真实数据/排序结果、共享/最近/收藏/回收站不同分区的副标题和权限标记、空态/加载态、grid 卡片与 1180px/短窗口下列表列折叠，需用用户当前运行态截图/步骤补齐；本报告不把此类待定位项冒充根因。
+
+### P2：其余各页面逐页矩阵
+
+| 页面/视图 | 原型源码结构 | 当前实现位置/结构 | 需纳入下一轮逐页对照的差异 |
+|---|---|---|---|
+| Splash | `Auth.tsx` 的 splash/安装/认证阶段；窗口切换与无边框过渡。 | `router.dart` boot route、`desktop_splash_page.dart`、BootGate。 | 动画时序、窗口背景、品牌图标与原型加载画面；桌面 window frame 边界。 |
+| Login | `Auth.tsx` + `setup.css`：左图/右表单、自适应、TOTP/注册状态。 | `desktop_login_page.dart` 与 `login_page.dart`、auth challenge panel。 | 列宽断点、玻璃卡、表单焦点和错误状态需重新截图核验；登录挑战真实流程与原型静态演示差别单列，不改变认证契约。 |
+| Setup | `Setup.tsx`：步骤栏、身份/安全/存储/完成步骤，抽屉/输入状态。 | `desktop_setup_page.dart` 与 `initial_setup_page.dart`。 | 步骤比例、内容滚动、安装 TOTP、错误提示和窄宽截断。 |
+| Home | `Home.tsx`：Sky Hero、两张 Hero tile、Weather、四 KPI、影视/音乐/阅读/照片/文件/活动。 | `desktop_home_page.dart` + `desktop_home_sections.dart` / `desktop_home_lists.dart`。 | Hero 结构和壁纸透明态、Recent Photos hover 是已确认重点；其余 KPI/两列/照片空态/Activity 数据语义需要按真实数据状态核对。 |
+| Movies Browse | `Movies.tsx::Browse`：cinema Hero、七分类入口、推荐轨道、Continue watching、空态。 | `desktop_movies_page.dart`, `desktop_movies_cinema.dart`, `desktop_movies_cards.dart`。 | 分类切换和 Hero 真实空数据时是否保持样例占位、卡片 hover/封面比/轨道间距、宽窄窗口截断。 |
+| Movie detail | `MovieDetail.tsx` 与 `Movies.tsx::VideoPlayer`。 | `desktop_movie_detail_page.dart`, `desktop_movie_detail_actions.dart`, route `/video/:videoId` 和 `/play`。 | 沉浸详情的壁纸层级、封面、信息列、播放 controls/字幕菜单、返回路径和全屏 key。 |
+| Series detail | 原型 Movies/detail 系列拓展的剧集列表/播放上下文。 | `desktop_series_detail_page.dart` 与分区组件。 | Hero、季/集列表、选中进度、字幕/音轨与 shell 沉浸边界。 |
+| Photos Library / albums / places / favorites / trash | `Photos.tsx` 顶部分类和各 gallery 空态/网格。 | `desktop_photos_page.dart`, `desktop_photos_sections.dart`, feature pages。 | 单 item sizing、分组标题、视图切换、拖动顺序、批选、删除/撤销和加载 skeleton。 |
+| Photo viewer / info / slideshow / editor | `Photos.tsx::PhotoViewer`, `.viewer`, 信息抽屉、filmstrip。 | `desktop_photo_viewer_page.dart`, photo detail/editor/slideshow routes。 | 路由是否真正 immersive；照片 contain/zoom/filmstrip、Info panel 进退动画和 keyboard。 |
+| Album detail / picker | `Photos.tsx` 新建相册 Drawer 与相册内容。 | `desktop_photos_album_detail.dart`、album picker。 | 卡片比例、相册工具栏/批选/编辑抽屉、详情导航。 |
+| Music Home / Tracks / Albums / Playlists / Queue | `Music.tsx::Music` tabs/rows/cards/queue，以及 `MetaEditor.tsx`。 | `desktop_music_page.dart`, rows/widgets/metadata drawer。 | 卡片光晕、曲目 hover actions、列表行高、曲集封面、详情抽屉字段和异步空/错误态。 |
+| Now Playing | `Music.tsx::NowPlaying` 全屏 stage、art、播放列、Queue/Lyrics/Appearance。 | `desktop_now_playing_page.dart` / immersive route。 | 封面/唱片动画、播放控制、歌词切页、样例装饰与真实 metadata 缺省时降级；与底栏重复问题联动。 |
+| Reader shelf/library | `Reader.tsx::Shelf/Library`：分类、grid/list、筛选、导入、空态。 | `desktop_reader_page.dart`, `desktop_reader_library.dart`, Reader feature pages。 | 书架密度、封面比例、行列切换、筛选与导入入口、未收录/加载状态。 |
+| Book detail / immersive reader | `Reader.tsx::BookDetail`, `ReaderView.tsx`。 | `desktop_book_detail_page.dart`、Reader detail/view routes。 | 详情 cover/metadata/reading stats；章节阅读 typography、spread、TOC、工具条、沉浸边界。 |
+| Files | `Files.tsx`：树、面包屑、列表/网格、筛选、排序、拖放、分享。 | `desktop_files_page.dart` + rail/rows/table/dialogs/actions。 | 树宽、分享权限、选中/拖入状态、列表 column、网格密度、预览壳、批量撤销和窄屏。 |
+| Settings Appearance/Profile | `Settings.tsx` section rail、theme swatches、profile rows/form。 | `desktop_settings_page.dart`, `desktop_settings_more.dart`。 | 样例控件状态、全站 theme/accent 色、输入焦点、保存反馈与两列布局。 |
+| Settings Backdrop / Weather | `Settings.tsx::BackdropSettings/WeatherSettings`，BackdropView 全局。 | `desktop_settings_backdrop.dart`, `desktop_settings_backdrop_library.dart`, `desktop_settings_weather.dart`。 | 当前 scope 逻辑、wallpaper 可见度、选择/预览抽屉、dim/blur slider、动态播放 pause、天气字段反馈。 |
+| Settings Security / Notifications / Connected / Storage / About | `Settings.tsx` 的真实 section rail + cards。 | `desktop_settings_page.dart`, `desktop_settings_more.dart`, `desktop_settings_storage.dart`。 | 通知桌面隔离、会话行/2FA、连接卡片、Storage 图表/按钮、About 信息结构；需逐节复核。 |
+| Admin Overview | `Admin.tsx::Overview`：4 KPI、14 天柱图、system health、role pills、Recalculate storage。 | `admin_overview_page.dart` 与 `admin_overview_desktop.dart`。 | 源码已接真实数据但数值语义、柱图颜色/tooltip/14 天刻度、存储概览卡是否移除及 recalculation 控件位置须截屏核验。 |
+| Admin Identity | `AdminIdentity.tsx` users/roles tables、状态/排序、drawer、role editor。 | `admin_group_pages.dart`, `admin_users_*`, user/roles management。 | 用户 drawer/role drawer、状态分类/排序和输入样式；当前按分组聚合显示，需检查与六项导航结构的差异。 |
+| Admin Media library | `LibraryManager.tsx` 独立分区。 | 无 `AdminSectionGroup.library`；相关代码仅在 `admin_operations_library.dart`/storage sources。 | 独立页面是缺项，拆解哪些 library cards/扫描/管理状态需要单独入口，后端有数据则沿用真实 API。 |
+| Admin Operations | `Admin.tsx::Ops`, Task/Dead/Audit/Session/Logs single tabbar。 | `_DesktopOperationsHub` + `AdminTasksPage`/`AdminLogsPage`/Sessions/System logs。 | 确认实机双分类条来自哪里；每个二级内容应只保留原型一层 Ops 分类栏及内层筛选。 |
+| Admin Configuration / Storage | `AdminConfig.tsx`, `Admin.tsx::Storage`；参数分组、Review/Save、locations/provider accounts。 | `admin_operations_config_*`, `admin_operations_external_storage.dart`, storage dashboards。 | 布局密度、参数分组、抽屉尺寸、可编辑字段和真实后端字段对应关系。 |
+| Shared / File preview / Search / import drawers / confirmation dialogs | `Shell.tsx`, `ui.tsx`, `ImportDialog.tsx`, per-page Dialog/Drawer。 | route preview/search, `desktop_overlays.dart`, `desktop_media_import_dialog.dart`, feature dialogs. | Portal/z-order、popover anchoring、关闭/焦点返回、toast/undo、键盘 Escape、页面内 Overlay 和 Shell ownership。 |
+
+## 全路由逐页核对矩阵
+
+上表是模块索引；以下按当前 router.dart 的具体桌面路由展开。标为“无原型路由”的项目仍须将其窗口视觉映射到最相近的原型 Panel/Drawer/Overlay。原型为本地静态演示、Flutter 为真实数据时，只要求内容结构/状态反馈对齐，不要求伪造演示数据。
+
+| 当前桌面路由/页面 | 原型位置及组成 | 当前源码证据 | 源码级差异 / 状态 |
+|---|---|---|---|
+| /boot 启动/引导 | Auth.tsx::Splash：品牌标记、文字、单条进度动画；DesktopApp 从 splash 转入 setup/auth。 | DesktopSplashPage、BootGate、DesktopBootSwitch。 | 产品启动加入服务器配置和认证状态门控，原型没有这些真实路由；视觉需对照动画时长、窗口底色和落位，不将门控流程误报为视觉缺项。 |
+| /setup 首次安装 | Setup.tsx：单页管理员表单、账户信息/语言/时区、强度条、可选演示 2FA、提交状态。 | DesktopSetupPage：含 setup token/instance、账号、密码、确认、时区、语言和真实 TOTP 服务。 | 内容多出部署凭证与实例字段；原型 2FA 是 optional/demo，当前真实部署首个管理员受更强约束，需以产品安全策略保留功能但按样例重排结构。 |
+| /login | Auth.tsx::Auth：左侧 artwork+两层 shade，右侧 420px 卡；≤900px 隐藏 artwork；用户名/密码后进入样例 2FA 卡。 | DesktopLoginPage：宽屏左 5/右 form pane，>900px 两列；左图 ClipRect 内 30s 1→1.14 Ken Burns；≤900px 仅表单；真实 challenge/Enrollment/PasswordChange。 | 源码修正了壁纸缩放越界：动画在 ClipRect 内，不改两列布局。原型 art 仅线性遮罩；暗主题 radial 背景在 auth 根层而非 artwork 内。当前两层 linear shade 可对应 art-shade；不应把根层 radial 搬到左图。2FA 文案/卡片状态须保留真实认证语义。原型 CSS 当前是单向 30s kenburns forwards，并非无限呼吸循环；若用户所指 prototype 已有新版循环动效，需以该新版源码为准。 |
+| /server-setup 服务器配置 | 无独立原型页；样例的 setup/auth 只展示视觉。 | ServerSetupPage。 | 当前为产品新增独立配置流程；视觉按 Setup 表单/步骤控件风格核对，字段与部署契约不能用演示数据代替。 |
+| /portal Home | Home.tsx::Home：Hero Sky、weather、4 KPI、continue watching、Evening listening、Currently reading、7 张 recent photos、Recent files、Activity。 | DesktopHomePage、desktop_home_sections.dart、desktop_home_lists.dart。 | Hero 缺原型两张带 artwork 的 action tiles；背景库开启时仍画 shade/框面。Recent Photos 当前在比例换算、hover grow 与标签字段(place→title)上不等价。KPI/Continue/Listening/Reading/Files/Activity 还需逐节核对空/加载/错误态和行列密度。 |
+| /library 媒体入口 | 原型 Sidebar 直接导航 Movies/Photos/Music/Reader/Files；没有聚合 Library landing route。 | LibrarySpacePage。 | 产品新增聚合入口，无一对一原型页；需要把每张模块卡、分类入口、空库 CTA 与 Sidebar 导航逐项映射至原型 NAV，不把新 IA 误认为同构。 |
+| /video 影视 Browse | Movies.tsx::Browse：cinema carousel、7 tabs、sort chips、Continue rail、Film/Series/Anime rails、导入、分类空态。 | DesktopMoviesPage、DesktopMoviesCinema/Cards。 | 7 个分类、导入入口及分档空态当前都存在，旧报告称“缺少”已过时。原型 carousel 固定精选并 7s 轮换，Flutter 从 API backdrop/recent 取前 3 项并在无数据时显示 skeleton/placeholder；布局相似不等于 artwork/轮播节奏相同。需要对照 For you 空库 Hero、继续观看为 0 时占位、分类切换滚动和 tab 标签。 |
+| /video 分类状态 | Movies.tsx 的 Films/Series/Anime/Favorites/Watchlist/History 单页状态，Empty 由该 tab 决定。 | DesktopMoviesTab、_MoviesEmpty。 | 7 项枚举和 Series/Anime/Favorites/Watchlist/History 的空态已有代码。Movies 实体在 API movieCount 为 0 时由 recentMovies fallback，需检查空数据下“电影”列表是否错误复用 recentlyAdded；这是数据语义而不是缺少页面。 |
+| /video/:videoId 影视详情 | MovieDetail.tsx::FilmDetail：大 backdrop hero、poster、评分/标签/进度、Play/Resume/From start、favorite/watched/watchlist、Overview/Cast/Files tabs。 | DesktopMovieDetailPage、desktop_movie_detail_sections/actions。 | 原型影视详情在 Movies 模块交互状态中，Flutter 使用独立 immersive route；需逐项比对 tabs、动作顺序、认证/API 失败反馈、Hero 尺寸和背景策略。routeBackdropPolicy 当前对 /video 使用 work 实色策略，遮掉全站壁纸。 |
+| /video/series/:seriesId | MovieDetail.tsx 的 Series 分支/剧集详情与播放上下文。 | DesktopSeriesDetailPage 及 episode/subtitle sections。 | Flutter 拆出季/集/字幕/音轨管理，原型演示字段较少；需比较 Hero、剧集列表密度、选集状态、播放/字幕操作抽屉和 immersive 壳层。壁纸继承 /video 实色策略。 |
+| /video/:videoId/play | Movies.tsx::VideoPlayer：Window 级 inset 0 overlay，播放/暂停、seek、字幕、音轨、键盘/idle chrome。 | MoviePlayerPage，DesktopShellMode immersive。 | 全屏 owner 的静态意图相符；必须验证在实际 window 下是否隐藏 app titlebar/sidebar/dock/playerbar、OS window chrome 的边界、seek/controls 自动隐藏和错误恢复。 |
+| /photos 图库 | Photos.tsx：Library/Albums/Places/Favorites/Trash 顶部分段，媒体导入、筛选、分组网格、batch actions。 | DesktopPhotosPage、desktop_photos_sections/selection。 | 各 5 个一级 tab 和导入入口均存在；需对齐 density slider、日期分组/空态/分页骨架和批量工具栏。不应再记录“缺少导入入口”。 |
+| /photos 单图网格状态 | Photos.tsx 为长度 1 的 Justified 增加 solo-note，并禁止 tile flex 扩张。 | desktop_photos_sections.dart::_layout 每行均 Expanded；没有独图旁注分支。 | 源码已确认差异：单照片构成一行时占满整行，缺少样例 metadata note。 |
+| /photos 新建相册 | Photos.tsx::NewAlbum 以 Drawer 打开，表单校验重名并可接入预选照片。 | desktop_photos_selection.dart::_NewAlbumDrawer、_CreateAlbumCard、_CreateAlbumBorder。 | 当前已有整卡自绘虚线和抽屉，并按 hover 改描边/文字 accent；源码未见该卡额外 halo。此前“旧矩形控件/缺透明虚线”的问题不再能从当前源码确认，须用当前构建截图复核。 |
+| /photos/albums/:albumId | Photos.tsx 的 Albums 子视图/专辑内容。 | DesktopPhotosAlbumDetailPage。 | 当前独立 route 展示详情/分享/删除，原型在 Photos 内部切换；IA/返回行为不同，内容栅格、toolbar、空相册状态需比较。 |
+| /photos/albums/:albumId/add | Photos.tsx 的相册选择器内选择照片并添加。 | PhotoAlbumPhotoPickerPage。 | 当前独立 picker route；原型是图库状态/Drawer 式选择，核对多选确认、返回后选择保持、空态和批量反馈。 |
+| Movies/Photos/Music 导入 | ImportDialog.tsx：From My files/From this device 两个 tab、选择列表、格式/大小、电影 metadata toggle、Import 按钮；提交后为每项排 task 并 toast，关闭 Dialog。 | DesktopMediaImportDialog 分页浏览 FileNode（page size 100、文件夹 breadcrumb、类型过滤、错误/加载/加载更多）；设备文件经 MediaImportButton 上传；三模块再通过 mediaImportQueueProvider 和 task waiter 异步创建媒体实体/更新列表。 | 入口三模块均存在，异步后台队列也存在；视觉/流程明显比 prototype 多真实浏览、分页、失败和队列状态。需比对 tab/列表/dialog 的尺寸和控件状态，同时保证上传进行中、取消、部分失败、后台解析完成反馈映射到样例 task/toast，不回退到旧同步/旧样式对话框。 |
+| /photos/period/:year/:month 与 /photos/groups | 原型按日期/位置分组显示，未设独立 period/groups route。 | PhotoPeriodPage、PhotoGroupsPage。 | 两个是产品深层列表页；需把日期网格和地点入口样式映射到 Photos 分组/Places section，并检查返回与全屏 shell。 |
+| /photos/:photoId Photo Viewer | Photos.tsx::PhotoViewer 经 Portal 到 .window；toolbar、prev/next、zoom/pan、filmstrip、slideshow、Info drawer、keyboard。 | DesktopPhotoViewerPage，desktop shell path matcher 应设 immersive。 | 功能集合有对应项，路由承载方式不同；按 prototype 的 Window 全屏覆盖边界核对。实机“壳层仍在”与静态 path 分支不符，需实测 URI/build。 |
+| /photos/slideshow | 原型为 Viewer 内开关 slideshow。 | PhotoSlideshowPage 独立 route。 | 产品独立 route vs 原型 Viewer 状态；比对进度条、暂停/继续、键盘、到末张行为和退出时回图库位置。 |
+| /photos/:photoId/edit | 原型 Viewer toolbar 提供 rotate/favorite/share/delete/info，不见独立照片编辑器 route。 | PhotoEditorPage，immersive。 | 原型无独立编辑页；按 Viewer 工具栏风格核对编辑器功能，不把产品新增编辑器当同构页。 |
+| /shared/photos/:token、/shared/photos/item/:token | 原型没有公开分享链接页。 | PhotoSharedAlbumPage、PhotoSharedItemPage。 | 产品新增公开访问页面；需匹配 Share/Viewer 的 typography、loading/expired/error states，协议与权限不在视觉层面伪造。 |
+| /music Music library | Music.tsx::Music：For you/Tracks/Albums/Playlists/Queue 状态，导入、album/playlist 卡、track table、metadata drawer。 | DesktopMusicPage、music rows/widgets/metadata drawer。 | 音乐导入入口当前存在；实际曲库来自 API。需逐态比较空库、专辑 mosaic、队列操作、Track hover actions、drawer 字段及分栏。用户报告的彩色 glow 要定位具体 widget/CSS；原型存在普通投影和 selected states。 |
+| /music/now-playing | Music.tsx::NowPlaying：Window overlay，两列 album deck + controls、Queue/Lyrics/Appearance。 | DesktopNowPlayingPage/Deck，immersive path。 | 同为沉浸播放器但当前是独立路由、支持更真实的播放引擎与更多外观设置；核对 cover/deck 尺寸、歌词状态、Queue、所有 shell 隐藏和底栏唯一实例。 |
+| /music/history、/music/scan | 原型无独立 History/Scan route；音乐历史/扫描只作为列表或操作状态。 | MusicHistoryPage、MusicScanPage。 | 当前为产品新增全页；视觉应沿用 Music section/任务状态，不能未经映射新增一套页面 chrome。 |
+| /reader Reader overview/library | Reader.tsx：Overview/Library、shelf、reading stats、recent books、导入入口位于 PageHead 左侧、Empty。 | DesktopReaderPage：PageHead actions 顺序为 ReaderLibraryImportAction 再 Overview/Library segmented control。 | Import 按钮当前源码位置、upload icon 与 soft button 已符合“在总览/书库左侧”的历史要求，不应记作缺失。仍需比较文字、icon 尺寸、按钮高度和边距；真实异步解析状态另见 import status。 |
+| /reader/bookshelf | Reader.tsx 内 Bookshelf/library 内容与筛选/排列。 | ReaderBookshelfPage。 | 原型是同页面视图，Flutter 有独立 route；核对 grid/list、分类/筛选、空态、加载 skeleton 与原型 tab 状态映射。 |
+| /reader/stats、/reader/admin | 原型 Reader overview 内阅读统计/管理入口，无独立路由页。 | ReaderStatsPage、ReaderAdminPage。 | 产品新增页面；统计图/管理工具应复用样例卡片、空态、section typography，检查与原型 overview 信息重复。 |
+| /reader/items/:itemId 书籍详情 | Reader.tsx::BookDetail：cover/metadata/progress、Read/Continue、Details/Chapters/Notes/Activity tabs、相关书籍。 | DesktopBookDetailPage，shell matcher immersive。 | 当前独立全屏 route 对应样例 book-detail 全视口；字段数据真实，样例有演示 Activity/Notes；核对 tab 顺序、首屏布局、章节进度/相关书籍空态。 |
+| /reader/items/:itemId/chapters/:chapterId | ReaderView.tsx::BookReader：theme/type/column controls、TOC/notes/bookmark panels、page/spread/scroll modes、键盘。 | ReaderViewPage。 | 有真实阅读进度与加密笔记，样例只用静态章节；比较三种 mode、TOC/notes 抽屉、文字栏宽和沉浸键盘。 |
+| /reader/comics/:itemId/read、/reader/pdfs/:itemId/read | ReaderView.tsx 演示 Comic/Book reader mode。 | ComicReaderPage、PdfReaderPage。 | Flutter 按文件格式拆两个 route，原型 reader 共用一个组件；比较同一 toolbar/content surface 和错误/空文件状态。 |
+| /reader/items/:itemId/metadata | 原型 BookDetail 书籍 metadata 内容和 edit actions，没有独立路由页面。 | ReaderMetadataEditPage。 | 当前全页 metadata editor；映射到样例编辑控件/Drawer 后再核对字段布局、保存/取消/错误反馈。 |
+| /reader/items/:itemId/import-status | 原型导入后仅 queue task/toast，不展示解析确认全页。 | ComicImportConfirmPage。 | 产品新增异步解析确认路由；需映射 ImportDialog、TaskPanel、Toast 的进度/结果视觉。 |
+| /files 文件管理 | `Files.tsx::treeFolders/newFolder/rowEl`：244px 左树卡，树目录可进入/拖放/延迟展开；创建后同一 `files` state 同步更新树；面包屑、筛选、排序、list/grid、名称/子项/更新时间/容量/Access 列、批选与拖放。 | `DesktopFilesPage`、`desktop_files_rail.dart::_FolderTree`、`desktop_files_rows.dart::_FileRow`、`desktop_files_table.dart`。 | 树栏缺原型整块玻璃容器；树节点只点击/箭头展开，未挂 draggable/drop/长按；树的本地 `_children` cache 不随 createFolder 刷新，解释列表与树状态分叉。Folder 副标题是类型而非子项数，日期格式固定 `YYYY-MM-DD` 而样例用短/相对日期。其余用户所报列表异常逐项待具体截图/步骤定位。 |
+| /files/preview/:fileId | 原型 Files 的详情/preview overlay（非独立主导航页）。 | FilePreviewRoutePage。 | 当前 route-level preview，需与原型 preview overlay 的尺寸、关闭返回、键盘、主壳遮挡和文件类型空态对齐。 |
+| /s/:token 文件分享预览 | 原型仅有 Files.tsx::ShareDialog 配置分享，没有公开 token route。 | FileSharePreviewPage。 | 产品新增公开页面；沿用样例 modal/preview 视觉，核对过期/无权限/下载反馈。 |
+| /profile?section=profile | Settings.tsx Profile：头像、name/email 表单、Reset/Save。 | DesktopSettingsPage profile section；使用真实当前用户资料。 | 字段对应；样例 PageHead 无副标题，当前 Settings PageHead 额外传 `desktopSettingsSubtitle`。样例 Save disabled 到 dirty/valid，当前真实资料保存状态需核对焦点、dirty 提示和错误 feedback。 |
+| /profile?section=appearance | Settings.tsx Appearance：theme/accent/density/type controls。 | DesktopSettingsPage appearance section + appearance sheet。 | Settings 8 个分区的顺序与原型一致；样例四 accent Sage/Mist/Copper/Iris，当前 enum 有相同四类。需逐项比较 Light/Dark/System、swatch、字体/密度控件和保存反馈。当前 Appearance section 内容是否完全同构仍需把动态壁纸偏好与通用偏好区分核对。 |
+| /profile?section=backdrop | Settings.tsx BackdropSettings + BackdropView：范围、库选择、静态/动态/透明度等。 | DesktopSettingsBackdrop/Library，DesktopBackdropScope。 | 全站 scope predicate 与 route surface work 策略冲突是已确认差异；light/dark、媒体/Utility scene 和 slider 实际值仍需核对。 |
+| /profile?section=notifications | Settings.tsx 通知偏好。 | DesktopSettingsMore 通知 section；另有顶部 NotificationsPanel。 | 设置偏好与通知内容列表要分开比较；用户要求桌面通知 panel 样例化、移动端保留原系统中心。当前顶部面板仍读 notificationControllerProvider，桌面全页 /notifications 仍存在。 |
+| /profile?section=security | Settings.tsx Security：登录保护、sessions/revoke、2FA toggle。 | DesktopSettingsMore 安全/会话 section。 | 必须尊重用户已明确的授权规则：普通用户自行开关 2FA，超管强制；管理员创建账号与用户注册的首登策略区分。表面/行样式尚需逐状态图核。 |
+| /profile?section=services | Settings.tsx Connected services provider cards/connect states。 | DesktopSettingsMore Connected Services。 | 对照 provider icon/card、未连接/授权中/过期/重新授权状态；真实 OAuth 返回状态和错误文案不能用 prototype mock 填充。 |
+| /profile?section=storage | Settings.tsx Storage section. | DesktopSettingsStorage。 | 用户历史反馈的 Storage 配置/存储视觉重做未逐张对照完成；逐项比 provider/location/容量图/设置 Drawer 与 Admin Storage 区分。 |
+| /profile?section=about | Settings.tsx About & updates。 | DesktopSettingsMore About section。 | 核对版本/更新状态、检查更新动作、空/失败反馈和样例 section 卡片密度。 |
+| /notifications | Shell.tsx::NotifPanel 为浮层，不是全页通知中心。 | NotificationPage 路由仍在 router.dart，并由桌面/移动共享入口可达。 | 桌面额外全页与 prototype information architecture 不同；桌面铃铛仍接系统通知 provider，需在未来实现阶段隔离 desktop visual surface，mobile 保留系统通知。 |
+| /search、Ctrl+K command palette | Shell.tsx::Palette 是中心命令/搜索面板，搜索媒体库/文件/命令。 | MobileSearchPage route + Shell search入口；desktop panels/Palette。 | 当前 search 是全页 route/真实跨域检索，与样例 palette overlay 的尺寸/关闭/结果结构不同；需要 source matching overlay mapping。 |
+| /tools | 原型 Shell task panel/shortcuts/context menu，没有 WorkspaceTools 全页。 | WorkspaceToolsPage。 | 产品新增页面；视觉映射至 Shell Panel，不应生成第二套独立 system-tools 导航。 |
+| /settings、/profile/notifications、/notifications-tasks、/tasks、/activity 等兼容地址 | 原型 Settings 是主页面，通知/任务只在 Shell panel 中打开。 | router.dart 将 /settings 重定向到 /profile?section=appearance、/profile/notifications 重定向到通知偏好；旧任务/活动地址重定向到 /notifications。 | 是 URL 兼容别名，不是独立 UI 页面；视觉责任在最终落点 route。桌面 `/notifications` 落地后仍是整页，是用户要求下的实际信息架构差异。 |
+| /admin Overview | Admin.tsx::Overview：4 KPI、14 日 bars、health、role pills、Recalculate storage。 | DesktopAdminOverview 读 summary+analytics；4 stat cards、14 日图、health、roles、Recalculate card 均存在。 | 旧报告“缺 14 天柱图/缺重算卡”已过时。当前第四张 KPI 是 Storage，样例也有 Storage KPI；是否另有额外 Storage overview tile 需确认实机所指的具体卡片。图表真实数据/加载 skeleton 与样例演示 bars 的布局不同，柱数应固定 14。 |
+| /admin Identity/users | AdminIdentity.tsx users table、Status `All/Active/Disabled` chips、Role chips、search、Sort select、create/edit UserDrawer、quota dialog。 | `admin_users_desktop.dart::_DesktopUsersPanel` 有 Role 与 Active/Disabled filters、username/storage/last active sort select、Create/Edit User Drawer、quota Modal。 | “缺少状态/排序/抽屉”不是当前源码可确认的功能缺项；已存在相同类别控件，但 Flutter 将搜索、角色/状态 ChipGroup 和排序选择器放在 Wrap toolbar，prototype 使用 Toolbar + FilterChips + sort select。需比较具体排列、密度、控件皮肤、字段列和编辑/创建 drawer 表单，不应再写“列表没有状态分类/排序”。 |
+| /admin Identity/roles | AdminIdentity.tsx role cards、permission summary/grid、RoleDrawer/permission tree。 | admin role management pages/drawers/permission tree。 | 当前已存在角色卡片、权限网格与 Role Drawer；逐项比较 role card 高度/顺序、权限分组密度、built-in/custom 状态、drawer width、保存/校验/未保存状态。API权限语义保持真实。 |
+| /admin Media library | Admin.tsx::sections 的独立 library + LibraryManager sources/review/scan drawers。 | AdminSection enum/group只有 overview/identity/operations/configuration/storage；相关媒体来源管理置于 admin_operations_library。 | 源码已确认：原型六分区里独立 Media library 缺失；现有媒体来源页面不等价于独立 LibraryManager 工作区。 |
+| /admin Operations/Tasks | Admin.tsx::Ops tabs 中 Tasks，status/type filters、search、CSV、pager。 | DesktopOperationsHub + AdminTasksPage。 | Flutter hub另有同级 segment并向子页传 hide selector；双栏仍以运行状态确认，但 mock live/history 与真实任务状态、Retry/Export状态需逐列映射。 |
+| /admin Operations/Dead letters | Admin.tsx::Ops Dead tab，状态/重试/过滤。 | Admin dead-letter page。 | 独立页内重复栏需检查；比对 failed payload details、retry/delete confirmation、空态和 table columns。 |
+| /admin Operations/Sign-in audit | Admin.tsx::Ops Audit tab，事件、时间、IP/状态等表。 | Admin sign-in audit page。 | route group 映射相符；真实审计字段及筛选项可能与 prototype mock 不同，行高/状态 chip/table toolbar需比对。 |
+| /admin Operations/Sessions | Admin.tsx::Ops Sessions tab，session rows/revoke。 | Admin session management page。 | 核对 active/revoked/expired 状态、批量撤销确认、IP/device metadata、空态和分类栏重复。 |
+| /admin Operations/System logs | Admin.tsx::Ops Logs tab、level/source filters、details/export。 | AdminLogsPage + hideDesktopTabSelector。 | 需确认 hub tab 与 logs 内部 tab是否重复；行级等级色、details drawer、过滤/分页对照。 |
+| /admin Configuration | AdminConfig.tsx 分类设置、Review/Save。 | admin_operations_config_*。 | 逐 section 对照控件类型、保存/取消/dirty diff、危险操作确认；原型 mock field不是后端 schema，缺字段要另列接口缺口。 |
+| /admin Storage | Admin.tsx::Storage locations/provider account rows + Add location/account Drawer。 | admin_operations_external_storage/storage pages。 | page tree exists but visual/fields需逐项核；与 Settings Storage 不能合并。provider secrets不得回显，保留样例的配置抽屉交互。 |
+| 全局 Shell、标题栏/侧栏/Dock | Shell.tsx::NAV 六项、46px titlebar、232/64px sidebar、detail Dock、window controls。 | desktop_shell.dart、desktop_title_bar/sidebar/panels、window controls。 | 页面信息架构并非一一相同；按图标字形/标签/尺寸/透明底/模糊/active/hover/badges逐项量化。原型 theme tokens为 dark #0b0e11/light #eef0ec 和四 accent，Flutter tokens需对照实际平台渲染。 |
+| 全局 Buttons/Inputs/Slider/Segment/Toggle | ui.tsx primitives；按钮34px/r10，输入40px/r10及 focus ring，seg/slider/toggle各有状态反馈。 | desktop_controls.dart、desktop_fields.dart、desktop_controls_slider.dart、desktop_select.dart。 | slider源码默认使用 accent fill 与可显隐 thumb；若某调用将 trackFill 关闭需在逐控件表列出。输入 focus ring/鼠标 hover 属样例明确效果，禁止一概清除；需逐调用对比颜色和形状。 |
+| Modal/Drawer/Confirm | ui.tsx Modal 460px / wide760px；Drawer默认480px从右侧进场；Confirm/Portal有 Escape/focus行为。 | desktop_dialogs.dart、desktop_overlays.dart、各 feature dialog/drawer。 | 当前跨 Flutter Overlay/Route/Dialog 多实现，不能按同名类推等价；按宽度、圆角、背景 blur、backdrop、Esc/点击外部关闭、焦点恢复、footer位置和窄窗适配对照。 |
+| Loading/Skeleton/Error/Empty/Toast | ui.tsx::useSkel 保持真实布局并把各卡/行转成尺寸对应 skeleton；Empty size sm/md/lg；Shell::Toasts 带 Undo/task action。 | DesktopSkeleton、DesktopEmpty/ErrorView、DesktopToast，以及各页面 AsyncValue 分支。 | 用户报告骨架位置/设计不对仍是跨页差异；应按 Home/Movies/Photos/Music/Reader/Files/Admin每个异步区分别对照 skeleton 的占位尺寸/位置/数量和 error retry，不用单个通用加载状态代替样例组件结构。 |
+| Context menu/Task panel/Palette/Shortcuts | Shell.tsx 提供 Window 级 context menu、task panel、palette、shortcuts、toast。 | Desktop overlays/panels、Notification/task surfaces、keyboard handlers。 | 视觉 owner 与 route/shell z-order、Escape、外部点击、焦点返回须矩阵验证；全屏页面不应被非样例常驻 chrome 覆盖。 |
+
+## 用户已报问题闭环表
+
+下表把此前分散在多轮消息中的实机问题合并，保留每项当前静态证据和判定边界。它是防止漏项的索引；详细源码位置、页面上下文和原型映射见上方 P1 分析及全路由矩阵。
+
+| ID | 已报问题 | 当前源码对照结论 | 判定 |
+|---|---|---|---|
+| U01 | Home Hero 缺少样例卡片；启用背景库后应透明 | 已新增两张 `.hero-tile`（封面/文案/进度），壁纸态改透明面 + 白 20% 边 + 仅底部长渐变，不再绘制天象。 | 已实现；运行态截图待补 |
+| U02 | 侧栏/顶部栏模糊材质、icon、文本不一致 | 46px TitleBar、232/64px Sidebar 几何值与原型一致；导航项目和 icon registry 映射并不相同。逐 glyph、标签、透明底/blur、hover/active/badge 仍需逐项记录。 | IA 已确认不同；造型细节待逐项源码/运行态验收 |
+| U03 | 全站背景在 Movies、Admin、Settings 未生效 | 桌面路由策略改为 content/staticContent，实底 surface 不再覆盖壳层壁纸；回归测试断言所有桌面策略 `visible`。 | 已实现；截图待补 |
+| U04 | Home 最近照片 hover 不符合样例 | 改为按比例分配宽度（hover=3×），600ms 过渡；标签取 `gpsLocation` 地名。 | 已实现；hover 运行态待验 |
+| U05 | Admin 缺少 Media library | 新增第六分区 `library`，`AdminMediaLibraryPage` 复用库源扫描/最近扫描摘要；侧栏、移动底栏、URL 段与权限齐备。 | 已实现；抽屉级视觉待核 |
+| U06 | Admin Operations 出现双分类栏 | Hub 已有一级分段，嵌入子页传 `hideDesktopTabSelector:true`；用户运行态仍看见重复分段。具体重复控件由权限/当前子页/运行 build 决定。 | 运行态症状已知，源代码触发链未定责 |
+| U07 | 底部播放器双层、宽度/控件/功能不一致 | Flutter 静态只有一个 `DesktopPlayerBar` 调用；按外层约束减两侧 margin 后，可见最大宽 1080/860px 与原型一致。控件差异及第二层来源静态未定位。 | 可见宽度非源码差异；重复与交互待运行态定责 |
+| U08 | Photos 单图铺满一行，hover/长按/批选不符 | 单图改按原比例 + `.solo-note` 旁注（标题/地点/相机/曝光），窄窗换行。 | 单图已实现；手势待运行态核验 |
+| U09 | 桌面通知要与移动端系统通知隔离 | 桌面标题栏/面板和 `/notifications` 仍读通知域 provider；样例桌面交互是 Shell NotifPanel。数据服务可保留，差异在桌面呈现/入口 owner。 | 源码已确认耦合 |
+| U10 | Music 卡 hover 出现样例没有的光晕 | 不能用“全局没有光晕”概括原型：样例有投影、选中层、slider thumb/focus ring 等局部效果；通用卡片额外彩色 glow 是否存在要定位 Flutter 实际绘制控件。 | 具体 glow 尚未逐控件定位；不做全局删除结论 |
+| U11 | Viewer/详情/播放时仍显示 Sidebar、Titlebar、Player | Router/`DesktopShellMode` 对主要沉浸路由有 immersive 分支，但它仍处于 `DesktopWindowChrome` 边界；静态意图与用户实机相反。 | 运行态症状与当前静态结构冲突，须核运行 path/build/owner |
+| U12 | Movies 结构、分类/空态/Hero 缺失 | 七分类、导入按钮和分档空状态已存在；Flutter 用真实最近媒体构建 Hero，原型用精选轮播/演示数据。空库 Hero 和 rail 排列语义不等价。 | “缺组件”旧结论过时；数据选择与构成仍有差异 |
+| U13 | Movies/Photos/Music 导入仍旧样式，要求异步 | 三模块入口、FileNode 分页浏览、设备上传、队列 controller 和 task 等待均已在源码中。Dialog 内视觉、部分失败/取消/后台继续与样例 task/toast 的映射尚未一一核过。 | 异步链路存在；视觉/失败状态未完成对照 |
+| U14 | Reader 导入按钮位置、名称/icon、样式不对 | `DesktopReaderPage` 的 PageHead actions 将 Import action 放在 Overview/Library segmented 前；upload icon 与 soft variant 已在源码。 | 位置/icon 基本满足历史要求；尺寸/文案待截图验收 |
+| U15 | Drawer/Dialog/Input/按钮/焦点/旧矩形样式不统一 | 样例 `ui.tsx` 共享 Modal/Drawer/Confirm/Button/Field primitives；Flutter 有多套 Dialog/Drawer/Overlay 和 feature-local controls，统一类名不能证明同材质/尺寸。样例 field focus 有明确 ring。 | 跨组件源码差异范围已确认，须按 primitive 建逐项表 |
+| U16 | 全页面骨架位置/设计错误 | 样例 `useSkel` 用真实布局的卡/行结构替换内容；Flutter 各 AsyncValue 页面自行返回通用 Skeleton 或 feature skeleton。当前矩阵列出 Home/Movies/Photos/Music/Reader/Files/Admin，具体尺寸分支待补图。 | 结构机制已确认不同；逐页面细节待对照 |
+| U17 | Admin Overview 数据与样例不一致、缺柱图/重算卡、多存储卡 | Flutter 有 4 KPI、14 天 dailyUploads 图、Recalculate card；样例同样有 Storage KPI。用户所说“多出的存储概览卡”尚未从实机截图对应到具体 widget。 | 部分旧问题已过时；额外卡需截图指认 |
+| U18 | 新建用户/编辑角色应抽屉；列表要状态分类、排序 | 原型 `AdminIdentity.tsx` 使用 user/role drawers、Status `All/Active/Disabled` chips、Role chips 与 Sort select；当前 `_DesktopUsersPanel` 有 Active/Disabled 和角色筛选、用户名/容量/最后活跃排序、Create/Edit User Drawer、Role Drawer。 | “缺状态/排序/抽屉”不是当前源码可确认的功能缺项；Flutter 把筛选、搜索、排序放进可换行 Wrap，视觉排布、表格列与抽屉表单仍需对照。 |
+| U19 | Storage 配置页/Storage 管理页不符合 | Settings Storage 原型是单一用量分布卡、Find duplicates；Flutter 读真实 storage stats 并分类型绘制、执行真实 duplicate scan。Admin Storage 原型是 location/provider rows + add drawer，与 Settings Storage 是两页。 | 数据/交互语义明确不同；容器布局和 fields 仍待逐项比对 |
+| U20 | 拖动 slider 后已选值无颜色 | Flutter DesktopSlider 默认 `trackFill=true`，按当前 value 绘制 accent fraction；原型 `.slider .track b` 同样按 value 填充 accent，drag 时取消 width transition。当前源码未证实“没有填色”，需用复现路径检查调用是否关闭 `trackFill` 或 provider value 是否回写。 | 设计意图一致；运行态故障待定位 |
+| U21 | Security/Sessions、2FA 设计不对 | 原型为 Security 区内 Change password、2FA toggle、sessions；Flutter 真实认证/会话页面保留同类能力。产品规则已经由用户明确：普通用户可自选 2FA，超管强制开启；管理员创建账号首次登录改密，与自助注册用户分开。 | 视觉需对照；产品权限规则已明确，不得改向 |
+| U22 | Connected Services 完全不符 | 原型分 Music platforms/Other，含 NetEase QR link、Local library scan、Last.fm toggle；当前真实服务 provider/OAuth 生命周期不一定与演示 provider 相同。 | 信息结构/真实 provider 映射需逐 service 比较；不可伪造服务数据 |
+| U23 | 登录页遮罩白边、壁纸光晕/默认图/缩放/自适应不符 | `BundledWallpaperPoster` 读取 `assets/backdrops/default_wallpaper.jpg`；该资源与用户提供的 `StockSnap_GI4HC0TIXR.jpg` SHA-256 相同。Flutter art 在 ClipRect 中做 transform、>900px 两栏，≤900px 单表单；当前样例源码是 root dark radial + art linear shade、≤900px 隐藏 art、30s 单向 Ken Burns。用户之前要求的“呼吸式”与当前原型源码不一致，需以最近优化的原型文件为准。遮罩覆盖/全屏布局症状与静态约束意图冲突，需用当前运行 build 核实。 | 默认壁纸资源已确认一致；动效/白边/响应式症状待运行态验收 |
+| U24 | 详情面板收放时右侧溢出 6.8px | Flutter Dock 在收放时固定内部 348px 内容宽度；用户报告的 RenderFlex ancestor/触发帧尚未获得。 | 运行态待定责，见 P1 详情坞条目 |
+| U25 | Photos 与其他卡片 hover 的多余光晕 | Photos 新建相册源码是整卡 dashed painter，hover 改描边/文字色，未发现该 card 有额外 halo。样例其他局部控件确有 hover/focus ring；应以控件为单位记录。 | Photos 新建相册未发现 halo 源码证据；其余逐控件待核 |
+| U26 | Files 左侧目录树样式完全不对 | 整轨改为玻璃面板（圆角 20 / `--panel` / 1px / blur 20）；行高、缩进、gap 分隔线、存储用量按样例重排。 | 已实现；截图待补 |
+| U27 | 新建文件夹后结构树无变化 | 树按当前目录文件夹签名失效缓存并重取；展开时强制刷新该层。 | 已实现；运行态待验 |
+| U28 | 无法长按/拖动结构树元素移动 | 树行加 Draggable/DragTarget，落点高亮、650ms 悬停展开、←/→ 键盘；根条目接收落点。 | 已实现；拖放运行态待验 |
+| U29 | Files 主列表内容和呈现仍有问题 | 目录副标题改真实子项数（后端新增 `childCount` 批量统计），日期改 Today/Yesterday/短月日，行内补星标与分享。 | 三项已实现；其余症状仍待具体截图定位 |
+
+### 覆盖边界
+
+- **页面/路由覆盖**：当前显式 GoRouter 路由、兼容 redirect、Settings 8 分区、Admin 6 个原型分区映射、共享 Shell 与主要 overlay 均有矩阵条目；Files 树、树列表同步和主列表状态已拆成独立差异项。
+- **源码结论覆盖**：已把能静态证明的结构/尺寸/数据绑定列为确认差异；“需要比较”用于源码不足以判定的动态、条件或实机症状，不能误读为该页面已像素级验收。
+- **运行态完整度**：没有原型和当前应用同分辨率截图、不同主题/locale/缩放、空/加载/错误/超长数据、hover/长按/拖拽/键盘/窗口resize 的逐状态实测；本报告因此不是截图像素审计或故障已修复声明。
+- **后端完整度**：已核对 UI 直接消费的代表性模型/Provider，但尚未穷举 Spring Controller、DTO、数据库迁移和权限契约；只有在该审计完成后才能断言缺少后端接口。
+
+## 数据绑定与后端接口观察
+
+本节只列出当前 UI 源码能证明的绑定；没有完成所有 Spring Controller/DTO/数据库表的接口审计，因此不把“尚未查到”写成“后端缺失”。若后续确认样例要求的字段确实没有服务端来源，再登记 API/DTO/迁移缺口。
+
+| 功能 | 当前数据路径 | 与原型字段/状态的关系 |
 |---|---|---|
-| 颜色 | 深浅底色、主要文本色、四档强调色及文件类型色有源码值对照；Files 行图标与 Home 最近文件类别色已按参考 CSS 修正。 | 语义色在每种主题/强调色下的最终合成、透明色叠加、动态背景上的文字对比、海报/照片平均背景、hover/pressed/selected/disabled 色值、各模块局部色板未全量逐值核对。 |
-| 布局与几何 | 侧栏、Dock、播放条、常规页顶部间距、Files 分栏令牌有静态尺寸对照；Files 全宽/断点/底部避让和 Reader 书详情沉浸路由已按参考源码修复。 | 上述修复以及其它页面仍缺实际 bounding box、栅格/列数、基线、留白、视口裁切、文本折行、滚动区高度、浮层锚点/层叠关系的同屏像素测量。 |
-| 字体与内容 | 参考 CSS 与 Flutter 均声明 Inter/Newsreader 主族，Flutter 有对应字体令牌和字阶。 | 实际字体是否加载、中文/特殊字符回退、字体文件版本、字重插值、字号缩放、字距/行高及相同内容下的换行高度没有运行态核验。 |
-| 图标与媒体素材 | 参考组件和 Flutter 图标/媒体组件均存在；Files 类型色差已修复。 | 图标字形/线宽/占位、图片源、封面裁切与焦点、模糊/颗粒/透明遮罩、加载/失败 fallback 未逐项对照。 |
-| 控件状态与动效 | 两端均有按钮、选择器、滑块、表单、弹层等实现；参考含 reduced-motion 样式，Flutter 有对应主题/动效基础设施。 | 每个控件的 default/hover/focus/pressed/selected/disabled/loading/error，以及弹层打开/关闭、切页、拖拽、撤销的时长/曲线/焦点还原/键盘退出尚无完整矩阵。 |
-| 响应式与密度 | Files 在 1180px 的断点已按参考源码实现。 | 桌面宽度、窗口化、短高度、DPI/系统缩放、主题、密度和字体缩放组合未做成套截图；除 Files 外的 breakpoint/溢出情况未逐页验收。 |
-| 表单与参数 | 影视、音乐、Reader 元数据、Files 分享、Profile 的若干字段/校验和部分 DTO 已对照；已将样例字段与后端能力字段区分。 | Admin、Auth/Setup、Security、Photo editor、Backdrop、Notifications、外部存储和其余业务表单尚未完成字段/约束/默认值/控件/校验/提交状态与 API DTO 的全量映射。不能推导为全部后端参数一致。 |
-
-### 8.4 下一轮严格一比一验收基线
-
-要签署“完全一致”，每张对照必须固定同一窗口尺寸、DPI/缩放、主题、强调色、语言、字体状态、内容数据和页面滚动位置；对每个页面主态及可见交互状态取得参考稿与 Flutter 成对截图。截图之外还要执行与页面有关的点击、键盘、拖拽、校验、保存、失败、恢复和撤销路径，记录前后反馈。至少覆盖本节 8.2 的所有页面/组件，并为 8.3 的颜色、字形、尺寸、层级、动效和响应式建立逐项通过/不通过/未验证记录。当前报告仍有大量“未验证”，所以不能给出全量通过结论。
-
-### 8.5 第二轮记录
-
-- 第二轮检查了参考页面/组件清单、桌面 CSS 主题与全局交互原语，并对照 Flutter 桌面页面、共享壳层/浮层、主题令牌及第一轮报告的覆盖边界。
-- 参考运行页可读到 Reader 书本详情及 About/Chapters/Notes/Activity 标签；没有完成 Flutter 与参考稿的有效成对截图，不能将该状态作为视觉通过证据。
-- 未改动产品代码；本轮只补充了本报告的范围、覆盖矩阵和验收边界。
-- 未运行测试、构建或静态分析；未完成像素比较、全页面交互录制和所有 DTO 的逐项追踪。
-
-## 9. 第三轮：差异修复记录（2026-11-16）
-
-本轮开始按参考实现修改 Flutter 桌面 UI。以下是**已落到代码的修复范围**，不是“全站一比一验收通过”的结论。
-
-| 模块 | 本轮改动 |
-|---|---|
-| 全局壳层 / Reader | Reader 书籍详情路由改为沉浸式视口，桌面侧栏不再挤压阅读内容；播放条预留高度按参考尺寸收紧。 |
-| Files | 主内容改为全宽；窄窗口按参考断点隐藏目录树；侧栏去掉样例不存在的任务分区，将回收站与来源、存储摘要重新组织。 |
-| Movies | “Continue Watching”的 See all 改到 History；For You 补 Anime 轨道；History 改成海报网格并接入真实清空历史操作。系列详情路由改为桌面沉浸布局，接入真实 Overview / Episodes / Files / Subtitles、季集加载、播放、收藏、标题与简介编辑、字幕上传/删除。由于 API 没有恢复历史的接口，清空后不展示虚假的 Undo。 |
-| Photos | Albums 区补 New Album 卡片和创建/打开路径；Viewer 顶栏补分享面板、移入 Trash 与可执行恢复 Undo；Trash 区补 Empty Trash 确认和批量清理任务。 |
-| Music | Home 增加歌单轨道与详情；补歌单新建、编辑、删除及播放/队列动作；Now Playing 增 About 和真实元数据编辑入口。 |
-| Reader | 数据页合并书库分页结果和 Dashboard 最近阅读；补 Books/Comics 书架、导入入口、筛选清除和滚动分页；统计卡改为 Books/Comics/Hours/Streak。 |
-| Settings | Appearance 补语言切换、语言成功反馈和 85%–125%（每 5%）文字比例滑块，并把 Ambient light / Reduce motion / Compact density 按样例归入 Atmosphere；桌面 Profile 限制名称 40 字、邮箱必填，头像选择限制 2 MB；天气位置与当前状态接入现有生产偏好和天气 Provider。 |
-
-上述改动均保留真实会话认证和后端数据，不使用原型模拟数据。字体偏好中的既有 `large` 档从 130% 调整到样例上限 125%；它仍使用原有持久化档位名 `large`。
-
-### 9.3 后续差异修复
-
-- Files 表格文件图标不再统一使用中性色，改为按 MIME/类型显示参考 CSS 的文件夹、PDF、视频、音频、图片和文本色；Home 最近文件类别色令牌同步修正。
-- Photos 全屏查看器增加 Delete 键移入回收站，复用已有真实删除与 Undo 流程；分享面板打开时不触发快捷键删除。
-- Files 桌面侧栏的 My files、Shared by me、Recycle 文案改为参考稿对应文案；使用独立 ARB 键，通用移动端标签保持各自文案。
-- Home Reading streak 卡改用真实 Reader `currentStreak`，增加最长连续天数统计字段和本地化最长值文案；今日新增数和本周音乐时长仍缺生产统计字段。
-- Reader 元数据抽屉先按已有接口改为封面预览 + Title/Author/Tags/Description；后续 9.5 节记录了新增后端能力和已补齐的样例字段。
-- 本批只修复源码可确认的色值和键盘动作，没有取得配对截图；最终像素与交互状态仍需运行态验收。
-
-### 9.4 本批验证
-
-- `flutter gen-l10n`：通过。
-- 本批涉及的 Dart 文件 `dart format --output=none --set-exit-if-changed ...`：通过，无格式差异。
-- `git diff --check`：通过。
-- `flutter analyze`：退出码 1，仍报告 8 项已有探针/测试驱动诊断；本批修改文件没有新增诊断。`frontend/test_driver/integration_test.dart` 是用户已有改动，本批未修改、未暂存。
-- 未运行测试或桌面截图验收。
-
-### 9.1 尚未达到一比一的差异与后端边界
-
-- **尚未完成像素级或全交互验收。** 本轮没有取得相同窗口尺寸、数据、主题、滚动位置下的参考稿/Flutter 成对截图；字体加载、颜色合成、窗口缩放、各状态动效、弹层尺寸与焦点还原仍未运行态核实。因此不能称“完全一致”。
-- **Movies**：系列桌面详情、主影片 Overview/Files/Subtitles、演员/主创、服务端文件清单、From start/已看/Watchlist 和清空历史撤销均有实现；系列 Watchlist/已看状态、播放器各状态仍未逐态核验。文件 API 只返回真实文件名/大小/媒体信息，不返回规范化路径；没有构造虚假库路径。
-- **影视元数据表单字段**：样例 FilmEditor 展示标题、Genre、Year、Runtime、Rating、Cast、Poster image URL、Synopsis。电影编辑现在覆盖并持久化这些字段，支持恢复首次手动编辑前的元数据；剧集编辑仍按其现有接口只编辑标题与简介。
-- **Photos**：Viewer 分享/删除/恢复 Undo、批量移入 Trash Undo、Trash 清空和 Albums 内联详情已有代码；Viewer 分享抽屉已对齐桌面抽屉容器、标题、区块滚动和固定操作栏，链接与策略继续使用真实 API；批量工具栏与 Add to Album 抽屉按 `.sel-bar` / `Drawer` 样式调整；查看器保留通往既有 PhotoEditorPage 的编辑入口（该业务扩展不在样例查看器按钮清单中，按用户要求保留）。相册管理分享弹窗、批量操作逐态反馈及删除/恢复后的运行态布局仍需截图核验。相册删除接口没有恢复操作，因此相册删除没有样例 toast Undo。
-- **Music 元数据字段**：Now Playing 桌面抽屉有 Cover image URL 与 Restore original，并提交 `coverUrl` / `restoreOriginal`；桌面入口的额外文件上传/移除控件已移除，移动编辑器仍多出 Genre、导入/在线歌词动作，视觉仍需统一。
-- **Reader 剩余差异**：样例元数据字段、书库搜索字段和排序选项已接入并按参考对齐（见 3.5 和 9.17）；桌面顶栏模式与操作入口已按现有 Reader 状态连接，全书搜索已按章节懒加载并可跨章定位；结果粒度尚未映射为原型页码，底栏缺少全书总页数和可靠剩余时长字段；面板状态反馈、页面几何与各状态仍未运行态核验。
-- **Files 分享表单**：allowDownloads、originalQuality、includeLocation 已接入桌面/移动创建与编辑表单、创建/更新/响应 DTO、share_links 持久化和跨端同步；Off、Passcode、自定义口令与 recipientUserIds 收件人选择也已实现。allowDownloads 已由后端执行；普通 Files 的原图网页尺寸副本、EXIF/GPS 剥离仍未执行。
-- **Settings**：桌面天气位置已支持城市联想搜索并将选中地点保存至生产偏好；个人资料可编辑、上传和移除头像。安全、通知、存储、服务等其余视图仍未逐状态验收。
-- Security、Notifications、Storage、Connected services、Backdrop、About、Admin、Auth/Setup 及 Viewer/播放器/抽屉等次级状态仍未逐屏实现和验收。认证保持真实业务流程；其视觉差异需要独立对照修复。
-
-### 9.2 本轮验证
-
-- `flutter gen-l10n`：通过。
-- 本轮所有修改的 Dart 文件 formatter 检查：通过（0 个待格式化文件）。
-- 全部 `lib test` formatter 检查：未通过，报告 30 个既有、未触及的 Dart 文件待格式化；仓库根目录 `.` 检查另因 `build/flutter_plugin_android_lifecycle` 下失效的生成路径而无法遍历。
-- `git diff --check`：通过。
-- `flutter analyze`：退出码 1。修复后本轮改动文件无 analyzer 诊断；剩余诊断来自现有 raster/performance 探针和 `test_driver/integration_test.dart`，其中包含用户已有的 integration driver 修改，本轮未改写该文件。
-- 未运行测试或桌面运行态截图验收；按当前任务约束未执行测试。故目前结论是**核心差异已有一批代码修复，但全量一比一仍未完成**。
-
-### 9.5 Reader 元数据与展示分类跨端接入（2026-11-16）
-
-- Reader DTO 与两端表单现已支持 Type、Series name、Volume number、Tags、Cover image URL、Description 和 Restore original。移动端原有 Publisher/Language/Release date/Rating/Serial status/ISBN 继续保留；另补齐清空 Release date 与 Rating 的显式请求字段，避免空值被当成“未修改”。
-- `readerType`、`seriesName`、`volumeNumber`、`coverImageUrl` 和首次编辑时的原始元数据快照写入 `reader_items.external_ids` JSONB；Tags 继续写 `genres.items`。未新增 Flyway 迁移。保存/恢复均经现有 Reader 条目更新与 `UPDATED` 同步事件，其他平台可读取同一份服务端数据。
-- 书库展示分类使用新 `readerType` 分页过滤，Books 与 Comics/Manga 分组不再误改实际 `contentKind`；后者继续决定文本/漫画解析和阅读器路径。自定义 HTTP(S) 封面由客户端读取，清空后回退到托管封面；上传或选择托管图片会清除自定义 URL。
-- 前端更新包括桌面/移动元数据表单、Reader 模型与请求、封面渲染，以及 Home/Reader 书封调用点；测试替身仅同步新增的可选 API 参数签名，没有新增或执行测试。
-
-验证：`flutter gen-l10n`、改动文件 `dart format`、`git diff --check` 均通过；`mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` 构建成功。`flutter analyze` 退出码 1，报告的 8 项仍为既有探针与用户保留 integration driver 诊断，本轮修改文件无新增诊断。未运行测试、未启动依赖数据库的 API，也未取得 Flutter 与原型的运行态配对截图；因此 JPQL 运行时解析和封面网络运行效果仍未验证。
-
-### 9.6 Movies 元数据字段与恢复跨端接入（2026-11-16）
-
-- 影片编辑抽屉按参考稿补齐 Title、Genre、Year、Runtime、Rating、Cast、Poster image URL、Synopsis，并对齐预览图与底部 Restore original / Cancel / Save 操作。Runtime 接受 `2h 14m`、`134m` 或分钟数，保存为服务端秒数，留空时清除；Year 要求四位数字，Rating 限定 0–10。
-- 影片更新 API 新增 Genre、Rating、Cast、Poster URL 和恢复原始数据参数。Genre/Cast 写入既有 `media_movies.genres` / `cast_members` JSONB；Rating 使用既有 `rating` 列；Poster URL 写入既有 `content_assets.external_url` 并作为 `manualPosterUrl` 保留可编辑源地址。未新增数据库迁移。
-- 第一次手动编辑时服务端在 `provider_metadata` 留存标题、原名、上映日、简介、时长、评分、类型、演员、海报资源和元数据状态快照。恢复操作回写快照并通过现有 `UPDATED` 事件同步其他平台；既有托管海报与远程海报均保存恢复信息。
-- 报告前文 9.1 对影视字段缺后端能力的描述已替换为当前实现状态。主影片详情字段动作现有后端能力；系列已看/稍后观看、影片详情其余结构、播放器以及表单像素级几何仍未完成一比一核验。
-
-### 9.7 本批验证
-
-- `mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile`：通过。
-- `flutter gen-l10n`：通过；`dart format` 修改的 Movies Dart 文件：通过。
-- `flutter analyze` 对本批三个修改的 Movies Dart 文件：通过，无诊断。
-- `git diff --check`：通过。未运行测试、未启动数据库/API、未做成对桌面截图；海报外链加载、数据库 JSONB 恢复行为和运行态抽屉几何仍待验证。
-
-### 9.8 Files 分享策略与跨端接入（2026-11-16）
-
-- Files 桌面创建对话框与移动/桌面 ShareLinkSheet 已展示 Allow downloads；图片/视频额外展示 Original quality 与 Include location。ShareLinkSheet 编辑态加载当前策略并允许更新。
-- 创建/编辑 API、文件分享列表响应与公开预览响应均传递三项策略。`allow_downloads` 已加入 V001 基线，并加入 `deploy/db/upgrade-baseline-20261116.sql` 的存量库补列；已有部署需先执行该脚本再按脚本说明运行 Flyway repair，不能只更新应用镜像。
-- `allowDownloads=false` 时，公开单文件接口不签发下载 URL，文件夹子项不附下载 URL，接受/转存入口返回 FORBIDDEN；公开页面隐藏下载与保存按钮并显示本地化提示。修改策略继续调用现有分享同步事件，因此其它客户端可读取相同设置。
-- `originalQuality` 和 `includeLocation` 在 Files 分享记录与公开预览中已持久化/同步，但普通 Files 文件访问仍签发原资源地址，没有网页尺寸副本生成或 EXIF/GPS 清理。Photos 专用分享已有自己的脱敏映射，不代表普通 Files 分享已完成这两项内容处理。
-- Off 状态、桌面自定义口令输入与收件人选择还未对齐。未运行测试，也未启动数据库/API 或取得成对截图；策略的端到端同步、拒绝路径及新旧数据库升级尚待运行态验证。
-
-### 9.9 Music 封面 URL、原始元数据恢复与跨端接入（2026-11-16）
-
-- Now Playing 桌面编辑抽屉补齐样例的 Edit track / Metadata 层级、Cover image URL 字段、动态封面预览、Restore original 和作用范围提示；移动编辑器也可编辑 URL 与恢复原始数据。URL 在前端和后端校验为不超过 2048 字符的 HTTP(S) 地址，不由服务端抓取。
-- `UpdateMusicTrackRequest` 新增 `coverUrl`、`restoreOriginal`；`MusicTrackDto` 新增 `manualCoverUrl`、`hasManualOverride`。前端模型、请求和恢复命令均使用同一服务端记录；保存/恢复沿用音乐曲目的 `UPDATED` 同步事件。
-- 后续桌面 UI 对照移除额外封面上传/移除控件，封面缩略图改为样例的 96×96 方形及 22px 上边距；歌词标签改为 12px 字段标签并显示行数，文本区对齐 10 行、14px 正文字体、10px 内边距、10px 圆角和强调色焦点环。表单字段间距、标题为空时的禁用保存态、保存成功 toast 与原型交互保持一致；共享桌面文本字段字号同步到样例根字号 14px。
-- 首次人工编辑会保存字段、原封面文件引用、状态和 provider 元数据快照。原始歌词/译文另存为 text 列，避免 2 MB 歌词副本进入 `provider_metadata` 的 512 KB 限制。恢复时回写封面来源、元数据和歌词；新刮削结果会清除旧人工快照。原封面文件在可恢复期间不会被误回收。
-- V001 基线与 `deploy/db/upgrade-baseline-20261116.sql` 均新增快照列。已有数据库需执行升级脚本后运行 Flyway repair，再部署新服务端；只更新应用镜像无法兼容缺列数据库。
-- `flutter gen-l10n`、改动 Dart 文件格式化与后端 `mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` 均通过。全量 `flutter analyze` 退出码 1，残留 8 项既有 integration/raster probe 诊断；当时的 Music 代码与接口桩无新增诊断。未运行测试、数据库/API 或成对截图，因此数据库升级实测与界面逐态、像素级验收仍待完成。
-
-### 9.10 Movies 详情页元数据抽屉对齐（2026-11-16）
-
-- 详情页实际打开的桌面编辑抽屉已改为样例字段与结构：Title、Genre、Year、Runtime、Rating、Cast、Poster image URL、Synopsis；恢复按钮只在存在人工编辑快照时显示，遮罩点击与 Escape 按样例关闭。
-- 表单几何对齐右侧 520px 抽屉、92×138 海报预览、Year/Runtime/Rating 三列和 5 行简介区。Title、四位 Year、0–10 Rating 决定 Save 有效性；运行时长可输入 `2h 14m`/分钟数并映射为秒，Genre/Cast 以逗号拆分为后端数组。
-- 这批没有增加后端字段或数据库迁移：`MovieMetadataUpdateRequest` 已支持 `genres`、`rating`、`cast`、`posterUrl`、`restoreOriginal` 和 `clearRuntime`；桌面详情表单现调用既有 API。保存/恢复通过现有影视 `UPDATED` 事件同步。
-- 前端本地化生成与 Dart 格式化通过；本批最终静态分析和桌面运行态截图仍在验证中。未运行测试、未启动后端/数据库，接口同步与抽屉最终像素尚未实测。
-
-### 9.11 Movies 详情动作与跨设备 Watchlist（2026-11-16）
-
-- 主影片 Hero 新增 From start、已观看/取消已观看、Watchlist 加入/移除；操作结果以本地化 toast 反馈，已看状态同步展示在徽章并隐藏完成进度。
-- From start 通过播放路由参数明确从 0 秒打开，不读取服务端续播位置；普通播放仍沿用原续播策略。
-- Watchlist 从 SharedPreferences 迁为后端系统合集，首次读取时会将当前设备旧清单幂等导入，之后独立于用户手动合集与 Favorites；服务端按用户保存条目，读写端点校验 ACTIVITY_READ/ACTIVITY_WRITE，并发出 VIDEO_COLLECTION 同步事件。前端 VIDEO 实时失效处理刷新清单；同一 Watched 操作使用现有播放进度端点和 MEDIA_PLAYBACK_PROGRESS 事件。
-- `V001__init_schema.sql` 扩展合集类型约束并新增每用户唯一 Watchlist 索引；`deploy/db/upgrade-baseline-20261116.sql` 为已部署数据库补齐约束/索引。存量库需执行 upgrade-baseline 后运行 `flyway repair`，再部署新后端；仅更新前端不会有跨端清单功能。
-- Flutter 定向格式检查（21 个 Dart 文件）、ARBs 本地化生成、变更 Dart 文件定向静态分析（无问题）和 `mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` 均通过。未运行测试、未连接真实数据库/API 或进行成对窗口截图；像素级和完整状态验收仍未完成。
-
-### 9.12 Movies 详情剧情、演职人员与文件页签（2026-11-17）
-
-- 电影详情补齐 Overview / Files / Subtitles 页签；Overview 显示服务端实际剧情、演员、导演/编剧元数据，并提供三行折叠与展开；窄窗口改为单列。
-- Files 页签显示真实文件名、大小、版本、编码和主版本状态，并纳入已生成的派生视频版本。新增 `GET /api/v1/video/items/{videoItemId}/files`，按现有媒体可读授权检查条目，只返回文件名/媒体信息，不返回规范化路径；同一响应包含现行服务端转码开关。已启用时可创建真实转码任务并收到带“查看任务”动作的提示，关闭时按配置显示说明；VIDEO_ITEM 实时事件会刷新已打开的文件清单。
-- 本批只增加 DTO 与查询 API，没有数据库迁移；系列详情仍由专用页面承载 Episodes / Files / Subtitles。
-- `flutter gen-l10n`、改动 Dart 文件格式化、定向 Dart 静态分析及 `mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` 均通过。未运行测试、未连接真实数据库/API 或进行配对窗口截图；运行态权限组合、文件查询和像素对照仍需验收。
-
-### 9.13 Photos 幻灯片查看器动效（2026-11-17）
-
-- 依据 `src/desktop/desktop.css:361`，幻灯片模式下照片以 4 秒 ease-out 从原始比例缓推至 1.14 倍并轻微平移；照片切换时按照片 ID 重新开始动画。
-- 顶栏和底部胶片条在幻灯片模式下随查看器 hover 状态以 600ms 淡入/淡出，隐藏时不接收点击；默认展示控件的非幻灯片行为不变。
-- 新增 `DesktopMotion.viewerKenBurns` 与 `viewerChrome` 动效令牌；系统启用减弱动效时照片缓推关闭。
-- 定向 Dart 静态分析、格式化与 `git diff --check` 通过。未运行测试、未启动桌面应用或取得 Flutter/原型配对截图，因此实际图像裁切边界、hover 命中与整体视觉仍需运行态核验。
-
-### 9.14 Photos Albums 内联详情（2026-11-17）
-
-- 桌面 Album 卡片现在在当前 Photos 页面内展开详情，保留顶部 Library/Albums/Places/Favorites/Trash 分区栏；详情区域按参考稿展示返回 Albums 链接、大标题、照片数与集合说明、Share/Delete album 操作及无标题/无选择控件的 justified 照片墙。New album 改为 420px 右侧抽屉，只保留名称字段和集合说明；相同名称提示、禁用创建与成功 toast 均有真实实现，创建后停留在 Albums 架。
-- 详情照片来自现有相册 API，继续按服务端分页读完后才允许打开图片，打开时设置 Album 浏览范围，Viewer 的上一张/下一张保持在当前相册。相册详情的 Share 管理弹窗仍使用生产分享链接管理与复制流程；删除继续调用真实相册 API，确认后显示反馈，照片本身不会删除。
-- 新增中英文集合说明文案；把 Photos 页面内的回收站/地点/照片墙展示组件拆到 `desktop_photos_sections.dart`，主页面降至 800 行以内。
-- `flutter gen-l10n`、涉及 Dart 文件格式化、定向 Dart 静态分析和 `git diff --check` 通过。未运行测试或配对窗口截图；Share 对话框的视觉与样例直接复制链接的流程不同，后端当前也没有相册删除恢复接口，所以无对应 Undo toast，这两项仍是差异。
-
-### 9.15 Photos 分享抽屉样式与页眉计数（2026-11-17）
-
-- Viewer 的 Photos 分享抽屉保留生产链接管理能力，容器改为 330px 桌面抽屉宽度、主题 panel-solid、左侧 22px 圆角、主题细描边与阴影；标题区、滚动内容区和固定底栏按桌面抽屉结构组织。打开时使用参考稿 40% 遮罩、4px 背景模糊和 320ms 遮罩淡入，抽屉以 420ms 原型曲线滑入；关闭遮罩 300ms 淡出。有效期、复制成功、设置开关和文字颜色接入桌面强调色/排版 token。只从桌面 Viewer 启用该样式，移动分享面板和幻灯片入口不切换桌面视觉。
-- 分享表单的接口与字段未改：继续读取/创建/更新/撤销真实照片分享链接，保留二维码/复制、有效期、提取码、位置及原图质量控制。相册详情的 Share 管理弹窗是另一个入口，本次未将其改为 Viewer 抽屉。
-- Photos 页眉此前把第二个占位参数显示成相册数，与样例 `Photos.tsx` 的“photos · videos”不符。现改为显示照片数与视频数；视频数来自现有 `movieDashboardProvider` 的 movieCount + episodeCount，因此不新增后端 DTO/API 字段，也不会使用原型固定演示数字。
-- `flutter gen-l10n` 成功；8 个 Dart 文件格式化无差异；5 个相关 Dart 源文件定向 `dart analyze` 输出 No issues found；`git diff --check` 通过。未运行测试、未启动桌面应用/后端、未取得配对截图；抽屉细节、窄窗口响应和两类统计在真实服务数据下的最终画面仍需运行态验收。
-
-### 9.16 Photos 批量工具栏、加入相册和编辑入口（2026-11-17）
-
-- 批量操作条按 `desktop.css:.sel-bar` 固定在播放条预留空间上方（104px），使用 30px 入场位移、500ms spring、30px 背景模糊、pop 表面与 18px 圆角；动作间距和关闭按钮尺寸按桌面控件统一。原先 90px 底距及无背景模糊与参考值不符。
-- 批量 Delete 成功后显示 Undo；撤销逐张调用现有恢复 API，并提供本地化的恢复数量反馈，失败时保留清晰的错误 toast。
-- Add to Album 不再使用定高对话框；改用 420px 右侧抽屉，首项为 New album，后续列出真实相册封面与数量。选中照片在打开抽屉时清除；创建新相册后按后端 API 创建相册并加入所选照片，成功 toast 显示名称和加入数量。
-- 按用户要求，桌面 Viewer 增加指向既有 `/photos/:photoId/edit` 的 Edit 操作，PhotoEditorPage、编辑版本 API 和恢复能力继续复用；没有改动编辑数据契约或移除原功能。该编辑按钮是按用户要求保留的生产能力，原型查看器未列出此动作，后续视觉验收需单独确认其摆放。
-- `flutter gen-l10n` 成功；8 个改动 Dart 文件格式化无差异；7 个相关 Dart 源文件定向 `dart analyze` 输出 No issues found；`git diff --check` 通过。未运行测试，也未启动桌面运行态/取得配对截图。抽屉关闭时序、长相册列表滚动、创建后同步和各种失败反馈仍需运行态核验。
-
-### 9.17 本轮剩余项修复（2026-11-17）
-
-- Reader 搜索现覆盖 title、author、series、description 和 tags；排序切换为 Recently read、Title、Author、Progress、Recently added，并使用参考稿 Select 控件。
-- Files 桌面分享补齐 Off / Anyone / Passcode、自定义或自动口令、收件人搜索选择；前端将 password 与 recipientUserIds 传入现有分享创建 API，后端提供受 FILE_WRITE 授权保护的用户目录查询。Off 会撤销当前资源的活动分享链接。触控设备拖动改成长按触发，鼠标保持即时拖动。
-- Settings 天气城市输入增加防抖联想、取消旧请求与加载/无结果/离线反馈；地理编码请求使用不带 OmniNest 认证令牌的独立客户端。Profile 补真实头像删除 API，清除用户头像引用、发出 USER_PROFILE 同步事件并释放旧文件。
-- Movies 清空历史新增 Undo：保留清空前进度快照，通过真实播放进度 API 恢复并刷新。Photos 查看器主图与胶片缩略图加载失败时显示主题图片图标。
-- Admin 桌面 Identity 分区在同页纵向展示 Users、Roles 和 Permissions；Storage 同页展示挂载位置与外部账户，并依据当前权限请求各面板。移动端原有页签布局保持不变。
-- 更新了新增 repository 契约对应的测试替身；未新增或运行测试。用户已有 frontend/test_driver/integration_test.dart 修改一并保留在提交内容中，并移除无用的 integration_test.dart import。
-- Files 分享的 originalQuality=false 网页尺寸副本和 includeLocation=false EXIF/GPS 剥离仍未实现；Home 统计语义、Admin 表单细节、Auth/Setup、播放器和其余模块次级状态仍有待处理差异。全屏逐状态配对截图和像素/交互验收仍未完成，因此不能标记为一比一通过。
-- 验证：flutter gen-l10n 成功；改动的 32 个 Dart 文件 formatter 检查无格式差异；后端 `mvn -f backend/pom.xml -pl omninest-system -am -DskipTests compile` 成功；git diff --check 通过。全量 `flutter analyze` 退出码 1，仅报告 7 项未触及的 integration raster/performance 探针诊断，改动文件无诊断。未运行测试，也未取得配对桌面截图。
-
-### 9.18 Setup 按原型源码逐项核对（2026-11-17）
-
-- 对照来源为原型源码 `src/desktop/Setup.tsx`、`setup.css`、`Select.tsx`、`select.css`；参考页面通过源码目录的 `npm run dev` 提供，不使用 `dist` 构建产物。
-- 表单几何按源码的 900px 响应断点、品牌区/表单卡两列、双列字段、右上角语言胶囊和分组标题核对。修正 Flutter 断点依据，使其按视口宽度判断；品牌区在 900px 以下隐藏。
-- 两个语言控件与原型一样共享当前语言状态：选择右上角语言或表单默认语言都会同步另一处，并提交 `zh-CN` / `en-US`。时区列表按浏览器 `Intl.supportedValuesOf('timeZone')` 提供可搜索 IANA 选项，标签把下划线替换为空格，选项显示当前 UTC 偏移；默认取浏览器时区。非 Web 平台使用内置常用时区回退列表。
-- Setup 字段与真实接口逐项映射：安装令牌通过 `X-Setup-Token` 请求头传递；请求体字段为 `username`、`displayName`、可空 `email`、`password`、`instanceName`、`defaultLocale`、`defaultTimezone`，并在启用 TOTP 时提交 `totpSecret` / `totpCode`。确认密码只用于前端一致性校验，不是接口参数；未发现请求字段缺失或命名不一致。服务端认证与 TOTP 仍按真实生产流程执行。
-- 本轮新增修正语言控件联动和视口断点；目标 Dart 文件定向静态分析、格式检查与 `git diff --check` 通过。参考页面已使用 `npm run dev`；未取得 Flutter 与原型成对截图，因此这里只记录源码层面已对齐，不宣称运行态像素验收通过。Native Flutter Desktop 当前使用常用时区回退列表，完整浏览器 IANA 列表仅在 Web 环境动态读取；若要求 Native 下拉选项也完全相同，这仍是待补差异。
-
-### 9.19 Setup / Login 窗口与下拉外观修正（2026-11-17）
-
-- 对照 `desktop.css`、`Select.tsx` / `select.css` 和 Flutter 桌面源码，确认 Setup 下拉触发器此前用 `bg2`（样例为 `bg`），焦点环缺失，已选项在活动态也没有样例的 accent 16% 底色；已逐项校正。时区弹层此前固定 180px，现按触发器实际宽度展开，最小 180px、右边界仍钳在视口内；悬停描边按样例与 `line2` 混合。
-- 重新核对 `.setup-grid` 的最终 CSS 后修正了此前过宽的表单几何：1120px 最大宽度现在包含响应式横向内边距，宽屏按 380px 品牌列 / 6vw 间距 / 最宽 620px 表单列计算，并在 900px 断点切为单列；两步验证 QR 卡也按该断点改为竖排。卡片与控件使用的深浅底、分隔线及强调色都直接映射样例 CSS 令牌。
-- 根构建器原先只在已认证时创建 `DesktopShellHost`，因此 `DesktopWindowChrome` 在 `/login`、`/setup` 等未认证路由根本不会构建。原生桌面 standalone 路由现由轻量主题宿主挂载 `DesktopWindowChrome`，保持独立页面，不创建工作区；可见最小化/最大化/关闭按钮、46px 拖拽区、双击最大化和边缘缩放区。登录与安装两页因此一并补上窗口能力。Setup 右上角移除重复语言控件，改为主题切换按钮。
-- Setup 页面仍可在窗口较矮时滚动，但隐藏原生自动滚动条；时区选项列表继续保留独立滚动条。表单字段与卡片沿用 DesktopSkin 映射到的原型 `bg` / `raise` / `line2` / accent 令牌。
-- 原型以 `npm run dev -- --configLoader runner --host 127.0.0.1` 从源码启动，未使用 `dist`。标准 Vite config bundler 因参考目录只读而无法写 `.vite-temp`，改用 runner 后服务器启动成功；内置浏览器连接该本机地址超时。`flutter devices` 与 `flutter build windows --debug --no-pub` 在本环境均无输出卡住，故没有可用的 Flutter Windows 成对窗口截图，窗口按钮命中/拖动尚未实机确认。此轮运行的定向 `flutter analyze` 无问题、Dart 格式检查与 `git diff --check` 通过；未运行测试。
-- 后续按浅色运行截图复核材质：原型 `--raise` 是叠在纯底色上的 4.5% 色层，而 Flutter 窗口合成时露出底层会呈玻璃感；Setup 卡改为先在 `--bg` 上合成同色值再以不透明表面绘制，阴影改为 `setup.css` 的单向下投影。副标题与 2FA 说明色调整为原型 `--text2`。语言胶囊桌面端在 46px 标题栏内垂直居中，与三键组保持 28px 间距；Web 仍按原型的 16px 顶距、28px 右距。窗口按钮与拖拽/缩放只在原生 Windows/Linux/macOS 启用，Web 标题栏和移动布局不显示这些原生窗口操作。
-
-### 9.20 Setup 焦点语义异常与右上角控件（2026-11-17）
-
-- 输入框点击日志的 `SemanticsNode._replaceChildren` / `node.built` 断言与 Flutter 官方 [OverlayPortal 语义树问题 #187198](https://github.com/flutter/flutter/issues/187198) 的异常相同。Setup 的未认证 standalone 路由此前被 `DesktopShellHost` 外层 `Overlay.wrap` 包住，形成额外 Overlay + Router Navigator + OverlayPortal 弹层的组合；现改为 `DesktopThemeScope` 直接挂 `DesktopWindowChrome`，不再创建这一层外部 Overlay。窗口控制的提示文案改为 Semantics label，保留无障碍名称，不用 Tooltip 再引入 Portal。
-- Setup 右上角移除独立语言切换，保留表单“默认语言”字段作为唯一入口；右上角改为浅色/深色切换，原生桌面在标题栏中垂直居中并留出窗口按钮间距，Web 保持独立右上角位置。
-- 窗口 controls 保留样例每键 46×46 命中区；最小化、最大化/还原、关闭图形改用 15/14px、1.8px 描边的样例路径，关闭悬停色改为 `#c4423b`。仅原生 Windows/Linux/macOS 构建 controls，Web 与移动端不显示。
-
-### 9.21 Flutter 输入焦点语义树断言与相似弹层排查（2026-11-17）
-
-- 新的 Windows Debug 日志确认程序构建启动成功，但语义树刷新期间多次触发 `SemanticsNode._replaceChildren` 的 `!child.attached` 断言，并出现 `node.built` 断言。日志没有指出具体应用组件；异常与 Flutter 开放问题 [OverlayPortal 语义树问题 #187198](https://github.com/flutter/flutter/issues/187198) 的症状相似，因此这里只按 Setup/Login 路径处理，不能据此推断全应用每个图标按钮都需要替换。
-- 撤回全库图标按钮包装。仅在 Setup/Login standalone 路由关闭框架 Tooltip 的悬浮层，并为密码显示、TOTP 密钥复制等表单动作保留 `Semantics.tooltip` 标签；普通 `IconButton` 继续使用 Flutter 原生实现。桌面 `DesktopSelect` 改用 `OverlayEntry`，保留搜索、键盘导航、位置钳制和收起后焦点返回，以消除 Setup 时区/语言下拉的直接 `OverlayPortal` 路径。
-- 相似机制扫描发现：Flutter `MenuAnchor` 在 Setup 的窄屏备用页面与通用 `AppDropdown` 中仍被使用，Music 音量面板也保留项目直接 `OverlayPortal`；各模块仍有常规 Flutter Tooltip。本次日志没有调用栈把问题定位到这些控件，故保留原生行为，列为后续若在对应页面复现时的追查点，不做全平台批量替换。
-- 验证：`flutter analyze lib --no-pub` 无问题；6 个改动 Dart 文件的 `dart format --output=none --set-exit-if-changed` 无格式差异；`git diff --check` 通过。Windows Debug 构建与 `flutter --version` 在本轮启动后均长时间没有任何输出，随后手动终止，因此不记为构建通过。按仓库规则未运行测试。桌面 UI 控制会话审批超时，尚未点击输入框作运行态复测；当前修复是定向源码规避，焦点交互结果仍待实机确认。
-
-### 9.22 Hero 圆角、Movies/Photos 布局与启动重绘（2026-11-17）
-
-- 逐个核对使用 Hero 圆角的桌面卡片：Home、Movies 影院轮播、Photos 地点地球、Reader 继续阅读/洞察、Reader 书本详情。修复图片/子内容越界未裁切的容器；边框移到 `foregroundDecoration`，让内容绘制后仍完整显示圆角描边。Music Hero 本已使用该方式。Movie/Series 详情是全屏沉浸头图，样例本身没有圆角卡片，未强行套圆角。
-- Movies 页面移除 Flutter 顶部七项分类 Seg，保留原有电影/剧集/动漫内容轨道；分区深链仍打开对应列表，子列表仅显示“返回 For you”动作。空态判定补入 Anime，并避免 dashboard/center 首次加载期间提前显示空状态。路由参数改变时同步切换 tab，避免同一页面实例停留在旧列表。
-- **参考版本冲突**：用户描述样例没有 Movies 顶部分段；当前被指定目录的 `src/desktop/Movies.tsx:19,65–66` 明确声明和渲染该分段。实现按用户最新明确要求去掉它，但需确认此目录是否已更新到用户实际看的参考版本；目前不宣称该细节与目录源码一致。
-- Photos 复核 `DesktopPageHead` 换行行为：操作区原先换到第二行后默认靠左；新增仅供 Photos 使用的右对齐窄屏布局，宽屏继续与标题同行。其它页面的通用页头策略不变。
-- 启动/首页性能的源码优化包括：Web 字体准备和 SharedPreferences 读取并行启动；桌面环境色背景订阅改为只选择当前模块实际使用的封面 URL；Home provider 订阅改为选择指标、继续播放目标、当前播放文案等实际消费字段，降低无关模块数据变化引发的页面重建。没有更改画面内容、尺寸或动效。
-- 本批运行态对照尝试：按要求从原型目录执行 `npm run dev`（未用 `dist`）；Vite 报 8443 已被占用，当前桌面自动化无法列出可连接浏览器，因此本批不能从该会话取得新截图。
-- 本批涉及 `bootstrap.dart`、桌面 Shell、Home/Movies/Photos/Reader Hero 与共享页头。验证：改动 Dart 文件 `dart format` 已执行；`flutter analyze lib --no-pub` 通过（0 issues）；`git diff --check` 通过。未运行测试。没有运行 Flutter profile/Windows 构建，故启动延迟的实际前后毫秒和最终帧率没有测量；其它页面性能热点及像素级圆角仍需运行态逐屏确认。
-
-### 9.23 Music Home 与曲目列表对齐（2026-11-17）
-
-- 对照 `src/desktop/Music.tsx`，Home 删除原型没有的独立 Tracks 轨道；Albums / Playlists 保留 `See all (n)` 入口并切换到各自分区，空数据时仍展示分区标题和入口。
-- Up next 改为原型标题与 `Open queue` 操作；操作打开桌面 Dock 的 Queue 页签。队列行复用曲目表格（封面、艺人、专辑、时长、操作），保留服务端队列索引播放，不再以纯文本行代替原型表格。
-- Tracks 页补 All / Favorites 计数筛选、Title / Artist / Album / Duration 排序和 20 / 50 / 100 行分页；Favorites 页维持原型独立收藏列表，不重复显示 Tracks 工具栏。搜索无结果时可清除筛选。
-- 曲目行单击打开详情 Dock，双击播放；悬停时序号位显示播放/暂停按钮，右键菜单补详情与元数据/歌词编辑入口，动作继续使用现有后端与详情实现。
-- 验证：`flutter gen-l10n` 成功；Music 的 3 个 Dart 文件 `dart format` 无格式差异；定向 `flutter analyze --no-pub` 无问题。尚未运行测试、启动桌面程序或取得原型/Flutter 配对截图；键盘/鼠标状态、窄宽度下工具栏换行、完整曲库分页与真实队列反馈仍需运行态核验。Home 的 Library/Listening 统计语义，以及播放器和元数据抽屉的全状态对照仍未关闭。
-
-### 9.24 Home 阅读最长连续天数统计对齐（2026-11-17）
-
-- 对照 `src/desktop/Home.tsx` 的 Reading streak 卡，保留真实当前连续阅读天数作为主值，并补上原型副标题展示的历史最长连续天数。
-- Reader 统计响应新增 `longestStreak`；后端按实例时区提取去重阅读日期，并用 PostgreSQL gaps-and-islands 聚合最长连续天数，只返回一个聚合值，不将全量会话记录加载进 JVM。前端模型和首页副标题消费该字段，英文/中文分别显示 `Longest: N days` / `最长：N天`。
-- 首页 Library 总数已通过现有音乐中心状态补入真实音乐 `trackCount`，不再漏计音乐曲目；Files 是否应计入该指标仍需与原型所指的 Library 统一定义。
-- Library 今日新增与 Listening 本周小时仍没有完整生产统计契约。音乐历史请求当前可传 `playDuration`，但 Flutter 播放流程没有可靠地累计并回写实际播放时长，因此暂不将时长字段视为可用统计来源。
-- 验证：`flutter gen-l10n`、5 个改动 Dart 文件的格式检查、Reader/Home/Music 投影文件定向 `flutter analyze`、`mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` 与 `git diff --check` 均通过。未运行测试；真实 PostgreSQL 执行和数据结果尚未验证。未取得原型和 Flutter 配对截图，最长天数副标题的最终宽度/截断和全卡几何仍需运行态验收。
-
-### 9.25 Reader 桌面沉浸阅读控件（2026-11-17）
-
-- 对照 `src/desktop/ReaderView.tsx` 与 `src/desktop/desktop.css`，桌面宽窗阅读器新增 Book / Swipe / Scroll 分段切换，并映射至已有 `readingMode` 与 `pageTurnMode`；当批首次实现时 Web 页模式仍受旧产品规则限制，后由 9.27 按用户确认调整为桌面 Web 可用。
-- 桌面顶栏现在依序提供搜索、目录、添加/移除书签、批注与阅读设置入口。纸页双模式采用原型深色书桌面，Scroll/Swipe 采用阅读主题纸色渐隐；颜色取自 Reader 主题色板，设置页和章节切换遮罩同步使用阅读画布底色。
-- 桌面底栏改为原型居中进度轨道，显示当前章节页码（分页模式下）或章节位置、真实全书进度百分比，并支持拖动跳转。原型显示全书总页数范围及剩余分钟；当前 Reader 数据没有可靠的全书页数与阅读速率统计，本次不生成推算值。
-- 本批变更包括 `reader_view_desktop_top_bar.dart`、Reader 顶/底栏、阅读设置与色板、阅读页面布局，以及英文/中文 ARB 和生成的本地化类。验证：`flutter gen-l10n` 成功；Reader 相关文件定向 `flutter analyze --no-pub` 与全 `lib` 分析均无问题；改动 Dart 文件格式检查与 `git diff --check` 通过。全仓 `flutter analyze --no-pub` 仍报现有 `desktop_movies_view_test.dart:164` 引用未定义 `desktopMoviesSegTabs`，并有 7 条既有 probe lint；全 `lib` 格式扫描报告 24 个未修改文件格式不同，未批量格式化这些无关文件；含 `build/` 的全仓格式命令还遇到已消失的 Gradle transform 子目录。未运行测试或 Flutter Windows 程序，未取得 Flutter 与原型配对截图；窄宽模式断点、面板打开/关闭反馈和视觉几何仍需实机核验。
-
-### 9.26 Reader 搜索输入响应与延迟（2026-11-17）
-
-- 章内搜索改为使用 `MotionToken.fast` 防抖；12,000 字符及以上的原生端文本扫描通过 `compute` 放到后台 isolate，较短内容和 Web 仍走轻量同步扫描。输入变化时取消旧定时器，并用搜索代数丢弃过期结果；命中上限和原字符串偏移语义保持不变。
-- 这项优化先降低了长章节扫描造成的输入延迟；整本书搜索随后由 9.28 增补。
-- 验证：`dart format lib/features/reader/presentation/widgets/reader_find_panel.dart` 无格式变更；`flutter analyze --no-pub lib/features/reader/presentation/widgets/reader_find_panel.dart` 无问题。未运行测试；目前没有输入长章节的实际计时或 Windows profile 数据，也未做配对截图。
-
-### 9.27 桌面 Web Reader 阅读模式（2026-11-17）
-
-- 按用户确认，以桌面原型为准，覆盖原来的 D3 Web-only-scroll 决策。`supportsPageMode` 现在允许桌面浏览器及原生平台使用分页，Android/iOS 手机浏览器继续滚动模式；书本/漫画顶栏、底栏和阅读设置共用此平台能力判断。
-- Web 分页使用现有 PageNavigator，不改变章节、进度或后端字段。大型章节的分页测量仍受 Web 单线程约束，实际卡顿程度需要在桌面浏览器运行态测量。
-- 本批源码与 Reader 搜索优化一起验证：改动文件 `dart format` 无格式差异；全 `lib` 的 `flutter analyze --no-pub lib` 无问题；`git diff --check` 通过。未运行测试或浏览器截图。桌面 Web 分页的实际大章节滚动/分页负载、键鼠手势与几何仍需运行态核验。
-
-### 9.28 Reader 整本书搜索（2026-11-17）
-
-- 按参考面板文案开放整本书搜索，输入至少两个字符后逐章加载并搜索块模型纯文本；查询改变后以 generation 取消后续读取，最多展示 60 个命中，与原型数量上限一致。
-- 命中只保存短上下文与源字符偏移，不把全文保留在结果里。阅读器为全书搜索增加 3 章、每章不超过 16,000 字的有界语料缓存；其余章节解析后释放，不触发布局测量。超长原生章节解析/扫描使用后台 isolate，桌面 Web 受 Flutter Web 单线程限制，首次全书检索的总等待时间仍需实测。
-- 命中包含章节标题与段落上下文，点按会定位到同章偏移或切到目标章节后定位；读不到的章节会显示部分搜索提示。原型按动态分页后的一页一条命中并显示页码；Flutter 当前按出现位置列出、没有全书页码，仍有结果粒度差异。英文/中文搜索标题、输入提示和错误提示进入 ARB。
-- 验证：改动 Dart 文件 `dart format --output=none --set-exit-if-changed ...` 无格式差异；`dart analyze lib` 无问题；中英文 ARB 用户文案键集合一致且新增键无重复；`git diff --check` 通过。`flutter gen-l10n` 未能运行：Flutter SDK 尝试创建 `D:\Development\flutter\bin\cache\lockfile` 时被文件系统权限拒绝，因此已按 ARB 手动同步生成的本地化接口并由 Dart 分析确认编译。未运行测试或浏览器配对截图；桌面 Web 的首次全书检索耗时仍需真实曲库测量。
-
-### 9.29 Home 统计数据契约复核（2026-11-17）
-
-- 参考首页 Library 副文案为 `+N today`，Listening 为本周小时数；当前 Flutter 使用真实的模块总量和最近播放条数，不是原型中的这两种口径。
-- `MusicDashboardDto` 只有 `playHistoryCount`，没有按周汇总的实际秒数。前端起播时写入播放历史的 `playDuration` 默认值为 0，因此不能用现有计数推导聆听时长。各媒体 Dashboard 也没有跨模块的“今天新增”总计字段。
-- 这些统计不能用播放次数乘曲目时长等方式估算；若要做成原型的实时生产数据，后续需要在播放会话结束/暂停路径记录实际播放秒数，并提供按时间窗聚合的后端字段，同时确定跨模块新增统计的时区边界。
-
-### 9.30 Photos 缩放条与桌面进度滑块（2026-11-17）
-
-- 对照 `src/desktop/Photos.tsx:22,54-58` 与 `desktop.css:93-99,338`：缩放范围为 150–320、初始值 210，轨道宽 120px、图标间距 10px；滑钮为常显强调色圆点与 4/7px 悬停光圈，缩放轨道不显示已填充段。原先 Flutter 把 0 当最小值，210 的滑钮落在约 66% 而非约 35%；现改为实际 min/max，并按滑钮半径 inset 映射可拖范围。
-- 桌面 `DesktopSlider` 新增可配置范围、轨道填充、滑钮颜色/尺寸/常显/光圈及键盘步幅；原有进度滑块默认继续显示强调色已完成段、抬高的悬停轨道和悬停滑钮。`DesktopTheme` 为 `AppSlider` 明确设置强调色完成轨道、弱化未完成轨道、4px 轨道和白色滑钮，使未覆盖模块主题的拖拽进度条也有清晰进度层次；播放器和 Reader 保留各自明确的语义色。
-- 验证：3 个改动 Dart 文件已格式化；全 `dart analyze lib` 无问题；`git diff --check` 通过。未运行测试，未取得运行态配对截图；窄窗口下整组页头操作的最终几何仍需实机核验。
-
-### 9.31 Photos 分类栏与缩放条同排（2026-11-17）
-
-- 用户指出 9.30 只校正了滑块内部位置，没有固定缩放条相对分类栏的位置。重新对照 `desktop.css:127,338` 后发现 `DesktopPageHead` 把 `.head-actions` 实现成 `Wrap`，并在宽屏 Row 中把标题与操作区各分配一半宽度，导致操作区内部再次换行，缩放条掉到分类栏下方。
-- 操作区现用不换行 `Row`，在宽屏按内容宽度置于页头右侧；需要折行时只将整组（分类栏 + 缩放条）放到标题下方并靠右。组内顺序保持 Seg 后接缩放条，组间距 10px，符合原型 `.head-actions` 的单行布局。
-- 验证：`desktop_surfaces.dart` 已格式化；全 `dart analyze lib` 无问题；`git diff --check` 通过。未运行测试或配对截图；运行窗口中的最终几何仍未实机确认。
-
-### 9.32 桌面骨架屏与管理存储类别分布（2026-11-18）
-
-- 对照 `src/desktop/polish.css` 的 `.sk-on` 与 `@media (prefers-reduced-motion: reduce)`：骨架基色改为暗色 `bg2/text` 9% 混合、浅色 8% 混合；扫光改为暗色白色 7.5%、浅色白色 85%。Admin 桌面摘要、用户列表和通用异步区加载时保留指标卡/14 日图表/状态分组/操作行轮廓；桌面 Admin 表格等待用圆头像加双文本条占位，移动端仍用 spinner。
-- 对照 `imgs/dark/33-admin-storage.png`，管理 Storage 的 Usage 区现有真实总使用量、类别分段条和两列图例。系统摘要 API 通过 `file_objects.mime_type` 汇总对象字节到 video/photos/music/docs/other，因此分段和系统对象总用量使用同一口径；原型截图的 100 GB 系统容量没有后端字段，不将该示例数值写成生产数据，当前仅显示实测总用量。
-- Movies 分类依据用户当前要求与 `src/desktop/Movies.tsx:20,67`、`imgs/dark/45-movies-category.png` 已确认为七项：为你推荐、电影、剧集、动漫、收藏夹、待看清单、历史。旧 9.22“移除顶部分类栏”是历史记录，已在交接文档修正，不再作为当前实现决策。
-- 验证：目标 7 个 Dart 文件 `dart format` 无变化；全 `flutter analyze --no-pub lib` 通过（0 issues）；`mvn -f backend/pom.xml -pl omninest-system -am -DskipTests compile` 与 `mvn -f backend/pom.xml -pl omninest-file -am -DskipTests compile` 均 BUILD SUCCESS。未运行测试。浏览器/桌面本机截图通路当前不可用，仍未得到参考和 Flutter 的配对运行截图；所有页面的空、错误、加载、窗口尺寸、抽屉焦点返回和 hover/focus 状态仍需实机逐项核验，不能据此宣称全量视觉通过。
-
-### 9.33 Movies 初始骨架与管理反馈状态（2026-11-18）
-
-- Movies 将初次加载和真实空库分开：影院 Hero 在请求未返回时用整块渐变骨架保留高度，电影/剧集/动漫等分类显示对应网格骨架，“为你推荐”显示继续观看与海报轨道骨架；等请求完成后才进入电影库空态。数据请求失败时的整页错误反馈和 Hero 运行几何仍待桌面验收。
-- Admin Overview 的 Items 副文案改用真实近 7 个自然日上传量；14 日图表在请求中显示 14 根位置匹配骨架，失败时给本地化原因和 Retry。ACTIVE 账号数仍不能当作在线会话数；后端没有汇总在线用户字段。系统用量卡按原型改标题为 Usage/用量，待数据时显示分段条与图例骨架，失败时可重试；真实系统容量上限尚无字段，不把原型示例的 100 GB 写入数据。
-- 验证：`flutter gen-l10n` 成功；本批改动 Dart 文件 `dart format` 完成；全 `flutter analyze --no-pub lib` 通过（0 issues）。未运行测试；未取得参考/Flutter 配对截图，故分类切换、骨架扫光和失败反馈仍未运行态验收。
-
-### 9.34 桌面异步占位与全站壁纸范围修复（2026-11-18）
-
-- Files 首屏的表格和网格分别保留真实行/卡片布局骨架；首载失败在两种视图显示本地化错误与重试。Settings 安全会话首载显示三行骨架，刷新失败保留旧数据，首次失败提供重试。Backdrop 的首载占位按参考页保留启用预览、素材库网格、展示设置三段结构，首载失败可重试。
-- 将桌面壁纸范围判断统一为可复用路由谓词；范围外路由恢复环境光，避免壁纸关闭后背景意外变成实底。沉浸式影视、照片、音乐播放与 Reader 页面现在也创建桌面壁纸层和 `BackdropGroup`，全站作用范围不再因为绕过常规工作区而失效。Standalone 登录与安装页不读取需认证的壁纸数据。
-- 详情坞的主/次操作从固定 Row 平分改为按自然宽度排列的 Wrap，与样例 `.row-actions { flex-wrap: wrap }` 一致，缩窄内容时按钮会下移而不会挤压标签。该调整针对用户报告的 6.8px RenderFlex 溢出；由于本轮没有可访问 Flutter 桌面窗口，错误是否完全消失仍待运行态确认。
-- 验证：当时 58 个变更 Dart 文件 `dart format --output=none --set-exit-if-changed` 无格式差异；`dart analyze lib` 通过（0 issues）。未运行测试；Vite runner 日志显示原型源代码服务器启动，但 Edge 与只读 HTTP 请求连接本机端口超时，未取得原型/Flutter 配对截图。Windows Computer Use 随后被 Escape 中止，未继续控制窗口。窗口展开/收缩时已知 6.8px RenderFlex 溢出尚无可访问运行态窗口复现，仍未标记关闭。
-
-### 9.35 Connected services 页面结构收敛（2026-11-18）
-
-- 依照 `src/desktop/Settings.tsx` 的 `services` 分支和 `imgs/dark/27-settings-services.png`，移除额外的外部存储账号卡，恢复 Music platforms 与 Other 两卡结构；音乐平台行去掉样例中不存在的图标块和连接状态胶囊。外部存储仍从 Files 与 Admin Storage 管理。
-- Last.fm 服务端尚未实现，保留清楚的不可用说明和未配置状态，不显示可启用但无法生效的开关；这与原型的演示开关仍有明确业务差异，待真实服务能力加入后再映射交互。
-- 验证：63 个变更 Dart 文件格式检查无差异；`dart analyze lib` 无问题；两份 ARB 可解析。未运行测试。Connected services 仍需 Flutter 实机配对截图确认卡片宽度、纵向位置与行高。
-
-### 9.36 Admin Configuration 结构与默认值反馈（2026-11-18）
-
-- 依照 `src/desktop/AdminConfig.tsx` 与 `more.css:48-70`，配置搜索/筛选移至独立顶卡；分组导航轨和参数列表在下方并列，窄宽时分组切为横向筛选；历史卡并入列表区。分组标题加入类别图标，参数行改为本地化说明与独立配置键。
-- 恢复默认值与偏离默认值计数需要服务端默认值。`ConfigEntryDto` 新增非敏感默认值、敏感标志和偏离默认值状态；敏感配置默认值恒返回空字符串，明文敏感配置仍不返回。恢复操作先生成草稿，经现有 Review/Save 写入服务端；敏感旧值未向客户端披露，对应历史回滚禁用并给出解释。
-- `flutter gen-l10n` 因 Flutter SDK 的 `bin/cache/lockfile` 不在可写工作区而失败，生成类按现有结构同步修改；ARB JSON 校验和 Dart 分析通过。`mvn -f backend/pom.xml -pl omninest-system -am -DskipTests compile` BUILD SUCCESS。未运行测试或运行态截图。
-
-### 9.37 Admin 概览与运维任务行（2026-11-18）
-
-- 概览保留真实 14 日上传图、健康/角色区与“重新计算存储”操作卡。用户明确要求移除概览 Storage KPI；这与指定 `imgs/dark/08-admin.png` 和 `src/desktop/Admin.tsx` 中的第 4 张 Storage KPI 冲突。本次遵从用户当前明确要求，将概览 KPI 调整为用户、条目、运行任务三张，侧栏与独立 Storage 页面仍保留实际存储信息。
-
-### 9.38 按最新要求恢复 Admin Storage KPI（2026-11-18）
-
-- 用户最新要求覆盖 9.37 中移除 Storage KPI 的处理，并要求以样例为准。概览已恢复四张 KPI，并在宽屏下按样例排为同一行。
-- Storage 卡取当前登录账号的 `fileStorageStatsProvider`（与桌面侧栏、首页相同的文件存储统计 API），显示该账号实际已用量及其真实配额/无限额状态；不使用管理摘要中的全站对象用量冒充账号配额，也不写入样例的静态 100 GB。
-- 这项数据已有后端接口，本次不重复造全局容量 API。用户数副文案目前仍以真实启用账号数呈现；后端会话记录没有在线心跳更新，因此不能诚实地标为“在线人数”。
-- 运维任务行改为 32px 圆角图标块、名称/次级信息、运行中下方进度条、状态胶囊和操作按钮；状态统一为本地化名称，移除样例没有的详情眼睛按钮，并保留整行打开详情的生产交互。运行任务是否可取消仍由后端能力决定，当前不显示无效的取消按钮。
-- 验证：本批代码已格式化并纳入全库 `dart analyze lib`（无问题）；全量格式检查 63 个变更 Dart 文件无差异；`git diff --check` 与 ARB JSON 检查通过。未运行测试。没有 Flutter/原型成对运行态截图。
-
-### 9.39 System Logs 接入真实当前进程日志
-
-- System Logs 页接入受 `SYSTEM_CONFIG_READ` 权限保护的 `/api/v1/admin/logs/system/page`。后端从当前 API 进程的 Logback 事件缓冲中分页读取最近最多 10,000 条，搜索消息和 logger 名称，按级别/来源过滤；日志消息会对常见凭据字段及 Bearer token 脱敏并限制长度。数据只存在内存中，进程重启会清空；不会汇总 Worker/Scheduler 或其它 API 实例日志，也不是持久化日志库。
-- 前端保留来源/级别筛选、搜索、展开长消息、CSV 导出和分页；结果列表改为在运维页固定筛选器下方滚动，分页器留在内容底部，避免有限高度下把所有日志行撑进外层 Column。
-- 验证：`mvn -f backend/pom.xml -pl omninest-app -am -DskipTests compile` reactor BUILD SUCCESS（编译器报告模块源码均为最新）；尚未启动 API 实例验证日志捕获、权限拒绝/通过及 CSV 导出。未运行测试，也没有配对截图。
-
-### 9.40 Movies、Photos、Music 与 Reader 导入入口
-
-- Movies、Photos、Music 页头新增样例的软按钮「Import / 导入」和下载图标，顺序置于分类栏前；弹窗按样例分为「From My files / From this device」，前者动态读取当前用户文件树，单击可多选文件或目录、双击目录进入，后者沿用真实平台文件选择、空间授权、上传校验与进度反馈，不使用样例静态候选假数据。Movies 保留导入后元数据匹配选项。
-- 为文件库中既有文件补充 `POST /api/v1/files/media-imports`：校验所有权、可写状态、个人空间和媒体类型后，经既有 Outbox 后处理任务服务排队；所选目录按归属用户和个人空间路径展开，只导入兼容媒体，并限制每次最多展开 500 个文件。Flutter 使用任务中心等待终态并刷新对应媒体页。Photos 的 RAW 扩展名（CR2/NEF/ARW/DNG）同步加入设备上传允许列表，与图片选择弹窗及后端 PHOTO 类型判定一致。
-- Reader 的导入入口使用样例 upload 图标与软按钮，排在 Overview/Library 分段之前；Reader 原有上传队列和校验流程保持接线。
-- 验证：本轮 `flutter gen-l10n` 成功；`dart format --output=none --set-exit-if-changed` 覆盖 10 个本批 Dart 文件，无格式差异；`flutter analyze --no-pub lib` 通过（0 issues）；ARB JSON 与可翻译键集合检查通过；`git diff --check` 通过。后端文件媒体导入接口与系统日志 API 随 app reactor `-DskipTests -Dmaven.compiler.useIncrementalCompilation=false compile` BUILD SUCCESS。未运行测试。没有配对运行截图；Photos 普通视频目前不属于后端 PhotoItem 导入能力，需补齐媒体实体、缩略图/播放与展示链路后才能完全复制样例的“photos and videos”导入。
-
-### 9.41 底部音乐播放器尺寸与控件密度
-
-- 对照 `imgs/dark/04-music.png`、`src/desktop/Shell.tsx` 与 `more.css:3-9`：播放器外框维持 66px 高、描边面板最大 1080px；窗口宽度 ≤1180px 时宽度收至 860px、水平留白 14px，≤860px 时曲目列/中心控件最小宽度分别为 150/120px 并隐藏艺人副标题；≥1360px 才显示 64×26 频谱，≤1180px 隐藏音量滑块。
-- 控件列按样例采用 270/200/150px 自适应曲目列、32px 收藏按钮、12/8px 分组间距、32px 右侧按钮、6px 右侧控件间距；时间标签改为 36px，进度条高度 14px 并上移 2px。`DesktopSlider` 增加可配置命中区高度，既有滑块默认高度不变。
-- 验证：桌面播放器相关 Dart 文件格式检查无差异；`flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` 通过。未运行测试或配对运行截图，断点附近的实际排布与 Windows 窗口化尺寸仍待截图核验。
-
-### 9.42 Movies 分类结构、Hero 几何与加载骨架
-
-- 继续按 `src/desktop/Movies.tsx` 和 `desktop.css:308-315` 对照：Hero 下边距调整为 30px；文案位置改为视口宽度 4vw（28–64px）和高度 6vh（34–66px），移除样例没有的轮播点上方 Featured 标签。Hero 从真实继续观看数据按媒体 ID 找到进度后展示百分比、剩余分钟及 Resume，否则显示 Featured / Play。
-- For you 三个分类轨道采用 Feature films、TV Series、Anime 标题，显示真实条目数和带数量的 See all；继续观看操作文案改为 See all。非 For you 分类页加入指向 For you 的左箭头返回入口，并按当前分区显示标题、数量与真实媒体网格。新增英文/中文本地化键。
-- 初次加载时不再同时渲染空数据网格和之后追加的骨架；Hero、分类轨道或分类海报骨架直接占据内容区原位，等请求结束再显示真实内容或空态。
-- 验证：`flutter gen-l10n` 成功；三份 Movies Dart 源码格式化；`flutter analyze --no-pub lib` 通过（0 issues）。未运行测试，未取得 Flutter/原型配对截图。接口失败时页面仍缺少与样例一致的整页错误/重试状态；七项分类交互、Hero 尺寸与窗口响应仍待运行态验收。
-
-### 9.43 Photos 新建相册占位卡
-
-- 对照 `Photos.tsx:100` 和 `desktop.css:346-348`：相册卡片按样例顺序先展示现有相册，创建卡固定在网格末尾；恢复 4:3 比例、透明背景和 1.5px 圆角虚线框。移除普通图片卡的 hover lift / 光晕，新建卡悬停只改变边框、加号与文字强调色，交互仍打开真实新建相册抽屉。
-- 验证：`dart format lib/app/desktop/pages/desktop_photos_selection.dart` 无格式变化；`flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` 通过（Git 仅提示现有工作副本换行符转换）。未运行测试或配对截图；虚线段长、网格落列与 hover 颜色仍待运行态目测。
-
-### 9.44 Admin 用户抽屉字段与资料接口
-
-- 新建用户抽屉扩至样例 480px，字段顺序调整为展示名、账户、邮箱、角色、配额、初始密码与账户状态；角色从真实角色接口读取，自定义配额可填 1–10000 GiB，留空时继续使用系统默认值。账户名按样例限制为小写字母开头的 3–24 位规则；密码显示/生成按钮并入同一行。
-- `POST /api/v1/admin/users` 增加可选 `quotaBytes`，后端校验 1–10000 GiB 并写入已有 `auth_users.quota_bytes`；不传时使用配置中心默认配额。账户显示名与邮箱可在编辑抽屉保存，新增 `PATCH /api/v1/admin/users/{userId}/profile` 并复用既有资料缓存失效和跨端 `USER_PROFILE` 同步；编辑抽屉同时包含只读账户名、角色、配额和账户启用状态。
-- 样例中的“管理员创建账号后首次登录强制修改临时密码”现已接入真实持久化认证流程；自助注册账号不强制改密。2FA 由用户自行开启，只有 SUPER_ADMIN 强制完成注册。既有实例需应用新增 V003 Flyway 迁移；管理员重置临时密码的独立入口仍未实现。
-- 验证：`flutter gen-l10n` 成功；本批相关 Dart 文件已格式化，`flutter analyze --no-pub lib` 通过（0 issues）；`mvn -f backend/pom.xml -pl omninest-system -am -DskipTests compile` BUILD SUCCESS；`git diff --check` 通过（存在工作副本 LF→CRLF 提示）。未运行测试或管理端运行态/配对截图；抽屉窄宽适配、重复账户错误反馈和用户资料更新实机同步尚未验证。
-
-### 9.45 管理台顶栏搜索焦点反馈
-
-- 桌面管理台 32px 顶栏搜索从普通 Material `TextField` 切到共享 `DesktopTextField`，使用样例搜索图标、32px 输入高度和强调色 4px 焦点外环；Ctrl/Cmd+F 注册、输入同步与键帽点击聚焦继续复用原流程。移动端搜索保留原字段实现。
-- `DesktopTextField` 暴露可选 `textInputAction`，使统一视觉字段可保留搜索键盘动作。
-- 验证：涉及 Dart 文件 `dart format --output=none --set-exit-if-changed` 通过；`flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` 通过（含既有 LF→CRLF 提示）。未运行测试或窗口实机截图；32px 字段外环在标题栏容器中的实际裁切仍需运行态检查。
-
-### 9.46 Photos 导入照片与视频
-
-- `ImportDialog.tsx` 的 Photos 配置为 `accept: "image/*,video/*"`、标题 Add photos and videos。Flutter 对齐中英文标题和提示、设备选择格式、Photos 页头上传允许列表与文件树筛选；`POST /api/v1/files/media-imports` 的 PHOTO 类型接受现有视频格式。
-- 视频通过 Photos 自动导入 handler 写入现有 `photo_items`，使用 `format` 字段识别，不新增 migration；同步 `PhotoDashboardDto.totalVideos`，PHOTOS 和 VIDEOS 统计不再借用 Movies catalog 数值。Worker 使用受控有界暂存运行 ffprobe/ffmpeg 取得尺寸和 poster，并回填已有 cover/width/height 字段。
-- 查看器识别视频后使用 `media_kit` 播放，缩略图显示播放标记，视频不会进入照片源图预解码，也不显示图片编辑入口；图片原有路径不变。
-- 验证：`flutter gen-l10n` 成功，`dart format` 对本批 8 个 Dart 文件无进一步格式改动，`flutter analyze --no-pub lib` 通过（0 issues）；Media/Worker 后端 reactor 使用 `-am -DskipTests compile` BUILD SUCCESS；ARB JSON 有效，`git diff --check` exit 0（有 LF→CRLF 提示）。未运行测试；没有 API/Worker 视频实机处理或原型/Flutter 同条件截图。ffmpeg/ffprobe 缺失、容器边缘格式和授权播放 URL 尚待运行态确认。
-
-### 9.47 管理台桌面表单焦点样式
-
-- 管理台 OAuth 应用在桌面壳中改用 460px 右侧抽屉，字段采用共享 `DesktopTextField` 的 40px 高度、10px 圆角和强调色焦点外环；密钥默认掩码并有显式显隐操作，保存/取消固定在抽屉底部。非桌面回退弹窗保留原有 Material 字段。
-- Geo 导入/回填和用户批量/单用户配额对话框按主题中是否含桌面皮肤选择字段实现：桌面使用 `DesktopTextField`，移动端保留原生字段样式。管理台桌面配置控制台原本走已对齐的行内字段，因此配置回退弹窗不被误套桌面主题。
-- 验证：4 个相关 Dart 源文件运行 `dart format`；全量 `flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` 通过。未运行测试，也未取得桌面/原型配对截图；表单抽屉实际开合、主题分支和键盘焦点仍待运行态验收。
-
-### 9.48 Settings Storage 重复文件扫描接入
-
-- Settings Storage 的「查找重复文件」按钮从禁用态改为可用，并按样例以桌面 Toast 返回扫描结果；扫描中按钮显示忙碌状态，接口错误走错误 Toast。
-- 新增 `GET /api/v1/files/duplicates/summary`，仅聚合当前用户个人空间、未删除、当前版本的常规文件；以服务端 SHA-256 分组，每组保留一份后计算重复副本数、重复组和可释放字节。回收站、共享空间、历史版本、派生资源和本地只读索引不进入个人云盘扫描。
-- 响应同时返回缺少已验证 SHA-256 的活动文件数，界面在有遗漏时给出单独警告，不将部分扫描说成完整结果。该实现无数据库迁移；运行时查询仍需使用真实文件库核验大库性能与历史无摘要条目的反馈。
-- 验证：`flutter gen-l10n` 成功；本批 8 个 Flutter 文件 `dart format` 完成；全量 `flutter analyze --no-pub lib` 通过（0 issues）；`mvn -f backend/pom.xml -pl omninest-file -am -DskipTests compile` BUILD SUCCESS；`git diff --check` exit 0（Git 提示若干既存 LF→CRLF 转换）。未运行测试、未启动 API/数据库验证 SQL 结果，也未取得原型/Flutter 配对截图。
-
-### 9.49 Photos 导入按内容跳过重复媒体
-
-- 样例 `src/desktop/ImportDialog.tsx` 明确说明照片按内容检测重复并跳过。原有图片预处理虽已计算 SHA-256，但导入只按 `fileNodeId` 幂等；视频路径则没有内容去重。
-- Photos 现在按当前所有者、活动文件和 SHA-256 判断重复。图片优先复用文件对象已验证摘要，在解析 EXIF/生成预览前跳过重复项；缺少文件摘要时使用预处理生成的摘要再检查。视频使用文件对象 SHA-256，旧对象无摘要时通过受权限校验的内容流计算，并把摘要保存到既有 `provider_metadata` JSONB 字段。
-- 同一所有者/摘要使用 PostgreSQL 事务级 advisory lock 串行化复核与写入，覆盖多 API/Worker 实例并发导入；用户隔离、回收站和已删除来源文件均不参与有效项匹配。没有新增数据库迁移。
-- 验证：`mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` BUILD SUCCESS；`flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` exit 0（仅有工作副本 LF→CRLF 提示）。未运行测试、未连接真实 PostgreSQL/媒体文件，也未取得原型/Flutter 配对截图。
-
-### 9.50 桌面详情坞收放动画布局
-
-- 样例 `desktop.css:216-217` 对右侧 `.dock` 动画宽度时固定内部 `.dock-in` 为 348px。Flutter 原先让 348px 内容直接继承动画中的临时宽度，关闭到接近 0 时页签行和关闭按钮被挤压，触发短暂 `RenderFlex` 横向溢出。
-- 详情坞现在用 `OverflowBox` 保持内部布局宽度 348px，并由 `ClipRect` 按动画容器当前宽度裁切可见区域；最终打开尺寸与样例一致，收放过程不再收缩内部 Row。
-- 验证：`dart format lib/app/desktop/desktop_dock.dart` 完成；`flutter analyze --no-pub lib` 通过（0 issues）；`git diff --check` exit 0（仅有既存 LF→CRLF 提示）。未运行测试或桌面运行态动画录屏，用户报告的设备/窗口尺寸仍待实机确认。
-
-### 9.51 Music 曲目编辑抽屉规格
-
-- 对照样例 `MetaEditor.tsx` 的 `TrackEditor` 与 `ui.tsx` 的 Drawer 默认参数：Flutter 桌面列表和 Now Playing 本来共用同一真实编辑抽屉，字段（Title、Artist、Album、Cover image URL、Lyrics）、原始元数据恢复和保存结构一致；此前宽度误设为 520px，遮罩点击也被禁用。
-- 抽屉宽度改为样例默认 480px，遮罩点击可关闭。歌词仍读取真实曲目详情，不采用原型演示歌词；生产字段与 API 保存保持原链路。
-- 验证：`dart format lib/app/desktop/pages/desktop_music_metadata_drawer.dart` 无格式变化；`flutter analyze --no-pub lib` 通过（0 issues）。未运行测试或配对截图。
-
-### 9.52 全站壁纸在沉浸详情页的背景透出
-
-- 全站范围枚举与路由匹配都返回正确状态；电影、剧集和书籍沉浸详情页自身仍绘制不透明主题底色，遮住位于页面下方的动态壁纸层。
-- 新增按真实壁纸启用状态及路由范围判定页面底色的共享方法。电影/剧集加载态与详情态、书籍详情在壁纸可见时使用透明画布；壁纸关闭或路由超出作用范围时保留主题底色。没有改变卡片表面材质和文本对比层。
-- 验证：5 个相关 Dart 文件执行 `dart format`（无格式变化）；`flutter analyze --no-pub lib` 通过（0 issues）。未运行测试或逐路由播放壁纸运行态截图，尚需覆盖浅/深主题、视频壁纸及“全站/首页与音乐”切换。
-
-### 9.53 Security 密码反馈与字段规格
-
-- 对照 `Settings.tsx` 与 `desktop.css:103,479`：密码字段高度改为 40px，字段间距为 14px；新密码下方补四段强度条与样例对应的 Too short/Weak/Fair/Good/Strong 反馈，颜色消费桌面语义色板。
-- 更新密码按钮按样例检查当前密码、强度、确认值；同时按真实接口约束限制 8–64 个 UTF-16 字符及 72 个 UTF-8 字节，超限在表单内解释。密码更新仍走真实 API；两步验证继续保留真实 TOTP 注册流程，会话列表继续显示服务端活动会话。
-- 新增强度“太短”中英文案并生成本地化类。验证：`flutter gen-l10n` 成功；相关 Dart 文件 `dart format` 无格式变化；`flutter analyze --no-pub lib` 通过（0 issues）。未运行测试或安全页运行态配对截图。
-
-### 9.54 Home 本周聆听时长数据链
-
-- 样例 `Home.tsx` 的 Listening 指标显示本周小时数。原播放历史表已有 `play_duration` 实际秒数字段，但前端起播只创建历史行且固定为 0；Home 此前用近期播放条数代替。
-- 播放历史创建接口现在返回本次会话 ID；Flutter 播放会话监听实际位置推进，排除暂停、跳转和长时间无进度间隔，每累计至少 15 秒以及暂停/切歌/退出时向 `PUT /api/v1/music/play-history/{historyId}/duration` 回报累计秒数。后端校验会话所有者和时长不超过服务端经过时间，并以单调递增累计值支持重试，不新增表或迁移。
-- `MusicDashboardDto.weekListeningSeconds` 汇总本周周一零点以来的实际秒数（使用后端实例时区）；桌面首页按小时展示一位小数并显示 `This week` / `本周聆听`。旧历史为 0 的行不回填；一条跨周会话按它的开始时间计入所属周。
-- 验证：`mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` BUILD SUCCESS；`flutter analyze --no-pub lib` 通过（0 issues）；改动 Dart 文件 `dart format` 完成；ARB JSON 有效。实际 PostgreSQL 聚合、真实播放回报和原型/Flutter 配对截图尚待检查。未运行测试。
-
-### 9.55 Home Library 今日新增汇总
-
-- 样例 `Home.tsx` 的 Library 卡副文案为 `+N today`。Flutter 此前显示照片/影视构成，且只由客户端总量推导，缺少当天新增的真实来源。
-- Movies、Photos、Music、Reader 四个现有 Dashboard 响应分别新增 `itemsAddedToday`，前端使用服务端活动记录计数并在 Home 求和；Movies 遵循用户可读的原始电影条目口径，Photos 排除视频格式和回收站条目，Music 保留个人及共享可见曲目口径，Reader 保留个人及共享可见条目口径。没有新接口或数据库迁移。
-- 首页 Library 副文案现在按样例展示 `+N today` / `今日新增 N 项`。Library 总量仍是当前四个媒体域之和，不包含 Files，与之前既定统计保持一致。
-- 当天边界来自各 Dashboard 的服务端时区：Photos 用实例时区配置，Movies/Music/Reader 用后端系统时区。若两者被配置为不同区域，午夜边界可能不同；实际部署配置与 SQL 结果尚未验证。
-- 验证：`mvn -f backend/pom.xml -pl omninest-media -am -DskipTests compile` BUILD SUCCESS；`flutter analyze --no-pub lib` 通过（0 issues）；ARB JSON 有效；14 个改动 Dart 文件格式检查无差异。未运行测试、真实数据库查询或配对截图。
-
-### 9.56 Movies / Photos / Music 导入弹窗尺寸
-
-- 对照 `src/desktop/ImportDialog.tsx:65-88`、`desktop.css:142-145`、`extra.css:106-108` 和 `imgs/dark/21-import-movies.png`：样例宽弹窗为 `min(760px, 94%)`，候选列表最高 340px。Flutter 三个媒体页已有 Import 页头入口及“我的文件/此设备”导入链路，但弹窗宽度此前为 620px，列表固定 264px。
-- 将 Flutter 导入弹窗最大宽度改为 760px，并将候选列表改为随内容伸展、最高 340px 后滚动。Movies 与 Music 页头继续使用样例下载图标和 Import 文案；Reader 的 Import 使用 upload 图标并位于 Overview/Library 切换左侧。数据导入继续走现有后台接口和任务队列。
-- 验证：`dart format --set-exit-if-changed lib/app/desktop/widgets/desktop_media_import_dialog.dart` 无格式变化；单文件 `dart analyze` 与 `flutter analyze --no-pub lib` 均通过；`flutter build windows --debug --no-pub` BUILD SUCCESS。已启动新构建，但初始化即显示 `ProviderException: Bad state: 服务器地址未配置`，无法进入导入界面；当前窗口未配置 `OMNINEST_API_BASE_URL`。未运行测试或取得配对截图。
-
-### 9.57 登录画幅与默认壁纸照片
-
-- 样例 `Auth.tsx` 使用全幅环境照片、水平渐暗和底部遮罩；Flutter 登录页原先只画径向底色与两团动态强调色光斑。现移除所有登录光晕，直接显示用户提供的 `StockSnap_GI4HC0TIXR.jpg`，并将品牌、主标题、底部说明分开放置以对应样例构图。
-- 同一照片成为桌面、移动、Web 的内置默认壁纸资源，替换随包默认视频及其旧预览帧。登录画幅按 `desktop.css` `.auth-art .img` 使用 30 秒 `kenburns` 慢推镜，终点为 `scale(1.14) translate(-1.5%, -1%)`；减少动态效果设置下跳过过程动画。内置素材 ID 保持稳定，既有选择该默认壁纸的用户升级后继续指向同一项；自定义壁纸与真实偏好同步不变。
-- 验证：改动文件已执行 `dart format`；`flutter analyze --no-pub lib` 通过（0 issues）。两次尝试执行 `flutter build windows --debug --no-pub`（第二次加 `--verbose`）均超过一分钟没有输出，已中断，不能记为构建通过。未运行测试；Computer Use 枚举到的 Chrome 是微软账号页、IDE 显示 Flutter 渲染错误文件，没有可确认的 OmniNest 登录窗口，因此未操作其它窗口，也未完成运行态配对截图。更换了 Flutter 打包资产，需成功重建并重启客户端后查看新照片与缓推。
-
-### 9.58 媒体设备导入改为后台队列并移除 Photos 悬停光晕
-
-- 对照 `src/desktop/ImportDialog.tsx:34-41`：原型点击 Import 后为每个文件加入后台任务、显示 queued Toast 和 View tasks 动作并关闭选择流程。Flutter Movies、Photos、Music 的设备上传此前仍走阻塞式进度弹窗。现改为应用层最多 2 个并发上传队列；逐文件状态、真实上传进度、取消与失败重试显示在任务面板，标题栏任务徽标同步计数。三个页面均在入队后立即反馈“导入已排队”，任务完成后的媒体扫描/注册与 Movies 元数据匹配继续使用既有 API。页面切换不会中止上传；会话世代变化时取消旧账号的本地上传并清空队列。
-- Photos 原先用通用 `DesktopTilt` 在照片卡片上加入指针跟随 shine、透视倾斜和大范围 hover 阴影。改为参考照片墙的轻微缩放与标题/选择反馈，去除光晕和倾斜；相册卡沿用无发光的 hover 抬升，新建相册虚线边框的颜色反馈保留。
-- 新增中英文队列标题/排队反馈文案。未新增后端接口：复用已有文件上传会话、媒体自动导入任务和扫描任务能力。
-- 验证：`flutter gen-l10n` 成功；相关 Dart 文件执行 `dart format`；定向 `flutter analyze --no-pub` 和全量 `flutter analyze --no-pub lib` 均输出 `No issues found`；`git diff --check` exit 0（仅提示工作副本存在 LF→CRLF 转换）。未运行测试、未连接真实后端进行设备上传，也未取得参考/Flutter 配对截图；任务队列进度、取消、失败反馈及 Photos 悬停效果仍需运行态验收。
-
-### 9.59 Settings Security 活跃会话行对齐
-
-- 对照 `src/desktop/Settings.tsx` 的 Active sessions：原 Flutter 行额外展示 IP 地址和设备图标，按钮文案为 Revoke，并在样例未要求时插入确认弹窗。现将当前会话置顶，按样例显示设备名、平台、相对活跃时间、当前设备标签和 Sign out 操作；行边线改为顶部边线，间距对应 `.set-row`。
-- Sign out 直接调用现有会话撤销 API，成功后刷新真实会话列表并提示对应设备；失败仍显示 API 错误 Toast。移除界面确认弹窗以匹配样例交互。未更改会话 API 或认证策略。
-- 新增中英文按设备名反馈文案，并复用现有相对时间翻译。验证：`flutter gen-l10n` 成功；`dart format lib/app/desktop/pages/desktop_settings_more.dart` 完成；`flutter analyze --no-pub lib/app/desktop/pages/desktop_settings_more.dart` 输出 `No issues found`。未运行测试、未连真实会话 API 或获取 Security 区域配对截图；会话时间、窄宽布局及撤销失败反馈仍待运行态验收。
-
-### 9.60 原型复读后的 Photos 悬停与导入反馈校准
-
-- 重新核对原型 `src/desktop/Photos.tsx`、`desktop.css` 与 `polish.css` 最终覆盖规则：照片卡悬停有 `scale(1.015)`、图片缩放和黑色投影 `0 14px 32px -14px rgba(0,0,0,.55)`，不含指针跟随 shine、透视倾斜或彩色外发光。Flutter 桌面照片卡补回同值黑色投影，只在未选中悬停态显示；强调色选中描边保持独立。此前“移除 hover 阴影”的描述以本节为准，目标是移除非样例光效而非删掉原型已有投影。
-- 通读更新后的 `ImportDialog.tsx` 与 Flutter 桌面接线：样例确认导入后关闭选择流程、逐项排入任务、显示 queued Toast/View tasks。Movies、Photos、Music 的桌面来源弹窗继续按此流程工作；通用非紧凑设备导入入口也已移除旧式阻塞进度 Dialog，接入同一文件队列与任务面板。紧凑布局保留移动端进度 Sheet。
-- 验证：`dart format` 覆盖导入按钮、桌面导入弹窗、三个媒体页、任务面板及 Photos 卡片；本轮定向 `flutter analyze --no-pub` 检查 9 个 Dart 源文件，`No issues found`。未运行测试、未连接真实后端进行上传，也未取得配对截图；桌面任务面板的真实进度、失败/重试及 Photos hover 仍待运行态验收。
-
-### 9.61 Photos 日期组/收藏/相册内排序
-
-- 复核 `src/desktop/Photos.tsx` 与 `src/desktop/reorder.tsx`：照片在同一日期组、收藏或相册内长按约 300ms 后排序；已选照片可成组移动，列表使用 FLIP 位移动画、拖动边缘自动滚动，并把顺序按上下文保存。日期组可重置排序；Viewer 继续按当前上下文顺序浏览。
-- Flutter 桌面现为照片 tile 增加长按拖放与同上下文目标约束；加入成组拖动反馈、260ms 换位迟滞、基于全局位置的 460ms FLIP、边缘自动滚动和日期组 Reset order。顺序用账号隔离的 SharedPreferences 本地存储，符合原型 `useStored` 行为，不需要后端接口。Library、Favorites、Album 的 Viewer browse scope 使用对应当前显示顺序。
-- 后端照片/收藏 API 保持每页 50 项；桌面 Library/Favorites 已在距底 600px 内自动请求下一页，去重后追加至同一浏览列表，已加载页可跨页排序。Viewer 从任一日期组打开时持有全图库已加载顺序，并在前进到末项时继续续载；收藏同样在范围末尾续载。
-- 验证：新增排序文案通过 `flutter gen-l10n`；7 个改动 Dart 源文件 `dart format` 无格式变化；全量 `flutter analyze --no-pub lib` 输出 `No issues found`。未运行测试、未做真实设备拖拽和配对截图；续载、拖拽落点与动效仍需运行态验收。
-
-### 9.62 Photos 排序落位动效与长列表续载
-
-- 对照 `src/desktop/reorder.tsx`：拖动 ghost 原先会在 `onDragEnd` 后直接消失，未实现样例约 420ms 的落位/取消回位。Flutter 现通过根 Overlay 将拖动影像从结束坐标补间至目标 tile；取消时回到记录的起始 tile，并从全局坐标转换到 Overlay 坐标，避免窗口位置偏移。缩略图多选拖拽的堆叠反馈同步参与缩放落位。
-- Library/Favorites provider 从只取首页改为应用层分页控制器。滚动视口距底 600px 时通过既有照片/收藏分页 API 续载，去重后追加并保留当前排序；短列表的尺寸变化也会触发检查。会话世代与 provider 生命周期校验可丢弃过期响应，不新增 API 或后端改动。
-- Viewer 从图库日期组打开时传入全图库的分组排序结果，不再局限于当前日期组；前进至已加载范围末尾会继续请求 Library/Favorites 下一页、更新 browse scope 并自动前进。页面和胶片条始终只包含当前已加载项。
-- 验证：4 个相关 Dart 文件执行 `dart format`；全量 `flutter analyze --no-pub lib` 输出 `No issues found`。未运行测试、未做拖拽、跨页排序和滚动续载的桌面实机验收，也未取得原型/Flutter 配对截图。
-
-### 9.63 Photos Viewer 跨日期浏览与末尾续页
-
-- 对照 `src/desktop/Photos.tsx`：从 Library 任意日期组打开 Viewer 后，样例使用 `libList` 作为浏览序列，因此前后翻页跨日期。Flutter 原来将当前组的照片传入 Viewer，造成跨组浏览范围不一致。
-- Library 入口现传入整个已加载图库的按日排序列表；Viewer 前进到 Library/Favorites 当前末项时读取下一页，按各日期/收藏本地顺序合并进 browse scope，再自动前进一张。右侧下一张按钮在当前只有一张但服务端仍有下一页时保持可用；键盘前进与幻灯片调用同一逻辑。相册、地点、时间线、标签保持各自来源范围。
-- 验证：2 个 Dart 文件格式化；`flutter analyze --no-pub lib` 输出 `No issues found`。未运行测试、未在真实分页数据上验证跨日导航、胶片条延展或幻灯片续页；无配对截图。
-
-### 9.64 Settings Storage 四类图例结构
-
-- 对照 `src/desktop/Settings.tsx` 与 `.u-leg.wide`：样例存储卡固定两列、四类（Video、Photos、Music、Documents）图例。Flutter 原先直接展示 API 返回的所有分类，小说、漫画、压缩包等会额外增加图例行，打破样例布局。
-- Flutter 现按样例归并可视类别：视频、图片、音频映射前三项，其它文件类别聚合到 Documents；每类仍从当前账号 API 读取真实字节数，零值类别保留图例位置。进度段以真实 quota/used denominator 计算，未使用原型种子数值。后端分类数据与接口不变。
-- 验证：`dart format lib/app/desktop/pages/desktop_settings_storage.dart` 无格式变化；全量 `flutter analyze --no-pub lib` 输出 `No issues found`。未运行测试、未接真实账号验证分类汇总/配额及宽窄窗口布局，也未取得配对截图。
-
-### 9.65 Admin Storage OAuth 逐连接器抽屉
-
-- 对照 `src/desktop/Admin.tsx`：样例在外部账户列表中为各提供方提供独立 Configure/Edit 入口，点击后打开 460px 右侧抽屉。Flutter 原来只有一条 OAuth Apps 总入口，且编辑时必须重新选连接器，无法从连接器列表直接维护。
-- 桌面 Storage 现在固定展示后端已实现 OAuth 授权的 Google Drive、OneDrive、Dropbox 三项，并逐项提供 Configure/Edit；各自打开 460px 抽屉，回填已有 Client ID、Redirect URI 和启用状态。客户端密钥不回显，编辑时留空沿用后端加密保存的旧密钥；新建时要求输入密钥。保留生产 API 必需的回调地址和启用字段。
-- S3/WebDAV 属于用户级远程存储账号，不是实例级 OAuth 应用；仍在实际连接列表中呈现，不伪造全局 OAuth 配置。样例将多种连接器并列为演示态，Flutter 按现有真实数据契约分别管理。
-- 验证：`flutter gen-l10n` 成功；2 个相关 Dart 文件 `dart format` 完成；全量 `flutter analyze --no-pub lib` 输出 `No issues found`。未运行测试或管理页面运行态交互，也未取得配对截图。
-
-### 9.66 管理员新建账号首次改密与 2FA 策略
-
-- 按用户最新决定，2FA 不是管理员创建/编辑的逐用户策略：普通用户自行选择是否启用，只有 SUPER_ADMIN 必须完成注册。`TwoFactorPolicyService` 固定检查 SUPER_ADMIN；现存 `auth.two-factor.required-roles` 配置值由 V003 收敛为 `SUPER_ADMIN`，管理端配置目录不再暴露可强制其它角色的开关。
-- 样例创建用户 Drawer 的 “Require a new password at first sign-in” 现接入真实链路。管理员创建账户默认要求改掉临时密码；请求允许沿用旧客户端（字段缺省按 true 处理），显式关闭仍遵从样例开关；自助注册及首次安装创建的账户默认为 false。
-- 登录密码校验通过后，待改密账号收到 5 分钟 `password_change` challenge，不签发访问令牌或会话。新端点校验挑战、频率限制和统一密码策略，保存新密码后清除标记；随后按账户现状进入已开启的 2FA 验证、SUPER_ADMIN 的 2FA 注册或正常登录。Flutter 登录页增加新密码与确认输入，并将接口错误、后续挑战和成功导航接入现有登录状态机。
-- 新增 `V003__user_initial_password_change_policy.sql`：新增 `password_change_required`（默认 false），并把旧角色强制 2FA 配置收敛至 SUPER_ADMIN。既有数据库需执行 Flyway V003。
-- 验证：`flutter gen-l10n` 成功；`flutter analyze --no-pub lib` 输出 `No issues found`；`mvn -f backend/pom.xml -pl omninest-app -am -DskipTests compile` 全模块 `BUILD SUCCESS`；`git diff --check` 通过（仅有 Windows LF/CRLF 转换提示）。未运行测试、真实数据库迁移或登录运行态截图；后两项需在启动实例上验证。
+| Home Hero movie tile | DesktopMoviesPage 从 MovieDashboard.recentlyAdded 取带 backdrop 的前三个条目作为 heroItems；无项时 fallback 到 movies。 | 原型按 featured 集合轮播。当前页面未使用专门的精选排序字段；如果产品需要管理员/推荐服务控制 Hero 顺序，当前 UI 数据路径尚未表达该契约，应核查并设计 API。若“取近期有 backdrop 条目”即为要求，则无需新增接口。 |
+| Home Recent Photos | DesktopPhotoStrip 从 PhotoItem 显示 title 和宽高比。PhotoItem 同时持有 dateTaken、GPS 坐标/位置元数据。 | 原型 hover 标签字段是 place。当前 title 与 place 不保证同义；需检查现有 gpsLocation 是否含可展示地点名称/后端反向地理编码能力。当前证据首先指向字段绑定差异，不能直接断定缺 API。 |
+| Admin uploads 14 days | AdminOverviewDesktop 消费 AdminAnalytics.dailyUploads；空数据走 14 根 skeleton bars，异常显示 retry。 | 14 天数据接口和 UI 状态已有明确模型，不支持“缺柱图数据接口”的结论；剩余主要是图表视觉、日期刻度和真实数据长度校验。 |
+| Movies/Photos/Music imports | 三页面共享 MediaImportButton；本机文件进入 upload provider，FileNode 导入经 MediaImportQueueController 编排异步导入，页面等待对应 task 并刷新实体。 | 当前已具备异步导入链路。各媒介 filter、部分成功/失败、取消/关闭后的任务继续行为需要对照样例 ImportDialog；不得把样例静态 candidates 当成真实后端数据。 |
+| Desktop notifications | 顶栏 NotificationsPanel 消费 notificationControllerProvider，/notifications 仍有 NotificationPage。 | 数据 API 可保留；已确认的差异是桌面交互/路由仍与旧通知中心耦合。后续可只替换桌面呈现层而不推断要删除通知后端。 |
+| Reader page position / total pages / remaining time | `ReaderView.tsx` 示例把搜索命中定位到页，并显示阅读进度/余时。 | 既有 API 审阅记录未找到可稳定提供整本总页数/阅读余时的字段；当前阅读状态主要按章节与字符 offset 保存。 | 页面/余时差异可能是数据契约缺口，不能用样例固定值冒充生产值。若要复现，需要先确定统一分页/预计时长算法及对应数据/API 契约。 |
+| Files 预览与公开分享 | `Files.tsx` 可显示文件详情/预览；分享表单提供原图质量与位置元数据策略。 | 普通 Files 分享 DTO/DB 已保存 `originalQuality`、`includeLocation` 等策略；既有审计记录指出后端尚未对实际文件字节生成原图尺寸副本或剥离 EXIF/GPS。 | 这是后端处理能力缺口，不等于缺少请求字段；不能宣称策略已作用于下载内容。 |
+| Movie file path / series metadata | `MovieDetail.tsx` 演示 File location 与更完整的编辑字段（Title/Genre/Year/Runtime/Rating/Cast/Poster/Synopsis）。 | 既有审计记录指出影片文件 API 返回文件名/大小/媒体信息但没有规范化库路径；主影片元数据编辑已持久化字段，系列编辑接口仍只覆盖标题与简介。 | 路径显示不可造假；如样例规范路径/剧集字段是硬性要求，需评估真实 API、权限及数据来源后登记后端契约。 |
+| Home Library aggregate | 原型 Home 展示 Library 指标和今日新增。 | 当前首页总量按影片、照片、音乐与 Reader 条目汇总；不含 Files。 | 若样例语义包含 Files，则 dashboard aggregation/API 缺字段；若 KPI 指媒体书库而非全部文件，则属于计数口径问题。需按原型字段语义确认。 |
+
+## 全局系统性差异
+
+1. **路由与页面容器不是一套信息架构**：原型主空间以 `Shell.tsx::NAV` 六项组成；Flutter 桌面路由已引入 Portal、Library、Profile、Admin 与模块全屏 route。需要记录明确映射，避免以路由存在推断页面层级等价。
+2. **共享 chrome 有多个 owner 风险**：shell host、模块页面、immersive overlay、窗口 chrome 和 mobile-hosted route 同时存在；播放器和查看器的实机反馈说明需要以一张 route × shell visibility 矩阵作为权威，当前源码意图未通过实机证明。
+3. **Backdrop 画面由三层共同决定**：scope predicate、根 Wallpaper layer、页面自身不透明容器。仅把范围设为 all 不足以保证页面实际可见。
+4. **设计语义混淆**：样例中存在 accent selected ring、黑色投影、专辑唱片中心点和歌词光影等局部效果；用户明确规定“只有样例本身有的效果可保留”。不能做全局零阴影/零 blur，也不能把某页的强调效果复制到样例没有的 hover 控件。
+5. **真实数据与演示排版分离**：结构、占位、字段顺序应按样例；数值沿真实 API，不得使用演示统计数值伪装后端状态。没有对应 API 时要在后续阶段标注缺口。
+
+## 下一步审查/实现顺序
+
+1. 先复现并定责 shell visibility、播放器重复和 backdrop stacking。这三项影响多个页面；形成路由矩阵与截图，不同时改各页面局部样式。
+2. Home：Hero、Recent Photos hover、空/加载态、启用 backdrop 的两种状态。
+3. Photos：Library 单项宽度、hover、长按、批选、viewer、filmstrip、album drawer；逐项比较 dark/light 和实际鼠标状态。
+4. Music：单一底栏、控件规格与功能、封面/Track hover 无额外光晕、Now Playing。
+5. Admin：六项主分区（含 Media library）、Overview、Operations 单分类栏、Identity drawers/filters、Config/Storage。
+6. Movies、Reader、Files、Settings、Login/Setup、通用 drawers/dialogs 按本报告页面表逐页核对。
+
+除用户明确要求提交当前工作区外，本报告没有执行代码修复。下一阶段先完成统一截图基线，再进入单页差异实现。
+
+## 2026-11-19 第四批：底部播放器双层根因与收口
+
+- **用户反馈**：底部音乐播放器明显两层，底部有模糊玻璃溢出，宽度/功能/样式与样例不符。
+- **源码取证**：原型终值是 `desktop.css:229` → `extra.css:8` → `more.css:4-9` → `polish.css:138` 的叠加结果：面板宽 1080（compact 860）、高 66、圆角 20、居中且两侧至少 20px；底部 14px；clearance 116；队列键是 `Shell.tsx:280` 的 `setDock(!dock)`。
+- **根因**：Flutter 在 `DesktopGlassSurface` 内放了一个带左右 margin 的面板，玻璃背板因此比可见面板宽 40px，视觉上就是“面板底下又垫一层玻璃”；旧 token 1120/888/104 还把 margin 算进了面板宽度。
+- **修正**：`LayoutBuilder` 直接算 `min(panelMax, viewport - 2*margin)`；阴影交给非裁剪外层，玻璃层与描边面板同宽、同高、同圆角，玻璃内部不再出现 margin；队列键改为可再次收起；曲目 Tooltip 移到整个按钮；展开键用 `desktopExpand`。
+- **验证**：`test/app/desktop/desktop_shell_test.dart` 新增 3 条，锁定单一玻璃、1080/860 宽度、居中坐标、完整控件组与队列 toggle；`test/app/desktop` 179 全绿，`test/app` 358 全绿，`test/features/admin|files|music` 986 全绿；播放器改动 `flutter analyze` 0 issue。
+- **未验证**：运行态截图、hover/缩放/主题切换下的实际玻璃合成仍未采集；本条只声明源码与 widget 层收口。

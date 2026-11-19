@@ -56,6 +56,8 @@ void registerMusicFirstFrameTieringTests() {
             albumCount: 1,
             artistCount: 1,
             playHistoryCount: 0,
+            weekListeningSeconds: 0,
+            itemsAddedToday: 0,
             recentTracks: [],
             recentAlbums: [],
             featuredArtists: [],

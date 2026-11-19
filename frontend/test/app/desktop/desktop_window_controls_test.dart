@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_shell.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_frame.dart';
@@ -22,6 +21,10 @@ class _MaximizedChrome extends WindowChromeController {
   @override
   WindowChromeState build() => const WindowChromeState(isMaximized: true);
 }
+
+Finder _semanticsWithLabel(String label) => find.byWidgetPredicate(
+  (widget) => widget is Semantics && widget.properties.label == label,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -93,9 +96,10 @@ void main() {
 
       expect(find.byType(DesktopWindowFrame), findsOneWidget);
       expect(find.byType(DesktopWindowControls), findsOneWidget);
-      expect(find.byTooltip('Minimize'), findsOneWidget);
-      expect(find.byTooltip('Maximize'), findsOneWidget);
-      expect(find.byTooltip('Close'), findsOneWidget);
+      // 三键是无障碍 button + label，没有 Tooltip；按 Semantics 断。
+      expect(_semanticsWithLabel('Minimize'), findsOneWidget);
+      expect(_semanticsWithLabel('Maximize'), findsOneWidget);
+      expect(_semanticsWithLabel('Close'), findsOneWidget);
       expect(resizeGrips, findsNWidgets(8));
 
       // 三键叠在 46px 的透明命中带里，不改页面自身布局：
@@ -135,8 +139,15 @@ void main() {
       );
 
       // 样例 `Shell.tsx:64`：`win === "max" ? restore : maximize`。
-      expect(find.byIcon(DesktopIcons.restore), findsOneWidget);
-      expect(find.byIcon(DesktopIcons.maximize), findsNothing);
+      // 两态字形由 CustomPainter 绘制，按控件 key 断言。
+      expect(
+        find.byKey(const ValueKey<String>('window-control-restore')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('window-control-maximize')),
+        findsNothing,
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

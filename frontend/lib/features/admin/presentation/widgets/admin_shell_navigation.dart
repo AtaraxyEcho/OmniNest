@@ -166,6 +166,7 @@ IconData _iconFor(AdminSection section) {
     AdminSection.maintenance => Icons.build_outlined,
     AdminSection.users => Icons.badge_outlined,
     AdminSection.roles => Icons.verified_user_outlined,
+    AdminSection.mediaLibrary => Icons.video_library_outlined,
     AdminSection.config => Icons.tune_outlined,
     AdminSection.storage => Icons.dns_outlined,
     AdminSection.externalStorage => Icons.cloud_sync_outlined,
@@ -181,6 +182,7 @@ String _sectionTitle(AppLocalizations l10n, AdminSection section) {
     AdminSection.maintenance => l10n.adminMaintenanceTitle,
     AdminSection.users => l10n.adminUsersTitle,
     AdminSection.roles => l10n.adminRolesTitle,
+    AdminSection.mediaLibrary => l10n.adminMediaLibraryTitle,
     AdminSection.config => l10n.adminConfigTitle,
     AdminSection.storage => l10n.adminStorageTitle,
     AdminSection.externalStorage => l10n.adminExternalStorageTitle,
@@ -192,19 +194,21 @@ String _sectionGroupLabel(AppLocalizations l10n, AdminSectionGroup group) {
     AdminSectionGroup.overview => l10n.adminGroupOverview,
     AdminSectionGroup.operations => l10n.adminGroupOperations,
     AdminSectionGroup.identity => l10n.adminGroupIdentity,
+    AdminSectionGroup.library => l10n.adminGroupLibrary,
     AdminSectionGroup.configuration => l10n.adminGroupConfiguration,
     AdminSectionGroup.storage => l10n.adminGroupStorage,
   };
 }
 
-/// 窄屏底栏按 5 分区索引，与样例 `.set-nav` 的分区顺序一致。
+/// 窄屏底栏按 6 分区索引，与样例 `.set-nav` 的分区顺序一致。
 int _adminDockIndex(AdminSection section) {
   return switch (section.group) {
     AdminSectionGroup.overview => 0,
     AdminSectionGroup.identity => 1,
-    AdminSectionGroup.operations => 2,
-    AdminSectionGroup.configuration => 3,
-    AdminSectionGroup.storage => 4,
+    AdminSectionGroup.library => 2,
+    AdminSectionGroup.operations => 3,
+    AdminSectionGroup.configuration => 4,
+    AdminSectionGroup.storage => 5,
   };
 }
 
@@ -212,9 +216,10 @@ AdminSection? _adminDockSection(int index) {
   return switch (index) {
     0 => AdminSectionGroup.overview.primary,
     1 => AdminSectionGroup.identity.primary,
-    2 => AdminSectionGroup.operations.primary,
-    3 => AdminSectionGroup.configuration.primary,
-    4 => AdminSectionGroup.storage.primary,
+    2 => AdminSectionGroup.library.primary,
+    3 => AdminSectionGroup.operations.primary,
+    4 => AdminSectionGroup.configuration.primary,
+    5 => AdminSectionGroup.storage.primary,
     _ => null,
   };
 }

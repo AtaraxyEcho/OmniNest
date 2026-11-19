@@ -11,6 +11,7 @@ import 'package:omninest/app/desktop/desktop_player_bar.dart';
 import 'package:omninest/app/desktop/desktop_sidebar.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_boundary.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -21,6 +22,7 @@ import 'desktop_test_harness.dart';
 /// 记录全局播放键是否真的打到播放器上。
 class _CountingActions implements MusicPortalActions {
   int toggles = 0;
+  int syncCalls = 0;
 
   @override
   Future<void> togglePlayback() async {
@@ -42,7 +44,9 @@ class _CountingActions implements MusicPortalActions {
   @override
   Future<void> playAlbum(MusicAlbum album) async {}
   @override
-  Future<void> syncPlayback() async {}
+  Future<void> syncPlayback() async {
+    syncCalls++;
+  }
 }
 
 void main() {
@@ -148,6 +152,72 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Aoi Trio'), findsOneWidget);
+  });
+
+  testWidgets('播放条只有一层玻璃：描边面板与模糊背板同宽同高', (tester) async {
+    await pumpShell(tester);
+
+    final player = find.byType(DesktopPlayerBar);
+    final glass = find.byKey(const ValueKey('desktop-player-bar-glass'));
+    final panel = find.byKey(const ValueKey('desktop-player-bar-panel'));
+    expect(
+      find.descendant(of: player, matching: find.byType(DesktopGlassSurface)),
+      findsOneWidget,
+      reason: 'playerbar 自己就是一层玻璃，不能再垫第二层',
+    );
+    expect(glass, findsOneWidget);
+    expect(panel, findsOneWidget);
+    expect(tester.getSize(glass), const Size(1080, 66));
+    expect(tester.getRect(panel), tester.getRect(glass));
+    expect(tester.getRect(glass).left, 260);
+    expect(tester.getRect(glass).bottom, 986);
+  });
+
+  testWidgets('窄屏播放条按 more.css 收成 860px 并保留 14px 外边距', (tester) async {
+    await pumpShell(tester, viewport: const Size(1100, 800));
+
+    final glass = find.byKey(const ValueKey('desktop-player-bar-glass'));
+    expect(tester.getSize(glass), const Size(860, 66));
+    expect(tester.getRect(glass).left, 120);
+    expect(tester.getRect(glass).right, 980);
+  });
+
+  testWidgets('播放条保留样例的完整控件组，队列键可再次收起坞', (tester) async {
+    final container = await pumpShell(tester);
+    final player = find.byType(DesktopPlayerBar);
+
+    for (final key in const <String>[
+      'desktop-player-favorite',
+      'desktop-player-mode',
+      'desktop-player-previous',
+      'desktop-player-play',
+      'desktop-player-next',
+      'desktop-player-queue',
+      'desktop-player-mute',
+      'desktop-player-volume',
+      'desktop-player-expand',
+    ]) {
+      expect(
+        find.descendant(of: player, matching: find.byKey(ValueKey(key))),
+        findsOneWidget,
+        reason: key,
+      );
+    }
+    expect(
+      find.descendant(of: player, matching: find.byTooltip('Open Now Playing')),
+      findsOneWidget,
+      reason: '样例 .pb-track 的 title 挂在整个按钮上',
+    );
+
+    final queue = find.byKey(const ValueKey('desktop-player-queue'));
+    expect(container.read(desktopShellProvider).dockOpen, isFalse);
+    await tester.tap(queue);
+    await tester.pump();
+    expect(container.read(desktopShellProvider).dockOpen, isTrue);
+    expect(container.read(desktopShellProvider).dockTab, DesktopDockTab.queue);
+    await tester.tap(queue);
+    await tester.pump();
+    expect(container.read(desktopShellProvider).dockOpen, isFalse);
   });
 
   testWidgets('壳层为路由内容提供 Material 祖先：TextField 不再报 No Material', (
@@ -362,6 +432,24 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     expect(container.read(desktopShellProvider).sidebarExpanded, isFalse);
+  });
+
+  testWidgets('桌面壳把音乐中心状态同步到播放会话', (tester) async {
+    final actions = _CountingActions();
+    final container = await pumpShell(tester, musicActions: actions);
+    await container.read(musicCenterControllerProvider.future);
+    await tester.pump();
+    final before = actions.syncCalls;
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .setPlaying(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    // 桌面没有移动 MiniPlayerSlot 的常驻监听；壳层必须补上这一段，
+    // 否则播放条只翻图标，音频引擎不会收到 play/pause。
+    expect(actions.syncCalls, greaterThan(before));
   });
 
   testWidgets('Space 在常规页切播放，在沉浸页让位给页面', (tester) async {

@@ -54,12 +54,14 @@ class FileListQueryService {
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(sorted);
         Map<UUID, UUID> coverMap = assembler.resolveAliveCovers(sorted);
         Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, sorted);
+        Map<UUID, Long> childCounts = assembler.resolveChildCounts(sorted);
         return sorted.stream()
                 .map(node -> assembler.toDto(
                         node,
                         uploaderNames,
                         coverMap.get(node.getId()),
-                        favoritedIds.contains(node.getId())))
+                        favoritedIds.contains(node.getId()),
+                        childCounts.getOrDefault(node.getId(), 0L)))
                 .toList();
     }
 
@@ -91,11 +93,13 @@ class FileListQueryService {
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(nodes.getContent());
         Map<UUID, UUID> covers = assembler.resolveAliveCovers(nodes.getContent());
         Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, nodes.getContent());
+        Map<UUID, Long> childCounts = assembler.resolveChildCounts(nodes.getContent());
         return nodes.map(node -> assembler.toDto(
                 node,
                 uploaderNames,
                 covers.get(node.getId()),
-                favoritedIds.contains(node.getId())));
+                favoritedIds.contains(node.getId()),
+                childCounts.getOrDefault(node.getId(), 0L)));
     }
 
     @Transactional(readOnly = true)
@@ -110,11 +114,13 @@ class FileListQueryService {
         Map<UUID, String> uploaderNames = assembler.resolveUploaderNames(nodes.getContent());
         Map<UUID, UUID> covers = assembler.resolveAliveCovers(nodes.getContent());
         Set<UUID> favoritedIds = resolveFavoritedIds(ownerUserId, nodes.getContent());
+        Map<UUID, Long> childCounts = assembler.resolveChildCounts(nodes.getContent());
         return nodes.map(node -> assembler.toDto(
                 node,
                 uploaderNames,
                 covers.get(node.getId()),
-                favoritedIds.contains(node.getId())));
+                favoritedIds.contains(node.getId()),
+                childCounts.getOrDefault(node.getId(), 0L)));
     }
 
     /**

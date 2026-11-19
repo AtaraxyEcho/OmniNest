@@ -8,6 +8,8 @@ class _FileRow extends StatelessWidget {
     required this.onTap,
     required this.onOpen,
     required this.onMenu,
+    this.onFavorite,
+    this.onShare,
     this.dragIds = const <String>[],
     this.onDropFiles,
     this.hoveredAsDropTarget = false,
@@ -20,6 +22,10 @@ class _FileRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onOpen;
   final ValueChanged<Offset> onMenu;
+
+  /// 行内星标与分享（样例 `.ra` 的 star/share 两个按钮）；回收站等只读分区为空。
+  final VoidCallback? onFavorite;
+  final VoidCallback? onShare;
 
   /// 拖动本行时携带的 id 集：选中态拖整组，否则只拖这一行。
   /// 空集表示本行不可拖（回收站等只读分区）。
@@ -138,7 +144,7 @@ class _FileRow extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _fileKindLabel(l10n, node),
+                            _fileSubtitle(l10n, node),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: DesktopType.caption(skin.text3),
@@ -150,7 +156,9 @@ class _FileRow extends StatelessWidget {
                     SizedBox(
                       width: _FileColumns.modified,
                       child: Text(
-                        _formatDate(node.updatedAt),
+                        _formatModified(context, node.updatedAt),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: DesktopType.numeric(skin.text3),
                       ),
                     ),
@@ -191,26 +199,55 @@ class _FileRow extends StatelessWidget {
                             DesktopMotion.fast,
                           ),
                           opacity: hovered || selected ? 1 : 0,
-                          child: Builder(
-                            builder:
-                                (buttonContext) => DesktopIconButton(
-                                  icon: DesktopIcons.more,
-                                  size: 26,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (onFavorite != null)
+                                DesktopIconButton(
+                                  icon:
+                                      node.favorited
+                                          ? DesktopIcons.starFilled
+                                          : DesktopIcons.star,
+                                  size: 24,
                                   iconSize: 14,
-                                  tooltip: l10n.filesOpenFileMenu,
-                                  onPressed: () {
-                                    final box =
-                                        buttonContext.findRenderObject()
-                                            as RenderBox?;
-                                    final origin =
-                                        box == null
-                                            ? Offset.zero
-                                            : box.localToGlobal(
-                                              Offset(0, box.size.height),
-                                            );
-                                    onMenu(origin);
-                                  },
+                                  color:
+                                      node.favorited ? skin.warm : skin.text2,
+                                  tooltip:
+                                      node.favorited
+                                          ? l10n.filesRemoveFavorite
+                                          : l10n.filesAddFavorite,
+                                  onPressed: onFavorite,
                                 ),
+                              if (onShare != null)
+                                DesktopIconButton(
+                                  icon: DesktopIcons.share,
+                                  size: 24,
+                                  iconSize: 14,
+                                  tooltip: l10n.filesShare,
+                                  onPressed: onShare,
+                                ),
+                              Builder(
+                                builder:
+                                    (buttonContext) => DesktopIconButton(
+                                      icon: DesktopIcons.more,
+                                      size: 26,
+                                      iconSize: 14,
+                                      tooltip: l10n.filesOpenFileMenu,
+                                      onPressed: () {
+                                        final box =
+                                            buttonContext.findRenderObject()
+                                                as RenderBox?;
+                                        final origin =
+                                            box == null
+                                                ? Offset.zero
+                                                : box.localToGlobal(
+                                                  Offset(0, box.size.height),
+                                                );
+                                        onMenu(origin);
+                                      },
+                                    ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -422,180 +459,16 @@ class _AccessTag extends StatelessWidget {
       // 样例 `extra.css:37`：内距 2/9，带一圈发丝描边。
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
       decoration: BoxDecoration(
-        color: accent ? skin.accentWash(0.14) : skin.raise,
+        // 样例 `.tag.acc` 有底色；`.tag.dim`（Private）是透明底 + 发丝描边。
+        color: accent ? skin.accentWash(0.16) : Colors.transparent,
         borderRadius: BorderRadius.circular(DesktopMetrics.radiusPill),
         border: Border.all(color: accent ? skin.accentWash(0.30) : skin.line),
       ),
       child: Text(
         label,
-        style: DesktopType.nano(accent ? skin.accent : skin.text3),
-      ),
-    );
-  }
-}
-
-class _FileGrid extends StatelessWidget {
-  const _FileGrid({
-    required this.items,
-    required this.selected,
-    required this.onTap,
-    required this.onSelect,
-    required this.onMenu,
-  });
-
-  final List<FileNode> items;
-  final Set<String> selected;
-  final ValueChanged<FileNode> onTap;
-  final ValueChanged<FileNode> onSelect;
-  final void Function(FileNode node, Offset position) onMenu;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // `extra.css:88` 终值：repeat(auto-fill,minmax(168px,1fr))，gap 12px。
-        final columns = ((constraints.maxWidth + 12) / (168 + 12))
-            .floor()
-            .clamp(2, 8);
-        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (var i = 0; i < items.length; i++)
-              SizedBox(
-                width: width,
-                child: DesktopStagger(
-                  index: i,
-                  child: _FileTile(
-                    node: items[i],
-                    selected: selected.contains(items[i].id),
-                    onTap: () => onSelect(items[i]),
-                    onOpen: () => onTap(items[i]),
-                    onMenu: (position) => onMenu(items[i], position),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _FileGridSkeleton extends StatelessWidget {
-  const _FileGridSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = ((constraints.maxWidth + 12) / (168 + 12))
-            .floor()
-            .clamp(2, 8);
-        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 18,
-          children: [
-            for (var i = 0; i < columns * 2; i++)
-              SizedBox(
-                width: width,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DesktopSkeletonBox(height: 128, radius: 12, index: i * 3),
-                    const SizedBox(height: 10),
-                    FractionallySizedBox(
-                      widthFactor: 0.72,
-                      child: DesktopSkeletonBox(
-                        height: 11,
-                        radius: 5.5,
-                        index: i * 3 + 1,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    FractionallySizedBox(
-                      widthFactor: 0.42,
-                      child: DesktopSkeletonBox(
-                        height: 9,
-                        radius: 4.5,
-                        index: i * 3 + 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _FileTile extends StatelessWidget {
-  const _FileTile({
-    required this.node,
-    required this.selected,
-    required this.onTap,
-    required this.onOpen,
-    required this.onMenu,
-  });
-
-  final FileNode node;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onOpen;
-  final ValueChanged<Offset> onMenu;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      onDoubleTap: onOpen,
-      onSecondaryTapDown: (details) => onMenu(details.globalPosition),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 128,
-            decoration: BoxDecoration(
-              color: selected ? skin.accentWash(0.14) : skin.raise,
-              borderRadius: BorderRadius.circular(DesktopMetrics.radius),
-              border: Border.all(color: selected ? skin.accent : skin.line),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              _fileIcon(node),
-              size: 26,
-              color: node.isFolder ? skin.accent : skin.text3,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  node.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DesktopType.rowTitle(
-                    selected ? skin.accent : skin.text,
-                  ),
-                ),
-              ),
-              if (node.favorited)
-                Icon(DesktopIcons.starFilled, size: 11, color: skin.warm),
-            ],
-          ),
-          Text(
-            node.isFolder ? '—' : formatFileSize(node.sizeBytes),
-            style: DesktopType.caption(skin.text3),
-          ),
-        ],
+        style: DesktopType.caption(
+          accent ? skin.accent : skin.text3,
+        ).copyWith(fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -682,6 +555,15 @@ Color _fileTone(FileNode node, DesktopSkin skin) {
   return skin.text2;
 }
 
+/// 行副标题：目录显示直接子项数（样例 `Files.tsx` 的 `childCount`），
+/// 文件显示类型标签。
+String _fileSubtitle(AppLocalizations l10n, FileNode node) {
+  if (node.isFolder) {
+    return l10n.desktopFilesItemCount(node.childCount);
+  }
+  return _fileKindLabel(l10n, node);
+}
+
 String _fileKindLabel(AppLocalizations l10n, FileNode node) {
   if (node.isFolder) {
     return l10n.desktopFilesKindFolder;
@@ -709,6 +591,26 @@ String _fileKindLabel(AppLocalizations l10n, FileNode node) {
     return l10n.desktopFilesKindText;
   }
   return l10n.desktopFilesKindOther;
+}
+
+/// 列表"更新时间"列：样例用 Today / Yesterday / 短月日，不写完整年-月-日。
+String _formatModified(BuildContext context, DateTime? value) {
+  if (value == null) {
+    return '—';
+  }
+  final local = value.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final that = DateTime(local.year, local.month, local.day);
+  final diff = today.difference(that).inDays;
+  final l10n = AppLocalizations.of(context);
+  if (diff <= 0) {
+    return l10n.desktopFilesDateToday;
+  }
+  if (diff == 1) {
+    return l10n.desktopFilesDateYesterday;
+  }
+  return MaterialLocalizations.of(context).formatShortMonthDay(local);
 }
 
 String _formatDate(DateTime? value) {

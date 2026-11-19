@@ -4106,6 +4106,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminRunningTasks => '运行中';
 
   @override
+  String get adminRunningTasksStat => '运行任务';
+
+  @override
   String get adminExecuting => '正在执行';
 
   @override
@@ -6139,6 +6142,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminStorageTitle => '存储管理';
+
+  @override
+  String get adminGroupLibrary => '媒体库';
+
+  @override
+  String get adminMediaLibraryTitle => '媒体库';
+
+  @override
+  String get adminMediaLibrarySubtitle => '库源、发现扫描与最近一次匹配结果。';
 
   @override
   String get adminStorageSubtitle => '管理 MinIO 桶、容量与索引维护。';
@@ -13460,6 +13472,16 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String desktopHeroResumeMeta(int percent) {
+    return '继续观看 · 还剩 $percent%';
+  }
+
+  @override
+  String desktopHeroPlayMeta(String artist) {
+    return '播放 · $artist';
+  }
+
+  @override
   String get desktopStartListening => '开始聆听';
 
   @override
@@ -13899,6 +13921,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopMusicPlaying => '正在播放';
 
   @override
+  String get desktopMusicPlayingFrom => '正在播放';
+
+  @override
   String get desktopMusicPaused => '已暂停';
 
   @override
@@ -14185,9 +14210,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopFilesKindOther => '文件';
 
   @override
+  String get desktopFilesDateToday => '今天';
+
+  @override
+  String get desktopFilesDateYesterday => '昨天';
+
+  @override
   String desktopPhotosIndex(int index, int total) {
     return '第 $index / $total 张';
   }
+
+  @override
+  String get desktopPhotosSingleCapture => '单张拍摄';
 
   @override
   String get desktopPhotosInfo => '信息';

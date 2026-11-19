@@ -112,18 +112,18 @@ void main() {
             .map((box) => (box.decoration! as BoxDecoration).color)
             .toList();
 
-    // 空密码：四段都还是空槽色。
+    // 样例 `Setup.tsx:149`：`pass && <div className="sf-meter">`，空密码不渲染。
     final skin = DesktopSkin.of(
       tester.element(find.byKey(const ValueKey<String>('setup-password'))),
     );
-    expect(barColors(), hasLength(4));
-    expect(barColors().every((color) => color == skin.line), isTrue);
+    expect(barColors(), isEmpty);
 
     final password = find.byKey(const ValueKey<String>('setup-password'));
     await tester.enterText(password, 'Abcdef12');
     await tester.pump(const Duration(milliseconds: 320));
 
-    // 大写+小写+数字且 8 位：至少点亮三段，且不再有空槽。
+    // 有输入后是四段；大写+小写+数字且 8 位至少点亮三段。
+    expect(barColors(), hasLength(4));
     final lit = barColors().where((color) => color != skin.line).length;
     expect(lit, greaterThanOrEqualTo(3));
   });

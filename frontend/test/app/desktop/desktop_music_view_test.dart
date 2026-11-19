@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_page.dart';
+import 'package:omninest/app/desktop/widgets/desktop_tilt.dart';
 
 import 'desktop_test_harness.dart';
 
@@ -31,8 +32,21 @@ void main() {
     expect(find.textContaining('2 TRACKS'), findsOneWidget);
     expect(find.text('Evening Drift'), findsWidgets);
     expect(find.textContaining('Aoi Trio'), findsWidgets);
-    expect(find.text('PLAYING NOW'), findsOneWidget);
+    // 原型 `Music.tsx`：Playing from {album}。
+    expect(find.text('PLAYING FROM BLUE HOURS'), findsOneWidget);
     expect(find.text('Pause'), findsOneWidget);
+  });
+
+  testWidgets('专辑分区使用音乐文案且卡片不带指针柔光', (tester) async {
+    await pumpMusic(tester);
+
+    expect(find.text('Albums'), findsWidgets);
+    expect(find.text('Playlists'), findsWidgets);
+    expect(find.text('Favorites'), findsWidgets);
+    // 音乐专辑误用照片模块的「相册」文案曾让页面看起来多出一个相册栏。
+    expect(find.text('相册'), findsNothing);
+    // 样例 `.album` 没有 `.tilt/.shine`，卡片 hover 不应出现光晕/大投影。
+    expect(find.byType(DesktopTilt), findsNothing);
   });
 
   testWidgets('曲目页列出曲名、专辑与时长', (tester) async {
@@ -78,7 +92,7 @@ void main() {
 
   testWidgets('收藏页只留收藏曲目', (tester) async {
     await pumpMusic(tester);
-    await tester.tap(find.text('Favorite').first);
+    await tester.tap(find.text('Favorites').first);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 

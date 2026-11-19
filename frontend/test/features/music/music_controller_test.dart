@@ -1274,7 +1274,7 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
-  Future<void> recordPlayableHistory({
+  Future<String?> recordPlayableHistory({
     required String playableKey,
     required String title,
     required String artistName,
@@ -1284,7 +1284,14 @@ class _FakeMusicApi implements MusicApi {
     int playDuration = 0,
   }) async {
     recordedHistoryKeys.add(playableKey);
+    return null;
   }
+
+  @override
+  Future<int> updateListeningDuration(
+    String historyId,
+    int listenedSeconds,
+  ) async => listenedSeconds;
 
   @override
   Future<MusicPlaybackQueueSnapshot> playbackQueue() async {

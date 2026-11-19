@@ -74,73 +74,110 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
     }
     return SizedBox(
       height: 200,
-      child: Row(
-        children: [
-          for (var index = 0; index < photos.length; index++)
-            Expanded(
-              flex:
-                  _hovered == index
-                      ? 300
-                      : ((photos[index].width ?? 4) *
-                              100 ~/
-                              (photos[index].height ?? 3))
-                          .clamp(60, 220),
-              child: Padding(
-                padding: EdgeInsets.only(
-                  right: index == photos.length - 1 ? 0 : 10,
-                ),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onEnter: (_) => setState(() => _hovered = index),
-                  onExit: (_) => setState(() => _hovered = null),
-                  child: GestureDetector(
-                    onTap:
-                        () => context.push(
-                          DesktopRoutes.photoDetail(photos[index].id),
-                        ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          DesktopCover(
-                            url: photos[index].coverUrl,
-                            fallbackIcon: DesktopIcons.image,
-                            cacheKey: photos[index].coverCacheKey,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 10.0;
+          final count = photos.length;
+          final available = (constraints.maxWidth - gap * (count - 1)).clamp(
+            0.0,
+            double.infinity,
+          );
+          // 样例 `Home.tsx`：`flexGrow: p.ratio`（宽高比原值），
+          // hover 时 `.ps:hover { flex-grow: 3 !important }`。
+          // 两边同乘 100 保留比例，避免把比例 clamp 到某个像素区间。
+          final grow = <double>[
+            for (final photo in photos)
+              ((photo.width ?? 4) / (photo.height ?? 3) * 100).clamp(
+                20.0,
+                800.0,
+              ),
+          ];
+          if (_hovered != null && _hovered! < grow.length) {
+            grow[_hovered!] = 300;
+          }
+          final total = grow.fold<double>(0, (sum, value) => sum + value);
+          return Row(
+            children: [
+              for (var index = 0; index < count; index++)
+                AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.photoStrip),
+                  curve: Curves.easeOutCubic,
+                  width: total == 0 ? 0 : available * grow[index] / total,
+                  padding: EdgeInsets.only(right: index == count - 1 ? 0 : gap),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => setState(() => _hovered = index),
+                    onExit: (_) => setState(() => _hovered = null),
+                    child: GestureDetector(
+                      onTap:
+                          () => context.push(
+                            DesktopRoutes.photoDetail(photos[index].id),
                           ),
-                          AnimatedOpacity(
-                            duration: MotionToken.reduced(
-                              context,
-                              MotionToken.fast,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            DesktopCover(
+                              url: photos[index].coverUrl,
+                              fallbackIcon: DesktopIcons.image,
+                              cacheKey: photos[index].coverCacheKey,
                             ),
-                            curve: MotionToken.curve,
-                            opacity: _hovered == index ? 1 : 0,
-                            child: Align(
-                              alignment: Alignment.bottomLeft,
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Text(
-                                  photos[index].title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.caption(
-                                    DesktopPalette.onStage,
+                            AnimatedOpacity(
+                              duration: MotionToken.reduced(
+                                context,
+                                MotionToken.fast,
+                              ),
+                              curve: MotionToken.curve,
+                              opacity: _hovered == index ? 1 : 0,
+                              child: Align(
+                                alignment: Alignment.bottomLeft,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    12,
+                                    12,
+                                    10,
+                                  ),
+                                  child: Text(
+                                    // 样例标签显示 `place`，不是照片标题。
+                                    _photoPlaceLabel(photos[index]) ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: DesktopType.caption(
+                                      DesktopPalette.onStage,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+/// 样例 `p.place`：取 `gpsLocation` 里第一个可读地名。
+String? _photoPlaceLabel(PhotoItem photo) {
+  final location = photo.gpsLocation;
+  if (location == null || location.isEmpty) {
+    return null;
+  }
+  for (final key in const ['name', 'displayName', 'locality', 'city']) {
+    final value = location[key];
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
 }
 
 /// 最近文件小列表（样例 `.mini-list`）。

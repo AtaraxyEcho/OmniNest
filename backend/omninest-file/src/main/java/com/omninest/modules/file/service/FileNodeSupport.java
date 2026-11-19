@@ -275,7 +275,8 @@ public class FileNodeSupport {
                 uploaderNames.get(uploaderId),
                 coverFileId,
                 null,
-                favorited
+                favorited,
+                0L
         );
     }
 

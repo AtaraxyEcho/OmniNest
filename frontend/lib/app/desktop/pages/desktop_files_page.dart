@@ -35,6 +35,7 @@ import 'package:omninest/platform/platform_capabilities.dart';
 part 'desktop_files_actions.dart';
 part 'desktop_files_dialogs.dart';
 part 'desktop_files_rail.dart';
+part 'desktop_files_grid.dart';
 part 'desktop_files_rows.dart';
 part 'desktop_files_sections.dart';
 part 'desktop_files_table.dart';
@@ -201,6 +202,9 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                       stats: stats,
                       onSection: (value) => _goSection(controller, value),
                       onOpenFolder: (folder) => _openFolder(controller, folder),
+                      onMoveFiles:
+                          (ids, target) =>
+                              unawaited(controller.moveFilesTo(ids, target)),
                     ),
                   ),
                 ),
@@ -362,6 +366,26 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                           node,
                                           position,
                                         ),
+                                    onFavorite:
+                                        section == FileManagerSection.recycleBin
+                                            ? null
+                                            : (node) => unawaited(
+                                              node.favorited
+                                                  ? controller.removeFavorite(
+                                                    node,
+                                                  )
+                                                  : controller.addFavorite(
+                                                    node,
+                                                  ),
+                                            ),
+                                    onShare:
+                                        section == FileManagerSection.recycleBin
+                                            ? null
+                                            : (node) => _showShareDialog(
+                                              context,
+                                              controller,
+                                              node,
+                                            ),
                                   ),
                                 )
                                 : CustomScrollView(

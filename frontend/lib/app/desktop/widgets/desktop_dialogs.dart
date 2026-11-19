@@ -337,10 +337,10 @@ class DesktopDrawerFrame extends StatelessWidget {
           Divider(height: 1, color: skin.line),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [footer!],
-            ),
+            // Align 给 footer 一个有界最大宽度：footer 常用 Row + Spacer
+            // 把取消/保存推到右端，套在无界 Row 里会触发
+            // "non-zero flex but unbounded width" 断言。
+            child: Align(alignment: Alignment.centerRight, child: footer!),
           ),
         ],
       ],
