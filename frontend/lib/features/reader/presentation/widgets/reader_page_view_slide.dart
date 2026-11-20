@@ -104,10 +104,17 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       _pointerMoved = true;
     }
     if (widget.turnMode != PageTurnMode.slide &&
-        _pointerKind == PointerDeviceKind.touch &&
         !widget.selectionActive &&
         delta.dx.abs() > _ReaderPageViewState._tapMoveThreshold &&
         delta.dx.abs() > delta.dy.abs()) {
+      // Book 模式的拖拽从页边开始，正文中段仍然留给文字选择；鼠标和触摸
+      // 共用这条路径，桌面端不能因为 PointerDeviceKind 是 mouse 而退化成
+      // 只有点按箭头才能翻页。
+      final width = context.size?.width ?? 1;
+      final startX = _pointerDownPosition!.dx;
+      final edgeStart =
+          width <= 1 || startX < width * 0.30 || startX > width * 0.70;
+      if (!edgeStart) return;
       if (!_isDragging) {
         _onDragStart(DragStartDetails(localPosition: event.localPosition));
       }

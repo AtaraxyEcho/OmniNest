@@ -292,9 +292,15 @@ mixin ReaderViewPageInteractionMixin
         newSettings.lineHeight != settings.lineHeight ||
         newSettings.fontFamily != settings.fontFamily;
     final modeChanged = newSettings.readingMode != settings.readingMode;
+    final turnModeChanged =
+        newSettings.pageTurnMode != settings.pageTurnMode;
     final immersiveChanged =
         newSettings.immersiveMode != settings.immersiveMode;
-    final layoutChanged = fontChanged || modeChanged || immersiveChanged;
+    // Book/Swipe 共用 page 模式，但跨页书架的页框宽度、步进和呈现树不同；
+    // 只比较 readingMode 会让切换后继续使用旧分页，表现为页码停滞、空白页
+    // 或左右滑动没有响应。翻页方式也必须冻结锚点并重新分页。
+    final layoutChanged =
+        fontChanged || modeChanged || turnModeChanged || immersiveChanged;
 
     // 冻结当前阅读锚点：优先从滚动位置计算（比 tracker 更精确），
     // 因为翻页模式的 onPageChanged 可能已将 tracker 更新为页首。
@@ -336,7 +342,7 @@ mixin ReaderViewPageInteractionMixin
     syncVolumeKeyPaging();
 
     if (layoutChanged) {
-      if (modeChanged) {
+      if (modeChanged || turnModeChanged) {
         modeSwitchInProgress = true;
         // 冻结锚点，防止 onPageChanged 用页首覆盖
         modeSwitchAnchor = savedCharOffset;
@@ -347,7 +353,8 @@ mixin ReaderViewPageInteractionMixin
 
       if (kDebugMode) {
         readerDebugLog(
-          'ApplySettings: modeChanged=$modeChanged, fontChanged=$fontChanged, '
+          'ApplySettings: modeChanged=$modeChanged, '
+          'turnModeChanged=$turnModeChanged, fontChanged=$fontChanged, '
           'immersiveChanged=$immersiveChanged, '
           'savedCharOffset=$savedCharOffset, isPageMode=$isPageMode',
         );

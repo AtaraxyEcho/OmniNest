@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -539,16 +540,22 @@ class _BookAbout extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            description,
-            maxLines: expanded ? null : 3,
-            overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: TextStyle(
-              color: context.env.inkMuted,
-              fontFamily: AppTypography.serifFamily,
-              fontFamilyFallback: AppTypography.serifFamilyFallback,
-              fontSize: AppTypography.titleMedium,
-              height: 1.48,
+          AnimatedSize(
+            duration: MotionToken.resolve(context, MotionToken.normal),
+            curve: MotionToken.curve,
+            alignment: Alignment.topLeft,
+            child: Text(
+              description,
+              key: ValueKey(expanded),
+              maxLines: expanded ? null : 3,
+              overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.env.inkMuted,
+                fontFamily: AppTypography.serifFamily,
+                fontFamilyFallback: AppTypography.serifFamilyFallback,
+                fontSize: AppTypography.titleMedium,
+                height: 1.48,
+              ),
             ),
           ),
           const SizedBox(height: 7),

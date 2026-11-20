@@ -135,20 +135,13 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             ),
           ),
         ],
-        // 控制栏显示时：全屏遮罩（点击任意位置关闭控制栏）
-        if (_showControls)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                _updateState(() => _showControls = false);
-              },
-              child: const SizedBox.expand(),
-            ),
-          ),
-        // 顶部栏（在遮罩之上，可接收点击）
+        // 顶栏和底栏只占自己的几何范围。正文必须一直保留指针命中，才能在
+        // chrome 首次显示时继续左右翻页、上下滚动；正文的中心点击由
+        // ReaderPageView/ReaderViewContent 统一切换 chrome，避免一个全屏遮罩
+        // 把手势截断后只能先隐藏栏再翻页。
+        // 顶部栏
         _buildTopBar(detail, content, sampleChrome: sampleChrome),
-        // 底部栏（在遮罩之上，可接收点击）
+        // 底部栏
         _buildBottomBar(detail, content, sampleChrome: sampleChrome),
         // Positioned 必须是 Stack 的直接子节点。控件原先自己返回 Positioned，
         // 又被包进 IgnorePointer → AnimatedOpacity 的交叉淡入链里，StackParentData

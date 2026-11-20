@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/desktop_ambient.dart';
+import 'package:omninest/features/backdrop/backdrop_ui.dart'
+    show bundledDefaultWallpaperAssetPath;
 
 import 'desktop_test_harness.dart';
 
@@ -96,5 +98,41 @@ void main() {
     expect(find.byKey(const ValueKey('ambient-blobs')), findsNothing);
     expect(tester.binding.transientCallbackCount, 0);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('随包默认场景按 asset 加载，不当成网络地址', (tester) async {
+    tester.view.physicalSize = kDesktopViewport;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      wrapDesktop(
+        DesktopAmbient(
+          imageUrl: bundledDefaultWallpaperAssetPath,
+          intensity: 70,
+          reduceMotion: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final image = tester.widget<Image>(
+      find.descendant(
+        of: find.byKey(const ValueKey('ambient-cover')),
+        matching: find.byType(Image),
+      ),
+    );
+    final provider = image.image;
+    expect(
+      provider,
+      isA<ResizeImage>(),
+      reason: '样例 `Mush` 把封面画进 64×40，环境光不该按原图解码',
+    );
+    expect(
+      (provider as ResizeImage).imageProvider,
+      isA<AssetImage>(),
+      reason: '默认场景是随包资产，走网络加载会静默失败只剩色场',
+    );
+    expect(provider.width, 64);
   });
 }

@@ -42,6 +42,8 @@ import 'package:omninest/features/files/application/media_import_queue_controlle
 import 'package:omninest/features/files/application/media_import_service.dart'
     show MediaImportBatchResult;
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
+import 'package:omninest/features/music/application/music_platform_library_controller.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/video/application/media_import_task_waiter.dart';
 
@@ -50,6 +52,7 @@ part 'desktop_music_widgets.dart';
 part 'desktop_music_rows.dart';
 part 'desktop_music_loading.dart';
 part 'desktop_music_album_detail.dart';
+part 'desktop_music_platform.dart';
 
 /// 桌面音乐页（样例 `Music.tsx` 的 Home/Tracks/Albums）。
 ///
@@ -341,43 +344,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     }
   }
 
-  Future<void> _playAlbumTracks(
-    List<MusicTrack> tracks, {
-    bool shuffle = false,
-  }) async {
-    if (tracks.isEmpty) return;
-    final l10n = AppLocalizations.of(context);
-    final ordered = tracks.toList(growable: true);
-    if (shuffle) ordered.shuffle();
-    try {
-      await ref
-          .read(musicCenterControllerProvider.notifier)
-          .playItems(ordered.map(MusicPlayableItem.local).toList());
-    } on Object catch (error) {
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        failureToast(l10n, l10n.musicPlay, error),
-        kind: DesktopToastKind.error,
-        icon: DesktopIcons.info,
-      );
-    }
-  }
-
-  void _enqueueAlbumTracks(List<MusicTrack> tracks) {
-    final controller = ref.read(musicCenterControllerProvider.notifier);
-    for (final track in tracks) {
-      controller.enqueue(MusicPlayableItem.local(track));
-    }
-    if (tracks.isNotEmpty) {
-      showDesktopToast(
-        context,
-        AppLocalizations.of(context).musicPlayNextAdded,
-        icon: DesktopIcons.queue,
-      );
-    }
-  }
-
   Future<void> _editPlaylist({MusicPlaylist? playlist}) async {
     final l10n = AppLocalizations.of(context);
     final taken =
@@ -487,6 +453,9 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final l10n = AppLocalizations.of(context);
     final musicAsync = ref.watch(musicCenterControllerProvider);
     final state = musicAsync.asData?.value;
+    final platformAsync = ref.watch(musicPlatformLibraryProvider);
+    final platform =
+        platformAsync.asData?.value ?? const MusicPlatformLibraryState();
     final actions = ref.watch(musicPortalActionsProvider);
     final selectedPlaylist =
         state?.section == MusicSection.playlistDetail
@@ -592,58 +561,149 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
               ),
               switch (_tab) {
                 DesktopMusicTab.home when state == null => initialContent(),
-                DesktopMusicTab.home => _Home(
-                  state: state,
-                  playlists: state?.playlists ?? const <MusicPlaylist>[],
-                  onSeeAlbums:
-                      () => setState(() => _tab = DesktopMusicTab.albums),
-                  onOpenAlbum:
-                      (album) => setState(() => _selectedAlbum = album),
-                  onPlayPlaylist: _openPlaylist,
-                  onSeePlaylists:
-                      () => setState(() => _tab = DesktopMusicTab.playlists),
-                  onTogglePlayback: () => actions.togglePlayback(),
-                  onOpenQueue:
-                      () => ref
-                          .read(desktopShellProvider.notifier)
-                          .setDockTab(DesktopDockTab.queue),
-                  onPlayQueueItem:
-                      (index) => actions.playQueueAt(index).ignore(),
+                DesktopMusicTab.home => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Home(
+                      state: state,
+                      playlists: state?.playlists ?? const <MusicPlaylist>[],
+                      onSeeAlbums:
+                          () => setState(() => _tab = DesktopMusicTab.albums),
+                      onOpenAlbum:
+                          (album) => setState(() => _selectedAlbum = album),
+                      onPlayPlaylist: _openPlaylist,
+                      onSeePlaylists:
+                          () =>
+                              setState(() => _tab = DesktopMusicTab.playlists),
+                      onTogglePlayback: () => actions.togglePlayback(),
+                      onOpenQueue:
+                          () => ref
+                              .read(desktopShellProvider.notifier)
+                              .setDockTab(DesktopDockTab.queue),
+                      onPlayQueueItem:
+                          (index) => actions.playQueueAt(index).ignore(),
+                    ),
+                    if (platform.playlists.isNotEmpty)
+                      _DesktopOnlinePlaylistSection(
+                        library: platform,
+                        playlists: platform.playlists,
+                        onOpen:
+                            (playlist) =>
+                                _playOnlinePlaylist(playlist).ignore(),
+                      ),
+                    if (platform.likedTracks.isNotEmpty)
+                      _DesktopOnlineTrackSection(
+                        tracks: platform.likedTracks,
+                        currentId: state?.currentItem?.playableKey,
+                        playing: state?.isPlaying ?? false,
+                        onPlay:
+                            (track) =>
+                                ref
+                                    .read(
+                                      musicCenterControllerProvider.notifier,
+                                    )
+                                    .playOnlineTrack(track)
+                                    .ignore(),
+                      ),
+                  ],
                 ),
                 DesktopMusicTab.playlists when state == null =>
                   initialContent(),
-                DesktopMusicTab.playlists => _PlaylistGrid(
-                  playlists: state?.playlists ?? const <MusicPlaylist>[],
-                  onOpen: _openPlaylist,
-                  onCreate: () => _editPlaylist(),
+                DesktopMusicTab.playlists => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _PlaylistGrid(
+                      playlists: state?.playlists ?? const <MusicPlaylist>[],
+                      onOpen: _openPlaylist,
+                      onCreate: () => _editPlaylist(),
+                    ),
+                    if (platform.playlists.isNotEmpty)
+                      _DesktopOnlinePlaylistSection(
+                        library: platform,
+                        playlists: platform.playlists,
+                        onOpen:
+                            (playlist) =>
+                                _playOnlinePlaylist(playlist).ignore(),
+                      ),
+                  ],
                 ),
                 DesktopMusicTab.tracks when state == null => initialContent(),
-                DesktopMusicTab.tracks => _TracksView(
-                  tracks: state?.tracks ?? const [],
-                  search: _search,
-                  onPlay: (track) => actions.playTrackById(track.id),
-                  currentId: state?.currentItem?.playableKey,
-                  playing: state?.isPlaying ?? false,
+                DesktopMusicTab.tracks => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TracksView(
+                      tracks: state?.tracks ?? const [],
+                      search: _search,
+                      onPlay: (track) => actions.playTrackById(track.id),
+                      currentId: state?.currentItem?.playableKey,
+                      playing: state?.isPlaying ?? false,
+                    ),
+                    if (platform.likedTracks.isNotEmpty)
+                      _DesktopOnlineTrackSection(
+                        tracks: platform.likedTracks,
+                        currentId: state?.currentItem?.playableKey,
+                        playing: state?.isPlaying ?? false,
+                        onPlay:
+                            (track) =>
+                                ref
+                                    .read(
+                                      musicCenterControllerProvider.notifier,
+                                    )
+                                    .playOnlineTrack(track)
+                                    .ignore(),
+                      ),
+                  ],
                 ),
                 DesktopMusicTab.favorites when state == null =>
                   initialContent(),
-                DesktopMusicTab.favorites => _TracksView(
-                  tracks:
-                      state?.tracks
-                          .where((track) => track.favorite)
-                          .toList(growable: false) ??
-                      const <MusicTrack>[],
-                  search: _search,
-                  onPlay: (track) => actions.playTrackById(track.id),
-                  currentId: state?.currentItem?.playableKey,
-                  playing: state?.isPlaying ?? false,
-                  showControls: false,
+                DesktopMusicTab.favorites => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TracksView(
+                      tracks:
+                          state?.tracks
+                              .where((track) => track.favorite)
+                              .toList(growable: false) ??
+                          const <MusicTrack>[],
+                      search: _search,
+                      onPlay: (track) => actions.playTrackById(track.id),
+                      currentId: state?.currentItem?.playableKey,
+                      playing: state?.isPlaying ?? false,
+                      showControls: false,
+                    ),
+                    if (platform.likedTracks.isNotEmpty)
+                      _DesktopOnlineTrackSection(
+                        tracks: platform.likedTracks,
+                        currentId: state?.currentItem?.playableKey,
+                        playing: state?.isPlaying ?? false,
+                        onPlay:
+                            (track) =>
+                                ref
+                                    .read(
+                                      musicCenterControllerProvider.notifier,
+                                    )
+                                    .playOnlineTrack(track)
+                                    .ignore(),
+                      ),
+                  ],
                 ),
                 DesktopMusicTab.albums when state == null => initialContent(),
-                DesktopMusicTab.albums => _AlbumGrid(
-                  albums: state?.albums ?? const [],
-                  emptyLabel: l10n.musicNoAlbums,
-                  onOpen: (album) => setState(() => _selectedAlbum = album),
+                DesktopMusicTab.albums => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _AlbumGrid(
+                      albums: state?.albums ?? const [],
+                      emptyLabel: l10n.musicNoAlbums,
+                      onOpen: (album) => setState(() => _selectedAlbum = album),
+                    ),
+                    if (_knownPlatformTracks(platform).isNotEmpty)
+                      _DesktopOnlineAlbumSection(
+                        tracks: _knownPlatformTracks(platform),
+                        currentId: state?.currentItem?.playableKey,
+                        playing: state?.isPlaying ?? false,
+                        onPlay: _playOnlineTracks,
+                      ),
+                  ],
                 ),
               },
             ],

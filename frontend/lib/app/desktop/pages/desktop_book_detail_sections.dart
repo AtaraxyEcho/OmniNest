@@ -12,6 +12,7 @@ import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/route_exit.dart';
@@ -98,14 +99,25 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
     final about = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          description.isEmpty ? l10n.desktopMoviesNoOverview : description,
-          maxLines: canExpandDescription && !_showFullDescription ? 3 : null,
-          overflow:
-              canExpandDescription && !_showFullDescription
-                  ? TextOverflow.ellipsis
-                  : TextOverflow.visible,
-          style: DesktopType.body(skin.text2),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: AnimatedSize(
+            duration: DesktopMotion.fade,
+            curve: DesktopMotion.ease,
+            alignment: Alignment.topLeft,
+            child: Text(
+              description.isEmpty ? l10n.desktopMoviesNoOverview : description,
+              key: ValueKey(
+                '${_showFullDescription ? 'expanded' : 'collapsed'}:$description',
+              ),
+              maxLines: canExpandDescription && !_showFullDescription ? 3 : null,
+              overflow:
+                  canExpandDescription && !_showFullDescription
+                      ? TextOverflow.ellipsis
+                      : TextOverflow.visible,
+              style: DesktopType.body(skin.text2),
+            ),
+          ),
         ),
         if (canExpandDescription)
           DesktopLink(
@@ -196,18 +208,21 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
+        // 原型在 1180px 以下才把 bp-grid 堆成单列；900px 会让中等桌面窗
+        // 的说明和详情卡过早改成纵向，导致与样例的 1.3fr/1fr 网格脱节。
+        if (constraints.maxWidth < 1180) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [about, const SizedBox(height: 20), spec],
           );
         }
+        final specWidth = math.max(280.0, (constraints.maxWidth - 40) / 2.3);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: about),
-            const SizedBox(width: 36),
-            SizedBox(width: 320, child: spec),
+            const SizedBox(width: 40),
+            SizedBox(width: specWidth, child: spec),
           ],
         );
       },

@@ -142,16 +142,28 @@ class DesktopBookDetailPage extends ConsumerWidget {
                       ),
                       border: Border.all(color: skin.line2),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // 样例 `.bp-cover`：静止 -14deg，hover 收到 -4deg。
-                        DesktopBookTilt(
-                          child: _BookCover(item: item, large: true),
-                        ),
-                        const SizedBox(width: 44),
-                        Expanded(
-                          child: Column(
+                    child: LayoutBuilder(
+                      builder: (context, heroConstraints) {
+                        final stacked = heroConstraints.maxWidth < 1180;
+                        return Flex(
+                          direction:
+                              stacked ? Axis.vertical : Axis.horizontal,
+                          crossAxisAlignment:
+                              stacked
+                                  ? CrossAxisAlignment.start
+                                  : CrossAxisAlignment.center,
+                          children: [
+                            // 样例 `.bp-cover`：静止 -14deg，hover 收到 -4deg。
+                            DesktopBookTilt(
+                              child: _BookCover(item: item, large: true),
+                            ),
+                            SizedBox(
+                              width: stacked ? 0 : 44,
+                              height: stacked ? 24 : 0,
+                            ),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -240,10 +252,12 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                   _DesktopBookShelfButton(item: item),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
+                              ],
+                            ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),

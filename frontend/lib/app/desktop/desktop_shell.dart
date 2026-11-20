@@ -42,6 +42,7 @@ import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
 part 'desktop_shell_immersive.dart';
@@ -327,6 +328,12 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
             null;
   }
 
+  /// 环境光封面按路由取（样例 `Shell.tsx` 的 `covers` 映射）。
+  ///
+  /// 只有媒体路由借「当前内容」当封面；home / files / settings / admin 在
+  /// 样例里统一取同一张 `img.environment`，这里落成随包的默认场景。
+  /// 此前这些页面都退到「最近一张照片」，关掉背景库后环境光仍会画出用户
+  /// 自己的照片，看起来像壁纸没关——那不是壁纸层，但肉眼分不出来。
   String? _ambientImage() {
     final path = _path;
     if (path.startsWith('/music')) {
@@ -352,17 +359,36 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
         }),
       );
     }
-    return ref.watch(
-      photoDashboardProvider.select((dashboard) {
-        for (final item
-            in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
-          if (item.coverUrl != null) {
-            return item.coverUrl;
+    if (path.startsWith('/reader')) {
+      return ref.watch(
+        readerDashboardProvider.select((dashboard) {
+          for (final item
+              in dashboard.asData?.value.continueReading ??
+                  const <ReaderItem>[]) {
+            final cover = item.coverUrl;
+            if (cover != null && cover.isNotEmpty) {
+              return cover;
+            }
           }
-        }
-        return null;
-      }),
-    );
+          return null;
+        }),
+      );
+    }
+    if (path.startsWith('/photos')) {
+      return ref.watch(
+        photoDashboardProvider.select((dashboard) {
+          for (final item
+              in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
+            if (item.coverUrl != null) {
+              return item.coverUrl;
+            }
+          }
+          return null;
+        }),
+      );
+    }
+    // 随包资产而不是网络 URL：`DesktopAmbient` 按前缀识别并走 `Image.asset`。
+    return bundledDefaultWallpaperAssetPath;
   }
 
   @override

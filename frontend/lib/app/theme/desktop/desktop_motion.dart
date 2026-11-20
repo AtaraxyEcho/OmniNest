@@ -220,6 +220,15 @@ abstract final class DesktopMotion {
   static const Duration blobCycleMid = floatCycle;
   static const Duration blobCycleSlow = Duration(seconds: 40);
 
+  /// 环境光整层的强度淡变（样例 `.ambient { transition: opacity .6s }`）。
+  static const Duration ambientLayer = Duration(milliseconds: 600);
+
+  /// 环境光换封面：旧层 `.out` 淡出、新层 `.in` 淡入（样例 1.6s）。
+  static const Duration ambientCoverSwap = Duration(milliseconds: 1600);
+
+  /// 环境光封面首帧解码后的淡入（样例 `.mush { transition: opacity 1.2s }`）。
+  static const Duration ambientCoverFade = Duration(milliseconds: 1200);
+
   /// `.pb-art.spin` / `.f-art.spin`：播放条 9s、大封面 14s。
   static const Duration vinylSpin = Duration(seconds: 9);
   static const Duration vinylSpinFull = Duration(seconds: 14);

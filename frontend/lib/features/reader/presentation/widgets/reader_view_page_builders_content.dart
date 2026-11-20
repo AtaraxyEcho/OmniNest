@@ -44,10 +44,11 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           isPageMode: true,
         );
 
-        // 样例 `.bookview.mode-flip`：翻页模式在宽屏是双页跨页；滑动与滚动
-        // 模式仍单页满铺。跨页只改呈现与步进，页码/页数/进度口径不变。
+        // 样例 `.bookview.mode-flip`：只有 Book/cover 模式在宽屏使用双页
+        // 跨页；Swipe/slide 与窄窗 Book 都保持单页满铺。否则把 fade 也当成
+        // 跨页会让三种模式的语义与原型错位，且 cover 在窄窗会被错误裁成半页。
         final spread =
-            settings.pageTurnMode != 'slide' && viewportSize.width >= 1100;
+            settings.pageTurnMode == 'cover' && viewportSize.width >= 1100;
         // 样例 `.spread`：整幅跨页 1.42 宽高比，最高 780；超出时居中留白，
         // 而不是把两页拉到视口边缘。分页宽高必须跟着画框走，否则文字会溢出。
         final frame =
@@ -184,7 +185,9 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                 pageData,
                 slice,
                 scrollPhysics: const NeverScrollableScrollPhysics(),
-                chapterTitle: chapterTitle,
+                // 原型 PageFace 只在章节第一页显示章头；把章节标题传给每个
+                // 切片会让 Swipe/Book 每翻一页重复一遍章头，并额外吃掉页高。
+                chapterTitle: index == 0 ? chapterTitle : null,
                 pageInsets: pageInsets,
                 pageContentWidth: pageWidth,
               ),

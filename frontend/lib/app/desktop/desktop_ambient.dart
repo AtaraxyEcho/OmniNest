@@ -148,8 +148,12 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final unit = math.max(viewport.width, viewport.height);
     final drift = Curves.easeInOut.transform(_drift.value.clamp(0.0, 1.0));
     return IgnorePointer(
-      child: Opacity(
+      // 样例 `.ambient { transition: opacity .6s }`：拖强度滑杆时整层淡变，
+      // 不是每跳一格硬切。
+      child: AnimatedOpacity(
         opacity: opacity.clamp(0.0, 1.0),
+        duration: DesktopMotion.ambientLayer,
+        curve: Curves.ease,
         // 合成顺序必须与样例 `.ambient` 一致：饱和封面 → 漂移色场 →
         // 径向暗纱 → 暗纱实色 → 噪点。拆成三个边界只改「何时重录」，
         // 不改画什么、按什么顺序画、什么透明度。
@@ -182,7 +186,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                     ),
                 child: RepaintBoundary(
                   key: const ValueKey('ambient-cover'),
-                  child: _cover(skin),
+                  child: _coverStack(skin),
                 ),
               ),
             // 样例 `.blob` 是「光栅一次的径向渐变纹理 + 合成器 transform」。
@@ -255,22 +259,71 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     );
   }
 
-  /// 样例 `.amb-img { filter: saturate(1.6) }`：**只有饱和，没有 blur**。
-  /// 此前额外的 48σ 全屏高斯是偏离样例的多余效果，也是最大单点 GPU 成本，
-  /// 已移除。不降采样：无低通掩盖时缩图拉伸的细节缺失可见，须原生解码。
-  Widget _cover(DesktopSkin skin) => ColorFiltered(
-    colorFilter: desktopColorGrade(saturation: 1.6),
-    child: Opacity(
-      opacity: skin.isDark ? 0.55 : 0.40,
-      child: Image.network(
-        widget.imageUrl!,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
-        errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+  /// 抽样宽度：样例 `Mush` 把封面画进 64×40 的 canvas 再铺满 112%。
+  static const int _mushWidth = 64;
+
+  /// 封面换页：样例 `Shell.tsx` 只留最多两层——旧层 `.out` 1.6s 淡出，
+  /// 新层 `.in` 1.6s 淡入。直接换图会在切路由时硬切一下。
+  Widget _coverStack(DesktopSkin skin) {
+    final source = widget.imageUrl;
+    if (source == null || source.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedSwitcher(
+      duration: DesktopMotion.ambientCoverSwap,
+      switchInCurve: Curves.ease,
+      switchOutCurve: Curves.ease,
+      layoutBuilder:
+          (current, previous) => Stack(
+            fit: StackFit.expand,
+            children: [...previous, if (current != null) current],
+          ),
+      child: KeyedSubtree(
+        key: ValueKey<String>(source),
+        child: _cover(skin, source),
       ),
-    ),
-  );
+    );
+  }
+
+  /// 样例 `.amb-img { filter: saturate(1.6) }`：**只有饱和，没有 blur**。
+  ///
+  /// 封面不是照片：样例 `Mush` 先画进 64×40 的 canvas 再拉伸铺满，环境光
+  /// 只保留大块色彩，不保留照片细节——这正是它看起来像「光」而不是
+  /// 「壁纸」的原因。这里用 `ResizeImage(64)` 复刻同一步（顺带把 4K 解码
+  /// 降到 64px）。
+  ///
+  /// `assets/` 前缀是随包默认场景（模块没有可借的当前内容时用它），其余
+  /// 一律按网络地址处理：默认场景绝不能走网络加载，asset key 会被当成
+  /// URL 请求失败，安静地只剩色场。
+  Widget _cover(DesktopSkin skin, String source) {
+    final ImageProvider<Object> provider =
+        source.startsWith('assets/')
+            ? AssetImage(source)
+            : NetworkImage(source);
+    return ColorFiltered(
+      colorFilter: desktopColorGrade(saturation: 1.6),
+      child: Opacity(
+        opacity: skin.isDark ? 0.55 : 0.40,
+        child: Image(
+          image: ResizeImage(provider, width: _mushWidth),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
+          // 样例 `.mush { opacity: 0; transition: opacity 1.2s }` + `.ok`：
+          // 首帧解码完成才淡入，避免从空画布硬闪。
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            return AnimatedOpacity(
+              opacity: (wasSynchronouslyLoaded || frame != null) ? 1 : 0,
+              duration: DesktopMotion.ambientCoverFade,
+              curve: Curves.ease,
+              child: child,
+            );
+          },
+          errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
 
   /// 单团色光：静态径向渐变纹理留在保留边界里只录一次；相位只驱动边界
   /// 之上的 Transform。变换与原先逐帧 paint 的公式逐字等价：中心平移
