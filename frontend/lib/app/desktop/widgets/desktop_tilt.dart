@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 
 /// 样例 `.tilt`：卡片跟随指针做透视倾斜。
 ///
@@ -55,6 +56,7 @@ class _DesktopTiltState extends State<DesktopTilt> {
           ..rotateX(_hovered && !reduced ? -ny * maxRadians : 0)
           ..rotateY(_hovered && !reduced ? nx * maxRadians : 0);
 
+    final skin = DesktopSkin.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) {
@@ -72,36 +74,43 @@ class _DesktopTiltState extends State<DesktopTilt> {
       child: GestureDetector(
         onTap: widget.onTap,
         onSecondaryTap: widget.onSecondaryTap,
-        child: AnimatedContainer(
-          duration: DesktopMotion.of(
-            context,
-            const Duration(milliseconds: 350),
-          ),
-          curve: DesktopMotion.ease,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.radius),
-            boxShadow:
-                _hovered
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        blurRadius: 34,
-                        offset: const Offset(0, 18),
-                        spreadRadius: -18,
-                      ),
-                    ]
-                    : null,
-          ),
-          child: AnimatedSlide(
-            duration: DesktopMotion.of(
-              context,
-              const Duration(milliseconds: 350),
-            ),
-            curve: DesktopMotion.ease,
-            offset: Offset.zero,
-            child: Transform(
-              alignment: Alignment.center,
-              transform: matrix,
+        // 投影、描边与遮罩必须和图片一起倾斜：样例 `.tilt::after` 是元素
+        // 自身的伪层，旧的 Flutter 实现把它们留在未旋转的外层，悬停时
+        // 卡片边缘会露出一条没有被遮罩/描边覆盖的亮边。
+        child: RepaintBoundary(
+          child: Transform(
+            alignment: Alignment.center,
+            transform: matrix,
+            child: AnimatedContainer(
+              duration: DesktopMotion.of(
+                context,
+                const Duration(milliseconds: 350),
+              ),
+              curve: DesktopMotion.ease,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(widget.radius),
+                boxShadow:
+                    _hovered
+                        ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            blurRadius: 34,
+                            offset: const Offset(0, 18),
+                            spreadRadius: -18,
+                          ),
+                        ]
+                        : null,
+              ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(widget.radius),
+                border: Border.all(
+                  color:
+                      _hovered && !reduced
+                          ? skin.accent.withValues(alpha: 0.70)
+                          : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(widget.radius),
                 child: widget.child,

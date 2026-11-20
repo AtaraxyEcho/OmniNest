@@ -457,7 +457,8 @@ class MovieLibraryServiceTest {
         var updated = movieLibraryService.updateSeriesMetadata(
                 OWNER_ID,
                 SERIES_ID,
-                new UpdateSeriesMetadataRequest("  新标题 ", "新简介")
+                new UpdateSeriesMetadataRequest(
+                        "  新标题 ", "新简介", null, null, null, null, null, null, null)
         );
 
         assertThat(updated.title()).isEqualTo("新标题");
@@ -472,6 +473,40 @@ class MovieLibraryServiceTest {
                 any(),
                 any()
         );
+    }
+
+    @Test
+    @DisplayName("剧集手填元数据写入实体列与 provider_metadata")
+    void updateSeriesMetadataPersistsManualFields() {
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(SERIES_ID);
+        series.setOwnerUserId(OWNER_ID);
+        series.setTitle("Old Title");
+        series.setMetadata(new java.util.LinkedHashMap<>());
+        when(tvSeriesRepository.findById(SERIES_ID)).thenReturn(Optional.of(series));
+        when(tvSeriesRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
+                .thenReturn(Map.of());
+        when(seriesFavoriteRepository.findByOwnerUserIdAndSeriesIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+
+        var updated = movieLibraryService.updateSeriesMetadata(
+                OWNER_ID,
+                SERIES_ID,
+                new UpdateSeriesMetadataRequest(
+                        "新标题", "新简介", "ANIME", LocalDate.of(2023, 4, 2),
+                        8.6, List.of("Drama"), List.of("Kaia Vik", "Eero Salmi"),
+                        "24m", "https://example.test/poster.jpg")
+        );
+
+        assertThat(series.getFirstAirDate()).isEqualTo(LocalDate.of(2023, 4, 2));
+        assertThat(series.getRating()).isEqualTo(8.6);
+        assertThat(updated.genres()).containsExactly("Drama");
+        assertThat(updated.castMembers()).extracting("name")
+                .containsExactly("Kaia Vik", "Eero Salmi");
+        assertThat(series.getMetadata()).containsEntry("manualRuntime", "24m")
+                .containsEntry("manualPosterUrl", "https://example.test/poster.jpg");
+        assertThat(updated.posterUrl()).isEqualTo("https://example.test/poster.jpg");
     }
 
     @Test
@@ -491,7 +526,9 @@ class MovieLibraryServiceTest {
 
         assertThatThrownBy(
                 () -> movieLibraryService.updateSeriesMetadata(
-                        OWNER_ID, SERIES_ID, new UpdateSeriesMetadataRequest("越权标题", "越权简介")))
+                        OWNER_ID, SERIES_ID,
+                        new UpdateSeriesMetadataRequest(
+                                "越权标题", "越权简介", null, null, null, null, null, null, null)))
                 .isInstanceOf(BusinessException.class);
         verify(tvSeriesRepository, never()).save(any());
         verifyNoInteractions(syncEventService);

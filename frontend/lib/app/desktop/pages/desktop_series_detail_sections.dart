@@ -148,7 +148,7 @@ class _OverviewTab extends StatelessWidget {
         ],
         if (detail.writable) ...[
           const SizedBox(height: 22),
-          _SeriesOverviewActions(series: series),
+          _SeriesOverviewActions(series: series, cast: detail.cast),
         ],
       ],
     );
@@ -199,34 +199,50 @@ class _SeriesSynopsisState extends State<_SeriesSynopsis> {
     final skin = DesktopSkin.of(context);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.text,
-            maxLines: _expanded ? null : 3,
-            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: DesktopType.body(skin.text2).copyWith(height: 1.65),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => setState(() => _expanded = !_expanded),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: skin.accent,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final style = DesktopType.body(skin.text2).copyWith(height: 1.65);
+          final painter = TextPainter(
+            text: TextSpan(text: widget.text, style: style),
+            maxLines: 3,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: constraints.maxWidth);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.text,
+                maxLines: _expanded ? null : 3,
+                overflow:
+                    _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                style: style,
               ),
-              child: Text(
-                _expanded
-                    ? l10n.desktopMoviesShowLess
-                    : l10n.desktopMoviesReadMore,
-                style: DesktopType.button(skin.accent),
-              ),
-            ),
-          ),
-        ],
+              if (painter.didExceedMaxLines) ...[
+                const SizedBox(height: 2),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: skin.accent,
+                    ),
+                    child: Text(
+                      _expanded
+                          ? l10n.desktopMoviesShowLess
+                          : l10n.desktopMoviesReadMore,
+                      style: DesktopType.button(skin.accent),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -277,9 +293,10 @@ class _SeriesFactsCard extends StatelessWidget {
 }
 
 class _SeriesOverviewActions extends StatelessWidget {
-  const _SeriesOverviewActions({required this.series});
+  const _SeriesOverviewActions({required this.series, required this.cast});
 
   final MovieSeries series;
+  final List<MovieCastMember> cast;
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +315,7 @@ class _SeriesOverviewActions extends StatelessWidget {
                 context,
                 width: 520,
                 barrierDismissible: false,
-                builder: (_) => _SeriesEditDialog(series: series),
+                builder: (_) => _SeriesEditDialog(series: series, cast: cast),
               ),
             );
           },
@@ -309,36 +326,93 @@ class _SeriesOverviewActions extends StatelessWidget {
 }
 
 class _SeriesEditDialog extends ConsumerStatefulWidget {
-  const _SeriesEditDialog({required this.series});
+  const _SeriesEditDialog({required this.series, required this.cast});
 
   final MovieSeries series;
+  final List<MovieCastMember> cast;
 
   @override
   ConsumerState<_SeriesEditDialog> createState() => _SeriesEditDialogState();
 }
 
+/// 样例 `FilmEditor` 的剧集分支：封面预览 + 标题/类型/年份/时长/评分/
+/// 演员/海报地址/简介，字段与影片共用一套排版。
 class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
   late final TextEditingController _title = TextEditingController(
     text: widget.series.title,
+  );
+  late final TextEditingController _genre = TextEditingController(
+    text: widget.series.genres.join(', '),
+  );
+  late final TextEditingController _year = TextEditingController(
+    text: widget.series.firstAirDate?.year.toString() ?? '',
+  );
+  late final TextEditingController _runtime = TextEditingController(
+    text: (widget.series.metadata['manualRuntime'] ?? '').toString(),
+  );
+  late final TextEditingController _rating = TextEditingController(
+    text: widget.series.rating?.toStringAsFixed(1) ?? '',
+  );
+  late final TextEditingController _cast = TextEditingController(
+    text: widget.cast.map((member) => member.name).join(', '),
+  );
+  late final TextEditingController _posterUrl = TextEditingController(
+    text:
+        (widget.series.metadata['manualPosterUrl'] ??
+                widget.series.posterUrl ??
+                '')
+            .toString(),
   );
   late final TextEditingController _overview = TextEditingController(
     text: widget.series.overview ?? '',
   );
   bool _saving = false;
   String? _titleError;
+  String? _yearError;
+  String? _ratingError;
 
   @override
   void dispose() {
     _title.dispose();
+    _genre.dispose();
+    _year.dispose();
+    _runtime.dispose();
+    _rating.dispose();
+    _cast.dispose();
+    _posterUrl.dispose();
     _overview.dispose();
     super.dispose();
   }
 
+  List<String> _split(String value) => value
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final title = _title.text.trim();
-    if (title.isEmpty) {
-      setState(() => _titleError = l10n.videoTitleRequired);
+    final yearText = _year.text.trim();
+    final ratingText = _rating.text.trim();
+    final year = int.tryParse(yearText);
+    final rating = double.tryParse(ratingText);
+    setState(() {
+      _titleError = title.isEmpty ? l10n.videoTitleRequired : null;
+      _yearError =
+          yearText.isNotEmpty && (yearText.length != 4 || year == null)
+              ? l10n.videoMetaRuntimeInvalid
+              : null;
+      _ratingError =
+          ratingText.isNotEmpty &&
+                  (rating == null ||
+                      rating.isFinite == false ||
+                      rating < 0 ||
+                      rating > 10)
+              ? l10n.videoMetaFieldRating
+              : null;
+    });
+    if (_titleError != null || _yearError != null || _ratingError != null) {
       return;
     }
     setState(() => _saving = true);
@@ -349,6 +423,14 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
             seriesId: widget.series.id,
             title: title,
             overview: _overview.text.trim(),
+            seriesType: widget.series.seriesType,
+            firstAirDate:
+                year == null ? null : DateTime(year, DateTime.january, 1),
+            rating: rating,
+            genres: _split(_genre.text),
+            cast: _split(_cast.text),
+            runtime: _runtime.text.trim(),
+            posterUrl: _posterUrl.text.trim(),
           );
       if (!mounted) return;
       ref.invalidate(movieSeriesDetailProvider(widget.series.id));
@@ -378,15 +460,16 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     return DesktopDrawerFrame(
-      eyebrow: l10n.videoMetadataStatus,
-      title: l10n.desktopMoviesEditDetails,
-      footer: Wrap(
-        spacing: 10,
+      eyebrow: l10n.videoMetaEyebrow,
+      title: l10n.videoMetaEditDetails,
+      footer: Row(
         children: [
+          const Spacer(),
           DesktopButton(
             label: l10n.coreCancel,
             onPressed: _saving ? null : () => closeDesktopModal(context),
           ),
+          const SizedBox(width: 10),
           DesktopButton(
             label: l10n.videoDetailSave,
             variant: DesktopButtonVariant.primary,
@@ -401,79 +484,109 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 108,
-                height: 148,
-                child: DesktopCover(
-                  url: widget.series.posterImageUrl,
-                  fallbackIcon: DesktopIcons.film,
-                  cacheKey: 'series-metadata-poster:${widget.series.id}',
-                  borderRadius: BorderRadius.circular(
-                    DesktopMetrics.radiusSmall,
+              Padding(
+                padding: const EdgeInsets.only(top: 22),
+                child: SizedBox(
+                  width: 92,
+                  height: 138,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: DesktopCover(
+                      url:
+                          _posterUrl.text.trim().isEmpty
+                              ? widget.series.posterImageUrl
+                              : _posterUrl.text.trim(),
+                      fallbackIcon: DesktopIcons.film,
+                      cacheKey:
+                          'series-metadata-poster:${widget.series.id}:${_posterUrl.text.trim()}',
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     DesktopTextField(
                       controller: _title,
                       label: l10n.videoMetaFieldTitle,
-                      required: true,
                       error: _titleError,
                       autofocus: true,
-                      onChanged: (_) {
-                        if (_titleError != null) {
-                          setState(() => _titleError = null);
-                        }
-                      },
                     ),
-                    if (widget.series.genres.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        l10n.videoGenre.toUpperCase(),
-                        style: DesktopType.eyebrow(skin.text3),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final genre in widget.series.genres)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 9,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: skin.raise,
-                                border: Border.all(color: skin.line),
-                                borderRadius: BorderRadius.circular(
-                                  DesktopMetrics.radiusPill,
-                                ),
-                              ),
-                              child: Text(
-                                genre,
-                                style: DesktopType.caption(skin.text2),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+                    const SizedBox(height: 14),
+                    DesktopTextField(
+                      controller: _genre,
+                      label: l10n.videoMetaFieldGenre,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                flex: 8,
+                child: DesktopTextField(
+                  controller: _year,
+                  label: l10n.videoMetaFieldYear,
+                  hint: '2024',
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  error: _yearError,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 14,
+                child: DesktopTextField(
+                  controller: _runtime,
+                  label: l10n.videoMetaFieldRuntime,
+                  hint: '48m',
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 8,
+                child: DesktopTextField(
+                  controller: _rating,
+                  label: l10n.videoMetaFieldRating,
+                  hint: '8.0',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  error: _ratingError,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _cast,
+            label: l10n.videoMetaFieldCast,
+            hint: l10n.videoMetaCommaSeparated,
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _posterUrl,
+            label: l10n.videoMetaFieldPosterUrl,
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 14),
           DesktopTextField(
             controller: _overview,
-            label: l10n.videoMetaFieldOverview,
-            maxLines: 6,
-            height: 140,
+            label: l10n.videoMetaFieldSynopsis,
+            maxLines: 5,
+            height: 124,
           ),
+          const SizedBox(height: 14),
+          Text(
+            l10n.videoMetadataScopeNote,
+            style: DesktopType.caption(skin.text3),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );

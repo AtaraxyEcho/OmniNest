@@ -38,33 +38,57 @@ class _OverviewState extends State<_Overview> {
         const SizedBox(height: 8),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: Text(
-            synopsis,
-            maxLines: _expanded ? null : 3,
-            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: DesktopType.body(skin.text2).copyWith(height: 1.65),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final style = DesktopType.body(skin.text2).copyWith(height: 1.65);
+              final painter = TextPainter(
+                text: TextSpan(text: synopsis, style: style),
+                maxLines: 3,
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout(maxWidth: constraints.maxWidth);
+              // 只有三行确实被截断时才给展开入口；短简介多一个链接会
+              // 让用户误以为还有隐藏内容。
+              final canExpand = scraped && painter.didExceedMaxLines;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    synopsis,
+                    maxLines: _expanded ? null : 3,
+                    overflow:
+                        _expanded
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
+                    style: style,
+                  ),
+                  if (canExpand) ...[
+                    const SizedBox(height: 2),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => setState(() => _expanded = !_expanded),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: skin.accent,
+                        ),
+                        child: Text(
+                          _expanded
+                              ? l10n.desktopMoviesShowLess
+                              : l10n.desktopMoviesReadMore,
+                          style: DesktopType.button(skin.accent),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
-        if (scraped) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => setState(() => _expanded = !_expanded),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: skin.accent,
-              ),
-              child: Text(
-                _expanded
-                    ? l10n.desktopMoviesShowLess
-                    : l10n.desktopMoviesReadMore,
-                style: DesktopType.button(skin.accent),
-              ),
-            ),
-          ),
-        ],
         const SizedBox(height: 10),
         Text(
           l10n.desktopMoviesCastCrew.toUpperCase(),

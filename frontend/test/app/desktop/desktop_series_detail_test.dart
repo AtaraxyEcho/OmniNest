@@ -58,4 +58,27 @@ void main() {
     expect(find.text('Subtitles'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('剧集编辑抽屉提供与样例一致的手填字段', (tester) async {
+    await pumpSeries(tester);
+
+    await tester.ensureVisible(find.text('Edit details'));
+    await tester.pump();
+    await tester.tap(find.text('Edit details'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    for (final label in const <String>[
+      'Title',
+      'Genre',
+      'Year',
+      'Runtime',
+      'Rating',
+      'Cast',
+      'Poster image URL',
+      'Synopsis',
+    ]) {
+      expect(find.text(label), findsWidgets, reason: label);
+    }
+  });
 }

@@ -95,10 +95,32 @@ mixin MovieApiCatalog on MovieApiBase {
     required String seriesId,
     required String title,
     String? overview,
+    String? seriesType,
+    DateTime? firstAirDate,
+    double? rating,
+    List<String>? genres,
+    List<String>? cast,
+    String? runtime,
+    String? posterUrl,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/admin/video/series/$seriesId/metadata',
-      data: {'title': title, 'overview': overview},
+      data: {
+        'title': title,
+        'overview': overview,
+        'seriesType': seriesType,
+        'firstAirDate':
+            firstAirDate == null
+                ? null
+                : '${firstAirDate.year.toString().padLeft(4, '0')}-'
+                    '${firstAirDate.month.toString().padLeft(2, '0')}-'
+                    '${firstAirDate.day.toString().padLeft(2, '0')}',
+        'rating': rating,
+        'genres': genres,
+        'cast': cast,
+        'runtime': runtime,
+        'posterUrl': posterUrl,
+      }..removeWhere((_, value) => value == null),
     );
     return _seriesFromJson(parseData(response.data));
   }

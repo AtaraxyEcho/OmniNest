@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -149,6 +150,40 @@ void main() {
     await tester.tap(find.text('Export NFO'));
     await tester.pump();
     expect(actions.calls, contains('nfo:v-1'));
+  });
+
+  testWidgets('短简介不显示阅读更多', (tester) async {
+    await pumpDetail(tester);
+    expect(find.text('Read more'), findsNothing);
+  });
+
+  testWidgets('超长简介才给展开入口并可收起', (tester) async {
+    final longItem = MovieVideoItem(
+      id: 'v-1',
+      fileNodeId: 'f-1',
+      movieId: 'm-1',
+      mediaType: 'MOVIE',
+      title: 'Aperture',
+      metadataStatus: 'MATCHED',
+      nfoStatus: 'PRESENT',
+      updatedAt: null,
+      metadata: const {},
+      posterUrl: 'https://example.test/aperture-poster.jpg',
+      overview: List<String>.filled(
+        8,
+        'A long line of synopsis text.',
+      ).join(' '),
+    );
+    await pumpDetail(tester, item: longItem);
+    expect(
+      find.textContaining('A long line of synopsis text.'),
+      findsOneWidget,
+    );
+    expect(find.text('Read more'), findsOneWidget);
+
+    await tester.tap(find.text('Read more'));
+    await tester.pump();
+    expect(find.text('Show less'), findsOneWidget);
   });
 
   testWidgets('未刮削条目显示徽章且匹配按钮为首次匹配文案', (tester) async {

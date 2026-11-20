@@ -314,11 +314,21 @@ public final class MovieDtos {
     }
 
     /**
-     * 手动更新剧集标题与简介的请求。
+     * 手动更新剧集元数据的请求。
+     *
+     * <p>剧集没有自己的时长字段，手填值随 posterUrl 一起放在 provider_metadata
+     * 里；其余字段对应 MediaTvSeries 的实体列。所有字段可空，未给出的保持原值。
      */
     public record UpdateSeriesMetadataRequest(
             String title,
-            String overview
+            String overview,
+            String seriesType,
+            LocalDate firstAirDate,
+            Double rating,
+            List<String> genres,
+            List<String> cast,
+            String runtime,
+            String posterUrl
     ) {
     }
 

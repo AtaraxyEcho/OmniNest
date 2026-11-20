@@ -183,19 +183,19 @@ class _CinemaState extends State<_Cinema> {
                   const Duration(milliseconds: 1200),
                 ),
                 opacity: i == _index ? 1 : 0,
-                child:
-                    i == _index
-                        ? _KenBurns(
-                          child: DesktopCover(
-                            url:
-                                widget.items[i].backdropUrl ??
-                                widget.items[i].posterUrl,
-                            kind: DesktopCoverKind.network,
-                            fallbackIcon: DesktopIcons.film,
-                            cacheKey: 'desktop-cinema-${widget.items[i].id}',
-                          ),
-                        )
-                        : const SizedBox.shrink(),
+                // 所有 slide 都常驻：切换时只淡入淡出，不再把上一张的
+                // 子树整块换成 SizedBox.shrink() 造成海报瞬间跳位。
+                child: _KenBurns(
+                  active: i == _index,
+                  child: DesktopCover(
+                    url:
+                        widget.items[i].backdropUrl ??
+                        widget.items[i].posterUrl,
+                    kind: DesktopCoverKind.network,
+                    fallbackIcon: DesktopIcons.film,
+                    cacheKey: 'desktop-cinema-${widget.items[i].id}',
+                  ),
+                ),
               ),
             const _CinemaShade(),
             Positioned(
@@ -465,10 +465,15 @@ String _resolutionLabel(MovieVideoItem item) {
   return item.videoCodec?.toUpperCase() ?? 'HD';
 }
 
-/// ken-burns：从 1.02 缓推到 1.14，14s 停住（样例 `.cin-slide.on .kb`）。
+/// 样例 `desktop.css:310`：`.cin-slide.on .kb` 从 `scale(1.02)` 推到
+/// `scale(1.14) translate(-1.5%, -1%)`，14s ease-out forwards。
+///
+/// 缩放配合位移抵消放大时的视觉重心漂移；`RepaintBoundary` 把位图缓存成
+/// 一张纹理供每帧变换，避免逐帧重绘边缘像素造成的抖动。
 class _KenBurns extends StatefulWidget {
-  const _KenBurns({required this.child});
+  const _KenBurns({required this.active, required this.child});
 
+  final bool active;
   final Widget child;
 
   @override
@@ -484,7 +489,6 @@ class _KenBurnsState extends State<_KenBurns>
 
   bool _started = false;
 
-  // MediaQuery 在 initState 里还不可依赖，动画起点放到 didChangeDependencies。
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -492,8 +496,23 @@ class _KenBurnsState extends State<_KenBurns>
       return;
     }
     _started = true;
-    if (!(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+    if (widget.active &&
+        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
       _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _KenBurns oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active == widget.active) {
+      return;
+    }
+    if (widget.active &&
+        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+      _controller.forward(from: 0);
+    } else {
+      _controller.reset();
     }
   }
 
@@ -509,7 +528,14 @@ class _KenBurnsState extends State<_KenBurns>
       animation: _controller,
       builder: (context, child) {
         final t = DesktopMotion.easeOut.transform(_controller.value);
-        return Transform.scale(scale: 1.02 + 0.12 * t, child: child);
+        return Transform.scale(
+          scale: 1.02 + 0.12 * t,
+          // CSS 的 translate 发生在 scale 之前（变换列表从右往左应用）。
+          child: FractionalTranslation(
+            translation: Offset(-0.015 * t, -0.01 * t),
+            child: RepaintBoundary(child: child),
+          ),
+        );
       },
       child: widget.child,
     );

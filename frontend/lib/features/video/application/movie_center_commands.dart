@@ -470,17 +470,31 @@ extension MovieCenterCommands on MovieCenterController {
     return [favorites[0], favorites[1]];
   }
 
-  /// 更新系列（剧集/动漫）标题与简介。
+  /// 更新系列（剧集/动漫）的可编辑元数据。
   Future<void> updateSeriesMetadata({
     required String seriesId,
     required String title,
     String? overview,
+    String? seriesType,
+    DateTime? firstAirDate,
+    double? rating,
+    List<String>? genres,
+    List<String>? cast,
+    String? runtime,
+    String? posterUrl,
   }) async {
     try {
       await _api.updateSeriesMetadata(
         seriesId: seriesId,
         title: title,
         overview: overview,
+        seriesType: seriesType,
+        firstAirDate: firstAirDate,
+        rating: rating,
+        genres: genres,
+        cast: cast,
+        runtime: runtime,
+        posterUrl: posterUrl,
       );
       await refresh();
       centerRef.invalidate(movieSeriesDetailProvider(seriesId));

@@ -471,6 +471,42 @@ public class MovieLibraryService {
         if (request.overview() != null) {
             series.setOverview(request.overview());
         }
+        if (request.seriesType() != null && !request.seriesType().isBlank()) {
+            series.setSeriesType(request.seriesType().trim());
+        }
+        if (request.firstAirDate() != null) {
+            series.setFirstAirDate(request.firstAirDate());
+        }
+        if (request.rating() != null) {
+            series.setRating(request.rating());
+        }
+        if (request.genres() != null) {
+            series.setGenres(request.genres().stream()
+                    .filter(name -> name != null && !name.isBlank())
+                    .map(name -> Map.<String, Object>of("name", name.trim()))
+                    .toList());
+        }
+        if (request.cast() != null) {
+            series.setCastMembers(request.cast().stream()
+                    .filter(name -> name != null && !name.isBlank())
+                    .map(name -> Map.<String, Object>of("name", name.trim()))
+                    .toList());
+        }
+        // 样例 FilmEditor 的手填字段没有对应实体列，统一落 provider_metadata；
+        // 客户端在 DTO 的 metadata 与 posterUrl 上读回同一份值。
+        Map<String, Object> metadata = new LinkedHashMap<>(series.getMetadata());
+        if (request.runtime() != null) {
+            metadata.put("manualRuntime", request.runtime().trim());
+        }
+        if (request.posterUrl() != null) {
+            String posterUrl = request.posterUrl().trim();
+            if (posterUrl.isEmpty()) {
+                metadata.remove("manualPosterUrl");
+            } else {
+                metadata.put("manualPosterUrl", posterUrl);
+            }
+        }
+        series.setMetadata(metadata);
         series.setUpdatedAt(Instant.now());
         tvSeriesRepository.save(series);
         syncEventService.record(
@@ -976,6 +1012,12 @@ public class MovieLibraryService {
     ) {
         Map<String, MovieContentAssetDto> safeAssets = protectSeriesAssets(requesterUserId, item, assets);
         String resolvedPosterUrl = posterUrl(safeAssets);
+        if (resolvedPosterUrl == null) {
+            Object manual = item.getMetadata().get("manualPosterUrl");
+            if (manual instanceof String url && !url.isBlank()) {
+                resolvedPosterUrl = url;
+            }
+        }
         String resolvedBackdropUrl = backdropUrl(safeAssets);
         return new MovieSeriesDto(
                 item.getId(),
