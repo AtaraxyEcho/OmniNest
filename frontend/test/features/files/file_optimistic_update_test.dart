@@ -19,17 +19,18 @@ class _SeededController extends FileBrowserController {
   Future<FileBrowserState> build() async => initial;
 }
 
-FileNode _node(String id, {bool favorited = false}) => FileNode(
-  id: id,
-  parentId: null,
-  name: '$id.txt',
-  isFolder: false,
-  nodeType: 'DOCUMENT',
-  normalizedPath: '/$id.txt',
-  sizeBytes: 1024,
-  updatedAt: DateTime(2026, 11, 10),
-  favorited: favorited,
-);
+FileNode _node(String id, {bool favorited = false, String? parentId}) =>
+    FileNode(
+      id: id,
+      parentId: parentId,
+      name: '$id.txt',
+      isFolder: false,
+      nodeType: 'DOCUMENT',
+      normalizedPath: '/$id.txt',
+      sizeBytes: 1024,
+      updatedAt: DateTime(2026, 11, 10),
+      favorited: favorited,
+    );
 
 FileBrowserState _state() => FileBrowserState(
   files: [_node('a'), _node('b')],
@@ -44,7 +45,10 @@ FileBrowserState _state() => FileBrowserState(
 typedef _Harness =
     ({ProviderContainer container, _FakeFileRepository repository});
 
-Future<_Harness> _pump(List<FileNode> Function() page) async {
+Future<_Harness> _pump(
+  List<FileNode> Function() page, {
+  FileBrowserState? initial,
+}) async {
   final repository = _FakeFileRepository();
   when(
     () => repository.listFilesPage(
@@ -69,7 +73,7 @@ Future<_Harness> _pump(List<FileNode> Function() page) async {
     overrides: [
       fileRepositoryProvider.overrideWithValue(repository),
       fileBrowserControllerProvider.overrideWith(
-        () => _SeededController(_state()),
+        () => _SeededController(initial ?? _state()),
       ),
     ],
   );
@@ -163,6 +167,26 @@ void main() {
       2,
     );
     verifyNever(() => harness.repository.batchMoveFiles(any(), any()));
+  });
+
+  test('从嵌套目录拖到根目录，即使当前列表在根层也会发移动请求', () async {
+    final nested = _node('a', parentId: 'folder-1');
+    final harness = await _pump(
+      () => [nested, _node('b')],
+      initial: _state().copyWith(files: [nested, _node('b')]),
+    );
+    when(
+      () => harness.repository.batchMoveFiles(any(), any()),
+    ).thenAnswer((_) async => const <FileNode>[]);
+    final notifier = harness.container.read(
+      fileBrowserControllerProvider.notifier,
+    );
+
+    await notifier.moveFilesTo(<String>['a'], '');
+
+    verify(
+      () => harness.repository.batchMoveFiles(<String>['a'], ''),
+    ).called(1);
   });
 
   test('收藏先点亮星标再等网络', () async {

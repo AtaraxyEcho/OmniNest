@@ -74,188 +74,202 @@ class _HeroSky extends StatelessWidget {
     final inset = (width * 0.034).clamp(26.0, 44.0);
     final l10n = AppLocalizations.of(context);
 
-    return Container(
-      height: height,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-        // `extra.css:124`：`.bd-on .hero-sky` 的底是透明的，让壁纸透上来。
-        color: backdropActive ? Colors.transparent : null,
-        boxShadow: skin.shadow,
-      ),
-      foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-        border: Border.all(
-          color:
-              backdropActive
-                  ? const Color(0xFFFFFFFF).withValues(alpha: 0.2)
-                  : skin.line2,
+    return DesktopOutsetShadow(
+      borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+      // `polish.css:451` 覆盖 `desktop.css:284` 的 `var(--shadow)`：
+      // `0 30px 70px -34px rgba(0,0,0,.55)`，且只落在边框盒外侧。
+      shadows: const [
+        BoxShadow(
+          color: Color(0x8C000000),
+          blurRadius: 70,
+          spreadRadius: -34,
+          offset: Offset(0, 30),
         ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (showSky && !backdropActive)
-            DesktopSky(
-              condition: condition,
-              hour: hour,
-              isDay: isDay,
-              reduceMotion: reduceMotion,
-            ),
-          if (backdropActive)
-            // `extra.css:126`：壁纸态只留底部长渐变（55% → 60% 处透明）。
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [Color(0x8C050A12), Color(0x00050A12)],
-                  stops: [0.0, 0.6],
+      ],
+      child: Container(
+        height: height,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+          // `extra.css:124`：`.bd-on .hero-sky` 的底是透明的，让壁纸透上来。
+          color: backdropActive ? Colors.transparent : null,
+        ),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+          border: Border.all(
+            color:
+                backdropActive
+                    ? const Color(0xFFFFFFFF).withValues(alpha: 0.2)
+                    : skin.line2,
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (showSky && !backdropActive)
+              DesktopSky(
+                condition: condition,
+                hour: hour,
+                isDay: isDay,
+                reduceMotion: reduceMotion,
+              ),
+            if (backdropActive)
+              // `extra.css:126`：壁纸态只留底部长渐变（55% → 60% 处透明）。
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0x8C050A12), Color(0x00050A12)],
+                    stops: [0.0, 0.6],
+                  ),
+                ),
+              )
+            else ...[
+              // `polish.css:405`：径向暗角（左下 72% → 48% 处 28% → 72% 透明）
+              // 叠一层顶部 28% 的线性压暗。
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.bottomLeft,
+                    radius: 1.2,
+                    colors: [
+                      Color(0xB8040912),
+                      Color(0x47040912),
+                      Color(0x00040912),
+                    ],
+                    stops: [0.0, 0.48, 0.72],
+                  ),
                 ),
               ),
-            )
-          else ...[
-            // `polish.css:405`：径向暗角（左下 72% → 48% 处 28% → 72% 透明）
-            // 叠一层顶部 28% 的线性压暗。
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.bottomLeft,
-                  radius: 1.2,
-                  colors: [
-                    Color(0xB8040912),
-                    Color(0x47040912),
-                    Color(0x00040912),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x47040912), Color(0x00040912)],
+                    stops: [0.0, 0.32],
+                  ),
+                ),
+              ),
+            ],
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.all(inset),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            dateLabel.toUpperCase(),
+                            style: DesktopType.eyebrow(
+                              DesktopPalette.onStage.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            greeting,
+                            style: DesktopType.displayXl(
+                              DesktopPalette.onStage,
+                              width,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (contentLoading) ...[
+                            const SizedBox(
+                              width: 440,
+                              child: DesktopSkeletonBox(height: 16, radius: 5),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                const DesktopSkeletonBox(
+                                  width: 214,
+                                  height: 66,
+                                  radius: 16,
+                                ),
+                                const SizedBox(width: 10),
+                                const DesktopSkeletonBox(
+                                  width: 214,
+                                  height: 66,
+                                  radius: 16,
+                                ),
+                              ],
+                            ),
+                          ] else ...[
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 440),
+                              child: Text(
+                                lead,
+                                style: DesktopType.medium(
+                                  DesktopPalette.onStage.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            if (contentFailed)
+                              DesktopButton(
+                                label: retryLabel,
+                                icon: DesktopIcons.retry,
+                                variant: DesktopButtonVariant.glass,
+                                large: true,
+                                onPressed: onRetryContent,
+                              )
+                            else
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  if (resumeTitle != null)
+                                    _HeroActionTile(
+                                      artUrl: resumeArtUrl,
+                                      icon: DesktopIcons.play,
+                                      filledIcon: true,
+                                      meta:
+                                          resumeLabel == null
+                                              ? null
+                                              : l10n.desktopHeroResumeMeta(
+                                                (100 - resumeProgress).round(),
+                                              ),
+                                      title: resumeTitle!,
+                                      progress: resumeProgress,
+                                      onTap: onResume,
+                                    ),
+                                  _HeroActionTile(
+                                    artUrl: listenArtUrl,
+                                    icon: DesktopIcons.music,
+                                    meta: l10n.desktopHeroPlayMeta(
+                                      listenArtist,
+                                    ),
+                                    title: listenLabel,
+                                    onTap: onStartListening,
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (showWeatherCard) ...[
+                      const SizedBox(width: 32),
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: SizedBox(
+                          width: 264,
+                          child: _WeatherCard(weather: weather, isDay: isDay),
+                        ),
+                      ),
+                    ],
                   ],
-                  stops: [0.0, 0.48, 0.72],
-                ),
-              ),
-            ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x47040912), Color(0x00040912)],
-                  stops: [0.0, 0.32],
                 ),
               ),
             ),
           ],
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.all(inset),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          dateLabel.toUpperCase(),
-                          style: DesktopType.eyebrow(
-                            DesktopPalette.onStage.withValues(alpha: 0.7),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          greeting,
-                          style: DesktopType.displayXl(
-                            DesktopPalette.onStage,
-                            width,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (contentLoading) ...[
-                          const SizedBox(
-                            width: 440,
-                            child: DesktopSkeletonBox(height: 16, radius: 5),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              const DesktopSkeletonBox(
-                                width: 214,
-                                height: 66,
-                                radius: 16,
-                              ),
-                              const SizedBox(width: 10),
-                              const DesktopSkeletonBox(
-                                width: 214,
-                                height: 66,
-                                radius: 16,
-                              ),
-                            ],
-                          ),
-                        ] else ...[
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 440),
-                            child: Text(
-                              lead,
-                              style: DesktopType.medium(
-                                DesktopPalette.onStage.withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          if (contentFailed)
-                            DesktopButton(
-                              label: retryLabel,
-                              icon: DesktopIcons.retry,
-                              variant: DesktopButtonVariant.glass,
-                              large: true,
-                              onPressed: onRetryContent,
-                            )
-                          else
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: [
-                                if (resumeTitle != null)
-                                  _HeroActionTile(
-                                    artUrl: resumeArtUrl,
-                                    icon: DesktopIcons.play,
-                                    filledIcon: true,
-                                    meta:
-                                        resumeLabel == null
-                                            ? null
-                                            : l10n.desktopHeroResumeMeta(
-                                              (100 - resumeProgress).round(),
-                                            ),
-                                    title: resumeTitle!,
-                                    progress: resumeProgress,
-                                    onTap: onResume,
-                                  ),
-                                _HeroActionTile(
-                                  artUrl: listenArtUrl,
-                                  icon: DesktopIcons.music,
-                                  meta: l10n.desktopHeroPlayMeta(listenArtist),
-                                  title: listenLabel,
-                                  onTap: onStartListening,
-                                ),
-                              ],
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (showWeatherCard) ...[
-                    const SizedBox(width: 32),
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: SizedBox(
-                        width: 264,
-                        child: _WeatherCard(weather: weather, isDay: isDay),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

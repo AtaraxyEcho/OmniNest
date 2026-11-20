@@ -168,15 +168,30 @@ class _FileTile extends StatelessWidget {
                         width: 84,
                         height: 84,
                         decoration: BoxDecoration(
-                          color: skin.raise2,
+                          color:
+                              _hasFileThumbnail(node)
+                                  ? Colors.transparent
+                                  : _fileTone(
+                                    node,
+                                    skin,
+                                  ).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(18),
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          _fileIcon(node),
-                          size: 36,
-                          color: node.isFolder ? skin.accent : skin.text3,
-                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child:
+                            _hasFileThumbnail(node)
+                                ? FileThumbnail(
+                                  file: node,
+                                  size: 84,
+                                  borderRadius: BorderRadius.circular(18),
+                                  zoomOnHover: true,
+                                )
+                                : Icon(
+                                  _fileIcon(node),
+                                  size: 36,
+                                  color: _fileTone(node, skin),
+                                ),
                       ),
                       const SizedBox(height: 10),
                       Row(

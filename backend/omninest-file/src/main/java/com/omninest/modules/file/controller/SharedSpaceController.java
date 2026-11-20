@@ -9,6 +9,7 @@ import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.service.FileNodeSupport;
 import com.omninest.modules.file.dto.MoveToSpaceRequest;
+import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedSpaceRolePermissionDto;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
@@ -83,6 +84,19 @@ public class SharedSpaceController {
         FileNode node = sharedSpaceService.renameSharedFile(
                 fileId,
                 request,
+                currentUserContext.requireCurrentUserId());
+        return ApiResponse.success(toDto(node));
+    }
+
+    @Operation(summary = "在共享空间内移动文件")
+    @PatchMapping("/files/{fileId}/move")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    public ApiResponse<FileNodeDto> moveFile(
+            @PathVariable UUID fileId,
+            @RequestBody @Valid MoveFileNodeRequest request) {
+        FileNode node = sharedSpaceService.moveWithinSharedSpace(
+                fileId,
+                request.parentId(),
                 currentUserContext.requireCurrentUserId());
         return ApiResponse.success(toDto(node));
     }

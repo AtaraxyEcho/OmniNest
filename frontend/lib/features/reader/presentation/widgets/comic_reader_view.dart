@@ -87,7 +87,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   /// 当前阅读锚点（统一真相源）。
   ComicAnchor _anchor = const ComicAnchor(pageId: '', pageIndex: 0);
 
-  bool _showControls = false;
+  // 与样例 BookReader 的 chrome=true 保持一致：进入漫画阅读页后立即给出
+  // 返回、目录、模式和页码入口，用户不需要先猜测中心热区。
+  bool _showControls = true;
   late ComicReadingMode _readingMode;
   late ComicReaderDisplaySettings _displaySettings;
   ReaderViewSettings _settings = ReaderViewSettings();

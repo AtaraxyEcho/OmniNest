@@ -132,6 +132,10 @@ abstract final class DesktopType {
   static TextStyle cardTitle(Color color) =>
       _ui(sizeMedium, color, weight: FontWeight.w600, height: 1.35);
 
+  /// Reader 封面标题：对应样例 `.book-cover b` 的衬线标题层级。
+  static TextStyle coverTitle(Color color, {bool large = false}) =>
+      _serif(large ? sizeDisplaySm : sizeLarge, color, height: 1.12);
+
   /// 文件页面包屑标题：衬线 26 / 字距 -.015em。
   static TextStyle crumbTitle(Color color) =>
       _serif(sizeCrumb, color, height: 1.2, tracking: -0.015);

@@ -44,6 +44,8 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   String get currentChapterId;
   bool get isBookmarked;
   set isBookmarked(bool value);
+  bool get showControls;
+  set showControls(bool value);
   WindowChromeController get windowChromeController;
   WindowChromeLease? get windowChromeLease;
   set windowChromeLease(WindowChromeLease? value);
@@ -101,6 +103,9 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
     );
     setState(() {
       settings = resolved;
+      // 进入时先显示 chrome 与样例一致；如果用户上次明确保存了沉浸模式，
+      // 则尊重该持久化状态，避免设置异步回来后又把控件闪回屏幕。
+      showControls = !resolved.immersiveMode;
     });
     applyImmersiveMode(resolved.immersiveMode);
   }

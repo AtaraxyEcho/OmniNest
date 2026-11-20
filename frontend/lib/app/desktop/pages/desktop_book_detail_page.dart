@@ -13,6 +13,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
@@ -78,6 +79,21 @@ class DesktopBookDetailPage extends ConsumerWidget {
             (chapter) => chapter.id == progress?.chapterId,
           );
           final hasProgress = percent > 0;
+          final formatLabel =
+              item.isComic
+                  ? '${item.readerType == 'MANGA' ? 'MANGA' : 'COMIC'} · ${item.itemType}'
+                  : item.itemType;
+          final progressLabel =
+              chapters.isEmpty
+                  ? l10n.readerProgressPercent(percent.round())
+                  : l10n.readerChapterPosition(
+                    (currentIndex < 0 ? 0 : currentIndex) + 1,
+                    chapters.length,
+                  );
+          final canOpenReader =
+              item.isComic ||
+              item.itemType.toUpperCase() == 'PDF' ||
+              chapters.isNotEmpty;
           final tone = Color.lerp(skin.panelSolid, skin.accent, 0.24)!;
 
           return SingleChildScrollView(
@@ -143,10 +159,7 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                 spacing: 6,
                                 runSpacing: 6,
                                 children: [
-                                  DesktopChip(
-                                    '${item.itemType} · ${item.contentKind}',
-                                    solid: true,
-                                  ),
+                                  DesktopChip(formatLabel, solid: true),
                                   if (item.rating != null)
                                     DesktopChip(
                                       '★ ${item.rating!.toStringAsFixed(1)}',
@@ -170,23 +183,18 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                 item.authorName ?? '',
                                 style: DesktopType.dense(skin.text2),
                               ),
-                              if (hasProgress) ...[
-                                const SizedBox(height: 18),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 420,
-                                  ),
-                                  child: _ProgressBar(value: percent / 100),
+                              const SizedBox(height: 18),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 420,
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  l10n.readerChapterPosition(
-                                    (currentIndex < 0 ? 0 : currentIndex) + 1,
-                                    chapters.length,
-                                  ),
-                                  style: DesktopType.caption(skin.text3),
-                                ),
-                              ],
+                                child: _ProgressBar(value: percent / 100),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                progressLabel,
+                                style: DesktopType.caption(skin.text3),
+                              ),
                               const SizedBox(height: 22),
                               Wrap(
                                 spacing: 10,
@@ -201,10 +209,11 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                     variant: DesktopButtonVariant.primary,
                                     large: true,
                                     onPressed:
-                                        chapters.isEmpty
+                                        !canOpenReader
                                             ? null
-                                            : () => _openChapter(
+                                            : () => _openReading(
                                               context,
+                                              item,
                                               itemId,
                                               chapters,
                                               progress,
@@ -213,20 +222,22 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                   ),
                                   if (hasProgress)
                                     DesktopButton(
-                                      label: l10n.readerStartReading,
+                                      label: l10n.desktopMoviesFromStart,
                                       variant: DesktopButtonVariant.glass,
                                       large: true,
                                       onPressed:
-                                          chapters.isEmpty
+                                          !canOpenReader
                                               ? null
-                                              : () => _openChapter(
+                                              : () => _openReading(
                                                 context,
+                                                item,
                                                 itemId,
                                                 chapters,
                                                 null,
                                                 resume: false,
                                               ),
                                     ),
+                                  _DesktopBookShelfButton(item: item),
                                 ],
                               ),
                             ],
@@ -255,8 +266,9 @@ class DesktopBookDetailPage extends ConsumerWidget {
                       onRetryChapters:
                           () => ref.invalidate(parsedBookProvider(itemId)),
                       onOpenChapter:
-                          (chapter) => _openChapter(
+                          (chapter) => _openReading(
                             context,
+                            item,
                             itemId,
                             chapters,
                             progress,
@@ -273,6 +285,34 @@ class DesktopBookDetailPage extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+
+  void _openReading(
+    BuildContext context,
+    ReaderItem item,
+    String itemId,
+    List<ReaderChapter> chapters,
+    ReaderProgress? progress, {
+    required bool resume,
+    ReaderChapter? chapter,
+  }) {
+    final encodedId = Uri.encodeComponent(itemId);
+    if (item.isComic) {
+      desktopPush(context, '/reader/comics/$encodedId/read');
+      return;
+    }
+    if (item.itemType.toUpperCase() == 'PDF') {
+      desktopPush(context, '/reader/pdfs/$encodedId/read');
+      return;
+    }
+    _openChapter(
+      context,
+      itemId,
+      chapters,
+      progress,
+      resume: resume,
+      chapter: chapter,
     );
   }
 
@@ -314,82 +354,18 @@ class _BookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
     return SizedBox(
       width: large ? 200 : 120,
       height: large ? 300 : 180,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(skin.accent, skin.panelSolid, 0.45)!,
-              skin.panelSolid,
-            ],
-          ),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(10),
-            bottomRight: Radius.circular(10),
-            bottomLeft: Radius.circular(4),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: 30,
-              offset: const Offset(0, 16),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(10),
-            bottomRight: Radius.circular(10),
-            bottomLeft: Radius.circular(4),
-          ),
-          child:
-              item.coverUrl?.isNotEmpty == true
-                  ? DesktopImage(url: item.coverUrl)
-                  : Stack(
-                    children: [
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: 12,
-                        child: ColoredBox(
-                          color: Colors.black.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 18, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              item.title,
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.displaySm(skin.onStage),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              item.authorName ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(
-                                skin.onStageWash(0.75),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-        ),
+      child: DesktopReaderBookCover(
+        itemId: item.id,
+        title: item.title,
+        author: item.authorName ?? '',
+        coverUrl: item.coverUrl,
+        isComic: item.isDisplayedAsComic,
+        readerType: item.readerType,
+        volumeNumber: item.volumeNumber,
+        large: large,
       ),
     );
   }
@@ -443,15 +419,15 @@ class _MetaStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final progressMeta =
+        chapters == 0
+            ? l10n.readerProgressPercent(percent.round())
+            : l10n.readerChapterPosition(
+              (currentIndex < 0 ? 0 : currentIndex) + 1,
+              chapters,
+            );
     final cells = <(String, String, String)>[
-      (
-        l10n.desktopBookProgress,
-        '${percent.round()}%',
-        l10n.readerChapterPosition(
-          (currentIndex < 0 ? 0 : currentIndex) + 1,
-          chapters,
-        ),
-      ),
+      (l10n.desktopBookProgress, '${percent.round()}%', progressMeta),
       (l10n.desktopBookChapters, '$chapters', ''),
       (l10n.videoRating, item.rating?.toStringAsFixed(1) ?? '—', ''),
       (
@@ -515,6 +491,75 @@ class _MetaStrip extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 详情英雄区的书架收藏动作：使用真实 `addedToBookshelf` 状态，避免把
+/// 原型的局部收藏按钮做成只在当前窗口生效的假状态。
+class _DesktopBookShelfButton extends ConsumerStatefulWidget {
+  const _DesktopBookShelfButton({required this.item});
+
+  final ReaderItem item;
+
+  @override
+  ConsumerState<_DesktopBookShelfButton> createState() =>
+      _DesktopBookShelfButtonState();
+}
+
+class _DesktopBookShelfButtonState
+    extends ConsumerState<_DesktopBookShelfButton> {
+  bool _busy = false;
+
+  Future<void> _toggle() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      final result = await ref
+          .read(readerCenterControllerProvider.notifier)
+          .setBookshelf(
+            widget.item.id,
+            onBookshelf: !widget.item.addedToBookshelf,
+          );
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
+      showOmniFeedback(
+        context,
+        result.addedToBookshelf
+            ? l10n.readerAddedToBookshelf
+            : l10n.readerRemovedFromBookshelf,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          errorReason(error, l10n),
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final added = widget.item.addedToBookshelf;
+    return DesktopIconButton(
+      icon: added ? DesktopIcons.bookmarkFilled : DesktopIcons.bookmark,
+      active: added,
+      onPressed: _busy ? null : _toggle,
+      tooltip:
+          added ? l10n.readerRemoveFromBookshelf : l10n.readerAddToBookshelf,
     );
   }
 }

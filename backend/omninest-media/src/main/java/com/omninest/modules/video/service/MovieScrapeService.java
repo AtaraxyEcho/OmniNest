@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MovieScrapeService {
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -73,8 +75,7 @@ public class MovieScrapeService {
     public MediaVideoItem registerPendingVideo(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = resolveVideoFile(ownerUserId, fileNodeId);
         FileNameGuess guess = fileNameParser.parse(file.name());
-        // 一个文件只有一条业务行，行 owner 是文件所有者：先按 fileNodeId 定位再判写权限。
-        // 按 (请求者, 文件) 查会查不到既有行并尝试插入，直接撞 uniq_media_video_items_file。
+        // 一行一文件：先按 fileNodeId 定位再判写权限，按「请求者+文件」查会撞唯一键。
         MediaVideoItem existing = videoItemRepository.findByFileNodeId(fileNodeId).orElse(null);
         if (existing != null) {
             requireScrapeWritable(ownerUserId, existing);
@@ -89,10 +90,9 @@ public class MovieScrapeService {
     }
 
     /**
-     * 批量登记待刮削视频：复用扫描阶段已加载的文件描述与既有条目，避免逐文件重复查询。
+     * 批量登记待刮削视频，复用扫描阶段已加载的文件描述与既有条目。
      *
-     * <p>不包裹单一事务：登记中途遇到无权限文件时，已登记条目与逐文件登记路径一样保留。
-     * Dashboard 缓存按目录所有者去重失效，不随文件数重复失效。</p>
+     * <p>不包单一事务：中途无权限时已登记条目保留，与逐文件登记一致。</p>
      *
      * @param ownerUserId 扫描发起者
      * @param files 待登记文件，调用方已按扫描规则过滤
@@ -292,17 +292,36 @@ public class MovieScrapeService {
         FileNameGuess guess = videoItemRepository.findByFileNodeId(fileNodeId)
                 .map(item -> scrapeGuess(item, fileGuess))
                 .orElse(fileGuess);
+        // 检索词只能从文件名推导，落中间态便于区分「解析错」与「提供器不通」。
+        log.info("刮削候选检索: fileNodeId={}, fileName={}, title={}, year={}, season={}, episode={}",
+                fileNodeId, file.name(), guess.title(), guess.year(),
+                guess.seasonNumber(), guess.episodeNumber());
         // 网络 IO 在事务外执行，避免长时间占用 DB 连接
-        return metadataProviders.stream()
-                .flatMap(provider -> provider.search(guess).stream())
-                .toList();
+        List<ScrapeCandidateDto> candidates = new ArrayList<>();
+        MetadataProviderUnavailableException unavailable = null;
+        for (MetadataProvider provider : metadataProviders) {
+            try {
+                candidates.addAll(provider.search(guess));
+            } catch (MetadataProviderUnavailableException ex) {
+                // 单个提供器不可达不立刻中断：其它提供器可能仍有结果。
+                unavailable = ex;
+                log.warn("元数据提供器不可达: provider={}, reason={}", ex.providerName(), ex.getMessage());
+            }
+        }
+        // 全部为空且有提供器不可达时报错：空列表会被前端渲染成「没有候选」。
+        if (candidates.isEmpty() && unavailable != null) {
+            throw new BusinessException(
+                    ErrorCode.MEDIA_PROVIDER_UNREACHABLE,
+                    "无法连接 " + unavailable.providerName() + "，请检查服务器网络与代理设置"
+            );
+        }
+        return candidates;
     }
 
     private FileDescriptor resolveVideoFile(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = fileMetadataQueryService.findOwnedActive(ownerUserId, fileNodeId)
                 .orElse(null);
-        // 非拥有者文件一律交给权限矩阵：共享空间成员与父目录分享的子文件其 shared
-        // 布尔位都可能是 false，权限由空间角色或继承链推导，不能用该字段提前短路。
+        // 非拥有者交给权限矩阵：共享成员与父目录分享的子文件，shared 位都可能是 false。
         if (file == null) {
             file = fileMetadataQueryService.findActiveById(fileNodeId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
@@ -323,12 +342,7 @@ public class MovieScrapeService {
                 ownerUserId, file, guess, new LinkedHashMap<>(), new LinkedHashMap<>());
     }
 
-    /**
-     * 组装待刮削条目，并按批量缓存系列与季。
-     *
-     * <p>一次扫描里同一部剧的几十集共用同一个系列和同一季；不缓存会让每个文件都打两次
-     * 定位查询。缓存只在单次调用内有效，不跨请求持有实体。</p>
-     */
+    /** 组装待刮削条目，按批量缓存系列与季（缓存仅单次调用内有效）。 */
     private MediaVideoItem pendingVideo(
             UUID ownerUserId,
             FileDescriptor file,

@@ -285,6 +285,12 @@ abstract interface class FileRepository {
     required String name,
   });
 
+  /// 在共享空间内移动节点；空字符串表示共享空间根目录。
+  Future<FileNode> moveSharedFile({
+    required String fileId,
+    required String parentId,
+  });
+
   /// 移动文件到共享空间
   Future<void> moveToSharedSpace(String fileId);
 

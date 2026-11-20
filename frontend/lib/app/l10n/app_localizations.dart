@@ -22318,6 +22318,12 @@ abstract class AppLocalizations {
   /// **'A required service is unavailable. Please try again later'**
   String get errorDependencyUnavailable;
 
+  /// No description provided for @errorMediaProviderUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot reach the metadata service. Check the server network or proxy settings'**
+  String get errorMediaProviderUnreachable;
+
   /// No description provided for @errorRegistrationDisabled.
   ///
   /// In en, this message translates to:

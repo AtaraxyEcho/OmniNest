@@ -199,16 +199,65 @@ extension FileBrowserSectionActions on FileBrowserController {
     });
   }
 
-  Future<void> openSharedSpaceFolder(FileNode folder) async {
+  Future<void> openSharedSpaceFolder(
+    FileNode folder, {
+    List<FileNode>? breadcrumbs,
+  }) async {
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.openSharedFolder, () async {
       final current = _currentState;
       final currentBreadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
+      final page = await _repository.listSharedSpaceFilesPage(
+        parentId: folder.id,
+        page: 0,
+        size: current?.filePageSize ?? 10,
+      );
       _emitState(
-        _liveOr(
-          current,
-        ).copyWith(sharedSpaceBreadcrumbs: [...currentBreadcrumbs, folder]),
+        _liveOr(current).copyWith(
+          files: page.items,
+          parentId: folder.id,
+          sharedSpaceBreadcrumbs:
+              breadcrumbs ?? [...currentBreadcrumbs, folder],
+          section:
+              current?.section == FileManagerSection.sharedSpace
+                  ? FileManagerSection.sharedSpace
+                  : FileManagerSection.allFiles,
+          searchQuery: '',
+          filePage: page.page,
+          filePageSize: page.size,
+          fileTotalElements: page.totalElements,
+          fileTotalPages: page.totalPages,
+        ),
+      );
+    });
+  }
+
+  /// 返回共享空间根目录并重新取数；根条目本身不是一个可请求的节点。
+  Future<void> goToSharedSpaceRoot() async {
+    _clearSelection();
+    _clearInspection();
+    await _runAction(FileOperation.navigateSharedUp, () async {
+      final current = _currentState;
+      final page = await _repository.listSharedSpaceFilesPage(
+        page: 0,
+        size: current?.filePageSize ?? 10,
+      );
+      _emitState(
+        _liveOr(current).copyWith(
+          files: page.items,
+          parentId: null,
+          sharedSpaceBreadcrumbs: const [],
+          section:
+              current?.section == FileManagerSection.sharedSpace
+                  ? FileManagerSection.sharedSpace
+                  : FileManagerSection.allFiles,
+          searchQuery: '',
+          filePage: page.page,
+          filePageSize: page.size,
+          fileTotalElements: page.totalElements,
+          fileTotalPages: page.totalPages,
+        ),
       );
     });
   }
@@ -218,11 +267,29 @@ extension FileBrowserSectionActions on FileBrowserController {
     _clearInspection();
     final current = _currentState;
     final breadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
-    if (index < 0 || index > breadcrumbs.length) return;
-    final targetBreadcrumbs = breadcrumbs.sublist(0, index);
+    if (index < 0 || index >= breadcrumbs.length) return;
+    final target = breadcrumbs[index];
     await _runAction(FileOperation.navigateSharedUp, () async {
+      final page = await _repository.listSharedSpaceFilesPage(
+        parentId: target.id,
+        page: 0,
+        size: current?.filePageSize ?? 10,
+      );
       _emitState(
-        _liveOr(current).copyWith(sharedSpaceBreadcrumbs: targetBreadcrumbs),
+        _liveOr(current).copyWith(
+          files: page.items,
+          parentId: target.id,
+          sharedSpaceBreadcrumbs: breadcrumbs.take(index + 1).toList(),
+          section:
+              current?.section == FileManagerSection.sharedSpace
+                  ? FileManagerSection.sharedSpace
+                  : FileManagerSection.allFiles,
+          searchQuery: '',
+          filePage: page.page,
+          filePageSize: page.size,
+          fileTotalElements: page.totalElements,
+          fileTotalPages: page.totalPages,
+        ),
       );
     });
   }

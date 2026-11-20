@@ -54,7 +54,10 @@ class _RecordingFileBrowser extends FileBrowserController {
   }) async {}
 
   @override
-  Future<void> openFolder(FileNode folder) async {
+  Future<void> openFolder(
+    FileNode folder, {
+    List<FileNode>? breadcrumbs,
+  }) async {
     openedFolders.add(folder.id);
   }
 }

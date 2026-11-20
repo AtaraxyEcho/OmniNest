@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.OutboundEndpointRules;
 import com.omninest.common.security.SafeUrlValidator;
@@ -43,15 +44,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private final MediaRuntimeConfigService configService;
     private final SafeUrlValidator safeUrlValidator;
 
-    /**
-     * 共享的 HTTP 客户端。
-     *
-     * <p>原先每次请求 {@code HttpClient.newBuilder()} 新建一个，用完不关：JDK 的 HttpClient 自带
-     * 选择器线程与连接池，刮削一轮下来会留下成倍泄漏的连接。连接超时因此不再跟随配置浮动
-     * （要跟随就只能每次新建），请求级超时仍按 {@code tmdbTimeoutSeconds()} 生效。
-     * 重定向策略固定为 NEVER：接口路径实测不产生跳转，一旦上游返回 3xx 说明目标已不在
-     * 配置的基址内，交给调用方按请求失败处理，避免带着 API 凭据被带到别的主机。
-     */
+    /** 共享客户端：每次新建会泄漏选择器线程与连接池；重定向固定 NEVER，避免凭据被带到别的主机。 */
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -74,7 +67,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
             return List.of();
         }
         boolean tv = guess.seasonNumber() != null;
-        log.info("TMDB 开始搜索: type={}", tv ? "TV" : "MOVIE");
+        // 检索词只能从文件名推导，日志是事后唯一能还原「搜了什么」的证据。
+        log.info("TMDB 开始搜索: type={}, title={}, year={}, season={}, episode={}",
+                tv ? "TV" : "MOVIE", guess.title(), guess.year(),
+                guess.seasonNumber(), guess.episodeNumber());
 
         // 第一轮：按解析结果搜索（tv 或 movie）
         List<ScrapeCandidateDto> result = searchWithType(guess, credential, tv);
@@ -96,7 +92,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             FileNameGuess guess, TmdbCredential credential, boolean tv
     ) {
         for (String query : searchQueries(guess.title())) {
-            log.debug("TMDB 查询: type={}, includeYear=true", tv ? "TV" : "MOVIE");
+            log.debug("TMDB 查询: type={}, query={}, includeYear=true, year={}",
+                    tv ? "TV" : "MOVIE", query, guess.year());
             List<ScrapeCandidateDto> candidates = requestCandidates(guess, credential, query, true, tv);
             if (!candidates.isEmpty()) {
                 candidates = enrichDetail(candidates, credential, tv);
@@ -104,7 +101,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 return candidates;
             }
             if (guess.year() != null) {
-                log.debug("TMDB 查询: type={}, includeYear=false", tv ? "TV" : "MOVIE");
+                log.debug("TMDB 查询: type={}, query={}, includeYear=false", tv ? "TV" : "MOVIE", query);
                 candidates = requestCandidates(guess, credential, query, false, tv);
                 if (!candidates.isEmpty()) {
                     candidates = enrichDetail(candidates, credential, tv);
@@ -132,6 +129,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
     ) {
         try {
             URI uri = searchUri(guess, credential, queryText, includeYear, tv);
+            log.debug("TMDB 请求: uri={}", safeUri(uri));
             HttpRequest request = requestBuilder(uri, credential).GET().build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -147,8 +145,17 @@ public class TmdbMetadataProvider implements MetadataProvider {
             Thread.currentThread().interrupt();
             log.warn("TMDB 请求被中断");
             return List.of();
-        } catch (RuntimeException | IOException ex) {
+        } catch (BusinessException ex) {
+            // 基址与安全策略拒绝属于配置问题：原样上抛，不改写成「无法连接」。
+            log.warn("TMDB 出站地址被安全策略拒绝: message={}", ex.getMessage());
+            throw ex;
+        } catch (IOException ex) {
+            // 传输层失败上抛，否则会被上层当成「没有候选」。
             log.warn("TMDB 请求异常: errorType={}", ex.getClass().getSimpleName(), ex);
+            throw new MetadataProviderUnavailableException(providerName(), ex.getClass().getSimpleName(), ex);
+        } catch (RuntimeException ex) {
+            // 解析异常按「本次无结果」处理，避免一条脏响应打断整轮刮削。
+            log.warn("TMDB 响应处理异常: errorType={}", ex.getClass().getSimpleName(), ex);
             return List.of();
         }
     }

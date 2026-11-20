@@ -8,7 +8,25 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
   Widget _buildReaderSkeleton() {
     return Scaffold(
       backgroundColor: _settings.readerCanvasColor,
-      body: SafeArea(child: ReaderContentSkeleton(settings: _settings)),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(child: ReaderContentSkeleton(settings: _settings)),
+          ),
+          Positioned(
+            top: MediaQuery.viewPaddingOf(context).top + 8,
+            left: 12,
+            child: IconButton(
+              tooltip: AppLocalizations.of(context).coreBack,
+              onPressed: handleReaderExit,
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: _settings.onSurfaceColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -72,6 +72,8 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorRateLimited;
       case 'DEPENDENCY_UNAVAILABLE':
         return errorDependencyUnavailable;
+      case 'MEDIA_PROVIDER_UNREACHABLE':
+        return errorMediaProviderUnreachable;
       case 'REGISTRATION_DISABLED':
         return errorRegistrationDisabled;
       case 'INTERNAL_ERROR':

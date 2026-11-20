@@ -577,6 +577,14 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FileNode> moveSharedFile({
+    required String fileId,
+    required String parentId,
+  }) {
+    return fileApi.moveSharedFile(fileId: fileId, parentId: parentId);
+  }
+
+  @override
   Future<void> moveToSharedSpace(String fileId) {
     return fileApi.moveToSharedSpace(fileId);
   }

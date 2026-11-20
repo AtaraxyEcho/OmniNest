@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -186,6 +187,278 @@ class DesktopPaperCover extends StatelessWidget {
   }
 }
 
+/// Reader 书籍封面：对应样例 `Cover` 与 `.book-cover.art`。
+///
+/// 封面图仍通过 Reader 的鉴权取图通道加载，图像之上保留原型的书脊、
+/// 底部暗部、标题层、类型标签和 hover 光泽；没有图像时复用同一套结构，
+/// 这样网格卡片、继续阅读卡和书籍详情不会产生两种封面语义。
+class DesktopReaderBookCover extends StatelessWidget {
+  const DesktopReaderBookCover({
+    required this.itemId,
+    required this.title,
+    required this.author,
+    required this.coverUrl,
+    required this.isComic,
+    this.readerType = 'BOOK',
+    this.volumeNumber,
+    this.large = false,
+    this.compact = false,
+    this.hoveredOverride,
+    super.key,
+  });
+
+  final String itemId;
+  final String title;
+  final String author;
+  final String? coverUrl;
+  final bool isComic;
+  final String readerType;
+  final int? volumeNumber;
+  final bool large;
+  final bool compact;
+  final bool? hoveredOverride;
+
+  static const _radius = BorderRadius.only(
+    topLeft: Radius.circular(4),
+    topRight: Radius.circular(10),
+    bottomRight: Radius.circular(10),
+    bottomLeft: Radius.circular(4),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final hasArt = coverUrl?.isNotEmpty == true;
+    final subtitle =
+        volumeNumber == null
+            ? author
+            : '${l10n.readerLabelVolume} $volumeNumber';
+    final tag =
+        readerType == 'MANGA' ? l10n.readerTypeManga : l10n.readerTypeComic;
+
+    return DesktopHover(
+      builder: (context, localHovered) {
+        final hovered = hoveredOverride ?? localHovered;
+        final gloss = AnimatedSlide(
+          offset: hovered ? const Offset(0.6, 0) : const Offset(-0.6, 0),
+          duration: MotionToken.reduced(context, DesktopMotion.colorFade),
+          curve: DesktopMotion.ease,
+          child: SizedBox.expand(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  // CSS `linear-gradient(115deg, ...)`：从左上向右下
+                  // 斜过封面，不能用默认的水平或反向斜线近似。
+                  begin: const Alignment(-0.906, -0.423),
+                  end: const Alignment(0.906, 0.423),
+                  colors: [
+                    Colors.transparent,
+                    Colors.white.withValues(alpha: 0.14),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.4, 0.5, 0.6],
+                ),
+              ),
+            ),
+          ),
+        );
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient:
+                hasArt
+                    ? null
+                    : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        skin.accent.withValues(alpha: large ? 0.38 : 0.32),
+                        Color.lerp(skin.accent, Colors.black, 0.55)!,
+                      ],
+                    ),
+            borderRadius: _radius,
+            boxShadow:
+                hovered
+                    ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        blurRadius: 50,
+                        offset: const Offset(0, 40),
+                        spreadRadius: -18,
+                      ),
+                    ]
+                    : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        blurRadius: 40,
+                        offset: const Offset(0, 24),
+                        spreadRadius: -14,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+          ),
+          child: ClipRRect(
+            borderRadius: _radius,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasArt)
+                  DesktopCover(
+                    url: coverUrl,
+                    kind: DesktopCoverKind.reader,
+                    readerItemId: itemId,
+                    fallbackIcon: DesktopIcons.book,
+                    cacheKey: 'desktop-reader-cover-$itemId',
+                    iconSize: large ? 28 : 20,
+                  ),
+                if (hasArt)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.78),
+                        ],
+                        stops: [0.35, 1],
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: compact ? 5 : (large ? 12 : 10),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.white.withValues(alpha: 0.12),
+                          Colors.black.withValues(alpha: 0.10),
+                        ],
+                        stops: const [0, 0.4, 1],
+                      ),
+                    ),
+                  ),
+                ),
+                if (!compact && !hasArt)
+                  Positioned(
+                    left: 24,
+                    right: 16,
+                    top: 22,
+                    child: ColoredBox(
+                      color: (hasArt ? Colors.white : skin.text).withValues(
+                        alpha: 0.4,
+                      ),
+                      child: const SizedBox(height: 1),
+                    ),
+                  ),
+                if (isComic && !compact && hasArt)
+                  Positioned(
+                    top: 12,
+                    right: 10,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        child: Text(
+                          tag,
+                          style: DesktopType.micro(skin.onStage).copyWith(
+                            letterSpacing: 0.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (isComic && !compact && !hasArt)
+                  Positioned(
+                    top: 34,
+                    left: 24,
+                    child: Text(
+                      l10n.readerTypeComic,
+                      style: DesktopType.micro(
+                        skin.text.withValues(alpha: 0.7),
+                      ).copyWith(letterSpacing: 1.8),
+                    ),
+                  ),
+                if (!compact)
+                  Positioned(
+                    left: 24,
+                    right: hasArt ? 14 : 16,
+                    bottom: hasArt ? 14 : 16,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: large ? 4 : 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.coverTitle(
+                            hasArt ? Colors.white : skin.text,
+                            large: large,
+                          ).copyWith(
+                            shadows:
+                                hasArt
+                                    ? [
+                                      const Shadow(
+                                        color: Colors.black54,
+                                        blurRadius: 8,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ]
+                                    : null,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.micro(
+                            (hasArt ? Colors.white : skin.text).withValues(
+                              alpha: 0.75,
+                            ),
+                          ).copyWith(
+                            shadows:
+                                hasArt
+                                    ? [
+                                      const Shadow(
+                                        color: Colors.black54,
+                                        blurRadius: 8,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ]
+                                    : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!compact)
+                  Positioned.fill(child: IgnorePointer(child: gloss)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// 书封面的静止 3D 倾角与 hover 抬角（样例 `.bp-cover` / `.cont-book`）。
 ///
 /// 两处口径不同：书详 `rotateY(-14deg) -> -4deg`；阅读页继续阅读卡
@@ -199,6 +472,7 @@ class DesktopBookTilt extends StatelessWidget {
     this.hoverY = -4,
     this.hoverX = 0,
     this.hoverLift = 0,
+    this.hoveredOverride,
     super.key,
   });
 
@@ -208,12 +482,14 @@ class DesktopBookTilt extends StatelessWidget {
   final double hoverY;
   final double hoverX;
   final double hoverLift;
+  final bool? hoveredOverride;
 
   @override
   Widget build(BuildContext context) {
     final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return DesktopHover(
-      builder: (context, hovered) {
+      builder: (context, localHovered) {
+        final hovered = hoveredOverride ?? localHovered;
         final active = hovered && !reduced;
         final y = active ? hoverY : restY;
         final x = active ? hoverX : restX;

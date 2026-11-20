@@ -31,6 +31,12 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
     final navigationIntent = chapterNavigationIntent;
     isLoadingChapter = true;
     contentLoader!.setActive(requestedChapterId);
+    // 正文已经取到后仍可能在排版、测高或分页阶段失败。把这一段也纳入
+    // 同一个协调器，根构建树才能从“正文已取到但画面空白”切换到可重试的
+    // 错误反馈，而不是把失败吞在异步任务里。
+    final layoutRequestGeneration = chapterLoadCoordinator.begin(
+      requestedChapterId,
+    );
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
 
     try {
@@ -84,6 +90,11 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
         );
       }
 
+      chapterLoadCoordinator.succeed(
+        layoutRequestGeneration,
+        requestedChapterId,
+      );
+
       chapterNavigationIntent = const ReaderChapterNavigationIntent.resume();
       chapterLoadingTimer?.cancel();
       showChapterLoadingOverlay = false;
@@ -96,6 +107,11 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
         readerDebugLog('ReaderView: loadCurrentChapter failed: $e');
       }
       if (_isCurrentChapterRequest(requestedChapterId, generation)) {
+        chapterLoadCoordinator.fail(
+          layoutRequestGeneration,
+          requestedChapterId,
+          reason: e is TxtChapterTextException ? e.reason : null,
+        );
         isRestoringProgress = false;
         restore.cancel();
       }

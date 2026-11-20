@@ -159,6 +159,47 @@ class TmdbMetadataProviderTest {
                 .isEqualTo("http://tmdb-proxy.lan:8080/3/search/movie?query=a");
     }
 
+    /** 传输层失败必须抛出可识别异常，否则会被上层当成「没有候选」。 */
+    @Test
+    void searchThrowsProviderUnavailableWhenTransportFails() {
+        whenBaseUrl("http://127.0.0.1:1/3");
+        when(configService.metadataProvidersEnabled()).thenReturn(true);
+        when(configService.tmdbEnabled()).thenReturn(true);
+        when(configService.tmdbApiKey()).thenReturn("test-key");
+        when(configService.tmdbAccessToken()).thenReturn("");
+        when(configService.tmdbLanguage()).thenReturn("zh-CN");
+        when(configService.tmdbIncludeAdult()).thenReturn(false);
+        when(configService.tmdbTimeoutSeconds()).thenReturn(5);
+        when(configService.tmdbSearchQueriesStrategy()).thenReturn("NORMALIZED_ONLY");
+
+        assertThatThrownBy(() -> provider.search(new FileNameGuess("飞驰人生3", 2024, null, null)))
+                .isInstanceOf(MetadataProviderUnavailableException.class)
+                .hasMessageContaining("ConnectException");
+    }
+
+    /**
+     * 基址被安全策略拒绝属于配置错误，不能降级成「没有候选」，否则管理员会去查网络。
+     */
+    @Test
+    void searchPropagatesSecurityRejectionInsteadOfReturningEmpty() {
+        whenBaseUrl("https://tmdb-cache.example/3");
+        when(configService.metadataProvidersEnabled()).thenReturn(true);
+        when(configService.tmdbEnabled()).thenReturn(true);
+        when(configService.tmdbApiKey()).thenReturn("test-key");
+        when(configService.tmdbAccessToken()).thenReturn("");
+        when(configService.tmdbLanguage()).thenReturn("zh-CN");
+        when(configService.tmdbIncludeAdult()).thenReturn(false);
+        when(configService.tmdbTimeoutSeconds()).thenReturn(5);
+        when(configService.tmdbSearchQueriesStrategy()).thenReturn("NORMALIZED_ONLY");
+        doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址"))
+                .when(safeUrlValidator)
+                .requireSelfHostedSafeHost(any());
+
+        assertThatThrownBy(() -> provider.search(new FileNameGuess("飞驰人生3", 2024, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("本地或内网");
+    }
+
     private URI apiUri(String path, String query) {
         try {
             Method method = TmdbMetadataProvider.class.getDeclaredMethod("apiUri", String.class, CharSequence.class);

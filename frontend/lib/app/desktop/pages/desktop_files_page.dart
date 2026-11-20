@@ -29,14 +29,17 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
+import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
 part 'desktop_files_actions.dart';
 part 'desktop_files_dialogs.dart';
 part 'desktop_files_rail.dart';
+part 'desktop_files_rail_tree.dart';
 part 'desktop_files_grid.dart';
 part 'desktop_files_rows.dart';
+part 'desktop_files_rows_drag.dart';
 part 'desktop_files_sections.dart';
 part 'desktop_files_table.dart';
 
@@ -133,7 +136,11 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
       final folder = state?.files.where((node) => node.id == id).firstOrNull;
       if (folder != null && folder.isFolder) {
         _clearExternalHover();
-        unawaited(controller.openFolder(folder));
+        unawaited(
+          state?.spaceType == 'SHARED'
+              ? controller.openSharedSpaceFolder(folder)
+              : controller.openFolder(folder),
+        );
       }
     });
   }
@@ -150,6 +157,7 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
     final async = ref.watch(fileBrowserControllerProvider);
     final state = async.asData?.value;
     final controller = ref.read(fileBrowserControllerProvider.notifier);
@@ -169,24 +177,12 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
         section == FileManagerSection.sharedSpace;
 
     // 样例 `extra.css:70` 的表头是 `position: sticky`：它粘在**列表容器**
-    // 的顶部，而不是整页。所以页面骨架改成固定外壳（页头 + 工具栏 + 侧栏）
-    // 加一块自滚动的列表区，表头才可能一直在位。
+    // 的顶部，而不是整页。主区玻璃面板只包住工具栏与列表，表头才能在
+    // 面板内部滚动并保持自己的模糊层。
     final page = DesktopPage(
       maxWidth: double.infinity,
       topPadding: DesktopMetrics.pageTopPaddingCompact,
       children: [
-        DesktopPageHead(
-          eyebrow:
-              l10n
-                  .desktopFilesHeadline(
-                    stats?.totalFiles ?? items.length,
-                    stats == null ? '—' : formatFileSize(stats.usedBytes),
-                  )
-                  .toUpperCase(),
-          title: l10n.desktopNavFiles,
-          // 视图切换在工具栏右侧（样例 `Files.tsx:336`），页头不再放一份。
-        ),
-        const SizedBox(height: 18),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -201,7 +197,17 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                       section: section,
                       stats: stats,
                       onSection: (value) => _goSection(controller, value),
-                      onOpenFolder: (folder) => _openFolder(controller, folder),
+                      onSharedRoot:
+                          () => unawaited(controller.goToSharedSpaceRoot()),
+                      onSpaceChanged:
+                          (spaceType) => _switchSpace(controller, spaceType),
+                      onOpenFolder:
+                          (folder, path) => _openFolder(
+                            controller,
+                            folder,
+                            shared: state?.spaceType == 'SHARED',
+                            breadcrumbs: path,
+                          ),
                       onMoveFiles:
                           (ids, target) => controller.moveFilesTo(ids, target),
                     ),
@@ -210,256 +216,290 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                 const SizedBox(width: 22),
               ],
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FilesToolbar(
-                      controller: controller,
-                      section: section,
-                      state: state,
-                      search: _search,
-                      onSearch: controller.setSearchQuery,
-                      grid: grid,
-                      canUpload: canUpload,
-                      onNewFolder:
-                          () => _showNewFolderDialog(context, controller),
-                      onUpload: () => _pickAndUpload(controller, state),
-                      onEmptyRecycle:
-                          () => _showPurgeDialog(
-                            context,
-                            controller,
-                            state?.recycleBin ?? const <FileNode>[],
-                          ),
+                child: DesktopGlassSurface(
+                  borderRadius: BorderRadius.circular(18),
+                  blur: 28,
+                  saturation: 1.25,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+                    decoration: BoxDecoration(
+                      color: skin.panel,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: skin.line),
+                      boxShadow: const <BoxShadow>[],
                     ),
-                    if (state != null && state.lastActionError != null) ...[
-                      const SizedBox(height: 10),
-                      _ActionErrorBanner(
-                        message: state.lastActionError!.displayMessage,
-                        onDismiss: controller.clearActionError,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    _SectionNotices(section: section, state: state),
-                    if (state != null && selected.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _SelectionBar(
-                        section: section,
-                        state: state,
-                        onClear: controller.clearSelection,
-                        onDownload: () => _downloadSelected(state, controller),
-                        onDelete: () => _deleteSelected(controller, state),
-                        onRestore: () => _restoreSelected(controller),
-                        onPurge:
-                            () => _showPurgeDialog(
-                              context,
-                              controller,
-                              _selectedNodes(state),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _FilesToolbar(
+                          controller: controller,
+                          section: section,
+                          state: state,
+                          search: _search,
+                          onSearch: controller.setSearchQuery,
+                          grid: grid,
+                          canUpload: canUpload,
+                          onNewFolder:
+                              () => _showNewFolderDialog(context, controller),
+                          onUpload: () => _pickAndUpload(controller, state),
+                          onEmptyRecycle:
+                              () => _showPurgeDialog(
+                                context,
+                                controller,
+                                state?.recycleBin ?? const <FileNode>[],
+                              ),
+                        ),
+                        if (state != null && state.lastActionError != null) ...[
+                          const SizedBox(height: 10),
+                          _ActionErrorBanner(
+                            message: state.lastActionError!.displayMessage,
+                            onDismiss: controller.clearActionError,
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        _SectionNotices(section: section, state: state),
+                        if (state != null && selected.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _SelectionBar(
+                            section: section,
+                            state: state,
+                            onClear: controller.clearSelection,
+                            onDownload:
+                                () => _downloadSelected(state, controller),
+                            onDelete: () => _deleteSelected(controller, state),
+                            onRestore: () => _restoreSelected(controller),
+                            onPurge:
+                                () => _showPurgeDialog(
+                                  context,
+                                  controller,
+                                  _selectedNodes(state),
+                                ),
+                            onFavorite:
+                                () => _favoriteSelected(state, controller),
+                            onShare:
+                                () => _showShareDialog(
+                                  context,
+                                  controller,
+                                  _selectedNodes(state).first,
+                                ),
+                            onRename:
+                                () => _showRenameDialog(
+                                  context,
+                                  controller,
+                                  _selectedNodes(state).first,
+                                ),
+                          ),
+                        ],
+                        if (section == FileManagerSection.externalStorage) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _ExternalSection(
+                                state: state,
+                                controller: controller,
+                              ),
                             ),
-                        onFavorite: () => _favoriteSelected(state, controller),
-                        onShare:
-                            () => _showShareDialog(
-                              context,
-                              controller,
-                              _selectedNodes(state).first,
+                          ),
+                        ] else if (section == FileManagerSection.myShares ||
+                            section == FileManagerSection.shareManagement) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _SharesSection(
+                                state: state,
+                                controller: controller,
+                                onCopy:
+                                    (link) => _copyShareLink(controller, link),
+                              ),
                             ),
-                        onRename:
-                            () => _showRenameDialog(
-                              context,
-                              controller,
-                              _selectedNodes(state).first,
+                          ),
+                        ] else if (section ==
+                            FileManagerSection.sharedWithMe) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _WithMeSection(
+                                state: state,
+                                controller: controller,
+                              ),
                             ),
-                      ),
-                    ],
-                    if (section == FileManagerSection.externalStorage) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _ExternalSection(
-                            state: state,
-                            controller: controller,
                           ),
-                        ),
-                      ),
-                    ] else if (section == FileManagerSection.myShares ||
-                        section == FileManagerSection.shareManagement) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _SharesSection(
-                            state: state,
-                            controller: controller,
-                            onCopy: (link) => _copyShareLink(controller, link),
+                        ] else if (section ==
+                            FileManagerSection.uploadQueue) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _UploadQueueSection(
+                                state: state,
+                                controller: controller,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ] else if (section == FileManagerSection.sharedWithMe) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _WithMeSection(
-                            state: state,
-                            controller: controller,
+                        ] else if (section ==
+                            FileManagerSection.importTasks) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _ImportTasksSection(state: state),
+                            ),
                           ),
-                        ),
-                      ),
-                    ] else if (section == FileManagerSection.uploadQueue) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _UploadQueueSection(
-                            state: state,
-                            controller: controller,
+                        ] else if (section ==
+                            FileManagerSection.storageStats) ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _StorageSection(
+                                stats: state?.storageStats ?? stats,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ] else if (section == FileManagerSection.importTasks) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _ImportTasksSection(state: state),
-                        ),
-                      ),
-                    ] else if (section == FileManagerSection.storageStats) ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: _StorageSection(
-                            stats: state?.storageStats ?? stats,
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child:
-                            state == null && async.isLoading
-                                ? SingleChildScrollView(
-                                  child:
-                                      grid
-                                          ? const _FileGridSkeleton()
-                                          : const DesktopSkeletonRows(count: 8),
-                                )
-                                : state == null && async.hasError
-                                ? DesktopErrorView(
-                                  message: errorReason(async.error!, l10n),
-                                  onRetry:
-                                      () => ref.invalidate(
-                                        fileBrowserControllerProvider,
-                                      ),
-                                  minHeightFactor: 0.24,
-                                )
-                                : grid
-                                ? SingleChildScrollView(
-                                  child: _FileGrid(
-                                    items: items,
-                                    selected: selected,
-                                    onTap:
-                                        (node) => _activate(controller, node),
-                                    onSelect:
-                                        (node) => _select(controller, node),
-                                    onMenu:
-                                        (node, position) => _openRowMenu(
-                                          context,
-                                          controller,
-                                          state,
-                                          node,
-                                          position,
-                                        ),
-                                    onFavorite:
-                                        section == FileManagerSection.recycleBin
-                                            ? null
-                                            : (node) => unawaited(
-                                              node.favorited
-                                                  ? controller.removeFavorite(
-                                                    node,
-                                                  )
-                                                  : controller.addFavorite(
-                                                    node,
-                                                  ),
-                                            ),
-                                    onShare:
-                                        section == FileManagerSection.recycleBin
-                                            ? null
-                                            : (node) => _showShareDialog(
-                                              context,
+                        ] else ...[
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child:
+                                state == null && async.isLoading
+                                    ? SingleChildScrollView(
+                                      child:
+                                          grid
+                                              ? const _FileGridSkeleton()
+                                              : const DesktopSkeletonRows(
+                                                count: 8,
+                                              ),
+                                    )
+                                    : state == null && async.hasError
+                                    ? DesktopErrorView(
+                                      message: errorReason(async.error!, l10n),
+                                      onRetry:
+                                          () => ref.invalidate(
+                                            fileBrowserControllerProvider,
+                                          ),
+                                      minHeightFactor: 0.24,
+                                    )
+                                    : grid
+                                    ? SingleChildScrollView(
+                                      child: _FileGrid(
+                                        items: items,
+                                        selected: selected,
+                                        onTap:
+                                            (node) => _activate(
                                               controller,
                                               node,
+                                              shared:
+                                                  state?.spaceType == 'SHARED',
                                             ),
-                                  ),
-                                )
-                                : CustomScrollView(
-                                  slivers: [
-                                    // 表头吸顶：行真的从表头下方滑过，模糊层
-                                    // 才有可见对象（样例 `extra.css:70`）。
-                                    // 空列表不画表头（样例 `Files.tsx:345` 的
-                                    // `rows.length > 0` 条件）。
-                                    if (items.isNotEmpty)
-                                      SliverPersistentHeader(
-                                        pinned: true,
-                                        delegate: _StickyFileTableHead(
-                                          sort:
-                                              state?.sortBy ??
-                                              FileBrowserSortBy.name,
-                                          ascending:
-                                              state?.sortAscending ?? true,
-                                          onSort:
-                                              (value) => _sortBy(
-                                                controller,
-                                                state,
-                                                value,
-                                              ),
-                                        ),
+                                        onSelect:
+                                            (node) => _select(controller, node),
+                                        onMenu:
+                                            (node, position) => _openRowMenu(
+                                              context,
+                                              controller,
+                                              state,
+                                              node,
+                                              position,
+                                            ),
+                                        onFavorite:
+                                            section ==
+                                                        FileManagerSection
+                                                            .recycleBin ||
+                                                    state?.spaceType == 'SHARED'
+                                                ? null
+                                                : (node) => unawaited(
+                                                  node.favorited
+                                                      ? controller
+                                                          .removeFavorite(node)
+                                                      : controller.addFavorite(
+                                                        node,
+                                                      ),
+                                                ),
+                                        onShare:
+                                            section ==
+                                                        FileManagerSection
+                                                            .recycleBin ||
+                                                    state?.spaceType == 'SHARED'
+                                                ? null
+                                                : (node) => _showShareDialog(
+                                                  context,
+                                                  controller,
+                                                  node,
+                                                ),
                                       ),
-                                    SliverList(
-                                      delegate: SliverChildListDelegate([
-                                        ..._groupedRows(
-                                          state,
-                                          controller,
-                                          items,
-                                          selected,
-                                        ),
-                                        if (state != null &&
-                                            !state.isBusy &&
-                                            items.isEmpty)
-                                          _FilesEmpty(
-                                            section: section,
-                                            filtered:
-                                                (state
-                                                    .searchQuery
-                                                    .isNotEmpty) ||
-                                                state.fileCategory !=
-                                                    FileBrowserFileCategory.all,
-                                            onClear: () {
-                                              _search.clear();
-                                              controller.setSearchQuery('');
-                                              controller.setFileCategory(
-                                                FileBrowserFileCategory.all,
-                                              );
-                                            },
+                                    )
+                                    : CustomScrollView(
+                                      slivers: [
+                                        // 表头吸顶：行真的从表头下方滑过，模糊层
+                                        // 才有可见对象（样例 `extra.css:70`）。
+                                        // 空列表不画表头（样例 `Files.tsx:345` 的
+                                        // `rows.length > 0` 条件）。
+                                        if (items.isNotEmpty)
+                                          SliverPersistentHeader(
+                                            pinned: true,
+                                            delegate: _StickyFileTableHead(
+                                              sort:
+                                                  state?.sortBy ??
+                                                  FileBrowserSortBy.name,
+                                              ascending:
+                                                  state?.sortAscending ?? true,
+                                              onSort:
+                                                  (value) => _sortBy(
+                                                    controller,
+                                                    state,
+                                                    value,
+                                                  ),
+                                            ),
                                           ),
-                                      ]),
+                                        SliverList(
+                                          delegate: SliverChildListDelegate([
+                                            ..._groupedRows(
+                                              state,
+                                              controller,
+                                              items,
+                                              selected,
+                                            ),
+                                            if (state != null &&
+                                                !state.isBusy &&
+                                                items.isEmpty)
+                                              _FilesEmpty(
+                                                section: section,
+                                                filtered:
+                                                    (state
+                                                        .searchQuery
+                                                        .isNotEmpty) ||
+                                                    state.fileCategory !=
+                                                        FileBrowserFileCategory
+                                                            .all,
+                                                onClear: () {
+                                                  _search.clear();
+                                                  controller.setSearchQuery('');
+                                                  controller.setFileCategory(
+                                                    FileBrowserFileCategory.all,
+                                                  );
+                                                },
+                                              ),
+                                          ]),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                      ),
-                    ],
-                    if (state != null && _hasMore(state, section))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: DesktopButton(
-                            label: l10n.desktopFilesLoadMore(
-                              _loadedCount(state, section),
-                              _totalCount(state, section),
-                            ),
-                            variant: DesktopButtonVariant.ghost,
-                            onPressed:
-                                () => _loadMore(controller, state, section),
                           ),
-                        ),
-                      ),
-                  ],
+                        ],
+                        if (state != null && _hasMore(state, section))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: DesktopButton(
+                                label: l10n.desktopFilesLoadMore(
+                                  _loadedCount(state, section),
+                                  _totalCount(state, section),
+                                ),
+                                variant: DesktopButtonVariant.ghost,
+                                onPressed:
+                                    () => _loadMore(controller, state, section),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

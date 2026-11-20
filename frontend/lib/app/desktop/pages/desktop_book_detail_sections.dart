@@ -8,6 +8,7 @@ import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
+import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -51,6 +52,7 @@ class DesktopBookDetailTabs extends ConsumerStatefulWidget {
 class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
   int _tab = 0;
   bool _busy = false;
+  bool _showFullDescription = false;
 
   @override
   Widget build(BuildContext context) {
@@ -67,9 +69,9 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
             small: true,
             labelOf:
                 (value) => switch (value) {
-                  0 => l10n.desktopReaderOverview,
-                  1 => l10n.readerChapterList,
-                  2 => l10n.desktopBookNotes,
+                  0 => l10n.readerDetailInfo,
+                  1 => l10n.readerDetailChapters,
+                  2 => l10n.readerNavNotes,
                   _ => l10n.desktopBookActivity,
                 },
             onChanged: (value) => setState(() => _tab = value),
@@ -89,15 +91,34 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
   Widget _overview(AppLocalizations l10n, DesktopSkin skin) {
     final item = widget.item;
     final genres = item.genres ?? const <String>[];
+    final description = (item.description ?? '').trim();
+    // 样例始终把描述限制在三行，展开状态只作用于这段描述，不能把
+    // 详情页其它分区一起撑开；短描述仍保留同一处 Read more 操作位。
+    final canExpandDescription = description.isNotEmpty;
     final about = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          (item.description ?? '').trim().isEmpty
-              ? l10n.desktopMoviesNoOverview
-              : item.description!,
+          description.isEmpty ? l10n.desktopMoviesNoOverview : description,
+          maxLines: canExpandDescription && !_showFullDescription ? 3 : null,
+          overflow:
+              canExpandDescription && !_showFullDescription
+                  ? TextOverflow.ellipsis
+                  : TextOverflow.visible,
           style: DesktopType.body(skin.text2),
         ),
+        if (canExpandDescription)
+          DesktopLink(
+            label:
+                _showFullDescription
+                    ? l10n.desktopMoviesShowLess
+                    : l10n.desktopMoviesReadMore,
+            trailing: false,
+            onPressed:
+                () => setState(
+                  () => _showFullDescription = !_showFullDescription,
+                ),
+          ),
         if (genres.isNotEmpty) ...[
           const SizedBox(height: 16),
           Wrap(

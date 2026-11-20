@@ -1,5 +1,6 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show BlurStyle, ImageFilter, MaskFilter;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 /// CSS `backdrop-filter: blur(Npx) saturate(s) brightness(b)` 的等价组合。
@@ -110,5 +111,112 @@ class DesktopGlassSurface extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// CSS `box-shadow` 语义的外侧投影：模糊只落在边框盒之外，盒内不染色。
+///
+/// [BoxShadow] 走的是 `BlurStyle.normal`：模糊后的**实心**形状连内部一起
+/// 铺满，填充不透明时被盖住看不出来，一旦填充透明（首页 Hero 在壁纸态
+/// 就是 `background: transparent`），两条阴影合起来相当于在整张卡上盖了
+/// 一层 76% 的黑纱——即「黑色遮罩玻璃」的来源。浏览器不会这样：
+/// `box-shadow` 按规范被裁在 border-box 外侧。
+///
+/// 这里在独立图层里画完阴影，再把边框盒圆角以内的部分 `clear` 掉，等价于
+/// 浏览器的裁剪。只用 `BlurStyle.outer` 不够：负 spread 会把阴影形状缩到
+/// 盒内，外扩的模糊带仍会从左右两侧的内边渗进来。
+class DesktopOutsetShadow extends StatelessWidget {
+  const DesktopOutsetShadow({
+    required this.borderRadius,
+    required this.shadows,
+    required this.child,
+    super.key,
+  });
+
+  final BorderRadius borderRadius;
+  final List<BoxShadow> shadows;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _OutsetShadowPainter(
+        borderRadius: borderRadius,
+        shadows: shadows,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _OutsetShadowPainter extends CustomPainter {
+  const _OutsetShadowPainter({
+    required this.borderRadius,
+    required this.shadows,
+  });
+
+  final BorderRadius borderRadius;
+  final List<BoxShadow> shadows;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (shadows.isEmpty) {
+      return;
+    }
+    final resolved = borderRadius.resolve(TextDirection.ltr);
+    final base = Rect.fromLTWH(0, 0, size.width, size.height);
+    RRect boxFor(BoxShadow shadow) {
+      // 与 CSS 一致：spread 同时收缩盒边与圆角，圆角最小到 0。
+      final spread = shadow.spreadRadius;
+      final rect = base.shift(shadow.offset).inflate(spread);
+      return RRect.fromRectAndCorners(
+        rect,
+        topLeft: _corner(resolved.topLeft, spread),
+        topRight: _corner(resolved.topRight, spread),
+        bottomLeft: _corner(resolved.bottomLeft, spread),
+        bottomRight: _corner(resolved.bottomRight, spread),
+      );
+    }
+
+    // 图层要裹住所有阴影的外扩范围，否则模糊带会被自身边界裁断。
+    Rect layerBounds = base;
+    for (final shadow in shadows) {
+      layerBounds = layerBounds.expandToInclude(
+        boxFor(shadow).outerRect.inflate(shadow.blurRadius * 3),
+      );
+    }
+
+    canvas.saveLayer(layerBounds, Paint());
+    for (final shadow in shadows) {
+      canvas.drawRRect(
+        boxFor(shadow),
+        Paint()
+          ..color = shadow.color
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurSigma),
+      );
+    }
+    // 内部挖空：只留边框盒外侧的模糊带，不给透明填充染底色。
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        base,
+        topLeft: resolved.topLeft,
+        topRight: resolved.topRight,
+        bottomLeft: resolved.bottomLeft,
+        bottomRight: resolved.bottomRight,
+      ),
+      Paint()..blendMode = BlendMode.clear,
+    );
+    canvas.restore();
+  }
+
+  Radius _corner(Radius radius, double spread) {
+    final value = (radius.x + spread).clamp(0.0, double.infinity);
+    return Radius.circular(value);
+  }
+
+  @override
+  bool shouldRepaint(_OutsetShadowPainter oldDelegate) {
+    return oldDelegate.borderRadius != borderRadius ||
+        !listEquals(oldDelegate.shadows, shadows);
   }
 }

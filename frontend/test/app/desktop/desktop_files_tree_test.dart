@@ -316,6 +316,46 @@ void main() {
     expect(repository.moves.first.$2, 'd-2');
   });
 
+  testWidgets('把嵌套目录拖到 My files 根行时使用空父目录', (tester) async {
+    final repository = await pumpTree(
+      tester,
+      children: <String?, List<FileNode>>{
+        'd-1': <FileNode>[child],
+      },
+    );
+
+    Finder rootNav() => find.byElementPredicate((element) {
+      final widget = element.widget;
+      if (widget is! Text || widget.data != 'My files') {
+        return false;
+      }
+      final box = element.renderObject as RenderBox?;
+      return box != null && box.localToGlobal(Offset.zero).dx < 300;
+    });
+
+    await tester.tap(nodeChevron('Studio archive'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+    final start = tester.getCenter(treeLabel('Spring trip'));
+    final target = tester.getCenter(rootNav());
+    final pointer = TestPointer(4, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(pointer.hover(start));
+    await tester.pump();
+    final gesture = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await gesture.moveTo(target);
+    await tester.pump(const Duration(milliseconds: 120));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(repository.moves, isNotEmpty);
+    expect(repository.moves.last.$1, <String>['d-1-1']);
+    expect(repository.moves.last.$2, '');
+  });
+
   testWidgets('树内跨分支移动后刷新已展开的来源和目标目录', (tester) async {
     final repository = await pumpTree(
       tester,

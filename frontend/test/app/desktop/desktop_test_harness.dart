@@ -549,6 +549,7 @@ List<Override> desktopSeedOverrides({
   bool empty = false,
   AuthSessionNotifier Function()? session,
   MusicPortalActions? musicActions,
+  ReaderDashboard? readerDashboard,
 }) => [
   // 壁纸仓储会读本地库；测试进程没有 path_provider，改用内存库，
   // 否则长帧用例（视觉基线）会在打开连接时抛 MissingPluginException。
@@ -588,13 +589,14 @@ List<Override> desktopSeedOverrides({
   ),
   readerDashboardProvider.overrideWith(
     (ref) async =>
-        empty
+        readerDashboard ??
+        (empty
             ? const ReaderDashboard(
               overview: ReaderOverview(totalItems: 0, continueCount: 0),
               continueReading: [],
               recentItems: [],
             )
-            : seededReaderDashboard,
+            : seededReaderDashboard),
   ),
   fileStorageStatsProvider.overrideWith((ref) async => seededStorage),
   fileRecentEntriesProvider.overrideWith(

@@ -223,6 +223,71 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     }
 
     /**
+     * 在共享空间内移动节点并重写其子树路径。
+     *
+     * <p>共享节点不属于当前用户的个人目录，不能复用个人空间的 move 接口；
+     * 这里按共享空间生命周期权限校验操作者，并按实际上传者记录同步事件。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNode moveWithinSharedSpace(UUID fileNodeId, UUID targetParentId, UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_BROWSE);
+        FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(
+                        fileNodeId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
+        validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
+        if (Objects.equals(node.getParentId(), targetParentId)) {
+            return node;
+        }
+
+        FileNode target = null;
+        if (targetParentId != null) {
+            target = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(
+                            targetParentId, SpaceType.SHARED)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+            if (!NodeType.FOLDER.getValue().equals(target.getNodeType())) {
+                throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+            }
+            if (target.getId().equals(node.getId())
+                    || target.getNormalizedPath().startsWith(node.getNormalizedPath() + "/")) {
+                throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录");
+            }
+        }
+        if (fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, targetParentId, node.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件");
+        }
+        if (NodeType.FOLDER.getValue().equals(node.getNodeType())
+                && !canAccess(operatorId, Action.CAN_DELETE_ANY)
+                && fileNodeScanQueryRepository.countActiveForeignDescendantsByPathPrefix(
+                        SpaceType.SHARED,
+                        LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"),
+                        operatorId) > 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无法整体移动");
+        }
+
+        String oldPath = node.getNormalizedPath();
+        String newPath = target == null
+                ? "/" + node.getName()
+                : target.getNormalizedPath() + "/" + node.getName();
+        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
+        idsByOwner.computeIfAbsent(node.getOwnerUserId(), key -> new ArrayList<>()).add(node.getId());
+        for (Object[] row : fileNodeRepository.findActiveIdOwnerPairsUnderPathInSpace(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(oldPath + "/"))) {
+            UUID ownerId = (UUID) row[0];
+            UUID nodeId = (UUID) row[1];
+            idsByOwner.computeIfAbsent(ownerId, key -> new ArrayList<>()).add(nodeId);
+        }
+        node.setParentId(targetParentId);
+        node.setNormalizedPath(newPath);
+        rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
+        fileNodeRepository.save(node);
+        idsByOwner.forEach((ownerId, ids) -> recordSyncEvent(ownerId, ids, node.getId(), SyncAction.UPDATED));
+        return node;
+    }
+
+    /**
      * 按主键游标分页重写活动子树的规范化路径。
      *
      * <p>驱动共享空间改名时的后代路径级联更新。只给 LIKE 用转义形式，路径改写仍按原始

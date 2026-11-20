@@ -25,6 +25,7 @@ export 'package:omninest/features/files/data/file_providers.dart';
 export 'package:omninest/features/files/application/file_browser_models.dart';
 
 part 'file_browser_selection_actions.dart';
+part 'file_browser_folder_actions.dart';
 part 'file_browser_upload_actions.dart';
 part 'file_browser_upload_runtime.dart';
 part 'file_browser_upload_state.dart';
@@ -379,7 +380,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
         await refreshFiles();
     }
   }
-
   /// 按当前分区刷新远端数据，不改变目录、视图模式和筛选条件。
   Future<void> refreshForRealtime() async {
     final current = state.asData?.value;
@@ -416,6 +416,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
           files: filesPage.items,
           parentId: null,
           breadcrumbs: [],
+          sharedSpaceBreadcrumbs: const [],
           spaceType: newSpaceType,
           section: FileManagerSection.allFiles,
           sharedSpaceUsage: usage,
@@ -571,7 +572,10 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
     });
   }
 
-  Future<void> openFolder(FileNode folder) async {
+  Future<void> openFolder(
+    FileNode folder, {
+    List<FileNode>? breadcrumbs,
+  }) async {
     if (!folder.isFolder) {
       return;
     }
@@ -594,7 +598,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
         _liveOr(current).copyWith(
           files: filesPage.items,
           parentId: folder.id,
-          breadcrumbs: [...?current?.breadcrumbs, folder],
+          breadcrumbs: breadcrumbs ?? [...?current?.breadcrumbs, folder],
           section: FileManagerSection.allFiles,
           searchQuery: '',
           fileCategory: category,

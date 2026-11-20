@@ -11887,6 +11887,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorDependencyUnavailable => '依赖服务不可用，请稍后重试';
 
   @override
+  String get errorMediaProviderUnreachable => '无法连接元数据服务，请检查服务器网络或代理设置';
+
+  @override
   String get errorRegistrationDisabled => '当前服务器未开放注册';
 
   @override

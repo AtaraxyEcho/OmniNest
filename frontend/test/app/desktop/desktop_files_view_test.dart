@@ -120,6 +120,13 @@ void main() {
     expect(find.text('1.0 MB'), findsWidgets);
   });
 
+  testWidgets('结构树顶部提供个人与共享空间切换', (tester) async {
+    await pumpFiles(tester);
+
+    expect(find.byTooltip('Personal Space'), findsOneWidget);
+    expect(find.byTooltip('Shared Space'), findsOneWidget);
+  });
+
   testWidgets('搜索按名称过滤主列表', (tester) async {
     await pumpFiles(tester);
 
@@ -370,12 +377,14 @@ void main() {
     );
     expect(find.text('Title'), findsOneWidget);
     // 行真的会滑到表头底下，模糊层必须有可见对象（样例 `backdrop-filter`）。
+    // 主区玻璃面板与吸顶表头各自保留一层模糊，避免表头滚动时失去
+    // 原型 `.fx-main` / `.f-head` 的层级。
     expect(
       find.ancestor(
         of: find.text('Title'),
         matching: find.byType(BackdropFilter),
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
   });
 

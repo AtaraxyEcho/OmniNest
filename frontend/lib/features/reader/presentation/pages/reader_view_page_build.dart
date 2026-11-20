@@ -89,6 +89,30 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
             }
             final content = loadedContent ?? _cachedContent;
 
+            // 章节正文取到后，排版/分页仍可能失败。这个状态必须优先于正文
+            // 构建，否则用户会得到一整页不可交互的纸面而没有恢复路径。
+            if (_chapterLoadCoordinator.hasFailed(_currentChapterId)) {
+              return AppErrorView(
+                message: chapterLoadErrorMessage(
+                  AppLocalizations.of(context),
+                  _chapterLoadCoordinator.failureReason,
+                ),
+                onBack: handleReaderExit,
+                onRetry: () {
+                  _chapterLoadCoordinator.clearFailure(_currentChapterId);
+                  if (content != null && _contentLoader != null) {
+                    _updateState(() {});
+                    unawaited(loadCurrentChapter(content));
+                    return;
+                  }
+                  _updateState(() {});
+                  if (parsedBook != null) {
+                    unawaited(loadChapterContentIfNeeded(parsedBook));
+                  }
+                },
+              );
+            }
+
             if (kDebugMode) {
               readerDebugLog(
                 'ReaderView build: content=${content != null}, _contentLoader=${_contentLoader != null}, _isLoadingChapter=$_isLoadingChapter, chapters=${chapters.length}',

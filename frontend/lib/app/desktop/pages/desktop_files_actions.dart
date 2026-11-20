@@ -106,8 +106,11 @@ extension _FilesPageActions on _DesktopFilesPageState {
       if (!mounted) {
         return;
       }
+      final controller = ref.read(fileBrowserControllerProvider.notifier);
       unawaited(
-        ref.read(fileBrowserControllerProvider.notifier).loadSection(target),
+        target == FileManagerSection.sharedSpace
+            ? controller.switchSpace('SHARED')
+            : controller.loadSection(target),
       );
     });
   }
@@ -118,8 +121,25 @@ extension _FilesPageActions on _DesktopFilesPageState {
     unawaited(controller.loadSection(value));
   }
 
-  void _openFolder(FileBrowserController controller, FileNode folder) {
-    unawaited(controller.openFolder(folder));
+  /// 原型侧栏的 Personal / Shared space 分段切换使用同一个工作区列表，
+  /// 不能只切换一个导航分区，否则树、面包屑和拖放目标仍停留在旧空间。
+  void _switchSpace(FileBrowserController controller, String spaceType) {
+    _search.clear();
+    controller.setSearchQuery('');
+    unawaited(controller.switchSpace(spaceType));
+  }
+
+  void _openFolder(
+    FileBrowserController controller,
+    FileNode folder, {
+    bool shared = false,
+    List<FileNode>? breadcrumbs,
+  }) {
+    unawaited(
+      shared
+          ? controller.openSharedSpaceFolder(folder, breadcrumbs: breadcrumbs)
+          : controller.openFolder(folder, breadcrumbs: breadcrumbs),
+    );
   }
 
   void _select(FileBrowserController controller, FileNode node) {
@@ -127,9 +147,17 @@ extension _FilesPageActions on _DesktopFilesPageState {
     controller.toggleSelection(node.id);
   }
 
-  void _activate(FileBrowserController controller, FileNode node) {
+  void _activate(
+    FileBrowserController controller,
+    FileNode node, {
+    bool shared = false,
+  }) {
     if (node.isFolder) {
-      unawaited(controller.openFolder(node));
+      unawaited(
+        shared
+            ? controller.openSharedSpaceFolder(node)
+            : controller.openFolder(node),
+      );
       return;
     }
     desktopPush(context, DesktopRoutes.filePreview(node.id));
@@ -214,7 +242,9 @@ extension _FilesPageActions on _DesktopFilesPageState {
     if (state.section == FileManagerSection.recycleBin) {
       return;
     }
-    final shared = state.section == FileManagerSection.sharedSpace;
+    final shared =
+        state.spaceType == 'SHARED' ||
+        state.section == FileManagerSection.sharedSpace;
     // 删除前留一份 id 快照：批量接口会清空选中集，Undo 拿不到原节点。
     final deletedIds = _selectedNodes(state).map((node) => node.id).toList();
     if (shared) {
@@ -363,7 +393,9 @@ extension _FilesPageActions on _DesktopFilesPageState {
     }
     final l10n = AppLocalizations.of(context);
     final recycle = state.section == FileManagerSection.recycleBin;
-    final sharedSpace = state.section == FileManagerSection.sharedSpace;
+    final sharedSpace =
+        state.spaceType == 'SHARED' ||
+        state.section == FileManagerSection.sharedSpace;
     final items = <DesktopMenuItem>[];
     if (recycle) {
       items.add(
@@ -388,7 +420,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
         DesktopMenuItem(
           label: l10n.desktopFilesOpen,
           icon: DesktopIcons.eye,
-          onPressed: () => _activate(controller, node),
+          onPressed: () => _activate(controller, node, shared: sharedSpace),
         ),
       );
       items.add(
@@ -508,7 +540,11 @@ extension _FilesPageActions on _DesktopFilesPageState {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter && selected.length == 1) {
-      _activate(controller, selected.first);
+      _activate(
+        controller,
+        selected.first,
+        shared: state.spaceType == 'SHARED',
+      );
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.delete && selected.isNotEmpty) {
@@ -521,7 +557,18 @@ extension _FilesPageActions on _DesktopFilesPageState {
     }
     if (event.logicalKey == LogicalKeyboardKey.backspace &&
         section == FileManagerSection.allFiles) {
-      unawaited(controller.goToParent());
+      if (state.spaceType == 'SHARED') {
+        final breadcrumbs = state.sharedSpaceBreadcrumbs;
+        unawaited(
+          breadcrumbs.isEmpty
+              ? controller.goToSharedSpaceRoot()
+              : breadcrumbs.length == 1
+              ? controller.goToSharedSpaceRoot()
+              : controller.goToSharedSpaceBreadcrumb(breadcrumbs.length - 2),
+        );
+      } else {
+        unawaited(controller.goToParent());
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -562,12 +609,18 @@ extension _FilesPageActions on _DesktopFilesPageState {
               recycle: state.section == FileManagerSection.recycleBin,
               hoveredAsDropTarget: _externalHoverId == node.id,
               onTap: () => _select(controller, node),
-              onOpen: () => _activate(controller, node),
+              onOpen:
+                  () => _activate(
+                    controller,
+                    node,
+                    shared: state.spaceType == 'SHARED',
+                  ),
               onMenu:
                   (position) =>
                       _openRowMenu(context, controller, state, node, position),
               onFavorite:
-                  state.section == FileManagerSection.recycleBin
+                  state.section == FileManagerSection.recycleBin ||
+                          state.spaceType == 'SHARED'
                       ? null
                       : () => unawaited(
                         node.favorited
@@ -575,7 +628,8 @@ extension _FilesPageActions on _DesktopFilesPageState {
                             : controller.addFavorite(node),
                       ),
               onShare:
-                  state.section == FileManagerSection.recycleBin
+                  state.section == FileManagerSection.recycleBin ||
+                          state.spaceType == 'SHARED'
                       ? null
                       : () => _showShareDialog(context, controller, node),
               // 选中态拖整组，否则只拖按下的这一行（样例 `dragIds` 同此）。

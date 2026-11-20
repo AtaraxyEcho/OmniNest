@@ -237,8 +237,13 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   /// 拉取目录选择器可进入的文件夹列表（展示层不直连仓储）。
-  Future<List<FileNode>> listFolderOptions(String? parentId) {
-    return _repository.listFiles(parentId: parentId);
+  Future<List<FileNode>> listFolderOptions(
+    String? parentId, {
+    bool shared = false,
+  }) {
+    return shared
+        ? _repository.listSharedSpaceFiles(parentId: parentId)
+        : _repository.listFiles(parentId: parentId);
   }
 
   /// 分页拉取目录选择器节点；调用方自行过滤文件夹并续页。
@@ -582,21 +587,37 @@ extension FileBrowserSelectionActions on FileBrowserController {
 
   /// 拖拽落点移动：显式给 id 集（被拖的行未必是当前选中集）。
   ///
-  /// 目标就是当前目录时直接返回——否则行会先乐观消失，再被刷新补回来。
+  /// 目标就是这些节点已经所在的目录时直接返回，避免无意义的刷新。
   /// 空串表示根目录（仓储层同样把空 parentId 折成 null）。
   Future<void> moveFilesTo(List<String> ids, String targetParentId) async {
     final current = _currentState;
     final target = targetParentId.isEmpty ? null : targetParentId;
+    final currentNodes = current?.files
+        .where((node) => ids.contains(node.id))
+        .toList(growable: false);
+    final allAlreadyInTarget =
+        ids.isNotEmpty &&
+        currentNodes?.length == ids.length &&
+        currentNodes!.every((node) => node.parentId == target);
     if (ids.isEmpty ||
         (target != null && ids.contains(target)) ||
-        current?.parentId == target) {
+        allAlreadyInTarget) {
       return;
     }
     registerFileEcho(ids);
     await _runAction(FileOperation.batchMove, () async {
       _removeNodesLocally(ids);
       try {
-        await _repository.batchMoveFiles(ids, targetParentId);
+        if (current?.spaceType == 'SHARED') {
+          for (final id in ids) {
+            await _repository.moveSharedFile(
+              fileId: id,
+              parentId: targetParentId,
+            );
+          }
+        } else {
+          await _repository.batchMoveFiles(ids, targetParentId);
+        }
       } on Object {
         await refreshFileNodesForCurrentSection();
         rethrow;
@@ -697,84 +718,4 @@ extension FileBrowserSelectionActions on FileBrowserController {
       }
     });
   }
-}
-
-/// 同级目录内去重命名：重名时以数字递增补充（新建文件夹 / 新建文件夹 2 ...）。
-String dedupeFolderName(String base, Iterable<FileNode> siblings) {
-  final names = siblings.where((n) => n.isFolder).map((n) => n.name).toSet();
-  if (!names.contains(base)) {
-    return base;
-  }
-  var index = 2;
-  while (names.contains('$base $index')) {
-    index++;
-  }
-  return '$base $index';
-}
-
-/// 就地新建文件夹草稿态。
-extension FileBrowserFolderDraftActions on FileBrowserController {
-  /// 进入新建态：[baseName] 为本地化默认名（调用侧先经 dedupeFolderName 去重）。
-  void beginFolderCreation(String baseName) {
-    final current = _currentState;
-    if (current == null || current.draftFolderName != null) {
-      return;
-    }
-    _emitState(current.copyWith(draftFolderName: baseName));
-  }
-
-  void cancelFolderCreation() {
-    final current = _currentState;
-    if (current == null || current.draftFolderName == null) {
-      return;
-    }
-    _emitState(current.copyWith(draftFolderName: null));
-  }
-
-  /// 提交新建：空名回落默认名，提交前按当前同级再次去重。
-  Future<void> commitFolderCreation(String name) async {
-    final current = _currentState;
-    if (current == null || current.draftFolderName == null) {
-      return;
-    }
-    final base = current.draftFolderName!;
-    final trimmed = name.trim();
-    final finalName = dedupeFolderName(
-      trimmed.isEmpty ? base : trimmed,
-      current.files,
-    );
-    _emitState(current.copyWith(draftFolderName: null));
-    await createFolder(finalName);
-  }
-
-  /// 登记一次本地文件变更（供实时回声抑制查询）。
-  void registerFileEcho(Iterable<String> fileIds) {
-    final expiry = DateTime.now().add(FileBrowserController._fileEchoWindow);
-    for (final fileId in fileIds) {
-      _recentFileEchoes[fileId] = expiry;
-    }
-  }
-
-  /// 判断一批资源是否全部命中本地回声窗口；
-  /// 顺带清理过期条目。空集返回 false（保守走刷新）。
-  bool matchesRecentFileEchoes(Set<String> fileIds) {
-    final now = DateTime.now();
-    _recentFileEchoes.removeWhere((_, expiry) => expiry.isBefore(now));
-    if (fileIds.isEmpty) {
-      return false;
-    }
-    return fileIds.every(_recentFileEchoes.containsKey);
-  }
-}
-
-/// 把已加载节点里的收藏标记翻到目标值，供星标乐观更新与失败回滚共用。
-List<FileNode> _flagFavorite(
-  List<FileNode> nodes,
-  String fileId,
-  bool favorited,
-) {
-  return [
-    for (final node in nodes)
-      node.id == fileId ? node.copyWith(favorited: favorited) : node,
-  ];
 }

@@ -6,6 +6,8 @@ class _InsightRow extends StatelessWidget {
     required this.comics,
     required this.readingHours,
     required this.streakDays,
+    required this.columns,
+    required this.panelWidth,
     this.dailyReading = const [],
   });
 
@@ -13,6 +15,8 @@ class _InsightRow extends StatelessWidget {
   final int comics;
   final String readingHours;
   final int? streakDays;
+  final int columns;
+  final double panelWidth;
   final List<ReaderDailyReading> dailyReading;
 
   @override
@@ -32,50 +36,46 @@ class _InsightRow extends StatelessWidget {
     // 样例 `.insight`：整块是一个玻璃面板（26/28 内距、26 圆角），四张
     // 卡片是面板内的 raise 小格（12/14、14 圆角、无描边），不是四张
     // 各自独立的 panel 卡；面板下半部是 14 天柱图与日期轴。
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 26),
-      decoration: BoxDecoration(
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-      ),
-      foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-        border: Border.all(color: skin.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 860 ? 4 : 2;
-              final width =
-                  (constraints.maxWidth - (columns - 1) * 12) / columns;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (var i = 0; i < cards.length; i++)
-                    SizedBox(
-                      width: width,
-                      child: DesktopStagger(
-                        index: i,
-                        child: _InsightCard(
-                          label: cards[i].$1,
-                          value: cards[i].$2,
-                          subtitle: cards[i].$3,
-                        ),
+    final radius = BorderRadius.circular(DesktopMetrics.radiusHero);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      blur: 20,
+      saturation: 1,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 26),
+        decoration: BoxDecoration(color: skin.panel, borderRadius: radius),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (var i = 0; i < cards.length; i++)
+                  SizedBox(
+                    width: ((panelWidth - 56) - (columns - 1) * 12) / columns,
+                    child: DesktopStagger(
+                      index: i,
+                      child: _InsightCard(
+                        label: cards[i].$1,
+                        value: cards[i].$2,
+                        subtitle: cards[i].$3,
                       ),
                     ),
-                ],
-              );
-            },
-          ),
-          if (dailyReading.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _ReadingBars(days: dailyReading),
+                  ),
+              ],
+            ),
+            if (dailyReading.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _ReadingBars(days: dailyReading),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

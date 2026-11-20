@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
-import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -82,45 +82,14 @@ class _RelatedCard extends StatelessWidget {
             SizedBox(
               width: 132,
               height: 188,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(skin.accent, skin.panelSolid, 0.45)!,
-                      skin.panelSolid,
-                    ],
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    topRight: Radius.circular(9),
-                    bottomRight: Radius.circular(9),
-                    bottomLeft: Radius.circular(4),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child:
-                    item.coverUrl?.isNotEmpty == true
-                        ? DesktopImage(url: item.coverUrl)
-                        : Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                          child: Align(
-                            alignment: Alignment.bottomLeft,
-                            child: Text(
-                              item.title,
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(skin.onStage),
-                            ),
-                          ),
-                        ),
+              child: DesktopReaderBookCover(
+                itemId: item.id,
+                title: item.title,
+                author: item.authorName ?? '',
+                coverUrl: item.coverUrl,
+                isComic: item.isDisplayedAsComic,
+                readerType: item.readerType,
+                volumeNumber: item.volumeNumber,
               ),
             ),
             const SizedBox(height: 8),

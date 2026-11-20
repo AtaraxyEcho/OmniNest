@@ -151,25 +151,82 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   MusicCenterState _liveOr(MusicCenterState captured) =>
       _currentState ?? captured;
 
-  /// 平台登录/断开后的后台刷新：账号资料 + 曲库全量失效。
+  /// 平台登录/断开后的刷新：账号资料 + 曲库重新接入。
   ///
   /// 由 application 层持有完整流程，不随登录面板关闭而丢失——此前
   /// 面板在慢速资料回源期间被用户关闭，`mounted` 守卫会跳过曲库
   /// 失效，表现为"登录成功但首页/曲库/歌单/收藏全空"。
   ///
-  /// 曲库重建不再串行等资料回源：确认后立即失效重建（externalUserId 未落
-  /// 时后端各支路会自行补拉一次资料），资料与曲库并行到位。方法整体仍等
-  /// 资料完成，扫码确认流依赖此契约判定面板终态。
-  Future<void> refreshAfterPlatformChange() async {
-    final platformInfo = loadPlatformInfo();
-    if (!_controllerDisposed && ref.mounted) {
-      ref.invalidate(musicPlatformLibraryProvider);
+  /// [waitForConnectedProfile] 用于扫码确认路径。二维码确认时后端会先保存
+  /// Cookie，再异步回源平台资料；若在 externalUserId 落地前就读取歌单，平台会
+  /// 返回空列表，前端还会把这个空列表当作成功结果。确认路径因此先等待资料落地，
+  /// 再触发一次完整曲库刷新，确保账号资料、歌单和喜欢列表属于同一轮接入。
+  Future<void> refreshAfterPlatformChange({
+    bool waitForConnectedProfile = false,
+  }) async {
+    if (waitForConnectedProfile) {
+      final profile = await _waitForConnectedPlatformProfile();
+      if (profile == null) {
+        throw StateError('网易云账号资料同步失败，请稍后重试');
+      }
+      await _refreshPlatformLibrary(forceRefresh: true);
+      // 中心控制器可能仍在首帧 build；曲库刷新完成后再回写一次资料，
+      // 避免首帧结束时把已确认账号落成空状态。
+      await _loadPlatformInfo();
+      return;
     }
+
+    final platformInfo = loadPlatformInfo();
+    final library = _refreshPlatformLibrary();
     try {
       await platformInfo;
     } on Object {
       // 账号资料刷新失败不阻塞曲库刷新。
     }
+    try {
+      await library;
+    } on Object {
+      // 曲库状态自身保留失败原因，面板关闭或重试时会再次回源。
+    }
+  }
+
+  /// 等待登录确认后由后端异步补齐的平台账号资料。
+  Future<PlatformUserInfo?> _waitForConnectedPlatformProfile() async {
+    const retryDelays = <Duration>[
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 500),
+      Duration(milliseconds: 1000),
+    ];
+    for (var attempt = 0; attempt <= retryDelays.length; attempt++) {
+      if (_controllerDisposed || !ref.mounted) {
+        return null;
+      }
+      final profile = await _loadPlatformInfo();
+      if (profile != null) {
+        return profile;
+      }
+      if (attempt < retryDelays.length) {
+        await Future<void>.delayed(retryDelays[attempt]);
+      }
+    }
+    return null;
+  }
+
+  /// 重建平台曲库并等待 Provider 的新状态落地。
+  Future<void> _refreshPlatformLibrary({bool forceRefresh = false}) async {
+    if (_controllerDisposed || !ref.mounted) {
+      return;
+    }
+    final library = await ref.refresh(musicPlatformLibraryProvider.future);
+    if (!forceRefresh ||
+        _controllerDisposed ||
+        !ref.mounted ||
+        library.connectedStatuses.isEmpty) {
+      return;
+    }
+    // 登录确认后的第一次读取可能与后端预热并行，强刷再取一次完整喜欢列表，
+    // 避免渐进首帧把空结果固定成账号刚接入时的最终状态。
+    await ref.read(musicPlatformLibraryProvider.notifier).refresh();
   }
 
   /// 作废收藏列表：收藏分区读服务端完整列表，切换收藏后必须重取。

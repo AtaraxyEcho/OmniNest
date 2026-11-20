@@ -10,6 +10,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_lists.dart';
 import 'package:omninest/app/desktop/pages/desktop_home_sections.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_sky.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';

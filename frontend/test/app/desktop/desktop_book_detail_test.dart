@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/pages/desktop_book_detail_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_book_metadata_dialog.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/features/reader/domain/parsed_book.dart';
@@ -127,7 +128,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Chapter List'));
+    await tester.tap(find.text('Chapters'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 220));
     expect(find.text('Kyoto, Winter'), findsOneWidget);
@@ -186,11 +187,69 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Chapter List'));
+    await tester.tap(find.text('Chapters'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 220));
     expect(find.text('Kyoto, Winter'), findsOneWidget);
     expect(find.text('Foreword'), findsWidgets);
+  });
+
+  testWidgets('详情页相关书卡复用统一 Reader 封面组件', (tester) async {
+    tester.view.physicalSize = kDesktopViewport;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final related = ReaderItem(
+      id: 'b-2',
+      title: 'A Small Weather',
+      authorName: 'Mina Ito',
+      itemType: 'EPUB',
+      contentKind: 'TEXT',
+      updatedAt: DateTime(2026, 11, 13),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...desktopSeedOverrides(
+            readerDashboard: ReaderDashboard(
+              overview: seededReaderDashboard.overview,
+              continueReading: [_detail.item],
+              recentItems: [_detail.item, related],
+            ),
+          ),
+          readerItemDetailProvider.overrideWith((ref, id) async => _detail),
+          parsedBookProvider.overrideWith((ref, id) async => _parsedBook),
+          readerItemAnnotationsProvider.overrideWith(
+            (ref, id) async => const <ReaderAnnotation>[],
+          ),
+          readerItemBookmarksProvider.overrideWith(
+            (ref, id) async => const <ReaderBookmark>[],
+          ),
+          readerStatsOverviewProvider.overrideWith(
+            (ref) async => const ReaderStatsOverview(
+              dailyMinutes: [],
+              completedCount: 0,
+              inProgressCount: 1,
+              totalItems: 2,
+              inProgressItems: [],
+            ),
+          ),
+        ],
+        child: wrapDesktop(
+          const DesktopShellScope(
+            hosted: true,
+            child: DesktopBookDetailPage(itemId: 'b-1'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(DesktopReaderBookCover), findsNWidgets(2));
+    expect(find.text('A Small Weather'), findsWidgets);
   });
 
   testWidgets('编辑元数据打开右侧抽屉而不是居中弹窗', (tester) async {

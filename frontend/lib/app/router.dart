@@ -13,6 +13,7 @@ import 'package:omninest/app/desktop/pages/desktop_now_playing_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_files_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_reader_page.dart';
+import 'package:omninest/app/desktop/pages/desktop_book_detail_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_splash_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_settings_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_setup_page.dart';
@@ -196,7 +197,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               _readerRoute(
                 '/reader/bookshelf',
-                (state) => const ReaderBookshelfPage(),
+                (state) => const DesktopFormSwitch(
+                  desktop: DesktopReaderPage(initialLibrary: true),
+                  mobile: ReaderBookshelfPage(),
+                ),
               ),
               _readerRoute('/reader/stats', (state) => const ReaderStatsPage()),
               _readerRoute('/reader/admin', (state) => const ReaderAdminPage()),
@@ -437,12 +441,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // position: fixed; inset: 0），所以和章节阅读页一样挂在壳层之外：挂在
       // /reader 分支里时它只能盖住内容区，壳层顶栏与底栏那两条环境带会留在
       // 纸面之上，从阅读页返回就露出接缝。MobileHostedRoute 补托管 scope。
-      _readerRoute(
-        '/reader/items/:itemId',
-        (state) => MobileHostedRoute(
-          child: ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
-        ),
-      ),
+      _readerRoute('/reader/items/:itemId', buildReaderItemRoute),
       _desktopViewerRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
@@ -561,6 +560,18 @@ GoRoute _readerRoute(
         child: _routeSurface(path, builder(state)),
       );
     },
+  );
+}
+
+/// 书籍详情的形态分派。桌面端使用当前原型对齐的全屏详情，移动端保留
+/// 既有详情页与其 hosted scope，避免深链在桌面误落到旧的移动布局。
+@visibleForTesting
+Widget buildReaderItemRoute(GoRouterState state) {
+  return DesktopFormSwitch(
+    desktop: DesktopBookDetailPage(itemId: state.pathParameters['itemId']!),
+    mobile: MobileHostedRoute(
+      child: ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
+    ),
   );
 }
 

@@ -195,11 +195,25 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
   }
 
   void _handleContentTap(Offset position) {
+    // 顶栏/底栏显示时，正文点击只负责收起 chrome。否则点击页面中部会
+    // 同时触发“下一页”，用户看不清控件也无法稳定打开目录或设置。
+    if (_showControls) {
+      _toggleControls();
+      return;
+    }
     if (_imageZoomed) {
       _toggleControls();
       return;
     }
     if (_readingMode != ComicReadingMode.page || _totalPages <= 0) {
+      final width = MediaQuery.sizeOf(context).width;
+      final x = position.dx;
+      // 连续模式沿用样例：只有中间区域切换 chrome，边缘点击保留为
+      // 阅读内容本身，避免轻触图片边缘被误判成控制命令。
+      if (_readingMode == ComicReadingMode.scroll &&
+          (x < width * 0.3 || x > width * 0.7)) {
+        return;
+      }
       _toggleControls();
       return;
     }

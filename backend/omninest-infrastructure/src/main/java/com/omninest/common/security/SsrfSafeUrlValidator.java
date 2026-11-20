@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,11 +23,11 @@ import org.springframework.stereotype.Component;
  * @author OmniNest
  */
 @Component
+@Slf4j
 public final class SsrfSafeUrlValidator implements SafeUrlValidator {
 
     static {
-        // 校验与 HttpClient 请求之间会再次解析域名；把 JVM 正向解析结果缓存到至少 60 秒，
-        // 使紧随其后的请求复用同一次已验证解析，缩小 DNS Rebinding 窗口。
+        // 钉住解析结果 60 秒，让紧随其后的请求复用同一次已验证解析，缩小 DNS 重绑定窗口。
         String ttl = Security.getProperty("networkaddress.cache.ttl");
         try {
             if (ttl == null || Integer.parseInt(ttl) < 60) {
@@ -68,10 +69,8 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
     }
 
     /**
-     * 读取刚通过 PUBLIC_ONLY 校验的公网地址，供 JEP 418 全局解析器钉死。
-     *
      * @param host 主机名
-     * @return 未过期的已验证地址；无记录或已过期时为空
+     * @return 刚通过 PUBLIC_ONLY 校验且未过期的地址；无记录或已过期时为空
      */
     public static Optional<InetAddress[]> findPinnedPublicAddresses(String host) {
         if (host == null || host.isBlank()) {
@@ -116,8 +115,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
             VERIFIED_PUBLIC_HOSTS.entrySet().removeIf(
                     entry -> now - entry.getValue().verifiedAtNanos() > PINNED_DNS_TTL_NANOS);
             if (VERIFIED_PUBLIC_HOSTS.size() >= MAX_PINNED_HOSTS) {
-                // 只淘汰最旧的一条：全量 clear 会让刚通过校验的目标域名失去钉死地址，
-                // 建立连接时回退到二次 DNS 解析，给 DNS 重绑定留下窗口。
+                // 全量 clear 会让刚验过的域名退回二次解析，这里只淘汰最旧一条。
                 evictOldestPinnedHost();
             }
         }
@@ -145,10 +143,8 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
     }
 
     /**
-     * 验证 URL 的主机名和解析后的 IP 地址是否安全。
-     *
      * @param uri 待验证的 URI
-     * @throws BusinessException 如果地址指向本地或内网
+     * @throws BusinessException 地址指向本地或内网
      */
     @Override
     public void requireSafeHost(URI uri) {
@@ -156,13 +152,11 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
     }
 
     /**
-     * 验证 URL 的主机名和解析后的 IP 地址是否安全；
-     * allowSiteLocal 为 true 时放行 RFC1918 与 IPv6 唯一本地地址，
-     * 环回、链路本地、云元数据与保留地址在任何模式下都拒绝。
+     * 同上；allowSiteLocal 放行 RFC1918 与 IPv6 ULA，环回、链路本地、元数据地址始终拒绝。
      *
      * @param uri 待验证的 URI
-     * @param allowSiteLocal 是否允许内网专用地址段
-     * @throws BusinessException 如果地址指向本地或受限网络
+     * @param allowSiteLocal 是否放行内网专用地址段
+     * @throws BusinessException 地址指向受限网段
      */
     @Override
     public void requireSafeHost(URI uri, boolean allowSiteLocal) {
@@ -170,8 +164,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
     }
 
     /**
-     * 验证超级管理员自建的常驻服务端点：环回与内网专用段按部署形态放行，
-     * 任意本地、链路本地（含云元数据 169.254.0.0/16）、多播与受限地址段仍然拒绝。
+     * 校验超管自建的常驻端点：环回与内网段放行，链路本地（含 169.254.0.0/16）与保留段仍拒绝。
      *
      * @param uri 待验证的 URI
      * @throws BusinessException 地址解析失败或落在受限段
@@ -187,6 +180,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 缺少主机名");
         }
         if (isReservedHostName(host, scope.allowLoopbackHostName)) {
+            log.warn("出站主机名被拒: host={}, scope={}", host, scope);
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
         }
         try {
@@ -196,6 +190,9 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
             }
             for (InetAddress address : addresses) {
                 if (isBlockedAddress(address, scope)) {
+                    // 只抛异常看不出是哪个解析结果被拒：DNS 指向、fake-ip 还是 hosts。
+                    log.warn("出站地址被拒: host={}, address={}, scope={}",
+                            host, address.getHostAddress(), scope);
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
                 }
             }

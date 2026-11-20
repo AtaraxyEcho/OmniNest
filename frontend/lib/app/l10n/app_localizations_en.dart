@@ -12296,6 +12296,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'A required service is unavailable. Please try again later';
 
   @override
+  String get errorMediaProviderUnreachable =>
+      'Cannot reach the metadata service. Check the server network or proxy settings';
+
+  @override
   String get errorRegistrationDisabled =>
       'Registration is disabled on this server';
 

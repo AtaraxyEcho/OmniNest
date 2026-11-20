@@ -273,6 +273,18 @@ mixin FileApiExternal on FileApiBase {
     return parseFileNodeResponse(response.data);
   }
 
+  /// 在共享空间内移动文件或文件夹。
+  Future<FileNode> moveSharedFile({
+    required String fileId,
+    required String parentId,
+  }) async {
+    final response = await apiClient.dio.patch<Map<String, dynamic>>(
+      '/shared-space/files/${Uri.encodeComponent(fileId)}/move',
+      data: {'parentId': parentId.isEmpty ? null : parentId},
+    );
+    return parseFileNodeResponse(response.data);
+  }
+
   /// 移动文件到共享空间
   Future<void> moveToSharedSpace(String fileId) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(

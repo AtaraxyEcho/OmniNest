@@ -114,7 +114,7 @@ final platformQrLoginRefreshProvider = Provider<Future<void> Function()>((ref) {
   return () async {
     await ref
         .read(musicCenterControllerProvider.notifier)
-        .refreshAfterPlatformChange();
+        .refreshAfterPlatformChange(waitForConnectedProfile: true);
   };
 });
 

@@ -202,7 +202,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // 图片降级提示的关闭状态只属于当前这一章：切章后必须重新出现，
   // 否则一次关闭会把后续章节的缺图数一起静音。
   String? _dismissedImageBudgetChapterId;
-  bool _showControls = false;
+  // 原型阅读器进入页面时默认展示顶部和底部 chrome。控制栏初始隐藏会让桌面
+  // 用户只能看到正文，返回、目录和阅读模式入口都要靠猜测点按，短章节甚至
+  // 会被误判成空白页。显示状态仍由中心点按和自动隐藏逻辑接管。
+  bool _showControls = true;
   bool _showTts = false;
   bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上
   bool _isBookmarked = false;

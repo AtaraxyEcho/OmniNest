@@ -26,6 +26,7 @@ import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaType;
 import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
 import com.omninest.modules.video.event.MediaScrapeRequestedEvent;
 import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
@@ -95,6 +96,39 @@ class MovieScrapeServiceTest {
                 eq(QueueNames.MEDIA_SCRAPE_ROUTING_KEY),
                 any(MediaScrapeRequestedEvent.class)
         );
+    }
+
+    /**
+     * 提供器不可达时接口必须报错：返回空列表会让前端把网络故障渲染成「没有候选」。
+     */
+    @Test
+    void candidatesReportProviderUnavailableInsteadOfEmptyList() {
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.empty());
+        MetadataProvider unreachable = new MetadataProvider() {
+            @Override
+            public String providerName() {
+                return "TMDB";
+            }
+
+            @Override
+            public List<ScrapeCandidateDto> search(FileNameGuess guess) {
+                throw new MetadataProviderUnavailableException(
+                        providerName(), "ConnectException", new RuntimeException("connect timed out"));
+            }
+        };
+        MovieScrapeService service = new MovieScrapeService(
+                fileMetadataQueryService, taskRecordService, videoItemRepository,
+                tvSeriesRepository, tvSeasonRepository, fileNameParser, List.of(unreachable),
+                taskDispatchService, filePermissionService, mediaLibraryAccessService,
+                readThroughCache);
+
+        assertThatThrownBy(() -> service.candidates(OWNER_ID, FILE_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.errorCode()).isEqualTo(ErrorCode.MEDIA_PROVIDER_UNREACHABLE);
+                    assertThat(exception.getMessage()).contains("TMDB");
+                });
     }
 
     @Test

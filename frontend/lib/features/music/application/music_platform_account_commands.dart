@@ -9,16 +9,19 @@ extension MusicPlatformAccountCommands on MusicCenterController {
 
   /// 加载网易云的登录状态。
   Future<void> loadPlatformInfo() async {
-    final current = _currentState;
-    if (current == null) {
-      return;
-    }
+    await _loadPlatformInfo();
+  }
+
+  /// 读取并回写平台资料，同时把结果返回给登录确认流程判定是否已落地。
+  Future<PlatformUserInfo?> _loadPlatformInfo() async {
     final platformInfo = await _safePlatformInfo();
     final latest = _currentState;
     if (latest == null) {
-      return;
+      return platformInfo['netease'];
     }
-    _replaceState(latest.copyWith(neteaseUserInfo: platformInfo['netease']));
+    final info = platformInfo['netease'];
+    _replaceState(latest.copyWith(neteaseUserInfo: info));
+    return info;
   }
 
   /// 创建网易云 QR 登录会话。

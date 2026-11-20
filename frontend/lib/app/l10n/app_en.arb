@@ -5546,6 +5546,7 @@
   "errorBadRequest": "The request could not be processed",
   "errorRateLimited": "Too many requests. Please try again later",
   "errorDependencyUnavailable": "A required service is unavailable. Please try again later",
+  "errorMediaProviderUnreachable": "Cannot reach the metadata service. Check the server network or proxy settings",
   "errorRegistrationDisabled": "Registration is disabled on this server",
   "errorInternalError": "Server error. Please try again later",
   "errorTaskStatusIllegal": "This task cannot be changed in its current state",

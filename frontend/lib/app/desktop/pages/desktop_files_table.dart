@@ -42,22 +42,17 @@ class _FilesToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final crumbs = state?.breadcrumbs ?? const <FileNode>[];
+    final shared = state?.spaceType == 'SHARED';
+    final crumbs =
+        shared
+            ? state?.sharedSpaceBreadcrumbs ?? const <FileNode>[]
+            : state?.breadcrumbs ?? const <FileNode>[];
     final showCrumbs = section == FileManagerSection.allFiles;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            DesktopIconButton(
-              icon: DesktopIcons.left,
-              size: 26,
-              iconSize: 14,
-              tooltip: l10n.filesCurrentView,
-              onPressed:
-                  showCrumbs ? () => unawaited(controller.goToParent()) : null,
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -78,7 +73,12 @@ class _FilesToolbar extends StatelessWidget {
                           ),
                         ),
                         GestureDetector(
-                          onTap: () => unawaited(controller.goToBreadcrumb(i)),
+                          onTap:
+                              () => unawaited(
+                                shared
+                                    ? controller.goToSharedSpaceBreadcrumb(i)
+                                    : controller.goToBreadcrumb(i),
+                              ),
                           child: Text(
                             crumbs[i].name,
                             style: DesktopType.dense(

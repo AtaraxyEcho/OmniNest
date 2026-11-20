@@ -86,18 +86,13 @@ public class MovieScrapeExecutionService {
     }
 
     /**
-     * 执行刮削任务。
-     *
-     * <p>元数据检索是外部 HTTP（连接/读取超时可达十秒以上），必须在事务外发起；写库与
-     * 同步事件集中在一个短事务里，边界与拆分前的整方法事务一致。同步事件记录器要求
-     * 外层事务（MANDATORY 传播），因此 {@code recordVideoUpdated} 只能在事务内调用。</p>
+     * 执行刮削任务：外部 HTTP 在事务外发起，写库与同步事件集中在一个短事务内。
      */
     public void execute(MediaScrapeRequestedEvent event) {
         if (!taskRecordService.claimForExecution(event.taskId(), "SCRAPING")) {
             return;
         }
-        // 刮削按提供器串行发外部 HTTP，剧集还要回写分集与海报，单批可能超过恢复调度器
-        // 的 stale 阈值；被判僵尸后重投会与仍在执行的本线程并发改同一条媒体行。
+        // 刮削可能超过恢复调度器的 stale 阈值，重投会与仍在执行的本线程并发改同一行。
         try (TaskHeartbeatRunner.Heartbeat ignored = taskHeartbeatRunner.start(event.taskId())) {
             executeClaimed(event);
         }
@@ -106,8 +101,7 @@ public class MovieScrapeExecutionService {
     private void executeClaimed(MediaScrapeRequestedEvent event) {
         fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
 
-        // 一个文件只有一条业务行，行 owner 是文件所有者：按 fileNodeId 定位，
-        // 否则请求者与所有者不同时会查不到而行，甚至重复插入撞 uniq_media_video_items_file。
+        // 一行一文件：按 fileNodeId 定位，按「请求者+文件」查会漏行并撞唯一键。
         Optional<MediaVideoItem> itemOpt = videoItemRepository.findByFileNodeId(event.fileNodeId());
         if (itemOpt.isEmpty()) {
             log.warn("媒体条目不存在: taskId={}, fileNodeId={}", event.taskId(), event.fileNodeId());
@@ -128,20 +122,28 @@ public class MovieScrapeExecutionService {
         FileNameGuess guess = new FileNameGuess(event.title(), event.year(), event.seasonNumber(), event.episodeNumber());
         String preferredProvider = hasText(event.provider()) ? event.provider().trim() : null;
         String preferredExternalId = hasText(event.externalId()) ? event.externalId().trim() : null;
-        // 用户在候选列表里指定了具体条目时只接受该候选：否则自动匹配可能选中同名的另一部，
-        // 用户看到「已应用」但详情页换成别的片。
-        Optional<ScrapeCandidateDto> candidateOpt = metadataProviders.stream()
-                .filter(provider -> preferredProvider == null
-                        || preferredProvider.equalsIgnoreCase(provider.providerName()))
-                .flatMap(provider -> {
-                    log.info("调用元数据提供器: provider={}", provider.providerName());
-                    List<ScrapeCandidateDto> results = provider.search(guess);
-                    log.info("元数据提供器返回: provider={}, candidates={}", provider.providerName(), results.size());
-                    return results.stream();
-                })
-                .filter(candidate -> preferredExternalId == null
-                        || preferredExternalId.equals(candidate.externalId()))
-                .findFirst();
+        // 用户指定候选时只接受该候选，否则同名作品会让「已应用」换成别的片。
+        Optional<ScrapeCandidateDto> candidateOpt;
+        try {
+            candidateOpt = metadataProviders.stream()
+                    .filter(provider -> preferredProvider == null
+                            || preferredProvider.equalsIgnoreCase(provider.providerName()))
+                    .flatMap(provider -> {
+                        log.info("调用元数据提供器: provider={}", provider.providerName());
+                        List<ScrapeCandidateDto> results = provider.search(guess);
+                        log.info("元数据提供器返回: provider={}, candidates={}", provider.providerName(), results.size());
+                        return results.stream();
+                    })
+                    .filter(candidate -> preferredExternalId == null
+                            || preferredExternalId.equals(candidate.externalId()))
+                    .findFirst();
+        } catch (MetadataProviderUnavailableException ex) {
+            // 不能落到 finishUnmatched：否则任务会被标成「没有匹配到元数据」。
+            log.warn("元数据提供器不可达，刮削任务终止: taskId={}, provider={}",
+                    event.taskId(), ex.providerName());
+            transactionTemplate.executeWithoutResult(status -> finishUnavailable(event, item, ex.providerName()));
+            return;
+        }
         if (candidateOpt.isEmpty()) {
             transactionTemplate.executeWithoutResult(status -> finishUnmatched(event, item, guess));
             return;
@@ -162,6 +164,18 @@ public class MovieScrapeExecutionService {
                 Map.of("taskId", event.taskId().toString(), "title", guess.title()));
     }
 
+    /** 提供器不可达时的收尾：失败原因指向网络，不写成「未匹配到元数据」。 */
+    private void finishUnavailable(MediaScrapeRequestedEvent event, MediaVideoItem item, String providerName) {
+        String reason = "无法连接 " + providerName + "，请检查服务器网络与代理设置";
+        item.setMetadataStatus(MetadataStatus.FAILED.getValue());
+        videoItemRepository.save(item);
+        recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.FAILED);
+        taskRecordService.markFailed(event.taskId(), reason);
+        notificationService.notifyOrLog(event.ownerUserId(), "TASK_FAILED",
+                "视频刮削失败", reason,
+                Map.of("taskId", event.taskId().toString()));
+    }
+
     private void finishMatched(MediaScrapeRequestedEvent event, MediaVideoItem item, ScrapeCandidateDto candidate) {
         fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
 
@@ -174,8 +188,7 @@ public class MovieScrapeExecutionService {
                 ? prepareEpisodeTargets(item, candidate)
                 : prepareMovieTargets(item, candidate));
 
-        // 海报与背景图是 TMDB 图片下载 + MinIO 入库（单张读取超时 30 秒、最多跟随 5 次重定向），
-        // 必须落在两次短事务之间：Worker 的数据库连接池很小，外部网络整段占住会拖垮其他消费者。
+        // 海报下载是长网络 IO，必须落在两次短事务之间，避免占死 Worker 的小连接池。
         ScrapeAssetRefs refs = fetchAssetRefs(plan, candidate);
 
         transactionTemplate.executeWithoutResult(status -> {
@@ -847,10 +860,7 @@ public class MovieScrapeExecutionService {
     }
 
     /**
-     * 下载演员头像到 MinIO，返回 FileNode UUID。失败时返回 null（保留 TMDB URL 降级）。
-     *
-     * <p>文件名以头像 URL 摘要为前缀：TMDB 的 profile_path 按人唯一，哈希保证同一资源内
-     * 不同演员、同名演员不会共用同一个派生文件；显示名仅用于可读性，不参与唯一性。</p>
+     * 下载演员头像到 MinIO，失败返回 null（保留 TMDB URL 降级）；文件名取头像 URL 摘要，避免同名演员共用文件。
      */
     private UUID storeProfileImage(
             UUID ownerUserId, UUID resourceId, String resourceType, String profileUrl, String personName) {

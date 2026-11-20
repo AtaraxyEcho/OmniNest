@@ -12,6 +12,7 @@ class _ReaderLibrary extends StatefulWidget {
     required this.status,
     required this.onStatus,
     required this.onOpen,
+    required this.onRead,
   });
 
   final List<ReaderItem> items;
@@ -19,6 +20,7 @@ class _ReaderLibrary extends StatefulWidget {
   final DesktopReaderFilter status;
   final ValueChanged<DesktopReaderFilter> onStatus;
   final ValueChanged<ReaderItem> onOpen;
+  final ValueChanged<ReaderItem> onRead;
 
   @override
   State<_ReaderLibrary> createState() => _ReaderLibraryState();
@@ -269,6 +271,7 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
                   child: _ReaderRow(
                     item: visible[i],
                     onTap: () => widget.onOpen(visible[i]),
+                    onRead: () => widget.onRead(visible[i]),
                   ),
                 ),
             ],
@@ -290,10 +293,15 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
 }
 
 class _ReaderRow extends StatelessWidget {
-  const _ReaderRow({required this.item, required this.onTap});
+  const _ReaderRow({
+    required this.item,
+    required this.onTap,
+    required this.onRead,
+  });
 
   final ReaderItem item;
   final VoidCallback onTap;
+  final VoidCallback onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -315,13 +323,15 @@ class _ReaderRow extends StatelessWidget {
               width: 44,
               child: AspectRatio(
                 aspectRatio: 2 / 3,
-                child: DesktopCover(
-                  url: item.coverUrl,
-                  kind: DesktopCoverKind.reader,
-                  readerItemId: item.id,
-                  fallbackIcon: DesktopIcons.book,
-                  cacheKey: 'desktop-reader-row-${item.id}',
-                  iconSize: 18,
+                child: DesktopReaderBookCover(
+                  itemId: item.id,
+                  title: item.title,
+                  author: item.authorName ?? '',
+                  coverUrl: item.coverUrl,
+                  isComic: item.isDisplayedAsComic,
+                  readerType: item.readerType,
+                  volumeNumber: item.volumeNumber,
+                  compact: true,
                 ),
               ),
             ),
@@ -367,6 +377,16 @@ class _ReaderRow extends StatelessWidget {
                 textAlign: TextAlign.right,
                 style: DesktopType.numeric(skin.text3),
               ),
+            ),
+            const SizedBox(width: 14),
+            DesktopButton(
+              label:
+                  progress > 0 && progress < 90
+                      ? AppLocalizations.of(context).readerContinueReading
+                      : AppLocalizations.of(context).readerStartReading,
+              icon: DesktopIcons.book,
+              variant: DesktopButtonVariant.soft,
+              onPressed: onRead,
             ),
           ],
         ),
