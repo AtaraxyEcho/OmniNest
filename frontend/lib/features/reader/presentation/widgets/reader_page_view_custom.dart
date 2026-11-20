@@ -44,6 +44,11 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     // 直接基于起点绝对位移计算进度，消除死区滞后并真正跟手。
     _totalDeltaX = details.localPosition.dx - _dragStartX;
 
+    // 严格对齐样例 ReaderView.tsx:203 阻尼：leafWidth * 1.35（双页时约 0.675 * w），
+    // 沉稳有真实纸张阻尼感，不再一拖就飞过去。
+    final leafWidth = widget.spread ? w / 2.0 : w;
+    final dragSpan = math.max(120.0, leafWidth * 1.35);
+
     if (_totalDeltaX < 0) {
       if (widget.state.isLastPage &&
           !widget.state.hasMore &&
@@ -52,14 +57,14 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         return;
       }
       _isForward = true;
-      _flipProgress = (-_totalDeltaX / (w * 0.52)).clamp(0.0, 1.0);
+      _flipProgress = (-_totalDeltaX / dragSpan).clamp(0.0, 1.0);
     } else if (_totalDeltaX > 0) {
       if (widget.state.isFirstPage && !widget.state.hasPreviousChapter) {
         _flipProgress = 0;
         return;
       }
       _isForward = false;
-      _flipProgress = (_totalDeltaX / (w * 0.52)).clamp(0.0, 1.0);
+      _flipProgress = (_totalDeltaX / dragSpan).clamp(0.0, 1.0);
     }
 
     // 实时平滑跟随鼠标 Y 坐标微调折角斜率，纸角真正粘在指针上。
@@ -108,9 +113,11 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     _isDragging = false;
 
     final velocity = details.velocity.pixelsPerSecond.dx;
+    // 反悔防误触：若拖出后又拖回原点附近（progress < 0.06）且无同向快甩，平滑弹回。
+    final directionalFling = _isForward ? velocity < -340 : velocity > 340;
     final shouldFlip =
         _flipProgress > _ReaderPageViewState._commitThreshold ||
-        velocity.abs() > 300;
+        (_flipProgress >= 0.06 && directionalFling);
 
     if (shouldFlip) {
       _startAutoFlip();
@@ -139,9 +146,9 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     required double to,
     required bool commit,
   }) {
-    final ms = ((commit ? 360 : 240) + 180 * (to - from).abs()).round().clamp(
-      160,
-      540,
+    final ms = ((commit ? 400 : 260) + 260 * (to - from).abs()).round().clamp(
+      180,
+      640,
     );
     return Duration(milliseconds: ms);
   }

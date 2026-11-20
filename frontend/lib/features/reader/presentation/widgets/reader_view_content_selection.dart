@@ -109,12 +109,13 @@ extension _ReaderViewContentSelection on _ReaderViewContentState {
         selectableRegionState.contextMenuButtonItems
             .where((e) => e.type == ContextMenuButtonType.selectAll)
             .firstOrNull;
+    // 彻底删除旧版“仅复制/全选”降级样式：即使极端跨页未命中偏移也统一呈现完整暗色毛玻璃工具条。
     if (!colorPickerEnabled) {
       widget.onRegisterSelectionKeyActions?.call(null);
       return ReaderSelectionColorToolbar(
         anchors: selectableRegionState.contextMenuAnchors,
         selectedColor: null,
-        highlightEnabled: false,
+        highlightEnabled: true,
         onSelectColor: (_) {},
         addAnnotationLabel: l10n.readerAddAnnotation,
         copyLabel:
@@ -124,6 +125,7 @@ extension _ReaderViewContentSelection on _ReaderViewContentState {
             selectAllItem?.label ??
             MaterialLocalizations.of(context).selectAllButtonLabel,
         onCopy: () {
+          _hideMouseSelectionOverlay();
           if (copyItem?.onPressed != null) {
             copyItem!.onPressed!();
           } else if (_selectedText.isNotEmpty) {
@@ -132,7 +134,13 @@ extension _ReaderViewContentSelection on _ReaderViewContentState {
             selectableRegionState.clearSelection();
           }
         },
-        onSelectAll: selectAllItem?.onPressed,
+        onSelectAll:
+            selectAllItem?.onPressed == null
+                ? null
+                : () {
+                  _hideMouseSelectionOverlay();
+                  selectAllItem!.onPressed!();
+                },
       );
     }
     final selectedColor =
@@ -184,6 +192,7 @@ extension _ReaderViewContentSelection on _ReaderViewContentState {
           selectAllItem?.label ??
           MaterialLocalizations.of(context).selectAllButtonLabel,
       onCopy: () {
+        _hideMouseSelectionOverlay();
         if (copyItem?.onPressed != null) {
           copyItem!.onPressed!();
         } else if (_selectedText.isNotEmpty) {
@@ -192,7 +201,13 @@ extension _ReaderViewContentSelection on _ReaderViewContentState {
           selectableRegionState.clearSelection();
         }
       },
-      onSelectAll: selectAllItem?.onPressed,
+      onSelectAll:
+          selectAllItem?.onPressed == null
+              ? null
+              : () {
+                _hideMouseSelectionOverlay();
+                selectAllItem!.onPressed!();
+              },
       removeHighlightLabel:
           hasHighlightOverlap && widget.onRemoveHighlight != null
               ? (overlappingHighlights.any((a) => (a.note ?? '').isNotEmpty)

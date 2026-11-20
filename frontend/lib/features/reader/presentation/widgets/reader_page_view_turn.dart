@@ -156,7 +156,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   /// 统一：下一页。
-  void _goNextPage({bool tapTurn = false}) {
+  void _goNextPage({bool tapTurn = false, double? tapFy}) {
     final reason = _blockReason;
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
@@ -216,6 +216,10 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('nextStart', detail: 'target=$nextIndex mode=flip');
       _transitionInFlight = true;
       _isForward = true;
+      _activeCurlConfig =
+          tapFy != null
+              ? CurlGrabConfig.fromPointerFy(tapFy)
+              : CurlGrabConfig.defaultNext;
       _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
       unawaited(_startAutoFlip());
     }
@@ -269,7 +273,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   /// 统一：上一页。
-  void _goPreviousPage({bool tapTurn = false}) {
+  void _goPreviousPage({bool tapTurn = false, double? tapFy}) {
     final reason = _blockReason;
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
@@ -323,6 +327,10 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('previousStart', detail: 'mode=flip');
       _transitionInFlight = true;
       _isForward = false;
+      _activeCurlConfig =
+          tapFy != null
+              ? CurlGrabConfig.fromPointerFy(tapFy)
+              : CurlGrabConfig.defaultNext;
       _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
       unawaited(_startAutoFlip());
     }

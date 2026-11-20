@@ -163,7 +163,8 @@ void main() {
       // 还夹着第二段的行首缩进，起止必须落在真实字符上。
       // 选区里多出来的空白要容错；没有空白的写法跨不过块之间的分隔符，仍按未命中处理。
       expect(matchCorpusRange(corpus, '乙 丙段 然而'), (4, 10));
-      expect(matchCorpusRange(corpus, '乙丙段然而'), isNull);
+      // v6 紧凑语料匹配：选区与正文都折叠空白，无空格针同样命中。
+      expect(matchCorpusRange(corpus, '乙丙段然而'), (4, 10));
     });
 
     test('returns null when the selection is not in this chapter', () {

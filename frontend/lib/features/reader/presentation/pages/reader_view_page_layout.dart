@@ -78,7 +78,13 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
           child: ReaderComfortFilter(
             brightness: _settings.brightness,
             warmth: _settings.warmth,
-            child: DecoratedBox(
+            // 舞台背景平滑渐变 + 新模式单向进场柔化过渡（绝不同时保留两棵带 ScrollController 的子树）
+            child: AnimatedContainer(
+              duration:
+                  animationsDisabled
+                      ? Duration.zero
+                      : const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
               decoration:
                   _settings.usesBookDesk
                       ? BoxDecoration(
@@ -99,7 +105,29 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                       : BoxDecoration(color: _settings.surfaceColor),
               child: FontScaleScope.withSystemScaleOnly(
                 context: context,
-                child: _buildContent(content, detail),
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey<String>(
+                    'mode-${_settings.readingMode}-${_settings.pageTurnMode}',
+                  ),
+                  tween: Tween<double>(
+                    begin: animationsDisabled ? 1.0 : 0.0,
+                    end: 1.0,
+                  ),
+                  duration:
+                      animationsDisabled
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder:
+                      (context, t, child) => Opacity(
+                        opacity: t,
+                        child: Transform.scale(
+                          scale: 0.988 + 0.012 * t,
+                          child: child,
+                        ),
+                      ),
+                  child: _buildContent(content, detail),
+                ),
               ),
             ),
           ),

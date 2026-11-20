@@ -14,9 +14,17 @@ class CurlGrabConfig {
   /// 折线斜率，范围 [-0.34, 0.34]。
   final double slant;
 
+  /// 三区连续多角度折角映射：上 1/3 顶角下卷、中 1/3 近似水平平翻、下 1/3 底角上卷。
   factory CurlGrabConfig.fromPointerFy(double fy) {
-    final bottom = fy > 0.5;
-    final raw = (bottom ? -1.0 : 1.0) * (0.12 + (fy - 0.5).abs() * 0.45);
+    final clamped = fy.clamp(0.05, 0.95);
+    final bottom = clamped >= 0.5;
+    final distFromCenter = (clamped - 0.5).abs(); // 0..0.45
+    // 中段（0.35..0.65）折角柔和趋平（0.05..0.12），靠近上下角时渐增至 0.34。
+    final magnitude =
+        distFromCenter < 0.15
+            ? 0.05 + (distFromCenter / 0.15) * 0.09
+            : 0.14 + ((distFromCenter - 0.15) / 0.30) * 0.20;
+    final raw = (bottom ? -1.0 : 1.0) * magnitude;
     return CurlGrabConfig(bottomCorner: bottom, slant: raw.clamp(-0.34, 0.34));
   }
 
@@ -485,6 +493,10 @@ class _CurlPainter extends CustomPainter {
           const [0.0, 0.98, 1.0],
         ),
     );
+    // 在贴底翻页正面内侧（书脊侧 0..35px）补画同源书脊阴影，按下页面瞬间书脊阴影 100% 连续不消失！
+    if (spread) {
+      _drawSpineHalfShadow(canvas, imageRect, spineOnLeft: !isPrev);
+    }
     _drawPaperRim(canvas, imageRect, isRightLeaf: !isPrev);
     canvas.restore();
 
@@ -583,11 +595,47 @@ class _CurlPainter extends CustomPainter {
             const [0.0, 0.17, 1.0],
           ),
       );
+      if (spread) {
+        _drawSpineHalfShadow(canvas, imageRect, spineOnLeft: isPrev);
+      }
       _drawPaperRim(canvas, imageRect, isRightLeaf: isPrev);
       canvas.restore();
     }
 
     canvas.restore();
+  }
+
+  /// 与 ReaderPageSpread 70px 静态中缝完全同源的单侧 35px 书脊阴影，
+  /// 仅画在贴底正/背纸面上，绝不压在浮空的 28 片圆柱纸筒上方。
+  void _drawSpineHalfShadow(
+    Canvas canvas,
+    Rect rect, {
+    required bool spineOnLeft,
+  }) {
+    const halfGutter = 35.0;
+    final shadowRect =
+        spineOnLeft
+            ? Rect.fromLTWH(rect.left, rect.top, halfGutter, rect.height)
+            : Rect.fromLTWH(
+              rect.right - halfGutter,
+              rect.top,
+              halfGutter,
+              rect.height,
+            );
+    canvas.drawRect(
+      shadowRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: spineOnLeft ? Alignment.centerLeft : Alignment.centerRight,
+          end: spineOnLeft ? Alignment.centerRight : Alignment.centerLeft,
+          colors: [
+            Colors.black.withValues(alpha: 0.16),
+            Colors.black.withValues(alpha: 0.05),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.42, 1.0],
+        ).createShader(shadowRect),
+    );
   }
 
   void _drawPaperRim(Canvas canvas, Rect rect, {required bool isRightLeaf}) {

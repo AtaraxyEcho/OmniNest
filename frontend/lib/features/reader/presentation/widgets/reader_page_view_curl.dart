@@ -6,9 +6,9 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     _curlWarmupTimer?.cancel();
     if (widget.turnMode != PageTurnMode.cover) return;
     _curlWarmupTimer = Timer(const Duration(milliseconds: 80), () async {
-      if (!mounted || _curlFrameNotifier.value.active) return;
+      if (!mounted || _curlFrameNotifier.value.active || _isDragging) return;
       await _ensureCurlPairReady(CurlDirection.next);
-      if (!mounted || _curlFrameNotifier.value.active) return;
+      if (!mounted || _curlFrameNotifier.value.active || _isDragging) return;
       await _ensureCurlPairReady(CurlDirection.prev);
     });
   }
@@ -94,6 +94,17 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
           old.front.dispose();
           old.back.dispose();
         });
+      }
+      // 关键修复：若抓图完成时用户仍在同方向拖拽，立刻补发当前进度首帧，杜绝偶发哑火！
+      final dragDir = _isForward ? CurlDirection.next : CurlDirection.prev;
+      if (mounted && _isDragging && dragDir == dir && _flipProgress > 0.005) {
+        final wasActive = _curlFrameNotifier.value.active;
+        _curlFrameNotifier.value = CurlFrame(
+          progress: _flipProgress,
+          direction: dir,
+          config: _activeCurlConfig,
+        );
+        if (!wasActive) _updateState(() {});
       }
       return true;
     } finally {

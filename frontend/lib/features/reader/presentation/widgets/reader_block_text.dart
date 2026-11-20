@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 
@@ -9,6 +11,27 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_mod
 /// 下标必须经本表换算，直接当 `charOffset` 用会偏到别的段落去。
 class ChapterSearchCorpus {
   ChapterSearchCorpus({required this.plainText, required this.charOffsets});
+
+  String? _compactText;
+  List<int>? _compactToPlain;
+
+  /// 懒缓存去除空白与不可见占位符的紧凑语料与下标映射表（O(N) 一次构建，长文本匹配零正则回溯）。
+  (String, List<int>) compactView() {
+    if (_compactText != null && _compactToPlain != null) {
+      return (_compactText!, _compactToPlain!);
+    }
+    final buf = StringBuffer();
+    final map = <int>[];
+    for (var i = 0; i < plainText.length; i++) {
+      final code = plainText.codeUnitAt(i);
+      if (_isIgnorableSelectionCodeUnit(code)) continue;
+      buf.writeCharCode(code);
+      map.add(i);
+    }
+    _compactText = buf.toString();
+    _compactToPlain = map;
+    return (_compactText!, _compactToPlain!);
+  }
 
   /// 从内容块构建检索文本与偏移映射，文本形状与 [plainTextFromBlocks] 完全一致。
   factory ChapterSearchCorpus.fromBlocks(List<ContentBlock> blocks) {
@@ -164,44 +187,86 @@ String plainTextFromBlocks(List<ContentBlock> blocks) {
   if (corpus.plainText.isEmpty || needle.isEmpty) {
     return null;
   }
-  final tokens =
-      needle
-          .split(RegExp(r'\s+'))
-          .where((token) => token.isNotEmpty)
-          .map(RegExp.escape)
-          .toList();
-  if (tokens.isEmpty) {
-    return null;
+  // 优先走 L1/L2 紧凑无空白 O(N) 索引匹配：彻底解决长文本跨段换行/不可见字符导致的失配与正则回溯卡顿。
+  final compactNeedleBuf = StringBuffer();
+  for (var i = 0; i < needle.length; i++) {
+    final code = needle.codeUnitAt(i);
+    if (_isIgnorableSelectionCodeUnit(code)) continue;
+    compactNeedleBuf.writeCharCode(code);
   }
-  // 选区与语料的空白不必一一对应：渲染折行会给选中文字补出换行或空格，
-  // 而同一段里跨内联样式边界的两个字在两边都可能没有空白。词元之间容许零个或多个空白。
-  final matches =
-      RegExp(tokens.join(r'\s*')).allMatches(corpus.plainText).toList();
-  if (matches.isEmpty) {
-    return null;
+  final compactNeedle = compactNeedleBuf.toString();
+  if (compactNeedle.isEmpty) return null;
+
+  final (compactText, compactToPlain) = corpus.compactView();
+  if (compactText.isEmpty) return null;
+
+  (int, int)? pickClosest(List<(int, int)> spans) {
+    if (spans.isEmpty) return null;
+    var best = spans.first;
+    final anchor = anchorCharOffset;
+    if (anchor != null && spans.length > 1) {
+      var bestDist = (corpus.toCharOffset(best.$1) - anchor).abs();
+      for (final s in spans.skip(1)) {
+        final d = (corpus.toCharOffset(s.$1) - anchor).abs();
+        if (d < bestDist) {
+          bestDist = d;
+          best = s;
+        }
+      }
+    }
+    return (corpus.toCharOffset(best.$1), corpus.toCharOffsetEnd(best.$2));
   }
-  var chosen = matches.first;
-  final anchor = anchorCharOffset;
-  if (anchor != null && matches.length > 1) {
-    var bestDistance = _distanceToAnchor(corpus, matches.first, anchor);
-    for (final match in matches.skip(1)) {
-      final distance = _distanceToAnchor(corpus, match, anchor);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        chosen = match;
+
+  // L1+L2: 直接在紧凑语料中收集全部精确命中区间
+  final exactHits = <(int, int)>[];
+  var searchFrom = 0;
+  while (searchFrom <= compactText.length - compactNeedle.length) {
+    final idx = compactText.indexOf(compactNeedle, searchFrom);
+    if (idx < 0) break;
+    exactHits.add((
+      compactToPlain[idx],
+      compactToPlain[idx + compactNeedle.length - 1],
+    ));
+    searchFrom = idx + 1;
+    if (exactHits.length >= 24) break;
+  }
+  final exact = pickClosest(exactHits);
+  if (exact != null) return exact;
+
+  // L3: 超长跨段选区首尾 12 字锚点闭合匹配（容错中间插入页码或特殊排版符）
+  if (compactNeedle.length >= 24) {
+    const anchorLen = 12;
+    final head = compactNeedle.substring(0, anchorLen);
+    final tail = compactNeedle.substring(compactNeedle.length - anchorLen);
+    final headIdx = compactText.indexOf(head);
+    if (headIdx >= 0) {
+      final minTailStart = headIdx + anchorLen;
+      final maxTailEnd = math.min(
+        compactText.length,
+        headIdx + compactNeedle.length + 80,
+      );
+      if (minTailStart < maxTailEnd) {
+        final tailIdx = compactText.indexOf(tail, minTailStart);
+        if (tailIdx >= 0 && tailIdx + anchorLen <= maxTailEnd) {
+          return (
+            corpus.toCharOffset(compactToPlain[headIdx]),
+            corpus.toCharOffsetEnd(compactToPlain[tailIdx + anchorLen - 1]),
+          );
+        }
       }
     }
   }
-  return (
-    corpus.toCharOffset(chosen.start),
-    corpus.toCharOffsetEnd(chosen.end - 1),
-  );
+  return null;
 }
 
-int _distanceToAnchor(
-  ChapterSearchCorpus corpus,
-  RegExpMatch match,
-  int anchorCharOffset,
-) {
-  return (corpus.toCharOffset(match.start) - anchorCharOffset).abs();
+bool _isIgnorableSelectionCodeUnit(int code) {
+  return code == 0x20 ||
+      code == 0x09 ||
+      code == 0x0A ||
+      code == 0x0D ||
+      code == 0x00A0 ||
+      code == 0x3000 ||
+      code == 0x200B ||
+      code == 0xFEFF ||
+      code == 0xFFFC;
 }

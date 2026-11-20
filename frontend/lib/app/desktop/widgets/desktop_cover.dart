@@ -500,22 +500,30 @@ class DesktopBookTilt extends StatelessWidget {
       builder: (context, localHovered) {
         final hovered = hoveredOverride ?? localHovered;
         final active = hovered && !reduced;
-        final y = active ? hoverY : restY;
-        final x = active ? hoverX : restX;
-        return AnimatedContainer(
+        // 弃用 AnimatedContainer(Matrix4Tween) 避免透视矩阵分解造成动画末尾扭曲；
+        // 改用标量 TweenAnimationBuilder 每帧重拼纯净 Matrix4，严格对齐样例 rotateY -> rotateX 顺序。
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: active ? 1.0 : 0.0),
           duration: MotionToken.reduced(
             context,
-            const Duration(milliseconds: 260),
+            const Duration(milliseconds: 560),
           ),
-          curve: Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
-          // 合并单矩阵变换 + 1px 透明抗锯齿缓冲边，平滑 3D 透视斜边毛刺。
-          transform:
-              Matrix4.identity()
-                ..setEntry(3, 2, 1 / 900)
-                ..translateByDouble(0.0, active ? hoverLift : 0.0, 0.0, 1.0)
-                ..rotateX(x * math.pi / 180)
-                ..rotateY(y * math.pi / 180),
+          curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+          builder: (context, t, content) {
+            final y = restY + (hoverY - restY) * t;
+            final x = restX + (hoverX - restX) * t;
+            final lift = hoverLift * t;
+            return Transform(
+              alignment: Alignment.center,
+              transform:
+                  Matrix4.identity()
+                    ..setEntry(3, 2, 1 / 900)
+                    ..translateByDouble(0.0, lift, 0.0, 1.0)
+                    ..rotateY(y * math.pi / 180)
+                    ..rotateX(x * math.pi / 180),
+              child: content,
+            );
+          },
           child: Padding(padding: const EdgeInsets.all(1), child: child),
         );
       },

@@ -298,7 +298,16 @@ class _DesktopModeSwitch extends StatelessWidget {
       ('scroll', l10n.readerModeScroll, _ReaderTopIcon.scroll),
     ];
 
-    return Container(
+    final activeIndex = mode == 'scroll' ? 2 : (mode == 'swipe' ? 1 : 0);
+    // 等宽单格 + AnimatedPositioned 滑动高亮胶囊：中英文均像素级精准滑行不错位。
+    final tabWidth = iconOnly ? 34.0 : 72.0;
+    final slideDur = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 220),
+    );
+
+    return AnimatedContainer(
+      duration: slideDur,
       height: 36,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -306,33 +315,57 @@ class _DesktopModeSwitch extends StatelessWidget {
         border: Border.all(color: line),
         borderRadius: BorderRadius.circular(11),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (id, label, icon) in options)
-            _ModeSwitchTab(
-              label: label,
-              icon: icon,
-              selected: mode == id,
-              iconOnly: iconOnly,
-              foreground: foreground,
-              activeBg: activeBg,
-              onTap: () {
-                if (id == 'scroll') {
-                  onSettingsChanged?.call(
-                    settings.copyWith(readingMode: 'scroll'),
-                  );
-                } else {
-                  onSettingsChanged?.call(
-                    settings.copyWith(
-                      readingMode: 'page',
-                      pageTurnMode: id == 'book' ? 'cover' : 'slide',
-                    ),
-                  );
-                }
-              },
+      child: SizedBox(
+        width: tabWidth * options.length,
+        height: 28,
+        child: Stack(
+          children: [
+            AnimatedPositioned(
+              duration: slideDur,
+              curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+              left: activeIndex * tabWidth,
+              top: 0,
+              bottom: 0,
+              width: tabWidth,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: activeBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
-        ],
+            Row(
+              children: [
+                for (final (id, label, icon) in options)
+                  SizedBox(
+                    width: tabWidth,
+                    child: _ModeSwitchTab(
+                      label: label,
+                      icon: icon,
+                      selected: mode == id,
+                      iconOnly: iconOnly,
+                      foreground: foreground,
+                      activeBg: Colors.transparent,
+                      onTap: () {
+                        if (id == 'scroll') {
+                          onSettingsChanged?.call(
+                            settings.copyWith(readingMode: 'scroll'),
+                          );
+                        } else {
+                          onSettingsChanged?.call(
+                            settings.copyWith(
+                              readingMode: 'page',
+                              pageTurnMode: id == 'book' ? 'cover' : 'slide',
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -382,14 +415,15 @@ class _ModeSwitchTabState extends State<_ModeSwitchTab> {
           child: AnimatedContainer(
             duration: MotionToken.resolve(context, MotionToken.fast),
             curve: MotionToken.curve,
-            height: 30,
-            padding: EdgeInsets.symmetric(horizontal: widget.iconOnly ? 8 : 11),
+            height: 28,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: widget.selected ? widget.activeBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _ReaderLineIcon(widget.icon, size: 15, color: color),
                 if (!widget.iconOnly) ...[

@@ -159,10 +159,11 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     if (delta.distance > _ReaderPageViewState._tapMoveThreshold) {
       _pointerMoved = true;
     }
+    // 放宽斜向掀角判定（支持从右下角往左上角 65° 以内自然拖拽掀页，不再偶发失效）
     if (widget.turnMode != PageTurnMode.slide &&
         !widget.selectionActive &&
-        delta.dx.abs() > _ReaderPageViewState._tapMoveThreshold &&
-        delta.dx.abs() > delta.dy.abs()) {
+        delta.dx.abs() > 4.0 &&
+        delta.dx.abs() > delta.dy.abs() * 0.45) {
       // Book 模式的拖拽从页边开始，正文中段仍然留给文字选择；鼠标和触摸
       // 共用这条路径，桌面端不能因为 PointerDeviceKind 是 mouse 而退化成
       // 只有点按箭头才能翻页。
@@ -239,22 +240,23 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     }
 
     final w = context.size?.width ?? 1;
+    final h = context.size?.height ?? 1;
     final x = startPos.dx;
+    final tapFy = (startPos.dy / math.max(1.0, h)).clamp(0.05, 0.95);
     final leftBound = w * _ReaderPageViewState._leftZoneRatio;
     final rightBound = w * (1 - _ReaderPageViewState._rightZoneRatio);
 
     if (widget.selectionActive) {
       widget.onClearSelection?.call();
-      // 点击中央仅清选区；点击左右翻页热区则清选区并直接翻页，绝不卡死。
       if (x >= leftBound && x <= rightBound) return;
     }
 
     if (x < leftBound) {
       _debugPageTurn('leftTapReceived');
-      _goPreviousPage(tapTurn: true);
+      _goPreviousPage(tapTurn: true, tapFy: tapFy);
     } else if (x > rightBound) {
       _debugPageTurn('rightTapReceived');
-      _goNextPage(tapTurn: true);
+      _goNextPage(tapTurn: true, tapFy: tapFy);
     } else {
       widget.callbacks.onToggleControls();
     }

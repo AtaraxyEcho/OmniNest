@@ -116,19 +116,19 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            DesktopTextField(
+        // 严格对齐样例 Reader.tsx:146-152 & more.css:157（.lib-bar + .sort-sel + .vtoggle）
+        LayoutBuilder(
+          builder: (context, barConstraints) {
+            final searchField = DesktopTextField(
               keyName: 'desktop-reader-search',
               controller: _search,
               hint: l10n.desktopReaderSearchHint,
               prefixIcon: DesktopIcons.search,
-              width: 280,
+              width: barConstraints.maxWidth < 920 ? 220 : 280,
               height: 36,
               onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(width: 12),
-            DesktopSeg<_ReaderType>(
+            );
+            final typeSeg = DesktopSeg<_ReaderType>(
               options: _ReaderType.values,
               value: _type,
               small: true,
@@ -143,21 +143,56 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
                     _type = value;
                     _genre = null;
                   }),
-            ),
-            const Spacer(),
-            DesktopIconButton(
-              icon: DesktopIcons.grid,
-              tooltip: l10n.desktopFilesGridView,
-              active: _grid,
-              onPressed: () => setState(() => _grid = true),
-            ),
-            DesktopIconButton(
-              icon: DesktopIcons.list,
-              tooltip: l10n.desktopFilesListView,
-              active: !_grid,
-              onPressed: () => setState(() => _grid = false),
-            ),
-          ],
+            );
+            final sortGroup = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.desktopReaderSortLabel,
+                  style: DesktopType.caption(skin.text3),
+                ),
+                const SizedBox(width: 8),
+                DesktopSelect<_ReaderSort>(
+                  value: _sort,
+                  width: 148,
+                  variant: DesktopSelectVariant.small,
+                  options: [
+                    for (final value in _ReaderSort.values)
+                      DesktopSelectOption(
+                        value: value,
+                        label: sortLabels[value] ?? '',
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _sort = value),
+                ),
+              ],
+            );
+            final viewToggle = _LibraryViewToggle(
+              isGrid: _grid,
+              gridTooltip: l10n.desktopFilesGridView,
+              listTooltip: l10n.desktopFilesListView,
+              onChanged: (grid) => setState(() => _grid = grid),
+            );
+            if (barConstraints.maxWidth < 760) {
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [searchField, typeSeg, sortGroup, viewToggle],
+              );
+            }
+            return Row(
+              children: [
+                searchField,
+                const SizedBox(width: 12),
+                typeSeg,
+                const Spacer(),
+                sortGroup,
+                const SizedBox(width: 10),
+                viewToggle,
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -198,31 +233,7 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
               ),
           ],
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Icon(DesktopIcons.sort, size: 15, color: skin.text3),
-            const SizedBox(width: 6),
-            Text(
-              l10n.desktopReaderSortLabel,
-              style: DesktopType.caption(skin.text3),
-            ),
-            const SizedBox(width: 8),
-            DesktopSelect<_ReaderSort>(
-              value: _sort,
-              width: 190,
-              variant: DesktopSelectVariant.small,
-              options: [
-                for (final value in _ReaderSort.values)
-                  DesktopSelectOption(
-                    value: value,
-                    label: sortLabels[value] ?? '',
-                  ),
-              ],
-              onChanged: (value) => setState(() => _sort = value),
-            ),
-          ],
-        ),
+
         const SizedBox(height: 8),
         Row(
           children: [
@@ -390,6 +401,89 @@ class _ReaderRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 1:1 样例 `.vtoggle`（desktop.css:454）：3px 内距、10px 圆角、两个 30×28 紧凑视图按钮。
+class _LibraryViewToggle extends StatelessWidget {
+  const _LibraryViewToggle({
+    required this.isGrid,
+    required this.gridTooltip,
+    required this.listTooltip,
+    required this.onChanged,
+  });
+
+  final bool isGrid;
+  final String gridTooltip;
+  final String listTooltip;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    Widget btn({
+      required IconData icon,
+      required String tooltip,
+      required bool active,
+      required VoidCallback onTap,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: MotionToken.reduced(
+                context,
+                const Duration(milliseconds: 200),
+              ),
+              curve: Curves.easeOutCubic,
+              width: 30,
+              height: 28,
+              decoration: BoxDecoration(
+                color: active ? skin.raise3 : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: active ? skin.text : skin.text3,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: skin.raise,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: skin.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn(
+            icon: DesktopIcons.grid,
+            tooltip: gridTooltip,
+            active: isGrid,
+            onTap: () => onChanged(true),
+          ),
+          btn(
+            icon: DesktopIcons.list,
+            tooltip: listTooltip,
+            active: !isGrid,
+            onTap: () => onChanged(false),
+          ),
+        ],
       ),
     );
   }

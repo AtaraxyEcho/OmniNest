@@ -272,8 +272,10 @@ class _SelectionPopoverLayoutDelegate extends SingleChildLayoutDelegate {
 
     final aboveY = primaryAnchor.dy - childSize.height - _verticalGap;
     final belowY = secondaryAnchor.dy + _verticalGap + 18;
+    // 避让顶部 64px 阅读器顶栏，选中页面最顶行时自动翻转到选区下方
+    const topClearance = 68.0;
     final double y =
-        aboveY >= _screenMargin
+        aboveY >= topClearance
             ? aboveY
             : belowY
                 .clamp(
