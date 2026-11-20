@@ -70,10 +70,8 @@ class _InsightRow extends StatelessWidget {
                   ),
               ],
             ),
-            if (dailyReading.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              _ReadingBars(days: dailyReading),
-            ],
+            const SizedBox(height: 20),
+            _ReadingBars(days: dailyReading),
           ],
         ),
       ),
@@ -91,26 +89,48 @@ class _ReadingBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final peak = days.fold<int>(0, (max, day) => math.max(max, day.minutes));
+    final l10n = AppLocalizations.of(context);
+    // 后端按契约返回最近 14 天；截取尾部仍可兼容旧服务端返回更长序列。
+    // 旧服务端暂时没有数据时仍保留 14 根基线柱，避免右卡片结构塌缩。
+    final visibleDays =
+        days.length > 14 ? days.sublist(days.length - 14) : days;
+    final chartDays = <ReaderDailyReading?>[
+      ...List<ReaderDailyReading?>.filled(
+        math.max(0, 14 - visibleDays.length),
+        null,
+      ),
+      ...visibleDays,
+    ];
+    final peak = visibleDays.fold<int>(
+      0,
+      (max, day) => math.max(max, day.minutes),
+    );
     final scale = peak <= 0 ? 1 : peak;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(l10n.readerStatsLast14, style: DesktopType.eyebrow(skin.text3)),
+        const SizedBox(height: 8),
         SizedBox(
           height: 90,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              for (var i = 0; i < days.length; i++)
+              for (var i = 0; i < chartDays.length; i++)
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
-                      right: i == days.length - 1 ? 0 : 6,
+                      right: i == chartDays.length - 1 ? 0 : 6,
                     ),
                     child: DesktopStagger(
                       index: i,
                       child: _ReadingBar(
-                        fraction: days[i].minutes / scale,
+                        // 原型 `Math.max(4, d * 10)%` 保证无阅读日仍有
+                        // 可见的 4% 基线柱，而不是让整块图表像缺失。
+                        fraction:
+                            chartDays[i] == null
+                                ? 0.04
+                                : math.max(0.04, chartDays[i]!.minutes / scale),
                         color: skin.accent,
                       ),
                     ),
@@ -119,20 +139,22 @@ class _ReadingBars extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              _shortDate(days.first.date),
-              style: DesktopType.micro(skin.text3),
-            ),
-            Text(
-              _shortDate(days.last.date),
-              style: DesktopType.micro(skin.text3),
-            ),
-          ],
-        ),
+        if (visibleDays.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _shortDate(visibleDays.first.date),
+                style: DesktopType.micro(skin.text3),
+              ),
+              Text(
+                _shortDate(visibleDays.last.date),
+                style: DesktopType.micro(skin.text3),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

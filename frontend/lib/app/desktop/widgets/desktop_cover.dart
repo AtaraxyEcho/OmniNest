@@ -242,7 +242,12 @@ class DesktopReaderBookCover extends StatelessWidget {
         final hovered = hoveredOverride ?? localHovered;
         final gloss = AnimatedSlide(
           offset: hovered ? const Offset(0.6, 0) : const Offset(-0.6, 0),
-          duration: MotionToken.reduced(context, DesktopMotion.colorFade),
+          // 原型 `.book-cover .gloss` 使用 1s 过渡；过短会让光带像
+          // hover 闪烁，并且在父卡片抬升时露出不连续的边缘。
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 1000),
+          ),
           curve: DesktopMotion.ease,
           child: SizedBox.expand(
             child: DecoratedBox(
@@ -303,6 +308,7 @@ class DesktopReaderBookCover extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: _radius,
+            clipBehavior: Clip.antiAliasWithSaveLayer,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -315,25 +321,11 @@ class DesktopReaderBookCover extends StatelessWidget {
                     cacheKey: 'desktop-reader-cover-$itemId',
                     iconSize: large ? 28 : 20,
                   ),
-                if (hasArt)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.04),
-                          Colors.black.withValues(alpha: 0.78),
-                        ],
-                        stops: [0.35, 1],
-                      ),
-                    ),
-                  ),
                 Positioned(
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  width: compact ? 5 : (large ? 12 : 10),
+                  width: compact ? 5 : 12,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -347,6 +339,27 @@ class DesktopReaderBookCover extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (hasArt)
+                  // 原型 DOM 顺序是 image → spine → shade → text/gloss，
+                  // 因而底部暗部也覆盖书脊；Positioned.fill 明确保证
+                  // 遮罩覆盖整个圆角裁剪区域，不会在边框处缩短。
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.05),
+                              Colors.black.withValues(alpha: 0.78),
+                            ],
+                            stops: const [0.35, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 if (!compact && !hasArt)
                   Positioned(
                     left: 24,
@@ -375,7 +388,7 @@ class DesktopReaderBookCover extends StatelessWidget {
                         ),
                         child: Text(
                           tag,
-                          style: DesktopType.micro(skin.onStage).copyWith(
+                          style: DesktopType.micro(Colors.white).copyWith(
                             letterSpacing: 0.5,
                             fontWeight: FontWeight.w600,
                           ),
