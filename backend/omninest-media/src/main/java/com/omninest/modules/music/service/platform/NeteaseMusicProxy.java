@@ -93,6 +93,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     /** 降档只保留两个关键落点，避免从最高档逐级串行探测九次。 */
     private static final List<String> QUALITY_FALLBACKS = List.of("exhigh", "standard");
 
+    /** 旧版接口只接受码率；作为 v1 返回 HTTP 400 时的兼容通道。 */
+    private static final List<Integer> LEGACY_BITRATE_FALLBACKS = List.of(320_000, 128_000);
+
     private final MusicRuntimeConfigService configService;
     private final MusicPlatformCredentialService credentialService;
     private final SafeUrlValidator safeUrlValidator;
@@ -170,7 +173,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             // 凭据查询与解密在循环外只做一次，避免重复查库。
             // song/url/v1 会根据客户端来源决定返回的音源策略；补充 PC 客户端标记，
             // 否则仅有 MUSIC_U 的 VIP 会话仍可能被接口判为无可用音质并返回 400。
-            String userCookie = mergeCookieHeaders(cookie(ownerUserId), "os=pc");
+            String userCookie = preparePlaybackCookie(ownerUserId);
             int startIndex = startIndexForQuality(quality);
             List<String> candidates = playbackQualityCandidates(startIndex);
             long deadline = System.nanoTime() + PLAYBACK_URL_TIMEOUT.toNanos();
@@ -207,6 +210,29 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                     log.info("网易云歌曲无版权或仅试听，停止降档探测: songId={}, level={}, code={}, fee={}",
                             songId, level, code, fee);
                     break;
+                }
+            }
+            // NeteaseCloudMusicApi 4.32 在部分会员曲目上会让新版接口直接返回
+            // HTTP 400；旧版 /song/url 仍按 br 返回可播地址，继续复用同一完整 Cookie。
+            for (int bitrate : LEGACY_BITRATE_FALLBACKS) {
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    break;
+                }
+                Duration requestTimeout = Duration.ofMillis(Math.max(
+                        1, Math.min(REQUEST_TIMEOUT.toMillis(), remainingNanos / 1_000_000)));
+                String path = "/song/url?id=" + encode(songId)
+                        + "&br=" + bitrate
+                        + "&timestamp=" + System.currentTimeMillis();
+                JsonNode json = requestJson(path, userCookie, requestTimeout);
+                String url = playbackUrl(json);
+                if (url != null) {
+                    String qualityName = bitrate >= 320_000 ? "exhigh" : "standard";
+                    JsonNode songData = json.path("data").get(0);
+                    String format = songData.path("type").asString(null);
+                    log.info("网易云播放URL通过旧接口获取成功: songId={}, quality={}, format={}",
+                            songId, qualityName, format);
+                    return new PlaybackUrlResult(url, qualityName, format, null);
                 }
             }
             log.info("网易云播放URL获取失败: songId={}, 所有音质均不可用", songId);
@@ -320,6 +346,19 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      */
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    /** 从新旧播放接口的统一 data 数组中提取真实音源地址。 */
+    private String playbackUrl(JsonNode json) {
+        if (json == null) {
+            return null;
+        }
+        JsonNode data = json.path("data");
+        if (!data.isArray() || data.isEmpty()) {
+            return null;
+        }
+        String url = data.get(0).path("url").asString(null);
+        return url == null || url.isBlank() ? null : url;
     }
 
     @Override
@@ -992,6 +1031,49 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     private String cookie(UUID ownerUserId) {
         MusicPlatformCredential credential = credential(ownerUserId);
         return credential == null ? null : credential.cookie();
+    }
+
+    /**
+     * 播放接口比资料接口更依赖登录会话中的 NMTID；旧 QR 会话只保存 MUSIC_U 时，
+     * 先用登录状态接口补收服务端下发的 Cookie，再把完整会话用于播放请求。
+     */
+    private String preparePlaybackCookie(UUID ownerUserId) throws IOException, InterruptedException {
+        MusicPlatformCredential credential = credential(ownerUserId);
+        String playbackCookie = mergeCookieHeaders(
+                credential == null ? null : credential.cookie(),
+                "os=pc"
+        );
+        if (credential == null
+                || (hasCookie(playbackCookie, "NMTID") && hasCookie(playbackCookie, "__csrf"))) {
+            return playbackCookie;
+        }
+        NeteaseApiResponse statusResponse = request(
+                "/login/status?timestamp=" + System.currentTimeMillis(),
+                playbackCookie
+        );
+        String refreshedCookie = mergeCookieHeaders(playbackCookie, statusResponse.cookie());
+        if (!statusResponse.cookie().isBlank() && !refreshedCookie.equals(playbackCookie)) {
+            credentialService.save(
+                    ownerUserId,
+                    MusicPlatform.NETEASE,
+                    refreshedCookie,
+                    credential.userInfo()
+            );
+        }
+        return refreshedCookie;
+    }
+
+    private boolean hasCookie(String cookieHeader, String name) {
+        if (cookieHeader == null || cookieHeader.isBlank()) {
+            return false;
+        }
+        for (String segment : cookieHeader.split(";")) {
+            int separator = segment.indexOf('=');
+            if (separator > 0 && name.equals(segment.substring(0, separator).trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private MusicPlatformCredential credential(UUID ownerUserId) {

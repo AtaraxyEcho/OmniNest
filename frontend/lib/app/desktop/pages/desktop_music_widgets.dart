@@ -14,7 +14,9 @@ class _FocusHero extends StatelessWidget {
     final item = state?.currentItem;
     final track = item?.track;
     final playing = state?.isPlaying ?? false;
-    final cover = _firstMusicCover(track?.coverUrl, track?.coverThumbUrl);
+    // Hero 使用列表封面地址优先：本地封面会走鉴权缩略图，平台封面会走平台
+    // 提供的方形缩放图。这样大图不会在固定唱片容器里被按矩形拉伸。
+    final cover = _firstMusicCover(track?.listCoverUrl, track?.coverUrl);
     // 样例 `.focus::before` 的 `color-mix(--hue 30%, rgba(5,8,10,.55))`：
     // 曲目色相混进深色底，切曲时按 1s 补间，不是硬切。
     final tint =
@@ -301,12 +303,21 @@ class _SpinningCoverState extends State<_SpinningCover>
           children: [
             RotationTransition(
               turns: _spin,
-              child: DesktopCover(
-                url: widget.url,
-                kind: DesktopCoverKind.music,
-                fallbackIcon: DesktopIcons.music,
-                cacheKey: widget.cacheKey,
-                iconSize: 32,
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  child: DesktopCover(
+                    url: widget.url,
+                    kind: DesktopCoverKind.music,
+                    fallbackIcon: DesktopIcons.music,
+                    cacheKey: widget.cacheKey,
+                    fit: BoxFit.cover,
+                    cacheWidth: (widget.size * 2).round(),
+                    cacheHeight: (widget.size * 2).round(),
+                    iconSize: 32,
+                  ),
+                ),
               ),
             ),
             if (widget.playing)
@@ -767,15 +778,24 @@ class _AlbumGrid extends StatelessWidget {
     required this.albums,
     required this.emptyLabel,
     required this.onOpen,
+    this.onlineTracks = const <OnlineTrack>[],
+    this.currentId,
+    this.playing = false,
+    this.onPlayOnline,
   });
 
   final List<MusicAlbum> albums;
   final String emptyLabel;
   final ValueChanged<MusicAlbum> onOpen;
+  final List<OnlineTrack> onlineTracks;
+  final String? currentId;
+  final bool playing;
+  final ValueChanged<List<OnlineTrack>>? onPlayOnline;
 
   @override
   Widget build(BuildContext context) {
-    if (albums.isEmpty) {
+    final onlineAlbums = _onlineAlbumGroups(onlineTracks);
+    if (albums.isEmpty && onlineAlbums.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 80),
         child: Center(
@@ -805,6 +825,20 @@ class _AlbumGrid extends StatelessWidget {
                   ),
                 ),
               ),
+            if (onPlayOnline != null)
+              for (var i = 0; i < onlineAlbums.length; i++)
+                SizedBox(
+                  width: width,
+                  child: DesktopStagger(
+                    index: albums.length + i,
+                    child: _DesktopOnlineAlbumCard(
+                      tracks: onlineAlbums[i],
+                      currentId: currentId,
+                      playing: playing,
+                      onPlay: () => onPlayOnline!(onlineAlbums[i]),
+                    ),
+                  ),
+                ),
           ],
         );
       },

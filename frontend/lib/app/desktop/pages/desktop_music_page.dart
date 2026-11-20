@@ -718,14 +718,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       albums: state?.albums ?? const [],
                       emptyLabel: l10n.musicNoAlbums,
                       onOpen: (album) => setState(() => _selectedAlbum = album),
+                      onlineTracks: knownPlatformTracks,
+                      currentId: state?.currentItem?.playableKey,
+                      playing: state?.isPlaying ?? false,
+                      onPlayOnline: _playOnlineTracks,
                     ),
-                    if (knownPlatformTracks.isNotEmpty)
-                      _DesktopOnlineAlbumSection(
-                        tracks: knownPlatformTracks,
-                        currentId: state?.currentItem?.playableKey,
-                        playing: state?.isPlaying ?? false,
-                        onPlay: _playOnlineTracks,
-                      ),
                   ],
                 ),
               },

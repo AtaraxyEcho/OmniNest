@@ -14,6 +14,24 @@ List<OnlineTrack> _knownPlatformTracks(MusicPlatformLibraryState library) {
   return List<OnlineTrack>.unmodifiable(tracks);
 }
 
+/// 将平台曲目按专辑聚合，供专辑网格和播放动作共用同一份数据。
+/// 专辑名为空的曲目没有稳定的专辑卡语义，因此继续由曲目列表承载。
+List<List<OnlineTrack>> _onlineAlbumGroups(List<OnlineTrack> tracks) {
+  final groups = <String, List<OnlineTrack>>{};
+  for (final track in tracks) {
+    final album = track.albumTitle.trim();
+    if (album.isEmpty) {
+      continue;
+    }
+    final key = '$album\u0000${track.artistName}';
+    groups.putIfAbsent(key, () => <OnlineTrack>[]).add(track);
+  }
+  return groups.values
+      .take(_desktopOnlineAlbumLimit)
+      .map(List<OnlineTrack>.unmodifiable)
+      .toList(growable: false);
+}
+
 List<String> _likedPlatformApis(MusicPlatformLibraryState library) {
   return library.connectedStatuses
       .where((status) => status.capabilities.likedTracks)
@@ -321,69 +339,6 @@ class _DesktopOnlineTrackSection extends StatelessWidget {
           const SizedBox(height: 8),
           Divider(height: 1, color: DesktopSkin.of(context).line),
         ],
-      ),
-    );
-  }
-}
-
-class _DesktopOnlineAlbumSection extends StatelessWidget {
-  const _DesktopOnlineAlbumSection({
-    required this.tracks,
-    required this.currentId,
-    required this.playing,
-    required this.onPlay,
-  });
-
-  final List<OnlineTrack> tracks;
-  final String? currentId;
-  final bool playing;
-  final ValueChanged<List<OnlineTrack>> onPlay;
-
-  Map<String, List<OnlineTrack>> _groups() {
-    final groups = <String, List<OnlineTrack>>{};
-    for (final track in tracks) {
-      final album = track.albumTitle.trim();
-      if (album.isEmpty) continue;
-      final key = '$album\u0000${track.artistName}';
-      groups.putIfAbsent(key, () => <OnlineTrack>[]).add(track);
-    }
-    return groups;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final groups = _groups().values
-        .take(_desktopOnlineAlbumLimit)
-        .toList(growable: false);
-    if (groups.isEmpty) return const SizedBox.shrink();
-    return DesktopSection(
-      eyebrow: l10n.musicDeckSourceNetease,
-      title: l10n.musicNavAlbums,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = (constraints.maxWidth / 208).floor().clamp(2, 8);
-          final width = (constraints.maxWidth - (columns - 1) * 18) / columns;
-          return Wrap(
-            spacing: 18,
-            runSpacing: 24,
-            children: [
-              for (var index = 0; index < groups.length; index++)
-                SizedBox(
-                  width: width,
-                  child: DesktopStagger(
-                    index: index,
-                    child: _DesktopOnlineAlbumCard(
-                      tracks: groups[index],
-                      currentId: currentId,
-                      playing: playing,
-                      onPlay: () => onPlay(groups[index]),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
       ),
     );
   }
