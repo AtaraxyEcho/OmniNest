@@ -87,6 +87,36 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
             '${settings.pageTurnMode}-${spread ? 'spread' : 'single'}',
           ),
           spread: spread,
+          paperEdgeColor: settings.paperEdgeColor,
+          bookmarked: isBookmarked,
+          contentRevision: Object.hash(
+            settings,
+            annotationHandler?.chapterAnnotations.length ?? 0,
+            activeSearchQuery,
+          ),
+          crossChapterSnapshotBuilder: (delta) {
+            final targetChapterIdx = chapterIdx + delta;
+            if (targetChapterIdx < 0 || targetChapterIdx >= chapters.length) {
+              return null;
+            }
+            return ColoredBox(
+              color: settings.surfaceColor,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    chapters[targetChapterIdx].title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: settings.onSurfaceVariantColor,
+                      fontSize: AppTypography.titleMedium,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
           controller: pageTurnController,
           pageCountNotifier: pageCountNotifier,
           state: PagedState(
@@ -105,7 +135,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           ),
           selectionActive: selectionActive,
           snapshotPageBuilder: (index) {
-            if (index < 0 || index >= contentPages) return null;
+            if (index < 0) return null;
             final slice = contentLoader?.computePage(
               chapterId: currentChapterId,
               settings: settings,
@@ -114,7 +144,12 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
               pageIndex: index,
               textScale: textScale,
             );
-            if (slice == null) return null;
+            if (slice == null) {
+              final confirmed = navigator?.confirmedTotalPages ?? contentPages;
+              return index == confirmed
+                  ? _buildChapterEndPage(detail, pageLayout, chromeLayout)
+                  : null;
+            }
             final pageData = contentLoader?.get(currentChapterId, settings);
             if (pageData == null) return null;
             return _PageWithFolio(
@@ -133,16 +168,9 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
             );
           },
           pageBuilder: (index) {
-            if (index >= contentPages) {
-              // 收页在正文切片之外：越界的一律不渲染，正好等于正文页数的是收页。
-              return isReaderChapterEndPage(
-                    pageIndex: index,
-                    contentPages: contentPages,
-                    fullyPaginated: !hasMore,
-                  )
-                  ? _buildChapterEndPage(detail, pageLayout, chromeLayout)
-                  : null;
-            }
+            if (index < 0) return null;
+            // A2 修复：不再用 index >= contentPages 硬截断，直接按需推进 getSlice，
+            // 杜绝后台全章分页期间快速翻页出现白页。
             final slice = contentLoader?.computePage(
               chapterId: currentChapterId,
               settings: settings,
@@ -151,7 +179,19 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
               pageIndex: index,
               textScale: textScale,
             );
-            if (slice == null) return null;
+            if (slice == null) {
+              final totalContentPages =
+                  navigator?.confirmedTotalPages ??
+                  navigator?.readablePageCount ??
+                  contentPages;
+              return isReaderChapterEndPage(
+                    pageIndex: index,
+                    contentPages: totalContentPages,
+                    fullyPaginated: navigator?.isFullyPaginated ?? !hasMore,
+                  )
+                  ? _buildChapterEndPage(detail, pageLayout, chromeLayout)
+                  : null;
+            }
             final pageData = contentLoader?.get(currentChapterId, settings);
             if (pageData == null) return null;
             // 封面章首页：整页封面渲染（严格结构判定，非图块即否决）。
@@ -170,7 +210,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
               number: index + 1,
               folioBottom: folioBottom,
               // 样例缎带只挂在「当前这一页」；相邻预构建页不能一起挂。
-              bookmarked: isBookmarked && index == alignedPageIndex,
+              bookmarked: !spread && isBookmarked && index == alignedPageIndex,
               ribbonRight: (spread ? halfWidth : frame.width) * 0.08,
               child: buildPageContent(
                 pageData,
@@ -312,6 +352,16 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       onAnnotate: (text, start, end) {
         if (!mounted) return;
         annotationHandler?.annotate(text, start, end, context);
+      },
+      onAnnotateInline: (text, start, end, note) {
+        if (!mounted) return;
+        annotationHandler?.annotateInline(
+          selectedText: text,
+          startOffset: start,
+          endOffset: end,
+          note: note,
+          context: context,
+        );
       },
       onRemoveHighlight: (a) {
         if (!mounted) return;
@@ -526,6 +576,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
 /// 跨页外框：`more.css:98` 的 `.spread { transform: none !important }` 覆盖
 /// 掉 `desktop.css:429` 的 rotateX(6deg)，终值没有 3D 倾斜与 hover 抬平。
 /// 保留 6px 圆角，换成 more.css 给出的双层投影。
+/// 跨页外框：不裁切外挂纸叠，阴影与圆角统一由 ReaderPageSpread 承担。
 class _SpreadFrame extends StatelessWidget {
   const _SpreadFrame({required this.size, required this.child});
 
@@ -534,29 +585,7 @@ class _SpreadFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.85),
-            blurRadius: 90,
-            spreadRadius: -24,
-            offset: const Offset(0, 50),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 30,
-            spreadRadius: -10,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: SizedBox(width: size.width, height: size.height, child: child),
-      ),
-    );
+    return SizedBox(width: size.width, height: size.height, child: child);
   }
 }
 

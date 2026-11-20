@@ -16,6 +16,7 @@ class ReaderPageSpread extends StatelessWidget {
     this.rightBoundaryKey,
     this.progress = 0,
     this.curlOverlay,
+    this.bookmarked = false,
     super.key,
   });
 
@@ -33,6 +34,7 @@ class ReaderPageSpread extends StatelessWidget {
 
   /// 整幅双页卷曲层（.curl-clip），覆盖左右两页允许纸页扫过书脊。
   final Widget? curlOverlay;
+  final bool bookmarked;
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +148,32 @@ class ReaderPageSpread extends StatelessWidget {
                 ),
                 if (curlOverlay != null)
                   Positioned.fill(child: IgnorePointer(child: curlOverlay!)),
+                if (bookmarked)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: LayoutBuilder(
+                        builder:
+                            (context, c) => Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned(
+                                  top: -2,
+                                  right: c.maxWidth * 0.08,
+                                  child: ClipPath(
+                                    clipper: const _SpreadRibbonClipper(),
+                                    child: Container(
+                                      width: 16,
+                                      height: 40,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -294,4 +322,21 @@ class _PaperStackPainter extends CustomPainter {
       oldDelegate.edge != edge ||
       oldDelegate.gap != gap ||
       oldDelegate.side != side;
+}
+
+class _SpreadRibbonClipper extends CustomClipper<Path> {
+  const _SpreadRibbonClipper();
+
+  @override
+  Path getClip(Size size) =>
+      Path()
+        ..moveTo(0, 0)
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width, size.height)
+        ..lineTo(size.width / 2, size.height * 0.8)
+        ..lineTo(0, size.height)
+        ..close();
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

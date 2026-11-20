@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -273,12 +274,26 @@ class _ReaderDesktopBottomBar extends StatelessWidget {
     final progress = (bar.progress.clamp(0.0, 1.0) * 100).round();
     final pageCount = bar.totalPages;
     final page = bar.currentPage;
+    final isSpread =
+        bar.isPageMode &&
+        bar.settings.usesBookDesk &&
+        MediaQuery.sizeOf(context).width >= 960;
     final positionLabel =
         bar.isPageMode && page != null && pageCount != null && pageCount > 0
-            ? l10n.readerChapterPagePosition(page + 1, pageCount)
+            ? (isSpread
+                ? l10n.readerPageRange(
+                  page + 1,
+                  math.min(pageCount, page + 2),
+                  pageCount,
+                )
+                : l10n.readerPageOf(page + 1, pageCount))
             : bar.chapterIndex != null && bar.chapterCount != null
             ? l10n.readerChapterPosition(bar.chapterIndex!, bar.chapterCount!)
             : l10n.readerReadingProgress(progress);
+    final minsLeft =
+        bar.isPageMode && page != null && pageCount != null && pageCount > 0
+            ? math.max(1, ((pageCount - page - 1) * 0.8).round())
+            : null;
     final textColor =
         bar.settings.usesBookDesk
             ? bar.settings.bookDeskTextColor.withValues(alpha: 0.62)
@@ -331,9 +346,13 @@ class _ReaderDesktopBottomBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   SizedBox(
-                    width: 48,
+                    width: minsLeft != null ? 116 : 56,
                     child: Text(
-                      l10n.readerProgressPercent(progress),
+                      minsLeft != null
+                          ? '${l10n.readerProgressPercent(progress)} · ${l10n.readerMinutesLeft(minsLeft)}'
+                          : l10n.readerProgressPercent(progress),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         color: textColor,

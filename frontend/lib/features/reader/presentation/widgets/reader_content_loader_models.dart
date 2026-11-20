@@ -74,6 +74,11 @@ class ChapterData {
 
   /// 翻页模式的懒分页导航器（按需计算单页）。
   PageNavigator? _pageNavigator;
+
+  void cancelFullPagination() {
+    _pageNavigator?.cancelFullPagination();
+  }
+
   double? _navigatorPageWidth;
   double? _navigatorPageHeight;
   double? _navigatorFontSize;
@@ -116,6 +121,7 @@ class ChapterData {
         settings,
         textScale: textScale,
       );
+      _pageNavigator?.cancelFullPagination();
       _pageNavigator = PageNavigator(
         blocks: blocks,
         computeFn: pageLayout.computeNextPage,

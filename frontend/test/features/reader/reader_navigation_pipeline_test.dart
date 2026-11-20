@@ -354,16 +354,18 @@ void main() {
     mode.value = PageTurnMode.cover;
     await tester.pump();
     controller.next();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
 
-    // cover 模式现在是 28 片卷页：快照就绪时画卷页，未就绪的那一两帧
-    // 仍用平移兜底，两种都算“正在翻页”。
-    final transforms = tester.widgetList<Transform>(find.byType(Transform));
-    final moving = transforms.any(
-      (widget) => widget.transform.storage[12].abs() > 0,
-    );
-    expect(moving || find.byType(ReaderPageCurl).evaluate().isNotEmpty, isTrue);
+    // cover 模式先异步抓取卷页快照再起动画：逐帧推进直到出现卷页层
+    // 或位移帧，随后交给 pumpAndSettle 跑完动画。
+    var moving = false;
+    for (var i = 0; i < 60 && !moving; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      final transforms = tester.widgetList<Transform>(find.byType(Transform));
+      moving =
+          transforms.any((widget) => widget.transform.storage[12].abs() > 0) ||
+          find.byType(ReaderPageCurl).evaluate().isNotEmpty;
+    }
+    expect(moving, isTrue);
     await tester.pumpAndSettle();
     expect(callbacks.pages, [1]);
   });

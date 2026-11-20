@@ -67,29 +67,7 @@ part 'reader_view_page_layout.dart';
 part 'reader_view_page_progress.dart';
 part 'reader_view_page_build_work.dart';
 part 'reader_view_page_build.dart';
-
-class ReaderViewPage extends ConsumerStatefulWidget {
-  const ReaderViewPage({
-    required this.itemId,
-    required this.chapterId,
-    this.entry,
-    this.initialCharOffset,
-    super.key,
-  });
-
-  final String itemId;
-  final String chapterId;
-
-  /// 路由进入语义（`chapter`=目录显式选章进章首，`offset`=按
-  /// [initialCharOffset] 精确定位，其余=续读恢复）。
-  final String? entry;
-
-  /// `entry=offset` 时的章内字符偏移（书签等精确定位入口）。
-  final int? initialCharOffset;
-
-  @override
-  ConsumerState<ReaderViewPage> createState() => _ReaderViewPageState();
-}
+part 'reader_view_page_shell.dart';
 
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     with
@@ -212,6 +190,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _showTts = false;
   bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上
   bool _isBookmarked = false;
+  List<ReaderBookmark> _bookmarks = const [];
+  Timer? _autoNightTimer;
+  bool _lastNightFlag = ReaderViewSettings.isNightHour();
   // null 表示详情尚未加载且用户未切换过书架状态；顶栏按详情初始值派生。
   bool? _bookshelfOverride;
   bool _bookmarkBusy = false;
@@ -457,6 +438,12 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   bool get isBookmarked => _isBookmarked;
   @override
+  List<ReaderBookmark> get bookmarks => _bookmarks;
+  @override
+  set bookmarks(List<ReaderBookmark> v) => _bookmarks = v;
+  @override
+  bool get isPanelOpen => _panelCoordinator.isOpen;
+  @override
   set isBookmarked(bool v) => _isBookmarked = v;
   @override
   bool get isInBookshelf => _bookshelfOverride ?? false;
@@ -597,6 +584,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(PaperGrainCache.ensureLoaded());
+    _autoNightTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted || !_settings.autoNight) return;
+      final nowNight = ReaderViewSettings.isNightHour();
+      if (nowNight != _lastNightFlag) {
+        _lastNightFlag = nowNight;
+        setState(() {});
+      }
+    });
     _chapterNavigationIntent =
         ReaderChapterNavigationIntent.intentForRouteEntry(
           widget.entry,
@@ -692,6 +687,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   @override
   void dispose() {
+    _autoNightTimer?.cancel();
+    _contentLoader?.cancelAllFullPaginations();
     // 退出阅读页即释放整章 blocks 与视觉行测量缓存，避免最后一章正文
     // 随进程常驻；缓存重算成本只落在下次打开时。
     clearReaderPaginationCaches();

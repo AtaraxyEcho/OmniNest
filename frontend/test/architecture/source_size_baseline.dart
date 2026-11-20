@@ -29,13 +29,13 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/application/reader_book_provider.dart': 911,
   'lib/features/reader/data/epub_parser_service.dart': 833,
   'lib/features/reader/presentation/pages/comic_detail_page.dart': 831,
-  'lib/features/reader/presentation/pages/reader_view_page.dart': 817,
+  'lib/features/reader/presentation/pages/reader_view_page.dart': 814,
   'lib/features/reader/presentation/widgets/book_detail_space.dart': 839,
-  'lib/features/reader/presentation/widgets/reader_content_loader.dart': 814,
+  'lib/features/reader/presentation/widgets/reader_content_loader.dart': 703,
   'lib/features/reader/presentation/widgets/reader_pagination_engine.dart': 904,
-  'lib/features/reader/presentation/widgets/reader_view_content.dart': 858,
+  'lib/features/reader/presentation/widgets/reader_view_content.dart': 640,
   'lib/features/reader/presentation/widgets/reader_view_page_mixin.dart': 807,
-  'lib/features/reader/presentation/widgets/reader_view_settings.dart': 915,
+  'lib/features/reader/presentation/widgets/reader_view_settings.dart': 535,
   'lib/features/video/presentation/pages/movie_player_page.dart': 919,
 };
 

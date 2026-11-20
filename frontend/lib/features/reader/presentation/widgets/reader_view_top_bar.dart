@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_desktop_top_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
@@ -47,6 +48,8 @@ class ReaderViewTopBar extends StatelessWidget {
     this.sampleChrome = false,
     this.desktopPrototypeChrome = false,
     this.pageModeEnabled = true,
+    this.activePanel,
+    this.annotationBadgeCount = 0,
     super.key,
   });
 
@@ -71,6 +74,8 @@ class ReaderViewTopBar extends StatelessWidget {
   final bool sampleChrome;
   final bool desktopPrototypeChrome;
   final bool pageModeEnabled;
+  final ReaderPanelType? activePanel;
+  final int annotationBadgeCount;
 
   /// 快捷键说明只对物理键盘客户端有意义；触屏客户端不提供该入口。
   bool get hasPhysicalKeyboard =>
@@ -95,6 +100,8 @@ class ReaderViewTopBar extends StatelessWidget {
         onSettingsChanged: onSettingsChanged,
         isBookmarked: isBookmarked,
         pageModeEnabled: pageModeEnabled,
+        activePanel: activePanel,
+        annotationBadgeCount: annotationBadgeCount,
       );
     }
     return ColoredBox(

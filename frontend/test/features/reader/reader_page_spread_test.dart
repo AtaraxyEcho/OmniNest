@@ -110,8 +110,11 @@ void main() {
     await tester.pump();
 
     controller.next();
-    await tester.pump();
-    // 翻页动画按样例 `leaf 820ms`，等它跑完再断言。
+    // v3 起覆盖模式先等卷页快照就绪再起动画；测试环境无空闲预热，
+    // 需要逐帧推进让抓图完成，再等 820ms 动画跑完。
+    for (var i = 0; i < 60 && callbacks.changed == null; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     await tester.pump(const Duration(milliseconds: 900));
 
     expect(callbacks.changed, 2);

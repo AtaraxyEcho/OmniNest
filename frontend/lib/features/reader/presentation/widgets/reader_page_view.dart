@@ -111,6 +111,8 @@ class ReaderPageView extends StatefulWidget {
     this.paperEdgeColor,
     this.snapshotPageBuilder,
     this.crossChapterSnapshotBuilder,
+    this.contentRevision,
+    this.bookmarked = false,
     super.key,
   });
 
@@ -127,6 +129,8 @@ class ReaderPageView extends StatefulWidget {
 
   /// 纸叠边缘色（样例 `--paper-edge`）；缺省由 surfaceColor 压暗派生。
   final Color? paperEdgeColor;
+  final Object? contentRevision;
+  final bool bookmarked;
   final PageTurnCallbacks callbacks;
   final Color surfaceColor;
   final bool selectionActive;
@@ -175,17 +179,19 @@ class _ReaderPageViewState extends State<ReaderPageView>
   Widget? _currentPageWidget;
   Widget? _targetPageWidget;
 
-  // ── 双向卷页状态与单槽快照缓存 ──
+  // ── 双向卷页状态与双槽快照缓存（同时预热 next 与 prev）──
   final ValueNotifier<CurlFrame> _curlFrameNotifier = ValueNotifier<CurlFrame>(
     CurlFrame.idle,
   );
   CurlGrabConfig _activeCurlConfig = CurlGrabConfig.defaultNext;
-  ui.Image? _curlFront;
-  ui.Image? _curlBack;
-  CurlDirection? _cachedCurlDir;
-  String? _cachedCurlChapterId;
-  int? _cachedCurlPageIndex;
-  bool _curlCapturing = false;
+  final Map<
+    CurlDirection,
+    ({ui.Image front, ui.Image back, String chapterId, int pageIndex})
+  >
+  _curlPairs = {};
+  final Set<CurlDirection> _capturingDirs = {};
+  bool _awaitingCurlStart = false;
+  bool _slideStageHovered = false;
   int _curlToken = 0;
   Timer? _curlWarmupTimer;
   Widget? _pendingBackCaptureWidget;
@@ -207,7 +213,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   /// 甩动识别：Listener 不经过手势竞技场，速度必须自行采样，
   /// 否则松手时只能拿到硬编码零速度，快速轻扫无法翻页。
   VelocityTracker? _velocityTracker;
-  static const _tapMoveThreshold = 18.0;
+  static const _tapMoveThreshold = 6.0;
 
   // ── 热区比例 ──
   static const _leftZoneRatio = 0.25;
@@ -222,7 +228,6 @@ class _ReaderPageViewState extends State<ReaderPageView>
 
   /// 样例 leaf：`820ms cubic-bezier(.5,.05,.3,1)`（`DesktopMotion.pageFlip`）。
   static int get _flipDurationMs => DesktopMotion.pageFlip.inMilliseconds;
-  static const _flipCurve = DesktopMotion.flipCurve;
 
   static const Duration _wheelThrottle = Duration(milliseconds: 520);
 
@@ -289,7 +294,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
     // 仅 turnMode 变化才重建。
 
     if (oldWidget.state.chapterId != widget.state.chapterId ||
-        oldWidget.state.pageIndex != widget.state.pageIndex) {
+        oldWidget.state.pageIndex != widget.state.pageIndex ||
+        oldWidget.surfaceColor != widget.surfaceColor ||
+        oldWidget.paperEdgeColor != widget.paperEdgeColor ||
+        oldWidget.contentRevision != widget.contentRevision) {
       if (!_slideScrolling) {
         _transitionInFlight = false;
       }

@@ -13,35 +13,91 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
             ? (state.hasMore ? _localPageCount + 1 : _localPageCount)
             : 1;
 
-    return Stack(
-      children: [
-        // 底层：PageView 处理横向拖动翻页
-        NotificationListener<ScrollNotification>(
-          onNotification: _onSlideScrollNotification,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: effectiveCount,
-            physics:
-                ReaderInteractionGate.locksScroll(_blockReason)
-                    ? const NeverScrollableScrollPhysics()
-                    : const PageScrollPhysics(),
-            onPageChanged: _onSlidePageChanged,
-            itemBuilder: (context, index) => _buildPageOrEmpty(index),
+    final edgeColor =
+        ThemeData.estimateBrightnessForColor(widget.surfaceColor) ==
+                Brightness.dark
+            ? Colors.white.withValues(alpha: 0.40)
+            : Colors.black.withValues(alpha: 0.40);
+    return MouseRegion(
+      onEnter: (_) => _updateState(() => _slideStageHovered = true),
+      onExit: (_) => _updateState(() => _slideStageHovered = false),
+      child: Stack(
+        children: [
+          NotificationListener<ScrollNotification>(
+            onNotification: _onSlideScrollNotification,
+            child: ScrollConfiguration(
+              // 桌面端排除 mouse 拖拽翻页，把正文区鼠标拖动 100% 留给丝滑选字；
+              // 触摸屏/触控板仍保持原生跟手滑动。
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: const {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.trackpad,
+                  PointerDeviceKind.stylus,
+                },
+              ),
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: effectiveCount,
+                physics:
+                    ReaderInteractionGate.locksScroll(_blockReason)
+                        ? const NeverScrollableScrollPhysics()
+                        : const PageScrollPhysics(),
+                onPageChanged: _onSlidePageChanged,
+                itemBuilder: (context, index) => _buildPageOrEmpty(index),
+              ),
+            ),
           ),
-        ),
-        // 顶层：透明交互层处理点击热区
-        // 用 Listener 而非 GestureDetector，避免与 PageView 的拖动手势竞争
-        Positioned.fill(
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: _onPointerDown,
-            onPointerMove: _onPointerMove,
-            onPointerUp: _onPointerUp,
-            onPointerCancel: _onPointerCancel,
-            onPointerSignal: _onPointerSignal,
+          // 样例 `.sw-stage .edge`：鼠标悬停时左右 56px 淡入边缘翻页提示箭头。
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 56,
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _slideStageHovered ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Center(
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 24,
+                    color: edgeColor,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 56,
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _slideStageHovered ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Center(
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 24,
+                    color: edgeColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              onPointerUp: _onPointerUp,
+              onPointerCancel: _onPointerCancel,
+              onPointerSignal: _onPointerSignal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -112,8 +168,11 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       // 只有点按箭头才能翻页。
       final width = context.size?.width ?? 1;
       final startX = _pointerDownPosition!.dx;
+      final edgeRatio = _pointerKind == PointerDeviceKind.mouse ? 0.10 : 0.30;
       final edgeStart =
-          width <= 1 || startX < width * 0.30 || startX > width * 0.70;
+          width <= 1 ||
+          startX < width * edgeRatio ||
+          startX > width * (1.0 - edgeRatio);
       if (!edgeStart) return;
       if (!_isDragging) {
         _onDragStart(DragStartDetails(localPosition: _pointerDownPosition!));

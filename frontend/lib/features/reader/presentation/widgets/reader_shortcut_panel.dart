@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 阅读器快捷键说明列表。
@@ -17,6 +18,7 @@ class ReaderShortcutPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = ReaderPanelColors.resolve(context, settings.palette);
     final entries = <(String, String)>[
       ('Space / PageDown', l10n.readerShortcutTurnPage),
       ('Shift + Space / PageUp', l10n.readerShortcutTurnPage),
@@ -41,12 +43,8 @@ class ReaderShortcutPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: entries.length,
       separatorBuilder:
-          (_, _) => Divider(
-            height: 1,
-            indent: 20,
-            endIndent: 20,
-            color: settings.onSurfaceColor.withValues(alpha: 0.07),
-          ),
+          (_, _) =>
+              Divider(height: 1, indent: 20, endIndent: 20, color: colors.line),
       itemBuilder: (context, index) {
         final entry = entries[index];
         // 分组标题行（触控手势）。
@@ -56,7 +54,7 @@ class ReaderShortcutPanel extends StatelessWidget {
             child: Text(
               entry.$1,
               style: TextStyle(
-                color: settings.onSurfaceVariantColor,
+                color: colors.onSurfaceVariant,
                 fontSize: AppTypography.labelSmall,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1,
@@ -74,7 +72,7 @@ class ReaderShortcutPanel extends StatelessWidget {
                 child: Text(
                   entry.$1,
                   style: TextStyle(
-                    color: settings.accentColor,
+                    color: colors.accent,
                     fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w700,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -86,7 +84,7 @@ class ReaderShortcutPanel extends StatelessWidget {
                 child: Text(
                   entry.$2,
                   style: TextStyle(
-                    color: settings.onSurfaceColor,
+                    color: colors.onSurface,
                     fontSize: AppTypography.bodyMedium,
                     height: 1.45,
                   ),

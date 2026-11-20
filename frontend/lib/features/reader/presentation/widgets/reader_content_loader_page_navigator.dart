@@ -22,6 +22,94 @@ class PageNavigator {
   bool _reachedEnd = false;
   bool _prefetching = false;
   int _prefetchTargetPage = -1;
+  int? _confirmedTotalPages;
+  bool _fullPaginating = false;
+  int _fullPaginationToken = 0;
+
+  int? get confirmedTotalPages => _confirmedTotalPages;
+
+  int get _chapterTotalChars => blocks.fold<int>(
+    0,
+    (sum, block) => sum + BlockClipper.blockCharCount(block),
+  );
+
+  /// 稳定的展示总页数：全章分页完成后返回精确真实总页数；
+  /// 测算中返回字符密度估算值，彻底消除「翻一页总页数+1」。
+  int get displayTotalPages {
+    if (_confirmedTotalPages != null) return _confirmedTotalPages!;
+    if (_reachedEnd) return _maxComputedPage + 1;
+    if (_maxComputedPage < 0) return 1;
+    final lastSlice = _cache[_maxComputedPage];
+    final coveredChars = lastSlice?.endCharOffset ?? 0;
+    final totalChars = _chapterTotalChars;
+    if (coveredChars <= 0 || totalChars <= coveredChars) {
+      return _maxComputedPage + 1;
+    }
+    final avgCharsPerPage = coveredChars / (_maxComputedPage + 1);
+    return math.max(
+      _maxComputedPage + 1,
+      (totalChars / avgCharsPerPage).ceil(),
+    );
+  }
+
+  /// 时间片后台全章分页：每帧预算 <= 6ms，算完锁定 [confirmedTotalPages]。
+  void scheduleFullPagination({
+    VoidCallback? onCompleted,
+    bool Function()? isCancelled,
+  }) {
+    if (_reachedEnd || _confirmedTotalPages != null) {
+      _confirmedTotalPages ??= _maxComputedPage + 1;
+      onCompleted?.call();
+      return;
+    }
+    if (_fullPaginating) return;
+    _fullPaginating = true;
+    final token = ++_fullPaginationToken;
+    unawaited(_runFullPagination(token, onCompleted, isCancelled));
+  }
+
+  Future<void> _runFullPagination(
+    int token,
+    VoidCallback? onCompleted,
+    bool Function()? isCancelled,
+  ) async {
+    try {
+      final sw = Stopwatch();
+      while (!_reachedEnd && token == _fullPaginationToken) {
+        if (isCancelled?.call() ?? false) return;
+        sw
+          ..reset()
+          ..start();
+        while (!_reachedEnd && sw.elapsedMilliseconds < 6) {
+          final nextPage = _maxComputedPage + 1;
+          final slice = _computeSlice(nextPage);
+          if (slice == null) {
+            _reachedEnd = true;
+            _confirmedTotalPages = _maxComputedPage + 1;
+            break;
+          }
+          _cache[nextPage] = slice;
+          _maxComputedPage = nextPage;
+        }
+        sw.stop();
+        if (_reachedEnd) break;
+        await Future<void>.delayed(Duration.zero);
+      }
+      if (_reachedEnd && token == _fullPaginationToken) {
+        _confirmedTotalPages = _maxComputedPage + 1;
+        onCompleted?.call();
+      }
+    } finally {
+      if (token == _fullPaginationToken) {
+        _fullPaginating = false;
+      }
+    }
+  }
+
+  void cancelFullPagination() {
+    _fullPaginationToken++;
+    _fullPaginating = false;
+  }
 
   int get currentPage => _currentPage;
 
@@ -55,6 +143,7 @@ class PageNavigator {
       final slice = _computeSlice(page);
       if (slice == null) {
         _reachedEnd = true;
+        _confirmedTotalPages = _maxComputedPage + 1;
         break;
       }
       _cache[page] = slice;

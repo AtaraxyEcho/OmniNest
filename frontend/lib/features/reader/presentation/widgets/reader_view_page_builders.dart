@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:omninest/app/theme/app_typography.dart';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';

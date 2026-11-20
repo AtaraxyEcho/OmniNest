@@ -164,8 +164,14 @@ class ReaderReadingPalette {
   /// 桌面毛玻璃浮层（样例 `.bk-pop`）的暗色玻璃底，四档色板共用同一层桌面 chrome。
   static const desktopPopoverGlass = Color(0xF01A1E22);
 
+  /// 桌面毛玻璃浮层上的主文字色（比夜间纸面文字更亮）。
+  static const desktopPopoverOnSurface = Color(0xFFEFF2F5);
+
   /// 选区浮动工具条（样例 `.sel-pop`）的暗色胶囊底。
   static const selectionToolbarSurface = Color(0xFF1C2125);
+
+  /// 选区浮动工具条的主强调色（保存批注与聚焦描边）。
+  static const selectionToolbarAccent = Color(0xFFF2D36B);
 
   /// 强调色圆角角标上的反白文字。
   static const onAccentInk = Color(0xFF0E1412);
@@ -190,4 +196,93 @@ class ReaderReadingPalette {
     final index = values.indexWhere((palette) => palette.id == id);
     return index < 0 ? 2 : index;
   }
+}
+
+/// 面板语义色板：自动适配桌面暗色毛玻璃浮层与移动端纸面抽屉，
+/// 彻底消除浅色/护眼/绿色主题下深色墨字绘制在暗色玻璃上的可读性异常。
+@immutable
+class ReaderPanelColors {
+  const ReaderPanelColors({
+    required this.onSurface,
+    required this.onSurfaceVariant,
+    required this.faint,
+    required this.line,
+    required this.controlFill,
+    required this.controlActiveFill,
+    required this.cardSurface,
+    required this.accent,
+    required this.accentSoft,
+    required this.isDarkGlass,
+  });
+
+  final Color onSurface;
+  final Color onSurfaceVariant;
+  final Color faint;
+  final Color line;
+  final Color controlFill;
+  final Color controlActiveFill;
+  final Color cardSurface;
+  final Color accent;
+  final Color accentSoft;
+  final bool isDarkGlass;
+
+  factory ReaderPanelColors.darkGlass({required Color accentColor}) {
+    final accent =
+        accentColor.computeLuminance() < 0.28
+            ? Color.lerp(accentColor, Colors.white, 0.36)!
+            : accentColor;
+    return ReaderPanelColors(
+      onSurface: const Color(0xFFEFF2F5),
+      onSurfaceVariant: const Color(0xFFAAB4BE),
+      faint: const Color(0xFF727D88),
+      line: Colors.white.withValues(alpha: 0.11),
+      controlFill: Colors.white.withValues(alpha: 0.08),
+      controlActiveFill: Colors.white.withValues(alpha: 0.20),
+      cardSurface: Colors.white.withValues(alpha: 0.06),
+      accent: accent,
+      accentSoft: accent.withValues(alpha: 0.20),
+      isDarkGlass: true,
+    );
+  }
+
+  factory ReaderPanelColors.fromPalette(ReaderReadingPalette palette) {
+    return ReaderPanelColors(
+      onSurface: palette.onSurface,
+      onSurfaceVariant: palette.onSurfaceVariant,
+      faint: palette.faint,
+      line: palette.line,
+      controlFill: palette.onSurface.withValues(alpha: 0.06),
+      controlActiveFill: palette.elevated,
+      cardSurface: palette.surface,
+      accent: palette.accent,
+      accentSoft: palette.accentSoft,
+      isDarkGlass: false,
+    );
+  }
+
+  static ReaderPanelColors resolve(
+    BuildContext context,
+    ReaderReadingPalette palette,
+  ) {
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<ReaderPanelSurfaceScope>();
+    if (scope?.darkGlass ?? false) {
+      return ReaderPanelColors.darkGlass(accentColor: palette.accent);
+    }
+    return ReaderPanelColors.fromPalette(palette);
+  }
+}
+
+class ReaderPanelSurfaceScope extends InheritedWidget {
+  const ReaderPanelSurfaceScope({
+    required this.darkGlass,
+    required super.child,
+    super.key,
+  });
+
+  final bool darkGlass;
+
+  @override
+  bool updateShouldNotify(ReaderPanelSurfaceScope oldWidget) =>
+      oldWidget.darkGlass != darkGlass;
 }

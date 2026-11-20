@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/reader/domain/reader_highlight_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_color_toolbar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -159,13 +161,15 @@ void main() {
       tester,
     ) async {
       String? highlightedText;
+      String? highlightedColor;
       int? highlightedStart;
       int? highlightedEnd;
       await tester.pumpWidget(
         buildTestWidget(
           html: '<p>Annotatable reader text</p>',
-          onHighlight: (text, start, end) {
+          onHighlightColor: (text, start, end, colorHex) {
             highlightedText = text;
+            highlightedColor = colorHex;
             highlightedStart = start;
             highlightedEnd = end;
           },
@@ -177,14 +181,37 @@ void main() {
       await tester.longPress(find.textContaining('Annotatable reader text'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Highlight'), findsOneWidget);
+      // v3 统一浮条：高亮改由色点直接创建（无文字按钮），批注仍保留文字入口。
       expect(find.text('Add Annotation'), findsOneWidget);
-      await tester.tap(find.text('Highlight'));
+      expect(find.byTooltip('Yellow highlight'), findsOneWidget);
+      await tester.tap(find.byTooltip('Yellow highlight'));
       await tester.pump();
 
       expect(highlightedText != null && highlightedText!.isNotEmpty, true);
+      expect(highlightedColor, ReaderHighlightPalette.colors.first);
       expect(highlightedStart != null, true);
       expect(highlightedEnd! > highlightedStart!, true);
+    });
+
+    testWidgets('鼠标拖拽划选松手后自动弹出统一浮条', (tester) async {
+      await tester.pumpWidget(
+        buildTestWidget(
+          html: '<p>Mouse drag selection text for popover</p>',
+          onHighlightColor: (_, _, _, _) {},
+        ),
+      );
+      await waitForParse(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.textContaining('Mouse drag selection')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(140, 0));
+      await gesture.up();
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(ReaderSelectionColorToolbar), findsOneWidget);
     });
 
     testWidgets('选区存在期间注册 1–4 键盘选色动作，应用后随选区一起撤下', (tester) async {
@@ -274,7 +301,8 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       await tester.pump();
 
-      expect(tester.takeException() == null, true);
+      final exception = tester.takeException();
+      expect(exception, isNull, reason: '$exception');
     });
 
     testWidgets('renders bold text within paragraph', (tester) async {

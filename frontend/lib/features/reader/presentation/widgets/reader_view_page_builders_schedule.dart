@@ -91,21 +91,29 @@ extension ReaderViewPageBuildersSchedule on ReaderViewPageBuilders {
         _pageCountWarmupChapterId = chapterId;
         pageCountNotifier.value = 0;
       }
-      navigator.ensurePage(0);
-      pageCountNotifier.value = readerDisplayPageCount(
-        contentPages: navigator.readablePageCount,
-        fullyPaginated: navigator.isFullyPaginated,
+      navigator.ensurePage(pageIndex);
+      if (settings.usesBookDesk) {
+        navigator.ensurePage(pageIndex + 1);
+      }
+      final initialDisplay = readerDisplayPageCount(
+        contentPages: navigator.displayTotalPages,
+        fullyPaginated: true,
       );
-      navigator.schedulePrefetch(
-        pageIndex,
-        onPageReady: () {
-          if (!mounted) return;
-          // 预取循环不随切章取消：换章后旧章的预取回调不得污染新章计数。
-          if (currentChapterId != chapterId) return;
-          pageCountNotifier.value = readerDisplayPageCount(
-            contentPages: navigator.readablePageCount,
-            fullyPaginated: navigator.isFullyPaginated,
+      if (pageCountNotifier.value != initialDisplay) {
+        pageCountNotifier.value = initialDisplay;
+      }
+      navigator.scheduleFullPagination(
+        isCancelled: () => !mounted || currentChapterId != chapterId,
+        onCompleted: () {
+          if (!mounted || currentChapterId != chapterId) return;
+          final exact = readerDisplayPageCount(
+            contentPages:
+                navigator.confirmedTotalPages ?? navigator.readablePageCount,
+            fullyPaginated: true,
           );
+          if (pageCountNotifier.value != exact) {
+            pageCountNotifier.value = exact;
+          }
         },
       );
     });

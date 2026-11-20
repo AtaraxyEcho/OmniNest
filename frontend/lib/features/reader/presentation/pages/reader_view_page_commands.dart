@@ -179,13 +179,18 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
 
   void _toggleReaderPanel(ReaderPanelType panel) {
     _hideTimer?.cancel();
+    final viewport = MediaQuery.sizeOf(context);
+    final isDesktopShell =
+        !shouldUseResponsiveMobileShell(
+          mobilePlatform: isMobilePlatform,
+          width: viewport.width,
+        );
     _updateState(() {
       _panelCoordinator.toggle(panel);
-      // 搜索面板关闭或切到其他面板时同步清掉正文命中高亮。
       if (_panelCoordinator.active != ReaderPanelType.search) {
         _activeSearchQuery = '';
       }
-      _showControls = false;
+      _showControls = isDesktopShell ? true : false;
       _showTts = false;
     });
   }
@@ -488,6 +493,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       _openReaderSearchResult(result.charOffset);
       return;
     }
+    _closeReaderPanel();
     unawaited(
       switchToChapter(
         result.chapterId,
@@ -527,22 +533,36 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         ),
         ReaderPanelType.search => _buildSearchPanel(content),
         ReaderPanelType.annotations =>
-          _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
+          _annotationHandler?.buildPanel(
+                context,
+                bookmarks: _bookmarks,
+                onSelectBookmark: (bm) {
+                  onAnnotationSelected(bm.chapterId, bm.charOffset);
+                },
+                onDeleteBookmark: (bm) async {
+                  await ref
+                      .read(readerDataManagerProvider)
+                      .deleteBookmark(bm.id);
+                  await checkBookmarkState();
+                },
+              ) ??
+              const SizedBox.shrink(),
         ReaderPanelType.shortcuts => ReaderShortcutPanel(
           settings: _settings,
           isComic: false,
         ),
       };
       if (!sampleChrome && layout.usesSidePanel) {
-        final alignLeft = active == ReaderPanelType.contents;
         final popoverWidth = switch (active) {
-          ReaderPanelType.contents => 280.0,
-          ReaderPanelType.settings => 310.0,
-          _ => 340.0,
+          ReaderPanelType.contents => 360.0,
+          ReaderPanelType.settings => 380.0,
+          ReaderPanelType.search => 400.0,
+          ReaderPanelType.annotations => 380.0,
+          ReaderPanelType.shortcuts => 360.0,
         };
         overlay = DesktopReaderPopover(
           key: ValueKey(active),
-          alignLeft: alignLeft,
+          alignLeft: false,
           width: popoverWidth,
           eyebrow: title,
           onDismissOutside: _closeReaderPanel,
@@ -575,6 +595,28 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           ),
           switchInCurve: MotionToken.curve,
           switchOutCurve: MotionToken.curveIn,
+          transitionBuilder: (child, animation) {
+            final slide = Tween<Offset>(
+              begin: const Offset(0.06, -0.02),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
+            final scale = Tween<double>(begin: 0.96, end: 1.0).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: slide,
+                child: ScaleTransition(
+                  scale: scale,
+                  alignment: Alignment.topRight,
+                  child: child,
+                ),
+              ),
+            );
+          },
           layoutBuilder:
               (currentChild, previousChildren) => Stack(
                 fit: StackFit.expand,

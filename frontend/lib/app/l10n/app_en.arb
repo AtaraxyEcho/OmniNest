@@ -2934,6 +2934,64 @@
       }
     }
   },
+  "readerBookmarksTab": "Bookmarks ({count})",
+  "@readerBookmarksTab": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerBookmarkFallback": "Bookmark {index}",
+  "@readerBookmarkFallback": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "readerFilterChaptersHint": "Filter chapters…",
+  "readerInlineNoteHint": "Write a note… (Ctrl+Enter to save)",
+  "readerSaveAnnotation": "Save annotation",
+  "readerJustifyLabel": "Justify text",
+  "readerJustifyHint": "Justify body paragraphs",
+  "readerMarginLabel": "Page margins",
+  "readerMarginNarrow": "Narrow",
+  "readerMarginStandard": "Standard",
+  "readerMarginWide": "Wide",
+  "readerPageRange": "Pages {start}–{end} / {total}",
+  "@readerPageRange": {
+    "placeholders": {
+      "start": {
+        "type": "int"
+      },
+      "end": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerPageOf": "Page {page} / {total}",
+  "@readerPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerMinutesLeft": "~{minutes} min left",
+  "@readerMinutesLeft": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "readerBookChapterPosition": "Ch. {current}/{total} · {percent}%",
   "@readerBookChapterPosition": {
     "placeholders": {

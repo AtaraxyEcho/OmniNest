@@ -207,8 +207,8 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('nextStart', detail: 'target=$nextIndex mode=flip');
       _transitionInFlight = true;
       _isForward = true;
-      _flipProgress = 0.01;
-      _startAutoFlip();
+      _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
+      unawaited(_startAutoFlip());
     }
   }
 
@@ -314,8 +314,8 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('previousStart', detail: 'mode=flip');
       _transitionInFlight = true;
       _isForward = false;
-      _flipProgress = 0.01;
-      _startAutoFlip();
+      _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
+      unawaited(_startAutoFlip());
     }
   }
 

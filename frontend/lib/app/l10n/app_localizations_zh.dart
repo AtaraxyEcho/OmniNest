@@ -6623,6 +6623,58 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String readerBookmarksTab(int count) {
+    return '书签 ($count)';
+  }
+
+  @override
+  String readerBookmarkFallback(int index) {
+    return '书签 $index';
+  }
+
+  @override
+  String get readerFilterChaptersHint => '筛选章节…';
+
+  @override
+  String get readerInlineNoteHint => '写下批注…（Ctrl+Enter 保存）';
+
+  @override
+  String get readerSaveAnnotation => '保存批注';
+
+  @override
+  String get readerJustifyLabel => '两端对齐';
+
+  @override
+  String get readerJustifyHint => '正文段落两端对齐';
+
+  @override
+  String get readerMarginLabel => '页边距';
+
+  @override
+  String get readerMarginNarrow => '窄';
+
+  @override
+  String get readerMarginStandard => '标准';
+
+  @override
+  String get readerMarginWide => '宽';
+
+  @override
+  String readerPageRange(int start, int end, int total) {
+    return '第 $start–$end / $total 页';
+  }
+
+  @override
+  String readerPageOf(int page, int total) {
+    return '第 $page / $total 页';
+  }
+
+  @override
+  String readerMinutesLeft(int minutes) {
+    return '约 $minutes 分钟';
+  }
+
+  @override
   String readerBookChapterPosition(int current, int total, int percent) {
     return '第 $current/$total 章 · $percent%';
   }

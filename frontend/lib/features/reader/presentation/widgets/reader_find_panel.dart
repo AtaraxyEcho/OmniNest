@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 typedef ReaderSearchScanResult = ({List<int> offsets, bool truncated});
@@ -237,7 +238,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
     });
   }
 
-  TextSpan _highlightedSnippet(int offset) {
+  TextSpan _highlightedSnippet(int offset, ReaderPanelColors colors) {
     final query = _controller.text.trim();
     final start = math.max(0, offset - 36);
     final end = math.min(widget.plainText.length, offset + query.length + 36);
@@ -246,8 +247,8 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
     final match = widget.plainText.substring(offset, matchEnd);
     final after = widget.plainText.substring(matchEnd, end);
     final normalStyle = TextStyle(
-      color: widget.settings.onSurfaceColor,
-      fontSize: AppTypography.bodyMedium,
+      color: colors.onSurface,
+      fontSize: colors.isDarkGlass ? 13.5 : AppTypography.bodyMedium,
       height: 1.45,
     );
     return TextSpan(
@@ -257,10 +258,8 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
         TextSpan(
           text: match,
           style: normalStyle.copyWith(
-            color: widget.settings.onSurfaceColor,
-            backgroundColor: widget.settings.accentColor.withValues(
-              alpha: 0.22,
-            ),
+            color: colors.onSurface,
+            backgroundColor: colors.accent.withValues(alpha: 0.22),
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -274,10 +273,13 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
     );
   }
 
-  TextSpan _bookHighlightedSnippet(ReaderBookSearchMatch result) {
+  TextSpan _bookHighlightedSnippet(
+    ReaderBookSearchMatch result,
+    ReaderPanelColors colors,
+  ) {
     final normalStyle = TextStyle(
-      color: widget.settings.onSurfaceColor,
-      fontSize: AppTypography.bodyMedium,
+      color: colors.onSurface,
+      fontSize: colors.isDarkGlass ? 13.5 : AppTypography.bodyMedium,
       height: 1.45,
     );
     return TextSpan(
@@ -287,9 +289,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
         TextSpan(
           text: result.match,
           style: normalStyle.copyWith(
-            backgroundColor: widget.settings.accentColor.withValues(
-              alpha: 0.22,
-            ),
+            backgroundColor: colors.accent.withValues(alpha: 0.22),
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -310,6 +310,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final colors = ReaderPanelColors.resolve(context, widget.settings.palette);
     return Column(
       children: [
         Padding(
@@ -317,13 +318,31 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
           child: TextField(
             controller: _controller,
             autofocus: true,
-            style: TextStyle(color: widget.settings.onSurfaceColor),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: AppTypography.bodyLarge,
+            ),
             decoration: InputDecoration(
               hintText: widget.searchHint ?? l10n.readerSearchInBookHint,
               prefixIcon: Icon(
                 Icons.search_rounded,
-                color: widget.settings.onSurfaceVariantColor,
+                color: colors.onSurfaceVariant,
               ),
+              suffixIcon:
+                  _controller.text.isEmpty
+                      ? null
+                      : IconButton(
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: colors.onSurfaceVariant,
+                        ),
+                        onPressed: () {
+                          _controller.clear();
+                          widget.onQueryChanged?.call('');
+                          _search('');
+                        },
+                      ),
               suffixText:
                   _isSearching ||
                           _controller.text.trim().isEmpty ||
@@ -333,14 +352,10 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                       : l10n.readerSearchResultCount(
                         _bookMatches?.length ?? _matches.length,
                       ),
-              suffixStyle: TextStyle(
-                color: widget.settings.onSurfaceVariantColor,
-              ),
-              hintStyle: TextStyle(
-                color: widget.settings.onSurfaceVariantColor,
-              ),
+              suffixStyle: TextStyle(color: colors.onSurfaceVariant),
+              hintStyle: TextStyle(color: colors.onSurfaceVariant),
               filled: true,
-              fillColor: widget.settings.onSurfaceColor.withValues(alpha: 0.06),
+              fillColor: colors.controlFill,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
@@ -360,8 +375,8 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                   ? l10n.readerSearchIncomplete
                   : l10n.readerSearchTruncated,
               style: TextStyle(
-                color: widget.settings.onSurfaceVariantColor,
-                fontSize: AppTypography.labelSmall,
+                color: colors.onSurfaceVariant,
+                fontSize: AppTypography.bodySmall,
               ),
             ),
           ),
@@ -376,9 +391,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                   ? Center(
                     child: Text(
                       l10n.readerNoSearchResults,
-                      style: TextStyle(
-                        color: widget.settings.onSurfaceVariantColor,
-                      ),
+                      style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                   )
                   : ListView.builder(
@@ -395,13 +408,13 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                               '${index + 1}',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: widget.settings.accentColor,
+                                color: colors.accent,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                           title: Text.rich(
-                            _bookHighlightedSnippet(result),
+                            _bookHighlightedSnippet(result, colors),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -410,8 +423,8 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: widget.settings.onSurfaceVariantColor,
-                              fontSize: AppTypography.labelSmall,
+                              color: colors.onSurfaceVariant,
+                              fontSize: AppTypography.bodySmall,
                             ),
                           ),
                           onTap: () => widget.onSelectBookMatch?.call(result),
@@ -426,13 +439,13 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                             '${index + 1}',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: widget.settings.accentColor,
+                              color: colors.accent,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
                         title: Text.rich(
-                          _highlightedSnippet(offset),
+                          _highlightedSnippet(offset, colors),
                           maxLines:
                               chapterTitle == null || chapterTitle.isEmpty
                                   ? 3
@@ -447,9 +460,8 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color:
-                                        widget.settings.onSurfaceVariantColor,
-                                    fontSize: AppTypography.labelSmall,
+                                    color: colors.onSurfaceVariant,
+                                    fontSize: AppTypography.bodySmall,
                                   ),
                                 ),
                         onTap: () => widget.onSelect(offset),

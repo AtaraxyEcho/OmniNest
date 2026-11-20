@@ -8,6 +8,8 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
 
   Widget _buildCustomMode() {
     return MouseRegion(
+      cursor:
+          _isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.basic,
       onHover: _onCurlHover,
       onExit: (_) => _clearCurlPeek(),
       child: Listener(
@@ -168,10 +170,39 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     }
   }
 
-  void _startAutoFlip() {
-    _prepareCurlCapture();
+  Duration _curlDuration({
+    required double from,
+    required double to,
+    required bool commit,
+  }) {
+    final ms = ((commit ? 420 : 300) + 380 * (to - from).abs()).round().clamp(
+      140,
+      820,
+    );
+    return Duration(milliseconds: ms);
+  }
+
+  Future<void> _startAutoFlip() async {
+    if (_awaitingCurlStart) return;
+    final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+
+    if (widget.turnMode == PageTurnMode.cover && !_hasReadyCurlPair(dir)) {
+      _awaitingCurlStart = true;
+      final ready = await _ensureCurlPairReady(dir);
+      _awaitingCurlStart = false;
+      if (!mounted) return;
+      if (!ready) {
+        // 极端跨域无法抓图时兜底
+        _runAutoFlipAnimation(useCurl: false);
+        return;
+      }
+    }
+    _runAutoFlipAnimation(useCurl: widget.turnMode == PageTurnMode.cover);
+  }
+
+  void _runAutoFlipAnimation({required bool useCurl}) {
     _transitionInFlight = true;
-    if (_targetPageWidget == null) {
+    if (!useCurl && _targetPageWidget == null) {
       final targetIndex =
           _isForward
               ? widget.state.pageIndex + pageStep
@@ -186,23 +217,23 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     final startValue =
         _curlFrameNotifier.value.isPeek
             ? _curlFrameNotifier.value.progress
-            : _flipProgress;
-    ctrl.duration = Duration(
-      milliseconds: (_ReaderPageViewState._flipDurationMs * (1 - startValue))
-          .round()
-          .clamp(100, _ReaderPageViewState._flipDurationMs),
-    );
+            : math.max(0.02, _flipProgress);
+    ctrl.duration = _curlDuration(from: startValue, to: 1.0, commit: true);
     ctrl.removeListener(_syncCurlFrameFromAnim);
     ctrl.addListener(_syncCurlFrameFromAnim);
     ctrl.value = startValue;
-    _syncCurlFrameFromAnim();
+    if (useCurl) {
+      final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+      _curlFrameNotifier.value = CurlFrame(
+        progress: startValue,
+        direction: dir,
+        config: _activeCurlConfig,
+      );
+    }
     if (mounted) _updateState(() {});
-    ctrl.animateTo(
-      1,
-      duration: ctrl.duration,
-      curve: _ReaderPageViewState._flipCurve,
-    );
+    ctrl.removeStatusListener(_onAutoFlipStatus);
     ctrl.addStatusListener(_onAutoFlipStatus);
+    ctrl.animateTo(1, duration: ctrl.duration, curve: Curves.easeInOutQuad);
   }
 
   void _onAutoFlipStatus(AnimationStatus status) {

@@ -19,6 +19,7 @@ mixin ReaderViewPageControlsMixin on ConsumerState<ReaderViewPage> {
   set showControls(bool value);
   bool get isHoveringControls;
   set isHoveringControls(bool value);
+  bool get isPanelOpen;
   String? get cachedPlainText;
   set cachedPlainText(String? value);
   String? get cachedContentSource;
@@ -86,9 +87,9 @@ mixin ReaderViewPageControlsMixin on ConsumerState<ReaderViewPage> {
   /// 启动控制栏自动隐藏计时器。
   void startHideTimer() {
     hideTimer?.cancel();
-    if (isHoveringControls) return;
+    if (isHoveringControls || isPanelOpen) return;
     hideTimer = Timer(hideDelay, () {
-      if (mounted && !isHoveringControls) {
+      if (mounted && !isHoveringControls && !isPanelOpen) {
         setState(() => showControls = false);
       }
     });

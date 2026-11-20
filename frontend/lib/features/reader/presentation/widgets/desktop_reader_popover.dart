@@ -5,17 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 
-/// 桌面端毛玻璃悬浮面板（1:1 对齐样例 `.bk-pop`）：
-/// - 无全屏暗色 scrim，不压暗正文阅读区；
-/// - 目录（TOC）靠左 `left: 20, width: 280`，其余面板靠右 `right: 20, width: 300-340`；
-/// - 受控 `BackdropFilter(sigma: 18)` 兼顾毛玻璃质感与高刷 GPU 帧率，关闭即卸载。
+/// 桌面端右侧毛玻璃悬浮抽屉（v3：统一右侧展开 + 加宽 + 显式关闭钮 + 暗色玻璃色板作用域）。
 class DesktopReaderPopover extends StatelessWidget {
   const DesktopReaderPopover({
-    required this.alignLeft,
     required this.width,
     required this.eyebrow,
     required this.onDismissOutside,
     required this.child,
+    this.alignLeft = false,
     super.key,
   });
 
@@ -27,11 +24,16 @@ class DesktopReaderPopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxH = math.max(240.0, MediaQuery.sizeOf(context).height - 140.0);
+    final viewport = MediaQuery.sizeOf(context);
+    final effectiveWidth = math.min(
+      width,
+      math.max(300.0, viewport.width - 40.0),
+    );
+    final maxH = math.max(280.0, viewport.height - 136.0);
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 透明点击穿透吸收层：点击正文区收起面板，不叠暗色黑幕。
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -43,51 +45,94 @@ class DesktopReaderPopover extends StatelessWidget {
           top: 64,
           left: alignLeft ? 20 : null,
           right: alignLeft ? null : 20,
-          width: width,
+          width: effectiveWidth,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxH),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: Material(
-                  color: ReaderReadingPalette.desktopPopoverGlass,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.46),
+                    blurRadius: 36,
+                    offset: const Offset(0, 14),
                   ),
-                  elevation: 16,
-                  shadowColor: Colors.black.withValues(alpha: 0.48),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      brightness: Brightness.dark,
-                      colorScheme: Theme.of(context).colorScheme.copyWith(
-                        brightness: Brightness.dark,
-                        onSurface: ReaderReadingPalette.dark.bookDeskText,
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Material(
+                    color: ReaderReadingPalette.desktopPopoverGlass,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.12),
                       ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            eyebrow.toUpperCase(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.50),
-                              fontSize: AppTypography.labelSmall,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            ),
+                    child: ReaderPanelSurfaceScope(
+                      darkGlass: true,
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          brightness: Brightness.dark,
+                          colorScheme: Theme.of(context).colorScheme.copyWith(
+                            brightness: Brightness.dark,
+                            onSurface:
+                                ReaderReadingPalette.desktopPopoverOnSurface,
                           ),
-                          const SizedBox(height: 10),
-                          Flexible(child: child),
-                        ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                14,
+                                10,
+                                10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      eyebrow,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                        fontSize: AppTypography.bodyLarge,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: onDismissOutside,
+                                    visualDensity: VisualDensity.compact,
+                                    splashRadius: 16,
+                                    icon: Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.68,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: Colors.white.withValues(alpha: 0.09),
+                            ),
+                            Flexible(child: child),
+                          ],
+                        ),
                       ),
                     ),
                   ),

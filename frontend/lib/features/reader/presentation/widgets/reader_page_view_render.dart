@@ -22,6 +22,7 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
         right: widget.pageBuilder(idx + 1),
         surfaceColor: widget.surfaceColor,
         paperEdgeColor: widget.paperEdgeColor,
+        bookmarked: widget.bookmarked,
         leftBoundaryKey: _liveLeftKey,
         rightBoundaryKey: _liveRightKey,
         progress: (idx / last).clamp(0.0, 1.0),
@@ -49,7 +50,8 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
             widget.turnMode == PageTurnMode.cover && frame.active;
 
         Widget mainContent;
-        if (!isCurlActive && _flipProgress <= 0 && !_isAnimating) {
+        if (_awaitingCurlStart ||
+            (!isCurlActive && _flipProgress <= 0 && !_isAnimating)) {
           mainContent = _buildRestingPage();
         } else if (isCurlActive && _hasReadyCurlPair(frame.direction)) {
           // 卷页激活期间由 CustomPainter(repaint: _curlFrameNotifier) 独立重绘，

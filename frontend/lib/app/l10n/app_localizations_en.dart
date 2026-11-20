@@ -6854,6 +6854,58 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String readerBookmarksTab(int count) {
+    return 'Bookmarks ($count)';
+  }
+
+  @override
+  String readerBookmarkFallback(int index) {
+    return 'Bookmark $index';
+  }
+
+  @override
+  String get readerFilterChaptersHint => 'Filter chapters…';
+
+  @override
+  String get readerInlineNoteHint => 'Write a note… (Ctrl+Enter to save)';
+
+  @override
+  String get readerSaveAnnotation => 'Save annotation';
+
+  @override
+  String get readerJustifyLabel => 'Justify text';
+
+  @override
+  String get readerJustifyHint => 'Justify body paragraphs';
+
+  @override
+  String get readerMarginLabel => 'Page margins';
+
+  @override
+  String get readerMarginNarrow => 'Narrow';
+
+  @override
+  String get readerMarginStandard => 'Standard';
+
+  @override
+  String get readerMarginWide => 'Wide';
+
+  @override
+  String readerPageRange(int start, int end, int total) {
+    return 'Pages $start–$end / $total';
+  }
+
+  @override
+  String readerPageOf(int page, int total) {
+    return 'Page $page / $total';
+  }
+
+  @override
+  String readerMinutesLeft(int minutes) {
+    return '~$minutes min left';
+  }
+
+  @override
   String readerBookChapterPosition(int current, int total, int percent) {
     return 'Ch. $current/$total · $percent%';
   }

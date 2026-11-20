@@ -246,6 +246,57 @@ class ReaderAnnotationHandler {
     return value.toUpperCase();
   }
 
+  /// 选区浮条内联批注直存接口（不弹模态框，对齐样例 `.sel-pop .note-box`）。
+  Future<void> annotateInline({
+    required String selectedText,
+    required int startOffset,
+    required int endOffset,
+    required String note,
+    required BuildContext context,
+    String? color,
+  }) async {
+    final trimmedNote = note.trim();
+    if (trimmedNote.isEmpty) return;
+    final chapter = chapterId;
+    final effectiveColor = color ?? _preferredHighlightColor;
+    final overlapping = _findOverlapping(chapter, startOffset, endOffset);
+    final mergedNote = _mergedNote(overlapping, primary: trimmedNote);
+    try {
+      final created = await dataManager.createAnnotation(
+        itemId: itemId,
+        chapterId: chapter,
+        startOffset: startOffset,
+        endOffset: endOffset,
+        highlightText: selectedText,
+        note: mergedNote,
+        color: effectiveColor,
+      );
+      final replacedIds = await _deleteAnnotations(overlapping);
+      _publish([
+        ..._annotations.where(
+          (a) => a.id != created.id && !replacedIds.contains(a.id),
+        ),
+        created,
+      ]);
+      if (context.mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).readerHighlightAdded,
+        );
+      }
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        readerDebugLog('ReaderAnnotationHandler: inline annotate failed: $e');
+      }
+      if (context.mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).readerAnnotationSaveFailed,
+        );
+      }
+    }
+  }
+
   /// 创建批注（弹出输入弹窗）。
   Future<void> annotate(
     String selectedText,
@@ -499,12 +550,20 @@ class ReaderAnnotationHandler {
   }
 
   /// 构建由阅读器自适应面板承载的批注内容。
-  Widget buildPanel(BuildContext context) {
+  Widget buildPanel(
+    BuildContext context, {
+    List<ReaderBookmark> bookmarks = const [],
+    ValueChanged<ReaderBookmark>? onSelectBookmark,
+    ValueChanged<ReaderBookmark>? onDeleteBookmark,
+  }) {
     return ReaderAnnotationPanel(
       annotations: chapterAnnotations,
       allAnnotations: _annotations,
       chapters: chapters,
       settings: settings,
+      bookmarks: bookmarks,
+      onSelectBookmark: onSelectBookmark,
+      onDeleteBookmark: onDeleteBookmark,
       onDelete: (annotation) async {
         await delete(annotation, context);
       },

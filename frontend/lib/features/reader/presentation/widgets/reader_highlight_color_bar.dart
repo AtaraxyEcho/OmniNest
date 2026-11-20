@@ -63,14 +63,13 @@ class ReaderHighlightColorBar extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: parseColor(colorHex),
-                          border:
-                              selectedColor == colorHex
-                                  ? Border.all(
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                    width: 2,
-                                  )
-                                  : null,
+                          border: Border.all(
+                            color:
+                                selectedColor == colorHex
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.40),
+                            width: 2,
+                          ),
                         ),
                         child:
                             selectedColor == colorHex

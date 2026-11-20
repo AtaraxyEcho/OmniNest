@@ -10,7 +10,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart'
-    show bookmarkAtChapter;
+    show ReaderBookmark, bookmarkAtChapter;
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -44,6 +44,8 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   String get currentChapterId;
   bool get isBookmarked;
   set isBookmarked(bool value);
+  List<ReaderBookmark> get bookmarks;
+  set bookmarks(List<ReaderBookmark> value);
   bool get showControls;
   set showControls(bool value);
   WindowChromeController get windowChromeController;
@@ -119,12 +121,13 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
     final chapterId = snapshot?.chapterId ?? currentChapterId;
     final charOffset = snapshot?.charOffset ?? 0;
     try {
-      final bookmarks = await ref
+      final loadedBookmarks = await ref
           .read(readerDataManagerProvider)
           .loadBookmarks(itemId);
       if (mounted) {
         setState(() {
-          isBookmarked = bookmarks.any(
+          bookmarks = loadedBookmarks;
+          isBookmarked = loadedBookmarks.any(
             (bookmark) => bookmarkAtChapter(
               bookmark,
               chapterId: chapterId,

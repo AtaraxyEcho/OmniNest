@@ -23,12 +23,13 @@ class _SettingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ReaderPanelColors.resolve(context, settings.palette);
     return Container(
       decoration:
           first
               ? null
               : BoxDecoration(
-                border: Border(top: BorderSide(color: settings.lineColor)),
+                border: Border(top: BorderSide(color: colors.line)),
               ),
       padding: const EdgeInsets.fromLTRB(0, 14, 0, 16),
       child: Column(
@@ -43,8 +44,11 @@ class _SettingSection extends StatelessWidget {
                     child: Text(
                       label!,
                       style: TextStyle(
-                        color: settings.onSurfaceColor,
-                        fontSize: AppTypography.labelSmall,
+                        color: colors.onSurface,
+                        fontSize:
+                            colors.isDarkGlass
+                                ? 13.5
+                                : AppTypography.labelSmall,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -53,8 +57,11 @@ class _SettingSection extends StatelessWidget {
                     Text(
                       value!,
                       style: TextStyle(
-                        color: settings.accentColor,
-                        fontSize: AppTypography.labelMicro,
+                        color: colors.accent,
+                        fontSize:
+                            colors.isDarkGlass
+                                ? 12.5
+                                : AppTypography.labelMicro,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -67,8 +74,8 @@ class _SettingSection extends StatelessWidget {
               child: Text(
                 hint!,
                 style: TextStyle(
-                  color: settings.onSurfaceVariantColor,
-                  fontSize: AppTypography.labelMicro,
+                  color: colors.onSurfaceVariant,
+                  fontSize: colors.isDarkGlass ? 12 : AppTypography.labelMicro,
                   height: 1.35,
                 ),
               ),
@@ -100,11 +107,12 @@ class _SampleSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ReaderPanelColors.resolve(context, settings.palette);
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: settings.onSurfaceColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(13),
+        color: colors.controlFill,
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
         children: [
@@ -145,34 +153,25 @@ class _SegmentOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ReaderPanelColors.resolve(context, settings.palette);
     return Semantics(
       label: label,
       selected: selected,
       button: true,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: MotionToken.reduced(
             context,
             const Duration(milliseconds: 180),
           ),
-          constraints: const BoxConstraints(minHeight: 38),
+          constraints: BoxConstraints(minHeight: colors.isDarkGlass ? 32 : 38),
           alignment: Alignment.center,
           padding: EdgeInsets.symmetric(horizontal: dense ? 5 : 8),
           decoration: BoxDecoration(
-            color: selected ? settings.elevatedColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow:
-                selected
-                    ? [
-                      BoxShadow(
-                        color: settings.shadowColor.withValues(alpha: 0.48),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                    : null,
+            color: selected ? colors.controlActiveFill : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             label,
@@ -180,12 +179,13 @@ class _SegmentOption extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color:
-                  selected
-                      ? settings.onSurfaceColor
-                      : settings.onSurfaceVariantColor,
+              color: selected ? colors.onSurface : colors.onSurfaceVariant,
               fontSize:
-                  dense ? AppTypography.labelNano : AppTypography.labelMicro,
+                  colors.isDarkGlass
+                      ? 12.5
+                      : (dense
+                          ? AppTypography.labelNano
+                          : AppTypography.labelMicro),
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
@@ -453,12 +453,119 @@ class _ThemeOption extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: labelColor,
-                fontSize: AppTypography.labelNano,
+                fontSize: AppTypography.labelSmall,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DesktopSettingRow extends StatelessWidget {
+  const _DesktopSettingRow({
+    required this.colors,
+    required this.label,
+    required this.control,
+  });
+
+  final ReaderPanelColors colors;
+  final String label;
+  final Widget control;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colors.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.onSurface,
+                fontSize: 13.5, // ignore: font_size_whitelist
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          control,
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopSliderControl extends StatelessWidget {
+  const _DesktopSliderControl({
+    required this.colors,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final ReaderPanelColors colors;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String label;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 205,
+      child: Row(
+        children: [
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3.5,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                activeTrackColor: colors.accent,
+                inactiveTrackColor: Colors.white.withValues(alpha: 0.16),
+                thumbColor: colors.accent,
+                overlayColor: colors.accent.withValues(alpha: 0.20),
+                activeTickMarkColor: Colors.transparent,
+                inactiveTickMarkColor: Colors.transparent,
+              ),
+              child: AppSlider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 38,
+            child: Text(
+              label,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: colors.onSurface,
+                fontSize: 12.5, // ignore: font_size_whitelist
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

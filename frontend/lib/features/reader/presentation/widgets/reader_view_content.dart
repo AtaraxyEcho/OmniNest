@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -19,6 +20,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_selection_c
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_span_style.dart';
+part 'reader_view_content_selection.dart';
 
 class ReaderViewContent extends StatefulWidget {
   const ReaderViewContent({
@@ -50,6 +52,7 @@ class ReaderViewContent extends StatefulWidget {
     this.onHighlightColor,
     this.onUpdateAnnotationColor,
     this.onAnnotate,
+    this.onAnnotateInline,
     this.onRemoveHighlight,
     this.onRemoveAnnotation,
     this.onSelectionActive,
@@ -156,6 +159,13 @@ class ReaderViewContent extends StatefulWidget {
   onUpdateAnnotationColor;
   final void Function(String selectedText, int startOffset, int endOffset)?
   onAnnotate;
+  final void Function(
+    String selectedText,
+    int startOffset,
+    int endOffset,
+    String note,
+  )?
+  onAnnotateInline;
   final ValueChanged<ReaderAnnotation>? onRemoveHighlight;
   final ValueChanged<ReaderAnnotation>? onRemoveAnnotation;
 
@@ -184,6 +194,15 @@ class ReaderViewContent extends StatefulWidget {
 }
 
 class _ReaderViewContentState extends State<ReaderViewContent> {
+  /// part 里的选区扩展不能直接调用受保护的 setState，统一从这里回写。
+  void _updateSelectionText(String value) {
+    if (mounted) {
+      setState(() => _selectedText = value);
+    } else {
+      _selectedText = value;
+    }
+  }
+
   List<ContentBlock> _blocks = [];
   List<ContentBlock> _rawBlocks = [];
 
@@ -193,6 +212,8 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   int _parseGeneration = 0;
   bool _isLoading = true;
   late final FocusNode _selectionFocusNode;
+  final GlobalKey<SelectionAreaState> _selectionAreaKey =
+      GlobalKey<SelectionAreaState>();
   String _selectedText = '';
   String _lastSelectionRawText = '';
   Offset? _pointerDownPosition;
@@ -200,6 +221,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   bool _pointerMoved = false;
   bool _selectionWasActiveOnPointerDown = false;
   bool _suppressNextContentTap = false;
+  OverlayEntry? _mouseSelectionOverlay;
   double _topWheelAccum = 0;
   DateTime _topWheelWindowStart = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -253,6 +275,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
 
   @override
   void dispose() {
+    _hideMouseSelectionOverlay();
     _clearSelectionKeyActions();
     _selectionFocusNode.dispose();
     super.dispose();
@@ -377,50 +400,58 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
         onPointerUp: _handlePointerUp,
         onPointerCancel: (_) => _resetPointerTracking(),
         onPointerSignal: _handleScrollPointerSignal,
-        child: SelectionArea(
-          focusNode: _selectionFocusNode,
-          onSelectionChanged: _handleSelectionChanged,
-          contextMenuBuilder: _buildSelectionMenu,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(
-              context,
-            ).copyWith(scrollbars: false),
-            child: ListView.builder(
-              controller: widget.scrollController,
-              physics: widget.scrollPhysics,
-              padding: scrollInsets,
-              itemCount: _blocks.length + 1,
-              itemExtentBuilder:
-                  extents == null
-                      ? null
-                      : (index, creator) =>
-                          index < extents.length
-                              ? extents[index] +
-                                  (_blocks[index] is HeadingBlock
-                                      ? ReaderViewContent.headingSlotSlack
-                                      : 0.0)
-                              : (widget.footerExtent ??
-                                  ReaderViewContent.trailingSpacerHeight),
-              addAutomaticKeepAlives: false,
-              addRepaintBoundaries: false,
-              itemBuilder: (context, index) {
-                final child =
-                    index == _blocks.length
-                        ? (widget.footer ??
-                            const SizedBox(
-                              height: ReaderViewContent.trailingSpacerHeight,
-                            ))
-                        : RepaintBoundary(child: _buildBlock(index));
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: colMaxW),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: hPad),
-                      child: child,
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            textSelectionTheme: TextSelectionThemeData(
+              selectionColor: widget.settings.selectionColor,
+            ),
+          ),
+          child: SelectionArea(
+            key: _selectionAreaKey,
+            focusNode: _selectionFocusNode,
+            onSelectionChanged: _handleSelectionChanged,
+            contextMenuBuilder: _buildSelectionMenu,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.builder(
+                controller: widget.scrollController,
+                physics: widget.scrollPhysics,
+                padding: scrollInsets,
+                itemCount: _blocks.length + 1,
+                itemExtentBuilder:
+                    extents == null
+                        ? null
+                        : (index, creator) =>
+                            index < extents.length
+                                ? extents[index] +
+                                    (_blocks[index] is HeadingBlock
+                                        ? ReaderViewContent.headingSlotSlack
+                                        : 0.0)
+                                : (widget.footerExtent ??
+                                    ReaderViewContent.trailingSpacerHeight),
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: false,
+                itemBuilder: (context, index) {
+                  final child =
+                      index == _blocks.length
+                          ? (widget.footer ??
+                              const SizedBox(
+                                height: ReaderViewContent.trailingSpacerHeight,
+                              ))
+                          : RepaintBoundary(child: _buildBlock(index));
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: colMaxW),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: hPad),
+                        child: child,
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -454,11 +485,19 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
               ),
             );
             if (widget.selectionDisabled) return body;
-            return SelectionArea(
-              focusNode: _selectionFocusNode,
-              onSelectionChanged: _handleSelectionChanged,
-              contextMenuBuilder: _buildSelectionMenu,
-              child: body,
+            return Theme(
+              data: Theme.of(context).copyWith(
+                textSelectionTheme: TextSelectionThemeData(
+                  selectionColor: widget.settings.selectionColor,
+                ),
+              ),
+              child: SelectionArea(
+                key: _selectionAreaKey,
+                focusNode: _selectionFocusNode,
+                onSelectionChanged: _handleSelectionChanged,
+                contextMenuBuilder: _buildSelectionMenu,
+                child: body,
+              ),
             );
           }(),
         ),
@@ -487,270 +526,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     // 标题后的间距属于块自身的盒（ReaderContentBlockItem._heading），
     // 不再由包装层追加：包装层里的那一份测量侧看不见，每页会按标题数少算。
     return item;
-  }
-
-  void clearSelection() {
-    _selectedText = '';
-    _clearSelectionKeyActions();
-    if (!_selectionFocusNode.hasFocus) {
-      widget.onSelectionActive?.call(false);
-      return;
-    }
-    _selectionFocusNode.unfocus();
-    widget.onSelectionActive?.call(false);
-  }
-
-  /// 选区结束即撤下键盘动作，避免页面按键命中已失效的选区闭包。
-  void _clearSelectionKeyActions() {
-    widget.onRegisterSelectionKeyActions?.call(null);
-  }
-
-  void _handleSelectionChanged(SelectedContent? selection) {
-    _lastSelectionRawText = selection?.plainText ?? '';
-    final selectedText = _lastSelectionRawText.trim();
-    // 桌面端第一次点击会由 SelectableRegion 自己发出"选中已清空"的空事件。
-    // 只接受非空事件会让 _selectedText 长期停在旧值，之后每一次单击都被
-    // 当成"仅清除选中"消费掉，控制栏再也弹不出来。
-    if (mounted) {
-      setState(() => _selectedText = selectedText);
-    } else {
-      _selectedText = selectedText;
-    }
-    if (selectedText.isEmpty) {
-      _clearSelectionKeyActions();
-    }
-    widget.onSelectionActive?.call(selectedText.isNotEmpty);
-  }
-
-  Widget _buildSelectionMenu(
-    BuildContext context,
-    SelectableRegionState selectableRegionState,
-  ) {
-    final range = _resolveSelectionRange(_selectedText);
-    // 选中范围与已有高亮重叠时，高亮项切换为取消高亮（再次选中可移除而非只能重建）。
-    final overlappingHighlights =
-        range == null
-            ? const <ReaderAnnotation>[]
-            : widget.annotations
-                .where(
-                  (a) => a.startOffset < range.$2 && a.endOffset > range.$1,
-                )
-                .toList();
-    final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
-    void removeOverlappingHighlights() {
-      selectableRegionState.hideToolbar();
-      selectableRegionState.clearSelection();
-      for (final annotation in overlappingHighlights) {
-        widget.onRemoveHighlight?.call(annotation);
-      }
-    }
-
-    readerDebugLog(
-      '[reader-selection][menu] '
-      'mode=${widget.visibleBlocks != null ? 'page' : 'scroll'} '
-      'rawLen=${_lastSelectionRawText.length} rawHash=${_debugTextHash(_lastSelectionRawText)} '
-      'trimmedLen=${_selectedText.length} trimmedHash=${_debugTextHash(_selectedText)} '
-      'range=${range == null ? 'null' : '(${range.$1}, ${range.$2})'} '
-      'annotations=[${_debugDescribeAnnotations(widget.annotations)}] '
-      'overlap=[${_debugDescribeAnnotations(overlappingHighlights)}]',
-    );
-    final items = <ContextMenuButtonItem>[
-      ...selectableRegionState.contextMenuButtonItems,
-      if (range != null && widget.onHighlight != null && !hasHighlightOverlap)
-        ContextMenuButtonItem(
-          label: AppLocalizations.of(context).readerHighlight,
-          onPressed: () {
-            final selectedText = _selectedText;
-            selectableRegionState.hideToolbar();
-            selectableRegionState.clearSelection();
-            widget.onHighlight?.call(selectedText, range.$1, range.$2);
-          },
-        ),
-      if (hasHighlightOverlap && widget.onRemoveHighlight != null)
-        ContextMenuButtonItem(
-          // 重叠批注含备注时按「取消批注」表述，纯高亮按「取消高亮」。
-          label:
-              overlappingHighlights.any((a) => (a.note ?? '').isNotEmpty)
-                  ? AppLocalizations.of(context).readerRemoveAnnotation
-                  : AppLocalizations.of(context).readerRemoveHighlight,
-          onPressed: removeOverlappingHighlights,
-        ),
-      if (range != null && widget.onAnnotate != null)
-        ContextMenuButtonItem(
-          label: AppLocalizations.of(context).readerAddAnnotation,
-          onPressed: () {
-            final selectedText = _selectedText;
-            selectableRegionState.hideToolbar();
-            selectableRegionState.clearSelection();
-            widget.onAnnotate?.call(selectedText, range.$1, range.$2);
-          },
-        ),
-    ];
-    final colorPickerEnabled =
-        range != null &&
-        (widget.onHighlightColor != null ||
-            (hasHighlightOverlap && widget.onUpdateAnnotationColor != null));
-    if (!colorPickerEnabled) {
-      widget.onRegisterSelectionKeyActions?.call(null);
-      return AdaptiveTextSelectionToolbar.buttonItems(
-        anchors: selectableRegionState.contextMenuAnchors,
-        buttonItems: items,
-      );
-    }
-    final l10n = AppLocalizations.of(context);
-    final selectedColor =
-        hasHighlightOverlap
-            ? overlappingHighlights.first.color.toUpperCase()
-            : null;
-    void selectColor(String colorHex) {
-      final selectionRange = range;
-      selectableRegionState.hideToolbar();
-      selectableRegionState.clearSelection();
-      if (hasHighlightOverlap) {
-        if (colorHex.toUpperCase() == selectedColor) {
-          removeOverlappingHighlights();
-        } else {
-          for (final annotation in overlappingHighlights) {
-            widget.onUpdateAnnotationColor?.call(annotation, colorHex);
-          }
-        }
-        return;
-      }
-      widget.onHighlightColor?.call(
-        _selectedText,
-        selectionRange.$1,
-        selectionRange.$2,
-        colorHex,
-      );
-    }
-
-    widget.onRegisterSelectionKeyActions?.call(
-      ReaderSelectionKeyActions(
-        colors: ReaderHighlightPalette.colors,
-        applyColor: selectColor,
-        removeHighlight:
-            hasHighlightOverlap && widget.onRemoveHighlight != null
-                ? removeOverlappingHighlights
-                : null,
-      ),
-    );
-    return ReaderSelectionColorToolbar(
-      anchors: selectableRegionState.contextMenuAnchors,
-      selectedColor: selectedColor,
-      onSelectColor: selectColor,
-      addAnnotationLabel: l10n.readerAddAnnotation,
-      contextMenuButtonItems: selectableRegionState.contextMenuButtonItems,
-      onAnnotate:
-          widget.onAnnotate == null
-              ? null
-              : () {
-                final selectedText = _selectedText;
-                selectableRegionState.hideToolbar();
-                selectableRegionState.clearSelection();
-                widget.onAnnotate?.call(selectedText, range.$1, range.$2);
-              },
-    );
-  }
-
-  /// 把选中的可绘制文本回指到块源字符域。
-  ///
-  /// 逐个 span 查找在真实正文里必然落空：一个自然段会被软换行拆成多行，内联加粗、链接、
-  /// 代码各自切开 span，已有高亮的边界还会再切一次——跨这些边界的选区拿不到偏移，
-  /// 高亮与批注按钮整体消失；章内重复出现的短词更会永远命中首次出现的位置。
-  /// 这里改用整块连续文本加逐码元源偏移映射，命中区间直接由映射表给出。
-  (int, int)? _resolveSelectionRange(String selectedText) {
-    if (selectedText.isEmpty) {
-      return null;
-    }
-    // 首行缩进是定宽 WidgetSpan，选到的行首会带一个 0xFFFC 对象替换字符：
-    // 它不属于任何源文本 span，先去掉再回指源文本区间。
-    final needle = selectedText.replaceAll('￼', '').trim();
-    if (needle.isEmpty) {
-      return null;
-    }
-    final candidates = <List<ContentBlock>>[
-      _blocks,
-      if (!identical(_rawBlocks, _blocks)) _rawBlocks,
-    ];
-    for (final blocks in candidates) {
-      final range = _matchSelectionInBlocks(blocks, needle);
-      if (range != null) {
-        readerDebugLog(
-          '[reader-selection][range] 命中 blocks=${blocks.length} '
-          'range=(${range.$1}, ${range.$2})',
-        );
-        return range;
-      }
-    }
-    readerDebugLog(
-      '[reader-selection][range] 未命中任何块：候选 ${candidates.length} 组，'
-      '选中 len=${needle.length} hash=${_debugTextHash(needle)}',
-    );
-    return null;
-  }
-
-  (int, int)? _matchSelectionInBlocks(
-    List<ContentBlock> blocks,
-    String needle,
-  ) {
-    return matchCorpusRange(
-      _corpusFor(blocks),
-      needle,
-      anchorCharOffset: _viewportAnchorCharOffset(blocks),
-    );
-  }
-
-  ChapterSearchCorpus _corpusFor(List<ContentBlock> blocks) {
-    if (identical(_selectionCorpusBlocks, blocks) && _selectionCorpus != null) {
-      return _selectionCorpus!;
-    }
-    final corpus = ChapterSearchCorpus.fromBlocks(blocks);
-    _selectionCorpusBlocks = blocks;
-    _selectionCorpus = corpus;
-    return corpus;
-  }
-
-  /// 视口中心在块源字符域的位置，用来给章内重复出现的短词就近消歧。
-  ///
-  /// 按块确定高度累加定位，量不到（无高度表、列表未挂载）时返回 null，
-  /// 调用方退回"取第一个命中"的旧行为。
-  int? _viewportAnchorCharOffset(List<ContentBlock> blocks) {
-    final controller = widget.scrollController;
-    final extents = widget.blockExtents;
-    if (controller == null ||
-        !controller.hasClients ||
-        extents == null ||
-        extents.isEmpty) {
-      return null;
-    }
-    final position = controller.position;
-    final target = position.pixels + position.viewportDimension * 0.5;
-    final limit =
-        extents.length < blocks.length ? extents.length : blocks.length;
-    var consumed = 0.0;
-    var chars = 0;
-    for (var i = 0; i < limit; i++) {
-      if (consumed + extents[i] >= target) {
-        return chars;
-      }
-      consumed += extents[i];
-      chars += BlockClipper.blockCharCount(blocks[i]);
-    }
-    return chars;
-  }
-
-  String _debugTextHash(String text) {
-    return text.hashCode.toRadixString(16);
-  }
-
-  String _debugDescribeAnnotations(List<ReaderAnnotation> annotations) {
-    return annotations
-        .map(
-          (a) =>
-              '${a.id.length > 8 ? a.id.substring(0, 8) : a.id}'
-              ':${a.startOffset}..${a.endOffset}',
-        )
-        .join(', ');
   }
 
   void _launchUrl(String href) {
@@ -786,6 +561,13 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    // C3: 桌面端鼠标左键拖拽划选松手后自动唤起统一选区浮条（单击清除选区不触发）。
+    if (event.kind == PointerDeviceKind.mouse && _pointerMoved) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedText.isEmpty) return;
+        _showMouseSelectionOverlay();
+      });
+    }
     final pointerDownPosition = _pointerDownPosition;
     final pointerDownAt = _pointerDownAt;
     final isTapLike =

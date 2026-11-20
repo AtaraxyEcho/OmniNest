@@ -198,13 +198,22 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                           animationsDisabled
                               ? Duration.zero
                               : const Duration(milliseconds: 180),
-                      child: ReaderProgressIndicator(
-                        key: const Key('readerPersistentProgress'),
-                        settings: _settings,
-                        progress: bookProgress ?? 0,
-                        currentPage: _isPageMode ? _pageModePage : null,
-                        totalPages: null, // 懒分页不预知总页数
-                        sampleChrome: sampleChrome,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: pageCountNotifier,
+                        builder:
+                            (context, totalPageCount, _) =>
+                                ReaderProgressIndicator(
+                                  key: const Key('readerPersistentProgress'),
+                                  settings: _settings,
+                                  progress: bookProgress ?? 0,
+                                  currentPage:
+                                      _isPageMode ? _pageModePage : null,
+                                  totalPages:
+                                      _isPageMode && totalPageCount > 0
+                                          ? totalPageCount
+                                          : null,
+                                  sampleChrome: sampleChrome,
+                                ),
                       ),
                     ),
                   ),
@@ -301,53 +310,65 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     ReaderChapterContent content, {
     bool sampleChrome = false,
   }) {
+    final dur =
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 240);
+    final badgeCount =
+        (_annotationHandler?.annotations.length ?? 0) + _bookmarks.length;
     return Positioned(
       top: 0,
       left: 0,
       right: 0,
-      child: AnimatedOpacity(
-        opacity: _showControls ? 1.0 : 0.0,
-        duration:
-            MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 180),
-        // 语义子树常驻：opacity 归零默认摘除语义，会触发 Windows 桥更新失败。
-        alwaysIncludeSemantics: true,
-        child: IgnorePointer(
-          ignoring: !_showControls,
-          child: MouseRegion(
-            onEnter: (_) => onHoverControls(true),
-            onExit: (_) => onHoverControls(false),
-            child: ReaderViewTopBar(
-              settings: _settings,
-              bookTitle: detail.item.title,
-              chapterTitle: content.title,
-              sampleChrome: sampleChrome,
-              onBack: handleReaderExit,
-              onSearch: () => _toggleReaderPanel(ReaderPanelType.search),
-              onShowShortcuts:
-                  () => _toggleReaderPanel(ReaderPanelType.shortcuts),
-              onAddBookmark:
-                  _bookmarkBusy ? null : () => toggleBookmark(detail, content),
-              onToggleBookshelf: () => toggleBookshelf(detail),
-              onToggleTts: () {
-                _hideTimer?.cancel();
-                _updateState(() {
-                  _panelCoordinator.close();
-                  _showTts = !_showTts;
-                });
-              },
-              onShowAnnotations:
-                  () => _toggleReaderPanel(ReaderPanelType.annotations),
-              isBookmarked: _isBookmarked,
-              isInBookshelf: _bookshelfOverride ?? detail.item.addedToBookshelf,
-              desktopPrototypeChrome: !sampleChrome,
-              pageModeEnabled: supportsPageMode,
-              onSettingsChanged: onSettingsChanged,
-              onShowContents:
-                  () => _toggleReaderPanel(ReaderPanelType.contents),
-              onShowSettings:
-                  () => _toggleReaderPanel(ReaderPanelType.settings),
+      child: AnimatedSlide(
+        offset: _showControls ? Offset.zero : const Offset(0, -0.15),
+        duration: dur,
+        curve: MotionToken.curve,
+        child: AnimatedOpacity(
+          opacity: _showControls ? 1.0 : 0.0,
+          duration: dur,
+          alwaysIncludeSemantics: true,
+          child: IgnorePointer(
+            ignoring: !_showControls,
+            child: MouseRegion(
+              onEnter: (_) => onHoverControls(true),
+              onExit: (_) => onHoverControls(false),
+              child: ReaderViewTopBar(
+                settings: _settings,
+                bookTitle: detail.item.title,
+                chapterTitle: content.title,
+                sampleChrome: sampleChrome,
+                onBack: handleReaderExit,
+                onSearch: () => _toggleReaderPanel(ReaderPanelType.search),
+                onShowShortcuts:
+                    () => _toggleReaderPanel(ReaderPanelType.shortcuts),
+                onAddBookmark:
+                    _bookmarkBusy
+                        ? null
+                        : () => toggleBookmark(detail, content),
+                onToggleBookshelf: () => toggleBookshelf(detail),
+                onToggleTts: () {
+                  _hideTimer?.cancel();
+                  _updateState(() {
+                    _panelCoordinator.close();
+                    _showTts = !_showTts;
+                  });
+                },
+                onShowAnnotations:
+                    () => _toggleReaderPanel(ReaderPanelType.annotations),
+                isBookmarked: _isBookmarked,
+                isInBookshelf:
+                    _bookshelfOverride ?? detail.item.addedToBookshelf,
+                desktopPrototypeChrome: !sampleChrome,
+                pageModeEnabled: supportsPageMode,
+                activePanel: _panelCoordinator.active,
+                annotationBadgeCount: badgeCount,
+                onSettingsChanged: onSettingsChanged,
+                onShowContents:
+                    () => _toggleReaderPanel(ReaderPanelType.contents),
+                onShowSettings:
+                    () => _toggleReaderPanel(ReaderPanelType.settings),
+              ),
             ),
           ),
         ),
@@ -361,57 +382,66 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     bool sampleChrome = false,
   }) {
     final chapters = _chaptersFor(detail);
+    final dur =
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 240);
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
-      child: AnimatedOpacity(
-        opacity: _showControls ? 1.0 : 0.0,
-        duration:
-            MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 180),
-        alwaysIncludeSemantics: true,
-        child: IgnorePointer(
-          ignoring: !_showControls,
-          child: MouseRegion(
-            onEnter: (_) => onHoverControls(true),
-            onExit: (_) => onHoverControls(false),
-            child: ValueListenableBuilder<double?>(
-              valueListenable: _bookProgressNotifier,
-              builder:
-                  (context, bookProgress, _) => ValueListenableBuilder<int>(
-                    valueListenable: pageCountNotifier,
-                    builder:
-                        (context, pageCount, _) => ReaderViewBottomBar(
-                          settings: _settings,
-                          progress: bookProgress ?? 0,
-                          isPageMode: _isPageMode,
-                          currentPage: _isPageMode ? pageModePage : null,
-                          totalPages: _isPageMode ? pageCount : null,
-                          sampleChrome: sampleChrome,
-                          desktopPrototypeChrome: !sampleChrome,
-                          onPrevious:
-                              () => _navigateReader(detail, forward: false),
-                          onNext: () => _navigateReader(detail, forward: true),
-                          onPreviousChapter: () => tryNavigateChapter(-1),
-                          onNextChapter: () => tryNavigateChapter(1),
-                          chapterIndex: _currentChapterPosition(chapters),
-                          chapterCount: chapters.length,
-                          onShowContents:
-                              () =>
-                                  _toggleReaderPanel(ReaderPanelType.contents),
-                          onShowSettings:
-                              () =>
-                                  _toggleReaderPanel(ReaderPanelType.settings),
-                          onToggleImmersive: _toggleReaderImmersive,
-                          onAddBookmark:
-                              _bookmarkBusy
-                                  ? null
-                                  : () => toggleBookmark(detail, content),
-                          onProgressSeek: (value) => _seekBookProgress(value),
-                        ),
-                  ),
+      child: AnimatedSlide(
+        offset: _showControls ? Offset.zero : const Offset(0, 0.15),
+        duration: dur,
+        curve: MotionToken.curve,
+        child: AnimatedOpacity(
+          opacity: _showControls ? 1.0 : 0.0,
+          duration: dur,
+          alwaysIncludeSemantics: true,
+          child: IgnorePointer(
+            ignoring: !_showControls,
+            child: MouseRegion(
+              onEnter: (_) => onHoverControls(true),
+              onExit: (_) => onHoverControls(false),
+              child: ValueListenableBuilder<double?>(
+                valueListenable: _bookProgressNotifier,
+                builder:
+                    (context, bookProgress, _) => ValueListenableBuilder<int>(
+                      valueListenable: pageCountNotifier,
+                      builder:
+                          (context, pageCount, _) => ReaderViewBottomBar(
+                            settings: _settings,
+                            progress: bookProgress ?? 0,
+                            isPageMode: _isPageMode,
+                            currentPage: _isPageMode ? pageModePage : null,
+                            totalPages: _isPageMode ? pageCount : null,
+                            sampleChrome: sampleChrome,
+                            desktopPrototypeChrome: !sampleChrome,
+                            onPrevious:
+                                () => _navigateReader(detail, forward: false),
+                            onNext:
+                                () => _navigateReader(detail, forward: true),
+                            onPreviousChapter: () => tryNavigateChapter(-1),
+                            onNextChapter: () => tryNavigateChapter(1),
+                            chapterIndex: _currentChapterPosition(chapters),
+                            chapterCount: chapters.length,
+                            onShowContents:
+                                () => _toggleReaderPanel(
+                                  ReaderPanelType.contents,
+                                ),
+                            onShowSettings:
+                                () => _toggleReaderPanel(
+                                  ReaderPanelType.settings,
+                                ),
+                            onToggleImmersive: _toggleReaderImmersive,
+                            onAddBookmark:
+                                _bookmarkBusy
+                                    ? null
+                                    : () => toggleBookmark(detail, content),
+                            onProgressSeek: (value) => _seekBookProgress(value),
+                          ),
+                    ),
+              ),
             ),
           ),
         ),

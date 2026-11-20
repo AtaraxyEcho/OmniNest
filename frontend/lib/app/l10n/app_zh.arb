@@ -2808,6 +2808,64 @@
       }
     }
   },
+  "readerBookmarksTab": "书签 ({count})",
+  "@readerBookmarksTab": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerBookmarkFallback": "书签 {index}",
+  "@readerBookmarkFallback": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "readerFilterChaptersHint": "筛选章节…",
+  "readerInlineNoteHint": "写下批注…（Ctrl+Enter 保存）",
+  "readerSaveAnnotation": "保存批注",
+  "readerJustifyLabel": "两端对齐",
+  "readerJustifyHint": "正文段落两端对齐",
+  "readerMarginLabel": "页边距",
+  "readerMarginNarrow": "窄",
+  "readerMarginStandard": "标准",
+  "readerMarginWide": "宽",
+  "readerPageRange": "第 {start}–{end} / {total} 页",
+  "@readerPageRange": {
+    "placeholders": {
+      "start": {
+        "type": "int"
+      },
+      "end": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerPageOf": "第 {page} / {total} 页",
+  "@readerPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerMinutesLeft": "约 {minutes} 分钟",
+  "@readerMinutesLeft": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "readerBookChapterPosition": "第 {current}/{total} 章 · {percent}%",
   "@readerBookChapterPosition": {
     "placeholders": {

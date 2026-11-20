@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -20,6 +21,7 @@ class ReaderDesktopTopBar extends StatelessWidget {
     required this.onSettingsChanged,
     required this.isBookmarked,
     required this.pageModeEnabled,
+    this.activePanel,
     this.annotationBadgeCount = 0,
     super.key,
   });
@@ -36,8 +38,7 @@ class ReaderDesktopTopBar extends StatelessWidget {
   final ValueChanged<ReaderViewSettings>? onSettingsChanged;
   final bool isBookmarked;
   final bool pageModeEnabled;
-
-  /// 书签 + 批注总数角标（对齐样例 `.bk-top .badge`）。
+  final ReaderPanelType? activePanel;
   final int annotationBadgeCount;
 
   @override
@@ -45,7 +46,13 @@ class ReaderDesktopTopBar extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final bookMode = settings.usesBookDesk;
     final foreground =
-        bookMode ? settings.bookDeskTextColor : settings.onSurfaceVariantColor;
+        bookMode ? settings.bookDeskTextColor : settings.onSurfaceColor;
+    final muted =
+        bookMode
+            ? settings.bookDeskTextColor.withValues(alpha: 0.62)
+            : settings.onSurfaceVariantColor;
+    final compactModeLabels = MediaQuery.sizeOf(context).width < 1000;
+
     return SafeArea(
       bottom: false,
       child: DecoratedBox(
@@ -70,9 +77,11 @@ class ReaderDesktopTopBar extends StatelessWidget {
             child: Row(
               children: [
                 _DesktopIconButton(
-                  icon: Icons.arrow_back_rounded,
+                  icon: Icons.chevron_left_rounded,
                   label: l10n.readerClose,
                   foreground: foreground,
+                  accent: settings.accentColor,
+                  bookMode: bookMode,
                   onPressed: onBack,
                   large: true,
                 ),
@@ -80,7 +89,9 @@ class ReaderDesktopTopBar extends StatelessWidget {
                 Flexible(
                   flex: 2,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
+                    constraints: BoxConstraints(
+                      maxWidth: compactModeLabels ? 180 : 300,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,7 +105,8 @@ class ReaderDesktopTopBar extends StatelessWidget {
                             fontFamily: AppTypography.serifFamily,
                             fontFamilyFallback:
                                 AppTypography.serifFamilyFallback,
-                            fontSize: AppTypography.titleMedium,
+                            fontSize: 17, // ignore: font_size_whitelist
+                            fontWeight: FontWeight.w400,
                             height: 1.25,
                           ),
                         ),
@@ -104,8 +116,8 @@ class ReaderDesktopTopBar extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: foreground.withValues(alpha: 0.6),
-                              fontSize: AppTypography.labelMicro,
+                              color: muted,
+                              fontSize: 12, // ignore: font_size_whitelist
                               height: 1.3,
                             ),
                           ),
@@ -118,22 +130,32 @@ class ReaderDesktopTopBar extends StatelessWidget {
                   _DesktopModeSwitch(
                     settings: settings,
                     foreground: foreground,
+                    bookMode: bookMode,
+                    iconOnly: compactModeLabels,
                     onSettingsChanged: onSettingsChanged,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                 ],
                 _DesktopIconButton(
                   icon: Icons.search_rounded,
-                  label: l10n.readerSearchInBook,
+                  label: '${l10n.readerSearchInBook} (/)',
                   foreground: foreground,
+                  accent: settings.accentColor,
+                  bookMode: bookMode,
+                  selected: activePanel == ReaderPanelType.search,
                   onPressed: onSearch,
                 ),
+                const SizedBox(width: 4),
                 _DesktopIconButton(
-                  icon: Icons.list_rounded,
-                  label: l10n.readerTableOfContents,
+                  icon: Icons.format_list_bulleted_rounded,
+                  label: '${l10n.readerTableOfContents} (T)',
                   foreground: foreground,
+                  accent: settings.accentColor,
+                  bookMode: bookMode,
+                  selected: activePanel == ReaderPanelType.contents,
                   onPressed: onShowContents,
                 ),
+                const SizedBox(width: 4),
                 _DesktopIconButton(
                   icon:
                       isBookmarked
@@ -144,9 +166,12 @@ class ReaderDesktopTopBar extends StatelessWidget {
                           ? l10n.readerRemoveBookmark
                           : l10n.readerAddBookmark,
                   foreground: foreground,
+                  accent: settings.accentColor,
+                  bookMode: bookMode,
                   selected: isBookmarked,
                   onPressed: onAddBookmark,
                 ),
+                const SizedBox(width: 4),
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -154,14 +179,18 @@ class ReaderDesktopTopBar extends StatelessWidget {
                       icon: Icons.edit_note_rounded,
                       label: l10n.readerAnnotations,
                       foreground: foreground,
+                      accent: settings.accentColor,
+                      bookMode: bookMode,
+                      selected: activePanel == ReaderPanelType.annotations,
                       onPressed: onShowAnnotations,
                     ),
                     if (annotationBadgeCount > 0)
                       Positioned(
-                        top: 2,
-                        right: 2,
+                        top: -2,
+                        right: -2,
                         child: IgnorePointer(
                           child: Container(
+                            constraints: const BoxConstraints(minWidth: 16),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 4,
                               vertical: 1,
@@ -174,11 +203,12 @@ class ReaderDesktopTopBar extends StatelessWidget {
                               annotationBadgeCount > 99
                                   ? '99+'
                                   : '$annotationBadgeCount',
+                              textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: ReaderReadingPalette.onAccentInk,
-                                fontSize: AppTypography.labelNano,
+                                fontSize: 10, // ignore: font_size_whitelist
                                 fontWeight: FontWeight.w700,
-                                height: 1.1,
+                                height: 1.15,
                               ),
                             ),
                           ),
@@ -186,10 +216,14 @@ class ReaderDesktopTopBar extends StatelessWidget {
                       ),
                   ],
                 ),
+                const SizedBox(width: 4),
                 _DesktopIconButton(
                   icon: Icons.text_fields_rounded,
                   label: l10n.readerSettingsTitle,
                   foreground: foreground,
+                  accent: settings.accentColor,
+                  bookMode: bookMode,
+                  selected: activePanel == ReaderPanelType.settings,
                   onPressed: onShowSettings,
                 ),
               ],
@@ -205,27 +239,31 @@ class _DesktopModeSwitch extends StatelessWidget {
   const _DesktopModeSwitch({
     required this.settings,
     required this.foreground,
+    required this.bookMode,
+    required this.iconOnly,
     required this.onSettingsChanged,
   });
 
   final ReaderViewSettings settings;
   final Color foreground;
+  final bool bookMode;
+  final bool iconOnly;
   final ValueChanged<ReaderViewSettings>? onSettingsChanged;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final background =
-        settings.usesBookDesk
+        bookMode
             ? Colors.white.withValues(alpha: 0.08)
             : settings.onSurfaceColor.withValues(alpha: 0.08);
     final line =
-        settings.usesBookDesk
+        bookMode
             ? Colors.white.withValues(alpha: 0.12)
             : settings.onSurfaceColor.withValues(alpha: 0.12);
-    final active =
-        settings.usesBookDesk
-            ? Colors.white.withValues(alpha: 0.2)
+    final activeBg =
+        bookMode
+            ? Colors.white.withValues(alpha: 0.20)
             : settings.onSurfaceColor.withValues(alpha: 0.14);
     final mode =
         settings.readingMode == 'scroll'
@@ -245,61 +283,33 @@ class _DesktopModeSwitch extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final (id, label, icon) in options)
-            Tooltip(
-              message: label,
-              child: Semantics(
-                button: true,
-                selected: mode == id,
-                label: label,
-                child: InkWell(
-                  onTap: () {
-                    if (id == 'scroll') {
-                      onSettingsChanged?.call(
-                        settings.copyWith(readingMode: 'scroll'),
-                      );
-                    } else {
-                      onSettingsChanged?.call(
-                        settings.copyWith(
-                          readingMode: 'page',
-                          pageTurnMode: id == 'book' ? 'cover' : 'slide',
-                        ),
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: AnimatedContainer(
-                    duration: MotionToken.resolve(context, MotionToken.fast),
-                    curve: MotionToken.curve,
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    decoration: BoxDecoration(
-                      color: mode == id ? active : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
+            _ModeSwitchTab(
+              label: label,
+              icon: icon,
+              selected: mode == id,
+              iconOnly: iconOnly,
+              foreground: foreground,
+              activeBg: activeBg,
+              onTap: () {
+                if (id == 'scroll') {
+                  onSettingsChanged?.call(
+                    settings.copyWith(readingMode: 'scroll'),
+                  );
+                } else {
+                  onSettingsChanged?.call(
+                    settings.copyWith(
+                      readingMode: 'page',
+                      pageTurnMode: id == 'book' ? 'cover' : 'slide',
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, size: 15, color: foreground),
-                        const SizedBox(width: 5),
-                        Text(
-                          label,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: AppTypography.labelSmall,
-                            fontWeight:
-                                mode == id ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                  );
+                }
+              },
             ),
         ],
       ),
@@ -307,11 +317,88 @@ class _DesktopModeSwitch extends StatelessWidget {
   }
 }
 
-class _DesktopIconButton extends StatelessWidget {
+class _ModeSwitchTab extends StatefulWidget {
+  const _ModeSwitchTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.iconOnly,
+    required this.foreground,
+    required this.activeBg,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final bool iconOnly;
+  final Color foreground;
+  final Color activeBg;
+  final VoidCallback onTap;
+
+  @override
+  State<_ModeSwitchTab> createState() => _ModeSwitchTabState();
+}
+
+class _ModeSwitchTabState extends State<_ModeSwitchTab> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        widget.selected || _hovered
+            ? widget.foreground
+            : widget.foreground.withValues(alpha: 0.65);
+    return Tooltip(
+      message: widget.label,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: MotionToken.resolve(context, MotionToken.fast),
+            curve: MotionToken.curve,
+            height: 30,
+            padding: EdgeInsets.symmetric(horizontal: widget.iconOnly ? 8 : 11),
+            decoration: BoxDecoration(
+              color: widget.selected ? widget.activeBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 15, color: color),
+                if (!widget.iconOnly) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12.5, // ignore: font_size_whitelist
+                      fontWeight:
+                          widget.selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopIconButton extends StatefulWidget {
   const _DesktopIconButton({
     required this.icon,
     required this.label,
     required this.foreground,
+    required this.accent,
+    required this.bookMode,
     required this.onPressed,
     this.selected = false,
     this.large = false,
@@ -320,33 +407,91 @@ class _DesktopIconButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color foreground;
+  final Color accent;
+  final bool bookMode;
   final VoidCallback? onPressed;
   final bool selected;
   final bool large;
 
   @override
+  State<_DesktopIconButton> createState() => _DesktopIconButtonState();
+}
+
+class _DesktopIconButtonState extends State<_DesktopIconButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+    final hoverBg =
+        widget.bookMode
+            ? Colors.white.withValues(alpha: 0.12)
+            : widget.foreground.withValues(alpha: 0.10);
+    final selectedBg =
+        widget.bookMode
+            ? widget.accent.withValues(alpha: 0.18)
+            : widget.accent.withValues(alpha: 0.14);
+
+    final bg =
+        !enabled
+            ? Colors.transparent
+            : widget.selected
+            ? selectedBg
+            : _hovered
+            ? hoverBg
+            : Colors.transparent;
+
+    final fg =
+        !enabled
+            ? widget.foreground.withValues(alpha: 0.35)
+            : widget.selected
+            ? widget.accent
+            : _hovered
+            ? widget.foreground
+            : widget.foreground.withValues(alpha: 0.84);
+
+    final side = widget.large ? 40.0 : 34.0;
+    final radius = widget.large ? 12.0 : 9.0;
+
     return Tooltip(
-      message: label,
+      message: widget.label,
       child: Semantics(
         button: true,
-        selected: selected,
-        label: label,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(7),
-            child: SizedBox(
-              width: large ? 40 : 36,
-              height: 36,
-              child: Icon(
-                icon,
-                size: large ? 20 : 18,
-                color:
-                    onPressed == null
-                        ? foreground.withValues(alpha: 0.35)
-                        : foreground,
+        selected: widget.selected,
+        label: widget.label,
+        child: MouseRegion(
+          cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit:
+              (_) => setState(() {
+                _hovered = false;
+                _pressed = false;
+              }),
+          child: GestureDetector(
+            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+            onTapCancel:
+                enabled ? () => setState(() => _pressed = false) : null,
+            onTap: widget.onPressed,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedScale(
+              scale: _pressed ? 0.88 : 1.0,
+              duration: MotionToken.resolve(context, MotionToken.fast),
+              curve: Curves.easeOutBack,
+              child: AnimatedContainer(
+                duration: MotionToken.resolve(context, MotionToken.fast),
+                width: side,
+                height: side,
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(radius),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: widget.large ? 22 : 18,
+                  color: fg,
+                ),
               ),
             ),
           ),

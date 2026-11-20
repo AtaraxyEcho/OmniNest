@@ -12551,6 +12551,90 @@ abstract class AppLocalizations {
   /// **'Reading session saved · {minutes} min'**
   String readerSessionSaved(int minutes);
 
+  /// No description provided for @readerBookmarksTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks ({count})'**
+  String readerBookmarksTab(int count);
+
+  /// No description provided for @readerBookmarkFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark {index}'**
+  String readerBookmarkFallback(int index);
+
+  /// No description provided for @readerFilterChaptersHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter chapters…'**
+  String get readerFilterChaptersHint;
+
+  /// No description provided for @readerInlineNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a note… (Ctrl+Enter to save)'**
+  String get readerInlineNoteHint;
+
+  /// No description provided for @readerSaveAnnotation.
+  ///
+  /// In en, this message translates to:
+  /// **'Save annotation'**
+  String get readerSaveAnnotation;
+
+  /// No description provided for @readerJustifyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Justify text'**
+  String get readerJustifyLabel;
+
+  /// No description provided for @readerJustifyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Justify body paragraphs'**
+  String get readerJustifyHint;
+
+  /// No description provided for @readerMarginLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Page margins'**
+  String get readerMarginLabel;
+
+  /// No description provided for @readerMarginNarrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Narrow'**
+  String get readerMarginNarrow;
+
+  /// No description provided for @readerMarginStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get readerMarginStandard;
+
+  /// No description provided for @readerMarginWide.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide'**
+  String get readerMarginWide;
+
+  /// No description provided for @readerPageRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages {start}–{end} / {total}'**
+  String readerPageRange(int start, int end, int total);
+
+  /// No description provided for @readerPageOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} / {total}'**
+  String readerPageOf(int page, int total);
+
+  /// No description provided for @readerMinutesLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'~{minutes} min left'**
+  String readerMinutesLeft(int minutes);
+
   /// No description provided for @readerBookChapterPosition.
   ///
   /// In en, this message translates to:
