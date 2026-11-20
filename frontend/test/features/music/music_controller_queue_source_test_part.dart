@@ -669,8 +669,8 @@ void registerMusicQueuePersistenceTests() {
     final firstScreen = await container
         .read(musicPlatformLibraryProvider.notifier)
         .loadPlaylistTracks(playlist);
-    expect(firstScreen, hasLength(200));
-    final startItem = MusicPlayableItem.online(firstScreen[150]);
+    expect(firstScreen, hasLength(100));
+    final startItem = MusicPlayableItem.online(firstScreen[50]);
 
     await container
         .read(musicCenterControllerProvider.notifier)

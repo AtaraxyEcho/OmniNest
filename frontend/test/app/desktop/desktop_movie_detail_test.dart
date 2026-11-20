@@ -123,6 +123,8 @@ void main() {
 
     expect(find.text('简体中文'), findsOneWidget);
     expect(find.textContaining('External'), findsOneWidget);
+    expect(find.text('UPLOAD SUBTITLE'), findsOneWidget);
+    expect(find.byTooltip('Delete subtitle'), findsOneWidget);
   });
 
   testWidgets('概览页动作行四个按钮都在，且探测与 NFO 走应用层入口', (tester) async {

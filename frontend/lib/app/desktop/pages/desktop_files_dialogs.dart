@@ -35,39 +35,6 @@ Future<void> _showRenameDialog(
   }
 }
 
-Future<void> _showNewFolderDialog(
-  BuildContext context,
-  FileBrowserController controller,
-) async {
-  final l10n = AppLocalizations.of(context);
-  final name = await showDesktopDialog<String>(
-    context,
-    builder:
-        (dialogContext) => _NameDialog(
-          eyebrow: l10n.filesCurrentView,
-          title: l10n.filesNewFolder,
-          hint: l10n.desktopFilesFolderNameHint,
-          confirmLabel: l10n.filesNewFolder,
-          icon: DesktopIcons.folder,
-        ),
-  );
-  if (name == null) {
-    return;
-  }
-  try {
-    await controller.createFolder(name);
-  } on Object catch (error) {
-    if (context.mounted) {
-      showDesktopToast(
-        context,
-        failureToast(l10n, l10n.filesNewFolder, error),
-        kind: DesktopToastKind.error,
-        icon: DesktopIcons.info,
-      );
-    }
-  }
-}
-
 /// 永久删除确认：先算清"会失去什么"，再让用户按下不可撤销的那颗键。
 Future<void> _showPurgeDialog(
   BuildContext context,

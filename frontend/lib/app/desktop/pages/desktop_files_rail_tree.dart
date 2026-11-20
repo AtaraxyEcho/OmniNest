@@ -524,3 +524,62 @@ class _RailStorageCard extends StatelessWidget {
         _ => l10n.filesCategoryOther,
       };
 }
+
+/// 共享空间没有按文件类型拆分的后端统计；显示真实配额进度，避免用原型演示
+/// 的类别数字伪造生产数据，同时保留样例底部用量条的层级和尺寸。
+class _RailSharedStorageCard extends StatelessWidget {
+  const _RailSharedStorageCard({required this.usage});
+
+  final SharedSpaceUsage usage;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final capacity =
+        usage.isUnlimited
+            ? l10n.filesSharedSpaceUnlimited
+            : formatFileSize(usage.maxBytes);
+    return Container(
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.fromLTRB(10, 14, 10, 4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: skin.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.desktopFilesGroupStorage.toUpperCase(),
+            style: DesktopType.eyebrow(skin.text3),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 8,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: ColoredBox(color: skin.raise2)),
+                  FractionallySizedBox(
+                    widthFactor: usage.usageRatio,
+                    child: ColoredBox(color: skin.accent),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            l10n.filesSharedSpaceInfo(
+              formatFileSize(usage.usedBytes),
+              capacity,
+              usage.fileCount,
+            ),
+            style: DesktopType.caption(skin.text2),
+          ),
+        ],
+      ),
+    );
+  }
+}

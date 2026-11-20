@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -19,10 +20,13 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
+import 'package:omninest/features/video/presentation/widgets/subtitle_file_decoder.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 part 'desktop_movie_detail_hero.dart';
 part 'desktop_movie_detail_sections.dart';
+part 'desktop_movie_detail_subtitles.dart';
 
 /// 桌面影视详情（样例 `FilmDetail`）。
 ///

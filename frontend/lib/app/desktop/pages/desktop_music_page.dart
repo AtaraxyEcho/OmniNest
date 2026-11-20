@@ -456,6 +456,24 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final platformAsync = ref.watch(musicPlatformLibraryProvider);
     final platform =
         platformAsync.asData?.value ?? const MusicPlatformLibraryState();
+    // 同一帧内复用展开后的首屏列表，避免每个桌面区块重复创建临时集合。
+    final likedTracks = platform.likedTracks;
+    final onlinePlaylists = platform.playlists;
+    final knownPlatformTracks = _knownPlatformTracks(platform);
+    final likedPlatformApis = _likedPlatformApis(platform);
+    final likedHasMore = platform.hasMoreLikedTracks(likedPlatformApis);
+    final likedLoadingMore = platform.loadingMoreLiked;
+    void loadMoreLikedTracks() {
+      if (likedPlatformApis.isEmpty || likedLoadingMore || !likedHasMore) {
+        return;
+      }
+      unawaited(
+        ref
+            .read(musicPlatformLibraryProvider.notifier)
+            .loadMoreLikedTracks(likedPlatformApis),
+      );
+    }
+
     final actions = ref.watch(musicPortalActionsProvider);
     final selectedPlaylist =
         state?.section == MusicSection.playlistDetail
@@ -583,19 +601,22 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       onPlayQueueItem:
                           (index) => actions.playQueueAt(index).ignore(),
                     ),
-                    if (platform.playlists.isNotEmpty)
+                    if (onlinePlaylists.isNotEmpty)
                       _DesktopOnlinePlaylistSection(
                         library: platform,
-                        playlists: platform.playlists,
+                        playlists: onlinePlaylists,
                         onOpen:
                             (playlist) =>
                                 _playOnlinePlaylist(playlist).ignore(),
                       ),
-                    if (platform.likedTracks.isNotEmpty)
+                    if (likedTracks.isNotEmpty)
                       _DesktopOnlineTrackSection(
-                        tracks: platform.likedTracks,
+                        tracks: likedTracks,
                         currentId: state?.currentItem?.playableKey,
                         playing: state?.isPlaying ?? false,
+                        hasMore: likedHasMore,
+                        loadingMore: likedLoadingMore,
+                        onLoadMore: loadMoreLikedTracks,
                         onPlay:
                             (track) =>
                                 ref
@@ -617,10 +638,10 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       onOpen: _openPlaylist,
                       onCreate: () => _editPlaylist(),
                     ),
-                    if (platform.playlists.isNotEmpty)
+                    if (onlinePlaylists.isNotEmpty)
                       _DesktopOnlinePlaylistSection(
                         library: platform,
-                        playlists: platform.playlists,
+                        playlists: onlinePlaylists,
                         onOpen:
                             (playlist) =>
                                 _playOnlinePlaylist(playlist).ignore(),
@@ -638,11 +659,14 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       currentId: state?.currentItem?.playableKey,
                       playing: state?.isPlaying ?? false,
                     ),
-                    if (platform.likedTracks.isNotEmpty)
+                    if (likedTracks.isNotEmpty)
                       _DesktopOnlineTrackSection(
-                        tracks: platform.likedTracks,
+                        tracks: likedTracks,
                         currentId: state?.currentItem?.playableKey,
                         playing: state?.isPlaying ?? false,
+                        hasMore: likedHasMore,
+                        loadingMore: likedLoadingMore,
+                        onLoadMore: loadMoreLikedTracks,
                         onPlay:
                             (track) =>
                                 ref
@@ -671,11 +695,14 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       playing: state?.isPlaying ?? false,
                       showControls: false,
                     ),
-                    if (platform.likedTracks.isNotEmpty)
+                    if (likedTracks.isNotEmpty)
                       _DesktopOnlineTrackSection(
-                        tracks: platform.likedTracks,
+                        tracks: likedTracks,
                         currentId: state?.currentItem?.playableKey,
                         playing: state?.isPlaying ?? false,
+                        hasMore: likedHasMore,
+                        loadingMore: likedLoadingMore,
+                        onLoadMore: loadMoreLikedTracks,
                         onPlay:
                             (track) =>
                                 ref
@@ -696,9 +723,9 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       emptyLabel: l10n.musicNoAlbums,
                       onOpen: (album) => setState(() => _selectedAlbum = album),
                     ),
-                    if (_knownPlatformTracks(platform).isNotEmpty)
+                    if (knownPlatformTracks.isNotEmpty)
                       _DesktopOnlineAlbumSection(
-                        tracks: _knownPlatformTracks(platform),
+                        tracks: knownPlatformTracks,
                         currentId: state?.currentItem?.playableKey,
                         playing: state?.isPlaying ?? false,
                         onPlay: _playOnlineTracks,

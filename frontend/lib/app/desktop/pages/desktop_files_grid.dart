@@ -3,6 +3,9 @@ part of 'desktop_files_page.dart';
 class _FileGrid extends StatelessWidget {
   const _FileGrid({
     required this.items,
+    this.draftFolderName,
+    this.onDraftSubmit,
+    this.onDraftCancel,
     required this.selected,
     required this.onTap,
     required this.onSelect,
@@ -12,6 +15,9 @@ class _FileGrid extends StatelessWidget {
   });
 
   final List<FileNode> items;
+  final String? draftFolderName;
+  final ValueChanged<String>? onDraftSubmit;
+  final VoidCallback? onDraftCancel;
   final Set<String> selected;
   final ValueChanged<FileNode> onTap;
   final ValueChanged<FileNode> onSelect;
@@ -32,6 +38,15 @@ class _FileGrid extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
+            if (draftFolderName != null)
+              SizedBox(
+                width: width,
+                child: _DesktopDraftFolderTile(
+                  defaultName: draftFolderName!,
+                  onSubmit: onDraftSubmit!,
+                  onCancel: onDraftCancel!,
+                ),
+              ),
             for (var i = 0; i < items.length; i++)
               SizedBox(
                 width: width,

@@ -125,23 +125,23 @@ List<MusicPlatformStatus> musicConnectedPlatformStatuses(
 /// 加载平台状态、账号歌单和喜欢歌曲，并隔离单来源失败。
 class MusicPlatformLibraryController
     extends AsyncNotifier<MusicPlatformLibraryState> {
-  static const int _playlistPreloadConcurrency = 3;
+  static const int _playlistPreloadConcurrency = 2;
 
   /// 预热覆盖的歌单数量上限：超出的部分走按需加载路径。
-  static const int _playlistPreloadLimit = 8;
+  static const int _playlistPreloadLimit = 2;
 
   /// 预热每个歌单只取封面与预览够用的条数：整表下发会在设备侧解析数百 KB JSON。
-  static const int _playlistPreloadTrackPageSize = 50;
+  static const int _playlistPreloadTrackPageSize = 20;
 
   /// 打开歌单只取首屏页，其余页由详情滚动续载。
-  static const int _playlistTrackPageSize = 200;
+  static const int _playlistTrackPageSize = 100;
 
   /// 播放整队时一次取满后端单页上限，保持"整个歌单入队"的既有语义。
   static const int _playlistFullTrackPageSize = 1000;
 
-  /// 喜欢列表首屏页：deck 把它混入曲库列表，整表下发会在设备侧解析数百 KB
+  /// 喜欢列表首屏页：deck 把它混入曲库列表，整表下发会在设备侧解析大量 JSON
   /// JSON 并阻塞 UI isolate，其余页由 deck 触底续载。
-  static const int _likedTrackPageSize = 200;
+  static const int _likedTrackPageSize = 50;
 
   /// 队列重建等"必须持有完整列表"的场景一次取满后端单页上限，与歌单整队一致。
   static const int _likedFullTrackPageSize = 1000;
@@ -446,9 +446,7 @@ class MusicPlatformLibraryController
       statuses = await api.musicPlatforms();
     } on Object catch (error) {
       return MusicPlatformLibraryState(
-        failures: <String, String>{
-          'platforms': userFacingErrorText(error),
-        },
+        failures: <String, String>{'platforms': userFacingErrorText(error)},
       );
     }
 
@@ -485,8 +483,7 @@ class MusicPlatformLibraryController
           playlistsByPlatform[status
               .platform] = List<OnlinePlaylist>.unmodifiable(page.items);
         } on Object catch (error) {
-          failures['${status.platform}:playlists'] =
-              userFacingErrorText(error);
+          failures['${status.platform}:playlists'] = userFacingErrorText(error);
         }
       }),
     );
@@ -542,8 +539,7 @@ class MusicPlatformLibraryController
           );
           likedTracksByPlatform[status.platform] = page;
         } on Object catch (error) {
-          failures['${status.platform}:liked'] =
-              userFacingErrorText(error);
+          failures['${status.platform}:liked'] = userFacingErrorText(error);
         }
       }),
     );
@@ -674,9 +670,7 @@ class MusicPlatformLibraryController
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
-      _recordLikedFailure(<String>[
-        platform,
-      ], userFacingErrorText(error));
+      _recordLikedFailure(<String>[platform], userFacingErrorText(error));
       // 整表失败时退回已加载页，重建不至于空队列。
       return cached?.items ?? const <OnlineTrack>[];
     } finally {

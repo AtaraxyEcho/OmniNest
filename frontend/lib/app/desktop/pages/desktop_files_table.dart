@@ -59,7 +59,9 @@ class _FilesToolbar extends StatelessWidget {
                 child: Row(
                   children: [
                     Text(
-                      _sectionTitle(l10n, section),
+                      shared
+                          ? l10n.filesSharedSpace
+                          : _sectionTitle(l10n, section),
                       style: DesktopType.crumbTitle(skin.text),
                     ),
                     if (showCrumbs)
@@ -129,7 +131,9 @@ class _FilesToolbar extends StatelessWidget {
                         keyName: 'desktop-files-search',
                         controller: search,
                         hint: l10n.desktopFilesSearchHint(
-                          _sectionTitle(l10n, section),
+                          shared
+                              ? l10n.filesSharedSpace
+                              : _sectionTitle(l10n, section),
                         ),
                         prefixIcon: DesktopIcons.search,
                         trailing:
@@ -341,6 +345,56 @@ class _SectionNotices extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final usage = state?.sharedSpaceUsage;
+    if (state?.spaceType == 'SHARED' && usage != null) {
+      final capacity =
+          usage.isUnlimited
+              ? l10n.filesSharedSpaceUnlimited
+              : formatFileSize(usage.maxBytes);
+      return Container(
+        margin: EdgeInsets.zero,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: skin.line),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: skin.accentWash(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(DesktopIcons.users, size: 17, color: skin.accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.filesSharedSpaceInfoTitle,
+                    style: DesktopType.bodyStrong(skin.text),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    l10n.filesSharedSpaceInfo(
+                      formatFileSize(usage.usedBytes),
+                      capacity,
+                      usage.fileCount,
+                    ),
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final (String, String)? notice = switch (section) {
       FileManagerSection.recycleBin
           when (state?.recycleBin.isNotEmpty ?? false) =>
@@ -356,7 +410,7 @@ class _SectionNotices extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Container(
-      margin: const EdgeInsets.only(top: 12),
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: skin.raise,
@@ -394,6 +448,8 @@ class _SelectionBar extends StatelessWidget {
     required this.onRestore,
     required this.onPurge,
     required this.onFavorite,
+    required this.onMoveToShared,
+    required this.onMoveToPersonal,
     required this.onShare,
     required this.onRename,
   });
@@ -406,6 +462,8 @@ class _SelectionBar extends StatelessWidget {
   final VoidCallback onRestore;
   final VoidCallback onPurge;
   final VoidCallback onFavorite;
+  final VoidCallback onMoveToShared;
+  final VoidCallback onMoveToPersonal;
   final VoidCallback onShare;
   final VoidCallback onRename;
 
@@ -416,7 +474,9 @@ class _SelectionBar extends StatelessWidget {
     final count = state.selectedFileIds.length;
     final single = count == 1;
     final recycle = section == FileManagerSection.recycleBin;
-    final sharedSpace = section == FileManagerSection.sharedSpace;
+    final sharedSpace =
+        section == FileManagerSection.sharedSpace ||
+        state.spaceType == 'SHARED';
     final allFavorited =
         (state.selectedFileIds.length ==
             state.favoriteIdSet.intersection(state.selectedFileIds).length);
@@ -473,6 +533,15 @@ class _SelectionBar extends StatelessWidget {
                     variant: DesktopButtonVariant.ghost,
                     onPressed: single ? onRename : null,
                   ),
+                  DesktopButton(
+                    label:
+                        sharedSpace
+                            ? l10n.filesMoveToPersonal
+                            : l10n.filesMoveToShared,
+                    icon: DesktopIcons.moveRight,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: sharedSpace ? onMoveToPersonal : onMoveToShared,
+                  ),
                   if (!sharedSpace)
                     DesktopButton(
                       label:
@@ -486,13 +555,15 @@ class _SelectionBar extends StatelessWidget {
                       variant: DesktopButtonVariant.ghost,
                       onPressed: onFavorite,
                     ),
-                  if (!sharedSpace)
-                    DesktopButton(
-                      label: l10n.desktopFilesMoveToRecycle,
-                      icon: DesktopIcons.trash,
-                      variant: DesktopButtonVariant.ghost,
-                      onPressed: onDelete,
-                    ),
+                  DesktopButton(
+                    label:
+                        sharedSpace
+                            ? l10n.filesDelete
+                            : l10n.desktopFilesMoveToRecycle,
+                    icon: DesktopIcons.trash,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: onDelete,
+                  ),
                 ],
               ],
             ),

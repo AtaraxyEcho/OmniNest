@@ -198,11 +198,13 @@ class _AccessTag extends StatelessWidget {
 class _FilesEmpty extends StatelessWidget {
   const _FilesEmpty({
     required this.section,
+    required this.shared,
     required this.filtered,
     required this.onClear,
   });
 
   final FileManagerSection section;
+  final bool shared;
   final bool filtered;
   final VoidCallback onClear;
 
@@ -221,12 +223,192 @@ class _FilesEmpty extends StatelessWidget {
         message:
             filtered
                 ? l10n.desktopFilesEmptyFilter
+                : shared
+                ? l10n.filesSharedSpaceEmpty
                 : l10n.desktopFilesEmptyFolder,
         actionLabel: filtered ? l10n.desktopFilesClearFilters : null,
         onAction: filtered ? onClear : null,
       ),
     );
   }
+}
+
+/// 原型 `newFolder()` 的就地重命名态：创建请求在提交时才发送，Enter/失焦提交，
+/// Escape 取消，避免弹窗把新目录从当前列表上下文中拆出去。
+class _DesktopDraftFolderRow extends StatelessWidget {
+  const _DesktopDraftFolderRow({
+    required this.defaultName,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  final String defaultName;
+  final ValueChanged<String> onSubmit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => _DesktopDraftFolderEditor(
+    defaultName: defaultName,
+    onSubmit: onSubmit,
+    onCancel: onCancel,
+    compact: true,
+  );
+}
+
+class _DesktopDraftFolderEditor extends StatefulWidget {
+  const _DesktopDraftFolderEditor({
+    required this.defaultName,
+    required this.onSubmit,
+    required this.onCancel,
+    required this.compact,
+  });
+
+  final String defaultName;
+  final ValueChanged<String> onSubmit;
+  final VoidCallback onCancel;
+  final bool compact;
+
+  @override
+  State<_DesktopDraftFolderEditor> createState() =>
+      _DesktopDraftFolderEditorState();
+}
+
+class _DesktopDraftFolderEditorState extends State<_DesktopDraftFolderEditor> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _settled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.defaultName)
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: widget.defaultName.length,
+      );
+    _focusNode = FocusNode()..addListener(_onFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_onFocusChanged)
+      ..dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!_focusNode.hasFocus) _submit();
+  }
+
+  void _submit() {
+    if (_settled) return;
+    _settled = true;
+    widget.onSubmit(_controller.text);
+  }
+
+  void _cancel() {
+    if (_settled) return;
+    _settled = true;
+    widget.onCancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final editor = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      autofocus: true,
+      maxLines: 1,
+      style: DesktopType.rowTitle(skin.text),
+      decoration: const InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+      onSubmitted: (_) => _submit(),
+    );
+    final content =
+        widget.compact
+            ? Row(
+              children: [
+                const SizedBox(width: _FileColumns.tick + _FileColumns.gap),
+                SizedBox(
+                  width: _FileColumns.icon,
+                  child: Icon(
+                    DesktopIcons.folder,
+                    size: 20,
+                    color: DesktopPalette.kindFolder,
+                  ),
+                ),
+                const SizedBox(width: _FileColumns.gap),
+                Expanded(child: editor),
+              ],
+            )
+            : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  DesktopIcons.folder,
+                  size: 34,
+                  color: DesktopPalette.kindFolder,
+                ),
+                const SizedBox(height: 10),
+                editor,
+              ],
+            );
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _cancel},
+      child: Focus(
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.enter) {
+            _submit();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Container(
+          constraints: BoxConstraints(minHeight: widget.compact ? 58 : 176),
+          padding:
+              widget.compact
+                  ? const EdgeInsets.symmetric(horizontal: 11)
+                  : const EdgeInsets.fromLTRB(12, 18, 12, 14),
+          decoration: BoxDecoration(
+            color: skin.accentWash(0.1),
+            borderRadius: BorderRadius.circular(DesktopMetrics.radius),
+            border: Border.all(color: skin.accentWash(0.35)),
+          ),
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopDraftFolderTile extends StatelessWidget {
+  const _DesktopDraftFolderTile({
+    required this.defaultName,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  final String defaultName;
+  final ValueChanged<String> onSubmit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => _DesktopDraftFolderEditor(
+    defaultName: defaultName,
+    onSubmit: onSubmit,
+    onCancel: onCancel,
+    compact: false,
+  );
 }
 
 // ── 共用小工具 ────────────────────────────────────────────────────────
@@ -295,7 +477,10 @@ String _fileSubtitle(AppLocalizations l10n, FileNode node) {
   if (node.spaceType == SpaceType.shared &&
       uploader != null &&
       uploader.isNotEmpty) {
-    return '$kind · ${l10n.desktopFilesOwner(uploader)}';
+    return '$kind · ${l10n.desktopFilesAddedBy(uploader)}';
+  }
+  if (node.spaceType == SpaceType.shared) {
+    return '$kind · ${l10n.desktopFilesAddedBy(l10n.filesSharedSpaceMember)}';
   }
   return kind;
 }

@@ -2,6 +2,7 @@ import 'dart:ui' show CheckedState, PointerDeviceKind;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/pages/desktop_files_page.dart';
@@ -125,6 +126,77 @@ void main() {
 
     expect(find.byTooltip('Personal Space'), findsOneWidget);
     expect(find.byTooltip('Shared Space'), findsOneWidget);
+  });
+
+  testWidgets('共享空间显示原型页头、真实用量卡和共享空态', (tester) async {
+    await pumpFiles(
+      tester,
+      state: FileBrowserState(
+        files: const <FileNode>[],
+        recycleBin: const <FileNode>[],
+        spaceType: 'SHARED',
+        sharedSpaceUsage: const SharedSpaceUsage(
+          usedBytes: 512 * 1024 * 1024,
+          maxBytes: 2 * 1024 * 1024 * 1024,
+          fileCount: 0,
+        ),
+        fileTotalPages: 1,
+      ),
+    );
+
+    expect(find.text('Shared Space'), findsWidgets);
+    expect(find.text('My files'), findsNothing);
+    expect(find.text('Household space'), findsOneWidget);
+    expect(find.text('No files in shared space'), findsOneWidget);
+  });
+
+  testWidgets('共享选择栏提供移回个人空间和共享删除动作', (tester) async {
+    await pumpFiles(
+      tester,
+      state: FileBrowserState(
+        files: [
+          FileNode(
+            id: 'shared-1',
+            parentId: null,
+            name: 'Shared report.pdf',
+            isFolder: false,
+            nodeType: 'DOCUMENT',
+            normalizedPath: '/Shared/Shared report.pdf',
+            sizeBytes: 1024,
+            mimeType: 'application/pdf',
+            updatedAt: DateTime(2026, 11, 2),
+            spaceType: SpaceType.shared,
+            uploaderName: 'Alex',
+          ),
+        ],
+        recycleBin: const <FileNode>[],
+        spaceType: 'SHARED',
+        selectedFileIds: const {'shared-1'},
+        fileTotalElements: 1,
+        fileTotalPages: 1,
+      ),
+    );
+
+    expect(find.text('Move to Personal Space'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Share'), findsNothing);
+    expect(find.text('Move to Recycle'), findsNothing);
+  });
+
+  testWidgets('新建文件夹先在当前列表进入就地命名态', (tester) async {
+    await pumpFiles(tester);
+
+    await tester.tap(find.text('New Folder'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(find.text('New Folder'), findsWidgets);
+    expect(find.byType(TextField), findsNWidgets(2));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('搜索按名称过滤主列表', (tester) async {

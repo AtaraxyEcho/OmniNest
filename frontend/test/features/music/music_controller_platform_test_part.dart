@@ -57,7 +57,7 @@ class _GatedMoreLikedMusicApi extends _ManyLikedMusicApi {
     int size = 1000,
     bool refresh = false,
   }) async {
-    if (page > 0 && size == 200) {
+    if (page > 0 && size == 50) {
       await moreGate.future;
     }
     return super.platformLikedTracks(
@@ -175,7 +175,7 @@ void registerMusicPlatformTests() {
     );
   });
 
-  test('喜欢列表分页：首屏只取 200 条，触底续载补齐剩余页', () async {
+  test('喜欢列表分页：首屏只取 50 条，触底续载补齐剩余页', () async {
     final api =
         _ManyLikedMusicApi()
           ..platformStatuses = const <MusicPlatformStatus>[
@@ -196,21 +196,17 @@ void registerMusicPlatformTests() {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     final first = container.read(musicPlatformLibraryProvider).value!;
     // 首屏只解码首页载荷，整表 450 条不再一次性压进 UI isolate。
-    expect(first.likedTracks, hasLength(200));
+    expect(first.likedTracks, hasLength(50));
     expect(first.hasMoreLikedTracks(const <String>['netease']), isTrue);
 
-    await container
-        .read(musicPlatformLibraryProvider.notifier)
-        .loadMoreLikedTracks(const <String>['netease']);
-    // 450 条按 200/页需两次续载：第一次到 400，仍可续。
-    expect(
-      container.read(musicPlatformLibraryProvider).value!.likedTracks,
-      hasLength(400),
-    );
-
-    await container
-        .read(musicPlatformLibraryProvider.notifier)
-        .loadMoreLikedTracks(const <String>['netease']);
+    final notifier = container.read(musicPlatformLibraryProvider.notifier);
+    while (container
+        .read(musicPlatformLibraryProvider)
+        .value!
+        .hasMoreLikedTracks(const <String>['netease'])) {
+      await notifier.loadMoreLikedTracks(const <String>['netease']);
+    }
+    // 450 条按 50/页续载，列表逐页增长，直到取尽后才停止请求。
     final second = container.read(musicPlatformLibraryProvider).value!;
     expect(second.likedTracks, hasLength(450));
     expect(second.hasMoreLikedTracks(const <String>['netease']), isFalse);
@@ -282,26 +278,26 @@ void registerMusicPlatformTests() {
     await container.read(musicPlatformLibraryProvider.future);
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
-    // 触底续载第 1 页（200~399），响应被门闩挂起。
+    // 触底续载第 1 页（50~99），响应被门闩挂起。
     final loadMore = container
         .read(musicPlatformLibraryProvider.notifier)
         .loadMoreLikedTracks(const <String>['netease']);
     await Future<void>.delayed(const Duration(milliseconds: 10));
-    // 续载在途期间整刷：喜欢列表重置回首屏 200 条，世代与请求序号均推进。
+    // 续载在途期间整刷：喜欢列表重置回首屏 50 条，世代与请求序号均推进。
     await container.read(musicPlatformLibraryProvider.notifier).refresh();
     expect(
       container.read(musicPlatformLibraryProvider).value!.likedTracks,
-      hasLength(200),
+      hasLength(50),
     );
 
     api.moreGate.complete();
     await loadMore;
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
-    // 旧的第 1 页响应被丢弃：不出现 200~399 的区间缺口式追加。
+    // 旧的第 1 页响应被丢弃：不出现 50~99 的区间缺口式追加。
     expect(
       container.read(musicPlatformLibraryProvider).value!.likedTracks,
-      hasLength(200),
+      hasLength(50),
     );
     // 新一轮续载仍可正常推进。
     await container
@@ -309,7 +305,7 @@ void registerMusicPlatformTests() {
         .loadMoreLikedTracks(const <String>['netease']);
     expect(
       container.read(musicPlatformLibraryProvider).value!.likedTracks,
-      hasLength(400),
+      hasLength(100),
     );
   });
 

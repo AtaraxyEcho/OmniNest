@@ -239,8 +239,7 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                           onSearch: controller.setSearchQuery,
                           grid: grid,
                           canUpload: canUpload,
-                          onNewFolder:
-                              () => _showNewFolderDialog(context, controller),
+                          onNewFolder: () => _beginNewFolder(controller, state),
                           onUpload: () => _pickAndUpload(controller, state),
                           onEmptyRecycle:
                               () => _showPurgeDialog(
@@ -276,6 +275,18 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                 ),
                             onFavorite:
                                 () => _favoriteSelected(state, controller),
+                            onMoveToShared:
+                                () => _moveSelectedToSpace(
+                                  controller,
+                                  state,
+                                  toShared: true,
+                                ),
+                            onMoveToPersonal:
+                                () => _moveSelectedToSpace(
+                                  controller,
+                                  state,
+                                  toShared: false,
+                                ),
                             onShare:
                                 () => _showShareDialog(
                                   context,
@@ -377,52 +388,103 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                     )
                                     : grid
                                     ? SingleChildScrollView(
-                                      child: _FileGrid(
-                                        items: items,
-                                        selected: selected,
-                                        onTap:
-                                            (node) => _activate(
-                                              controller,
-                                              node,
-                                              shared:
-                                                  state?.spaceType == 'SHARED',
-                                            ),
-                                        onSelect:
-                                            (node) => _select(controller, node),
-                                        onMenu:
-                                            (node, position) => _openRowMenu(
-                                              context,
-                                              controller,
-                                              state,
-                                              node,
-                                              position,
-                                            ),
-                                        onFavorite:
-                                            section ==
-                                                        FileManagerSection
-                                                            .recycleBin ||
-                                                    state?.spaceType == 'SHARED'
-                                                ? null
-                                                : (node) => unawaited(
-                                                  node.favorited
-                                                      ? controller
-                                                          .removeFavorite(node)
-                                                      : controller.addFavorite(
-                                                        node,
-                                                      ),
-                                                ),
-                                        onShare:
-                                            section ==
-                                                        FileManagerSection
-                                                            .recycleBin ||
-                                                    state?.spaceType == 'SHARED'
-                                                ? null
-                                                : (node) => _showShareDialog(
-                                                  context,
-                                                  controller,
-                                                  node,
-                                                ),
-                                      ),
+                                      child:
+                                          items.isEmpty &&
+                                                  (section !=
+                                                          FileManagerSection
+                                                              .allFiles ||
+                                                      state?.draftFolderName ==
+                                                          null)
+                                              ? _FilesEmpty(
+                                                section: section,
+                                                shared:
+                                                    state?.spaceType ==
+                                                    'SHARED',
+                                                filtered:
+                                                    (state
+                                                            ?.searchQuery
+                                                            .isNotEmpty ??
+                                                        false) ||
+                                                    state?.fileCategory !=
+                                                        FileBrowserFileCategory
+                                                            .all,
+                                                onClear: () {
+                                                  _search.clear();
+                                                  controller.setSearchQuery('');
+                                                  controller.setFileCategory(
+                                                    FileBrowserFileCategory.all,
+                                                  );
+                                                },
+                                              )
+                                              : _FileGrid(
+                                                items: items,
+                                                draftFolderName:
+                                                    section ==
+                                                            FileManagerSection
+                                                                .allFiles
+                                                        ? state?.draftFolderName
+                                                        : null,
+                                                onDraftSubmit:
+                                                    controller
+                                                        .commitFolderCreation,
+                                                onDraftCancel:
+                                                    controller
+                                                        .cancelFolderCreation,
+                                                selected: selected,
+                                                onTap:
+                                                    (node) => _activate(
+                                                      controller,
+                                                      node,
+                                                      shared:
+                                                          state?.spaceType ==
+                                                          'SHARED',
+                                                    ),
+                                                onSelect:
+                                                    (node) => _select(
+                                                      controller,
+                                                      node,
+                                                    ),
+                                                onMenu:
+                                                    (node, position) =>
+                                                        _openRowMenu(
+                                                          context,
+                                                          controller,
+                                                          state,
+                                                          node,
+                                                          position,
+                                                        ),
+                                                onFavorite:
+                                                    section ==
+                                                                FileManagerSection
+                                                                    .recycleBin ||
+                                                            state?.spaceType ==
+                                                                'SHARED'
+                                                        ? null
+                                                        : (node) => unawaited(
+                                                          node.favorited
+                                                              ? controller
+                                                                  .removeFavorite(
+                                                                    node,
+                                                                  )
+                                                              : controller
+                                                                  .addFavorite(
+                                                                    node,
+                                                                  ),
+                                                        ),
+                                                onShare:
+                                                    section ==
+                                                                FileManagerSection
+                                                                    .recycleBin ||
+                                                            state?.spaceType ==
+                                                                'SHARED'
+                                                        ? null
+                                                        : (node) =>
+                                                            _showShareDialog(
+                                                              context,
+                                                              controller,
+                                                              node,
+                                                            ),
+                                              ),
                                     )
                                     : CustomScrollView(
                                       slivers: [
@@ -449,6 +511,20 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                           ),
                                         SliverList(
                                           delegate: SliverChildListDelegate([
+                                            if (section ==
+                                                    FileManagerSection
+                                                        .allFiles &&
+                                                state?.draftFolderName != null)
+                                              _DesktopDraftFolderRow(
+                                                defaultName:
+                                                    state!.draftFolderName!,
+                                                onSubmit:
+                                                    controller
+                                                        .commitFolderCreation,
+                                                onCancel:
+                                                    controller
+                                                        .cancelFolderCreation,
+                                              ),
                                             ..._groupedRows(
                                               state,
                                               controller,
@@ -457,9 +533,16 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                             ),
                                             if (state != null &&
                                                 !state.isBusy &&
-                                                items.isEmpty)
+                                                items.isEmpty &&
+                                                (section !=
+                                                        FileManagerSection
+                                                            .allFiles ||
+                                                    state.draftFolderName ==
+                                                        null))
                                               _FilesEmpty(
                                                 section: section,
+                                                shared:
+                                                    state.spaceType == 'SHARED',
                                                 filtered:
                                                     (state
                                                         .searchQuery
@@ -524,7 +607,10 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
         if (_dragging)
           Positioned.fill(
             child: _DropVeil(
-              target: _sectionTitle(AppLocalizations.of(context), section),
+              target:
+                  state?.spaceType == 'SHARED'
+                      ? AppLocalizations.of(context).filesSharedSpace
+                      : _sectionTitle(AppLocalizations.of(context), section),
             ),
           ),
       ],

@@ -78,9 +78,8 @@ DesktopShellMode desktopShellModeForPath(String path) {
   // `FilmDetail` 直接渲染在 `.main` 里，标题栏与侧栏始终在场。海报英雄区
   // 只是页面内的圆角卡，不再是满铺沉浸画布。
   // 剧集详情仍保留独立沉浸画布（`.video`），两者不共用路由姿态。
-  if (RegExp(r'^/video/series/[^/]+$').hasMatch(path)) {
-    return DesktopShellMode.immersive;
-  }
+  // 样例的 `FilmDetail` 同时承载 Film 与 Series，剧集详情也是 `.main` 里的
+  // `.page.film-page`，因此与影视详情一样保留工作区 chrome。
   // 书本详情与参考稿一样铺满应用视口，阅读工作区壳层只在书架页保留。
   if (RegExp(r'^/reader/items/[^/]+$').hasMatch(path)) {
     return DesktopShellMode.immersive;

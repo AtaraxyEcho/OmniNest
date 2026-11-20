@@ -129,6 +129,19 @@ extension _FilesPageActions on _DesktopFilesPageState {
     unawaited(controller.switchSpace(spaceType));
   }
 
+  void _beginNewFolder(
+    FileBrowserController controller,
+    FileBrowserState? state,
+  ) {
+    if (state == null || state.draftFolderName != null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    controller.beginFolderCreation(
+      dedupeFolderName(l10n.filesNewFolderDefault, state.files),
+    );
+  }
+
   void _openFolder(
     FileBrowserController controller,
     FileNode folder, {
@@ -245,11 +258,52 @@ extension _FilesPageActions on _DesktopFilesPageState {
     final shared =
         state.spaceType == 'SHARED' ||
         state.section == FileManagerSection.sharedSpace;
+    final nodes = _selectedNodes(state);
+    if (nodes.isEmpty) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDesktopDialog<bool>(
+      context,
+      builder:
+          (dialogContext) => DesktopDialog(
+            eyebrow: l10n.filesFileActions,
+            title:
+                shared
+                    ? l10n.filesRemoveSharedConfirmTitle
+                    : l10n.filesDeleteConfirmTitle(nodes.first.name),
+            lead: Icon(DesktopIcons.trash, size: 20, color: DesktopPalette.bad),
+            content: Text(
+              shared
+                  ? l10n.filesRemoveSharedConfirmMessage
+                  : l10n.filesDeleteConfirmMessage(nodes.first.name),
+              style: DesktopType.dense(DesktopSkin.of(context).text2),
+            ),
+            actions: [
+              DesktopButton(
+                label: l10n.filesCancel,
+                onPressed: () => closeDesktopModal(dialogContext, false),
+              ),
+              DesktopButton(
+                label:
+                    shared
+                        ? l10n.filesRemoveSharedConfirmAction
+                        : l10n.filesMoveToRecycleBin,
+                icon: DesktopIcons.trash,
+                variant: DesktopButtonVariant.danger,
+                onPressed: () => closeDesktopModal(dialogContext, true),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) {
+      return;
+    }
     // 删除前留一份 id 快照：批量接口会清空选中集，Undo 拿不到原节点。
-    final deletedIds = _selectedNodes(state).map((node) => node.id).toList();
+    final deletedIds = nodes.map((node) => node.id).toList();
     if (shared) {
       // 共享空间没有批量删除接口：逐个移出，语义与移动页一致。
-      for (final node in _selectedNodes(state)) {
+      for (final node in nodes) {
         await controller.deleteSharedFile(node);
       }
     } else {
@@ -258,10 +312,11 @@ extension _FilesPageActions on _DesktopFilesPageState {
     if (!mounted) {
       return;
     }
-    final l10n = AppLocalizations.of(context);
     showDesktopToast(
       context,
-      l10n.desktopFilesMovedToRecycle,
+      shared
+          ? l10n.desktopFilesRemovedFromSharedSpace
+          : l10n.desktopFilesMovedToRecycle,
       icon: DesktopIcons.trash,
       // 移出共享空间不进回收站，没有可还原的对象，别给假 Undo。
       actionLabel: shared ? null : l10n.desktopUndo,
@@ -294,6 +349,35 @@ extension _FilesPageActions on _DesktopFilesPageState {
     } else {
       await controller.batchAddFavorites();
     }
+  }
+
+  Future<void> _moveSelectedToSpace(
+    FileBrowserController controller,
+    FileBrowserState state, {
+    required bool toShared,
+  }) async {
+    final nodes = _selectedNodes(state);
+    if (nodes.isEmpty) {
+      return;
+    }
+    for (final node in nodes) {
+      if (toShared) {
+        await controller.moveToSharedSpace(node);
+      } else {
+        await controller.moveToPersonalSpace(node);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    showDesktopToast(
+      context,
+      toShared
+          ? l10n.filesMoveToSharedSuccess
+          : l10n.filesMoveToPersonalSuccess,
+      icon: DesktopIcons.moveRight,
+    );
   }
 
   Future<void> _copyShareLink(

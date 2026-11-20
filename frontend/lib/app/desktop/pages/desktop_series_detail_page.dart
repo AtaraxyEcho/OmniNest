@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
@@ -16,6 +16,7 @@ import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -25,6 +26,7 @@ import 'package:omninest/features/video/presentation/widgets/subtitle_file_decod
 import 'package:omninest/features/video/video_dashboard.dart';
 import 'package:omninest/platform/file_pick.dart';
 
+part 'desktop_series_detail_hero.dart';
 part 'desktop_series_detail_sections.dart';
 part 'desktop_series_detail_episode_sections.dart';
 part 'desktop_series_detail_subtitle_sections.dart';
@@ -52,15 +54,11 @@ class _DesktopSeriesDetailPageState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final backdropVisible = desktopBackdropVisibleForRoute(
-      ref,
-      DesktopRoutes.seriesDetail(widget.seriesId),
-    );
     final detailAsync = ref.watch(movieSeriesDetailProvider(widget.seriesId));
     return detailAsync.when(
       loading:
           () => ColoredBox(
-            color: backdropVisible ? Colors.transparent : skin.bg,
+            color: skin.bg,
             child: const Center(
               child: SizedBox(
                 width: 320,
@@ -97,11 +95,12 @@ class _DesktopSeriesDetailPageState
           (_SeriesTab.subtitles, l10n.desktopSeriesSubtitles),
         ];
         return ColoredBox(
-          color: backdropVisible ? Colors.transparent : skin.bg,
+          color: skin.bg,
           child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: DesktopPage(
+              topPadding: DesktopMetrics.pageTopPaddingCompact,
               children: [
+                const SizedBox(height: 6),
                 _SeriesHero(
                   series: series,
                   seasons: detail.seasons.length,
@@ -112,46 +111,39 @@ class _DesktopSeriesDetailPageState
                   onPlay: _play,
                   onToggleFavorite: () => _toggleFavorite(favorite),
                 ),
-                DesktopPage(
-                  topPadding: 24,
-                  children: [
-                    _SeriesMetaStrip(series: series, seasons: detail.seasons),
-                    const SizedBox(height: 22),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: DesktopSeg<_SeriesTab>(
-                        options: tabs.map((entry) => entry.$1).toList(),
-                        value: _tab,
-                        labelOf:
-                            (tab) =>
-                                tabs.firstWhere((entry) => entry.$1 == tab).$2,
-                        onChanged: (value) => setState(() => _tab = value),
-                        small: true,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    switch (_tab) {
-                      _SeriesTab.overview => _OverviewTab(detail: detail),
-                      _SeriesTab.episodes => _EpisodesTab(
-                        detail: detail,
-                        onPlay: (episode) => _playEpisode(episode.id),
-                      ),
-                      _SeriesTab.files => _FilesTab(seriesId: series.id),
-                      _SeriesTab.subtitles => _SubtitlesTab(
-                        seriesId: series.id,
-                      ),
-                    },
-                    if (related.isNotEmpty) ...[
-                      const SizedBox(height: 36),
-                      Text(
-                        l10n.desktopMoviesMoreLikeThis.toUpperCase(),
-                        style: DesktopType.eyebrow(skin.text3),
-                      ),
-                      const SizedBox(height: 14),
-                      _RelatedSeriesRail(items: related),
-                    ],
-                  ],
+                const SizedBox(height: 22),
+                _SeriesMetaStrip(series: series, seasons: detail.seasons),
+                const SizedBox(height: 22),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: DesktopSeg<_SeriesTab>(
+                    options: tabs.map((entry) => entry.$1).toList(),
+                    value: _tab,
+                    labelOf:
+                        (tab) => tabs.firstWhere((entry) => entry.$1 == tab).$2,
+                    onChanged: (value) => setState(() => _tab = value),
+                    small: true,
+                  ),
                 ),
+                const SizedBox(height: 20),
+                switch (_tab) {
+                  _SeriesTab.overview => _OverviewTab(detail: detail),
+                  _SeriesTab.episodes => _EpisodesTab(
+                    detail: detail,
+                    onPlay: (episode) => _playEpisode(episode.id),
+                  ),
+                  _SeriesTab.files => _FilesTab(seriesId: series.id),
+                  _SeriesTab.subtitles => _SubtitlesTab(seriesId: series.id),
+                },
+                if (related.isNotEmpty) ...[
+                  const SizedBox(height: 40),
+                  Text(
+                    l10n.desktopMoviesMoreLikeThis,
+                    style: DesktopType.sectionTitle(skin.text),
+                  ),
+                  const SizedBox(height: 18),
+                  _RelatedSeriesRail(items: related),
+                ],
               ],
             ),
           ),
@@ -239,205 +231,5 @@ class _DesktopSeriesDetailPageState
     } finally {
       if (mounted) setState(() => _savingFavorite = false);
     }
-  }
-}
-
-class _SeriesHero extends StatelessWidget {
-  const _SeriesHero({
-    required this.series,
-    required this.seasons,
-    required this.favorite,
-    required this.busy,
-    required this.onBack,
-    required this.onPlay,
-    required this.onToggleFavorite,
-  });
-
-  final MovieSeries series;
-  final int seasons;
-  final bool favorite;
-  final bool busy;
-  final VoidCallback onBack;
-  final VoidCallback onPlay;
-  final VoidCallback onToggleFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final viewport = MediaQuery.sizeOf(context);
-    final heroWidth = viewport.width;
-    final heroHeight = (viewport.height * 0.48).clamp(360.0, 500.0);
-    return SizedBox(
-      height: heroHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DesktopCover(
-            url: series.heroImageUrl,
-            fallbackIcon: DesktopIcons.film,
-            cacheKey: 'desktop-series-hero:${series.id}',
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  skin.bg.withValues(alpha: 0.96),
-                  skin.bg.withValues(alpha: 0.82),
-                  skin.bg.withValues(alpha: 0.18),
-                ],
-              ),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [skin.bg, Colors.transparent],
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: DesktopIconButton(
-                icon: DesktopIcons.left,
-                tooltip: l10n.desktopBack,
-                onPressed: onBack,
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1280),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  heroWidth < 760 ? 24 : 48,
-                  24,
-                  heroWidth < 760 ? 24 : 48,
-                  28,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (heroWidth >= 760) ...[
-                      SizedBox(
-                        width: 190,
-                        height: 270,
-                        child: DesktopCover(
-                          url: series.posterImageUrl,
-                          fallbackIcon: DesktopIcons.film,
-                          cacheKey: 'desktop-series-poster:${series.id}',
-                          borderRadius: BorderRadius.circular(
-                            DesktopMetrics.radiusCard,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 26),
-                    ],
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _Badge(
-                                label: series.seriesType,
-                                color: skin.accent,
-                              ),
-                              _Badge(label: series.year, color: skin.text2),
-                              _Badge(
-                                label: l10n.desktopSeriesSeasonCount(seasons),
-                                color: skin.text2,
-                              ),
-                              if (series.rating != null)
-                                _Badge(
-                                  label:
-                                      '★ ${series.rating!.toStringAsFixed(1)}',
-                                  color: skin.warm,
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            series.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.displayXl(skin.text, heroWidth),
-                          ),
-                          if (series.overview?.trim().isNotEmpty == true) ...[
-                            const SizedBox(height: 8),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 760),
-                              child: Text(
-                                series.overview!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.body(skin.text2),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 18),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              DesktopButton(
-                                label: l10n.videoPlay,
-                                icon: DesktopIcons.play,
-                                variant: DesktopButtonVariant.primary,
-                                busy: busy,
-                                onPressed: busy ? null : onPlay,
-                              ),
-                              DesktopIconButton(
-                                icon:
-                                    favorite
-                                        ? DesktopIcons.heartFilled
-                                        : DesktopIcons.heart,
-                                tooltip: l10n.videoFavorite,
-                                active: favorite,
-                                onPressed: busy ? null : onToggleFavorite,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.32),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusPill),
-      ),
-      child: Text(label, style: DesktopType.caption(color)),
-    );
   }
 }

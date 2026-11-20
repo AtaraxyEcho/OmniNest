@@ -43,7 +43,7 @@ class _SeriesMetaStrip extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: skin.line),
       ),
       clipBehavior: Clip.antiAlias,
@@ -77,7 +77,9 @@ class _SeriesMetaStrip extends StatelessWidget {
                       cells[index].$2,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: DesktopType.sectionTitle(skin.text),
+                      style: DesktopType.sectionTitle(
+                        skin.text,
+                      ).copyWith(letterSpacing: -24 * 0.01),
                     ),
                     if (cells[index].$3.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -134,7 +136,7 @@ class _OverviewTab extends StatelessWidget {
           style: DesktopType.eyebrow(skin.text3),
         ),
         const SizedBox(height: 8),
-        Text(synopsis, style: DesktopType.body(skin.text2)),
+        _SeriesSynopsis(text: synopsis),
         if (credits.isNotEmpty) ...[
           const SizedBox(height: 24),
           Text(
@@ -162,12 +164,70 @@ class _OverviewTab extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: left),
-            const SizedBox(width: 36),
-            SizedBox(width: 320, child: right),
+            Expanded(flex: 13, child: left),
+            const SizedBox(width: 40),
+            Expanded(
+              flex: 10,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 280),
+                child: right,
+              ),
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+/// 样例 `.bp-about.clamp`：三行折叠 + accent 链接。
+class _SeriesSynopsis extends StatefulWidget {
+  const _SeriesSynopsis({required this.text});
+
+  final String text;
+
+  @override
+  State<_SeriesSynopsis> createState() => _SeriesSynopsisState();
+}
+
+class _SeriesSynopsisState extends State<_SeriesSynopsis> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.text,
+            maxLines: _expanded ? null : 3,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: DesktopType.body(skin.text2).copyWith(height: 1.65),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: skin.accent,
+              ),
+              child: Text(
+                _expanded
+                    ? l10n.desktopMoviesShowLess
+                    : l10n.desktopMoviesReadMore,
+                style: DesktopType.button(skin.accent),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -478,51 +538,68 @@ class _RelatedSeriesRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return SizedBox(
-      height: 268,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 14),
-        itemBuilder: (context, index) {
-          final series = items[index];
-          return SizedBox(
-            width: 168,
-            child: DesktopHoverLift(
-              onTap: () => desktopPush(context, '/video/series/${series.id}'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: DesktopCover(
-                      url: series.posterImageUrl,
-                      fallbackIcon: DesktopIcons.film,
-                      cacheKey: 'desktop-related-series:${series.id}',
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radiusCard,
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    // 样例 `.poster-grid`：auto-fill minmax(clamp(190px,15vw,250px),1fr)、gap 22。
+    const gap = 22.0;
+    final minimum = (viewportWidth * 0.15).clamp(190.0, 250.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            math
+                .max(
+                  1,
+                  ((constraints.maxWidth + gap) / (minimum + gap)).floor(),
+                )
+                .toInt();
+        final cardWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final series in items)
+              SizedBox(
+                width: cardWidth,
+                child: DesktopHoverLift(
+                  onTap:
+                      () => desktopPush(context, '/video/series/${series.id}'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 2 / 3,
+                        child: DesktopCover(
+                          url: series.posterImageUrl,
+                          fallbackIcon: DesktopIcons.film,
+                          cacheKey: 'desktop-related-series:${series.id}',
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      Text(
+                        series.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.bodyStrong(
+                          DesktopSkin.of(context).text,
+                        ).copyWith(fontSize: 13.5),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${series.year} · ${series.genres.take(1).join()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(
+                          DesktopSkin.of(context).text3,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    series.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.rowTitle(skin.text),
-                  ),
-                  Text(
-                    '${series.firstAirDate?.year.toString() ?? '—'} · ${series.genres.take(1).join()}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.caption(skin.text3),
-                  ),
-                ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
+          ],
+        );
+      },
     );
   }
 }

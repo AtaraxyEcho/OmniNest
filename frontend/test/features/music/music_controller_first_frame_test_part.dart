@@ -195,11 +195,7 @@ void registerMusicPlaylistPreloadTests() {
     await pumpEventQueue();
 
     final loading = container.read(musicPlatformLibraryProvider).value!;
-    expect(loading.loadingPlaylistKeys, {
-      'netease:list-0',
-      'netease:list-1',
-      'netease:list-2',
-    });
+    expect(loading.loadingPlaylistKeys, {'netease:list-0', 'netease:list-1'});
     expect(loading.playlistTracks, isEmpty);
     // 首帧数据与预热加载标记各发布一次（曲目数为 0）；该平台未启用喜欢列表，
     // 渐进补发无内容时不产生空发布。预热结果仍一次性合并，不逐条发布。
@@ -208,11 +204,10 @@ void registerMusicPlaylistPreloadTests() {
     api.playlistTracksGate!.complete();
     await pumpEventQueue();
 
-    expect(trackCounts, <int>[0, 0, 3]);
+    expect(trackCounts, <int>[0, 0, 2]);
     expect(api.platformPlaylistTrackRequests, [
       'netease:list-0',
       'netease:list-1',
-      'netease:list-2',
     ]);
   });
 
@@ -231,7 +226,12 @@ void registerMusicPlaylistPreloadTests() {
     await pumpEventQueue();
     expect(api.platformPlaylistTrackRequests, hasLength(2));
 
-    api.neteasePlaylists = _onlinePlaylists(3);
+    final refreshedPlaylists = _onlinePlaylists(3);
+    api.neteasePlaylists = <OnlinePlaylist>[
+      refreshedPlaylists[2],
+      refreshedPlaylists[0],
+      refreshedPlaylists[1],
+    ];
     await container.read(musicPlatformLibraryProvider.notifier).refresh();
     await pumpEventQueue();
 
@@ -268,8 +268,8 @@ void registerMusicPlaylistPreloadTests() {
     final preloaded = container.read(musicPlatformLibraryProvider).value!;
     final preloadPage = preloaded.playlistTracks['netease:list-0']!;
     // 预热只需要封面与预览，载荷按页大小截断，但总数告诉它还有更多。
-    expect(api.platformPlaylistTrackSizes['netease:list-0'], 50);
-    expect(preloadPage.items, hasLength(50));
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 20);
+    expect(preloadPage.items, hasLength(20));
     expect(preloadPage.totalElements, 800);
     expect(preloadPage.hasMore, isTrue);
     expect(
@@ -282,8 +282,8 @@ void registerMusicPlaylistPreloadTests() {
         .loadPlaylistTracks(preloaded.playlists.first);
 
     // 打开只取首屏页：详情按滚动续载，整表留给播放补齐。
-    expect(api.platformPlaylistTrackSizes['netease:list-0'], 200);
-    expect(opened, hasLength(200));
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 100);
+    expect(opened, hasLength(100));
     final loaded = container.read(musicPlatformLibraryProvider).value!;
     expect(loaded.playlistTracks['netease:list-0']!.hasMore, isTrue);
 
@@ -327,12 +327,12 @@ void registerMusicPlaylistPreloadTests() {
         .read(musicPlatformLibraryProvider.notifier)
         .loadPlaylistTracks(playlist, forceRefresh: true);
 
-    expect(api.platformPlaylistTrackSizes['netease:list-0'], 200);
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 100);
     expect(api.platformListRefreshFlags['playlistTracks'], isTrue);
     expect(api.platformPlaylistTrackRequests, hasLength(preloadRequests + 1));
   });
 
-  test('预热只覆盖前 8 个歌单，其余走按需加载', () async {
+  test('预热只覆盖前 2 个歌单，其余走按需加载', () async {
     final api =
         _FakeMusicApi()
           ..platformStatuses = const <MusicPlatformStatus>[
@@ -348,7 +348,7 @@ void registerMusicPlaylistPreloadTests() {
     await pumpEventQueue();
 
     expect(api.platformPlaylistTrackRequests, <String>[
-      for (var index = 0; index < 8; index++) 'netease:list-$index',
+      for (var index = 0; index < 2; index++) 'netease:list-$index',
     ]);
     final state = container.read(musicPlatformLibraryProvider).value!;
     expect(state.playlists, hasLength(10));
@@ -380,15 +380,15 @@ void registerMusicPlaylistPreloadTests() {
     expect(api.heldPlaylistTracks, hasLength(2));
 
     api.heldPlaylistTracks[1].released.complete();
-    expect(await opening, hasLength(200));
+    expect(await opening, hasLength(100));
     // 预热页更小且更晚到达：必须丢弃，否则列表被截回首页条数。
     api.heldPlaylistTracks[0].released.complete();
     await pumpEventQueue();
 
     final state = container.read(musicPlatformLibraryProvider).value!;
     final page = state.playlistTracks['netease:list-0']!;
-    expect(page.items, hasLength(200));
-    expect(page.size, 200);
+    expect(page.items, hasLength(100));
+    expect(page.size, 100);
     expect(state.loadingPlaylistKeys, isEmpty);
   });
 
@@ -420,7 +420,7 @@ void registerMusicPlaylistPreloadTests() {
     expect(api.platformPlaylistTrackPages['netease:list-0'], 1);
     final state = container.read(musicPlatformLibraryProvider).value!;
     final page = state.playlistTracks['netease:list-0']!;
-    expect(page.items, hasLength(400));
+    expect(page.items, hasLength(200));
     // 追加后仍有下一页，且续载结束后不再显示底部进度。
     expect(page.hasMore, isTrue);
     expect(state.appendingPlaylistKeys, isEmpty);

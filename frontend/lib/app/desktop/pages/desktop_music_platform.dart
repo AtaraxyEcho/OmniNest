@@ -1,15 +1,24 @@
 part of 'desktop_music_page.dart';
 
+const int _desktopOnlinePlaylistLimit = 12;
+const int _desktopOnlineAlbumLimit = 12;
+const int _desktopOnlineTrackViewportRows = 10;
+const double _desktopOnlineTrackRowHeight = 56;
+
 List<OnlineTrack> _knownPlatformTracks(MusicPlatformLibraryState library) {
   final seen = <String>{};
   final tracks = <OnlineTrack>[];
-  for (final track in <OnlineTrack>[
-    ...library.likedTracks,
-    ...library.playlistTracks.values.expand((page) => page.items),
-  ]) {
+  for (final track in library.likedTracks) {
     if (seen.add('${track.platform}:${track.songId}')) tracks.add(track);
   }
   return List<OnlineTrack>.unmodifiable(tracks);
+}
+
+List<String> _likedPlatformApis(MusicPlatformLibraryState library) {
+  return library.connectedStatuses
+      .where((status) => status.capabilities.likedTracks)
+      .map((status) => status.platform)
+      .toList(growable: false);
 }
 
 /// 桌面端旧页面的本地曲库区域继续复用原有组件，平台内容在这里以独立区块呈现。
@@ -35,8 +44,11 @@ class _DesktopOnlinePlaylistSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final visiblePlaylists = playlists
+        .take(_desktopOnlinePlaylistLimit)
+        .toList(growable: false);
     return DesktopSection(
-      eyebrow: playlists.map(_platformLabel).toSet().join(' · '),
+      eyebrow: visiblePlaylists.map(_platformLabel).toSet().join(' · '),
       title: l10n.musicNavPlaylists,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -46,15 +58,17 @@ class _DesktopOnlinePlaylistSection extends StatelessWidget {
             spacing: 18,
             runSpacing: 24,
             children: [
-              for (var index = 0; index < playlists.length; index++)
+              for (var index = 0; index < visiblePlaylists.length; index++)
                 SizedBox(
                   width: width,
                   child: DesktopStagger(
                     index: index,
                     child: _DesktopOnlinePlaylistCard(
-                      playlist: playlists[index],
-                      coverUrl: library.coverUrlForPlaylist(playlists[index]),
-                      onOpen: () => onOpen(playlists[index]),
+                      playlist: visiblePlaylists[index],
+                      coverUrl: library.coverUrlForPlaylist(
+                        visiblePlaylists[index],
+                      ),
+                      onOpen: () => onOpen(visiblePlaylists[index]),
                     ),
                   ),
                 ),
@@ -157,17 +171,27 @@ class _DesktopOnlineTrackSection extends StatelessWidget {
     required this.tracks,
     required this.currentId,
     required this.playing,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
     required this.onPlay,
   });
 
   final List<OnlineTrack> tracks;
   final String? currentId;
   final bool playing;
+  final bool hasMore;
+  final bool loadingMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<OnlineTrack> onPlay;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final rowCount =
+        (tracks.length + (hasMore ? 1 : 0))
+            .clamp(1, _desktopOnlineTrackViewportRows)
+            .toInt();
     return DesktopSection(
       eyebrow: l10n.musicDeckSourceNetease,
       title: l10n.musicNavFavorites,
@@ -175,14 +199,47 @@ class _DesktopOnlineTrackSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _DesktopOnlineTrackHead(),
-          for (var index = 0; index < tracks.length; index++)
-            _DesktopOnlineTrackRow(
-              index: index,
-              track: tracks[index],
-              current: _onlineTrackKey(tracks[index]) == currentId,
-              playing: playing,
-              onPlay: () => onPlay(tracks[index]),
+          SizedBox(
+            height: rowCount * _desktopOnlineTrackRowHeight,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification.metrics.axis == Axis.vertical &&
+                    notification.metrics.extentAfter < 180 &&
+                    hasMore &&
+                    !loadingMore) {
+                  onLoadMore();
+                }
+                return false;
+              },
+              child: ListView.builder(
+                itemExtent: _desktopOnlineTrackRowHeight,
+                itemCount: tracks.length + (hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= tracks.length) {
+                    return Center(
+                      child:
+                          loadingMore
+                              ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const SizedBox.shrink(),
+                    );
+                  }
+                  final track = tracks[index];
+                  return _DesktopOnlineTrackRow(
+                    index: index,
+                    track: track,
+                    current: _onlineTrackKey(track) == currentId,
+                    playing: playing,
+                    onPlay: () => onPlay(track),
+                  );
+                },
+              ),
             ),
+          ),
           const SizedBox(height: 8),
           Divider(height: 1, color: DesktopSkin.of(context).line),
         ],
@@ -218,7 +275,9 @@ class _DesktopOnlineAlbumSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final groups = _groups().values.toList(growable: false);
+    final groups = _groups().values
+        .take(_desktopOnlineAlbumLimit)
+        .toList(growable: false);
     if (groups.isEmpty) return const SizedBox.shrink();
     return DesktopSection(
       eyebrow: l10n.musicDeckSourceNetease,
