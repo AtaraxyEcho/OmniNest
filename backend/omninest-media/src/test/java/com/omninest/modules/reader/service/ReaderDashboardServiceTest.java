@@ -21,8 +21,10 @@ import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -60,12 +62,15 @@ class ReaderDashboardServiceTest {
     private FileMetadataQueryService fileMetadataQueryService;
     @Mock
     private SharedSpaceAccessQuery sharedSpaceAccessQuery;
+    @Mock
+    private SystemInstanceConfigService systemInstanceConfigService;
 
     @InjectMocks
     private ReaderDashboardService dashboardService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.of("UTC"));
         lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
         lenient().when(itemService.listItemsPage(
                         any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))

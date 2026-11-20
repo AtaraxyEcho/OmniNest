@@ -548,14 +548,22 @@ class _CurlPainter extends CustomPainter {
       canvas.save();
       canvas.translate(-2.0, 3.0);
       canvas.transform(geometry.flatTransform.storage);
-      final flatShadowAlpha = (0.30 * geometry.shadowOpacity).clamp(0.0, 0.30);
+      // 用轻量多层半透明偏移替代每帧昂贵的 MaskFilter.blur，60/120fps 丝滑无掉帧。
+      final flatShadowAlpha = (0.24 * geometry.shadowOpacity).clamp(0.0, 0.24);
       if (flatShadowAlpha > 0.002) {
         canvas.drawPath(
           geometry.flatClip,
           Paint()
-            ..color = Colors.black.withValues(alpha: flatShadowAlpha)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.45),
         );
+        canvas.save();
+        canvas.translate(-3.0, 4.0);
+        canvas.drawPath(
+          geometry.flatClip,
+          Paint()
+            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.28),
+        );
+        canvas.restore();
       }
       canvas.restore();
 

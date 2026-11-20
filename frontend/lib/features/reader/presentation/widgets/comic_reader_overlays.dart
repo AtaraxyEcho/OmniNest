@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -92,15 +93,23 @@ class ComicReaderTopBar extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Expanded(
-                            child: Text(
-                              catalogTitle,
-                              style: TextStyle(
-                                color: settings.onSurfaceColor,
-                                fontSize: AppTypography.titleMedium,
-                                fontWeight: FontWeight.w700,
+                            child: DesktopWindowDragRegion(
+                              child: SizedBox(
+                                height: 56,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    catalogTitle,
+                                    style: TextStyle(
+                                      color: settings.onSurfaceColor,
+                                      fontSize: AppTypography.titleMedium,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (layout.density != ReaderControlDensity.compact)

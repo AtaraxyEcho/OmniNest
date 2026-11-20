@@ -14,6 +14,7 @@ import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository.DailyMinutesView;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -54,6 +55,7 @@ public class ReaderDashboardService {
     private final ReaderReadingSessionRepository readingSessionRepository;
     private final FileMetadataQueryService fileMetadataQueryService;
     private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     /**
      * 获取阅读仪表盘数据。
@@ -64,7 +66,7 @@ public class ReaderDashboardService {
     public ReaderDashboardDto getDashboard(UUID ownerUserId) {
         SpaceType sharedType = sharedVisibility(ownerUserId);
         long totalItems = itemRepository.countVisibleItems(ownerUserId, sharedType);
-        ZoneId zone = ZoneId.systemDefault();
+        ZoneId zone = systemInstanceConfigService.timeZone();
         Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
         long itemsAddedToday = itemRepository.countVisibleItemsCreatedSince(ownerUserId, sharedType, todayStart);
         long inProgressCount = progressRepository.countVisibleInProgress(ownerUserId, sharedType);
@@ -95,13 +97,14 @@ public class ReaderDashboardService {
      * 时区与 {@code ReaderStatsService} 一致，取服务器本地时区（自托管即用户时区）。
      */
     private List<ReaderDailyReadingDto> dailyReading(UUID ownerUserId) {
-        ZoneId zone = ZoneId.systemDefault();
+        ZoneId zone = systemInstanceConfigService.timeZone();
         LocalDate today = LocalDate.now(zone);
         LocalDate start = today.minusDays(DAILY_READING_DAYS - 1L);
         Instant since = start.atStartOfDay(zone).toInstant();
+        String zoneId = "Z".equals(zone.getId()) ? "UTC" : zone.getId();
         Map<LocalDate, Long> minutesByDay = new LinkedHashMap<>();
         for (DailyMinutesView row
-                : readingSessionRepository.sumDailyMinutesSince(ownerUserId, since, zone.getId())) {
+                : readingSessionRepository.sumDailyMinutesSince(ownerUserId, since, zoneId)) {
             if (row.getDay() != null) {
                 minutesByDay.put(row.getDay(), row.getMinutes());
             }

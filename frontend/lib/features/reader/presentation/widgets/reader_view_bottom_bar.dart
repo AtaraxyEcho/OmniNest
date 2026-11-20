@@ -263,15 +263,25 @@ class ReaderViewBottomBar extends StatelessWidget {
 }
 
 /// 桌面原型 `.bk-foot`：进度说明、可拖动总进度与百分比。
-class _ReaderDesktopBottomBar extends StatelessWidget {
+class _ReaderDesktopBottomBar extends StatefulWidget {
   const _ReaderDesktopBottomBar({required this.bar});
 
   final ReaderViewBottomBar bar;
 
   @override
+  State<_ReaderDesktopBottomBar> createState() =>
+      _ReaderDesktopBottomBarState();
+}
+
+class _ReaderDesktopBottomBarState extends State<_ReaderDesktopBottomBar> {
+  double? _scrubProgress;
+
+  @override
   Widget build(BuildContext context) {
+    final bar = widget.bar;
     final l10n = AppLocalizations.of(context);
-    final progress = (bar.progress.clamp(0.0, 1.0) * 100).round();
+    final effectiveProgress = (_scrubProgress ?? bar.progress).clamp(0.0, 1.0);
+    final progress = (effectiveProgress * 100).round();
     final pageCount = bar.totalPages;
     final page = bar.currentPage;
     final isSpread =
@@ -340,8 +350,12 @@ class _ReaderDesktopBottomBar extends StatelessWidget {
                   Expanded(
                     child: _ReaderProgressSlider(
                       settings: bar.settings,
-                      progress: bar.progress,
-                      onSeekEnd: bar.onProgressSeek,
+                      progress: effectiveProgress,
+                      onScrub: (v) => setState(() => _scrubProgress = v),
+                      onSeekEnd: (v) {
+                        setState(() => _scrubProgress = null);
+                        bar.onProgressSeek?.call(v);
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -376,11 +390,13 @@ class _ReaderProgressSlider extends StatefulWidget {
     required this.settings,
     required this.progress,
     required this.onSeekEnd,
+    this.onScrub,
   });
 
   final ReaderViewSettings settings;
   final double progress;
   final ValueChanged<double>? onSeekEnd;
+  final ValueChanged<double>? onScrub;
 
   @override
   State<_ReaderProgressSlider> createState() => _ReaderProgressSliderState();
@@ -412,7 +428,10 @@ class _ReaderProgressSliderState extends State<_ReaderProgressSlider> {
           onChanged:
               widget.onSeekEnd == null
                   ? null
-                  : (value) => setState(() => _dragValue = value),
+                  : (value) {
+                    setState(() => _dragValue = value);
+                    widget.onScrub?.call(value);
+                  },
           onChangeEnd:
               widget.onSeekEnd == null
                   ? null

@@ -116,7 +116,10 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
               child: _BookFloatingArrow(
                 icon: Icons.chevron_left_rounded,
                 tooltip: AppLocalizations.of(context).readerPreviousPage,
-                onTap: () => _pageTurnController.previous(),
+                onTap: () {
+                  if (_selectionActive) clearReaderSelection();
+                  _pageTurnController.previous();
+                },
               ),
             ),
           ),
@@ -128,7 +131,10 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
               child: _BookFloatingArrow(
                 icon: Icons.chevron_right_rounded,
                 tooltip: AppLocalizations.of(context).readerNextPage,
-                onTap: () => _pageTurnController.next(),
+                onTap: () {
+                  if (_selectionActive) clearReaderSelection();
+                  _pageTurnController.next();
+                },
               ),
             ),
           ),

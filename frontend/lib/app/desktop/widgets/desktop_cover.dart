@@ -354,39 +354,19 @@ class DesktopReaderBookCover extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (hasArt)
-                    // 原型 DOM 顺序是 image → spine → shade → text/gloss，
-                    // 因而底部暗部也覆盖书脊；Positioned.fill 明确保证
-                    // 遮罩覆盖整个圆角裁剪区域，不会在边框处缩短。
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.05),
-                                Colors.black.withValues(alpha: 0.78),
-                              ],
-                              stops: const [0.35, 1],
-                            ),
-                          ),
-                        ),
+                  // 有封面图时不再覆满高对比暗色遮罩（书名作者已在卡片下方展示），
+                  // 既彻底消除暗色边缘对比锯齿，又完整呈现原版封面色彩质感。                  if (!compact && !hasArt)
+                  Positioned(
+                    left: 24,
+                    right: 16,
+                    top: 22,
+                    child: ColoredBox(
+                      color: (hasArt ? Colors.white : skin.text).withValues(
+                        alpha: 0.4,
                       ),
+                      child: const SizedBox(height: 1),
                     ),
-                  if (!compact && !hasArt)
-                    Positioned(
-                      left: 24,
-                      right: 16,
-                      top: 22,
-                      child: ColoredBox(
-                        color: (hasArt ? Colors.white : skin.text).withValues(
-                          alpha: 0.4,
-                        ),
-                        child: const SizedBox(height: 1),
-                      ),
-                    ),
+                  ),
                   if (isComic && !compact && hasArt)
                     Positioned(
                       top: 12,
@@ -523,17 +503,20 @@ class DesktopBookTilt extends StatelessWidget {
         final y = active ? hoverY : restY;
         final x = active ? hoverX : restX;
         return AnimatedContainer(
-          duration: MotionToken.reduced(context, DesktopMotion.pageFlip),
-          curve: DesktopMotion.spring,
+          duration: MotionToken.reduced(
+            context,
+            const Duration(milliseconds: 260),
+          ),
+          curve: Curves.easeOutCubic,
           transformAlignment: Alignment.center,
-          // 将 hoverLift 合并入同一 Matrix4，避免双层变换离屏采样模糊与锯齿。
+          // 合并单矩阵变换 + 1px 透明抗锯齿缓冲边，平滑 3D 透视斜边毛刺。
           transform:
               Matrix4.identity()
                 ..setEntry(3, 2, 1 / 900)
                 ..translateByDouble(0.0, active ? hoverLift : 0.0, 0.0, 1.0)
                 ..rotateX(x * math.pi / 180)
                 ..rotateY(y * math.pi / 180),
-          child: child,
+          child: Padding(padding: const EdgeInsets.all(1), child: child),
         );
       },
     );

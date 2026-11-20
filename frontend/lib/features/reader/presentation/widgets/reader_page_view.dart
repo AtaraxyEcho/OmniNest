@@ -105,6 +105,7 @@ class ReaderPageView extends StatefulWidget {
     required this.callbacks,
     required this.surfaceColor,
     this.selectionActive = false,
+    this.onClearSelection,
     this.controller,
     this.turnMode = PageTurnMode.slide,
     this.pageCountNotifier,
@@ -135,6 +136,7 @@ class ReaderPageView extends StatefulWidget {
   final PageTurnCallbacks callbacks;
   final Color surfaceColor;
   final bool selectionActive;
+  final VoidCallback? onClearSelection;
   final ReaderPageTurnController? controller;
   final PageTurnMode turnMode;
 
@@ -174,6 +176,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   bool _transitionInFlight = false;
   bool _boundaryRequestInFlight = false;
   double _totalDeltaX = 0;
+  double _dragStartX = 0;
   int _pendingSlideBoundaryDirection = 0;
 
   // ── 页面缓存 ──
@@ -232,7 +235,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   /// 样例 leaf：`820ms cubic-bezier(.5,.05,.3,1)`（`DesktopMotion.pageFlip`）。
   static int get _flipDurationMs => DesktopMotion.pageFlip.inMilliseconds;
 
-  static const Duration _wheelThrottle = Duration(milliseconds: 520);
+  static const Duration _wheelThrottle = Duration(milliseconds: 320);
 
   // ── 待执行翻页意图（方案 §7-8）──
   // 控制器未挂载时保留意图并按帧重试，最多 4 帧；挂载后按最新

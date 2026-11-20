@@ -128,7 +128,10 @@ public class ReaderProgressService {
         if (readingMode == null || readingMode.isBlank()) {
             return "scroll";
         }
-        String normalized = readingMode.trim();
+        String normalized = readingMode.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("book".equals(normalized)) {
+            normalized = "page";
+        }
         if (!ALLOWED_READING_MODES.contains(normalized)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的阅读模式");
         }

@@ -134,6 +134,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                 isRestoringProgress,
           ),
           selectionActive: selectionActive,
+          onClearSelection: clearReaderSelection,
           snapshotPageBuilder: (index) {
             if (index < 0) return null;
             final slice = contentLoader?.computePage(

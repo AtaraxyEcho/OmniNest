@@ -44,7 +44,8 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     _capturingDirs.add(dir);
     final token = _curlToken;
     try {
-      final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 1.5);
+      if (token != _curlToken) return false;
+      final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 1.35);
       final liveKey =
           widget.spread
               ? (dir == CurlDirection.next ? _liveRightKey : _liveLeftKey)

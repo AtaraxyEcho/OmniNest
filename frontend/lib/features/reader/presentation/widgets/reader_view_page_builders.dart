@@ -113,6 +113,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool get isSwitchingChapter;
   bool get isLoadingChapter;
   bool get selectionActive;
+
+  /// 翻页前清掉正文选区（由 ReaderViewPageMixin 实现），避免选字后热区卡死。
+  void clearReaderSelection();
   void registerReaderSelectionKeyActions(ReaderSelectionKeyActions? actions);
   ReaderChapterLoadCoordinator get chapterLoadCoordinator;
   ReaderPageLocator get pageLocator;

@@ -168,7 +168,8 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       // 只有点按箭头才能翻页。
       final width = context.size?.width ?? 1;
       final startX = _pointerDownPosition!.dx;
-      final edgeRatio = _pointerKind == PointerDeviceKind.mouse ? 0.10 : 0.30;
+      // 桌面端鼠标左右各 22% 边缘可直接拖拽翻页，中段 22%~78% 完整留给丝滑选字。
+      final edgeRatio = _pointerKind == PointerDeviceKind.mouse ? 0.22 : 0.30;
       final edgeStart =
           width <= 1 ||
           startX < width * edgeRatio ||
@@ -177,9 +178,11 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       if (!_isDragging) {
         _onDragStart(DragStartDetails(localPosition: _pointerDownPosition!));
       }
+      // 关键修复：传入 primaryDelta 时 delta 另一轴必须严格为 0.0，
+      // 彻底根除 DragUpdateDetails 断言异常吞帧导致的拖不动与翻页卡死！
       _onDragUpdate(
         DragUpdateDetails(
-          delta: event.delta,
+          delta: Offset(event.delta.dx, 0),
           primaryDelta: event.delta.dx,
           globalPosition: event.position,
           localPosition: event.localPosition,
@@ -235,12 +238,16 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       return;
     }
 
-    if (widget.selectionActive) return;
-
     final w = context.size?.width ?? 1;
     final x = startPos.dx;
     final leftBound = w * _ReaderPageViewState._leftZoneRatio;
     final rightBound = w * (1 - _ReaderPageViewState._rightZoneRatio);
+
+    if (widget.selectionActive) {
+      widget.onClearSelection?.call();
+      // 点击中央仅清选区；点击左右翻页热区则清选区并直接翻页，绝不卡死。
+      if (x >= leftBound && x <= rightBound) return;
+    }
 
     if (x < leftBound) {
       _debugPageTurn('leftTapReceived');

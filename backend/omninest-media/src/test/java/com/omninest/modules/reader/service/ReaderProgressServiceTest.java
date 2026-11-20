@@ -241,4 +241,18 @@ class ReaderProgressServiceTest {
                 Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
                 Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
     }
+
+    @Test
+    void updateProgressNormalizesBookReadingModeToPage() {
+        ReaderItem item = item();
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
+        stubUpsert(1);
+
+        service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("book", null, null));
+
+        Mockito.verify(progressRepository).upsertProgress(
+                Mockito.eq(OWNER_ID), Mockito.eq(ITEM_ID), Mockito.anyLong(),
+                Mockito.any(), Mockito.eq("page"), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
 }

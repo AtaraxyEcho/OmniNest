@@ -10,8 +10,6 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     return MouseRegion(
       cursor:
           _isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.basic,
-      onHover: _onCurlHover,
-      onExit: (_) => _clearCurlPeek(),
       child: Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: _onPointerDown,
@@ -24,74 +22,29 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     );
   }
 
-  /// 桌面悬停边角微翘（对齐样例 ReaderView.tsx:190-194：fy > 0.82 && fx > 0.9 / < 0.1）。
-  void _onCurlHover(PointerEvent event) {
-    if (widget.turnMode != PageTurnMode.cover || _isDragging || _isAnimating) {
-      return;
-    }
-    final size = context.size;
-    if (size == null || size.width <= 0 || size.height <= 0) return;
-    final fx = event.localPosition.dx / size.width;
-    final fy = event.localPosition.dy / size.height;
-    CurlDirection? dir;
-    if (fy > 0.82 &&
-        fx > 0.90 &&
-        (!widget.state.isLastPage || widget.state.hasNextChapter)) {
-      dir = CurlDirection.next;
-    } else if (fy > 0.82 &&
-        fx < 0.10 &&
-        (!widget.state.isFirstPage || widget.state.hasPreviousChapter)) {
-      dir = CurlDirection.prev;
-    }
-    if (dir == null) {
-      _clearCurlPeek();
-      return;
-    }
-    if (!_hasReadyCurlPair(dir)) {
-      unawaited(_ensureCurlPairReady(dir));
-      return;
-    }
-    final current = _curlFrameNotifier.value;
-    if (!current.active || current.isPeek) {
-      final wasActive = current.active;
-      _activeCurlConfig = CurlGrabConfig.hoverPeek;
-      _curlFrameNotifier.value = CurlFrame(
-        progress: 0.045,
-        direction: dir,
-        config: CurlGrabConfig.hoverPeek,
-        isPeek: true,
-      );
-      if (!wasActive && mounted) _updateState(() {});
-    }
-  }
-
-  void _clearCurlPeek() {
-    if (_curlFrameNotifier.value.isPeek) {
-      _curlFrameNotifier.value = CurlFrame.idle;
-      if (mounted) _updateState(() {});
-    }
-  }
-
   void _onDragStart(DragStartDetails details) {
     if (ReaderInteractionGate.blocksInput(_blockReason)) return;
     _isDragging = true;
     _totalDeltaX = 0;
-    _isForward = true;
+    _dragStartX = details.localPosition.dx;
+    final w = context.size?.width ?? 1;
     final h = context.size?.height ?? 1;
-    final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.0, 1.0);
+    _isForward = details.localPosition.dx >= w * 0.5;
+    final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.08, 0.92);
     _activeCurlConfig = CurlGrabConfig.fromPointerFy(fy);
+    _prepareCurlCapture(_isForward ? CurlDirection.next : CurlDirection.prev);
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
     if (!_isDragging || ReaderInteractionGate.blocksInput(_blockReason)) {
       return;
     }
-    _totalDeltaX += details.delta.dx;
-
     final w = context.size?.width ?? 1;
+    final h = context.size?.height ?? 1;
+    // 直接基于起点绝对位移计算进度，消除死区滞后并真正跟手。
+    _totalDeltaX = details.localPosition.dx - _dragStartX;
 
     if (_totalDeltaX < 0) {
-      // 向前拖动：检查是否已在最后一页
       if (widget.state.isLastPage &&
           !widget.state.hasMore &&
           !widget.state.hasNextChapter) {
@@ -99,16 +52,25 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         return;
       }
       _isForward = true;
-      _flipProgress = (-_totalDeltaX / (w * 0.68)).clamp(0.0, 1.0);
+      _flipProgress = (-_totalDeltaX / (w * 0.52)).clamp(0.0, 1.0);
     } else if (_totalDeltaX > 0) {
-      // 向后拖动：检查是否已在第一页
       if (widget.state.isFirstPage && !widget.state.hasPreviousChapter) {
         _flipProgress = 0;
         return;
       }
       _isForward = false;
-      _flipProgress = (_totalDeltaX / (w * 0.68)).clamp(0.0, 1.0);
+      _flipProgress = (_totalDeltaX / (w * 0.52)).clamp(0.0, 1.0);
     }
+
+    // 实时平滑跟随鼠标 Y 坐标微调折角斜率，纸角真正粘在指针上。
+    final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.08, 0.92);
+    final targetCfg = CurlGrabConfig.fromPointerFy(fy);
+    _activeCurlConfig = CurlGrabConfig(
+      bottomCorner: _activeCurlConfig.bottomCorner,
+      slant:
+          _activeCurlConfig.slant +
+          (targetCfg.slant - _activeCurlConfig.slant) * 0.25,
+    );
 
     if (widget.turnMode == PageTurnMode.cover && _flipProgress > 0.005) {
       final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
@@ -177,9 +139,9 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     required double to,
     required bool commit,
   }) {
-    final ms = ((commit ? 420 : 300) + 380 * (to - from).abs()).round().clamp(
-      140,
-      820,
+    final ms = ((commit ? 360 : 240) + 180 * (to - from).abs()).round().clamp(
+      160,
+      540,
     );
     return Duration(milliseconds: ms);
   }
@@ -237,7 +199,11 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     if (mounted) _updateState(() {});
     ctrl.removeStatusListener(_onAutoFlipStatus);
     ctrl.addStatusListener(_onAutoFlipStatus);
-    ctrl.animateTo(1, duration: ctrl.duration, curve: Curves.easeInOutQuad);
+    ctrl.animateTo(
+      1,
+      duration: ctrl.duration,
+      curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+    );
   }
 
   void _onAutoFlipStatus(AnimationStatus status) {

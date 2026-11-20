@@ -647,19 +647,24 @@ class _BookCard extends StatelessWidget {
     final progress = (item.progressPercent ?? 0).clamp(0, 100);
     return DesktopHover(
       builder: (context, hovered) {
-        final angle = hovered ? -1.2 * math.pi / 180 : 0.0;
+        // 移除 1.2° 微旋转彻底根治 GPU 裁剪斜边阶梯锯齿，改用 220ms 利落上浮 + 微缩放。
         return AnimatedContainer(
           key: ValueKey<String>('desktop-reader-book-card-${item.id}'),
           duration: MotionToken.reduced(
             context,
-            const Duration(milliseconds: 500),
+            const Duration(milliseconds: 220),
           ),
-          curve: DesktopMotion.spring,
+          curve: Curves.easeOutCubic,
           transformAlignment: Alignment.center,
           transform:
               Matrix4.identity()
-                ..translateByDouble(0.0, hovered ? -14.0 : 0.0, 0, 1)
-                ..rotateZ(angle),
+                ..translateByDouble(0.0, hovered ? -10.0 : 0.0, 0, 1)
+                ..scaleByDouble(
+                  hovered ? 1.022 : 1.0,
+                  hovered ? 1.022 : 1.0,
+                  1.0,
+                  1.0,
+                ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

@@ -12,16 +12,17 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-    // 选区键盘动作优先于页面命令：正文里有有效选区时，1–5 与 N 归选区工具栏。
-    final selectionActions = _selectionKeyActions;
-    if (runReaderSelectionKeyShortcut(event.logicalKey, selectionActions)) {
-      return KeyEventResult.handled;
-    }
     final hardware = HardwareKeyboard.instance;
     final focusContext = FocusManager.instance.primaryFocus?.context;
     final inputFocused =
         focusContext?.widget is EditableText ||
         focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    // 关键修复：输入框（批注/搜索）获焦时严禁截胡 1–5 / N 等选区快捷键！
+    final selectionActions = _selectionKeyActions;
+    if (!inputFocused &&
+        runReaderSelectionKeyShortcut(event.logicalKey, selectionActions)) {
+      return KeyEventResult.handled;
+    }
     final command = const ReaderShortcutResolver().resolve(
       key: event.logicalKey,
       mode:
@@ -159,11 +160,20 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
 
   void _closeReaderLayer() {
     if (_panelCoordinator.close()) {
-      _updateState(() {});
+      _updateState(() => _activeSearchQuery = '');
       return;
     }
     if (_showTts) {
       _updateState(() => _showTts = false);
+      return;
+    }
+    final inFullscreen =
+        isDesktopPlatform
+            ? ref.read(windowChromeControllerProvider).isFullscreen
+            : (isWebPlatform && fs.isFullscreen);
+    if (inFullscreen) {
+      _toggleReaderFullscreen();
+      _updateState(() => _showControls = true);
       return;
     }
     if (_showControls) {
@@ -249,6 +259,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
   }
 
   void _navigateReader(ReaderItemDetail detail, {required bool forward}) {
+    if (_selectionActive) clearReaderSelection();
     if (_isPageMode) {
       if (forward) {
         _pageTurnController.next();
@@ -584,13 +595,15 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           ReaderPanelType.annotations => 380.0,
           ReaderPanelType.shortcuts => 360.0,
         };
+        // 使用稳定常驻 Key：在设置/目录/搜索/批注间切换时抽屉外壳不闪退，
+        // 宽度与标题平滑过渡、内部内容轻量交叉淡入；仅开关抽屉时播放进退场滑入滑出。
         overlay = DesktopReaderPopover(
-          key: ValueKey(active),
+          key: const ValueKey('desktop-reader-popover-shell'),
           alignLeft: false,
           width: popoverWidth,
           eyebrow: title,
           onDismissOutside: _closeReaderPanel,
-          child: child,
+          child: KeyedSubtree(key: ValueKey(active), child: child),
         );
       } else {
         overlay = ReaderAdaptivePanelOverlay(
@@ -611,11 +624,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         child: AnimatedSwitcher(
           duration: MotionToken.reduced(
             context,
-            const Duration(milliseconds: 260),
+            const Duration(milliseconds: 220),
           ),
           reverseDuration: MotionToken.reduced(
             context,
-            const Duration(milliseconds: 200),
+            const Duration(milliseconds: 170),
           ),
           switchInCurve: MotionToken.curve,
           switchOutCurve: MotionToken.curveIn,

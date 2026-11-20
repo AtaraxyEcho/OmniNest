@@ -18,6 +18,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       return;
     }
     _lastWheelAt = now;
+    if (widget.selectionActive) widget.onClearSelection?.call();
     if (event.scrollDelta.dy > 0) {
       _goNextPage(tapTurn: true);
     } else {
@@ -26,8 +27,16 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   void _onExternalPageCommand() {
-    // 底栏/快捷键是显式翻页意图，不能被上一次手势残留的滚动状态吞掉；
-    // 重复触发仍由闸门内的动画与边界请求原因挡住。
+    if (widget.selectionActive) widget.onClearSelection?.call();
+    // Book 模式连点快翻：若上一页卷页动画已过 62%，立即结算并无缝起手下一页。
+    if (widget.turnMode == PageTurnMode.cover &&
+        _isAnimating &&
+        (_animController?.value ?? 0) > 0.62) {
+      _animController?.removeStatusListener(_onAutoFlipStatus);
+      _animController?.stop();
+      _commitFlip();
+      return;
+    }
     if (ReaderInteractionGate.blocksTapTurn(_blockReason)) return;
     final direction = widget.controller?.direction ?? 0;
     if (direction > 0) {
