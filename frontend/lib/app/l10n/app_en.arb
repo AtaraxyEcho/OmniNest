@@ -539,6 +539,17 @@
   "filesSharedSpaceDesc": "All users shared file space",
   "filesSharedSpaceUsage": "Shared Space Usage",
   "filesSharedSpaceEmpty": "No files in shared space",
+  "filesSharedSpaceInfoTitle": "Household space",
+  "filesSharedSpaceInfo": "Used {used} of {capacity} · {items} items",
+  "@filesSharedSpaceInfo": {
+    "placeholders": {
+      "used": { "type": "String" },
+      "capacity": { "type": "String" },
+      "items": { "type": "int" }
+    }
+  },
+  "filesSharedSpaceUnlimited": "No limit",
+  "filesSharedSpaceMember": "a member",
   "filesMoveToShared": "Move to Shared Space",
   "filesMoveToSharedConfirm": "Move to Shared Space",
   "filesMoveToSharedMessage": "Move \"{name}\" to shared space? All users will see it.",
@@ -752,6 +763,9 @@
     }
   },
   "filesDeleteConfirmMessage": "\"{name}\" will be removed from the file list and associated records in video, music and other modules will be cleaned up.",
+  "filesRemoveSharedConfirmTitle": "Remove from shared space?",
+  "filesRemoveSharedConfirmMessage": "Other members will no longer see these items.",
+  "filesRemoveSharedConfirmAction": "Remove",
   "@filesDeleteConfirmMessage": {
     "placeholders": {
       "name": {}
@@ -1951,6 +1965,8 @@
   "adminConfigMusicBrainzCoverUrl": "MusicBrainz cover service URL",
   "adminConfigMusicOnlineEnabled": "Enable online music",
   "adminConfigTmdbBaseUrl": "TMDB service URL",
+  "adminConfigTmdbImageUrl": "TMDB image base URL",
+  "adminConfigTmdbProxyUrl": "TMDB outbound proxy",
   "adminConfigPhotoAiEndpoint": "Image analysis service URL",
   "adminConfigNeteaseBaseUrl": "NetEase Music service URL",
   "adminConfigNeteaseHosts": "NetEase playback hosts",
@@ -5547,6 +5563,9 @@
   "errorRateLimited": "Too many requests. Please try again later",
   "errorDependencyUnavailable": "A required service is unavailable. Please try again later",
   "errorMediaProviderUnreachable": "Cannot reach the metadata service. Check the server network or proxy settings",
+  "errorMediaProviderAuthFailed": "The metadata service rejected the credentials",
+  "errorMediaProviderRateLimited": "The metadata service is rate limiting requests. Try again later",
+  "errorMediaProviderConfigInvalid": "The metadata service configuration is invalid. Check the admin settings",
   "errorRegistrationDisabled": "Registration is disabled on this server",
   "errorInternalError": "Server error. Please try again later",
   "errorTaskStatusIllegal": "This task cannot be changed in its current state",
@@ -6784,6 +6803,14 @@
       }
     }
   },
+  "desktopFilesAddedBy": "Added by {name}",
+  "@desktopFilesAddedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "desktopFilesDetails": "Details & versions",
   "desktopFilesVersions": "Versions",
   "desktopFilesMoveToRecycle": "Move to Recycle",
@@ -6814,6 +6841,7 @@
     }
   },
   "desktopFilesMovedToRecycle": "Moved to Recycle",
+  "desktopFilesRemovedFromSharedSpace": "Removed from shared space",
   "desktopFilesRestored": "Restored",
   "desktopFilesShareUnavailable": "Share links need the web base URL configured on the server.",
   "desktopFilesLoadMore": "Load more ({loaded} of {total})",
@@ -7287,6 +7315,10 @@
   "desktopMoviesEmptySeriesBody": "Series added to your library will appear here.",
   "desktopMoviesEmptyAnimeTitle": "No anime yet",
   "desktopMoviesEmptyAnimeBody": "Anime series added to your library will appear here.",
+  "desktopMoviesQuality": "Quality",
+  "desktopMoviesDetailLibrary": "Library",
+  "desktopMoviesDetailVisibility": "Visibility",
+  "desktopMoviesDetailDirectPlay": "Direct play",
   "filesLocalLibrary": "Local library",
   "musicScanStatusLabel": "Scanning",
   "musicScanQueued": "Music scan started",

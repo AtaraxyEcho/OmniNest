@@ -1,7 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -10,7 +11,6 @@ import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_movie_detail_actions.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
-import 'package:omninest/app/desktop/widgets/desktop_tilt.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -21,11 +21,13 @@ import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
+part 'desktop_movie_detail_hero.dart';
 part 'desktop_movie_detail_sections.dart';
 
 /// 桌面影视详情（样例 `FilmDetail`）。
 ///
-/// 满铺英雄区（剧照 + 海报 + 文案与动作）+ 概览/字幕分页 + 相关推荐。
+/// 样例把详情页直接挂在 `.main` 里，因此这里是工作区内的普通内容页：
+/// 标题栏、侧栏、坞和播放条全程在场，圆角英雄区只是页面第一块内容。
 /// 数据走模块门面：详情、观看历史、字幕、收藏状态各一个 provider；
 /// 播放仍跳既有播放路由，播放器覆盖层另批处理。
 class DesktopMovieDetailPage extends ConsumerStatefulWidget {
@@ -48,15 +50,11 @@ class _DesktopMovieDetailPageState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final backdropVisible = desktopBackdropVisibleForRoute(
-      ref,
-      DesktopRoutes.movieDetail(widget.videoItemId),
-    );
     final detail = ref.watch(movieDetailProvider(widget.videoItemId));
     final item = detail.asData?.value;
     if (item == null) {
       return ColoredBox(
-        color: backdropVisible ? Colors.transparent : skin.bg,
+        color: skin.bg,
         child: Center(
           child:
               detail.hasError
@@ -92,14 +90,16 @@ class _DesktopMovieDetailPageState
             (candidate.genres.any(item.genres.contains) ||
                 candidate.mediaType == item.mediaType))
           candidate,
-    ].take(8).toList(growable: false);
+    ].take(5).toList(growable: false);
 
     return ColoredBox(
-      color: backdropVisible ? Colors.transparent : skin.bg,
+      color: skin.bg,
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: DesktopPage(
+          // 样例 `.film-page { padding-top: 14px }` + `.fd-hero { margin: 6px 0 22px }`。
+          topPadding: DesktopMetrics.pageTopPaddingCompact,
           children: [
+            const SizedBox(height: 6),
             _Hero(
               item: item,
               history: history,
@@ -120,49 +120,43 @@ class _DesktopMovieDetailPageState
               onToggleWatched: () => _toggleWatched(item, history),
               onToggleWatchlist: () => _toggleWatchlist(item),
             ),
-            DesktopPage(
-              topPadding: 22,
-              children: [
-                _MetaStrip(item: item),
-                const SizedBox(height: 22),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: DesktopSeg<_MovieDetailTab>(
-                    options: _MovieDetailTab.values,
-                    value: _tab,
-                    onChanged: (value) => setState(() => _tab = value),
-                    labelOf:
-                        (value) => switch (value) {
-                          _MovieDetailTab.overview =>
-                            l10n.videoDetailTabOverview,
-                          _MovieDetailTab.files => l10n.videoDetailTabFiles,
-                          _MovieDetailTab.subtitles =>
-                            l10n.desktopSeriesSubtitles,
-                        },
-                    small: true,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                switch (_tab) {
-                  _MovieDetailTab.overview => _Overview(item: item),
-                  _MovieDetailTab.files => _MovieFilesTab(
-                    videoItemId: item.id,
-                    transcoding: _transcoding,
-                    onTranscode: () => _queueTranscode(item),
-                  ),
-                  _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
-                },
-                if (related.isNotEmpty) ...[
-                  const SizedBox(height: 36),
-                  Text(
-                    l10n.desktopMoviesMoreLikeThis.toUpperCase(),
-                    style: DesktopType.eyebrow(skin.text3),
-                  ),
-                  const SizedBox(height: 14),
-                  _RelatedRail(items: related),
-                ],
-              ],
+            const SizedBox(height: 22),
+            _MetaStrip(item: item),
+            const SizedBox(height: 22),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DesktopSeg<_MovieDetailTab>(
+                options: _MovieDetailTab.values,
+                value: _tab,
+                onChanged: (value) => setState(() => _tab = value),
+                labelOf:
+                    (value) => switch (value) {
+                      _MovieDetailTab.overview => l10n.videoDetailTabOverview,
+                      _MovieDetailTab.files => l10n.videoDetailTabFiles,
+                      _MovieDetailTab.subtitles => l10n.desktopSeriesSubtitles,
+                    },
+                small: true,
+              ),
             ),
+            const SizedBox(height: 20),
+            switch (_tab) {
+              _MovieDetailTab.overview => _Overview(item: item),
+              _MovieDetailTab.files => _MovieFilesTab(
+                videoItemId: item.id,
+                transcoding: _transcoding,
+                onTranscode: () => _queueTranscode(item),
+              ),
+              _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
+            },
+            if (related.isNotEmpty) ...[
+              const SizedBox(height: 40),
+              Text(
+                l10n.desktopMoviesMoreLikeThis,
+                style: DesktopType.sectionTitle(skin.text),
+              ),
+              const SizedBox(height: 18),
+              _RelatedRail(items: related),
+            ],
           ],
         ),
       ),
@@ -332,7 +326,7 @@ MovieVideoItem _resumeAsItem(MovieContinueWatching entry) => MovieVideoItem(
 );
 
 /// 五格统计条（样例 `.fd-strip`）：评分 / 年份 / 时长 / 题材 / 音轨。
-/// 只在有值的格子给 hint，缺值统一显示破折号，不摆空壳。
+/// 数值按样例用 24px 衬线，缺值统一显示破折号，不摆空壳。
 class _MetaStrip extends StatelessWidget {
   const _MetaStrip({required this.item});
 
@@ -345,27 +339,31 @@ class _MetaStrip extends StatelessWidget {
     final year = item.releaseDate?.year.toString() ?? '—';
     final cells = <(String, String, String)>[
       (l10n.videoRating, item.rating?.toStringAsFixed(1) ?? '—', 'TMDB'),
-      (l10n.videoYear, year, item.mediaType),
+      (l10n.videoYear, year, _kindLabel(item, l10n)),
       (
         l10n.videoDuration,
         _formatRuntime(item.runtimeSeconds),
-        item.contentRating ?? '',
+        l10n.desktopMoviesDetailDirectPlay,
       ),
       (
         l10n.videoGenre,
         item.genres.isEmpty ? '—' : item.genres.take(2).join(' · '),
-        '',
+        (item.contentRating ?? '').trim(),
       ),
       (
-        l10n.videoAudio,
-        (item.audioCodec ?? '—').toUpperCase(),
-        item.containerFormat?.toUpperCase() ?? '',
+        l10n.desktopMoviesQuality,
+        (item.resolutionHeight ?? 0) >= 2160
+            ? '4K HDR'
+            : (item.resolutionHeight ?? 0) >= 1080
+            ? '1080p'
+            : '—',
+        (item.audioCodec ?? '').trim().toUpperCase(),
       ),
     ];
     return Container(
       decoration: BoxDecoration(
         color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: skin.line),
       ),
       clipBehavior: Clip.antiAlias,
@@ -399,7 +397,9 @@ class _MetaStrip extends StatelessWidget {
                       cells[i].$2,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: DesktopType.sectionTitle(skin.text),
+                      style: DesktopType.sectionTitle(
+                        skin.text,
+                      ).copyWith(letterSpacing: -24 * 0.01),
                     ),
                     if (cells[i].$3.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -418,277 +418,4 @@ class _MetaStrip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Hero extends StatelessWidget {
-  const _Hero({
-    required this.item,
-    required this.history,
-    required this.favorite,
-    required this.watched,
-    required this.watchlisted,
-    required this.saving,
-    required this.engaging,
-    required this.onBack,
-    required this.onPlay,
-    required this.onFromStart,
-    required this.onToggleFavorite,
-    required this.onToggleWatched,
-    required this.onToggleWatchlist,
-  });
-
-  final MovieVideoItem item;
-  final MovieWatchHistory? history;
-  final bool favorite;
-  final bool watched;
-  final bool watchlisted;
-  final bool saving;
-  final bool engaging;
-  final VoidCallback onBack;
-  final VoidCallback onPlay;
-  final VoidCallback onFromStart;
-  final VoidCallback onToggleFavorite;
-  final VoidCallback onToggleWatched;
-  final VoidCallback onToggleWatchlist;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final progress = watched ? 0.0 : _progress(history);
-    final resumeLabel =
-        progress > 0.02 && progress < 0.98
-            ? l10n.videoHeroResume
-            : l10n.videoPlay;
-    final horizontal = (MediaQuery.sizeOf(context).width * 0.03).clamp(
-      DesktopMetrics.pageHorizontalMin,
-      DesktopMetrics.pageHorizontalMax,
-    );
-    // 样例 `.fd-hero { height: clamp(360px, 48vh, 500px) }`。
-    final heroHeight = (MediaQuery.sizeOf(context).height * 0.48).clamp(
-      360.0,
-      500.0,
-    );
-    return SizedBox(
-      height: heroHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DesktopImage(url: item.backdropUrl ?? item.posterUrl),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  skin.bg.withValues(alpha: 0.45),
-                  skin.bg.withValues(alpha: 0.12),
-                  skin.bg,
-                ],
-                stops: const [0, 0.52, 1],
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: DesktopMetrics.pageMaxWidth,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 26),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          DesktopButton(
-                            label: l10n.desktopNavMovies,
-                            icon: DesktopIcons.left,
-                            variant: DesktopButtonVariant.glass,
-                            onPressed: onBack,
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          SizedBox(
-                            width: 184,
-                            child: AspectRatio(
-                              aspectRatio: 2 / 3,
-                              child: DesktopTilt(
-                                child: DesktopImage(
-                                  url: item.posterUrl,
-                                  borderRadius: BorderRadius.circular(
-                                    DesktopMetrics.radiusCard,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 26),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    if (item.mediaType.isNotEmpty)
-                                      DesktopChip(item.mediaType, solid: true),
-                                    for (final genre in item.genres.take(2))
-                                      DesktopChip(genre),
-                                    if (item.rating != null)
-                                      DesktopChip(
-                                        '★ ${item.rating!.toStringAsFixed(1)}',
-                                        tone: skin.warm,
-                                      ),
-                                    if (watched) DesktopChip(l10n.videoWatched),
-                                    if (_notScraped(item))
-                                      DesktopChip(
-                                        l10n.desktopMoviesNotScraped,
-                                        tone: skin.warn,
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.displayXl(
-                                    skin.text,
-                                    MediaQuery.sizeOf(context).width,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  [
-                                        _formatRuntime(item.runtimeSeconds),
-                                        if (item.metadata['year'] != null)
-                                          '${item.metadata['year']}',
-                                        if (item.genres.isNotEmpty)
-                                          item.genres.first,
-                                      ]
-                                      .where((part) => part.isNotEmpty)
-                                      .join(' · '),
-                                  style: DesktopType.caption(skin.text3),
-                                ),
-                                if (progress > 0.02) ...[
-                                  const SizedBox(height: 14),
-                                  SizedBox(
-                                    width: 420,
-                                    child: DesktopProgress(
-                                      fraction: progress,
-                                      label: l10n.desktopMoviesWatched(
-                                        (progress * 100).round(),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 18),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    DesktopButton(
-                                      label: resumeLabel,
-                                      icon: DesktopIcons.play,
-                                      variant: DesktopButtonVariant.primary,
-                                      large: true,
-                                      onPressed: onPlay,
-                                    ),
-                                    if (progress > 0.02) ...[
-                                      DesktopButton(
-                                        label: l10n.desktopMoviesFromStart,
-                                        variant: DesktopButtonVariant.glass,
-                                        large: true,
-                                        onPressed: onFromStart,
-                                      ),
-                                    ],
-                                    DesktopButton.iconOnly(
-                                      icon:
-                                          favorite
-                                              ? DesktopIcons.heartFilled
-                                              : DesktopIcons.heart,
-                                      variant: DesktopButtonVariant.glass,
-                                      large: true,
-                                      foregroundOverride:
-                                          favorite ? skin.liked : null,
-                                      tooltip: l10n.videoFavorite,
-                                      onPressed:
-                                          saving ? null : onToggleFavorite,
-                                    ),
-                                    DesktopButton.iconOnly(
-                                      icon: DesktopIcons.check,
-                                      variant: DesktopButtonVariant.glass,
-                                      large: true,
-                                      tooltip:
-                                          watched
-                                              ? l10n.desktopMoviesMarkUnwatched
-                                              : l10n.desktopMoviesMarkWatched,
-                                      onPressed:
-                                          engaging ? null : onToggleWatched,
-                                    ),
-                                    DesktopButton.iconOnly(
-                                      icon:
-                                          watchlisted
-                                              ? DesktopIcons.check
-                                              : DesktopIcons.plus,
-                                      variant: DesktopButtonVariant.glass,
-                                      large: true,
-                                      tooltip:
-                                          watchlisted
-                                              ? l10n
-                                                  .desktopMoviesRemoveWatchlist
-                                              : l10n.desktopMoviesAddWatchlist,
-                                      onPressed:
-                                          engaging ? null : onToggleWatchlist,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-double _progress(MovieWatchHistory? history) {
-  if (history == null || history.durationSeconds <= 0) {
-    return 0;
-  }
-  return (history.positionSeconds / history.durationSeconds).clamp(0.0, 1.0);
-}
-
-String _formatRuntime(int? seconds) {
-  if (seconds == null || seconds <= 0) {
-    return '—';
-  }
-  final duration = Duration(seconds: seconds);
-  final hours = duration.inHours;
-  final minutes = duration.inMinutes.remainder(60);
-  return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
-}
-
-/// 样例 `scraped=false` 的徽章口径：只有已匹配或手动维护过的条目算已完成刮削。
-bool _notScraped(MovieVideoItem item) {
-  final status = item.metadataStatus.toUpperCase();
-  return status.isEmpty || status == 'PENDING' || status == 'FAILED';
 }

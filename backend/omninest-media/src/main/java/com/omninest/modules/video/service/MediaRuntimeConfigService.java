@@ -22,6 +22,7 @@ public class MediaRuntimeConfigService extends BaseRuntimeConfigService {
     public static final String TMDB_LANGUAGE = "media.tmdb.lang";
     public static final String TMDB_INCLUDE_ADULT = "media.tmdb.adult";
     public static final String TMDB_BASE_URL = "media.tmdb.url";
+    public static final String TMDB_IMAGE_URL = "media.tmdb.image-url";
     public static final String TMDB_TIMEOUT_SECONDS = "media.tmdb.timeout";
     public static final String TMDB_SEARCH_STRATEGY = "media.tmdb.strategy";
     public static final String TMDB_MAX_RESULTS = "media.tmdb.limit";
@@ -55,6 +56,17 @@ public class MediaRuntimeConfigService extends BaseRuntimeConfigService {
     public String tmdbBaseUrl() {
         return stringWithLegacy(TMDB_BASE_URL, "media.metadata-provider.tmdb.base-url",
                 "https://api.themoviedb.org/3");
+    }
+
+    /**
+     * TMDB 图床基础地址，供海报与头像拼接使用。
+     *
+     * @return 图床基础地址
+     */
+    public String tmdbImageBaseUrl() {
+        String value = stringWithLegacy(TMDB_IMAGE_URL, "media.metadata-provider.tmdb.image-url",
+                "https://image.tmdb.org/t/p");
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     public String tmdbLanguage() {

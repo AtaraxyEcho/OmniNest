@@ -131,6 +131,38 @@ class MovieScrapeServiceTest {
                 });
     }
 
+    /**
+     * 用户手动选候选时，滞留的自动重试任务必须先取消，否则新任务会被静默吞掉。
+     */
+    @Test
+    void manualCandidateCancelsStaleRetryWaitTask() {
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.empty());
+        when(videoItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        TaskRecord stale = new TaskRecord();
+        stale.setId(TASK_ID);
+        stale.setStatus("RETRY_WAIT");
+        when(taskRecordService.findActiveResourceTask(
+                eq(OWNER_ID), eq("MEDIA_SCRAPE"), any(), any(), any()))
+                .thenReturn(Optional.of(stale));
+
+        var result = scrapeService.createScrapeTask(OWNER_ID, FILE_ID, false, "TMDB", "external-1");
+
+        assertThat(result.taskId()).isNotEqualTo(TASK_ID);
+        verify(taskRecordService).markCancelled(TASK_ID);
+        verify(taskRecordService).createQueuedTask(
+                eq(result.taskId()),
+                eq(OWNER_ID),
+                eq("MEDIA_SCRAPE"),
+                eq(QueueNames.MEDIA_SCRAPE_ROUTING_KEY),
+                eq("QUEUED"),
+                eq("FILE_NODE"),
+                eq(FILE_ID),
+                any()
+        );
+    }
+
     @Test
     void rejectsNonVideoFile() {
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))

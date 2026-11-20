@@ -170,6 +170,7 @@ class OutboundEndpointRulesTest {
     private static final class RecordingSafeUrlValidator implements SafeUrlValidator {
         private final List<URI> checked = new ArrayList<>();
         private final List<URI> selfHostChecked = new ArrayList<>();
+        private final List<URI> staticChecked = new ArrayList<>();
         private URI rejectedUri;
         private URI rejectedSelfHostedUri;
 
@@ -205,6 +206,11 @@ class OutboundEndpointRulesTest {
         @Override
         public void requireSafeHttpUrl(String url) {
             requireSafeHost(URI.create(url));
+        }
+
+        @Override
+        public void requireStaticSafeHost(URI uri, boolean allowSelfHostedLiteralIp) {
+            staticChecked.add(uri);
         }
     }
 }

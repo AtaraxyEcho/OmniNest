@@ -195,15 +195,23 @@ public class MovieScrapeService {
                 resource.id(),
                 ACTIVE_TASK_STATUSES
         ).orElse(null);
-        if (activeTask != null) {
-            return new ScrapeTaskDto(
-                    activeTask.getId(),
-                    activeTask.getStatus(),
-                    "该媒体实体已有刮削任务正在执行"
-            );
-        }
         String preferredProvider = blankToNull(provider);
         String preferredExternalId = blankToNull(externalId);
+        if (activeTask != null) {
+            boolean manualPickRetryWait = preferredExternalId != null
+                    && TaskStatus.RETRY_WAIT.getValue().equals(activeTask.getStatus());
+            if (!manualPickRetryWait) {
+                return new ScrapeTaskDto(
+                        activeTask.getId(),
+                        activeTask.getStatus(),
+                        "该媒体实体已有刮削任务正在执行"
+                );
+            }
+            // 滞留的自动重试任务会静默吞掉用户手动选中的候选，先取消再入队。
+            taskRecordService.markCancelled(activeTask.getId());
+            log.info("取消滞留的自动刮削重试任务: taskId={}, fileNodeId={}",
+                    activeTask.getId(), fileNodeId);
+        }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("ownerUserId", ownerUserId.toString());
         payload.put("fileNodeId", fileNodeId.toString());

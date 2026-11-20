@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.security.OutboundProxyPort;
 import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
@@ -39,6 +40,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
@@ -75,11 +77,7 @@ public class DerivedAssetStorageService {
     public static final String SOURCE_TYPE_DERIVED = "DERIVED";
 
     /** 复用 HttpClient 实例，避免每次请求创建新连接池 */
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(DOWNLOAD_TIMEOUT)
-            // 重定向在 download 内手动逐跳校验；客户端自动跟随会绕过对跳转后地址的 SSRF 检查。
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    private final HttpClient httpClient;
 
     private final ObjectStorageBuckets objectStorageBuckets;
     private final ObjectStorageClient objectStorageClient;
@@ -89,6 +87,56 @@ public class DerivedAssetStorageService {
     private final TransactionTemplate transactionTemplate;
     private final FileTransferLimitsProperties transferLimits;
     private final TempStagingPort tempStagingPort;
+
+    /**
+     * 保留原构造器供既有单测直接实例化；不接出站代理。
+     */
+    DerivedAssetStorageService(
+            ObjectStorageBuckets objectStorageBuckets,
+            ObjectStorageClient objectStorageClient,
+            FileObjectRepository fileObjectRepository,
+            FileNodeRepository fileNodeRepository,
+            SafeUrlValidator safeUrlValidator,
+            TransactionTemplate transactionTemplate,
+            FileTransferLimitsProperties transferLimits,
+            TempStagingPort tempStagingPort
+    ) {
+        this(objectStorageBuckets, objectStorageClient, fileObjectRepository, fileNodeRepository,
+                safeUrlValidator, transactionTemplate, transferLimits, tempStagingPort, null);
+    }
+
+    /**
+     * 生产构造器：代理只对 TMDB 图片域生效，其余目标（外部存储签名 URL 等）保持直连。
+     */
+    @Autowired
+    public DerivedAssetStorageService(
+            ObjectStorageBuckets objectStorageBuckets,
+            ObjectStorageClient objectStorageClient,
+            FileObjectRepository fileObjectRepository,
+            FileNodeRepository fileNodeRepository,
+            SafeUrlValidator safeUrlValidator,
+            TransactionTemplate transactionTemplate,
+            FileTransferLimitsProperties transferLimits,
+            TempStagingPort tempStagingPort,
+            OutboundProxyPort outboundProxy
+    ) {
+        this.objectStorageBuckets = objectStorageBuckets;
+        this.objectStorageClient = objectStorageClient;
+        this.fileObjectRepository = fileObjectRepository;
+        this.fileNodeRepository = fileNodeRepository;
+        this.safeUrlValidator = safeUrlValidator;
+        this.transactionTemplate = transactionTemplate;
+        this.transferLimits = transferLimits;
+        this.tempStagingPort = tempStagingPort;
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .connectTimeout(DOWNLOAD_TIMEOUT)
+                // 重定向在 download 内手动逐跳校验；自动跟随会绕过跳转后地址的 SSRF 检查。
+                .followRedirects(HttpClient.Redirect.NEVER);
+        if (outboundProxy != null) {
+            builder.proxy(outboundProxy.proxySelector());
+        }
+        this.httpClient = builder.build();
+    }
 
     /** 在独立新事务中执行存储动作；并发流水线写入同一对象键时重试一次。 */
     private UUID storeInNewTransactionWithRetry(StoreAction action) {

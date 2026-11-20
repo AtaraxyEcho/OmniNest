@@ -1463,6 +1463,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSharedSpaceEmpty => 'No files in shared space';
 
   @override
+  String get filesSharedSpaceInfoTitle => 'Household space';
+
+  @override
+  String filesSharedSpaceInfo(String used, String capacity, int items) {
+    return 'Used $used of $capacity · $items items';
+  }
+
+  @override
+  String get filesSharedSpaceUnlimited => 'No limit';
+
+  @override
+  String get filesSharedSpaceMember => 'a member';
+
+  @override
   String get filesMoveToShared => 'Move to Shared Space';
 
   @override
@@ -1983,6 +1997,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String filesDeleteConfirmMessage(Object name) {
     return '\"$name\" will be removed from the file list and associated records in video, music and other modules will be cleaned up.';
   }
+
+  @override
+  String get filesRemoveSharedConfirmTitle => 'Remove from shared space?';
+
+  @override
+  String get filesRemoveSharedConfirmMessage =>
+      'Other members will no longer see these items.';
+
+  @override
+  String get filesRemoveSharedConfirmAction => 'Remove';
 
   @override
   String filesPurgeConfirmTitle(Object name) {
@@ -4592,6 +4616,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConfigTmdbBaseUrl => 'TMDB service URL';
+
+  @override
+  String get adminConfigTmdbImageUrl => 'TMDB image base URL';
+
+  @override
+  String get adminConfigTmdbProxyUrl => 'TMDB outbound proxy';
 
   @override
   String get adminConfigPhotoAiEndpoint => 'Image analysis service URL';
@@ -12300,6 +12330,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Cannot reach the metadata service. Check the server network or proxy settings';
 
   @override
+  String get errorMediaProviderAuthFailed =>
+      'The metadata service rejected the credentials';
+
+  @override
+  String get errorMediaProviderRateLimited =>
+      'The metadata service is rate limiting requests. Try again later';
+
+  @override
+  String get errorMediaProviderConfigInvalid =>
+      'The metadata service configuration is invalid. Check the admin settings';
+
+  @override
   String get errorRegistrationDisabled =>
       'Registration is disabled on this server';
 
@@ -14693,6 +14735,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String desktopFilesAddedBy(String name) {
+    return 'Added by $name';
+  }
+
+  @override
   String get desktopFilesDetails => 'Details & versions';
 
   @override
@@ -14734,6 +14781,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get desktopFilesMovedToRecycle => 'Moved to Recycle';
+
+  @override
+  String get desktopFilesRemovedFromSharedSpace => 'Removed from shared space';
 
   @override
   String get desktopFilesRestored => 'Restored';
@@ -15777,6 +15827,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get desktopMoviesEmptyAnimeBody =>
       'Anime series added to your library will appear here.';
+
+  @override
+  String get desktopMoviesQuality => 'Quality';
+
+  @override
+  String get desktopMoviesDetailLibrary => 'Library';
+
+  @override
+  String get desktopMoviesDetailVisibility => 'Visibility';
+
+  @override
+  String get desktopMoviesDetailDirectPlay => 'Direct play';
 
   @override
   String get filesLocalLibrary => 'Local library';

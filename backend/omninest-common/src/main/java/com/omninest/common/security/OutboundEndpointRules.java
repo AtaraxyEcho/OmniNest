@@ -4,6 +4,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import java.net.URI;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * 服务端主动出站到第三方接口的地址规则。
@@ -64,6 +65,43 @@ public final class OutboundEndpointRules {
         requireHttpUri(target, "外部服务请求地址");
         if (!sameOrigin(origin, target)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "外部服务请求地址偏离配置的基址");
+        }
+        safeUrlValidator.requireSelfHostedSafeHost(origin);
+        return target;
+    }
+
+    /**
+     * 同上，但按出站代理配置决定校验方式。
+     *
+     * <p>经代理时目标由代理解析建连，本地 DNS 结果不代表真实目标，因此跳过地址段解析，
+     * 改为校验代理主机（自建端点档位）与目标的静态规则（不解析域名，覆盖 IPv6 字面量）；
+     * 非代理请求保持完整校验。</p>
+     *
+     * @param configuredBaseUrl 配置项原文
+     * @param target 实际要请求的完整地址
+     * @param safeUrlValidator 地址解析校验器
+     * @param outboundProxy 出站代理端口，可为空
+     * @return 校验通过的请求地址
+     * @throws BusinessException 地址非法、偏离基址，或代理地址不可用
+     */
+    public static URI requireConfiguredEndpoint(
+            String configuredBaseUrl,
+            URI target,
+            SafeUrlValidator safeUrlValidator,
+            OutboundProxyPort outboundProxy
+    ) {
+        URI origin = parseConfiguredBaseUrl(configuredBaseUrl);
+        requireHttpUri(target, "外部服务请求地址");
+        if (!sameOrigin(origin, target)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "外部服务请求地址偏离配置的基址");
+        }
+        if (outboundProxy != null && outboundProxy.shouldProxy(target)) {
+            Optional<URI> proxyUri = outboundProxy.resolveConfiguredProxyUri();
+            if (proxyUri.isPresent()) {
+                safeUrlValidator.requireSelfHostedSafeHost(proxyUri.get());
+                safeUrlValidator.requireStaticSafeHost(origin, true);
+                return target;
+            }
         }
         safeUrlValidator.requireSelfHostedSafeHost(origin);
         return target;

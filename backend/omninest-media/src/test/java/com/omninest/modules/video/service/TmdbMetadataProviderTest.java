@@ -32,7 +32,7 @@ class TmdbMetadataProviderTest {
             new TmdbMetadataProvider(configService, safeUrlValidator);
 
     @Test
-    void v3SearchUriUsesApiKeyWhenBothCredentialsConfigured() throws Exception {
+    void v3SearchUriUsesBearerWhenTokenConfigured() throws Exception {
         whenBaseUrl("https://api.themoviedb.org/3");
         when(configService.tmdbIncludeAdult()).thenReturn(false);
 
@@ -40,9 +40,20 @@ class TmdbMetadataProviderTest {
 
         assertThat(uri.toString()).startsWith("https://api.themoviedb.org/3/search/movie?");
         assertThat(uri.getRawQuery()).contains("query=%E9%A3%9E%E9%A9%B0%E4%BA%BA%E7%94%9F3");
-        assertThat(uri.getRawQuery()).contains("api_key=test-key");
+        // Token 非空时一律走 Bearer，api_key 不再出现在 URL 里，避免随日志扩散。
+        assertThat(uri.getRawQuery()).doesNotContain("api_key=");
         assertThat(uri.getRawQuery()).contains("primary_release_year=2024");
         assertThat(uri.getRawQuery()).doesNotContain("&year=");
+    }
+
+    @Test
+    void searchUriFallsBackToApiKeyWhenTokenAbsent() throws Exception {
+        whenBaseUrl("https://api.themoviedb.org/3");
+        when(configService.tmdbIncludeAdult()).thenReturn(false);
+
+        URI uri = searchUri(new FileNameGuess("飞驰人生3", 2024, null, null), "test-key", null);
+
+        assertThat(uri.getRawQuery()).contains("api_key=test-key");
     }
 
     @Test

@@ -53,6 +53,8 @@ INSERT INTO omni.config_entries (
     ('media.tmdb.key', '', 'STRING', 'media', 'HOT', 'TMDB v3 API Key', true),
     ('media.tmdb.token', '', 'STRING', 'media', 'HOT', 'TMDB v4 Access Token', true),
     ('media.tmdb.url', 'https://api.themoviedb.org/3', 'STRING', 'media', 'HOT', 'TMDB API 基础地址', false),
+    ('media.tmdb.image-url', 'https://image.tmdb.org/t/p', 'STRING', 'media', 'HOT', 'TMDB 图床基础地址', false),
+    ('media.tmdb.proxy-url', '', 'STRING', 'media', 'HOT', 'TMDB 出站代理，如 http://127.0.0.1:7897（留空直连）', false),
     ('media.tmdb.lang', 'zh-CN', 'STRING', 'media', 'HOT', 'TMDB 返回语言', false),
     ('media.tmdb.timeout', '15', 'NUMBER', 'media', 'HOT', 'TMDB 请求超时（秒）', false),
     ('media.tmdb.strategy', 'NORMALIZED_AND_FALLBACKS', 'STRING', 'media', 'HOT', 'TMDB 搜索策略', false),

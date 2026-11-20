@@ -8,6 +8,7 @@ import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/api_url_resolver.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';

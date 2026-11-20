@@ -74,10 +74,10 @@ DesktopShellMode desktopShellModeForPath(String path) {
   if (RegExp(r'^/photos/[^/]+$').hasMatch(path)) {
     return DesktopShellMode.immersive;
   }
-  // 影视详情是满铺英雄区（样例 `.fd-hero` + `.film-page`），同样让出壳层。
-  if (RegExp(r'^/video/[^/]+$').hasMatch(path)) {
-    return DesktopShellMode.immersive;
-  }
+  // 影视详情是内容区里的 `.page.film-page`：样例 `Movies.tsx:15` 把
+  // `FilmDetail` 直接渲染在 `.main` 里，标题栏与侧栏始终在场。海报英雄区
+  // 只是页面内的圆角卡，不再是满铺沉浸画布。
+  // 剧集详情仍保留独立沉浸画布（`.video`），两者不共用路由姿态。
   if (RegExp(r'^/video/series/[^/]+$').hasMatch(path)) {
     return DesktopShellMode.immersive;
   }

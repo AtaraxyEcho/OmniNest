@@ -122,7 +122,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
 
     expect(find.text('简体中文'), findsOneWidget);
-    expect(find.text('External'), findsOneWidget);
+    expect(find.textContaining('External'), findsOneWidget);
   });
 
   testWidgets('概览页动作行四个按钮都在，且探测与 NFO 走应用层入口', (tester) async {
@@ -218,5 +218,41 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
     expect(find.text('Genre'), findsOneWidget);
     expect(find.text('Aperture'), findsWidgets);
+  });
+
+  testWidgets('编辑抽屉给影片完整八个字段，未刮削条目不退化成单集表单', (tester) async {
+    await pumpDetail(
+      tester,
+      item: const MovieVideoItem(
+        id: 'v-1',
+        fileNodeId: 'f-1',
+        mediaType: 'MOVIE',
+        title: 'Aperture',
+        metadataStatus: 'PENDING',
+        nfoStatus: 'MISSING',
+        updatedAt: null,
+        metadata: {},
+        posterUrl: 'https://example.test/aperture-poster.jpg',
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Edit details'));
+    await tester.pump();
+    await tester.tap(find.text('Edit details'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    for (final label in const <String>[
+      'Title',
+      'Genre',
+      'Year',
+      'Runtime',
+      'Rating',
+      'Cast',
+      'Poster image URL',
+      'Synopsis',
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
   });
 }

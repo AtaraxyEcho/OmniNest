@@ -193,6 +193,11 @@ mixin MovieApiCatalog on MovieApiBase {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/video/scrape/candidates',
       queryParameters: {'fileNodeId': fileNodeId},
+      // 候选接口是幂等只读请求，5xx/超时重试会把 25s 预算放大成 ~75s；后端已在 18s 内返回结构化错误。
+      options: Options(
+        receiveTimeout: const Duration(seconds: 25),
+        extra: const {skipServerErrorRetryKey: true},
+      ),
     );
     return parseList(response.data).map(VideoScrapeCandidate.fromJson).toList();
   }

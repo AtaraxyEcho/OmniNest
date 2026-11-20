@@ -1,8 +1,10 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.OutboundProxyPort;
 import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
@@ -28,6 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -39,16 +42,49 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private static final String DEFAULT_BASE_URL = "https://api.themoviedb.org/3";
     private static final String SEARCH_STRATEGY_NORMALIZED_ONLY = "NORMALIZED_ONLY";
     private static final String SEARCH_STRATEGY_RAW_ONLY = "RAW_ONLY";
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration MAX_REQUEST_TIMEOUT = Duration.ofSeconds(8);
+    private static final Duration SEARCH_BUDGET = Duration.ofSeconds(18);
 
     private final MediaRuntimeConfigService configService;
     private final SafeUrlValidator safeUrlValidator;
+    private final OutboundProxyPort outboundProxy;
 
     /** 共享客户端：每次新建会泄漏选择器线程与连接池；重定向固定 NEVER，避免凭据被带到别的主机。 */
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    private final HttpClient httpClient;
+
+    /**
+     * 兼容既有单测的构造器：不接出站代理。
+     *
+     * @param configService 媒体运行时配置
+     * @param safeUrlValidator 出站地址校验器
+     */
+    public TmdbMetadataProvider(MediaRuntimeConfigService configService, SafeUrlValidator safeUrlValidator) {
+        this(configService, safeUrlValidator, null);
+    }
+
+    /**
+     * @param configService 媒体运行时配置
+     * @param safeUrlValidator 出站地址校验器
+     * @param outboundProxy 出站代理端口，可为空
+     */
+    @Autowired
+    public TmdbMetadataProvider(
+            MediaRuntimeConfigService configService,
+            SafeUrlValidator safeUrlValidator,
+            OutboundProxyPort outboundProxy
+    ) {
+        this.configService = configService;
+        this.safeUrlValidator = safeUrlValidator;
+        this.outboundProxy = outboundProxy;
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
+                .followRedirects(HttpClient.Redirect.NEVER);
+        if (outboundProxy != null) {
+            builder.proxy(outboundProxy.proxySelector());
+        }
+        this.httpClient = builder.build();
+    }
 
     @Override
     public String providerName() {
@@ -73,7 +109,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 guess.seasonNumber(), guess.episodeNumber());
 
         // 第一轮：按解析结果搜索（tv 或 movie）
-        List<ScrapeCandidateDto> result = searchWithType(guess, credential, tv);
+        // 首轮与回退共用一个预算：单个请求的超时已由客户端控制，这里限制总变体数。
+        long deadlineNanos = System.nanoTime() + SEARCH_BUDGET.toNanos();
+        List<ScrapeCandidateDto> result = searchWithType(guess, credential, tv, deadlineNanos);
         if (!result.isEmpty()) {
             return result;
         }
@@ -81,7 +119,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         // 第二轮：回退到另一种类型搜索（主流媒体管理器的标准做法）
         boolean fallbackTv = !tv;
         log.info("TMDB 首轮搜索无结果，回退搜索: fallbackType={}", fallbackTv ? "TV" : "MOVIE");
-        result = searchWithType(guess, credential, fallbackTv);
+        result = searchWithType(guess, credential, fallbackTv, deadlineNanos);
         if (!result.isEmpty()) {
             log.info("TMDB 回退搜索命中: type={}, candidates={}", fallbackTv ? "TV" : "MOVIE", result.size());
         }
@@ -89,9 +127,13 @@ public class TmdbMetadataProvider implements MetadataProvider {
     }
 
     private List<ScrapeCandidateDto> searchWithType(
-            FileNameGuess guess, TmdbCredential credential, boolean tv
+            FileNameGuess guess, TmdbCredential credential, boolean tv, long deadlineNanos
     ) {
         for (String query : searchQueries(guess.title())) {
+            if (System.nanoTime() > deadlineNanos) {
+                log.warn("TMDB 搜索超出总预算，停止后续变体: type={}", tv ? "TV" : "MOVIE");
+                break;
+            }
             log.debug("TMDB 查询: type={}, query={}, includeYear=true, year={}",
                     tv ? "TV" : "MOVIE", query, guess.year());
             List<ScrapeCandidateDto> candidates = requestCandidates(guess, credential, query, true, tv);
@@ -132,9 +174,25 @@ public class TmdbMetadataProvider implements MetadataProvider {
             log.debug("TMDB 请求: uri={}", safeUri(uri));
             HttpRequest request = requestBuilder(uri, credential).GET().build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("TMDB 请求失败: status={}, type={}",
-                        response.statusCode(), tv ? "TV" : "MOVIE");
+            int status = response.statusCode();
+            if (status < 200 || status >= 300) {
+                logUpstreamFailure(status, response.body(), tv);
+                if (status == 401 || status == 403) {
+                    throw new BusinessException(ErrorCode.MEDIA_PROVIDER_AUTH_FAILED,
+                            "TMDB 拒绝访问，请检查 API Key 或 Access Token");
+                }
+                if (status == 407) {
+                    throw new BusinessException(ErrorCode.MEDIA_PROVIDER_CONFIG_INVALID,
+                            "代理要求认证，请检查 media.tmdb.proxy-url");
+                }
+                if (status == 429) {
+                    throw new BusinessException(ErrorCode.MEDIA_PROVIDER_RATE_LIMITED,
+                            "TMDB 请求过于频繁，请稍后重试");
+                }
+                if (status >= 500) {
+                    throw new MetadataProviderUnavailableException(providerName(), "HTTP " + status, null);
+                }
+                // 400/404 属于提供器正常应答：确实是「没搜到」。
                 return List.of();
             }
             String body = response.body();
@@ -158,6 +216,20 @@ public class TmdbMetadataProvider implements MetadataProvider {
             log.warn("TMDB 响应处理异常: errorType={}", ex.getClass().getSimpleName(), ex);
             return List.of();
         }
+    }
+
+    /**
+     * 记录上游拒绝原因：TMDB 在非 2xx 时返回 status_message，缺了它无法区分 Key 失效与代理拦截。
+     */
+    private void logUpstreamFailure(int status, String body, boolean tv) {
+        String upstream = "";
+        try {
+            upstream = JsonSupport.readTree(body == null ? "" : body).path("status_message").asString("");
+        } catch (RuntimeException ignored) {
+            // 响应体不是 JSON（例如代理返回的 HTML 错误页）时只记录状态码。
+        }
+        log.warn("TMDB 请求失败: status={}, type={}, upstream={}",
+                status, tv ? "TV" : "MOVIE", upstream.length() > 200 ? upstream.substring(0, 200) : upstream);
     }
 
     private URI searchUri(FileNameGuess guess, TmdbCredential credential, String queryText, boolean includeYear, boolean tv) {
@@ -296,13 +368,13 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 String posterUrl = posterUrl(text(detail, "poster_path"));
                 String backdropUrl = backdropUrl(text(detail, "backdrop_path"));
 
-                List<String> genres = extractGenreNames(detail.path("genres"));
+                List<String> genres = TmdbMetadataJson.extractGenreNames(detail.path("genres"));
                 String tagline = detail.path("tagline").asString(null);
                 Integer voteCount = detail.hasNonNull("vote_count") ? detail.path("vote_count").asInt() : null;
                 Double popularity = detail.hasNonNull("popularity") ? detail.path("popularity").asDouble() : null;
                 String originalLanguage = text(detail, "original_language");
-                List<Map<String, Object>> studios = parseCompanyList(detail.path("production_companies"));
-                List<Map<String, Object>> countries = parseCountryList(detail.path("production_countries"));
+                List<Map<String, Object>> studios = TmdbMetadataJson.parseCompanyList(detail.path("production_companies"));
+                List<Map<String, Object>> countries = TmdbMetadataJson.parseCountryList(detail.path("production_countries"));
                 List<CastMemberDto> cast = List.of();
                 List<CrewMemberDto> crew = List.of();
                 try {
@@ -460,51 +532,6 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return null;
     }
 
-    private List<String> extractGenreNames(JsonNode genres) {
-        if (genres == null || !genres.isArray() || genres.isEmpty()) {
-            return List.of();
-        }
-        List<String> names = new ArrayList<>();
-        for (int i = 0; i < genres.size(); i++) {
-            String name = genres.get(i).path("name").asString(null);
-            if (name != null && !name.isBlank()) {
-                names.add(name);
-            }
-        }
-        return names;
-    }
-
-    private List<Map<String, Object>> parseCompanyList(JsonNode companies) {
-        if (companies == null || !companies.isArray() || companies.isEmpty()) {
-            return List.of();
-        }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (int i = 0; i < companies.size(); i++) {
-            JsonNode c = companies.get(i);
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", c.hasNonNull("id") ? c.path("id").asInt() : null);
-            map.put("name", text(c, "name"));
-            map.put("origin_country", text(c, "origin_country"));
-            result.add(map);
-        }
-        return result;
-    }
-
-    private List<Map<String, Object>> parseCountryList(JsonNode countries) {
-        if (countries == null || !countries.isArray() || countries.isEmpty()) {
-            return List.of();
-        }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (int i = 0; i < countries.size(); i++) {
-            JsonNode c = countries.get(i);
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("iso_3166_1", text(c, "iso_3166_1"));
-            map.put("name", text(c, "name"));
-            result.add(map);
-        }
-        return result;
-    }
-
     private String profileUrl(String path) {
         return imageUrl(path, "w185");
     }
@@ -568,7 +595,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         if (path == null || path.isBlank()) {
             return null;
         }
-        return "https://image.tmdb.org/t/p/" + size + path;
+        return configService.tmdbImageBaseUrl() + "/" + size + path;
     }
 
     private LocalDate parseDate(String date) {
@@ -660,8 +687,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
 
     private URI apiUri(String path, CharSequence query) {
         String base = normalizedApiBaseUrl(configService.tmdbBaseUrl());
-        return OutboundEndpointRules.requireConfiguredEndpoint(base, URI.create(base + path + "?" + query),
-                safeUrlValidator);
+        URI target = URI.create(base + path + "?" + query);
+        return outboundProxy == null
+                ? OutboundEndpointRules.requireConfiguredEndpoint(base, target, safeUrlValidator)
+                : OutboundEndpointRules.requireConfiguredEndpoint(base, target, safeUrlValidator, outboundProxy);
     }
 
     private String normalizedApiBaseUrl(String value) {
@@ -690,11 +719,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
             return (apiKey != null && !apiKey.isBlank()) || (accessToken != null && !accessToken.isBlank());
         }
 
+        /** 配了 Token 就一律走 Bearer：api_key 拼在 URL 里会随日志、代理与异常链扩散。 */
         private boolean useBearer() {
-            if (accessToken == null || accessToken.isBlank()) {
-                return false;
-            }
-            return apiVersion >= 4 || apiKey == null || apiKey.isBlank();
+            return accessToken != null && !accessToken.isBlank();
         }
     }
 

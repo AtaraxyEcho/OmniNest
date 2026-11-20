@@ -2774,6 +2774,30 @@ abstract class AppLocalizations {
   /// **'No files in shared space'**
   String get filesSharedSpaceEmpty;
 
+  /// No description provided for @filesSharedSpaceInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Household space'**
+  String get filesSharedSpaceInfoTitle;
+
+  /// No description provided for @filesSharedSpaceInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Used {used} of {capacity} · {items} items'**
+  String filesSharedSpaceInfo(String used, String capacity, int items);
+
+  /// No description provided for @filesSharedSpaceUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get filesSharedSpaceUnlimited;
+
+  /// No description provided for @filesSharedSpaceMember.
+  ///
+  /// In en, this message translates to:
+  /// **'a member'**
+  String get filesSharedSpaceMember;
+
   /// No description provided for @filesMoveToShared.
   ///
   /// In en, this message translates to:
@@ -3763,6 +3787,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'\"{name}\" will be removed from the file list and associated records in video, music and other modules will be cleaned up.'**
   String filesDeleteConfirmMessage(Object name);
+
+  /// No description provided for @filesRemoveSharedConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from shared space?'**
+  String get filesRemoveSharedConfirmTitle;
+
+  /// No description provided for @filesRemoveSharedConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Other members will no longer see these items.'**
+  String get filesRemoveSharedConfirmMessage;
+
+  /// No description provided for @filesRemoveSharedConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get filesRemoveSharedConfirmAction;
 
   /// No description provided for @filesPurgeConfirmTitle.
   ///
@@ -8478,6 +8520,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'TMDB service URL'**
   String get adminConfigTmdbBaseUrl;
+
+  /// No description provided for @adminConfigTmdbImageUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'TMDB image base URL'**
+  String get adminConfigTmdbImageUrl;
+
+  /// No description provided for @adminConfigTmdbProxyUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'TMDB outbound proxy'**
+  String get adminConfigTmdbProxyUrl;
 
   /// No description provided for @adminConfigPhotoAiEndpoint.
   ///
@@ -22324,6 +22378,24 @@ abstract class AppLocalizations {
   /// **'Cannot reach the metadata service. Check the server network or proxy settings'**
   String get errorMediaProviderUnreachable;
 
+  /// No description provided for @errorMediaProviderAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The metadata service rejected the credentials'**
+  String get errorMediaProviderAuthFailed;
+
+  /// No description provided for @errorMediaProviderRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'The metadata service is rate limiting requests. Try again later'**
+  String get errorMediaProviderRateLimited;
+
+  /// No description provided for @errorMediaProviderConfigInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The metadata service configuration is invalid. Check the admin settings'**
+  String get errorMediaProviderConfigInvalid;
+
   /// No description provided for @errorRegistrationDisabled.
   ///
   /// In en, this message translates to:
@@ -26626,6 +26698,12 @@ abstract class AppLocalizations {
   /// **'From {name}'**
   String desktopFilesOwner(String name);
 
+  /// No description provided for @desktopFilesAddedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Added by {name}'**
+  String desktopFilesAddedBy(String name);
+
   /// No description provided for @desktopFilesDetails.
   ///
   /// In en, this message translates to:
@@ -26703,6 +26781,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Moved to Recycle'**
   String get desktopFilesMovedToRecycle;
+
+  /// No description provided for @desktopFilesRemovedFromSharedSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from shared space'**
+  String get desktopFilesRemovedFromSharedSpace;
 
   /// No description provided for @desktopFilesRestored.
   ///
@@ -28569,6 +28653,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Anime series added to your library will appear here.'**
   String get desktopMoviesEmptyAnimeBody;
+
+  /// No description provided for @desktopMoviesQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get desktopMoviesQuality;
+
+  /// No description provided for @desktopMoviesDetailLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get desktopMoviesDetailLibrary;
+
+  /// No description provided for @desktopMoviesDetailVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Visibility'**
+  String get desktopMoviesDetailVisibility;
+
+  /// No description provided for @desktopMoviesDetailDirectPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct play'**
+  String get desktopMoviesDetailDirectPlay;
 
   /// No description provided for @filesLocalLibrary.
   ///

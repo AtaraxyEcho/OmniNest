@@ -584,7 +584,6 @@ void main() {
       '/photos/p-1',
       '/reader/items/book-1',
       '/music/now-playing',
-      '/video/v-1',
     ]) {
       router.go(path);
       await tester.pump();
@@ -596,6 +595,20 @@ void main() {
       expect(find.byType(DesktopPlayerBar), findsNothing, reason: path);
       expect(find.text('OmniNest'), findsNothing, reason: path);
     }
+  });
+
+  testWidgets('影视详情保留壳层：标题栏、侧栏与播放条都在', (tester) async {
+    await pumpShell(tester);
+    final router = GoRouter.of(tester.element(find.text('route:/portal')));
+
+    router.go('/video/v-1');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+
+    expect(find.text('route:/video/v-1'), findsOneWidget);
+    expect(find.byType(DesktopTitleBar), findsOneWidget);
+    expect(find.byType(DesktopSidebar), findsOneWidget);
+    expect(find.byType(DesktopPlayerBar), findsOneWidget);
   });
 
   test('路由 → 壳层姿态的判定覆盖公开页、沉浸页与常规页', () {
@@ -619,6 +632,11 @@ void main() {
     );
     expect(
       desktopShellModeForPath('/reader/items/book-1/chapters/chapter-1'),
+      DesktopShellMode.immersive,
+    );
+    expect(desktopShellModeForPath('/video/v-1'), DesktopShellMode.chrome);
+    expect(
+      desktopShellModeForPath('/video/series/s-1'),
       DesktopShellMode.immersive,
     );
     expect(

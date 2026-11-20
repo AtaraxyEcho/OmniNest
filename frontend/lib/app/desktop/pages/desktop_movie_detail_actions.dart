@@ -201,7 +201,12 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
   late final String _initialPosterUrl;
   bool _saving = false;
 
-  bool get _isMovie => widget.item.movieId != null;
+  /// 样例 `FilmEditor` 对影视条目固定给全量字段（标题/类型/年份/时长/
+  /// 评分/演员/海报地址/简介）。只有剧集单集才走精简字段；未刮削的影片
+  /// 没有 `movieId`，不能据此把它误判成单集而少掉一半输入框。
+  bool get _isMovie =>
+      widget.item.movieId != null ||
+      widget.item.mediaType.toUpperCase() != 'EPISODE';
   bool get _canRestoreOriginal =>
       widget.item.metadata['manualMetadataOriginal'] is Map;
 

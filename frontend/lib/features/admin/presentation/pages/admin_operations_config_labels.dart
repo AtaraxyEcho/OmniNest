@@ -95,6 +95,8 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
         'media.metadata-provider.tmdb.api-key': l10n.adminConfigTmdbApiKey,
         'media.tmdb.url': l10n.adminConfigTmdbBaseUrl,
         'media.metadata-provider.tmdb.base-url': l10n.adminConfigTmdbBaseUrl,
+        'media.tmdb.image-url': l10n.adminConfigTmdbImageUrl,
+        'media.tmdb.proxy-url': l10n.adminConfigTmdbProxyUrl,
         'media.tmdb.lang': l10n.adminConfigTmdbLanguage,
         'media.metadata-provider.tmdb.language': l10n.adminConfigTmdbLanguage,
         'media.tmdb.timeout': l10n.adminConfigTmdbTimeout,

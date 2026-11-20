@@ -163,6 +163,12 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.tmdb.accessToken", "TMDB v4 Access Token", 2048));
         add(values, string("media.tmdb.url", "https://api.themoviedb.org/3", "media", ConfigSurface.INTEGRATION,
                 "config.integration.tmdb.baseUrl", "TMDB API 基础地址", false, 512));
+        add(values, string("media.tmdb.image-url", "https://image.tmdb.org/t/p", "media",
+                ConfigSurface.INTEGRATION, "config.integration.tmdb.imageUrl",
+                "TMDB 图床基础地址", false, 512));
+        add(values, string("media.tmdb.proxy-url", "", "media", ConfigSurface.INTEGRATION,
+                "config.integration.tmdb.proxyUrl",
+                "TMDB 出站代理（http://host:port，留空直连）", false, 512));
         add(values, string("media.tmdb.lang", "zh-CN", "media", ConfigSurface.INTEGRATION,
                 "config.integration.tmdb.language", "TMDB 返回语言", false, 32));
         add(values, number("media.tmdb.timeout", "15", "media", ConfigSurface.INTEGRATION,

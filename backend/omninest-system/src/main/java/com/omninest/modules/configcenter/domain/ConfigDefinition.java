@@ -44,6 +44,7 @@ public record ConfigDefinition(
 ) {
     private static final Set<String> URL_KEYS = Set.of(
             "media.tmdb.url",
+            "media.tmdb.image-url",
             "music.musicbrainz.url",
             "music.musicbrainz.cover-url",
             "music.netease.url",
@@ -51,6 +52,9 @@ public record ConfigDefinition(
             "weather.qweather.url",
             "notification.email.web-base-url"
     );
+
+    /** 出站代理地址：JDK HttpClient 只支持 HTTP CONNECT，因此比普通 URL 更严。 */
+    private static final Set<String> PROXY_URL_KEYS = Set.of("media.tmdb.proxy-url");
 
     /**
      * 逗号分隔的运行目录相对路径清单配置：写入时就拒绝绝对路径与目录逃逸，
@@ -146,6 +150,9 @@ public record ConfigDefinition(
         if (TRUST_HOST_LIST_KEYS.contains(key)) {
             return normalizeTrustHostList(rawValue);
         }
+        if (PROXY_URL_KEYS.contains(key)) {
+            return normalizeProxyUrl(rawValue);
+        }
         if (!URL_KEYS.contains(key)) {
             return rawValue;
         }
@@ -199,6 +206,39 @@ public record ConfigDefinition(
             }
         }
         return String.join(",", segments);
+    }
+
+    /**
+     * 校验出站代理地址。JDK HttpClient 只支持 HTTP CONNECT，故仅接受 {@code http://host:port}；
+     * 空串表示直连。https/socks5、带凭据或带路径的写法一律拒绝，避免运行时静默降级成直连。
+     */
+    private String normalizeProxyUrl(String rawValue) {
+        String value = rawValue.trim();
+        if (value.isEmpty()) {
+            return "";
+        }
+        if (value.chars().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("代理地址不能包含控制字符");
+        }
+        URI uri;
+        try {
+            uri = new URI(value);
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("代理地址格式不正确，示例：http://127.0.0.1:7897", exception);
+        }
+        if (!"http".equalsIgnoreCase(uri.getScheme())
+                || uri.getHost() == null
+                || uri.getHost().isBlank()
+                || uri.getPort() <= 0
+                || uri.getPort() > 65535
+                || uri.getUserInfo() != null
+                || uri.getQuery() != null
+                || uri.getFragment() != null
+                || (uri.getPath() != null && !uri.getPath().isEmpty() && !"/".equals(uri.getPath()))) {
+            throw new IllegalArgumentException(
+                    "代理地址仅支持无凭据的 http://host:port 格式，例如 http://127.0.0.1:7897");
+        }
+        return "http://" + uri.getHost() + ":" + uri.getPort();
     }
 
     private String normalizeUrl(String rawValue) {

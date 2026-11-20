@@ -40,4 +40,13 @@ public interface SafeUrlValidator {
      * @param url 待校验的 URL
      */
     void requireSafeHttpUrl(String url);
+
+    /**
+     * 只校验主机名与字面量地址，不做 DNS 解析。经代理访问时目标由代理解析，
+     * 本地解析结果既拦不住真实目标，也会在 Fake-IP 或 DNS 污染下误杀。
+     *
+     * @param uri 待校验的 URI
+     * @param allowSelfHostedLiteralIp 是否放行环回与内网字面量（自建端点）
+     */
+    void requireStaticSafeHost(URI uri, boolean allowSelfHostedLiteralIp);
 }

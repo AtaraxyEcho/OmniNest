@@ -174,6 +174,53 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
         require(uri, AddressScope.SELF_HOSTED);
     }
 
+    /**
+     * 只校验主机名与字面量地址，不触发 DNS。IPv6 方括号必须剥离后再判网段，
+     * 否则 {@code [::1]} 会被当成普通域名放行。
+     *
+     * @param uri 待验证的 URI
+     * @param allowSelfHostedLiteralIp 是否放行环回与内网字面量
+     * @throws BusinessException 地址缺失、格式非法或落在受限段
+     */
+    @Override
+    public void requireStaticSafeHost(URI uri, boolean allowSelfHostedLiteralIp) {
+        String rawHost = uri == null ? null : uri.getHost();
+        if (rawHost == null || rawHost.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 缺少主机名");
+        }
+        String host = rawHost.trim();
+        boolean bracketedIpv6 = host.startsWith("[") && host.endsWith("]");
+        if (bracketedIpv6) {
+            host = host.substring(1, host.length() - 1);
+        }
+        if (host.contains("%")) {
+            // 带 zoneId 的地址（fe80::1%eth0）必定指向本机链路。
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
+        }
+        AddressScope scope = allowSelfHostedLiteralIp ? AddressScope.SELF_HOSTED : AddressScope.PUBLIC_ONLY;
+        if (isReservedHostName(host, scope.allowLoopbackHostName)) {
+            log.warn("出站主机名被拒(静态校验): host={}, scope={}", host, scope);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
+        }
+        InetAddress literal = tryParseIpLiteral(host);
+        if (literal != null) {
+            if (isBlockedAddress(literal, scope)) {
+                log.warn("出站字面量地址被拒(静态校验): host={}, scope={}", host, scope);
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
+            }
+        } else if (bracketedIpv6) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 主机名格式无效");
+        }
+    }
+
+    private static InetAddress tryParseIpLiteral(String host) {
+        try {
+            return InetAddress.ofLiteral(host);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private void require(URI uri, AddressScope scope) {
         String host = uri.getHost();
         if (host == null || host.isBlank()) {

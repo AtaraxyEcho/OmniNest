@@ -55,6 +55,9 @@ public enum ErrorCode {
     MUSIC_RECOMMENDATION_UNAVAILABLE(5005, "每日推荐暂不可用"),
     MEDIA_FORMAT_UNSUPPORTED(5006, "媒体格式不支持"),
     MEDIA_PROVIDER_UNREACHABLE(5007, "元数据提供器不可达"),
+    MEDIA_PROVIDER_AUTH_FAILED(5008, "元数据提供器凭据无效或权限不足"),
+    MEDIA_PROVIDER_RATE_LIMITED(5009, "元数据提供器请求过于频繁"),
+    MEDIA_PROVIDER_CONFIG_INVALID(5010, "元数据提供器配置无效"),
 
     // ==================== 阅读 6xxx ====================
     BOOK_NOT_FOUND(6001, "书籍不存在"),

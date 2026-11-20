@@ -539,6 +539,17 @@
   "filesSharedSpaceDesc": "所有用户共享的文件空间",
   "filesSharedSpaceUsage": "共享空间用量",
   "filesSharedSpaceEmpty": "共享空间暂无文件",
+  "filesSharedSpaceInfoTitle": "家庭共享空间",
+  "filesSharedSpaceInfo": "已用 {used} / {capacity} · {items} 个项目",
+  "@filesSharedSpaceInfo": {
+    "placeholders": {
+      "used": { "type": "String" },
+      "capacity": { "type": "String" },
+      "items": { "type": "int" }
+    }
+  },
+  "filesSharedSpaceUnlimited": "不设上限",
+  "filesSharedSpaceMember": "成员",
   "filesMoveToShared": "移到共享空间",
   "filesMoveToSharedConfirm": "移到共享空间",
   "filesMoveToSharedMessage": "将 \"{name}\" 移到共享空间？所有用户将可见。",
@@ -742,6 +753,9 @@
   "filesFileActions": "文件操作",
   "filesDeleteConfirmTitle": "移入回收站？",
   "filesDeleteConfirmMessage": "\"{name}\" 会从文件列表中移除，并同步清理影视、音乐等模块中的关联记录。",
+  "filesRemoveSharedConfirmTitle": "从共享空间移除？",
+  "filesRemoveSharedConfirmMessage": "其他成员将无法再看到这些项目。",
+  "filesRemoveSharedConfirmAction": "移除",
   "filesPurgeConfirmTitle": "彻底删除？",
   "filesPurgeConfirmMessage": "\"{name}\" 将从回收站永久删除，此操作不可撤销。",
   "filesFolderItemCount": "{count} 项",
@@ -1825,6 +1839,8 @@
   "adminConfigMusicBrainzCoverUrl": "MusicBrainz 封面服务地址",
   "adminConfigMusicOnlineEnabled": "启用在线音乐",
   "adminConfigTmdbBaseUrl": "TMDB 服务地址",
+  "adminConfigTmdbImageUrl": "TMDB 图床地址",
+  "adminConfigTmdbProxyUrl": "TMDB 出站代理",
   "adminConfigPhotoAiEndpoint": "图像分析服务地址",
   "adminConfigNeteaseBaseUrl": "网易云音乐服务地址",
   "adminConfigNeteaseHosts": "网易云播放域名",
@@ -5409,6 +5425,9 @@
   "errorRateLimited": "请求过于频繁，请稍后重试",
   "errorDependencyUnavailable": "依赖服务不可用，请稍后重试",
   "errorMediaProviderUnreachable": "无法连接元数据服务，请检查服务器网络或代理设置",
+  "errorMediaProviderAuthFailed": "元数据服务凭据无效或权限不足",
+  "errorMediaProviderRateLimited": "元数据服务请求过于频繁，请稍后重试",
+  "errorMediaProviderConfigInvalid": "元数据服务配置无效，请检查管理台配置",
   "errorRegistrationDisabled": "当前服务器未开放注册",
   "errorInternalError": "服务器内部错误，请稍后重试",
   "errorTaskStatusIllegal": "任务当前状态不允许该操作",
@@ -6402,6 +6421,14 @@
   "desktopFilesLinkCopied": "链接已复制到剪贴板",
   "desktopFilesRevoke": "撤销",
   "desktopFilesOwner": "来自{name}",
+  "desktopFilesAddedBy": "由{name}添加",
+  "@desktopFilesAddedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "desktopFilesDetails": "详情与版本",
   "desktopFilesVersions": "版本",
   "desktopFilesMoveToRecycle": "移到回收站",
@@ -6415,6 +6442,7 @@
   "desktopFilesOpen": "打开",
   "desktopFilesUploadDone": "已上传 {done}/{total}",
   "desktopFilesMovedToRecycle": "已移到回收站",
+  "desktopFilesRemovedFromSharedSpace": "已从共享空间移除",
   "desktopFilesRestored": "已还原",
   "desktopFilesShareUnavailable": "服务端未配置 Web 访问基址，无法生成分享链接。",
   "desktopFilesLoadMore": "加载更多（{loaded}/{total}）",
@@ -6791,6 +6819,10 @@
   "desktopMoviesEmptySeriesBody": "添加到片库的剧集会显示在这里。",
   "desktopMoviesEmptyAnimeTitle": "暂无动漫",
   "desktopMoviesEmptyAnimeBody": "添加到片库的动漫剧集会显示在这里。",
+  "desktopMoviesQuality": "画质",
+  "desktopMoviesDetailLibrary": "媒体库",
+  "desktopMoviesDetailVisibility": "可见范围",
+  "desktopMoviesDetailDirectPlay": "直接播放",
   "filesLocalLibrary": "本地曲库",
   "musicScanStatusLabel": "扫描中",
   "musicScanQueued": "已开始扫描音乐",

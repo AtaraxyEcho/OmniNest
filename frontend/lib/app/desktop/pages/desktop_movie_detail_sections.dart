@@ -36,11 +36,14 @@ class _OverviewState extends State<_Overview> {
           style: DesktopType.eyebrow(skin.text3),
         ),
         const SizedBox(height: 8),
-        Text(
-          synopsis,
-          maxLines: _expanded ? null : 3,
-          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-          style: DesktopType.body(skin.text2).copyWith(height: 1.65),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Text(
+            synopsis,
+            maxLines: _expanded ? null : 3,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: DesktopType.body(skin.text2).copyWith(height: 1.65),
+          ),
         ),
         if (scraped) ...[
           Align(
@@ -67,9 +70,9 @@ class _OverviewState extends State<_Overview> {
           l10n.desktopMoviesCastCrew.toUpperCase(),
           style: DesktopType.eyebrow(skin.text3),
         ),
-        const SizedBox(height: 8),
-        _CastAndCrew(item: item),
         const SizedBox(height: 10),
+        _CastAndCrew(item: item),
+        const SizedBox(height: 18),
         DesktopMovieDetailActions(item: item),
       ],
     );
@@ -80,12 +83,19 @@ class _OverviewState extends State<_Overview> {
         children: [overview, const SizedBox(height: 28), _SpecCard(item: item)],
       );
     }
+    // 样例 `.bp-grid { grid-template-columns: minmax(0,1.3fr) minmax(280px,1fr); gap:40px }`。
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(flex: 13, child: overview),
         const SizedBox(width: 40),
-        Expanded(flex: 10, child: _SpecCard(item: item)),
+        Expanded(
+          flex: 10,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 280),
+            child: _SpecCard(item: item),
+          ),
+        ),
       ],
     );
   }
@@ -137,74 +147,89 @@ class _CastAndCrew extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth < 500 ? 1 : 2;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: cards.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisExtent: 60,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemBuilder: (context, index) {
-            final card = cards[index];
-            final skin = DesktopSkin.of(context);
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: skin.raise,
-                border: Border.all(color: skin.line),
-                borderRadius: BorderRadius.circular(14),
+        // 样例 `.cast-grid`：auto-fill minmax(210px,1fr)、gap 8。
+        const gap = 8.0;
+        const minimum = 210.0;
+        final columns =
+            math
+                .max(
+                  1,
+                  ((constraints.maxWidth + gap) / (minimum + gap)).floor(),
+                )
+                .toInt();
+        final cardWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final card in cards)
+              SizedBox(
+                width: cardWidth,
+                height: 60,
+                child: _CastCard(card: card),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color:
-                          card.$3
-                              ? skin.raise2
-                              : skin.accent.withValues(alpha: 0.16),
-                    ),
-                    child: Text(
-                      _initials(card.$1),
-                      style: DesktopType.caption(
-                        card.$3 ? skin.text2 : skin.accent,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          card.$1,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.rowTitle(skin.text),
-                        ),
-                        Text(
-                          card.$2,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.caption(skin.text3),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+          ],
         );
       },
+    );
+  }
+}
+
+class _CastCard extends StatelessWidget {
+  const _CastCard({required this.card});
+
+  final (String, String, bool) card;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: skin.raise,
+        border: Border.all(color: skin.line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color:
+                  card.$3 ? skin.raise2 : skin.accent.withValues(alpha: 0.16),
+            ),
+            child: Text(
+              _initials(card.$1),
+              style: DesktopType.caption(card.$3 ? skin.text2 : skin.accent),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.$1,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.rowTitle(skin.text),
+                ),
+                Text(
+                  card.$2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -419,11 +444,18 @@ class _MovieFileRow extends StatelessWidget {
           }
           return Row(
             children: [
-              Expanded(flex: 5, child: name),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 170, maxWidth: 240),
+                child: name,
+              ),
               const SizedBox(width: 14),
-              Expanded(flex: 4, child: detail),
+              Expanded(child: detail),
               const SizedBox(width: 14),
               size,
+              if (file.primary) ...[
+                const SizedBox(width: 12),
+                DesktopChip(l10n.desktopMoviesPrimaryFile),
+              ],
             ],
           );
         },
@@ -460,42 +492,41 @@ class _Subtitles extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < tracks.length; i++)
-          DesktopStagger(
-            index: i,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: skin.raise,
-                borderRadius: BorderRadius.circular(DesktopMetrics.radiusSmall),
-                border: Border.all(color: skin.line),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 13),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: skin.line, width: i == 0 ? 0 : 1),
               ),
-              child: Row(
-                children: [
-                  Icon(DesktopIcons.captions, size: 15, color: skin.text3),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      tracks[i].label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.rowTitle(skin.text),
-                    ),
+            ),
+            child: Row(
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 170,
+                    maxWidth: 240,
                   ),
-                  SizedBox(
-                    width: 90,
-                    child: Text(
-                      tracks[i].language,
-                      style: DesktopType.caption(skin.text3),
-                    ),
+                  child: Text(
+                    tracks[i].label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DesktopType.rowTitle(skin.text),
                   ),
-                  DesktopChip(
-                    tracks[i].embedded
-                        ? l10n.videoRedesignSubtitleEmbedded
-                        : l10n.videoRedesignSubtitleExternal,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    [
+                      tracks[i].embedded
+                          ? l10n.videoRedesignSubtitleEmbedded
+                          : l10n.videoRedesignSubtitleExternal,
+                      tracks[i].kind,
+                    ].join(' · '),
+                    style: DesktopType.caption(skin.text3),
                   ),
-                ],
-              ),
+                ),
+                Text(tracks[i].language, style: DesktopType.body(skin.text2)),
+              ],
             ),
           ),
       ],
@@ -510,42 +541,70 @@ class _RelatedRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 268,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 14),
-        itemBuilder: (context, i) {
-          final item = items[i];
-          return SizedBox(
-            width: 168,
-            child: DesktopHoverLift(
-              onTap: () => desktopPush(context, '/video/${item.id}'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: DesktopImage(
-                      url: item.posterUrl,
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radius,
+    final l10n = AppLocalizations.of(context);
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    // 样例 `.poster-grid`：auto-fill minmax(clamp(190px,15vw,250px),1fr)、gap 22。
+    const gap = 22.0;
+    final minimum = (viewportWidth * 0.15).clamp(190.0, 250.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            math
+                .max(
+                  1,
+                  ((constraints.maxWidth + gap) / (minimum + gap)).floor(),
+                )
+                .toInt();
+        final cardWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: cardWidth,
+                child: DesktopHoverLift(
+                  onTap: () => desktopPush(context, '/video/${item.id}'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 2 / 3,
+                        child: DesktopImage(
+                          url: item.posterUrl,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.bodyStrong(
+                          DesktopSkin.of(context).text,
+                        ).copyWith(fontSize: 13.5),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (item.releaseDate != null)
+                            '${item.releaseDate!.year}',
+                          if (item.genres.isNotEmpty) _kindLabel(item, l10n),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(
+                          DesktopSkin.of(context).text3,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.rowTitle(DesktopSkin.of(context).text),
-                  ),
-                ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -573,6 +632,8 @@ class _SpecCard extends ConsumerWidget {
     final subtitles = ref.watch(movieSubtitlesProvider(item.id)).asData?.value;
     final rows = <(String, String)>[
       (l10n.videoStudio, studio.isEmpty ? '—' : studio),
+      (l10n.desktopMoviesDetailLibrary, '/Library/Movies'),
+      (l10n.desktopMoviesDetailVisibility, l10n.videoLibraryVisibilityMembers),
       (l10n.videoVideo, video.isEmpty ? '—' : video),
       (
         l10n.videoAudio,
@@ -600,8 +661,9 @@ class _SpecCard extends ConsumerWidget {
               children: [
                 SizedBox(
                   width: 140,
-                  child: Text(row.$1, style: DesktopType.caption(skin.text3)),
+                  child: Text(row.$1, style: DesktopType.dense(skin.text3)),
                 ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     row.$2,

@@ -1392,6 +1392,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesSharedSpaceEmpty => '共享空间暂无文件';
 
   @override
+  String get filesSharedSpaceInfoTitle => '家庭共享空间';
+
+  @override
+  String filesSharedSpaceInfo(String used, String capacity, int items) {
+    return '已用 $used / $capacity · $items 个项目';
+  }
+
+  @override
+  String get filesSharedSpaceUnlimited => '不设上限';
+
+  @override
+  String get filesSharedSpaceMember => '成员';
+
+  @override
   String get filesMoveToShared => '移到共享空间';
 
   @override
@@ -1909,6 +1923,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String filesDeleteConfirmMessage(Object name) {
     return '\"$name\" 会从文件列表中移除，并同步清理影视、音乐等模块中的关联记录。';
   }
+
+  @override
+  String get filesRemoveSharedConfirmTitle => '从共享空间移除？';
+
+  @override
+  String get filesRemoveSharedConfirmMessage => '其他成员将无法再看到这些项目。';
+
+  @override
+  String get filesRemoveSharedConfirmAction => '移除';
 
   @override
   String filesPurgeConfirmTitle(Object name) {
@@ -4451,6 +4474,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigTmdbBaseUrl => 'TMDB 服务地址';
+
+  @override
+  String get adminConfigTmdbImageUrl => 'TMDB 图床地址';
+
+  @override
+  String get adminConfigTmdbProxyUrl => 'TMDB 出站代理';
 
   @override
   String get adminConfigPhotoAiEndpoint => '图像分析服务地址';
@@ -11890,6 +11919,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorMediaProviderUnreachable => '无法连接元数据服务，请检查服务器网络或代理设置';
 
   @override
+  String get errorMediaProviderAuthFailed => '元数据服务凭据无效或权限不足';
+
+  @override
+  String get errorMediaProviderRateLimited => '元数据服务请求过于频繁，请稍后重试';
+
+  @override
+  String get errorMediaProviderConfigInvalid => '元数据服务配置无效，请检查管理台配置';
+
+  @override
   String get errorRegistrationDisabled => '当前服务器未开放注册';
 
   @override
@@ -14198,6 +14236,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String desktopFilesAddedBy(String name) {
+    return '由$name添加';
+  }
+
+  @override
   String get desktopFilesDetails => '详情与版本';
 
   @override
@@ -14239,6 +14282,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopFilesMovedToRecycle => '已移到回收站';
+
+  @override
+  String get desktopFilesRemovedFromSharedSpace => '已从共享空间移除';
 
   @override
   String get desktopFilesRestored => '已还原';
@@ -15225,6 +15271,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopMoviesEmptyAnimeBody => '添加到片库的动漫剧集会显示在这里。';
+
+  @override
+  String get desktopMoviesQuality => '画质';
+
+  @override
+  String get desktopMoviesDetailLibrary => '媒体库';
+
+  @override
+  String get desktopMoviesDetailVisibility => '可见范围';
+
+  @override
+  String get desktopMoviesDetailDirectPlay => '直接播放';
 
   @override
   String get filesLocalLibrary => '本地曲库';

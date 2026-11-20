@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import java.time.Year;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -12,17 +13,21 @@ import org.springframework.stereotype.Component;
 public class SimpleFileNameParser {
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\b(19\\d{2}|20\\d{2})\\b");
 
-    /** 中文季: 第一季、第二季、第3季 等 */
+    /** 中文季: 第一季、第3季 等。「部」单列，只有带集数标记时才算季。 */
     private static final Pattern CN_SEASON_PATTERN = Pattern.compile(
-            "第([一二三四五六七八九十百\\d]+)[季部]");
+            "第([一二三四五六七八九十百\\d]+)季");
+
+    /** 中文分部和集数标记：用于判断「第X部」是否属于剧集。 */
+    private static final Pattern CN_PART_PATTERN = Pattern.compile(
+            "第([一二三四五六七八九十百\\d]+)部");
 
     /** 中文集: 第01集、第1话、第2話、第3回 等 */
     private static final Pattern CN_EPISODE_PATTERN = Pattern.compile(
             "第(\\d{1,3})[集话話回]");
 
-    /** 中文季+集组合: 第二季-01、第1季03、第1季EP02 等 */
+    /** 中文季+集组合: 第1季03、第1季EP02 等；末尾必须不是字母或数字，避免吃掉年份前三位。 */
     private static final Pattern CN_SEASON_EPISODE_PATTERN = Pattern.compile(
-            "第([一二三四五六七八九十百\\d]+)[季部][\\s.\\-_]?[Ee]?[Pp]?(\\d{1,3})");
+            "第([一二三四五六七八九十百\\d]+)[季部][\\s.\\-_]*(?:[Ee][Pp]?)?(\\d{1,3})(?![\\dA-Za-z])");
 
     /** 西方格式: S01E02、s1e2、S01.E02 等 */
     private static final Pattern WESTERN_EPISODE_PATTERN = Pattern.compile(
@@ -30,7 +35,7 @@ public class SimpleFileNameParser {
 
     /** 裸集数: 仅当已识别到季时，匹配末尾的 -01、_02、.03 等 */
     private static final Pattern BARE_EPISODE_PATTERN = Pattern.compile(
-            "[\\s.\\-_](\\d{1,3})\\s*$");
+            "[\\s.\\-_](\\d{1,3})(?![\\dA-Za-z])\\s*$");
 
     /** 常见视频标签 */
     private static final Pattern TAG_PATTERN = Pattern.compile(
@@ -52,7 +57,7 @@ public class SimpleFileNameParser {
         Integer episode = null;
         int titleEnd = baseName.length();
 
-        // 1. 中文季+集组合（最高优先级）
+        // 1. 中文季/部 + 集数组合（最高优先级）
         Matcher cnComboMatcher = CN_SEASON_EPISODE_PATTERN.matcher(baseName);
         if (cnComboMatcher.find()) {
             season = parseChineseNumber(cnComboMatcher.group(1));
@@ -66,28 +71,31 @@ public class SimpleFileNameParser {
             if (cnSeasonMatcher.find()) {
                 season = parseChineseNumber(cnSeasonMatcher.group(1));
                 titleEnd = cnSeasonMatcher.start();
-                // 尝试在季之后匹配裸集数
-                String afterSeason = baseName.substring(cnSeasonMatcher.end());
-                Matcher bareMatcher = BARE_EPISODE_PATTERN.matcher(afterSeason);
-                if (bareMatcher.find()) {
-                    episode = Integer.parseInt(bareMatcher.group(1));
-                }
             }
         }
 
         // 3. 中文集（独立，无季信息时）
-        if (episode == null) {
-            Matcher cnEpMatcher = CN_EPISODE_PATTERN.matcher(baseName);
-            if (cnEpMatcher.find()) {
-                episode = Integer.parseInt(cnEpMatcher.group(1));
+        Matcher cnEpMatcher = CN_EPISODE_PATTERN.matcher(baseName);
+        if (cnEpMatcher.find()) {
+            episode = Integer.parseInt(cnEpMatcher.group(1));
+            if (season == null) {
+                season = 1;
+            }
+            titleEnd = Math.min(titleEnd, cnEpMatcher.start());
+        }
+
+        // 4. 「第X部」只有同时出现明确集数标记时才算剧集，否则是电影名的一部分。
+        if (episode != null) {
+            Matcher cnPartMatcher = CN_PART_PATTERN.matcher(baseName);
+            if (cnPartMatcher.find()) {
                 if (season == null) {
-                    season = 1;
+                    season = parseChineseNumber(cnPartMatcher.group(1));
                 }
-                titleEnd = Math.min(titleEnd, cnEpMatcher.start());
+                titleEnd = Math.min(titleEnd, cnPartMatcher.start());
             }
         }
 
-        // 4. 西方格式 S##E##
+        // 5. 西方格式 S##E##
         Matcher westernMatcher = WESTERN_EPISODE_PATTERN.matcher(baseName);
         if (westernMatcher.find()) {
             season = Integer.parseInt(westernMatcher.group(1));
@@ -95,7 +103,7 @@ public class SimpleFileNameParser {
             titleEnd = Math.min(titleEnd, westernMatcher.start());
         }
 
-        // 5. 有季无集时，尝试末尾裸集数
+        // 6. 有季无集时，尝试末尾裸集数
         if (season != null && episode == null) {
             Matcher bareMatcher = BARE_EPISODE_PATTERN.matcher(baseName);
             if (bareMatcher.find()) {
@@ -104,12 +112,20 @@ public class SimpleFileNameParser {
             }
         }
 
-        // 年份提取
+        // 年份：取最后一个非起始位置的合法年份，保护《1917.2019》《2001太空漫游.1968》这类片名。
         Matcher yearMatcher = YEAR_PATTERN.matcher(baseName);
         Integer year = null;
-        if (yearMatcher.find()) {
-            year = Integer.valueOf(yearMatcher.group(1));
-            titleEnd = Math.min(titleEnd, yearMatcher.start());
+        int yearStart = -1;
+        int maxYear = Year.now().getValue() + 1;
+        while (yearMatcher.find()) {
+            int candidate = Integer.parseInt(yearMatcher.group(1));
+            if (candidate <= maxYear) {
+                year = candidate;
+                yearStart = yearMatcher.start();
+            }
+        }
+        if (year != null && yearStart > 0) {
+            titleEnd = Math.min(titleEnd, yearStart);
         }
 
         // 提取标题
@@ -121,7 +137,7 @@ public class SimpleFileNameParser {
         title = title.replaceAll("\\s+", " ").trim();
 
         if (title.isEmpty()) {
-            title = removeExtension(fileName).replaceAll("[._-]+", " ").trim();
+            title = removeExtension(fileName == null ? "" : fileName).replaceAll("[._-]+", " ").trim();
         }
         if (title.isEmpty()) {
             title = "Untitled";
