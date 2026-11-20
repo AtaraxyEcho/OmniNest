@@ -72,6 +72,7 @@ part 'reader_view_page_shell.dart';
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     with
         WidgetsBindingObserver,
+        _ReaderViewPageSessionClock,
         ReaderViewPageBuilders,
         ReaderViewPageSettingsMixin,
         ReaderViewPageControlsMixin,
@@ -226,16 +227,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   EdgeInsets _lastSafePadding = EdgeInsets.zero;
   double _lastViewPaddingTop = 0;
   String? _lastLoadedChapterId;
-
-  // ── 阅读会话 ──
-  // 进入阅读页即计时：late final 会在首次读取（dispose）时才求值，
-  // 导致会话时长恒为 0，统计永不入队。
-  final DateTime _sessionStart = DateTime.now();
-
-  // 前台活跃阅读时长：切后台/窗口隐藏的挂机时间不计入阅读统计。
-  DateTime _lastResumedAt = DateTime.now();
-  Duration _accumulatedActive = Duration.zero;
-  bool _lifecycleReading = true;
 
   bool get _isPageMode => supportsPageMode && _settings.readingMode == 'page';
 
@@ -583,7 +574,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(PaperGrainCache.ensureLoaded());
+    if (_settings.usesBookDesk) {
+      unawaited(PaperGrainCache.ensureLoaded());
+    }
     _autoNightTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted || !_settings.autoNight) return;
       final nowNight = ReaderViewSettings.isNightHour();

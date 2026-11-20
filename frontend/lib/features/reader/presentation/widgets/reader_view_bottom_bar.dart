@@ -290,7 +290,7 @@ class _ReaderDesktopBottomBarState extends State<_ReaderDesktopBottomBar> {
         MediaQuery.sizeOf(context).width >= 960;
     final positionLabel =
         bar.isPageMode && page != null && pageCount != null && pageCount > 0
-            ? (isSpread
+            ? (isSpread && page + 1 < pageCount
                 ? l10n.readerPageRange(
                   page + 1,
                   math.min(pageCount, page + 2),

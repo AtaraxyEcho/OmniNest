@@ -89,8 +89,15 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           spread: spread,
           paperEdgeColor: settings.paperEdgeColor,
           bookmarked: isBookmarked,
+          // 仅对真正影响书页排版的字段求 hash，拖动外层亮度/暖色滑块不再误触发 Book 快照重抓。
           contentRevision: Object.hash(
-            settings,
+            settings.themeIndex,
+            settings.fontSize,
+            settings.lineHeight,
+            settings.fontFamily,
+            settings.justify,
+            settings.marginPreset,
+            settings.followBookTypesetting,
             annotationHandler?.chapterAnnotations.length ?? 0,
             activeSearchQuery,
           ),

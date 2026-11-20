@@ -1,5 +1,17 @@
 part of 'reader_view_page.dart';
 
+/// 阅读会话计时状态（从 State 主文件拆出，按职责独立并守住源码行数棘轮）。
+mixin _ReaderViewPageSessionClock on ConsumerState<ReaderViewPage> {
+  // 进入阅读页即计时：late final 会在首次读取（dispose）时才求值，
+  // 导致会话时长恒为 0，统计永不入队。
+  final DateTime _sessionStart = DateTime.now();
+
+  // 前台活跃阅读时长：切后台/窗口隐藏的挂机时间不计入阅读统计。
+  DateTime _lastResumedAt = DateTime.now();
+  Duration _accumulatedActive = Duration.zero;
+  bool _lifecycleReading = true;
+}
+
 /// 全书进度重算、回声判定与退出时强制上报。
 extension _ReaderViewPageProgress on _ReaderViewPageState {
   /// 防抖重算全书进度（O 章节），滚动期间最多每 200ms 一次。

@@ -18,6 +18,9 @@ mixin ReaderViewPageControlsMixin on ConsumerState<ReaderViewPage> {
   bool get showControls;
   set showControls(bool value);
   bool get isHoveringControls;
+
+  /// 选区存在时不得启动/执行控制栏自动隐藏（由页面 State 实现）。
+  bool get selectionActive;
   set isHoveringControls(bool value);
   bool get isPanelOpen;
   String? get cachedPlainText;
@@ -87,9 +90,9 @@ mixin ReaderViewPageControlsMixin on ConsumerState<ReaderViewPage> {
   /// 启动控制栏自动隐藏计时器。
   void startHideTimer() {
     hideTimer?.cancel();
-    if (isHoveringControls || isPanelOpen) return;
+    if (isHoveringControls || isPanelOpen || selectionActive) return;
     hideTimer = Timer(hideDelay, () {
-      if (mounted && !isHoveringControls && !isPanelOpen) {
+      if (mounted && !isHoveringControls && !isPanelOpen && !selectionActive) {
         setState(() => showControls = false);
       }
     });

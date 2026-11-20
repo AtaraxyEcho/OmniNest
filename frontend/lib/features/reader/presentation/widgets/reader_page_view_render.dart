@@ -45,6 +45,24 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
                 : MediaQuery.sizeOf(context).height;
         final leafWidth = widget.spread ? width / 2.0 : width;
 
+        // 窗口缩放时自动失效旧尺寸 ui.Image 快照并重预热，杜绝缩放后首翻文字拉伸变形。
+        if (widget.turnMode == PageTurnMode.cover && width > 0 && height > 0) {
+          final prevSize = _lastCurlLayoutSize;
+          final currentSize = Size(width, height);
+          if (prevSize != null &&
+              ((prevSize.width - width).abs() > 2.0 ||
+                  (prevSize.height - height).abs() > 2.0)) {
+            _lastCurlLayoutSize = currentSize;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _curlFrameNotifier.value.active) return;
+              _clearCurlImages();
+              _scheduleIdleNextCurlWarmup();
+            });
+          } else if (prevSize == null) {
+            _lastCurlLayoutSize = currentSize;
+          }
+        }
+
         final frame = _curlFrameNotifier.value;
         final isCurlActive =
             widget.turnMode == PageTurnMode.cover && frame.active;

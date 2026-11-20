@@ -177,6 +177,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
   bool _boundaryRequestInFlight = false;
   double _totalDeltaX = 0;
   double _dragStartX = 0;
+  int _animGeneration = 0;
+  CurlDirection? _dragLockedDir;
+  Size? _lastCurlLayoutSize;
   int _pendingSlideBoundaryDirection = 0;
 
   // ── 页面缓存 ──
@@ -256,6 +259,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
     widget.controller?.addListener(_onExternalPageCommand);
     widget.pageCountNotifier?.addListener(_onPageCountChanged);
     _initForMode();
+    if (widget.turnMode == PageTurnMode.cover) {
+      unawaited(PaperGrainCache.ensureLoaded());
+    }
     _scheduleIdleNextCurlWarmup();
   }
 
@@ -293,6 +299,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _clearCurlImages();
       _disposeControllers();
       _initForMode();
+      if (widget.turnMode == PageTurnMode.cover) {
+        unawaited(PaperGrainCache.ensureLoaded());
+      }
       _scheduleIdleNextCurlWarmup();
     }
 
@@ -309,6 +318,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
       if (!_slideScrolling) {
         _transitionInFlight = false;
       }
+      _animGeneration++;
+      _awaitingCurlStart = false;
+      _dragLockedDir = null;
+      _isDragging = false;
       _isAnimating = false;
       _flipProgress = 0;
       _targetPageWidget = null;

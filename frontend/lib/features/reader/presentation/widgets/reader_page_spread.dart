@@ -259,7 +259,15 @@ class _SpreadPage extends StatelessWidget {
             left: side == _SpreadSide.left ? 0 : null,
             right: side == _SpreadSide.right ? 0 : null,
             child: IgnorePointer(
-              child: ColoredBox(color: Colors.white.withValues(alpha: 0.40)),
+              child: ColoredBox(
+                color: Colors.white.withValues(
+                  alpha:
+                      ThemeData.estimateBrightnessForColor(color) ==
+                              Brightness.dark
+                          ? 0.09
+                          : 0.40,
+                ),
+              ),
             ),
           ),
         ],

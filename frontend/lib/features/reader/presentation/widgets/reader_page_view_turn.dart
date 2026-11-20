@@ -32,7 +32,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
     if (widget.turnMode == PageTurnMode.cover &&
         _isAnimating &&
         (_animController?.value ?? 0) > 0.62) {
-      _animController?.removeStatusListener(_onAutoFlipStatus);
+      _animGeneration++;
       _animController?.stop();
       _commitFlip();
       return;

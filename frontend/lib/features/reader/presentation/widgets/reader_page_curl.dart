@@ -476,6 +476,13 @@ class _CurlPainter extends CustomPainter {
       canvas.scale(-1.0, 1.0);
     }
 
+    // 实时动态阴影弧高曲线：起手 0% 平滑渐入 -> 半空最饱满 -> 落页 0% 消散，彻底告别突变黑影。
+    final arch = math.sin(frame.progress * math.pi).clamp(0.0, 1.0);
+    final frontShadeFactor = math.pow(arch, 0.6).toDouble();
+    final backShadeFactor = (math.min(1.0, frame.progress * 3.5) *
+            math.min(1.0, (1.0 - frame.progress) * 3.0))
+        .clamp(0.0, 1.0);
+
     // 1. 正面平铺段
     canvas.save();
     canvas.transform(geometry.frontTransform.storage);
@@ -483,19 +490,34 @@ class _CurlPainter extends CustomPainter {
     canvas.drawRect(imageRect, paperPaint);
     canvas.drawImageRect(front, frontSrc, imageRect, imgPaint);
     if (grainPaint != null) canvas.drawRect(imageRect, grainPaint);
-    canvas.drawRect(
-      imageRect,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          geometry.frontShadeFrom,
-          geometry.frontShadeTo,
-          const [Color(0x00000000), Color(0x33000000), Color(0x00000000)],
-          const [0.0, 0.98, 1.0],
-        ),
-    );
-    // 在贴底翻页正面内侧（书脊侧 0..35px）补画同源书脊阴影，按下页面瞬间书脊阴影 100% 连续不消失！
+    if (frontShadeFactor > 0.003) {
+      canvas.drawRect(
+        imageRect,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            geometry.frontShadeFrom,
+            geometry.frontShadeTo,
+            [
+              Colors.transparent,
+              Colors.black.withValues(alpha: 0.22 * frontShadeFactor),
+              Colors.transparent,
+            ],
+            const [0.0, 0.96, 1.0],
+          ),
+      );
+    }
+    // 动态书脊阴影：p=0 时 100% 衔接静止 70px 中缝，离脊掀起时自然变浅透光。
     if (spread) {
-      _drawSpineHalfShadow(canvas, imageRect, spineOnLeft: !isPrev);
+      final frontSpineIntensity = (1.0 - frame.progress * 0.68).clamp(
+        0.32,
+        1.0,
+      );
+      _drawSpineHalfShadow(
+        canvas,
+        imageRect,
+        spineOnLeft: !isPrev,
+        intensity: frontSpineIntensity,
+      );
     }
     _drawPaperRim(canvas, imageRect, isRightLeaf: !isPrev);
     canvas.restore();
@@ -544,40 +566,46 @@ class _CurlPainter extends CustomPainter {
         );
       }
       if (slice.light > 0.001) {
+        final isDarkPaper =
+            ThemeData.estimateBrightnessForColor(paper) == Brightness.dark;
+        final specColor =
+            isDarkPaper ? const Color(0xFFD8DEE9) : const Color(0xFFFFFBEE);
+        final specAlpha = (slice.light * (isDarkPaper ? 0.36 : 1.0)).clamp(
+          0.0,
+          1.0,
+        );
         canvas.drawRect(
           imageRect,
-          Paint()
-            ..color = const Color(
-              0xFFFFFBEE,
-            ).withValues(alpha: slice.light.clamp(0, 1)),
+          Paint()..color = specColor.withValues(alpha: specAlpha),
         );
       }
       canvas.restore();
     }
 
-    // 4. 背面平铺段（.cu-wrap > .cu-flat）
+    // 4. 背面平铺段（.cu-wrap > .cu-flat）：浮空投影偏移与深度随翻页弧高实时伸缩
     if (frame.progress >= 0.002) {
-      canvas.save();
-      canvas.translate(-2.0, 3.0);
-      canvas.transform(geometry.flatTransform.storage);
-      // 用轻量多层半透明偏移替代每帧昂贵的 MaskFilter.blur，60/120fps 丝滑无掉帧。
-      final flatShadowAlpha = (0.24 * geometry.shadowOpacity).clamp(0.0, 0.24);
+      final flatShadowAlpha = (0.22 * arch).clamp(0.0, 0.22);
       if (flatShadowAlpha > 0.002) {
+        final dx1 = -1.2 - 2.6 * arch;
+        final dy1 = 1.2 + 3.2 * arch;
+        canvas.save();
+        canvas.translate(dx1, dy1);
+        canvas.transform(geometry.flatTransform.storage);
         canvas.drawPath(
           geometry.flatClip,
           Paint()
-            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.45),
+            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.46),
         );
         canvas.save();
-        canvas.translate(-3.0, 4.0);
+        canvas.translate(dx1 * 0.9, dy1 * 0.9);
         canvas.drawPath(
           geometry.flatClip,
           Paint()
-            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.28),
+            ..color = Colors.black.withValues(alpha: flatShadowAlpha * 0.24),
         );
         canvas.restore();
+        canvas.restore();
       }
-      canvas.restore();
 
       canvas.save();
       canvas.transform(geometry.flatTransform.storage);
@@ -585,18 +613,34 @@ class _CurlPainter extends CustomPainter {
       canvas.drawRect(imageRect, paperPaint);
       canvas.drawImageRect(back, backSrc, imageRect, imgPaint);
       if (grainPaint != null) canvas.drawRect(imageRect, grainPaint);
-      canvas.drawRect(
-        imageRect,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            geometry.flatShadeFrom,
-            geometry.flatShadeTo,
-            const [Color(0x42000000), Color(0x1A000000), Color(0x05000000)],
-            const [0.0, 0.17, 1.0],
-          ),
-      );
+      if (backShadeFactor > 0.003) {
+        canvas.drawRect(
+          imageRect,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              geometry.flatShadeFrom,
+              geometry.flatShadeTo,
+              [
+                Colors.black.withValues(alpha: 0.26 * backShadeFactor),
+                Colors.black.withValues(alpha: 0.10 * backShadeFactor),
+                Colors.black.withValues(alpha: 0.02 * backShadeFactor),
+              ],
+              const [0.0, 0.22, 1.0],
+            ),
+        );
+      }
+      // 背面动态书脊阴影：刚翻过时轻柔透光，落定到对侧（p->1.0）时平滑加深无缝合龙静止中缝。
       if (spread) {
-        _drawSpineHalfShadow(canvas, imageRect, spineOnLeft: isPrev);
+        final backSpineIntensity = (0.25 + frame.progress * 0.75).clamp(
+          0.25,
+          1.0,
+        );
+        _drawSpineHalfShadow(
+          canvas,
+          imageRect,
+          spineOnLeft: isPrev,
+          intensity: backSpineIntensity,
+        );
       }
       _drawPaperRim(canvas, imageRect, isRightLeaf: isPrev);
       canvas.restore();
@@ -611,8 +655,10 @@ class _CurlPainter extends CustomPainter {
     Canvas canvas,
     Rect rect, {
     required bool spineOnLeft,
+    double intensity = 1.0,
   }) {
     const halfGutter = 35.0;
+    final k = intensity.clamp(0.0, 1.0);
     final shadowRect =
         spineOnLeft
             ? Rect.fromLTWH(rect.left, rect.top, halfGutter, rect.height)
@@ -629,11 +675,11 @@ class _CurlPainter extends CustomPainter {
           begin: spineOnLeft ? Alignment.centerLeft : Alignment.centerRight,
           end: spineOnLeft ? Alignment.centerRight : Alignment.centerLeft,
           colors: [
-            Colors.black.withValues(alpha: 0.16),
-            Colors.black.withValues(alpha: 0.05),
+            Colors.black.withValues(alpha: 0.15 * k),
+            Colors.black.withValues(alpha: 0.05 * k),
             Colors.transparent,
           ],
-          stops: const [0.0, 0.42, 1.0],
+          stops: const [0.0, 0.40, 1.0],
         ).createShader(shadowRect),
     );
   }
@@ -646,13 +692,18 @@ class _CurlPainter extends CustomPainter {
         ..strokeWidth = 1.0
         ..color = Colors.black.withValues(alpha: 0.14),
     );
+    // 暗色主题下自适应降低纸缘白边亮度，杜绝深炭灰书页四周出现刺眼亮白框。
+    final isDarkPaper =
+        ThemeData.estimateBrightnessForColor(paper) == Brightness.dark;
+    final sideHighlightAlpha = isDarkPaper ? 0.10 : 0.55;
+    final topHighlightAlpha = isDarkPaper ? 0.06 : 0.30;
     final edgeX = isRightLeaf ? rect.right - 1.0 : rect.left + 1.0;
     canvas.drawLine(
       Offset(edgeX, rect.top),
       Offset(edgeX, rect.bottom),
       Paint()
         ..strokeWidth = 2.0
-        ..color = Colors.white.withValues(alpha: 0.55),
+        ..color = Colors.white.withValues(alpha: sideHighlightAlpha),
     );
     // 对齐样例 reader.css:18-19 顶边纸缘高光
     canvas.drawLine(
@@ -660,7 +711,7 @@ class _CurlPainter extends CustomPainter {
       Offset(rect.right, rect.top + 1.0),
       Paint()
         ..strokeWidth = 2.0
-        ..color = Colors.white.withValues(alpha: 0.30),
+        ..color = Colors.white.withValues(alpha: topHighlightAlpha),
     );
   }
 

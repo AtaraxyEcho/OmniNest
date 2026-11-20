@@ -204,17 +204,10 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
               : widget.state.pageIndex - 1;
       final revealed =
           targetIndex >= 0 ? widget.pageBuilder(targetIndex) : null;
+      // 单页窄窗与静止态保持统一无圆角裁切，消除翻页起止瞬间四角闪烁。
       return Stack(
         fit: StackFit.expand,
-        children: [
-          _constrainPage(revealed),
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: curlLayer,
-            ),
-          ),
-        ],
+        children: [_constrainPage(revealed), Positioned.fill(child: curlLayer)],
       );
     }
 
@@ -224,10 +217,17 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     final underlayLeft =
         (isNext
             ? widget.pageBuilder(idx)
-            : (idx - 2 >= 0 ? widget.pageBuilder(idx - 2) : null)) ??
+            : (idx - 2 >= 0
+                ? widget.pageBuilder(idx - 2)
+                : widget.crossChapterSnapshotBuilder?.call(-1))) ??
         const SizedBox.expand();
     final underlayRight =
-        isNext ? widget.pageBuilder(idx + 3) : widget.pageBuilder(idx + 1);
+        isNext
+            ? (widget.pageBuilder(idx + 3) ??
+                (idx + 2 >= widget.state.pageCount
+                    ? widget.crossChapterSnapshotBuilder?.call(1)
+                    : null))
+            : widget.pageBuilder(idx + 1);
 
     return ReaderPageSpread(
       left: underlayLeft,
