@@ -40,6 +40,8 @@ class _FakeFileRepository
   final deletedSharedFileIds = <String>[];
   final createdSharedFolderNames = <String>[];
   final renamedSharedFileIds = <String>[];
+  final movedSharedFileIds = <String>[];
+  final movedSharedParentIds = <String>[];
 
   final sharedFilesByParent = <String?, List<FileNode>>{};
   final sharedParentRequests = <String?>[];
@@ -606,6 +608,17 @@ class _FakeFileRepository
   }
 
   @override
+  Future<FileNode> moveSharedFile({
+    required String fileId,
+    required String parentId,
+  }) async {
+    movedSharedFileIds.add(fileId);
+    movedSharedParentIds.add(parentId);
+    // 移动不改名；fake 里没有原始节点，用 id 当名字即可回查目标目录。
+    return _fileNode(fileId, fileId, parentId: parentId);
+  }
+
+  @override
   Future<void> moveToSharedSpace(String fileId) => throw UnimplementedError();
 
   @override
@@ -733,10 +746,10 @@ FileNode _folderNode(String id, String name) {
   );
 }
 
-FileNode _fileNode(String id, String name) {
+FileNode _fileNode(String id, String name, {String? parentId}) {
   return FileNode(
     id: id,
-    parentId: null,
+    parentId: parentId,
     name: name,
     isFolder: false,
     nodeType: 'FILE',

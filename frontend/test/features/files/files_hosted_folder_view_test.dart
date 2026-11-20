@@ -49,13 +49,16 @@ class _FakeFileBrowserController extends FileBrowserController {
   }
 
   @override
-  Future<void> openFolder(FileNode folder) async {
+  Future<void> openFolder(
+    FileNode folder, {
+    List<FileNode>? breadcrumbs,
+  }) async {
     final current = state.asData!.value;
     state = AsyncData(
       current.copyWith(
         files: [_file('leaf-1', 'Poster.png')],
         parentId: folder.id,
-        breadcrumbs: [folder],
+        breadcrumbs: breadcrumbs ?? [folder],
       ),
     );
   }

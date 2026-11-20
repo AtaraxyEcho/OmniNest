@@ -109,6 +109,8 @@ x-backend-service: &backend-service
     - omninest-probe-cache:/tmp/omninest-probe
     # 整个处理根目录落卷：转码、照片打包、EPUB 暂存与派生资产共用同一大容量临时卷。
     - omninest-processing-cache:/tmp/omninest-processing
+    # AOT cache，由 deploy/backend/train-aot-cache.sh 生成，三角色共用。
+    - omninest-aot:/app/aot
   # 后端是 rclone RC 的唯一调用方（见 x-backend-environment 的 OMNINEST_RCLONE_ENDPOINT），
   # 因此只有它同时挂在出网执行体所在的 egress 上；数据面服务与 nginx 都不进 egress。
   networks:
@@ -456,6 +458,7 @@ volumes:
   omninest-certbot-config:
   omninest-certbot-challenges:
   omninest-probe-cache:
+  omninest-aot:
   omninest-processing-cache:
 
 networks:

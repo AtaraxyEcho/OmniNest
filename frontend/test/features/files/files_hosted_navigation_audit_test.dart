@@ -73,7 +73,10 @@ class _AuditFileController extends FileBrowserController {
   }
 
   @override
-  Future<void> openFolder(FileNode folder) async {
+  Future<void> openFolder(
+    FileNode folder, {
+    List<FileNode>? breadcrumbs,
+  }) async {
     final current = state.asData!.value;
     state = AsyncData(
       current.copyWith(
@@ -82,7 +85,7 @@ class _AuditFileController extends FileBrowserController {
           _file('leaf-${folder.id}', 'Sheet.jpg', parentId: folder.id),
         ],
         parentId: folder.id,
-        breadcrumbs: [...current.breadcrumbs, folder],
+        breadcrumbs: breadcrumbs ?? [...current.breadcrumbs, folder],
       ),
     );
   }

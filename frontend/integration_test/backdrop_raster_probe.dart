@@ -64,11 +64,15 @@ void main() {
   void report(String label) {
     void pct(List<double> v, String name) {
       if (v.isEmpty) {
+        // ignore: avoid_print
         print('GLASS_PROBE $label $name n=0');
         return;
       }
       final s = [...v]..sort();
       final avg = s.reduce((a, b) => a + b) / s.length;
+      // 探针输出要被外部脚本按前缀逐行解析：debugPrint 会节流并重排，
+      // 采样行必须原样落在设备日志里。
+      // ignore: avoid_print
       print(
         'GLASS_PROBE $label $name n=${s.length} '
         'avg=${avg.toStringAsFixed(2)} '
