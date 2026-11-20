@@ -997,6 +997,7 @@ class _FakeMusicApi implements MusicApi {
   Object? playlistsError;
   final secondaryRequests = <String>[];
   Completer<void>? secondaryGate;
+  Completer<void>? albumsGate;
 
   /// 置 false 后次级请求立即回包：用于让挂起的那一轮与随后新一轮刷新分出先后。
   bool gateSecondary = true;
@@ -1109,7 +1110,9 @@ class _FakeMusicApi implements MusicApi {
     secondaryRequests.add('albums');
     // 按调用时刻取快照：挂起期间改动数据时，回包仍反映发起时的状态。
     final items = List<MusicAlbum>.from(libraryAlbums);
-    if (gateSecondary) {
+    if (albumsGate != null) {
+      await albumsGate!.future;
+    } else if (gateSecondary) {
       await secondaryGate?.future;
     }
     return MusicPagedResult<MusicAlbum>(

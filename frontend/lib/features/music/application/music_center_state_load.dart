@@ -27,7 +27,8 @@ extension MusicCenterStateLoad on MusicCenterController {
     // 首帧只等本分区必需的请求：曲库首页、歌单、最近播放与恢复队列快照。
     // 仪表盘点、专辑/歌手全量列表与平台账号资料不参与首页渲染，
     // 交给 `_backfillSecondary` 在首帧之后补齐（`includeSecondary` 为 true 时
-    // 仍按一次栅栏取齐，供手动刷新与实时事件刷新使用）。
+    // 仍按一次栅栏取齐，供手动刷新与实时事件刷新使用）。首页专辑由
+    // `_backfillSecondary` 负责按小窗口发布，不把慢请求重新放回首帧栅栏。
     Future<Object?> deferred(Object? value) => Future<Object?>.value(value);
     final results = await Future.wait(<Future<Object?>>[
       includeSecondary
@@ -153,9 +154,7 @@ extension MusicCenterStateLoad on MusicCenterController {
             try {
               resolvedPlan = await _playbackResolver.resolve(fallback);
             } on Object catch (fallbackError) {
-              _partialErrors.add(
-                userFacingErrorText(fallbackError),
-              );
+              _partialErrors.add(userFacingErrorText(fallbackError));
             }
           } else {
             _partialErrors.add(userFacingErrorText(error));

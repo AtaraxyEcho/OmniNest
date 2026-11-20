@@ -100,6 +100,44 @@ void registerMusicFirstFrameTieringTests() {
     expect(filled.playlists, firstFrame.playlists);
   });
 
+  test('首页专辑不等待慢速账号资料回源', () async {
+    final api =
+        _FakeMusicApi()
+          ..libraryAlbums = [_preloadTestAlbum]
+          ..dashboardValue = const MusicDashboard(
+            trackCount: 9,
+            albumCount: 1,
+            artistCount: 0,
+            playHistoryCount: 0,
+            weekListeningSeconds: 0,
+            itemsAddedToday: 0,
+            recentTracks: [],
+            recentAlbums: [],
+            featuredArtists: [],
+          )
+          ..secondaryGate = Completer<void>()
+          ..albumsGate = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(musicCenterControllerProvider.future);
+    api.albumsGate!.complete();
+    await pumpEventQueue();
+
+    final albumFirst = container.read(musicCenterControllerProvider).value!;
+    expect(albumFirst.albums.single.id, 'album-1');
+    expect(albumFirst.dashboard.trackCount, 0);
+
+    api.secondaryGate!.complete();
+    await pumpEventQueue();
+    expect(
+      container.read(musicCenterControllerProvider).value!.dashboard.trackCount,
+      9,
+    );
+  });
+
   test('次级回填晚于新一轮刷新时不得覆盖新状态', () async {
     final api =
         _FakeMusicApi()

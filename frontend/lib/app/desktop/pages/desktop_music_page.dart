@@ -308,7 +308,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(musicCenterControllerProvider.notifier);
     try {
-      final tracks = await controller.ensureCompletePlaylistTracks();
+      final tracks = current?.selectedPlaylistTracks ?? const <MusicTrack>[];
       if (!mounted || tracks.isEmpty) {
         return;
       }
@@ -329,6 +329,13 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
           title: playlist.name,
         ),
       );
+      unawaited(
+        _streamPlaylistQueue(
+          playlistId: playlist.id,
+          seededTrackIds: tracks.map((track) => track.id).toSet(),
+          shuffle: shuffle,
+        ),
+      );
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -344,15 +351,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   Future<void> _playFavoriteTrack(MusicTrack startTrack) async {
     final controller = ref.read(musicCenterControllerProvider.notifier);
     try {
-      var current = ref.read(musicCenterControllerProvider).asData?.value;
-      while (current?.hasMoreTracks == true) {
-        final beforeCount = current!.tracks.length;
-        await controller.loadMoreTracks();
-        current = ref.read(musicCenterControllerProvider).asData?.value;
-        if (current == null || current.tracks.length <= beforeCount) {
-          break;
-        }
-      }
+      final current = ref.read(musicCenterControllerProvider).asData?.value;
       final favorites =
           current?.tracks
               .where((track) => track.favorite)
@@ -369,6 +368,12 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         startIndex: startIndex,
         // 收藏列表是动态集合，当前队列必须保留本次快照，不能在重启时误还原为整库。
         source: MusicQueueSource.transient,
+      );
+      unawaited(
+        _streamFavoriteQueue(
+          seededTrackIds: favorites.map((track) => track.id).toSet(),
+          startTrackId: startTrack.id,
+        ),
       );
     } on Object catch (error) {
       if (mounted) {
@@ -395,16 +400,23 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(musicCenterControllerProvider.notifier);
     try {
-      final tracks = await controller.ensureCompletePlaylistTracks();
+      final tracks = current?.selectedPlaylistTracks ?? const <MusicTrack>[];
       if (!mounted) {
         return;
       }
       if (tracks.isEmpty) {
         return;
       }
-      for (final track in tracks) {
-        controller.enqueue(MusicPlayableItem.local(track));
-      }
+      controller.enqueueItems(
+        tracks.map(MusicPlayableItem.local),
+        playNext: false,
+      );
+      unawaited(
+        _streamPlaylistQueue(
+          playlistId: playlist.id,
+          seededTrackIds: tracks.map((track) => track.id).toSet(),
+        ),
+      );
       showDesktopToast(
         context,
         l10n.musicPlayNextAdded,
@@ -419,6 +431,75 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
           icon: DesktopIcons.info,
         );
       }
+    }
+  }
+
+  /// 播放歌单只把首屏放入队列，余下页在后台追加到队尾。
+  Future<void> _streamPlaylistQueue({
+    required String playlistId,
+    required Set<String> seededTrackIds,
+    bool shuffle = false,
+  }) async {
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    final knownIds = <String>{...seededTrackIds};
+    while (mounted) {
+      final current = ref.read(musicCenterControllerProvider).asData?.value;
+      final playlist = current?.selectedPlaylist;
+      if (current == null || playlist == null || playlist.id != playlistId) {
+        return;
+      }
+      final paging = current.detailPaging;
+      if (!paging.hasMore || paging.loadingMore) {
+        return;
+      }
+      final beforeCount = current.selectedPlaylistTracks.length;
+      await controller.loadMorePlaylistTracks();
+      if (!mounted) return;
+      final latest = ref.read(musicCenterControllerProvider).asData?.value;
+      if (latest == null ||
+          latest.selectedPlaylist?.id != playlistId ||
+          latest.selectedPlaylistTracks.length <= beforeCount) {
+        return;
+      }
+      final additions = latest.selectedPlaylistTracks
+          .where((track) => knownIds.add(track.id))
+          .toList(growable: true);
+      if (shuffle) additions.shuffle();
+      controller.enqueueItems(
+        additions.map(MusicPlayableItem.local),
+        playNext: false,
+      );
+    }
+  }
+
+  /// 收藏列表按曲库分页续载，避免一次把整个曲库解析到 UI isolate。
+  Future<void> _streamFavoriteQueue({
+    required Set<String> seededTrackIds,
+    required String startTrackId,
+  }) async {
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    final knownIds = <String>{...seededTrackIds};
+    while (mounted) {
+      final current = ref.read(musicCenterControllerProvider).asData?.value;
+      if (current == null ||
+          !current.hasMoreTracks ||
+          !current.playbackItems.any(
+            (item) => item.playableKey == 'local:$startTrackId',
+          )) {
+        return;
+      }
+      final beforeCount = current.tracks.length;
+      await controller.loadMoreTracks();
+      if (!mounted) return;
+      final latest = ref.read(musicCenterControllerProvider).asData?.value;
+      if (latest == null || latest.tracks.length <= beforeCount) {
+        return;
+      }
+      final additions = latest.tracks
+          .where((track) => track.favorite && knownIds.add(track.id))
+          .map(MusicPlayableItem.local)
+          .toList(growable: false);
+      controller.enqueueItems(additions, playNext: false);
     }
   }
 
@@ -667,13 +748,17 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       state: state,
                       playlists: state?.playlists ?? const <MusicPlaylist>[],
                       onlinePlaylists: onlinePlaylists,
+                      onlineTracks: knownPlatformTracks,
                       onlineLibrary: platform,
+                      currentId: state?.currentItem?.playableKey,
+                      playing: state?.isPlaying ?? false,
                       onSeeAlbums:
                           () => setState(() => _tab = DesktopMusicTab.albums),
                       onOpenAlbum: (album) => _openAlbum(album).ignore(),
                       onPlayPlaylist: _openPlaylist,
                       onPlayOnlinePlaylist:
                           (playlist) => _playOnlinePlaylist(playlist).ignore(),
+                      onPlayOnlineTracks: _playOnlineTracks,
                       onSeePlaylists:
                           () =>
                               setState(() => _tab = DesktopMusicTab.playlists),
@@ -797,11 +882,15 @@ class _Home extends StatelessWidget {
     required this.state,
     required this.playlists,
     required this.onlinePlaylists,
+    required this.onlineTracks,
     required this.onlineLibrary,
+    required this.currentId,
+    required this.playing,
     required this.onSeeAlbums,
     required this.onOpenAlbum,
     required this.onPlayPlaylist,
     required this.onPlayOnlinePlaylist,
+    required this.onPlayOnlineTracks,
     required this.onSeePlaylists,
     required this.onTogglePlayback,
     required this.onOpenQueue,
@@ -811,11 +900,15 @@ class _Home extends StatelessWidget {
   final MusicCenterState? state;
   final List<MusicPlaylist> playlists;
   final List<OnlinePlaylist> onlinePlaylists;
+  final List<OnlineTrack> onlineTracks;
   final MusicPlatformLibraryState onlineLibrary;
+  final String? currentId;
+  final bool playing;
   final VoidCallback onSeeAlbums;
   final ValueChanged<MusicAlbum> onOpenAlbum;
   final ValueChanged<MusicPlaylist> onPlayPlaylist;
   final ValueChanged<OnlinePlaylist> onPlayOnlinePlaylist;
+  final ValueChanged<List<OnlineTrack>> onPlayOnlineTracks;
   final VoidCallback onSeePlaylists;
   final VoidCallback onTogglePlayback;
   final VoidCallback onOpenQueue;
@@ -824,13 +917,18 @@ class _Home extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // 首屏全量专辑在后台分页补载，补载尚未回写时使用 dashboard 的最近专辑，
-    // 避免首页在异步窗口内出现空轨道。后端已按 updatedAt 倒序返回，首页只取十张。
+    // 首帧请求只取十张，后台回填全量列表；dashboard 作为旧缓存或异常回退。
+    // 后端已按 updatedAt 倒序返回，首页始终只展示十张。
     final albums =
         state?.albums.isNotEmpty == true
             ? state!.albums
             : (state?.dashboard.recentAlbums ?? const <MusicAlbum>[]);
     final album = albums.take(10).toList(growable: false);
+    final onlineAlbums = _onlineAlbumGroups(onlineTracks);
+    final localAlbumCount =
+        (state?.dashboard.albumCount ?? 0) > 0
+            ? state!.dashboard.albumCount
+            : albums.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -839,10 +937,17 @@ class _Home extends StatelessWidget {
           eyebrow: l10n.desktopMusicLibraryEyebrow,
           title: l10n.musicNavAlbums,
           actionLabel: l10n.desktopSeeAllCount(
-            state?.dashboard.albumCount ?? albums.length,
+            localAlbumCount + onlineAlbums.length,
           ),
           onAction: onSeeAlbums,
-          child: _AlbumRail(albums: album, onOpen: onOpenAlbum),
+          child: _AlbumRail(
+            albums: album,
+            onlineAlbums: onlineAlbums,
+            currentId: currentId,
+            playing: playing,
+            onOpen: onOpenAlbum,
+            onPlayOnline: onPlayOnlineTracks,
+          ),
         ),
         DesktopSection(
           eyebrow: l10n.desktopMusicLibraryEyebrow,

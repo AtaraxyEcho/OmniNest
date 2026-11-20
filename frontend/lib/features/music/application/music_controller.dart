@@ -81,6 +81,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   MusicApi get _api => ref.read(musicApiProvider);
 
+  /// 平台歌单渐进播放使用的受保护依赖转接，避免扩展文件直接访问 [ref]。
+  MusicPlatformLibraryController get _platformLibrary =>
+      ref.read(musicPlatformLibraryProvider.notifier);
+
+  MusicPlatformLibraryState? get _platformLibrarySnapshot =>
+      ref.read(musicPlatformLibraryProvider).asData?.value;
+
+  bool get _isControllerAlive => !_controllerDisposed && ref.mounted;
+
   MusicCenterState? get _currentState => state.asData?.value;
 
   /// 播放历史门控：`ref` 只能在类体内取用，播放流程扩展经此转接。
@@ -91,18 +100,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   Future<void> _primeResumePosition(String? playableKey) => ref
       .read(musicPlaybackSessionProvider.notifier)
       .primeResumePosition(playableKey);
-
-  /// 补齐外部平台歌单曲目：`ref` 只能在类体内取用，队列命令扩展经此转接。
-  Future<List<OnlineTrack>> _loadAllPlatformPlaylistTracks(
-    OnlinePlaylist playlist,
-  ) async {
-    final notifier = ref.read(musicPlatformLibraryProvider.notifier);
-    final tracks = await notifier.loadAllPlaylistTracks(playlist);
-    if (_controllerDisposed) {
-      return const <OnlineTrack>[];
-    }
-    return tracks;
-  }
 
   /// 补齐外部平台整个喜欢列表：队列重建经此转接，语义与歌单整队一致。
   Future<List<OnlineTrack>> _loadAllLikedTracks(String platform) async {
@@ -314,50 +311,103 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final generation = _refreshGeneration;
     // `_partialErrors` 里是首帧已经发布过的错误，可能被用户关掉过；
     // 直接重新拼接会把旧错误再弹一次，因此只登记本轮新增的部分。
-    final knownErrorCount = _partialErrors.length;
-    final results = await Future.wait(<Future<Object?>>[
-      _safe(_api.dashboard, MusicDashboard.empty()),
-      _safe(() async => (await _api.albums(size: 200)).items, <MusicAlbum>[]),
-      _safe(() async => (await _api.artists(size: 200)).items, <MusicArtist>[]),
-      _safePlatformInfo(),
-    ]);
-    for (var attempt = 0; attempt < 3; attempt++) {
-      if (_controllerDisposed || !ref.mounted) {
-        return;
+    var reportedErrorCount = _partialErrors.length;
+    Future<bool> publish({
+      MusicDashboard? dashboard,
+      List<MusicAlbum>? albums,
+      List<MusicArtist>? artists,
+      Map<String, PlatformUserInfo?>? platformInfo,
+    }) async {
+      // 回填与 build 同时启动时，快速响应可能先于首帧状态落地；持续让出事件
+      // 循环，直到首帧可合并，避免这类竞态把已经取到的专辑丢掉。
+      while (true) {
+        if (_controllerDisposed || !ref.mounted) {
+          return false;
+        }
+        final pending = state;
+        if (pending.asData?.value != null) {
+          break;
+        }
+        if (pending.hasError) {
+          return false;
+        }
+        await Future<void>.delayed(Duration.zero);
       }
-      if (state.asData?.value != null) {
-        break;
+      final current = state.asData?.value;
+      if (current == null ||
+          _controllerDisposed ||
+          !ref.mounted ||
+          generation != _refreshGeneration) {
+        return false;
       }
-      await Future<void>.delayed(Duration.zero);
+      final freshErrors =
+          reportedErrorCount < _partialErrors.length
+              ? _partialErrors.sublist(reportedErrorCount)
+              : const <String>[];
+      final nextDashboard = dashboard;
+      final nextAlbums = albums;
+      final nextArtists = artists;
+      final nextPlatformInfo = platformInfo;
+      state = AsyncData(
+        current.copyWith(
+          // 次级请求失败时保留首帧小窗口，避免一次短暂 5xx 把首页专辑清空。
+          dashboard:
+              nextDashboard != null &&
+                      (nextDashboard.trackCount > 0 ||
+                          nextDashboard.albumCount > 0 ||
+                          nextDashboard.recentTracks.isNotEmpty ||
+                          nextDashboard.recentAlbums.isNotEmpty)
+                  ? nextDashboard
+                  : current.dashboard,
+          albums:
+              nextAlbums != null && nextAlbums.isNotEmpty
+                  ? nextAlbums
+                  : current.albums,
+          artists:
+              nextArtists != null && nextArtists.isNotEmpty
+                  ? nextArtists
+                  : current.artists,
+          neteaseUserInfo: nextPlatformInfo?['netease'],
+          // 无新错误时不传 errorMessage（copyWith 传 null 即保持原值）；
+          // 有新错误时追加到尚未关闭的旧错误之后。
+          errorMessage:
+              freshErrors.isEmpty
+                  ? null
+                  : <String>[
+                    if (current.errorMessage != null) current.errorMessage!,
+                    ...freshErrors,
+                  ].join('；'),
+        ),
+      );
+      reportedErrorCount = _partialErrors.length;
+      return true;
     }
-    final current = state.asData?.value;
-    if (current == null ||
-        _controllerDisposed ||
-        !ref.mounted ||
-        generation != _refreshGeneration) {
+
+    // 专辑是首页可见内容，先单独发布十张，避免被慢速账号资料或仪表盘请求
+    // 阻塞；其余次级切片随后合并，仍然只取一次请求结果。
+    final albumsFuture = _safe(
+      () async => (await _api.albums(size: 10)).items,
+      <MusicAlbum>[],
+    );
+    final dashboardFuture = _safe(_api.dashboard, MusicDashboard.empty());
+    final artistsFuture = _safe(
+      () async => (await _api.artists(size: 200)).items,
+      <MusicArtist>[],
+    );
+    final platformInfoFuture = _safePlatformInfo();
+    final albums = await albumsFuture;
+    if (!await publish(albums: albums)) {
       return;
     }
-    final freshErrors =
-        knownErrorCount < _partialErrors.length
-            ? _partialErrors.sublist(knownErrorCount)
-            : const <String>[];
-    final platformInfo = results[3] as Map<String, PlatformUserInfo?>;
-    state = AsyncData(
-      current.copyWith(
-        dashboard: results[0] as MusicDashboard,
-        albums: results[1] as List<MusicAlbum>,
-        artists: results[2] as List<MusicArtist>,
-        neteaseUserInfo: platformInfo['netease'],
-        // 无新错误时不传 errorMessage（copyWith 传 null 即保持原值）；
-        // 有新错误时追加到尚未关闭的旧错误之后。
-        errorMessage:
-            freshErrors.isEmpty
-                ? null
-                : <String>[
-                  if (current.errorMessage != null) current.errorMessage!,
-                  ...freshErrors,
-                ].join('；'),
-      ),
+    final results = await Future.wait<Object?>([
+      dashboardFuture,
+      artistsFuture,
+      platformInfoFuture,
+    ]);
+    await publish(
+      dashboard: results[0] as MusicDashboard,
+      artists: results[1] as List<MusicArtist>,
+      platformInfo: results[2] as Map<String, PlatformUserInfo?>,
     );
   }
 

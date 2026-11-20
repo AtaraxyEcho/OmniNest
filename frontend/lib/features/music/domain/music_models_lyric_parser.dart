@@ -45,8 +45,36 @@ List<MusicLyricLine> parseMusicLyrics(
   }
 
   for (final rawLine in normalizedRaw.split(RegExp(r'\r?\n'))) {
+    final structured = _parseNeteaseLyricJsonLine(rawLine.trim());
+    if (structured != null) {
+      lines.add(
+        MusicLyricLine(
+          position: structured.position,
+          text: structured.text,
+          translation: nearestText(translationByPosition, structured.position),
+          words: _nearestWords(wordsByPosition, structured.position),
+        ),
+      );
+      continue;
+    }
     final matches = timestampPattern.allMatches(rawLine).toList();
     if (matches.isEmpty) {
+      final yrcHeader = RegExp(r'^\[(\d+),\d+\]').firstMatch(rawLine.trim());
+      if (yrcHeader != null) {
+        final startMs = int.tryParse(yrcHeader.group(1) ?? '');
+        final text = _yrcLineText(rawLine.substring(yrcHeader.end));
+        if (startMs != null && text.isNotEmpty) {
+          final position = Duration(milliseconds: startMs);
+          lines.add(
+            MusicLyricLine(
+              position: position,
+              text: text,
+              translation: nearestText(translationByPosition, position),
+              words: _nearestWords(wordsByPosition, position),
+            ),
+          );
+        }
+      }
       continue;
     }
     final text = rawLine.replaceAll(timestampPattern, '').trim();
@@ -75,6 +103,70 @@ List<MusicLyricLine> parseMusicLyrics(
   }
   lines.sort((left, right) => left.position.compareTo(right.position));
   return lines;
+}
+
+/// 网易云逐字歌词的行级 JSON 载荷。网易云会把作词/作曲等元信息也编码成
+/// `{"t":0,"c":[{"tx":"..."}]}`，不能把它当作普通文本直接交给 UI。
+_StructuredMusicLyricLine? _parseNeteaseLyricJsonLine(String line) {
+  if (!line.startsWith('{') && !line.startsWith('[')) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(line);
+    if (decoded is Map) {
+      return _structuredLineFromJson(decoded);
+    }
+    // 少数代理把整段 yrc 压成一个 JSON 数组；解析首个可展示行，
+    // 其余行由逐行路径处理不到，因此只在数组恰好包含一行时使用。
+    if (decoded is List && decoded.length == 1 && decoded.first is Map) {
+      return _structuredLineFromJson(decoded.first as Map);
+    }
+  } on FormatException {
+    // 不是 JSON 的歌词行继续按 LRC/YRC 解析。
+  }
+  return null;
+}
+
+_StructuredMusicLyricLine? _structuredLineFromJson(Map value) {
+  final startMs = _lyricMilliseconds(value['t']);
+  final content = value['c'];
+  if (startMs == null || content is! List) {
+    return null;
+  }
+  final text =
+      content
+          .map((part) => part is Map ? part['tx']?.toString() ?? '' : '')
+          .join();
+  if (text.trim().isEmpty) {
+    return null;
+  }
+  return _StructuredMusicLyricLine(
+    position: Duration(milliseconds: startMs),
+    text: text.trim(),
+  );
+}
+
+int? _lyricMilliseconds(Object? value) {
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '');
+}
+
+String _yrcLineText(String body) {
+  final wordPattern = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
+  return wordPattern
+      .allMatches(body)
+      .map((match) => match.group(3) ?? '')
+      .join()
+      .trim();
+}
+
+class _StructuredMusicLyricLine {
+  const _StructuredMusicLyricLine({required this.position, required this.text});
+
+  final Duration position;
+  final String text;
 }
 
 /// 解析逐字歌词载荷（网易云 `yrc`），返回"行起始时间 → 词列表"。

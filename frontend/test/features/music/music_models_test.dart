@@ -67,6 +67,28 @@ void main() {
     expect(lines.single.text, '中国');
   });
 
+  test(
+    'parses Netease structured lyric metadata instead of displaying JSON',
+    () {
+      final lines = parseMusicLyrics(
+        '{"t":0,"c":[{"tx":"作词:"},{"tx":"Christopher Lund Nissen"}]}'
+        '\n{"t":1000,"c":[{"tx":"第一句"}]}',
+      );
+
+      expect(lines, hasLength(2));
+      expect(lines[0].text, '作词:Christopher Lund Nissen');
+      expect(lines[1].position, const Duration(seconds: 1));
+      expect(lines[1].text, '第一句');
+    },
+  );
+
+  test('parses yrc line bodies when the primary lyric is yrc', () {
+    final lines = parseMusicLyrics('[1000,900](1000,400,0)第一(1400,500,0)句');
+
+    expect(lines.single.position, const Duration(seconds: 1));
+    expect(lines.single.text, '第一句');
+  });
+
   test('music track parses genre from json', () {
     const track = MusicTrack(
       id: 't',

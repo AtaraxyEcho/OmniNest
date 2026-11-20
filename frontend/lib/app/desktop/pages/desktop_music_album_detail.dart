@@ -53,7 +53,7 @@ class _AlbumDetail extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(DesktopMetrics.radius),
                   child: DesktopCover(
-                    url: album.coverUrl,
+                    url: album.listCoverUrl,
                     kind: DesktopCoverKind.music,
                     fallbackIcon: DesktopIcons.music,
                     cacheKey: 'desktop-album-detail-${album.id}',

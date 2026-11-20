@@ -649,7 +649,7 @@ void registerMusicQueuePersistenceTests() {
     },
   );
 
-  test('播放在线歌单入队整表而不是首屏页', () async {
+  test('播放在线歌单先入队首屏并在后台补齐余页', () async {
     final api =
         _FakeMusicApi()
           ..platformStatuses = const <MusicPlatformStatus>[
@@ -676,11 +676,28 @@ void registerMusicQueuePersistenceTests() {
         .read(musicCenterControllerProvider.notifier)
         .playPlatformPlaylist(playlist, startItem: startItem);
 
-    // 在线歌单没有可重建的队列来源，入队必须已经补齐整表。
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.playbackItems, hasLength(800));
-    expect(state.currentItem?.playableKey, startItem.playableKey);
-    expect(state.queueSource.kind, MusicQueueSourceKind.transient);
+    // 首次点击只等待首屏，避免把 800 首曲目一次性解析并发布到队列。
+    final firstFrame = container.read(musicCenterControllerProvider).value!;
+    expect(firstFrame.playbackItems, hasLength(100));
+    expect(firstFrame.currentItem?.playableKey, startItem.playableKey);
+    expect(firstFrame.queueSource.kind, MusicQueueSourceKind.transient);
+
+    // 后台分页会按批追加到队尾，最终仍保持整张歌单的播放语义。
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await pumpEventQueue();
+      if (container
+              .read(musicCenterControllerProvider)
+              .value
+              ?.playbackItems
+              .length ==
+          800) {
+        break;
+      }
+    }
+    final completed = container.read(musicCenterControllerProvider).value!;
+    expect(completed.playbackItems, hasLength(800));
+    expect(completed.currentItem?.playableKey, startItem.playableKey);
+    expect(completed.queueSource.kind, MusicQueueSourceKind.transient);
   });
 }
 

@@ -343,10 +343,21 @@ class _SpinningCoverState extends State<_SpinningCover>
 }
 
 class _AlbumRail extends StatelessWidget {
-  const _AlbumRail({required this.albums, required this.onOpen});
+  const _AlbumRail({
+    required this.albums,
+    required this.onlineAlbums,
+    required this.currentId,
+    required this.playing,
+    required this.onOpen,
+    required this.onPlayOnline,
+  });
 
   final List<MusicAlbum> albums;
+  final List<List<OnlineTrack>> onlineAlbums;
+  final String? currentId;
+  final bool playing;
   final ValueChanged<MusicAlbum> onOpen;
+  final ValueChanged<List<OnlineTrack>> onPlayOnline;
 
   @override
   Widget build(BuildContext context) {
@@ -359,19 +370,33 @@ class _AlbumRail extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            itemCount: albums.length,
+            itemCount: albums.length + onlineAlbums.length,
             separatorBuilder: (_, _) => const SizedBox(width: 20),
-            itemBuilder:
-                (context, index) => SizedBox(
+            itemBuilder: (context, index) {
+              if (index < albums.length) {
+                final album = albums[index];
+                return SizedBox(
                   width: width,
                   child: DesktopStagger(
                     index: index,
-                    child: _AlbumCard(
-                      album: albums[index],
-                      onTap: () => onOpen(albums[index]),
-                    ),
+                    child: _AlbumCard(album: album, onTap: () => onOpen(album)),
+                  ),
+                );
+              }
+              final onlineAlbum = onlineAlbums[index - albums.length];
+              return SizedBox(
+                width: width,
+                child: DesktopStagger(
+                  index: index,
+                  child: _DesktopOnlineAlbumCard(
+                    tracks: onlineAlbum,
+                    currentId: currentId,
+                    playing: playing,
+                    onPlay: () => onPlayOnline(onlineAlbum),
                   ),
                 ),
+              );
+            },
           ),
         );
       },
@@ -890,7 +915,7 @@ class _AlbumCard extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: DesktopCover(
-                          url: album.coverUrl,
+                          url: album.listCoverUrl,
                           kind: DesktopCoverKind.music,
                           fallbackIcon: DesktopIcons.music,
                           cacheKey: 'desktop-album-${album.id}',

@@ -16,6 +16,7 @@ import 'package:omninest/app/desktop/widgets/desktop_track_hue.dart';
 import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -24,6 +25,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_now_playing_deck.dart';
@@ -146,47 +148,50 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        DesktopIconButton(
-                          icon: DesktopIcons.chevDown,
-                          size: 36,
-                          iconSize: 20,
-                          tooltip: l10n.photosClose,
-                          onPressed: _close,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n.musicNowPlayingEyebrow,
-                                style: DesktopType.eyebrow(
-                                  Colors.white.withValues(alpha: 0.6),
-                                ),
-                              ),
-                              Text(
-                                track?.albumTitle ?? l10n.desktopDockNowPlaying,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.caption(
-                                  Colors.white.withValues(alpha: 0.72),
-                                ),
-                              ),
-                            ],
+                    DesktopWindowDragRegion(
+                      child: Row(
+                        children: [
+                          DesktopIconButton(
+                            icon: DesktopIcons.chevDown,
+                            size: 36,
+                            iconSize: 20,
+                            tooltip: l10n.photosClose,
+                            onPressed: _close,
                           ),
-                        ),
-                        DesktopIconButton(
-                          icon: DesktopIcons.sparkle,
-                          size: 34,
-                          iconSize: 18,
-                          active: _styleOpen,
-                          tooltip: l10n.desktopNpAppearance,
-                          onPressed:
-                              () => setState(() => _styleOpen = !_styleOpen),
-                        ),
-                      ],
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  l10n.musicNowPlayingEyebrow,
+                                  style: DesktopType.eyebrow(
+                                    Colors.white.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                Text(
+                                  track?.albumTitle ??
+                                      l10n.desktopDockNowPlaying,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.caption(
+                                    Colors.white.withValues(alpha: 0.72),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          DesktopIconButton(
+                            icon: DesktopIcons.sparkle,
+                            size: 34,
+                            iconSize: 18,
+                            active: _styleOpen,
+                            tooltip: l10n.desktopNpAppearance,
+                            onPressed:
+                                () => setState(() => _styleOpen = !_styleOpen),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Expanded(
@@ -272,7 +277,15 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                   ],
                 ),
               ),
-              if (_styleOpen)
+              if (_styleOpen) ...[
+                // 样例 NpStyle 在面板外点击即收起，避免设置面板长期挡住歌词/队列。
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => setState(() => _styleOpen = false),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
                 Positioned(
                   top: 62,
                   right: 24,
@@ -280,6 +293,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                     onClose: () => setState(() => _styleOpen = false),
                   ),
                 ),
+              ],
               if (track == null)
                 Center(
                   child: Text(
@@ -919,11 +933,21 @@ List<String> _lyricLines(String? raw) {
   if (raw == null || raw.trim().isEmpty) {
     return const <String>[];
   }
+  final parsed = parseMusicLyrics(raw);
+  if (parsed.isNotEmpty) {
+    return parsed.map((line) => line.text).toList(growable: false);
+  }
   final tag = RegExp(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]');
   return raw
       .split('\n')
       .map((line) => line.replaceAll(tag, '').trim())
-      .where((line) => line.isNotEmpty && !line.startsWith('['))
+      .where(
+        (line) =>
+            line.isNotEmpty &&
+            !line.startsWith('[') &&
+            !line.startsWith('{"t"') &&
+            !line.startsWith('{"c"'),
+      )
       .toList(growable: false);
 }
 

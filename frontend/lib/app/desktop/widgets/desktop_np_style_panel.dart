@@ -271,6 +271,8 @@ class DesktopNpStylePanel extends ConsumerWidget {
                         const SizedBox(height: 12),
                         _label(l10n.desktopNpLyrics),
                         const SizedBox(height: 8),
+                        _LyricAppearancePreview(style: style),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             Text(
@@ -496,6 +498,76 @@ class DesktopNpStylePanel extends ConsumerWidget {
     4 => l10n.desktopNpPresetRose,
     _ => l10n.desktopNpPresetMono,
   };
+}
+
+/// 参照样例 `LyricPreview` 的轻量预览：只绘制三行色带，不启动独立动画，
+/// 保证拖动滑杆时面板不会再创建一棵高成本的歌词列表。
+class _LyricAppearancePreview extends StatelessWidget {
+  const _LyricAppearancePreview({required this.style});
+
+  final DesktopNpStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = DesktopNpBrush.values[style.brush.clamp(0, 4)].color;
+    final lower = DesktopNpBrush.values[style.lowerBrush.clamp(0, 4)].color;
+    final inactive = Colors.white.withValues(alpha: 0.28);
+    final activeDecoration = BoxDecoration(
+      gradient:
+          style.splitPaint
+              ? LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [
+                  style.splitPos.clamp(5, 95) / 100,
+                  style.splitPos.clamp(5, 95) / 100,
+                ],
+                colors: [active, lower],
+              )
+              : null,
+      color: style.splitPaint ? null : active,
+      borderRadius: BorderRadius.circular(4),
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DesktopNpStylePanel._line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FractionallySizedBox(
+            widthFactor: 0.58,
+            child: Container(height: 8, decoration: activeDecoration),
+          ),
+          const SizedBox(height: 8),
+          FractionallySizedBox(
+            widthFactor: 0.82,
+            child: Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: inactive,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          FractionallySizedBox(
+            widthFactor: 0.66,
+            child: Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: inactive.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Pill extends StatelessWidget {

@@ -84,17 +84,22 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     );
   }
 
-  /// 播放外部平台歌单：先补齐整表再入队。
+  /// 播放外部平台歌单：首屏先入队，余页在后台追加。
   ///
-  /// 在线歌单的队列来源是瞬态的（重启后无法按来源重建），入队必须持有完整列表；
-  /// 详情列表因此按页展示，只有真正播放时才回源整表。起始曲按 playableKey 定位，
-  /// 避免补齐期间顺序变化导致播错曲目。
+  /// 在线歌单的队列来源是瞬态的（重启后无法按来源重建），但播放首曲不需要等整表；
+  /// 分页回填仍会保留统一队列语义，避免点击播放时一次解析上千条 JSON。
   Future<void> playPlatformPlaylist(
     OnlinePlaylist playlist, {
     required MusicPlayableItem startItem,
     MusicQueueSource source = MusicQueueSource.transient,
   }) async {
-    final tracks = await _loadAllPlatformPlaylistTracks(playlist);
+    final library = _platformLibrary;
+    final key = '${playlist.platform}:${playlist.playlistId}';
+    final cached = _platformLibrarySnapshot?.playlistTracks[key]?.items;
+    final tracks =
+        cached?.isNotEmpty == true
+            ? cached!
+            : await library.loadPlaylistTracks(playlist);
     if (_controllerDisposed || tracks.isEmpty) {
       return;
     }
@@ -103,23 +108,91 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       (item) => item.playableKey == startItem.playableKey,
     );
     await playItems(items, startIndex: index < 0 ? 0 : index, source: source);
+    unawaited(_streamPlatformPlaylistQueue(library, playlist, tracks));
+  }
+
+  Future<void> _streamPlatformPlaylistQueue(
+    MusicPlatformLibraryController library,
+    OnlinePlaylist playlist,
+    List<OnlineTrack> seeded,
+  ) async {
+    final knownIds = seeded.map((track) => track.songId).toSet();
+    final key = '${playlist.platform}:${playlist.playlistId}';
+    while (_isControllerAlive) {
+      final current = _platformLibrarySnapshot;
+      final page = current?.playlistTracks[key];
+      if (page == null || !page.hasMore) {
+        return;
+      }
+      final beforeCount = page.items.length;
+      try {
+        await library.loadMorePlaylistTracks(playlist);
+      } on Object {
+        // 队列是播放器的瞬态补齐任务；窗口关闭或账号切换时平台库可能
+        // 先于中心控制器销毁，后台续载应安静结束，不得把异步异常抛到界面。
+        return;
+      }
+      if (!_isControllerAlive) {
+        return;
+      }
+      final latest = _platformLibrarySnapshot;
+      final next = latest?.playlistTracks[key];
+      if (next == null || next.items.length <= beforeCount) {
+        return;
+      }
+      enqueueItems(
+        next.items
+            .where((track) => knownIds.add(track.songId))
+            .map(MusicPlayableItem.online),
+        playNext: false,
+      );
+    }
   }
 
   /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
   void enqueue(MusicPlayableItem item) {
+    enqueueItems(<MusicPlayableItem>[item]);
+  }
+
+  /// 批量加入播放队列。
+  ///
+  /// 分页回填使用尾部追加并且只持久化一次，避免逐曲触发状态发布、队列写入和
+  /// UI 重建。默认仍保持“下一首播放”的单曲入队语义，供菜单操作兼容。
+  void enqueueItems(
+    Iterable<MusicPlayableItem> incoming, {
+    bool playNext = true,
+  }) {
     final current = _currentState;
-    if (current == null ||
-        current.playbackItems.any(
-          (candidate) => candidate.playableKey == item.playableKey,
-        )) {
+    if (current == null) {
+      return;
+    }
+    final knownKeys =
+        current.playbackItems.map((item) => item.playableKey).toSet();
+    final additions = <MusicPlayableItem>[];
+    for (final item in incoming) {
+      if (knownKeys.add(item.playableKey)) {
+        additions.add(item);
+      }
+    }
+    if (additions.isEmpty) {
       return;
     }
     final items = [...current.playbackItems];
-    final insertAt = (current.playbackIndex + 1).clamp(0, items.length);
-    items.insert(insertAt, item);
+    final insertAt =
+        playNext
+            ? (current.playbackIndex + 1).clamp(0, items.length)
+            : items.length;
+    items.insertAll(insertAt, additions);
     if (current.playMode == MusicPlayMode.shuffle) {
-      // 下一首播放语义：洗牌序队头同步插入。
-      _shuffleUpcoming.insert(0, item.playableKey);
+      // 下一首播放语义插到洗牌序队头；尾部续载按顺序追加到未播序末端。
+      if (playNext) {
+        _shuffleUpcoming.insertAll(
+          0,
+          additions.map((item) => item.playableKey),
+        );
+      } else {
+        _shuffleUpcoming.addAll(additions.map((item) => item.playableKey));
+      }
     }
     final next = current.copyWith(playbackItems: items);
     _replaceState(next);

@@ -8,7 +8,13 @@ const double _desktopOnlineTrackRowHeight = 56;
 List<OnlineTrack> _knownPlatformTracks(MusicPlatformLibraryState library) {
   final seen = <String>{};
   final tracks = <OnlineTrack>[];
-  for (final track in library.likedTracks) {
+  // 喜欢列表与已预热歌单共同构成当前会话可见的在线曲目窗口；只取喜欢列表
+  // 会让没有收藏歌曲的账号在首页和 Albums 页看不到第三方专辑。
+  final candidates = <OnlineTrack>[
+    ...library.likedTracks,
+    for (final page in library.playlistTracks.values) ...page.items,
+  ];
+  for (final track in candidates) {
     if (seen.add('${track.platform}:${track.songId}')) tracks.add(track);
   }
   return List<OnlineTrack>.unmodifiable(tracks);
@@ -576,14 +582,6 @@ extension on _DesktopMusicPageState {
       final ordered = tracks.toList(growable: true);
       final selectedAlbum =
           ref.read(musicCenterControllerProvider).asData?.value.selectedAlbum;
-      if (selectedAlbum != null) {
-        final complete = await controller.ensureCompleteAlbumTracks();
-        if (complete.isNotEmpty) {
-          ordered
-            ..clear()
-            ..addAll(complete);
-        }
-      }
       if (shuffle) ordered.shuffle();
       final startIndex =
           startTrack == null
@@ -601,6 +599,15 @@ extension on _DesktopMusicPageState {
                   title: selectedAlbum.title,
                 ),
       );
+      if (selectedAlbum != null) {
+        unawaited(
+          _streamAlbumQueue(
+            albumId: selectedAlbum.id,
+            seededTrackIds: tracks.map((track) => track.id).toSet(),
+            shuffle: shuffle,
+          ),
+        );
+      }
     } on Object catch (error) {
       if (!mounted) return;
       showDesktopToast(
@@ -614,8 +621,10 @@ extension on _DesktopMusicPageState {
 
   Future<void> _playOnlineLikedTrack(OnlineTrack track) async {
     try {
-      final library = ref.read(musicPlatformLibraryProvider.notifier);
-      final tracks = await library.loadAllLikedTracks(track.platform);
+      final snapshot = ref.read(musicPlatformLibraryProvider).asData?.value;
+      final tracks =
+          snapshot?.likedTracksByPlatform[track.platform]?.items ??
+          const <OnlineTrack>[];
       if (!mounted || tracks.isEmpty) {
         return;
       }
@@ -631,6 +640,13 @@ extension on _DesktopMusicPageState {
             tracks.map(MusicPlayableItem.online).toList(growable: false),
             startIndex: startIndex,
           );
+      unawaited(
+        _streamOnlineLikedQueue(
+          platform: track.platform,
+          seededSongIds: tracks.map((item) => item.songId).toSet(),
+          startSongId: track.songId,
+        ),
+      );
     } on Object catch (error) {
       if (!mounted) return;
       showDesktopToast(
@@ -646,7 +662,7 @@ extension on _DesktopMusicPageState {
     }
   }
 
-  /// 在线歌单卡片先加载首屏，再交给统一播放队列补齐整张歌单。
+  /// 在线歌单卡片先加载首屏，再在后台向队尾追加后续页。
   ///
   /// 桌面端旧页面只认识本地 [MusicPlaylist]，这里显式走平台歌单命令，
   /// 避免把平台歌单 ID 误传给本地曲库接口。
@@ -659,10 +675,15 @@ extension on _DesktopMusicPageState {
       if (!mounted || tracks.isEmpty) return;
       await ref
           .read(musicCenterControllerProvider.notifier)
-          .playPlatformPlaylist(
-            playlist,
-            startItem: MusicPlayableItem.online(tracks.first),
+          .playItems(
+            tracks.map(MusicPlayableItem.online).toList(growable: false),
           );
+      unawaited(
+        _streamOnlinePlaylistQueue(
+          playlist: playlist,
+          seededSongIds: tracks.map((item) => item.songId).toSet(),
+        ),
+      );
     } on Object catch (error) {
       if (!mounted) return;
       showDesktopToast(
@@ -694,8 +715,19 @@ extension on _DesktopMusicPageState {
 
   void _enqueueAlbumTracks(List<MusicTrack> tracks) {
     final controller = ref.read(musicCenterControllerProvider.notifier);
-    for (final track in tracks) {
-      controller.enqueue(MusicPlayableItem.local(track));
+    controller.enqueueItems(
+      tracks.map(MusicPlayableItem.local),
+      playNext: false,
+    );
+    final album =
+        ref.read(musicCenterControllerProvider).asData?.value.selectedAlbum;
+    if (album != null) {
+      unawaited(
+        _streamAlbumQueue(
+          albumId: album.id,
+          seededTrackIds: tracks.map((track) => track.id).toSet(),
+        ),
+      );
     }
     if (tracks.isNotEmpty) {
       showDesktopToast(
@@ -703,6 +735,103 @@ extension on _DesktopMusicPageState {
         AppLocalizations.of(context).musicPlayNextAdded,
         icon: DesktopIcons.queue,
       );
+    }
+  }
+
+  /// 专辑只先播放首屏，剩余页到达后批量追加到队尾。
+  Future<void> _streamAlbumQueue({
+    required String albumId,
+    required Set<String> seededTrackIds,
+    bool shuffle = false,
+  }) async {
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    final knownIds = <String>{...seededTrackIds};
+    while (mounted) {
+      final current = ref.read(musicCenterControllerProvider).asData?.value;
+      if (current?.selectedAlbum?.id != albumId) return;
+      final paging = current!.detailPaging;
+      if (!paging.hasMore || paging.loadingMore) return;
+      final beforeCount = current.selectedAlbumTracks.length;
+      await controller.loadMoreAlbumTracks();
+      if (!mounted) return;
+      final latest = ref.read(musicCenterControllerProvider).asData?.value;
+      if (latest == null ||
+          latest.selectedAlbum?.id != albumId ||
+          latest.selectedAlbumTracks.length <= beforeCount) {
+        return;
+      }
+      final additions = latest.selectedAlbumTracks
+          .where((track) => knownIds.add(track.id))
+          .toList(growable: true);
+      if (shuffle) additions.shuffle();
+      controller.enqueueItems(
+        additions.map(MusicPlayableItem.local),
+        playNext: false,
+      );
+    }
+  }
+
+  /// 在线歌单按首屏页宽向后续载，避免播放按钮触发 1000 条 JSON 的同步解析。
+  Future<void> _streamOnlinePlaylistQueue({
+    required OnlinePlaylist playlist,
+    required Set<String> seededSongIds,
+  }) async {
+    final library = ref.read(musicPlatformLibraryProvider.notifier);
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    final knownIds = <String>{...seededSongIds};
+    while (mounted) {
+      final current = ref.read(musicPlatformLibraryProvider).asData?.value;
+      final page =
+          current
+              ?.playlistTracks['${playlist.platform}:${playlist.playlistId}'];
+      if (page == null || !page.hasMore) return;
+      final beforeCount = page.items.length;
+      await library.loadMorePlaylistTracks(playlist);
+      if (!mounted) return;
+      final latest = ref.read(musicPlatformLibraryProvider).asData?.value;
+      final next =
+          latest?.playlistTracks['${playlist.platform}:${playlist.playlistId}'];
+      if (next == null || next.items.length <= beforeCount) return;
+      final additions = next.items
+          .where((track) => knownIds.add(track.songId))
+          .map(MusicPlayableItem.online)
+          .toList(growable: false);
+      controller.enqueueItems(additions, playNext: false);
+    }
+  }
+
+  /// 在线喜欢列表按平台分页续载，首屏先播放，后续曲目批量入队。
+  Future<void> _streamOnlineLikedQueue({
+    required String platform,
+    required Set<String> seededSongIds,
+    required String startSongId,
+  }) async {
+    final library = ref.read(musicPlatformLibraryProvider.notifier);
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    final knownIds = <String>{...seededSongIds};
+    while (mounted) {
+      final current = ref.read(musicPlatformLibraryProvider).asData?.value;
+      final page = current?.likedTracksByPlatform[platform];
+      final musicState = ref.read(musicCenterControllerProvider).asData?.value;
+      if (page == null ||
+          !page.hasMore ||
+          musicState == null ||
+          !musicState.playbackItems.any(
+            (item) => item.playableKey == 'online:$platform:$startSongId',
+          )) {
+        return;
+      }
+      final beforeCount = page.items.length;
+      await library.loadMoreLikedTracks(<String>[platform]);
+      if (!mounted) return;
+      final latest = ref.read(musicPlatformLibraryProvider).asData?.value;
+      final next = latest?.likedTracksByPlatform[platform];
+      if (next == null || next.items.length <= beforeCount) return;
+      final additions = next.items
+          .where((track) => knownIds.add(track.songId))
+          .map(MusicPlayableItem.online)
+          .toList(growable: false);
+      controller.enqueueItems(additions, playNext: false);
     }
   }
 }
