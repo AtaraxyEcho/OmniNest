@@ -177,6 +177,15 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             int startIndex = startIndexForQuality(quality);
             List<String> candidates = playbackQualityCandidates(startIndex);
             long deadline = System.nanoTime() + PLAYBACK_URL_TIMEOUT.toNanos();
+            // NeteaseCloudMusicApi 在会员曲目上经常让 song/url/v1 对 exhigh/standard
+            // 直接返回 400，而旧版 song/url 按码率仍能给出可播地址。普通音质先走
+            // 旧接口可以省掉两次必败请求；无损/母带等高级音质仍保留 v1 探测。
+            if (prefersLegacyPlayback(quality)) {
+                PlaybackUrlResult legacy = requestLegacyPlayback(songId, quality, userCookie, deadline);
+                if (legacy.url() != null) {
+                    return legacy;
+                }
+            }
             for (String level : candidates) {
                 long remainingNanos = deadline - System.nanoTime();
                 if (remainingNanos <= 0) {
@@ -212,28 +221,10 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                     break;
                 }
             }
-            // NeteaseCloudMusicApi 4.32 在部分会员曲目上会让新版接口直接返回
-            // HTTP 400；旧版 /song/url 仍按 br 返回可播地址，继续复用同一完整 Cookie。
-            for (int bitrate : LEGACY_BITRATE_FALLBACKS) {
-                long remainingNanos = deadline - System.nanoTime();
-                if (remainingNanos <= 0) {
-                    break;
-                }
-                Duration requestTimeout = Duration.ofMillis(Math.max(
-                        1, Math.min(REQUEST_TIMEOUT.toMillis(), remainingNanos / 1_000_000)));
-                String path = "/song/url?id=" + encode(songId)
-                        + "&br=" + bitrate
-                        + "&timestamp=" + System.currentTimeMillis();
-                JsonNode json = requestJson(path, userCookie, requestTimeout);
-                String url = playbackUrl(json);
-                if (url != null) {
-                    String qualityName = bitrate >= 320_000 ? "exhigh" : "standard";
-                    JsonNode songData = json.path("data").get(0);
-                    String format = songData.path("type").asString(null);
-                    log.info("网易云播放URL通过旧接口获取成功: songId={}, quality={}, format={}",
-                            songId, qualityName, format);
-                    return new PlaybackUrlResult(url, qualityName, format, null);
-                }
+            // 高级音质的 v1 失败时仍回落到旧接口，兼容不同版本的代理容器。
+            PlaybackUrlResult legacy = requestLegacyPlayback(songId, quality, userCookie, deadline);
+            if (legacy.url() != null) {
+                return legacy;
             }
             log.info("网易云播放URL获取失败: songId={}, 所有音质均不可用", songId);
             return new PlaybackUrlResult(null, null, null, "所有音质均不可用，可能需要VIP");
@@ -246,6 +237,54 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             // 用户可见文案固定脱敏：异常消息里可能带内网主机名与端口。
             return new PlaybackUrlResult(null, null, null, "音源服务暂时不可用，请稍后重试");
         }
+    }
+
+    private boolean prefersLegacyPlayback(String quality) {
+        if (quality == null || quality.isBlank()) {
+            return true;
+        }
+        return switch (quality.trim().toLowerCase(Locale.ROOT)) {
+            case "standard", "higher", "exhigh" -> true;
+            default -> false;
+        };
+    }
+
+    private PlaybackUrlResult requestLegacyPlayback(
+            String songId,
+            String quality,
+            String cookie,
+            long deadline
+    ) throws IOException, InterruptedException {
+        List<Integer> bitrates = legacyBitrateCandidates(quality);
+        for (int bitrate : bitrates) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
+                break;
+            }
+            Duration requestTimeout = Duration.ofMillis(Math.max(
+                    1, Math.min(REQUEST_TIMEOUT.toMillis(), remainingNanos / 1_000_000)));
+            String path = "/song/url?id=" + encode(songId)
+                    + "&br=" + bitrate
+                    + "&timestamp=" + System.currentTimeMillis();
+            JsonNode json = requestJson(path, cookie, requestTimeout);
+            String url = playbackUrl(json);
+            if (url != null) {
+                String qualityName = bitrate >= 320_000 ? "exhigh" : "standard";
+                JsonNode songData = json.path("data").get(0);
+                String format = songData.path("type").asString(null);
+                log.info("网易云播放URL通过旧接口获取成功: songId={}, quality={}, format={}",
+                        songId, qualityName, format);
+                return new PlaybackUrlResult(url, qualityName, format, null);
+            }
+        }
+        return new PlaybackUrlResult(null, null, null, null);
+    }
+
+    private List<Integer> legacyBitrateCandidates(String quality) {
+        if (quality != null && "standard".equalsIgnoreCase(quality.trim())) {
+            return List.of(128_000);
+        }
+        return LEGACY_BITRATE_FALLBACKS;
     }
 
     @Override

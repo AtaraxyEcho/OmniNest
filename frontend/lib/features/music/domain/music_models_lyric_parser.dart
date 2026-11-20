@@ -9,13 +9,18 @@ List<MusicLyricLine> parseMusicLyrics(
   String? translation,
   String? wordLyrics,
 }) {
-  if (raw == null || raw.trim().isEmpty) {
+  final normalizedRaw = _normalizeMusicLyricText(raw);
+  if (normalizedRaw == null || normalizedRaw.trim().isEmpty) {
     return const [];
   }
   final lines = <MusicLyricLine>[];
   final timestampPattern = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
-  final translationByPosition = _parseTranslationTimestamps(translation);
-  final wordsByPosition = parseMusicLyricWords(wordLyrics);
+  final translationByPosition = _parseTranslationTimestamps(
+    _normalizeMusicLyricText(translation),
+  );
+  final wordsByPosition = parseMusicLyricWords(
+    _normalizeMusicLyricText(wordLyrics),
+  );
   String? nearestText(Map<Duration, String> table, Duration position) {
     if (table.isEmpty) {
       return null;
@@ -39,7 +44,7 @@ List<MusicLyricLine> parseMusicLyrics(
     return best;
   }
 
-  for (final rawLine in raw.split(RegExp(r'\r?\n'))) {
+  for (final rawLine in normalizedRaw.split(RegExp(r'\r?\n'))) {
     final matches = timestampPattern.allMatches(rawLine).toList();
     if (matches.isEmpty) {
       continue;
@@ -79,12 +84,13 @@ List<MusicLyricLine> parseMusicLyrics(
 /// 无法识别的行会被跳过；整段无法识别时返回空表，调用方退回行级显示。
 Map<Duration, List<MusicLyricWord>> parseMusicLyricWords(String? raw) {
   final result = <Duration, List<MusicLyricWord>>{};
-  if (raw == null || raw.trim().isEmpty) {
+  final normalizedRaw = _normalizeMusicLyricText(raw);
+  if (normalizedRaw == null || normalizedRaw.trim().isEmpty) {
     return result;
   }
   final lineHeader = RegExp(r'^\[(\d+),(\d+)\]');
   final yrcWord = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
-  for (final rawLine in raw.split(RegExp(r'\r?\n'))) {
+  for (final rawLine in normalizedRaw.split(RegExp(r'\r?\n'))) {
     final line = rawLine.trim();
     final header = lineHeader.firstMatch(line);
     if (header == null) {
@@ -109,6 +115,111 @@ Map<Duration, List<MusicLyricWord>> parseMusicLyricWords(String? raw) {
     );
   }
   return result;
+}
+
+/// 兼容部分第三方代理把歌词先按 Latin-1 转了一次或把 Unicode 转义保留为文本。
+/// 只在检测到明显的异常编码标记时修复，正常中文、日文和拉丁字符保持原样。
+String? _normalizeMusicLyricText(String? value) {
+  if (value == null || value.isEmpty) {
+    return value;
+  }
+  var text = value.replaceAllMapped(
+    RegExp(r'\\u([0-9a-fA-F]{4})'),
+    (match) => String.fromCharCode(int.parse(match.group(1)!, radix: 16)),
+  );
+  // 某些代理会把 JSON 内的换行再次转义，先还原成真正的歌词行分隔符。
+  text = text
+      .replaceAll(r'\r\n', '\n')
+      .replaceAll(r'\n', '\n')
+      .replaceAll(r'\r', '\r');
+  if (!_looksLikeMojibake(text)) {
+    return text;
+  }
+  try {
+    final bytes = _mojibakeBytes(text);
+    if (bytes == null) {
+      return text;
+    }
+    final repaired = utf8.decode(bytes, allowMalformed: false);
+    if (_mojibakeMarkerCount(repaired) < _mojibakeMarkerCount(text)) {
+      text = repaired;
+    }
+  } on FormatException {
+    // 非 UTF-8 的合法拉丁歌词保持原文，不能用替换字符覆盖用户内容。
+  }
+  return text;
+}
+
+bool _looksLikeMojibake(String value) => _mojibakeMarkerCount(value) >= 2;
+
+int _mojibakeMarkerCount(String value) {
+  const markers = <String>{
+    'Ã',
+    'Â',
+    'â',
+    'ä',
+    'æ',
+    'ç',
+    'å',
+    'è',
+    'é',
+    'ï',
+    '�',
+  };
+  var count = 0;
+  for (final rune in value.runes) {
+    if (markers.contains(String.fromCharCode(rune))) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/// 将常见的 Windows-1252 标点映射回 UTF-8 字节，覆盖“ä¸­å›½”这类
+/// 由代理错误解码产生的文本；其它无法确定来源的字符不参与修复。
+List<int>? _mojibakeBytes(String value) {
+  const cp1252 = <int, int>{
+    0x20ac: 0x80,
+    0x201a: 0x82,
+    0x192: 0x83,
+    0x201e: 0x84,
+    0x2026: 0x85,
+    0x2020: 0x86,
+    0x2021: 0x87,
+    0x2c6: 0x88,
+    0x2030: 0x89,
+    0x160: 0x8a,
+    0x2039: 0x8b,
+    0x152: 0x8c,
+    0x17d: 0x8e,
+    0x2018: 0x91,
+    0x2019: 0x92,
+    0x201c: 0x93,
+    0x201d: 0x94,
+    0x2022: 0x95,
+    0x2013: 0x96,
+    0x2014: 0x97,
+    0x2dc: 0x98,
+    0x2122: 0x99,
+    0x161: 0x9a,
+    0x203a: 0x9b,
+    0x153: 0x9c,
+    0x17e: 0x9e,
+    0x178: 0x9f,
+  };
+  final bytes = <int>[];
+  for (final rune in value.runes) {
+    if (rune <= 0xff) {
+      bytes.add(rune);
+    } else {
+      final mapped = cp1252[rune];
+      if (mapped == null) {
+        return null;
+      }
+      bytes.add(mapped);
+    }
+  }
+  return bytes;
 }
 
 void _addWord(

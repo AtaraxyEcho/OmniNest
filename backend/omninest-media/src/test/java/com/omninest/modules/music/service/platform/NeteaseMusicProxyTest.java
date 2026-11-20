@@ -621,17 +621,21 @@ class NeteaseMusicProxyTest {
     }
 
     @Test
-    void playbackUrlFallsBackToLegacyBitrateEndpointAfterV1Http400() throws IOException {
+    void playbackUrlPrefersLegacyBitrateEndpointForDefaultQuality() throws IOException {
         MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
         MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
         AtomicReference<String> legacyQuery = new AtomicReference<>();
         AtomicReference<String> legacyCookie = new AtomicReference<>();
+        AtomicInteger v1Requests = new AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/login/status", exchange -> {
             exchange.getResponseHeaders().add("Set-Cookie", "NMTID=refreshed; Path=/");
             writeJson(exchange, "{\"data\":{\"account\":{\"id\":42}}}");
         });
-        server.createContext("/song/url/v1", exchange -> writeStatus(exchange, 400));
+        server.createContext("/song/url/v1", exchange -> {
+            v1Requests.incrementAndGet();
+            writeStatus(exchange, 400);
+        });
         server.createContext("/song/url", exchange -> {
             legacyQuery.set(exchange.getRequestURI().getQuery());
             legacyCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
@@ -664,6 +668,7 @@ class NeteaseMusicProxyTest {
 
             assertThat(result.url()).isEqualTo("https://music.163.com/legacy.mp3");
             assertThat(result.quality()).isEqualTo("exhigh");
+            assertThat(v1Requests).hasValue(0);
             assertThat(legacyQuery.get()).contains("br=320000");
             assertThat(legacyCookie.get()).contains("MUSIC_U=test-cookie");
             assertThat(legacyCookie.get()).contains("os=pc");

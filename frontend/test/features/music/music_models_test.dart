@@ -61,6 +61,12 @@ void main() {
     expect(track.lyricLines.single.text, 'Hello');
   });
 
+  test('repairs common third party lyric mojibake before parsing', () {
+    final lines = parseMusicLyrics('[00:01.00]ä¸­å›½');
+
+    expect(lines.single.text, '中国');
+  });
+
   test('music track parses genre from json', () {
     const track = MusicTrack(
       id: 't',

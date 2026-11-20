@@ -567,20 +567,79 @@ extension on _DesktopMusicPageState {
   Future<void> _playAlbumTracks(
     List<MusicTrack> tracks, {
     bool shuffle = false,
+    MusicTrack? startTrack,
   }) async {
     if (tracks.isEmpty) return;
     final l10n = AppLocalizations.of(context);
-    final ordered = tracks.toList(growable: true);
-    if (shuffle) ordered.shuffle();
+    final controller = ref.read(musicCenterControllerProvider.notifier);
     try {
-      await ref
-          .read(musicCenterControllerProvider.notifier)
-          .playItems(ordered.map(MusicPlayableItem.local).toList());
+      final ordered = tracks.toList(growable: true);
+      final selectedAlbum =
+          ref.read(musicCenterControllerProvider).asData?.value.selectedAlbum;
+      if (selectedAlbum != null) {
+        final complete = await controller.ensureCompleteAlbumTracks();
+        if (complete.isNotEmpty) {
+          ordered
+            ..clear()
+            ..addAll(complete);
+        }
+      }
+      if (shuffle) ordered.shuffle();
+      final startIndex =
+          startTrack == null
+              ? 0
+              : ordered.indexWhere((track) => track.id == startTrack.id);
+      await controller.playItems(
+        ordered.map(MusicPlayableItem.local).toList(growable: false),
+        startIndex: startIndex < 0 ? 0 : startIndex,
+        source:
+            selectedAlbum == null
+                ? MusicQueueSource.transient
+                : MusicQueueSource(
+                  kind: MusicQueueSourceKind.album,
+                  id: selectedAlbum.id,
+                  title: selectedAlbum.title,
+                ),
+      );
     } on Object catch (error) {
       if (!mounted) return;
       showDesktopToast(
         context,
         failureToast(l10n, l10n.musicPlay, error),
+        kind: DesktopToastKind.error,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+
+  Future<void> _playOnlineLikedTrack(OnlineTrack track) async {
+    try {
+      final library = ref.read(musicPlatformLibraryProvider.notifier);
+      final tracks = await library.loadAllLikedTracks(track.platform);
+      if (!mounted || tracks.isEmpty) {
+        return;
+      }
+      final startIndex = tracks.indexWhere(
+        (candidate) => candidate.songId == track.songId,
+      );
+      if (startIndex < 0) {
+        return;
+      }
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .playItems(
+            tracks.map(MusicPlayableItem.online).toList(growable: false),
+            startIndex: startIndex,
+          );
+    } on Object catch (error) {
+      if (!mounted) return;
+      showDesktopToast(
+        context,
+        failureToast(
+          AppLocalizations.of(context),
+          AppLocalizations.of(context).musicPlay,
+          error,
+        ),
         kind: DesktopToastKind.error,
         icon: DesktopIcons.info,
       );

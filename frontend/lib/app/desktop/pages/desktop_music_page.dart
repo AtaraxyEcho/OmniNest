@@ -44,6 +44,7 @@ import 'package:omninest/features/files/application/media_import_service.dart'
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/video/application/media_import_task_waiter.dart';
 
@@ -69,7 +70,6 @@ class DesktopMusicPage extends ConsumerStatefulWidget {
 
 class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   DesktopMusicTab _tab = DesktopMusicTab.home;
-  MusicAlbum? _selectedAlbum;
   final TextEditingController _search = TextEditingController();
   final GlobalKey<MediaImportButtonState> _mediaImportKey =
       GlobalKey<MediaImportButtonState>();
@@ -280,7 +280,26 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     }
   }
 
-  Future<void> _playSelectedPlaylist({bool shuffle = false}) async {
+  Future<void> _openAlbum(MusicAlbum album) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(musicCenterControllerProvider.notifier).openAlbum(album);
+    } on Object catch (error) {
+      if (mounted) {
+        showDesktopToast(
+          context,
+          failureToast(l10n, l10n.musicNavAlbums, error),
+          kind: DesktopToastKind.error,
+          icon: DesktopIcons.info,
+        );
+      }
+    }
+  }
+
+  Future<void> _playSelectedPlaylist({
+    bool shuffle = false,
+    MusicTrack? startTrack,
+  }) async {
     final current = ref.read(musicCenterControllerProvider).asData?.value;
     final playlist = current?.selectedPlaylist;
     if (playlist == null) {
@@ -297,14 +316,69 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
       if (shuffle) {
         ordered.shuffle();
       }
+      final startIndex =
+          startTrack == null
+              ? 0
+              : ordered.indexWhere((track) => track.id == startTrack.id);
       await controller.playItems(
         ordered.map(MusicPlayableItem.local).toList(growable: false),
+        startIndex: startIndex < 0 ? 0 : startIndex,
+        source: MusicQueueSource(
+          kind: MusicQueueSourceKind.playlist,
+          id: playlist.id,
+          title: playlist.name,
+        ),
       );
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
           context,
           failureToast(l10n, l10n.musicPlay, error),
+          kind: DesktopToastKind.error,
+          icon: DesktopIcons.info,
+        );
+      }
+    }
+  }
+
+  Future<void> _playFavoriteTrack(MusicTrack startTrack) async {
+    final controller = ref.read(musicCenterControllerProvider.notifier);
+    try {
+      var current = ref.read(musicCenterControllerProvider).asData?.value;
+      while (current?.hasMoreTracks == true) {
+        final beforeCount = current!.tracks.length;
+        await controller.loadMoreTracks();
+        current = ref.read(musicCenterControllerProvider).asData?.value;
+        if (current == null || current.tracks.length <= beforeCount) {
+          break;
+        }
+      }
+      final favorites =
+          current?.tracks
+              .where((track) => track.favorite)
+              .toList(growable: false) ??
+          const <MusicTrack>[];
+      final startIndex = favorites.indexWhere(
+        (track) => track.id == startTrack.id,
+      );
+      if (favorites.isEmpty || startIndex < 0) {
+        return;
+      }
+      await controller.playItems(
+        favorites.map(MusicPlayableItem.local).toList(growable: false),
+        startIndex: startIndex,
+        // 收藏列表是动态集合，当前队列必须保留本次快照，不能在重启时误还原为整库。
+        source: MusicQueueSource.transient,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        showDesktopToast(
+          context,
+          failureToast(
+            AppLocalizations.of(context),
+            AppLocalizations.of(context).musicPlay,
+            error,
+          ),
           kind: DesktopToastKind.error,
           icon: DesktopIcons.info,
         );
@@ -483,13 +557,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         state?.section == MusicSection.playlistDetail
             ? state?.selectedPlaylist
             : null;
-    final selectedAlbum = _selectedAlbum;
-    final albumTracks =
-        selectedAlbum == null
-            ? const <MusicTrack>[]
-            : (state?.tracks ?? const <MusicTrack>[])
-                .where((track) => track.albumTitle == selectedAlbum.title)
-                .toList(growable: false);
+    final selectedAlbum =
+        state?.section == MusicSection.albumDetail
+            ? state?.selectedAlbum
+            : null;
+    final albumTracks = state?.selectedAlbumTracks ?? const <MusicTrack>[];
     Widget initialContent() =>
         musicAsync.hasError
             ? DesktopErrorView(
@@ -532,11 +604,16 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 tracks: albumTracks,
                 currentId: state?.currentItem?.playableKey,
                 playing: state?.isPlaying ?? false,
-                onBack: () => setState(() => _selectedAlbum = null),
+                onBack:
+                    () =>
+                        ref
+                            .read(musicCenterControllerProvider.notifier)
+                            .closeAlbum(),
                 onPlay: () => _playAlbumTracks(albumTracks),
                 onShuffle: () => _playAlbumTracks(albumTracks, shuffle: true),
                 onAddToQueue: () => _enqueueAlbumTracks(albumTracks),
-                onTrackPlay: (track) => actions.playTrackById(track.id),
+                onTrackPlay:
+                    (track) => _playAlbumTracks(albumTracks, startTrack: track),
               )
             else if (selectedPlaylist != null)
               _PlaylistDetail(
@@ -555,7 +632,8 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 onAddToQueue: _addSelectedPlaylistToQueue,
                 onEdit: () => _editPlaylist(playlist: selectedPlaylist),
                 onDelete: () => _deletePlaylist(selectedPlaylist),
-                onTrackPlay: (track) => actions.playTrackById(track.id),
+                onTrackPlay:
+                    (track) => _playSelectedPlaylist(startTrack: track),
               )
             else ...[
               DesktopPageHead(
@@ -576,7 +654,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                     onChanged:
                         (value) => setState(() {
                           _tab = value;
-                          _selectedAlbum = null;
                         }),
                   ),
                 ],
@@ -593,8 +670,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       onlineLibrary: platform,
                       onSeeAlbums:
                           () => setState(() => _tab = DesktopMusicTab.albums),
-                      onOpenAlbum:
-                          (album) => setState(() => _selectedAlbum = album),
+                      onOpenAlbum: (album) => _openAlbum(album).ignore(),
                       onPlayPlaylist: _openPlaylist,
                       onPlayOnlinePlaylist:
                           (playlist) => _playOnlinePlaylist(playlist).ignore(),
@@ -618,13 +694,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                         loadingMore: likedLoadingMore,
                         onLoadMore: loadMoreLikedTracks,
                         onPlay:
-                            (track) =>
-                                ref
-                                    .read(
-                                      musicCenterControllerProvider.notifier,
-                                    )
-                                    .playOnlineTrack(track)
-                                    .ignore(),
+                            (track) => _playOnlineLikedTrack(track).ignore(),
                       ),
                   ],
                 ),
@@ -664,13 +734,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                         loadingMore: likedLoadingMore,
                         onLoadMore: loadMoreLikedTracks,
                         onPlay:
-                            (track) =>
-                                ref
-                                    .read(
-                                      musicCenterControllerProvider.notifier,
-                                    )
-                                    .playOnlineTrack(track)
-                                    .ignore(),
+                            (track) => _playOnlineLikedTrack(track).ignore(),
                       ),
                   ],
                 ),
@@ -686,7 +750,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                               .toList(growable: false) ??
                           const <MusicTrack>[],
                       search: _search,
-                      onPlay: (track) => actions.playTrackById(track.id),
+                      onPlay: _playFavoriteTrack,
                       currentId: state?.currentItem?.playableKey,
                       playing: state?.isPlaying ?? false,
                       showControls: false,
@@ -700,13 +764,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                         loadingMore: likedLoadingMore,
                         onLoadMore: loadMoreLikedTracks,
                         onPlay:
-                            (track) =>
-                                ref
-                                    .read(
-                                      musicCenterControllerProvider.notifier,
-                                    )
-                                    .playOnlineTrack(track)
-                                    .ignore(),
+                            (track) => _playOnlineLikedTrack(track).ignore(),
                       ),
                   ],
                 ),
@@ -717,7 +775,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                     _AlbumGrid(
                       albums: state?.albums ?? const [],
                       emptyLabel: l10n.musicNoAlbums,
-                      onOpen: (album) => setState(() => _selectedAlbum = album),
+                      onOpen: (album) => _openAlbum(album).ignore(),
                       onlineTracks: knownPlatformTracks,
                       currentId: state?.currentItem?.playableKey,
                       playing: state?.isPlaying ?? false,
@@ -766,15 +824,23 @@ class _Home extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final album = state?.albums.take(8).toList() ?? const <MusicAlbum>[];
+    // 首屏全量专辑在后台分页补载，补载尚未回写时使用 dashboard 的最近专辑，
+    // 避免首页在异步窗口内出现空轨道。后端已按 updatedAt 倒序返回，首页只取十张。
+    final albums =
+        state?.albums.isNotEmpty == true
+            ? state!.albums
+            : (state?.dashboard.recentAlbums ?? const <MusicAlbum>[]);
+    final album = albums.take(10).toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _FocusHero(state: state, onTogglePlayback: onTogglePlayback),
         DesktopSection(
-          eyebrow: l10n.desktopRecentlyAdded,
+          eyebrow: l10n.desktopMusicLibraryEyebrow,
           title: l10n.musicNavAlbums,
-          actionLabel: l10n.desktopSeeAllCount(state?.albums.length ?? 0),
+          actionLabel: l10n.desktopSeeAllCount(
+            state?.dashboard.albumCount ?? albums.length,
+          ),
           onAction: onSeeAlbums,
           child: _AlbumRail(albums: album, onOpen: onOpenAlbum),
         ),

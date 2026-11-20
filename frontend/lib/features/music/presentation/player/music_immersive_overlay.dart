@@ -129,44 +129,55 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
     required bool isFullscreen,
   }) {
     final visible = !isFullscreen || _topBarHovered;
-    return SizedBox(
-      height: 58,
-      child: MouseRegion(
-        onEnter: (_) => _setTopBarHovered(true),
-        onExit: (_) => _setTopBarHovered(false),
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedSlide(
-            offset: visible ? Offset.zero : const Offset(0, -0.78),
-            duration: MusicImmersiveMotion.duration(
-              context,
-              const Duration(milliseconds: 220),
-            ),
-            curve: Curves.easeOutCubic,
-            child: AnimatedOpacity(
-              opacity: visible ? 1 : 0,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      // 沉浸播放覆盖层会遮住壳层标题栏，顶栏空白区域必须继续承担
+      // 无边框窗口的拖拽入口；按钮自身仍优先响应点击。
+      onPanStart:
+          isDesktopPlatform
+              ? (_) => _windowChromeController.startDragging()
+              : null,
+      onDoubleTap:
+          isDesktopPlatform ? _windowChromeController.toggleMaximize : null,
+      child: SizedBox(
+        height: 58,
+        child: MouseRegion(
+          onEnter: (_) => _setTopBarHovered(true),
+          onExit: (_) => _setTopBarHovered(false),
+          child: IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedSlide(
+              offset: visible ? Offset.zero : const Offset(0, -0.78),
               duration: MusicImmersiveMotion.duration(
                 context,
-                const Duration(milliseconds: 180),
+                const Duration(milliseconds: 220),
               ),
               curve: Curves.easeOutCubic,
-              // 全屏下顶栏淡出时保留语义子树：透明度归零会整棵移除顶栏语义，
-              // 鼠标移入再整棵加回，会让 Windows 辅助功能桥反复重建 AXTree。
-              // 交互本身由外层 IgnorePointer 屏蔽，读屏仍能读到顶栏按钮。
-              alwaysIncludeSemantics: true,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildBackButton(context),
-                  const SleepTimerBadge(),
-                  const Spacer(),
-                  AppFullscreenButton(
-                    isFullscreen: isFullscreen,
-                    foregroundColor: MusicImmersivePalette.digital.text,
-                    accentColor: MusicImmersivePalette.digital.accent,
-                    onPressed: _toggleFullscreen,
-                  ),
-                ],
+              child: AnimatedOpacity(
+                opacity: visible ? 1 : 0,
+                duration: MusicImmersiveMotion.duration(
+                  context,
+                  const Duration(milliseconds: 180),
+                ),
+                curve: Curves.easeOutCubic,
+                // 全屏下顶栏淡出时保留语义子树：透明度归零会整棵移除顶栏语义，
+                // 鼠标移入再整棵加回，会让 Windows 辅助功能桥反复重建 AXTree。
+                // 交互本身由外层 IgnorePointer 屏蔽，读屏仍能读到顶栏按钮。
+                alwaysIncludeSemantics: true,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildBackButton(context),
+                    const SleepTimerBadge(),
+                    const Spacer(),
+                    AppFullscreenButton(
+                      isFullscreen: isFullscreen,
+                      foregroundColor: MusicImmersivePalette.digital.text,
+                      accentColor: MusicImmersivePalette.digital.accent,
+                      onPressed: _toggleFullscreen,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

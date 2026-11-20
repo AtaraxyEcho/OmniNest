@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:omninest/features/music/domain/music_cover_paths.dart';
 
 part 'music_models_lyric_parser.dart';

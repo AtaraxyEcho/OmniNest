@@ -50,12 +50,13 @@ class _FocusHero extends StatelessWidget {
             RepaintBoundary(
               child: ImageFiltered(
                 imageFilter: desktopGlassFilter(
-                  blur: 42,
-                  saturation: 1.6,
+                  blur: 30,
+                  saturation: 1.35,
                   brightness: 0.7,
                 ),
                 child: Transform.scale(
-                  scale: 1.2,
+                  // BoxFit.cover 已经铺满舞台，只保留极小安全边避免模糊采样露边。
+                  scale: 1.04,
                   child: DesktopCover(
                     url: cover,
                     kind: DesktopCoverKind.music,
