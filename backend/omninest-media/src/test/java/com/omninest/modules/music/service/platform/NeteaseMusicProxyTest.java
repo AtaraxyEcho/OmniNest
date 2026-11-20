@@ -576,6 +576,50 @@ class NeteaseMusicProxyTest {
                 .isEqualTo("http://localhost:3001/cloudsearch?keywords=a");
     }
 
+    @Test
+    void playbackUrlAddsPcClientCookieForVipSession() throws IOException {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
+        AtomicReference<String> playbackCookie = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/song/url/v1", exchange -> {
+            playbackCookie.set(exchange.getRequestHeaders().getFirst("Cookie"));
+            if (!playbackCookie.get().contains("os=pc")) {
+                writeStatus(exchange, 400);
+                return;
+            }
+            writeJson(exchange, """
+                    {"data":[{"url":"https://music.163.com/song.mp3","type":"mp3"}]}
+                    """);
+        });
+        server.start();
+        try {
+            UUID ownerUserId = UUID.randomUUID();
+            when(configService.onlineEnabled()).thenReturn(true);
+            when(configService.neteaseEnabled()).thenReturn(true);
+            when(configService.neteaseBaseUrl()).thenReturn(
+                    "http://127.0.0.1:" + server.getAddress().getPort()
+            );
+            when(credentialService.find(ownerUserId, MusicPlatform.NETEASE)).thenReturn(
+                    Optional.of(credential("42"))
+            );
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    configService,
+                    credentialService,
+                    mock(SafeUrlValidator.class)
+            );
+
+            var result = localProxy.getPlaybackUrl(ownerUserId, "28310702", null, "exhigh");
+
+            assertThat(result.url()).isEqualTo("https://music.163.com/song.mp3");
+            assertThat(result.quality()).isEqualTo("exhigh");
+            assertThat(playbackCookie.get()).contains("MUSIC_U=test-cookie");
+            assertThat(playbackCookie.get()).contains("os=pc");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static void writeJson(HttpExchange exchange, String response) throws IOException {
         byte[] body = response.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");

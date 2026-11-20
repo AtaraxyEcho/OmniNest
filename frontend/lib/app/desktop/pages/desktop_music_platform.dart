@@ -21,65 +21,143 @@ List<String> _likedPlatformApis(MusicPlatformLibraryState library) {
       .toList(growable: false);
 }
 
-/// 桌面端旧页面的本地曲库区域继续复用原有组件，平台内容在这里以独立区块呈现。
-/// 这样不会把平台曲目伪装成本地文件，也不会把平台歌单 ID 送进本地接口。
-class _DesktopOnlinePlaylistSection extends StatelessWidget {
-  const _DesktopOnlinePlaylistSection({
-    required this.library,
+class _PlaylistRail extends StatelessWidget {
+  const _PlaylistRail({
     required this.playlists,
-    required this.onOpen,
+    required this.onPlay,
+    this.onlinePlaylists = const <OnlinePlaylist>[],
+    this.onlineLibrary,
+    this.onPlayOnline,
   });
 
-  final MusicPlatformLibraryState library;
-  final List<OnlinePlaylist> playlists;
-  final ValueChanged<OnlinePlaylist> onOpen;
-
-  String _platformLabel(OnlinePlaylist playlist) {
-    for (final status in library.statuses) {
-      if (status.platform == playlist.platform) return status.displayName;
-    }
-    return playlist.platform;
-  }
+  final List<MusicPlaylist> playlists;
+  final ValueChanged<MusicPlaylist> onPlay;
+  final List<OnlinePlaylist> onlinePlaylists;
+  final MusicPlatformLibraryState? onlineLibrary;
+  final ValueChanged<OnlinePlaylist>? onPlayOnline;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final visiblePlaylists = playlists
-        .take(_desktopOnlinePlaylistLimit)
-        .toList(growable: false);
-    return DesktopSection(
-      eyebrow: visiblePlaylists.map(_platformLabel).toSet().join(' · '),
-      title: l10n.musicNavPlaylists,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = (constraints.maxWidth / 208).floor().clamp(2, 8);
-          final width = (constraints.maxWidth - (columns - 1) * 18) / columns;
-          return Wrap(
-            spacing: 18,
-            runSpacing: 24,
-            children: [
-              for (var index = 0; index < visiblePlaylists.length; index++)
-                SizedBox(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = (constraints.maxWidth * 0.14).clamp(168.0, 210.0);
+        final visibleOnline = onlinePlaylists
+            .take(_desktopOnlinePlaylistLimit)
+            .toList(growable: false);
+        return SizedBox(
+          height: width + 70,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            itemCount: playlists.length + visibleOnline.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 20),
+            itemBuilder: (context, index) {
+              if (index < playlists.length) {
+                final playlist = playlists[index];
+                return SizedBox(
                   width: width,
                   child: DesktopStagger(
                     index: index,
-                    child: _DesktopOnlinePlaylistCard(
-                      playlist: visiblePlaylists[index],
-                      coverUrl: library.coverUrlForPlaylist(
-                        visiblePlaylists[index],
-                      ),
-                      onOpen: () => onOpen(visiblePlaylists[index]),
+                    child: _PlaylistCard(
+                      playlist: playlist,
+                      onOpen: () => onPlay(playlist),
                     ),
                   ),
+                );
+              }
+              final onlineIndex = index - playlists.length;
+              final playlist = visibleOnline[onlineIndex];
+              final library = onlineLibrary;
+              final open = onPlayOnline;
+              if (library == null || open == null) {
+                return const SizedBox.shrink();
+              }
+              return SizedBox(
+                width: width,
+                child: DesktopStagger(
+                  index: index,
+                  child: _DesktopOnlinePlaylistCard(
+                    playlist: playlist,
+                    coverUrl: library.coverUrlForPlaylist(playlist),
+                    onOpen: () => open(playlist),
+                  ),
                 ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
 
+/// 歌单分页（样例 `Music.tsx` 的 Playlists）：整卡即播，曲目先补齐再入队。
+class _PlaylistGrid extends StatelessWidget {
+  const _PlaylistGrid({
+    required this.playlists,
+    required this.onOpen,
+    required this.onCreate,
+    this.onlinePlaylists = const <OnlinePlaylist>[],
+    this.onlineLibrary,
+    this.onOpenOnline,
+  });
+
+  final List<MusicPlaylist> playlists;
+  final ValueChanged<MusicPlaylist> onOpen;
+  final VoidCallback onCreate;
+  final List<OnlinePlaylist> onlinePlaylists;
+  final MusicPlatformLibraryState? onlineLibrary;
+  final ValueChanged<OnlinePlaylist>? onOpenOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = (constraints.maxWidth / 208).floor().clamp(2, 8);
+        final width = (constraints.maxWidth - (columns - 1) * 18) / columns;
+        final visibleOnline = onlinePlaylists
+            .take(_desktopOnlinePlaylistLimit)
+            .toList(growable: false);
+        return Wrap(
+          spacing: 18,
+          runSpacing: 24,
+          children: [
+            for (var i = 0; i < playlists.length; i++)
+              SizedBox(
+                width: width,
+                child: DesktopStagger(
+                  index: i,
+                  child: _PlaylistCard(
+                    playlist: playlists[i],
+                    onOpen: () => onOpen(playlists[i]),
+                  ),
+                ),
+              ),
+            if (onlineLibrary != null && onOpenOnline != null)
+              for (var i = 0; i < visibleOnline.length; i++)
+                SizedBox(
+                  width: width,
+                  child: DesktopStagger(
+                    index: playlists.length + i,
+                    child: _DesktopOnlinePlaylistCard(
+                      playlist: visibleOnline[i],
+                      coverUrl: onlineLibrary!.coverUrlForPlaylist(
+                        visibleOnline[i],
+                      ),
+                      onOpen: () => onOpenOnline!(visibleOnline[i]),
+                    ),
+                  ),
+                ),
+            SizedBox(width: width, child: _NewPlaylistCard(onCreate: onCreate)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 桌面端本地与平台曲目继续复用各自的数据接口，展示层把歌单卡片合并到同一组。
+/// 这样不会把平台曲目伪装成本地文件，也不会把平台歌单 ID 送进本地接口。
 class _DesktopOnlinePlaylistCard extends StatelessWidget {
   const _DesktopOnlinePlaylistCard({
     required this.playlist,

@@ -589,11 +589,15 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                     _Home(
                       state: state,
                       playlists: state?.playlists ?? const <MusicPlaylist>[],
+                      onlinePlaylists: onlinePlaylists,
+                      onlineLibrary: platform,
                       onSeeAlbums:
                           () => setState(() => _tab = DesktopMusicTab.albums),
                       onOpenAlbum:
                           (album) => setState(() => _selectedAlbum = album),
                       onPlayPlaylist: _openPlaylist,
+                      onPlayOnlinePlaylist:
+                          (playlist) => _playOnlinePlaylist(playlist).ignore(),
                       onSeePlaylists:
                           () =>
                               setState(() => _tab = DesktopMusicTab.playlists),
@@ -605,14 +609,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                       onPlayQueueItem:
                           (index) => actions.playQueueAt(index).ignore(),
                     ),
-                    if (onlinePlaylists.isNotEmpty)
-                      _DesktopOnlinePlaylistSection(
-                        library: platform,
-                        playlists: onlinePlaylists,
-                        onOpen:
-                            (playlist) =>
-                                _playOnlinePlaylist(playlist).ignore(),
-                      ),
                     if (likedTracks.isNotEmpty)
                       _DesktopOnlineTrackSection(
                         tracks: likedTracks,
@@ -639,17 +635,13 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   children: [
                     _PlaylistGrid(
                       playlists: state?.playlists ?? const <MusicPlaylist>[],
+                      onlinePlaylists: onlinePlaylists,
+                      onlineLibrary: platform,
                       onOpen: _openPlaylist,
+                      onOpenOnline:
+                          (playlist) => _playOnlinePlaylist(playlist).ignore(),
                       onCreate: () => _editPlaylist(),
                     ),
-                    if (onlinePlaylists.isNotEmpty)
-                      _DesktopOnlinePlaylistSection(
-                        library: platform,
-                        playlists: onlinePlaylists,
-                        onOpen:
-                            (playlist) =>
-                                _playOnlinePlaylist(playlist).ignore(),
-                      ),
                   ],
                 ),
                 DesktopMusicTab.tracks when state == null => initialContent(),
@@ -749,9 +741,12 @@ class _Home extends StatelessWidget {
   const _Home({
     required this.state,
     required this.playlists,
+    required this.onlinePlaylists,
+    required this.onlineLibrary,
     required this.onSeeAlbums,
     required this.onOpenAlbum,
     required this.onPlayPlaylist,
+    required this.onPlayOnlinePlaylist,
     required this.onSeePlaylists,
     required this.onTogglePlayback,
     required this.onOpenQueue,
@@ -760,9 +755,12 @@ class _Home extends StatelessWidget {
 
   final MusicCenterState? state;
   final List<MusicPlaylist> playlists;
+  final List<OnlinePlaylist> onlinePlaylists;
+  final MusicPlatformLibraryState onlineLibrary;
   final VoidCallback onSeeAlbums;
   final ValueChanged<MusicAlbum> onOpenAlbum;
   final ValueChanged<MusicPlaylist> onPlayPlaylist;
+  final ValueChanged<OnlinePlaylist> onPlayOnlinePlaylist;
   final VoidCallback onSeePlaylists;
   final VoidCallback onTogglePlayback;
   final VoidCallback onOpenQueue;
@@ -786,11 +784,16 @@ class _Home extends StatelessWidget {
         DesktopSection(
           eyebrow: l10n.desktopMusicLibraryEyebrow,
           title: l10n.musicDeckPlaylists,
-          actionLabel: l10n.desktopSeeAllCount(playlists.length),
+          actionLabel: l10n.desktopSeeAllCount(
+            playlists.length + onlinePlaylists.length,
+          ),
           onAction: onSeePlaylists,
           child: _PlaylistRail(
             playlists: playlists.take(8).toList(growable: false),
             onPlay: onPlayPlaylist,
+            onlinePlaylists: onlinePlaylists,
+            onlineLibrary: onlineLibrary,
+            onPlayOnline: onPlayOnlinePlaylist,
           ),
         ),
         DesktopSection(

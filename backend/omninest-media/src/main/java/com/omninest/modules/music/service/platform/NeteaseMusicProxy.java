@@ -168,7 +168,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         }
         try {
             // 凭据查询与解密在循环外只做一次，避免重复查库。
-            String userCookie = cookie(ownerUserId);
+            // song/url/v1 会根据客户端来源决定返回的音源策略；补充 PC 客户端标记，
+            // 否则仅有 MUSIC_U 的 VIP 会话仍可能被接口判为无可用音质并返回 400。
+            String userCookie = mergeCookieHeaders(cookie(ownerUserId), "os=pc");
             int startIndex = startIndexForQuality(quality);
             List<String> candidates = playbackQualityCandidates(startIndex);
             long deadline = System.nanoTime() + PLAYBACK_URL_TIMEOUT.toNanos();

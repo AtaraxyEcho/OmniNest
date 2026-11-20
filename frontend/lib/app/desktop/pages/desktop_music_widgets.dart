@@ -14,7 +14,7 @@ class _FocusHero extends StatelessWidget {
     final item = state?.currentItem;
     final track = item?.track;
     final playing = state?.isPlaying ?? false;
-    final cover = track?.coverUrl ?? track?.coverThumbUrl;
+    final cover = _firstMusicCover(track?.coverUrl, track?.coverThumbUrl);
     // 样例 `.focus::before` 的 `color-mix(--hue 30%, rgba(5,8,10,.55))`：
     // 曲目色相混进深色底，切曲时按 1s 补间，不是硬切。
     final tint =
@@ -54,11 +54,13 @@ class _FocusHero extends StatelessWidget {
                 ),
                 child: Transform.scale(
                   scale: 1.2,
-                  child: Image.network(
-                    cover,
+                  child: DesktopCover(
+                    url: cover,
+                    kind: DesktopCoverKind.music,
+                    cacheKey:
+                        'desktop-music-focus-background-${track?.id ?? 'empty'}',
+                    fallback: const SizedBox.shrink(),
                     fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -108,6 +110,7 @@ class _FocusHero extends StatelessWidget {
                     url: cover,
                     playing: playing,
                     size: 280,
+                    cacheKey: 'desktop-music-focus-${track?.id ?? cover}',
                     onTap: () => desktopPush(context, DesktopRoutes.nowPlaying),
                   ),
                 const SizedBox(width: 40),
@@ -183,6 +186,17 @@ class _FocusHero extends StatelessWidget {
   }
 }
 
+/// 封面字段在在线曲目里可能以空字符串表示缺失，不能只用 `??` 判断。
+/// Hero 与唱片封面必须共享同一回退顺序，避免背景有图而前景落占位图。
+String? _firstMusicCover(String? primary, String? fallback) {
+  final primaryValue = primary?.trim() ?? '';
+  if (primaryValue.isNotEmpty) {
+    return primaryValue;
+  }
+  final fallbackValue = fallback?.trim() ?? '';
+  return fallbackValue.isEmpty ? null : fallbackValue;
+}
+
 /// 样例 `.f-copy .eyebrow`：Playing from {album} / Paused · {album}。
 String _heroEyebrow(AppLocalizations l10n, bool playing, MusicTrack? track) {
   final label =
@@ -199,12 +213,14 @@ class _SpinningCover extends StatefulWidget {
     required this.url,
     required this.playing,
     required this.onTap,
+    required this.cacheKey,
     this.size = 280,
   });
 
   final String url;
   final bool playing;
   final VoidCallback onTap;
+  final String cacheKey;
   final double size;
 
   @override
@@ -289,7 +305,7 @@ class _SpinningCoverState extends State<_SpinningCover>
                 url: widget.url,
                 kind: DesktopCoverKind.music,
                 fallbackIcon: DesktopIcons.music,
-                cacheKey: 'desktop-music-focus',
+                cacheKey: widget.cacheKey,
                 iconSize: 32,
               ),
             ),
@@ -345,83 +361,6 @@ class _AlbumRail extends StatelessWidget {
                   ),
                 ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _PlaylistRail extends StatelessWidget {
-  const _PlaylistRail({required this.playlists, required this.onPlay});
-
-  final List<MusicPlaylist> playlists;
-  final ValueChanged<MusicPlaylist> onPlay;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = (constraints.maxWidth * 0.14).clamp(168.0, 210.0);
-        return SizedBox(
-          height: width + 70,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            itemCount: playlists.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 20),
-            itemBuilder:
-                (context, index) => SizedBox(
-                  width: width,
-                  child: DesktopStagger(
-                    index: index,
-                    child: _PlaylistCard(
-                      playlist: playlists[index],
-                      onOpen: () => onPlay(playlists[index]),
-                    ),
-                  ),
-                ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 歌单分页（样例 `Music.tsx` 的 Playlists）：整卡即播，曲目先补齐再入队。
-class _PlaylistGrid extends StatelessWidget {
-  const _PlaylistGrid({
-    required this.playlists,
-    required this.onOpen,
-    required this.onCreate,
-  });
-
-  final List<MusicPlaylist> playlists;
-  final ValueChanged<MusicPlaylist> onOpen;
-  final VoidCallback onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = (constraints.maxWidth / 208).floor().clamp(2, 8);
-        final width = (constraints.maxWidth - (columns - 1) * 18) / columns;
-        return Wrap(
-          spacing: 18,
-          runSpacing: 24,
-          children: [
-            for (var i = 0; i < playlists.length; i++)
-              SizedBox(
-                width: width,
-                child: DesktopStagger(
-                  index: i,
-                  child: _PlaylistCard(
-                    playlist: playlists[i],
-                    onOpen: () => onOpen(playlists[i]),
-                  ),
-                ),
-              ),
-            SizedBox(width: width, child: _NewPlaylistCard(onCreate: onCreate)),
-          ],
         );
       },
     );
