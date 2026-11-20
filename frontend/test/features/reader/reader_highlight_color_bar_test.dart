@@ -30,30 +30,29 @@ void main() {
     );
   }
 
-  testWidgets('五个色点均为 36dp 热区并回传颜色', (tester) async {
+  testWidgets('四个样例高亮色点均为 36dp 热区并回传颜色', (tester) async {
     String? picked;
     await pumpBar(
       tester,
-      selected: '#FFEB3B',
+      selected: '#F2D36B',
       onSelect: (color) => picked = color,
     );
 
     expect(find.byTooltip('黄色高亮'), findsOneWidget);
     expect(find.byTooltip('绿色高亮'), findsOneWidget);
-    expect(find.byTooltip('蓝色高亮'), findsOneWidget);
     expect(find.byTooltip('粉色高亮'), findsOneWidget);
-    expect(find.byTooltip('灰色高亮'), findsOneWidget);
+    expect(find.byTooltip('蓝色高亮'), findsOneWidget);
     expect(find.byIcon(Icons.check), findsOneWidget);
 
     final green = find.byTooltip('绿色高亮');
     expect(tester.getSize(green).width, greaterThanOrEqualTo(36));
     await tester.tap(green);
     await tester.pump();
-    expect(picked, '#4CAF50');
+    expect(picked, '#8CC5B2');
   });
 
   testWidgets('已有选中色时显示选中环与对勾', (tester) async {
-    await pumpBar(tester, selected: '#2196F3', onSelect: (_) {});
+    await pumpBar(tester, selected: '#A99BD8', onSelect: (_) {});
 
     expect(find.byIcon(Icons.check), findsOneWidget);
   });

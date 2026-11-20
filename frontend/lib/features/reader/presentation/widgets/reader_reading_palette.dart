@@ -22,6 +22,7 @@ class ReaderReadingPalette {
     required this.controlSurface,
     required this.bookDesk,
     required this.bookDeskText,
+    required this.paperEdge,
     required this.glass,
     required this.glassSolid,
     required this.shadow,
@@ -58,6 +59,9 @@ class ReaderReadingPalette {
   /// 双页书本模式控制栏在桌面底色上的文字色。
   final Color bookDeskText;
 
+  /// 双页纸叠边缘色（样例 `--paper-edge`）。
+  final Color paperEdge;
+
   /// `--glass`：底栏玻璃条的半透明底，只用在真有 backdrop 模糊的那一层。
   final Color glass;
 
@@ -72,17 +76,18 @@ class ReaderReadingPalette {
   /// 稿子 `.theme-paper`（index.css:73）。
   static const light = ReaderReadingPalette(
     id: 'light',
-    surface: Color(0xFFFAF9F5),
+    surface: Color(0xFFF6F1E4),
     elevated: Color(0xFFFFFFFF),
-    onSurface: Color(0xFF252624),
-    onSurfaceVariant: Color(0xFF6D706C),
-    faint: Color(0xFFA1A39E),
-    line: Color(0x1C1F231F),
+    onSurface: Color(0xFF2B2620),
+    onSurfaceVariant: Color(0xFF6D685E),
+    faint: Color(0xFFA19B8F),
+    line: Color(0x1C2B2620),
     accent: Color(0xFF246D62),
     accentSoft: Color(0x1C246D62),
-    controlSurface: Color(0xFFFAFAF7),
+    controlSurface: Color(0xFFFAF6EC),
     bookDesk: Color(0xFF1B1F22),
     bookDeskText: Color(0xFFE8ECEA),
+    paperEdge: Color(0xFFE4DCC8),
     glass: Color(0xD6FFFFFF),
     glassSolid: Color(0xFFFAFAF7),
     shadow: Color(0x1F1C211D),
@@ -93,17 +98,18 @@ class ReaderReadingPalette {
   /// 稿子 `.reader` 基线（index.css:52），也是稿子的默认档。
   static const eyeCare = ReaderReadingPalette(
     id: 'eyeCare',
-    surface: Color(0xFFF4F0E6),
-    elevated: Color(0xFFF8F5EC),
-    onSurface: Color(0xFF2D2D2A),
-    onSurfaceVariant: Color(0xFF77736A),
-    faint: Color(0xFFA7A197),
-    line: Color(0x1F433E34),
+    surface: Color(0xFFEAD9B6),
+    elevated: Color(0xFFF2E5C9),
+    onSurface: Color(0xFF3D2F1B),
+    onSurfaceVariant: Color(0xFF725E44),
+    faint: Color(0xFF9F8B6D),
+    line: Color(0x1F3D2F1B),
     accent: Color(0xFF337F70),
     accentSoft: Color(0x1F337F70),
-    controlSurface: Color(0xFFF5F1E8),
+    controlSurface: Color(0xFFF0E1C2),
     bookDesk: Color(0xFF2A2118),
     bookDeskText: Color(0xFFE8ECEA),
+    paperEdge: Color(0xFFD6C196),
     glass: Color(0xD1FAF7EF),
     glassSolid: Color(0xFFF5F1E8),
     shadow: Color(0x242F2B23),
@@ -114,17 +120,18 @@ class ReaderReadingPalette {
   /// 稿子 `.theme-night`（index.css:101）。
   static const dark = ReaderReadingPalette(
     id: 'dark',
-    surface: Color(0xFF151918),
-    elevated: Color(0xFF1D2220),
-    onSurface: Color(0xFFE6E8E2),
-    onSurfaceVariant: Color(0xFF9B9F99),
-    faint: Color(0xFF666C67),
+    surface: Color(0xFF1C2024),
+    elevated: Color(0xFF23282D),
+    onSurface: Color(0xFFC9CDC8),
+    onSurfaceVariant: Color(0xFF8F9691),
+    faint: Color(0xFF606763),
     line: Color(0x1AEBF0E8),
-    accent: Color(0xFF9EC7A5),
-    accentSoft: Color(0x1F9EC7A5),
-    controlSurface: Color(0xFF1D2220),
+    accent: Color(0xFF8CC5B2),
+    accentSoft: Color(0x1F8CC5B2),
+    controlSurface: Color(0xFF22272B),
     bookDesk: Color(0xFF0B0D0F),
     bookDeskText: Color(0xFFE8ECEA),
+    paperEdge: Color(0xFF14171A),
     glass: Color(0xDB191E1C),
     glassSolid: Color(0xFF1D2220),
     shadow: Color(0x52000000),
@@ -146,12 +153,28 @@ class ReaderReadingPalette {
     controlSurface: Color(0xFFEDF2EA),
     bookDesk: Color(0xFF1B1F22),
     bookDeskText: Color(0xFFE8ECEA),
+    paperEdge: Color(0xFFD5DED0),
     glass: Color(0xD6EDF2EA),
     glassSolid: Color(0xFFEDF2EA),
     shadow: Color(0x211E2E24),
     selection: Color(0x66568A64),
     annotation: Color(0xFFE2C75D),
   );
+
+  /// 桌面毛玻璃浮层（样例 `.bk-pop`）的暗色玻璃底，四档色板共用同一层桌面 chrome。
+  static const desktopPopoverGlass = Color(0xF01A1E22);
+
+  /// 选区浮动工具条（样例 `.sel-pop`）的暗色胶囊底。
+  static const selectionToolbarSurface = Color(0xFF1C2125);
+
+  /// 强调色圆角角标上的反白文字。
+  static const onAccentInk = Color(0xFF0E1412);
+
+  /// 书内搜索命中词的半透明强调底（`<mark class="hit">`）。
+  static const searchHit = Color(0x738CC5B2);
+
+  /// 护眼暖色滤镜的暖色基色；强度由 `warmth` 调制。
+  static const comfortWarmTint = Color(0xFFFF9628);
 
   static const values = [light, eyeCare, dark, green];
 

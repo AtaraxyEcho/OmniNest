@@ -181,6 +181,10 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     _hideTimer?.cancel();
     _updateState(() {
       _panelCoordinator.toggle(panel);
+      // 搜索面板关闭或切到其他面板时同步清掉正文命中高亮。
+      if (_panelCoordinator.active != ReaderPanelType.search) {
+        _activeSearchQuery = '';
+      }
       _showControls = false;
       _showTts = false;
     });
@@ -188,8 +192,14 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
 
   void _closeReaderPanel() {
     if (_panelCoordinator.close()) {
-      _updateState(() {});
+      _updateState(() => _activeSearchQuery = '');
     }
+  }
+
+  void _onSearchQueryChanged(String query) {
+    final trimmed = query.trim();
+    if (trimmed == _activeSearchQuery) return;
+    _updateState(() => _activeSearchQuery = trimmed);
   }
 
   void _toggleReaderImmersive() {
@@ -197,7 +207,10 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (enableImmersive) {
       _hideTimer?.cancel();
       _panelCoordinator.close();
-      _updateState(() => _showControls = false);
+      _updateState(() {
+        _showControls = false;
+        _activeSearchQuery = '';
+      });
     }
     onSettingsChanged(_settings.copyWith(immersiveMode: enableImmersive));
   }
@@ -380,6 +393,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       plainText: corpus?.plainText ?? getPlainText(content.content),
       settings: _settings,
       searchBook: _searchBook,
+      onQueryChanged: _onSearchQueryChanged,
       onSelectBookMatch: _openReaderBookSearchResult,
       onSelect:
           corpus == null
@@ -519,15 +533,32 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           isComic: false,
         ),
       };
-      overlay = ReaderAdaptivePanelOverlay(
-        key: ValueKey(active),
-        title: title,
-        settings: _settings,
-        layout: layout,
-        eyebrow: detail.item.title,
-        onClose: _closeReaderPanel,
-        child: child,
-      );
+      if (!sampleChrome && layout.usesSidePanel) {
+        final alignLeft = active == ReaderPanelType.contents;
+        final popoverWidth = switch (active) {
+          ReaderPanelType.contents => 280.0,
+          ReaderPanelType.settings => 310.0,
+          _ => 340.0,
+        };
+        overlay = DesktopReaderPopover(
+          key: ValueKey(active),
+          alignLeft: alignLeft,
+          width: popoverWidth,
+          eyebrow: title,
+          onDismissOutside: _closeReaderPanel,
+          child: child,
+        );
+      } else {
+        overlay = ReaderAdaptivePanelOverlay(
+          key: ValueKey(active),
+          title: title,
+          settings: _settings,
+          layout: layout,
+          eyebrow: detail.item.title,
+          onClose: _closeReaderPanel,
+          child: child,
+        );
+      }
     }
     // 槽位始终存在：关闭面板时由 AnimatedSwitcher 保留旧子树并播放退场，
     // 直接返回空列表会瞬间摘除整棵子树，没有任何过渡。

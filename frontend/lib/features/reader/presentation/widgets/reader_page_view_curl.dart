@@ -1,90 +1,164 @@
 part of 'reader_page_view.dart';
 
-/// 卷页的取图与拼装：翻页开始时把「翻起的那一页」和它的背面各抓成一张
-/// 位图，之后 28 片圆柱条带只做贴图，不再重建整页子树。
+/// 双向卷页单槽空闲预抓图与装配：
+/// 1. 正面直接从当前可见页面的 RepaintBoundary 抓取，零额外子树、零选区冲突。
+/// 2. 背面仅在需要时挂载单个 ExcludeFocus + selectionDisabled 隔离槽，抓完立刻卸载。
+/// 3. 翻页落定 120ms 后自动预热正向翻页快照，正向翻页与边角悬停微翘 0ms 起手。
 extension _ReaderPageViewCurl on _ReaderPageViewState {
-  /// 翻起的那一页（正面）。
-  Widget? get _curlFrontPage =>
-      widget.spread
-          ? widget.pageBuilder(widget.state.pageIndex + 1)
-          : pageAt(widget.state.pageIndex);
+  void _scheduleIdleNextCurlWarmup() {
+    _curlWarmupTimer?.cancel();
+    if (widget.turnMode != PageTurnMode.cover) return;
+    _curlWarmupTimer = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted || _curlFrameNotifier.value.active) return;
+      unawaited(_ensureCurlPairReady(CurlDirection.next));
+    });
+  }
 
-  /// 卷起后露出的那一面（背面）。
-  Widget? get _curlBackPage =>
-      widget.spread
-          ? widget.pageBuilder(widget.state.pageIndex + 2)
-          : pageAt(widget.state.pageIndex + pageStep);
+  bool _hasReadyCurlPair(CurlDirection dir) {
+    return _cachedCurlDir == dir &&
+        _cachedCurlPageIndex == widget.state.pageIndex &&
+        _cachedCurlChapterId == widget.state.chapterId &&
+        _curlFront != null &&
+        _curlBack != null;
+  }
 
   void _prepareCurlCapture() {
-    if (widget.turnMode != PageTurnMode.cover || !_isForward) {
-      return;
-    }
-    if (_curlCapturing || (_curlFront != null && _curlBack != null)) {
-      return;
-    }
+    if (widget.turnMode != PageTurnMode.cover) return;
+    final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+    if (_hasReadyCurlPair(dir) || _curlCapturing) return;
+    unawaited(_ensureCurlPairReady(dir));
+  }
+
+  Future<bool> _ensureCurlPairReady(CurlDirection dir) async {
+    if (widget.turnMode != PageTurnMode.cover || !mounted) return false;
+    if (_hasReadyCurlPair(dir)) return true;
+
     _curlCapturing = true;
-    _curlToken++;
-    if (mounted) {
-      _updateState(() {});
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_captureCurlImages());
+    final token = ++_curlToken;
+    final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 1.5);
+
+    final liveKey =
+        widget.spread
+            ? (dir == CurlDirection.next ? _liveRightKey : _liveLeftKey)
+            : _liveSingleKey;
+    final frontImg = await _captureBoundarySafe(liveKey, dpr);
+    if (!mounted || token != _curlToken || frontImg == null) {
+      frontImg?.dispose();
+      if (mounted && token == _curlToken) {
+        _curlCapturing = false;
       }
-    });
-  }
-
-  Future<void> _captureCurlImages() async {
-    if (!mounted || !_curlCapturing) {
-      return;
+      return false;
     }
-    final token = _curlToken;
-    final front = await _captureBoundary(_curlFrontKey);
-    final back = await _captureBoundary(_curlBackKey);
+
+    final backWidget = _resolveCurlBackWidget(dir);
+    if (backWidget == null) {
+      frontImg.dispose();
+      if (mounted && token == _curlToken) {
+        _curlCapturing = false;
+      }
+      return false;
+    }
+
+    _updateState(() => _pendingBackCaptureWidget = backWidget);
+
+    final frameDone = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) => frameDone.complete());
+    await frameDone.future;
     if (!mounted || token != _curlToken) {
-      front?.dispose();
-      back?.dispose();
-      return;
+      frontImg.dispose();
+      return false;
     }
-    if (front == null || back == null) {
-      front?.dispose();
-      back?.dispose();
-      _updateState(() => _curlCapturing = false);
-      return;
+
+    final backImg = await _captureBoundarySafe(_singleBackCaptureKey, dpr);
+    if (mounted) {
+      _updateState(() => _pendingBackCaptureWidget = null);
+    } else {
+      _pendingBackCaptureWidget = null;
     }
-    _updateState(() {
-      _curlFront?.dispose();
-      _curlBack?.dispose();
-      _curlFront = front;
-      _curlBack = back;
-      _curlCapturing = false;
-    });
+
+    if (!mounted || token != _curlToken || backImg == null) {
+      frontImg.dispose();
+      backImg?.dispose();
+      if (mounted && token == _curlToken) {
+        _curlCapturing = false;
+      }
+      return false;
+    }
+
+    _replaceCurlCache(
+      dir: dir,
+      chapterId: widget.state.chapterId,
+      pageIndex: widget.state.pageIndex,
+      front: frontImg,
+      back: backImg,
+    );
+    return true;
   }
 
-  Future<ui.Image?> _captureBoundary(GlobalKey key) async {
+  Widget? _resolveCurlBackWidget(CurlDirection dir) {
+    final idx = widget.state.pageIndex;
+    final targetIdx =
+        dir == CurlDirection.next
+            ? (widget.spread ? idx + 2 : idx + 1)
+            : idx - 1;
+    final builder = widget.snapshotPageBuilder ?? widget.pageBuilder;
+    final inChapter = targetIdx >= 0 ? builder(targetIdx) : null;
+    if (inChapter != null) return inChapter;
+    return widget.crossChapterSnapshotBuilder?.call(
+      dir == CurlDirection.next ? 1 : -1,
+    );
+  }
+
+  Future<ui.Image?> _captureBoundarySafe(GlobalKey key, double ratio) async {
     final boundary = key.currentContext?.findRenderObject();
-    if (boundary is! RenderRepaintBoundary) {
-      return null;
-    }
-    final ratio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
+    if (boundary is! RenderRepaintBoundary) return null;
     try {
       return await boundary.toImage(pixelRatio: ratio);
     } on Object {
+      // Web 端跨域无 CORS 图片导致 Canvas tainted 时安全返回 null，由上层退回平滑翻页。
       return null;
     }
   }
 
-  /// 翻页提交后清引用：当前帧的画笔可能还持有图片，释放推迟到帧末。
+  void _replaceCurlCache({
+    required CurlDirection dir,
+    required String chapterId,
+    required int pageIndex,
+    required ui.Image front,
+    required ui.Image back,
+  }) {
+    final oldFront = _curlFront;
+    final oldBack = _curlBack;
+    _curlFront = front;
+    _curlBack = back;
+    _cachedCurlDir = dir;
+    _cachedCurlChapterId = chapterId;
+    _cachedCurlPageIndex = pageIndex;
+    _curlCapturing = false;
+    if (mounted) {
+      _updateState(() {});
+    }
+    if (oldFront != null || oldBack != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldFront?.dispose();
+        oldBack?.dispose();
+      });
+    }
+  }
+
   void _clearCurlImages() {
+    _curlWarmupTimer?.cancel();
     final front = _curlFront;
     final back = _curlBack;
     _curlFront = null;
     _curlBack = null;
+    _cachedCurlDir = null;
+    _cachedCurlPageIndex = null;
+    _cachedCurlChapterId = null;
     _curlCapturing = false;
+    _pendingBackCaptureWidget = null;
     _curlToken++;
-    if (front == null && back == null) {
-      return;
-    }
+    if (front == null && back == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       front?.dispose();
       back?.dispose();
@@ -92,113 +166,95 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
   }
 
   void _disposeCurlImages() {
+    _curlWarmupTimer?.cancel();
     _curlToken++;
     _curlCapturing = false;
+    _pendingBackCaptureWidget = null;
     _curlFront?.dispose();
     _curlBack?.dispose();
     _curlFront = null;
     _curlBack = null;
   }
 
-  /// 翻页进程里的卷页层；快照未就绪时返回 null，调用方退回 cover。
-  Widget? _buildCurlTurn(double t, double width, double height) {
+  /// 构建卷页态整幅画面（覆盖整个双页或单页画框）；快照未就绪或跨域降级时返回 null。
+  Widget? _buildCurlTurn(double width, double height) {
+    final frame = _curlFrameNotifier.value;
+    if (!frame.active) return null;
+    if (!_hasReadyCurlPair(frame.direction)) return null;
     final front = _curlFront;
     final back = _curlBack;
-    if (front == null || back == null || t <= 0) {
-      return null;
-    }
-    final sheet = ReaderPageCurl(
+    if (front == null || back == null) return null;
+
+    final curlLayer = ReaderPageCurl(
+      frameListenable: _curlFrameNotifier,
       front: front,
       back: back,
-      progress: t,
       paper: widget.surfaceColor,
+      spread: widget.spread,
     );
+
     if (!widget.spread) {
-      final revealed = pageAt(widget.state.pageIndex + pageStep);
+      final targetIndex =
+          frame.direction == CurlDirection.next
+              ? widget.state.pageIndex + 1
+              : widget.state.pageIndex - 1;
+      final revealed =
+          targetIndex >= 0 ? widget.pageBuilder(targetIndex) : null;
       return Stack(
+        fit: StackFit.expand,
         children: [
           _constrainPage(revealed),
           Positioned.fill(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(6),
-              child: sheet,
+              child: curlLayer,
             ),
           ),
         ],
       );
     }
-    // 跨页：左页不动，右页换成下一跨页的右页；卷起的是当前右页。
-    final half = math.max(0.0, (width - _spreadGutterWidth) / 2);
-    final underlay = ReaderPageSpread(
-      left:
-          widget.pageBuilder(widget.state.pageIndex) ?? const SizedBox.expand(),
-      right: widget.pageBuilder(widget.state.pageIndex + 3),
+
+    final idx = widget.state.pageIndex;
+    final last = widget.state.pageCount <= 1 ? 1 : widget.state.pageCount - 1;
+    final isNext = frame.direction == CurlDirection.next;
+    // 对齐 ReaderView.tsx:390-391；底层 underlay 严禁传 leftBoundaryKey/rightBoundaryKey。
+    final underlayLeft =
+        (isNext
+            ? widget.pageBuilder(idx)
+            : (idx - 2 >= 0 ? widget.pageBuilder(idx - 2) : null)) ??
+        const SizedBox.expand();
+    final underlayRight =
+        isNext ? widget.pageBuilder(idx + 3) : widget.pageBuilder(idx + 1);
+
+    return ReaderPageSpread(
+      left: underlayLeft,
+      right: underlayRight,
       surfaceColor: widget.surfaceColor,
-      progress:
-          widget.state.pageCount <= 1
-              ? 0
-              : (widget.state.pageIndex / (widget.state.pageCount - 1)).clamp(
-                0.0,
-                1.0,
-              ),
-    );
-    return Stack(
-      children: [
-        Positioned.fill(child: underlay),
-        Positioned(
-          left: half + _spreadGutterWidth,
-          top: 0,
-          width: half,
-          height: height,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(
-              right: Radius.circular(6),
-            ),
-            child: sheet,
-          ),
-        ),
-      ],
+      paperEdgeColor: widget.paperEdgeColor,
+      progress: (idx / last).clamp(0.0, 1.0),
+      curlOverlay: curlLayer,
     );
   }
 
-  /// 抓图期间挂两块不可见的页面副本：必须真的绘制过才能 `toImage`，
-  /// 放在 1% 不透明度里既参与绘制又不会被看到。
-  List<Widget> _curlCaptureSources(double sheetWidth, double height) {
-    final front = _curlFrontPage;
-    final back = _curlBackPage;
-    return [
-      if (front != null)
-        Positioned(
-          left: 0,
-          top: 0,
-          width: sheetWidth,
-          height: height,
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: 0.01,
-              child: RepaintBoundary(
-                key: _curlFrontKey,
-                child: _constrainPage(front),
-              ),
+  Widget _buildSingleBackCaptureSlot(double leafWidth, double height) {
+    final child = _pendingBackCaptureWidget;
+    if (child == null) return const SizedBox.shrink();
+    return Positioned(
+      left: 0,
+      top: 0,
+      width: leafWidth,
+      height: height,
+      child: ExcludeFocus(
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: 0.001,
+            child: RepaintBoundary(
+              key: _singleBackCaptureKey,
+              child: ColoredBox(color: widget.surfaceColor, child: child),
             ),
           ),
         ),
-      if (back != null)
-        Positioned(
-          left: 0,
-          top: 0,
-          width: sheetWidth,
-          height: height,
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: 0.01,
-              child: RepaintBoundary(
-                key: _curlBackKey,
-                child: _constrainPage(back),
-              ),
-            ),
-          ),
-        ),
-    ];
+      ),
+    );
   }
 }

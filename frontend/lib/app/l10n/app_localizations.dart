@@ -12257,6 +12257,30 @@ abstract class AppLocalizations {
   /// **'Reading Settings'**
   String get readerSettingsTitle;
 
+  /// No description provided for @readerBrightness.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get readerBrightness;
+
+  /// No description provided for @readerWarmth.
+  ///
+  /// In en, this message translates to:
+  /// **'Eye comfort warmth'**
+  String get readerWarmth;
+
+  /// No description provided for @readerAutoNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto night (20:00–06:00)'**
+  String get readerAutoNight;
+
+  /// No description provided for @readerAutoNightHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to dark paper automatically at night'**
+  String get readerAutoNightHint;
+
   /// No description provided for @readerReadingMode.
   ///
   /// In en, this message translates to:
@@ -12520,6 +12544,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reading progress {percent}%'**
   String readerReadingProgress(int percent);
+
+  /// No description provided for @readerSessionSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading session saved · {minutes} min'**
+  String readerSessionSaved(int minutes);
 
   /// No description provided for @readerBookChapterPosition.
   ///

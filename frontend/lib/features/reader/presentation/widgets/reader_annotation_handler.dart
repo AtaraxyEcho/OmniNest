@@ -234,9 +234,17 @@ class ReaderAnnotationHandler {
     }
   }
 
-  /// 批注存色可能为空或不在预设内；编辑对话框只能选中预设格，回落批注默认色。
-  static String _presetColorOrDefault(String? color) =>
-      ReaderHighlightPalette.colors.contains(color) ? color! : '#E0E0E0';
+  /// 批注存色可能为空或损坏；合法十六进制一律保留（含历史旧 5 色，编辑备注
+  /// 不得静默改色），只有空值与损坏值才回落批注默认色。
+  static final RegExp _hexColorPattern = RegExp(r'^#[0-9A-Fa-f]{6}$');
+
+  static String _presetColorOrDefault(String? color) {
+    final value = color?.trim();
+    if (value == null || !_hexColorPattern.hasMatch(value)) {
+      return '#E0E0E0';
+    }
+    return value.toUpperCase();
+  }
 
   /// 创建批注（弹出输入弹窗）。
   Future<void> annotate(

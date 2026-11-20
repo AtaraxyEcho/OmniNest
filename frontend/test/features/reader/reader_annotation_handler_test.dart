@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:toastification/toastification.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
+import 'package:omninest/features/reader/domain/reader_highlight_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -349,7 +350,7 @@ void main() {
           endOffset: 6,
           highlightText: '选中文本',
           note: null,
-          color: '#FFEB3B',
+          color: ReaderHighlightPalette.defaultColor,
         ),
       ).thenThrow(Exception('db down'));
       when(
@@ -390,7 +391,7 @@ void main() {
           endOffset: 6,
           highlightText: '选中文本',
           note: '旧笔记',
-          color: '#FFEB3B',
+          color: ReaderHighlightPalette.defaultColor,
         ),
       ).thenAnswer((_) async {
         events.add('create');
@@ -429,7 +430,7 @@ void main() {
           endOffset: 6,
           highlightText: '选中文本',
           note: null,
-          color: '#FFEB3B',
+          color: ReaderHighlightPalette.defaultColor,
         ),
       ).thenAnswer((_) async => createAnnotation());
       when(

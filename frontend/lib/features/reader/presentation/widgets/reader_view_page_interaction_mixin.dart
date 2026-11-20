@@ -287,18 +287,25 @@ mixin ReaderViewPageInteractionMixin
       newSettings = newSettings.copyWith(readingMode: 'scroll');
     }
 
+    final sliderTypographyOnly =
+        (newSettings.fontSize != settings.fontSize ||
+            newSettings.lineHeight != settings.lineHeight) &&
+        newSettings.fontFamily == settings.fontFamily &&
+        newSettings.readingMode == settings.readingMode &&
+        newSettings.pageTurnMode == settings.pageTurnMode &&
+        newSettings.immersiveMode == settings.immersiveMode &&
+        newSettings.justify == settings.justify &&
+        newSettings.marginPreset == settings.marginPreset;
     final fontChanged =
         newSettings.fontSize != settings.fontSize ||
         newSettings.lineHeight != settings.lineHeight ||
-        newSettings.fontFamily != settings.fontFamily;
+        newSettings.fontFamily != settings.fontFamily ||
+        newSettings.justify != settings.justify ||
+        newSettings.marginPreset != settings.marginPreset;
     final modeChanged = newSettings.readingMode != settings.readingMode;
-    final turnModeChanged =
-        newSettings.pageTurnMode != settings.pageTurnMode;
+    final turnModeChanged = newSettings.pageTurnMode != settings.pageTurnMode;
     final immersiveChanged =
         newSettings.immersiveMode != settings.immersiveMode;
-    // Book/Swipe 共用 page 模式，但跨页书架的页框宽度、步进和呈现树不同；
-    // 只比较 readingMode 会让切换后继续使用旧分页，表现为页码停滞、空白页
-    // 或左右滑动没有响应。翻页方式也必须冻结锚点并重新分页。
     final layoutChanged =
         fontChanged || modeChanged || turnModeChanged || immersiveChanged;
 
@@ -361,18 +368,31 @@ mixin ReaderViewPageInteractionMixin
       }
 
       if (isPageMode) {
-        contentLoader?.rekeyAndRecomputeHeights(
-          currentChapterId,
-          computePageWidth(),
-          settings,
-          MediaQuery.textScalerOf(context).scale(1.0),
-          prepareScrollLayout: false,
-        );
-        // 进入页模式时页码清零：ReaderPageView 将重挂载，恢复目标可能
-        // 超出重分页初期的 item 数，initialPage 直接指向目标会被钳制到
-        // 章首且索引不再变化。落位统一交给 PageRestore 的索引变更路径。
-        pageModePage = 0;
-        repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
+        if (sliderTypographyOnly) {
+          // 字号/行距滑块拖动做 120ms 防抖再触发整章重分页，消除拖动掉帧。
+          repaginateTimer?.cancel();
+          repaginateTimer = Timer(const Duration(milliseconds: 120), () {
+            if (!mounted || !isPageMode) return;
+            contentLoader?.rekeyAndRecomputeHeights(
+              currentChapterId,
+              computePageWidth(),
+              settings,
+              MediaQuery.textScalerOf(context).scale(1.0),
+              prepareScrollLayout: false,
+            );
+            repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
+          });
+        } else {
+          contentLoader?.rekeyAndRecomputeHeights(
+            currentChapterId,
+            computePageWidth(),
+            settings,
+            MediaQuery.textScalerOf(context).scale(1.0),
+            prepareScrollLayout: false,
+          );
+          pageModePage = 0;
+          repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
+        }
       } else {
         contentLoader?.rekeyAndRecomputeHeights(
           currentChapterId,

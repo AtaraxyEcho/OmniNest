@@ -6463,6 +6463,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerSettingsTitle => '阅读设置';
 
   @override
+  String get readerBrightness => '亮度';
+
+  @override
+  String get readerWarmth => '护眼暖色';
+
+  @override
+  String get readerAutoNight => '自动夜间 (20:00–06:00)';
+
+  @override
+  String get readerAutoNightHint => '夜间自动切换深色纸面';
+
+  @override
   String get readerReadingMode => '阅读模式';
 
   @override
@@ -6603,6 +6615,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String readerReadingProgress(int percent) {
     return '阅读进度 $percent%';
+  }
+
+  @override
+  String readerSessionSaved(int minutes) {
+    return '阅读时长已记录 · $minutes 分钟';
   }
 
   @override

@@ -6691,6 +6691,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerSettingsTitle => 'Reading Settings';
 
   @override
+  String get readerBrightness => 'Brightness';
+
+  @override
+  String get readerWarmth => 'Eye comfort warmth';
+
+  @override
+  String get readerAutoNight => 'Auto night (20:00–06:00)';
+
+  @override
+  String get readerAutoNightHint =>
+      'Switch to dark paper automatically at night';
+
+  @override
   String get readerReadingMode => 'Reading Mode';
 
   @override
@@ -6833,6 +6846,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String readerReadingProgress(int percent) {
     return 'Reading progress $percent%';
+  }
+
+  @override
+  String readerSessionSaved(int minutes) {
+    return 'Reading session saved · $minutes min';
   }
 
   @override

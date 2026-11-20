@@ -124,4 +124,28 @@ void main() {
     expect(find.text('page-3'), findsOneWidget);
     expect(find.text('page-4'), findsNothing);
   });
+
+  testWidgets('ReaderPageSpread 支持整幅 curlOverlay 叠加渲染', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 800,
+            height: 600,
+            child: ReaderPageSpread(
+              left: Center(child: Text('L')),
+              right: Center(child: Text('R')),
+              surfaceColor: Color(0xFFF6F1E4),
+              curlOverlay: SizedBox.expand(
+                key: ValueKey('spread-curl-overlay'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('spread-curl-overlay')), findsOneWidget);
+  });
 }

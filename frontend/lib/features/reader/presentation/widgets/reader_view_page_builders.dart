@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
@@ -30,6 +29,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.d
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_viewport_metrics.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
@@ -68,6 +68,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   ScrollRestore get restore;
   ReaderViewSettings get settings;
   String get currentChapterId;
+
+  /// 搜索面板当前查询词（空串表示未搜索），正文按它实时叠加命中高亮。
+  String get activeSearchQuery;
   bool get isPageMode;
   int get pageModePage;
   set pageModePage(int value);
@@ -92,6 +95,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   set lastPointerDownTime(DateTime value);
   Size? get pageViewportSize;
   set pageViewportSize(Size? value);
+  ReaderViewportMetrics? get lastViewportMetrics;
+  set lastViewportMetrics(ReaderViewportMetrics? value);
+  EdgeInsets get lastSafePadding;
   bool get showReturnControl;
   bool get showControls;
   bool get showRemoteProgressCue;
@@ -140,50 +146,43 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// 由 ReaderViewPageInteractionMixin 实现并在滚动内容越界时调用。
   void handleBackwardChapterOverscroll();
 
-  // ── 页面尺寸 ──
+  // ── 页面尺寸（单一几何事实源，dispose 期安全读缓存） ──
 
-  double computePageWidth() {
-    final viewport = pageViewportSize;
-    final size =
-        viewport != null && viewport.width.isFinite
-            ? viewport
-            : MediaQuery.sizeOf(context);
-    return ReaderControlLayout.resolve(
-      viewport: size,
-      fontSize: settings.fontSize,
-      textScale: MediaQuery.textScalerOf(context).scale(1),
-    ).textColumnWidth;
-  }
-
-  double computePageHeight() {
-    final chromeLayout = ReaderChromeLayout.resolve(
-      immersiveMode: settings.immersiveMode,
-      isPageMode: isPageMode,
+  ReaderViewportMetrics resolveViewportMetrics({
+    Size? viewportOverride,
+    double? textScaleOverride,
+    EdgeInsets? safePaddingOverride,
+  }) {
+    final cached = lastViewportMetrics;
+    final viewport =
+        viewportOverride ??
+        pageViewportSize ??
+        cached?.viewportSize ??
+        (mounted ? MediaQuery.sizeOf(context) : const Size(1280, 800));
+    final textScale =
+        textScaleOverride ??
+        cached?.textScale ??
+        (mounted ? FontScaleScope.systemScalerOf(context).scale(1.0) : 1.0);
+    final safePadding =
+        safePaddingOverride ??
+        (mounted ? MediaQuery.viewPaddingOf(context) : lastSafePadding);
+    final metrics = ReaderViewportMetrics.resolve(
+      viewportSize: viewport,
+      settings: settings,
+      textScale: textScale,
+      safePadding: safePadding,
     );
-    final viewport = pageViewportSize;
-    if (viewport != null && viewport.height.isFinite) {
-      final available = viewport.height - chromeLayout.chapterHeaderReserve - 1;
-      return available > 1 ? available : 1;
-    }
-    final size = MediaQuery.sizeOf(context);
-    final topInset =
-        settings.immersiveMode ? 0.0 : MediaQuery.viewPaddingOf(context).top;
-    final available =
-        size.height - topInset - chromeLayout.viewportVerticalReserve;
-    final contentHeight = available - chromeLayout.chapterHeaderReserve - 1;
-    return contentHeight > 1 ? contentHeight : 1;
+    lastViewportMetrics = metrics;
+    return metrics;
   }
+
+  double computePageWidth() => resolveViewportMetrics().pageWidth;
+
+  double computePageHeight() => resolveViewportMetrics().pageHeight;
 
   double get viewportAnchorY {
-    final size = MediaQuery.sizeOf(context);
-    final topInset =
-        settings.immersiveMode ? 0.0 : MediaQuery.viewPaddingOf(context).top;
-    final chromeLayout = ReaderChromeLayout.resolve(
-      immersiveMode: settings.immersiveMode,
-      isPageMode: isPageMode,
-    );
-    return (size.height - topInset - chromeLayout.viewportVerticalReserve) *
-        0.25;
+    final metrics = resolveViewportMetrics();
+    return metrics.viewportSize.height * 0.25;
   }
 
   int computePageCharOffset(int pageIndex) {

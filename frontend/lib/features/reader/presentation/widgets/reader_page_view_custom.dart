@@ -7,15 +7,67 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
   // ══════════════════════════════════════════
 
   Widget _buildCustomMode() {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _onPointerDown,
-      onPointerMove: _onPointerMove,
-      onPointerUp: _onPointerUp,
-      onPointerCancel: _onPointerCancel,
-      onPointerSignal: _onPointerSignal,
-      child: _buildAnimationContent(),
+    return MouseRegion(
+      onHover: _onCurlHover,
+      onExit: (_) => _clearCurlPeek(),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _onPointerUp,
+        onPointerCancel: _onPointerCancel,
+        onPointerSignal: _onPointerSignal,
+        child: _buildAnimationContent(),
+      ),
     );
+  }
+
+  /// 桌面悬停边角微翘（对齐样例 ReaderView.tsx:190-194：fy > 0.82 && fx > 0.9 / < 0.1）。
+  void _onCurlHover(PointerEvent event) {
+    if (widget.turnMode != PageTurnMode.cover || _isDragging || _isAnimating) {
+      return;
+    }
+    final size = context.size;
+    if (size == null || size.width <= 0 || size.height <= 0) return;
+    final fx = event.localPosition.dx / size.width;
+    final fy = event.localPosition.dy / size.height;
+    CurlDirection? dir;
+    if (fy > 0.82 &&
+        fx > 0.90 &&
+        (!widget.state.isLastPage || widget.state.hasNextChapter)) {
+      dir = CurlDirection.next;
+    } else if (fy > 0.82 &&
+        fx < 0.10 &&
+        (!widget.state.isFirstPage || widget.state.hasPreviousChapter)) {
+      dir = CurlDirection.prev;
+    }
+    if (dir == null) {
+      _clearCurlPeek();
+      return;
+    }
+    if (!_hasReadyCurlPair(dir)) {
+      unawaited(_ensureCurlPairReady(dir));
+      return;
+    }
+    final current = _curlFrameNotifier.value;
+    if (!current.active || current.isPeek) {
+      final wasActive = current.active;
+      _activeCurlConfig = CurlGrabConfig.hoverPeek;
+      _curlFrameNotifier.value = CurlFrame(
+        progress: 0.045,
+        direction: dir,
+        config: CurlGrabConfig.hoverPeek,
+        isPeek: true,
+      );
+      if (!wasActive && mounted) _updateState(() {});
+    }
+  }
+
+  void _clearCurlPeek() {
+    if (_curlFrameNotifier.value.isPeek) {
+      _curlFrameNotifier.value = CurlFrame.idle;
+      if (mounted) _updateState(() {});
+    }
   }
 
   void _onDragStart(DragStartDetails details) {
@@ -23,6 +75,9 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     _isDragging = true;
     _totalDeltaX = 0;
     _isForward = true;
+    final h = context.size?.height ?? 1;
+    final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.0, 1.0);
+    _activeCurlConfig = CurlGrabConfig.fromPointerFy(fy);
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
@@ -42,7 +97,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         return;
       }
       _isForward = true;
-      _flipProgress = (-_totalDeltaX / w).clamp(0.0, 1.0);
+      _flipProgress = (-_totalDeltaX / (w * 0.68)).clamp(0.0, 1.0);
     } else if (_totalDeltaX > 0) {
       // 向后拖动：检查是否已在第一页
       if (widget.state.isFirstPage && !widget.state.hasPreviousChapter) {
@@ -50,12 +105,23 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         return;
       }
       _isForward = false;
-      _flipProgress = (_totalDeltaX / w).clamp(0.0, 1.0);
+      _flipProgress = (_totalDeltaX / (w * 0.68)).clamp(0.0, 1.0);
     }
 
-    // 拖动超过阈值时预构建目标页（仅首次需要 setState 让 AnimatedBuilder 生效）
-    if (_flipProgress > 0.05 && _isForward) {
-      _prepareCurlCapture();
+    if (widget.turnMode == PageTurnMode.cover && _flipProgress > 0.005) {
+      final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+      if (!_hasReadyCurlPair(dir)) {
+        _prepareCurlCapture();
+      } else {
+        final wasActive = _curlFrameNotifier.value.active;
+        _curlFrameNotifier.value = CurlFrame(
+          progress: _flipProgress,
+          direction: dir,
+          config: _activeCurlConfig,
+        );
+        // 仅从静止切换到卷页首帧触发一次 build，后续全程 0-Rebuild。
+        if (!wasActive && mounted) _updateState(() {});
+      }
     }
     if (_flipProgress > 0.05 && _targetPageWidget == null) {
       final targetIndex =
@@ -88,10 +154,23 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
   }
   // ── 自定义动画 ──
 
+  void _syncCurlFrameFromAnim() {
+    if (widget.turnMode != PageTurnMode.cover) return;
+    final ctrl = _animController;
+    if (ctrl == null) return;
+    final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+    if (_hasReadyCurlPair(dir)) {
+      _curlFrameNotifier.value = CurlFrame(
+        progress: ctrl.value,
+        direction: dir,
+        config: _activeCurlConfig,
+      );
+    }
+  }
+
   void _startAutoFlip() {
     _prepareCurlCapture();
     _transitionInFlight = true;
-    // 确保目标页已构建
     if (_targetPageWidget == null) {
       final targetIndex =
           _isForward
@@ -104,15 +183,19 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
 
     _isAnimating = true;
     final ctrl = _animController!;
+    final startValue =
+        _curlFrameNotifier.value.isPeek
+            ? _curlFrameNotifier.value.progress
+            : _flipProgress;
     ctrl.duration = Duration(
-      milliseconds: (_ReaderPageViewState._flipDurationMs * (1 - _flipProgress))
+      milliseconds: (_ReaderPageViewState._flipDurationMs * (1 - startValue))
           .round()
           .clamp(100, _ReaderPageViewState._flipDurationMs),
     );
-
-    ctrl.value = _flipProgress;
-    // 动画启动时触发一次 build 进入 AnimatedBuilder 分支；
-    // 后续每帧由 AnimatedBuilder 直接驱动，不再经过 setState。
+    ctrl.removeListener(_syncCurlFrameFromAnim);
+    ctrl.addListener(_syncCurlFrameFromAnim);
+    ctrl.value = startValue;
+    _syncCurlFrameFromAnim();
     if (mounted) _updateState(() {});
     ctrl.animateTo(
       1,
@@ -158,25 +241,32 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
 
   void _cancelFlip() {
     _isAnimating = true;
-    _animController!.reverse(from: _flipProgress).then((_) {
+    final ctrl = _animController!;
+    ctrl.removeListener(_syncCurlFrameFromAnim);
+    ctrl.addListener(_syncCurlFrameFromAnim);
+    ctrl.reverse(from: _flipProgress).then((_) {
+      ctrl.removeListener(_syncCurlFrameFromAnim);
+      _curlFrameNotifier.value = CurlFrame.idle;
       if (mounted) {
         _updateState(() {
           _flipProgress = 0;
           _isAnimating = false;
+          _transitionInFlight = false;
         });
       }
-      // 取消翻页同样要释放卷页快照：回退动画结束后这两张 ui.Image 若留在
-      // State 上，会一直挂到下次成功翻页或页面销毁，反复「拖起又松手」
-      // 会让 _prepareCurlCapture 的 guard 复用旧图并持续钉住位图。
-      _clearCurlImages();
+      _scheduleIdleNextCurlWarmup();
     });
   }
 
   void _resetFlip() {
+    _animController?.removeListener(_syncCurlFrameFromAnim);
+    _curlFrameNotifier.value = CurlFrame.idle;
     _flipProgress = 0;
     _isAnimating = false;
+    _transitionInFlight = false;
     _targetPageWidget = null;
     _clearCurlImages();
     if (mounted) _updateState(() {});
+    _scheduleIdleNextCurlWarmup();
   }
 }

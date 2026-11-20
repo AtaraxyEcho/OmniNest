@@ -177,7 +177,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
         ctrl != null && ctrl.hasClients
             ? (ctrl.page?.round() ?? widget.state.pageIndex)
             : widget.state.pageIndex;
-    final nextIndex = basePage + 1;
+    final nextIndex = basePage + pageStep;
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
 
     if (atBoundary) {
@@ -298,10 +298,11 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
     }
 
     if (widget.turnMode == PageTurnMode.slide) {
+      final prevIndex = math.max(0, basePage - pageStep);
       if (ctrl != null && ctrl.hasClients) {
-        _debugPageTurn('previousStart', detail: 'target=${basePage - 1}');
+        _debugPageTurn('previousStart', detail: 'target=$prevIndex');
         _transitionInFlight = true;
-        unawaited(_animateSlideTo(ctrl, basePage - 1));
+        unawaited(_animateSlideTo(ctrl, prevIndex));
       } else {
         _debugPageTurn(
           'previousRetryScheduled',

@@ -187,7 +187,7 @@ void main() {
       expect(highlightedEnd! > highlightedStart!, true);
     });
 
-    testWidgets('选区存在期间注册 1–5 键盘选色动作，应用后随选区一起撤下', (tester) async {
+    testWidgets('选区存在期间注册 1–4 键盘选色动作，应用后随选区一起撤下', (tester) async {
       ReaderSelectionKeyActions? registered;
       final applied = <String>[];
       await tester.pumpWidget(

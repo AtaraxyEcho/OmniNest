@@ -47,12 +47,14 @@ import 'package:omninest/features/reader/presentation/widgets/reader_page_locato
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_side_tap_zone.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_builders.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_controls_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_library_actions_mixin.dart';
 import 'package:omninest/features/reader/application/reader_session_recorder.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_viewport_metrics.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_comfort_filter.dart';
+import 'package:omninest/features/reader/presentation/widgets/desktop_reader_popover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_interaction_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_settings_mixin.dart';
@@ -198,6 +200,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── UI 状态 ──
   ReaderViewSettings _settings = ReaderViewSettings();
   late String _currentChapterId = widget.chapterId;
+  String _activeSearchQuery = '';
   ReaderChapterContent? _cachedContent;
   // 图片降级提示的关闭状态只属于当前这一章：切章后必须重新出现，
   // 否则一次关闭会把后续章节的缺图数一起静音。
@@ -238,6 +241,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   String? _cachedContentSource;
   Size? _lastViewportSize;
   Size? _pageViewportSize;
+  ReaderViewportMetrics? _lastViewportMetrics;
+  EdgeInsets _lastSafePadding = EdgeInsets.zero;
   double _lastViewPaddingTop = 0;
   String? _lastLoadedChapterId;
 
@@ -542,6 +547,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   String get itemId => widget.itemId;
   @override
+  String get activeSearchQuery => _activeSearchQuery;
+  @override
   bool get exitRequested => _exitRequested;
   @override
   set exitRequested(bool value) => _exitRequested = value;
@@ -549,6 +556,13 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Size? get pageViewportSize => _pageViewportSize;
   @override
   set pageViewportSize(Size? value) => _pageViewportSize = value;
+  @override
+  ReaderViewportMetrics? get lastViewportMetrics => _lastViewportMetrics;
+  @override
+  set lastViewportMetrics(ReaderViewportMetrics? value) =>
+      _lastViewportMetrics = value;
+  @override
+  EdgeInsets get lastSafePadding => _lastSafePadding;
 
   @override
   void onReaderSelectionActive(bool active) {
@@ -582,6 +596,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(PaperGrainCache.ensureLoaded());
     _chapterNavigationIntent =
         ReaderChapterNavigationIntent.intentForRouteEntry(
           widget.entry,
@@ -637,7 +652,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     // 活动期捕获视口与插边缓存：dispose 时元素已 defunct，
     // 禁止任何 MediaQuery 祖先查找（退出备份计算使用这份缓存）。
     _lastViewportSize = MediaQuery.sizeOf(context);
-    _lastViewPaddingTop = MediaQuery.viewPaddingOf(context).top;
+    _lastSafePadding = MediaQuery.viewPaddingOf(context);
+    _lastViewPaddingTop = _lastSafePadding.top;
     _annotationHandler ??= ReaderAnnotationHandler(
       itemId: widget.itemId,
       chapterId: widget.chapterId,
@@ -667,6 +683,13 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
   }
 
+  /// 本次会话的前台活跃时长（切后台挂机不计入），退出提示与会话上报共用。
+  Duration get _activeReadingDuration =>
+      _accumulatedActive +
+      (_lifecycleReading
+          ? DateTime.now().difference(_lastResumedAt)
+          : Duration.zero);
+
   @override
   void dispose() {
     // 退出阅读页即释放整章 blocks 与视觉行测量缓存，避免最后一章正文
@@ -677,11 +700,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     ReaderSessionRecorder.recordSession(
       itemId: widget.itemId,
       sessionStart: _sessionStart,
-      activeReading:
-          _accumulatedActive +
-          (_lifecycleReading
-              ? DateTime.now().difference(_lastResumedAt)
-              : Duration.zero),
+      activeReading: _activeReadingDuration,
     );
     // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
     // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。

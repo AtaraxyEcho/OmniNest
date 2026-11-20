@@ -27,6 +27,11 @@ class ReaderViewSettings {
     this.volumeKeyPaging = true,
     this.followBookTypesetting = false,
     this.mobileDefaults = false,
+    this.justify = true,
+    this.marginPreset = 'standard',
+    this.brightness = 100,
+    this.warmth = 0,
+    this.autoNight = false,
   }) : paletteId =
            paletteId ?? ReaderReadingPalette.idFromLegacyIndex(themeIndex ?? 2);
 
@@ -56,6 +61,29 @@ class ReaderViewSettings {
   /// 桌面端与已保存偏好看不见此分支。落盘后不再重复套用，避免每次进书盖掉读者拧过的档位。
   final bool mobileDefaults;
 
+  /// 两端对齐开关（对齐样例 `ReaderView.tsx` 的 `justify`）。
+  ///
+  /// 默认开启以保持既有正文版式：旧版本正文恒为两端对齐，改成默认关闭会让
+  /// 所有未设置过的读者看到版式突变。
+  final bool justify;
+
+  /// 页边距档位：'narrow' | 'standard' | 'wide'。
+  final String marginPreset;
+
+  /// 阅读亮度（30..100，对齐样例 `prefs.bright`）。
+  final int brightness;
+
+  /// 护眼暖色强度（0..60，对齐样例 `prefs.warm`）。
+  final int warmth;
+
+  /// 夜间自动切换（20:00–06:00 自动切夜间主题，对齐样例 `prefs.autoNight`）。
+  final bool autoNight;
+
+  static bool isNightHour([DateTime? now]) {
+    final h = (now ?? DateTime.now()).hour;
+    return h >= 20 || h < 6;
+  }
+
   ReaderViewSettings withMobileDefaults() {
     if (mobileDefaults || paletteId != ReaderReadingPalette.dark.id) {
       return this;
@@ -68,7 +96,11 @@ class ReaderViewSettings {
     );
   }
 
-  ReaderReadingPalette get palette => ReaderReadingPalette.fromId(paletteId);
+  ReaderReadingPalette get palette =>
+      autoNight && isNightHour()
+          ? ReaderReadingPalette.dark
+          : ReaderReadingPalette.fromId(paletteId);
+  Color get paperEdgeColor => palette.paperEdge;
   Color get surfaceColor => palette.surface;
   Color get elevatedColor => palette.elevated;
   Color get onSurfaceColor => palette.onSurface;
@@ -175,10 +207,30 @@ class ReaderViewSettings {
   static const double chapterKickerLetterSpacingScale = 0.24;
 
   /// 标签字色：稿子的 `--accent` 压在米黄（`eyeCare`）与葱绿（`green`）纸底上只有
-  /// 4.1–4.2:1，不到正文 AA 的 4.5。按稿子自己对引用块的写法把强调色往墨色折
-  /// 20%，四档纸底下都过 4.5（reader_reading_palette_test 把关）。
-  Color get chapterKintColor =>
-      Color.lerp(accentColor, onSurfaceColor, 0.2) ?? accentColor;
+  /// 4.1–4.2:1，不到正文 AA 的 4.5。按稿子自己对引用块的写法把强调色往墨色折，
+  /// 折比从 20% 起按 5% 递增到实际达标，色板换值后仍由对比度不变量兜底
+  /// （reader_reading_palette_test 把关）。
+  Color get chapterKintColor {
+    var mix = 0.2;
+    while (mix < 0.95 &&
+        _contrastRatio(
+              Color.lerp(accentColor, onSurfaceColor, mix) ?? onSurfaceColor,
+              surfaceColor,
+            ) <
+            4.5) {
+      mix += 0.05;
+    }
+    return Color.lerp(accentColor, onSurfaceColor, mix.clamp(0.0, 1.0)) ??
+        accentColor;
+  }
+
+  static double _contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final lighter = la > lb ? la : lb;
+    final darker = la > lb ? lb : la;
+    return (lighter + 0.05) / (darker + 0.05);
+  }
 
   TextStyle chapterKickerStyle() => TextStyle(
     fontSize: chapterKickerFontSize,
@@ -200,6 +252,11 @@ class ReaderViewSettings {
     bool? volumeKeyPaging,
     bool? followBookTypesetting,
     bool? mobileDefaults,
+    bool? justify,
+    String? marginPreset,
+    int? brightness,
+    int? warmth,
+    bool? autoNight,
   }) {
     return ReaderViewSettings(
       fontFamily: fontFamily ?? this.fontFamily,
@@ -217,6 +274,11 @@ class ReaderViewSettings {
       followBookTypesetting:
           followBookTypesetting ?? this.followBookTypesetting,
       mobileDefaults: mobileDefaults ?? this.mobileDefaults,
+      justify: justify ?? this.justify,
+      marginPreset: marginPreset ?? this.marginPreset,
+      brightness: (brightness ?? this.brightness).clamp(30, 100),
+      warmth: (warmth ?? this.warmth).clamp(0, 60),
+      autoNight: autoNight ?? this.autoNight,
     );
   }
 
@@ -246,7 +308,12 @@ class ReaderViewSettings {
         other.pageTurnMode == pageTurnMode &&
         other.volumeKeyPaging == volumeKeyPaging &&
         other.followBookTypesetting == followBookTypesetting &&
-        other.mobileDefaults == mobileDefaults;
+        other.mobileDefaults == mobileDefaults &&
+        other.justify == justify &&
+        other.marginPreset == marginPreset &&
+        other.brightness == brightness &&
+        other.warmth == warmth &&
+        other.autoNight == autoNight;
   }
 
   @override
@@ -261,6 +328,11 @@ class ReaderViewSettings {
     volumeKeyPaging,
     followBookTypesetting,
     mobileDefaults,
+    justify,
+    marginPreset,
+    brightness,
+    warmth,
+    autoNight,
   );
 
   Map<String, dynamic> toJson() => {
@@ -275,6 +347,11 @@ class ReaderViewSettings {
     'volumeKeyPaging': volumeKeyPaging,
     'followBookTypesetting': followBookTypesetting,
     'mobileDefaults': mobileDefaults,
+    'justify': justify,
+    'marginPreset': marginPreset,
+    'brightness': brightness,
+    'warmth': warmth,
+    'autoNight': autoNight,
     'version': _settingsVersion,
   };
 
@@ -312,6 +389,14 @@ class ReaderViewSettings {
       // v6 → v7：新增 mobileDefaults 标记，旧偏好视为未套用移动壳层默认
       migrated['mobileDefaults'] ??= false;
     }
+    if (version < 8) {
+      // v7 → v8：新增对齐、页边距、亮度、护眼暖色与自动夜间字段
+      migrated['justify'] ??= true;
+      migrated['marginPreset'] ??= 'standard';
+      migrated['brightness'] ??= 100;
+      migrated['warmth'] ??= 0;
+      migrated['autoNight'] ??= false;
+    }
 
     final rawFontSize = (migrated['fontSize'] as num?)?.toDouble() ?? 18.0;
     final rawLineHeight = (migrated['lineHeight'] as num?)?.toDouble() ?? 1.8;
@@ -319,7 +404,9 @@ class ReaderViewSettings {
     final rawFontFamily = migrated['fontFamily'] as String? ?? 'serif';
     const allowedFonts = ['serif', 'sans', 'system'];
     const allowedTurnModes = ['slide', 'cover', 'fade'];
+    const allowedMargins = ['narrow', 'standard', 'wide'];
     final rawTurnMode = migrated['pageTurnMode'] as String? ?? 'slide';
+    final rawMargin = migrated['marginPreset'] as String? ?? 'standard';
     return ReaderViewSettings(
       fontFamily:
           allowedFonts.contains(rawFontFamily) ? rawFontFamily : 'serif',
@@ -337,10 +424,18 @@ class ReaderViewSettings {
       followBookTypesetting:
           migrated['followBookTypesetting'] as bool? ?? false,
       mobileDefaults: migrated['mobileDefaults'] as bool? ?? false,
+      justify: migrated['justify'] as bool? ?? false,
+      marginPreset: allowedMargins.contains(rawMargin) ? rawMargin : 'standard',
+      brightness: ((migrated['brightness'] as num?)?.round() ?? 100).clamp(
+        30,
+        100,
+      ),
+      warmth: ((migrated['warmth'] as num?)?.round() ?? 0).clamp(0, 60),
+      autoNight: migrated['autoNight'] as bool? ?? false,
     );
   }
 
-  static const _settingsVersion = 7;
+  static const _settingsVersion = 8;
 
   /// 段落首行缩进的字数：跟随原书且书表达过时按书的，否则用阅读器默认档。
   ///
@@ -414,11 +509,11 @@ class ReaderViewSettings {
     return capped * lineHeight;
   }
 
-  /// 段落对齐方式。书没表达时沿用稿子的两端对齐。
+  /// 段落对齐方式：受 justify 开关控制；跟随原书排版且书表达过时优先按原书。
   TextAlign paragraphAlign(ParagraphStyleSpec? bookStyle) {
     final expressed = bookStyle?.textAlign;
     if (followBookTypesetting && expressed != null) return expressed;
-    return TextAlign.justify;
+    return justify ? TextAlign.justify : TextAlign.start;
   }
 
   /// 引用块的对齐：只在跟随原书且书表达过时采纳，否则维持现状的起始对齐。
@@ -532,6 +627,86 @@ class ReaderViewSettingsPanel extends StatelessWidget {
         ),
       ),
       _buildThemeSection(context, l10n),
+      _SettingSection(
+        settings: settings,
+        label: l10n.readerBrightness,
+        value: '${settings.brightness}%',
+        child: AppSlider(
+          value: settings.brightness.toDouble(),
+          min: 30,
+          max: 100,
+          divisions: 70,
+          onChanged:
+              (v) =>
+                  onSettingsChanged(settings.copyWith(brightness: v.round())),
+        ),
+      ),
+      _SettingSection(
+        settings: settings,
+        label: l10n.readerWarmth,
+        value: '${settings.warmth}%',
+        child: AppSlider(
+          value: settings.warmth.toDouble(),
+          min: 0,
+          max: 60,
+          divisions: 60,
+          onChanged:
+              (v) => onSettingsChanged(settings.copyWith(warmth: v.round())),
+        ),
+      ),
+      _SettingSection(
+        settings: settings,
+        label: l10n.readerAutoNight,
+        child: SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(
+            l10n.readerAutoNightHint,
+            style: TextStyle(
+              color: settings.onSurfaceVariantColor,
+              fontSize: AppTypography.labelSmall,
+            ),
+          ),
+          value: settings.autoNight,
+          onChanged: (v) => onSettingsChanged(settings.copyWith(autoNight: v)),
+        ),
+      ),
+      _SettingSection(
+        settings: settings,
+        label: '两端对齐',
+        child: SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(
+            '正文段落两端对齐',
+            style: TextStyle(
+              color: settings.onSurfaceVariantColor,
+              fontSize: AppTypography.labelSmall,
+            ),
+          ),
+          value: settings.justify,
+          onChanged: (v) => onSettingsChanged(settings.copyWith(justify: v)),
+        ),
+      ),
+      _SettingSection(
+        settings: settings,
+        label: '页边距',
+        child: _SampleSegmented(
+          settings: settings,
+          labels: const ['窄', '标准', '宽'],
+          selectedIndex: const [
+            'narrow',
+            'standard',
+            'wide',
+          ].indexOf(settings.marginPreset),
+          onChanged:
+              (index) => onSettingsChanged(
+                settings.copyWith(
+                  marginPreset: const ['narrow', 'standard', 'wide'][index],
+                ),
+              ),
+        ),
+      ),
       _SettingSection(
         settings: settings,
         label: l10n.readerFollowBookTypesetting,

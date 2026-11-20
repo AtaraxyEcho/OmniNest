@@ -116,7 +116,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
           width <= 1 || startX < width * 0.30 || startX > width * 0.70;
       if (!edgeStart) return;
       if (!_isDragging) {
-        _onDragStart(DragStartDetails(localPosition: event.localPosition));
+        _onDragStart(DragStartDetails(localPosition: _pointerDownPosition!));
       }
       _onDragUpdate(
         DragUpdateDetails(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 桌面原型 `.bk-top`：左侧返回与书名，右侧模式分段和阅读工具。
@@ -19,6 +20,7 @@ class ReaderDesktopTopBar extends StatelessWidget {
     required this.onSettingsChanged,
     required this.isBookmarked,
     required this.pageModeEnabled,
+    this.annotationBadgeCount = 0,
     super.key,
   });
 
@@ -34,6 +36,9 @@ class ReaderDesktopTopBar extends StatelessWidget {
   final ValueChanged<ReaderViewSettings>? onSettingsChanged;
   final bool isBookmarked;
   final bool pageModeEnabled;
+
+  /// 书签 + 批注总数角标（对齐样例 `.bk-top .badge`）。
+  final int annotationBadgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +94,7 @@ class ReaderDesktopTopBar extends StatelessWidget {
                             fontFamily: AppTypography.serifFamily,
                             fontFamilyFallback:
                                 AppTypography.serifFamilyFallback,
-                            fontSize: 17,
+                            fontSize: AppTypography.titleMedium,
                             height: 1.25,
                           ),
                         ),
@@ -142,11 +147,44 @@ class ReaderDesktopTopBar extends StatelessWidget {
                   selected: isBookmarked,
                   onPressed: onAddBookmark,
                 ),
-                _DesktopIconButton(
-                  icon: Icons.edit_note_rounded,
-                  label: l10n.readerAnnotations,
-                  foreground: foreground,
-                  onPressed: onShowAnnotations,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _DesktopIconButton(
+                      icon: Icons.edit_note_rounded,
+                      label: l10n.readerAnnotations,
+                      foreground: foreground,
+                      onPressed: onShowAnnotations,
+                    ),
+                    if (annotationBadgeCount > 0)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: settings.accentColor,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              annotationBadgeCount > 99
+                                  ? '99+'
+                                  : '$annotationBadgeCount',
+                              style: const TextStyle(
+                                color: ReaderReadingPalette.onAccentInk,
+                                fontSize: AppTypography.labelNano,
+                                fontWeight: FontWeight.w700,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 _DesktopIconButton(
                   icon: Icons.text_fields_rounded,

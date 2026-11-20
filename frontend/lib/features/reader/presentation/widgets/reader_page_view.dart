@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
+
 import 'package:flutter/gestures.dart'
     show
         PointerScrollEvent,
@@ -106,6 +108,9 @@ class ReaderPageView extends StatefulWidget {
     this.turnMode = PageTurnMode.slide,
     this.pageCountNotifier,
     this.spread = false,
+    this.paperEdgeColor,
+    this.snapshotPageBuilder,
+    this.crossChapterSnapshotBuilder,
     super.key,
   });
 
@@ -113,6 +118,15 @@ class ReaderPageView extends StatefulWidget {
 
   /// 构建指定页码的 Widget。返回 null 表示页面不存在（章节结束）。
   final Widget? Function(int pageIndex) pageBuilder;
+
+  /// 离屏抓图专用的轻量纯展示页构造器（无 SelectionArea / FocusNode）；缺省回退 pageBuilder。
+  final Widget? Function(int pageIndex)? snapshotPageBuilder;
+
+  /// 跨章卷页时的邻章快照页构造器（+1 下一章首页，-1 上一章末页）。
+  final Widget? Function(int chapterDelta)? crossChapterSnapshotBuilder;
+
+  /// 纸叠边缘色（样例 `--paper-edge`）；缺省由 surfaceColor 压暗派生。
+  final Color? paperEdgeColor;
   final PageTurnCallbacks callbacks;
   final Color surfaceColor;
   final bool selectionActive;
@@ -161,13 +175,24 @@ class _ReaderPageViewState extends State<ReaderPageView>
   Widget? _currentPageWidget;
   Widget? _targetPageWidget;
 
-  // ── 卷页快照（只在下一页的 cover 翻页时抓取）──
+  // ── 双向卷页状态与单槽快照缓存 ──
+  final ValueNotifier<CurlFrame> _curlFrameNotifier = ValueNotifier<CurlFrame>(
+    CurlFrame.idle,
+  );
+  CurlGrabConfig _activeCurlConfig = CurlGrabConfig.defaultNext;
   ui.Image? _curlFront;
   ui.Image? _curlBack;
+  CurlDirection? _cachedCurlDir;
+  String? _cachedCurlChapterId;
+  int? _cachedCurlPageIndex;
   bool _curlCapturing = false;
   int _curlToken = 0;
-  final GlobalKey _curlFrontKey = GlobalKey();
-  final GlobalKey _curlBackKey = GlobalKey();
+  Timer? _curlWarmupTimer;
+  Widget? _pendingBackCaptureWidget;
+  final GlobalKey _liveLeftKey = GlobalKey();
+  final GlobalKey _liveRightKey = GlobalKey();
+  final GlobalKey _liveSingleKey = GlobalKey();
+  final GlobalKey _singleBackCaptureKey = GlobalKey();
 
   // ── 本地页数跟踪（slide 模式探测扩展） ──
   int _localPageCount = 0;
@@ -220,6 +245,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
     widget.controller?.addListener(_onExternalPageCommand);
     widget.pageCountNotifier?.addListener(_onPageCountChanged);
     _initForMode();
+    _scheduleIdleNextCurlWarmup();
   }
 
   /// 预取就绪页数直连：仅更新本地计数（事件时读点），不重建页面。
@@ -250,9 +276,13 @@ class _ReaderPageViewState extends State<ReaderPageView>
       }
     }
 
-    if (oldWidget.turnMode != widget.turnMode) {
+    if (oldWidget.turnMode != widget.turnMode ||
+        oldWidget.spread != widget.spread) {
+      _curlFrameNotifier.value = CurlFrame.idle;
+      _clearCurlImages();
       _disposeControllers();
       _initForMode();
+      _scheduleIdleNextCurlWarmup();
     }
 
     // 跨章页流软切换：chapterId 变化不重挂载控制器，保持翻页手势连续。
@@ -264,7 +294,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
         _transitionInFlight = false;
       }
       _boundaryRequestInFlight = false;
+      _curlFrameNotifier.value = CurlFrame.idle;
       _clearCurlImages();
+      _scheduleIdleNextCurlWarmup();
     }
 
     if (widget.turnMode == PageTurnMode.slide &&
@@ -286,6 +318,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
     _boundaryResetTimer?.cancel();
     _disposeControllers();
     _disposeCurlImages();
+    _curlFrameNotifier.dispose();
     _flipProgressNotifier.dispose();
     super.dispose();
   }

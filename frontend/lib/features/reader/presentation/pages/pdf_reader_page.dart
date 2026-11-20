@@ -9,6 +9,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -18,6 +19,7 @@ import 'package:omninest/features/reader/application/reader_session_recorder.dar
 import 'package:omninest/features/reader/domain/reader_progress.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_comfort_filter.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -444,36 +446,58 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
         }
         await _handleExit();
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.readerPdfPageIndicator(_currentPage, _totalPages)),
-          leading: IconButton(
-            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => unawaited(_handleExit()),
-          ),
-        ),
-        body: Stack(
-          children: [
-            Positioned.fill(child: _buildViewerBody()),
-            if (_totalPages > 0)
-              Positioned(
-                right: 16,
-                bottom: 16,
-                child: IgnorePointer(
-                  child: ReaderProgressIndicator(
-                    settings: ReaderViewSettings.fromJson(
-                      ref.watch(readerPreferencesProvider).value ??
-                          const <String, dynamic>{},
-                    ),
-                    progress: _currentPage / _totalPages,
-                    currentPage: _currentPage - 1,
-                    totalPages: _totalPages,
+      child: Builder(
+        builder: (context) {
+          final readerSettings = ReaderViewSettings.fromJson(
+            ref.watch(readerPreferencesProvider).value ??
+                const <String, dynamic>{},
+          );
+          return Scaffold(
+            backgroundColor: readerSettings.surfaceColor,
+            appBar: AppBar(
+              title: Text(
+                l10n.readerPdfPageIndicator(_currentPage, _totalPages),
+              ),
+              leading: IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => unawaited(_handleExit()),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: l10n.readerSettingsTitle,
+                  icon: const Icon(Icons.tune_rounded),
+                  onPressed:
+                      () => _showPdfComfortSheet(context, readerSettings),
+                ),
+              ],
+            ),
+            body: Stack(
+              children: [
+                Positioned.fill(
+                  child: ReaderComfortFilter(
+                    brightness: readerSettings.brightness,
+                    warmth: readerSettings.warmth,
+                    child: _buildViewerBody(),
                   ),
                 ),
-              ),
-          ],
-        ),
+                if (_totalPages > 0)
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: IgnorePointer(
+                      child: ReaderProgressIndicator(
+                        settings: readerSettings,
+                        progress: _currentPage / _totalPages,
+                        currentPage: _currentPage - 1,
+                        totalPages: _totalPages,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -513,6 +537,77 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
       controller: _viewerController,
       initialPageNumber: _currentPage,
       params: params,
+    );
+  }
+
+  /// 顶栏快捷护眼调节：亮度与暖色实时预览并同步到云端偏好。
+  void _showPdfComfortSheet(
+    BuildContext context,
+    ReaderViewSettings initialSettings,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        var current = initialSettings;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void update(ReaderViewSettings next) {
+              setModalState(() => current = next);
+              unawaited(
+                ref
+                    .read(readerPreferencesProvider.notifier)
+                    .save(next.toJson()),
+              );
+            }
+
+            return MobileSheetSemantics(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(l10n.readerBrightness),
+                          Text('${current.brightness}%'),
+                        ],
+                      ),
+                      Slider(
+                        value: current.brightness.toDouble(),
+                        min: 30,
+                        max: 100,
+                        divisions: 70,
+                        onChanged:
+                            (v) =>
+                                update(current.copyWith(brightness: v.round())),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(l10n.readerWarmth),
+                          Text('${current.warmth}%'),
+                        ],
+                      ),
+                      Slider(
+                        value: current.warmth.toDouble(),
+                        min: 0,
+                        max: 60,
+                        divisions: 60,
+                        onChanged:
+                            (v) => update(current.copyWith(warmth: v.round())),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

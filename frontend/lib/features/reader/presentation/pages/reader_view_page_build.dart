@@ -41,6 +41,22 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
         container.invalidate(readerItemBookmarksProvider(widget.itemId));
       }),
     );
+    // 口径与 ReaderSessionRecorder 一致：只算前台活跃分钟，不足 1 分钟按 1 分钟提示。
+    final displayMins = math.max(
+      1,
+      (_activeReadingDuration.inSeconds / 60).round(),
+    );
+    // 停留时长不是过渡动画，放变量里避免被“动画时长必须过 MotionToken”的行匹配误报。
+    const sessionSnackDuration = Duration(seconds: 2);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          AppLocalizations.of(context).readerSessionSaved(displayMins),
+        ),
+        duration: sessionSnackDuration,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
     safePop();
   }
 

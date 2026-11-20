@@ -2717,6 +2717,10 @@
   "readerThemeDark": "深色",
   "readerThemeGreen": "绿色",
   "readerSettingsTitle": "阅读设置",
+  "readerBrightness": "亮度",
+  "readerWarmth": "护眼暖色",
+  "readerAutoNight": "自动夜间 (20:00–06:00)",
+  "readerAutoNightHint": "夜间自动切换深色纸面",
   "readerReadingMode": "阅读模式",
   "readerModeScroll": "滑动",
   "readerModePage": "左右滑动",
@@ -2792,6 +2796,14 @@
   "@readerReadingProgress": {
     "placeholders": {
       "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSessionSaved": "阅读时长已记录 · {minutes} 分钟",
+  "@readerSessionSaved": {
+    "placeholders": {
+      "minutes": {
         "type": "int"
       }
     }

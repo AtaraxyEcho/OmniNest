@@ -43,57 +43,20 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           immersiveMode: settings.immersiveMode,
           isPageMode: true,
         );
-
-        // 样例 `.bookview.mode-flip`：只有 Book/cover 模式在宽屏使用双页
-        // 跨页；Swipe/slide 与窄窗 Book 都保持单页满铺。否则把 fade 也当成
-        // 跨页会让三种模式的语义与原型错位，且 cover 在窄窗会被错误裁成半页。
-        final spread =
-            settings.pageTurnMode == 'cover' && viewportSize.width >= 1100;
-        // 样例 `.spread`：整幅跨页 1.42 宽高比，最高 780；超出时居中留白，
-        // 而不是把两页拉到视口边缘。分页宽高必须跟着画框走，否则文字会溢出。
-        final frame =
-            spread
-                ? _spreadFrame(viewportSize)
-                : Size(viewportSize.width, viewportSize.height);
-        // 扣除中缝 70px（与 reader_page_spread.dart 的 _spreadGutterWidth 同值；
-        // 两者分属不同库，改动时须同步）。
-        final halfWidth =
-            spread ? math.max(280.0, (frame.width - 70) / 2) : frame.width;
-        // 样例 `.pg { padding: 7% 9% 8% }`：CSS 的 padding 百分比一律按包含块
-        // 宽度算（含上下），包含块是跨页里的半页。
-        // 单页按 `reader.css:51` 覆盖成
-        // `max(64px,9vh) max(24px,(100% - 680px)/2) max(56px,9vh)`：正文列
-        // 收敛到 680，上下各留一档安全边距。窄视口仍是旧口径——64px 上边距
-        // 在手机高度上会直接吃掉正文。
-        final singleInsets =
-            !spread && frame.width >= 900
-                ? ReaderControlLayout.singlePageInsets(frame)
-                : null;
-        final pageInsets =
-            spread
-                ? EdgeInsets.only(
-                  left: halfWidth * 0.09,
-                  right: halfWidth * 0.09,
-                  top: halfWidth * 0.07,
-                  bottom: halfWidth * 0.08,
-                )
-                : singleInsets;
-        final pageWidth =
-            spread
-                ? math.max(80.0, halfWidth - (pageInsets?.horizontal ?? 0))
-                : pageInsets != null
-                ? math.max(80.0, frame.width - pageInsets.horizontal)
-                : pageLayout.textColumnWidth;
-        // 页脚 folio 预留 20px，避免页码压住最后一行正文；跨页内距同样要从
-        // 分页高度里扣掉，否则切片算出的文字会顶到页框之外。
-        final availablePageHeight =
-            frame.height -
-            chromeLayout.chapterHeaderReserve -
-            21 -
-            (pageInsets?.vertical ?? 0);
-        final pageHeight = availablePageHeight > 1 ? availablePageHeight : 1.0;
-        // 样例 `.folio { bottom: 4.5% }`，单页被 reader.css 覆盖成 22px。
-        final folioBottom = spread ? frame.height * 0.045 : 22.0;
+        // 单一几何事实源：测量、分页、恢复与渲染全部从此处取值，根除缓存乒乓。
+        final metrics = resolveViewportMetrics(
+          viewportOverride: viewportSize,
+          textScaleOverride: textScale,
+          safePaddingOverride: MediaQuery.viewPaddingOf(context),
+        );
+        final spread = metrics.isSpread;
+        final frame = metrics.frameSize;
+        final halfWidth = metrics.halfWidth;
+        final pageInsets = metrics.pageInsets;
+        final pageWidth = metrics.pageWidth;
+        final pageHeight = metrics.pageHeight;
+        final folioBottom = metrics.folioBottom;
+        final alignedPageIndex = metrics.alignPageIndex(pageModePage);
         final data = contentLoader?.get(currentChapterId, settings);
         final navigator = data?.getOrCreatePageNavigator(
           pageWidth,
@@ -128,7 +91,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           pageCountNotifier: pageCountNotifier,
           state: PagedState(
             chapterId: currentChapterId,
-            pageIndex: pageModePage,
+            pageIndex: alignedPageIndex,
             pageCount: pageCount,
             hasMore: hasMore,
             hasPreviousChapter: chapterIdx > 0,
@@ -141,6 +104,34 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                 isRestoringProgress,
           ),
           selectionActive: selectionActive,
+          snapshotPageBuilder: (index) {
+            if (index < 0 || index >= contentPages) return null;
+            final slice = contentLoader?.computePage(
+              chapterId: currentChapterId,
+              settings: settings,
+              pageWidth: pageWidth,
+              pageHeight: pageHeight,
+              pageIndex: index,
+              textScale: textScale,
+            );
+            if (slice == null) return null;
+            final pageData = contentLoader?.get(currentChapterId, settings);
+            if (pageData == null) return null;
+            return _PageWithFolio(
+              number: index + 1,
+              folioBottom: folioBottom,
+              bookmarked: false,
+              ribbonRight: (spread ? halfWidth : frame.width) * 0.08,
+              child: buildPageContent(
+                pageData,
+                slice,
+                scrollPhysics: const NeverScrollableScrollPhysics(),
+                pageInsets: pageInsets,
+                pageContentWidth: pageWidth,
+                selectionDisabled: true,
+              ),
+            );
+          },
           pageBuilder: (index) {
             if (index >= contentPages) {
               // 收页在正文切片之外：越界的一律不渲染，正好等于正文页数的是收页。
@@ -179,7 +170,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
               number: index + 1,
               folioBottom: folioBottom,
               // 样例缎带只挂在「当前这一页」；相邻预构建页不能一起挂。
-              bookmarked: isBookmarked && index == pageModePage,
+              bookmarked: isBookmarked && index == alignedPageIndex,
               ribbonRight: (spread ? halfWidth : frame.width) * 0.08,
               child: buildPageContent(
                 pageData,
@@ -210,8 +201,9 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                 changedPageIndex: index,
                 landedPageIndex: pageModePage,
               );
-              if (pageModePage != index) {
-                pageModePage = index;
+              final normalizedIndex = metrics.alignPageIndex(index);
+              if (pageModePage != normalizedIndex) {
+                pageModePage = normalizedIndex;
                 _requestReaderRebuild();
               }
               if (landingEcho) {
@@ -256,15 +248,6 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
     );
   }
 
-  /// 跨页画框：1.42 宽高比、最高 780，同时不超出视口。
-  Size _spreadFrame(Size viewport) {
-    final height = math.min(
-      780.0,
-      math.min(viewport.height, viewport.width / 1.42),
-    );
-    return Size(height * 1.42, height);
-  }
-
   // ── 单页内容 ──
 
   /// 按切片取可见块：规则收在 `BlockClipper.clipBlocksByPageRange`，
@@ -279,6 +262,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
     String? chapterTitle,
     EdgeInsets? pageInsets,
     double? pageContentWidth,
+    bool selectionDisabled = false,
   }) {
     final blocks = _sliceVisibleBlocks(data, slice);
 
@@ -305,12 +289,14 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       itemId: itemId,
       chapterId: data.chapterId,
       annotations: annotationHandler?.chapterAnnotations ?? [],
+      searchQuery: activeSearchQuery,
       visibleBlocks: blocks,
       rawBlocks: data.blocks,
       scrollPhysics: scrollPhysics,
       isFirstBlockContinuation: isFirstBlockContinuation,
       pageInsets: pageInsets,
       pageContentWidth: pageContentWidth,
+      selectionDisabled: selectionDisabled,
       onHighlight: (text, start, end) {
         if (!mounted) return;
         annotationHandler?.highlight(text, start, end, context);
@@ -344,21 +330,9 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       onTap: null,
     );
 
-    if (settings.immersiveMode ||
-        chapterTitle == null ||
-        chapterTitle.isEmpty) {
-      return content;
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16),
-          child: buildChapterHeader(chapterTitle),
-        ),
-        Expanded(child: content),
-      ],
-    );
+    // 章首标题统一由正文首块 HeadingBlock 参与分页测高与绘制，不再在正文外层
+    // 追加独立 Column 章头，彻底消除第 0 页底部 54px 裁字。
+    return content;
   }
 
   Widget buildChapterHeader(String chapterTitle) {
@@ -493,9 +467,14 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           itemId: itemId,
           chapterId: currentChapterId,
           annotations: annotationHandler?.chapterAnnotations ?? [],
+          searchQuery: activeSearchQuery,
           rawBlocks: chapterData?.blocks,
           blockExtents: chapterData?.blockExtents,
           scrollController: scrollController,
+          scrollColumnMaxWidth: resolveViewportMetrics().scrollColumnMaxWidth,
+          scrollHorizontalPadding:
+              resolveViewportMetrics().scrollHorizontalPadding,
+          onBackwardChapterRequest: handleBackwardChapterOverscroll,
           footer: _buildChapterEndCard(detail),
           // 章末两块的高度随文字缩放同步放大：卡内文本吃缩放，高度不跟就会在紧约束下
           // 溢出。取卡片实际所在内容层的缩放（已剔除应用字体档位），页面环境值在档位

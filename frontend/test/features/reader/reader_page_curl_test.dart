@@ -22,8 +22,11 @@ Future<void> _pumpCurl(
   required double progress,
   required ui.Image front,
   required ui.Image back,
+  CurlDirection direction = CurlDirection.next,
+  bool spread = false,
 }) async {
-  tester.view.physicalSize = const Size(400, 600);
+  final size = spread ? const Size(800, 600) : const Size(400, 600);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -33,12 +36,14 @@ Future<void> _pumpCurl(
       textDirection: TextDirection.ltr,
       child: Center(
         child: SizedBox(
-          width: 400,
-          height: 600,
+          width: size.width,
+          height: size.height,
           child: ReaderPageCurl(
             front: front,
             back: back,
             progress: progress,
+            direction: direction,
+            spread: spread,
             paper: const Color(0xFFF6F1E4),
           ),
         ),
@@ -51,7 +56,7 @@ Future<void> _pumpCurl(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('卷页在各个进度都能画出 28 片条带且不抛异常', (tester) async {
+  testWidgets('卷页在各个进度都能画出 28 片条带且不抛异常（正向与反向）', (tester) async {
     final front = await tester.runAsync(
       () => _pageImage(const Color(0xFFF6F1E4), const Color(0xFF4A6A8A)),
     );
@@ -61,10 +66,19 @@ void main() {
     expect(front, isNotNull);
     expect(back, isNotNull);
 
-    for (final progress in [0.05, 0.25, 0.5, 0.75, 0.95]) {
-      await _pumpCurl(tester, progress: progress, front: front!, back: back!);
-      expect(tester.takeException(), isNull, reason: 'p=$progress');
-      expect(find.byType(CustomPaint), findsWidgets, reason: 'p=$progress');
+    for (final dir in CurlDirection.values) {
+      for (final progress in [0.045, 0.25, 0.5, 0.75, 0.95]) {
+        await _pumpCurl(
+          tester,
+          progress: progress,
+          front: front!,
+          back: back!,
+          direction: dir,
+          spread: true,
+        );
+        expect(tester.takeException(), isNull, reason: 'dir=$dir p=$progress');
+        expect(find.byType(CustomPaint), findsWidgets);
+      }
     }
   });
 
@@ -76,6 +90,53 @@ void main() {
       () => _pageImage(const Color(0xFFEFE8D6), const Color(0xFF8A6A4A)),
     );
     await _pumpCurl(tester, progress: 0, front: front!, back: back!);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ValueNotifier<CurlFrame> 驱动 0-Rebuild 更新且预烘焙纸纹可用', (
+    tester,
+  ) async {
+    final shader = await tester.runAsync(PaperGrainCache.ensureLoaded);
+    expect(shader, isNotNull);
+    final front = await tester.runAsync(
+      () => _pageImage(const Color(0xFFF6F1E4), const Color(0xFF4A6A8A)),
+    );
+    final back = await tester.runAsync(
+      () => _pageImage(const Color(0xFFEFE8D6), const Color(0xFF8A6A4A)),
+    );
+    final frame = ValueNotifier<CurlFrame>(
+      const CurlFrame(
+        progress: 0.045,
+        direction: CurlDirection.next,
+        config: CurlGrabConfig.hoverPeek,
+        isPeek: true,
+      ),
+    );
+    addTearDown(frame.dispose);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: ReaderPageCurl(
+            frameListenable: frame,
+            front: front!,
+            back: back!,
+            paper: const Color(0xFFF6F1E4),
+            spread: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    frame.value = const CurlFrame(
+      progress: 0.6,
+      direction: CurlDirection.next,
+      config: CurlGrabConfig.defaultNext,
+    );
+    await tester.pump();
     expect(tester.takeException(), isNull);
   });
 }

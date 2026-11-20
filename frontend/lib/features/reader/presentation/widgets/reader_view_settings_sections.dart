@@ -246,6 +246,7 @@ class _FontSizeRange extends StatelessWidget {
               inactiveTickMarkColor: Colors.transparent,
             ),
             child: AppSlider(
+              key: const Key('readerFontSizeSlider'),
               value: clamped,
               min: 16,
               max: 26,

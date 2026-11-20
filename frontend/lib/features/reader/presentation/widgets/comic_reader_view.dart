@@ -28,6 +28,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_panel_coord
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tap_detector.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_comfort_filter.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
@@ -123,7 +124,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   ComicManifest get _manifest => widget.manifest;
   List<ComicPage> get _pages => _manifest.pages;
   int get _totalPages => _pages.length;
-  bool get _isRtl => _manifest.readingDirection?.toLowerCase() == 'rtl';
+  bool get _isRtl =>
+      _displaySettings.rtlOverride ??
+      (_manifest.readingDirection?.toLowerCase() == 'rtl');
   ReaderViewSettings get _controlSettings =>
       _settings.copyWith(paletteId: ReaderReadingPalette.dark.id);
 
@@ -700,7 +703,13 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            _buildContent(),
+            Positioned.fill(
+              child: ReaderComfortFilter(
+                brightness: _settings.brightness,
+                warmth: _settings.warmth,
+                child: _buildContent(),
+              ),
+            ),
             // 控件条与页码常驻挂载，仅切换可见性：条件挂载会让父 Stack
             // 存续期间整棵摘除/加回语义子树，触发 Windows 辅助功能桥
             // "will not be in the tree" 更新失败。

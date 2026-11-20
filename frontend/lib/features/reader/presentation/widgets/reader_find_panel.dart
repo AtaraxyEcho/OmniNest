@@ -106,6 +106,7 @@ class ReaderFindPanel extends StatefulWidget {
     this.chapterTitleOf,
     this.searchBook,
     this.onSelectBookMatch,
+    this.onQueryChanged,
     this.searchHint,
     super.key,
   });
@@ -113,6 +114,9 @@ class ReaderFindPanel extends StatefulWidget {
   final String plainText;
   final ReaderViewSettings settings;
   final ValueChanged<int> onSelect;
+
+  /// 查询词变化（已去首尾空白）；正文据此实时叠加命中高亮。
+  final ValueChanged<String>? onQueryChanged;
 
   /// 可选：全局 offset → 章标题（窗口多章搜索时展示）。
   final String Function(int globalOffset)? chapterTitleOf;
@@ -342,7 +346,10 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                 borderSide: BorderSide.none,
               ),
             ),
-            onChanged: _search,
+            onChanged: (value) {
+              widget.onQueryChanged?.call(value.trim());
+              _search(value);
+            },
           ),
         ),
         if (_truncated || _incomplete)

@@ -192,13 +192,15 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
       positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
       // locate 按需算出目标页后，页数通知器可能仍停留在预热进度；先同步到
       // 导航器实际页数，避免恢复跳转因 PageView item 数不足被钳制到半途页。
+      final metrics = resolveViewportMetrics();
+      final alignedTargetPage = metrics.alignPageIndex(targetPage);
       final navigator = chapterData.getOrCreatePageNavigator(
-        computePageWidth(),
-        computePageHeight(),
+        metrics.pageWidth,
+        metrics.pageHeight,
         settings,
-        textScale: MediaQuery.textScalerOf(context).scale(1.0),
+        textScale: metrics.textScale,
       );
-      if (pageCountNotifier.value < targetPage + 1) {
+      if (pageCountNotifier.value < alignedTargetPage + 1) {
         pageCountNotifier.value = readerDisplayPageCount(
           contentPages: navigator.readablePageCount,
           fullyPaginated: navigator.isFullyPaginated,
@@ -210,7 +212,7 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
         const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
       );
       _updateState(() {
-        pageModePage = targetPage;
+        pageModePage = alignedTargetPage;
         modeSwitchInProgress = false;
         isRestoringProgress = false;
       });

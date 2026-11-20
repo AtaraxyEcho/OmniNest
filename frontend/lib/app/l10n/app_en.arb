@@ -2843,6 +2843,10 @@
   "readerThemeDark": "Dark",
   "readerThemeGreen": "Green",
   "readerSettingsTitle": "Reading Settings",
+  "readerBrightness": "Brightness",
+  "readerWarmth": "Eye comfort warmth",
+  "readerAutoNight": "Auto night (20:00–06:00)",
+  "readerAutoNightHint": "Switch to dark paper automatically at night",
   "readerReadingMode": "Reading Mode",
   "readerModeScroll": "Scroll",
   "readerModePage": "Page",
@@ -2918,6 +2922,14 @@
   "@readerReadingProgress": {
     "placeholders": {
       "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSessionSaved": "Reading session saved · {minutes} min",
+  "@readerSessionSaved": {
+    "placeholders": {
+      "minutes": {
         "type": "int"
       }
     }

@@ -226,4 +226,19 @@ class ReaderProgressServiceTest {
                 0.25,
                 clientUpdatedAt);
     }
+
+    @Test
+    void updateProgressAcceptsFlipAndSwipeReadingModes() {
+        ReaderItem item = item();
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
+        stubUpsert(1);
+
+        service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("flip", null, null));
+        service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("swipe", null, null));
+
+        Mockito.verify(progressRepository, Mockito.times(2)).upsertProgress(
+                Mockito.any(), Mockito.any(), Mockito.anyLong(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
 }

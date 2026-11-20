@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReaderProgressService {
 
-    private static final Set<String> ALLOWED_READING_MODES = Set.of("scroll", "page");
+    private static final Set<String> ALLOWED_READING_MODES = Set.of("scroll", "page", "flip", "swipe");
 
     private final ReaderItemRepository itemRepository;
     private final ReaderItemSourceRepository sourceRepository;

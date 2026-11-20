@@ -27,6 +27,7 @@ class ReaderViewContent extends StatefulWidget {
     this.itemId,
     this.chapterId,
     this.annotations = const [],
+    this.searchQuery = '',
     this.visibleBlocks,
     this.rawBlocks,
     this.stylesheetCss = '',
@@ -38,6 +39,10 @@ class ReaderViewContent extends StatefulWidget {
     this.blockExtents,
     this.pageInsets,
     this.pageContentWidth,
+    this.scrollColumnMaxWidth,
+    this.scrollHorizontalPadding,
+    this.onBackwardChapterRequest,
+    this.selectionDisabled = false,
     this.isFirstBlockContinuation = false,
     this.onImageTap,
     this.onLinkTap,
@@ -63,6 +68,9 @@ class ReaderViewContent extends StatefulWidget {
   /// 当前章节标识；块内链接的 recognizer 缓存键与语义上下文必须用它，不能用书籍 ID。
   final String? chapterId;
   final List<ReaderAnnotation> annotations;
+
+  /// 书内搜索当前查询词；长度 ≥ 2 时正文实时叠加命中高亮，空串即清除。
+  final String searchQuery;
 
   /// 当前页的 block 子集（用于分页模式下的页面切片渲染）。
   /// 为 null 时使用 htmlContent 解析的全量 blocks。
@@ -97,6 +105,18 @@ class ReaderViewContent extends StatefulWidget {
   /// 与 [pageInsets] 配套的文字列宽，等于分页器 `computePage` 的 `pageWidth`。
   /// 两者必须同源，否则折行位置与切片边界会错开。
   final double? pageContentWidth;
+
+  /// 滚动模式正文列最大宽度（来自 ReaderViewportMetrics，与测量同源）。
+  final double? scrollColumnMaxWidth;
+
+  /// 滚动模式水平内边距（来自 ReaderViewportMetrics，与测量同源）。
+  final double? scrollHorizontalPadding;
+
+  /// 桌面端 ClampingScrollPhysics 顶部继续上滚时触发的上一章回退回调。
+  final VoidCallback? onBackwardChapterRequest;
+
+  /// 为 true 时跳过 SelectionArea 与 FocusNode 注册（专用于离屏卷页抓图槽）。
+  final bool selectionDisabled;
 
   /// 滚动列表末尾留白条目高度，同时作为该项的确定高度。
   static const double trailingSpacerHeight = 80.0;
@@ -180,12 +200,16 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   bool _pointerMoved = false;
   bool _selectionWasActiveOnPointerDown = false;
   bool _suppressNextContentTap = false;
+  double _topWheelAccum = 0;
+  DateTime _topWheelWindowStart = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
     super.initState();
     _selectionFocusNode = FocusNode(debugLabel: 'reader-selection');
-    widget.onRegisterClearSelection?.call(clearSelection);
+    if (!widget.selectionDisabled) {
+      widget.onRegisterClearSelection?.call(clearSelection);
+    }
     if (widget.visibleBlocks != null) {
       _applyVisibleBlocks(notify: false);
     } else if (widget.rawBlocks != null && widget.rawBlocks!.isNotEmpty) {
@@ -202,10 +226,12 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     if (widget.visibleBlocks != null) {
       // 分页模式：visibleBlocks 变化时重新应用
       if (!identical(oldWidget.visibleBlocks, widget.visibleBlocks) ||
-          !identical(oldWidget.annotations, widget.annotations)) {
+          !identical(oldWidget.annotations, widget.annotations) ||
+          oldWidget.searchQuery != widget.searchQuery) {
         _applyVisibleBlocks(notify: false);
       }
-    } else if (!identical(oldWidget.rawBlocks, widget.rawBlocks) &&
+    } else if ((!identical(oldWidget.rawBlocks, widget.rawBlocks) ||
+            oldWidget.searchQuery != widget.searchQuery) &&
         widget.rawBlocks != null &&
         widget.rawBlocks!.isNotEmpty) {
       // 滚动模式：rawBlocks 变化时直接使用
@@ -218,8 +244,9 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       } else {
         _parseContent();
       }
-    } else if (!identical(oldWidget.annotations, widget.annotations)) {
-      // 批注列表变更但内容相同 — 基于原始块重新应用高亮
+    } else if (!identical(oldWidget.annotations, widget.annotations) ||
+        oldWidget.searchQuery != widget.searchQuery) {
+      // 批注列表或搜索词变更但内容相同 — 基于原始块重新应用高亮
       _blocks = _applyAnnotations(_rawBlocks);
     }
   }
@@ -282,7 +309,11 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   }
 
   List<ContentBlock> _applyAnnotations(List<ContentBlock> blocks) {
-    return ReaderContentAnnotationProjector.apply(blocks, widget.annotations);
+    return ReaderContentAnnotationProjector.apply(
+      blocks,
+      widget.annotations,
+      searchQuery: widget.searchQuery,
+    );
   }
 
   @override
@@ -323,6 +354,79 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     final insets =
         pageInsets ??
         EdgeInsets.symmetric(horizontal: layout.horizontalPadding);
+    if (!isPageMode) {
+      final viewportHeight = MediaQuery.sizeOf(context).height;
+      final scrollInsets = ReaderChromeLayout.scrollContentInsets(
+        viewportHeight: viewportHeight,
+        frame:
+            ReaderChromeLayout.resolve(
+              immersiveMode: widget.settings.immersiveMode,
+              isPageMode: false,
+            ).contentPadding,
+        immersiveMode: widget.settings.immersiveMode,
+        safePadding: MediaQuery.viewPaddingOf(context),
+      );
+      final colMaxW = widget.scrollColumnMaxWidth ?? 720.0;
+      final hPad = widget.scrollHorizontalPadding ?? layout.horizontalPadding;
+      // 滚动模式：ListView 占满全视口宽度以在桌面端任意空白处响应滚轮，
+      // 居中限宽下沉到 itemBuilder 内部。
+      return Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: (_) => _resetPointerTracking(),
+        onPointerSignal: _handleScrollPointerSignal,
+        child: SelectionArea(
+          focusNode: _selectionFocusNode,
+          onSelectionChanged: _handleSelectionChanged,
+          contextMenuBuilder: _buildSelectionMenu,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(
+              context,
+            ).copyWith(scrollbars: false),
+            child: ListView.builder(
+              controller: widget.scrollController,
+              physics: widget.scrollPhysics,
+              padding: scrollInsets,
+              itemCount: _blocks.length + 1,
+              itemExtentBuilder:
+                  extents == null
+                      ? null
+                      : (index, creator) =>
+                          index < extents.length
+                              ? extents[index] +
+                                  (_blocks[index] is HeadingBlock
+                                      ? ReaderViewContent.headingSlotSlack
+                                      : 0.0)
+                              : (widget.footerExtent ??
+                                  ReaderViewContent.trailingSpacerHeight),
+              addAutomaticKeepAlives: false,
+              addRepaintBoundaries: false,
+              itemBuilder: (context, index) {
+                final child =
+                    index == _blocks.length
+                        ? (widget.footer ??
+                            const SizedBox(
+                              height: ReaderViewContent.trailingSpacerHeight,
+                            ))
+                        : RepaintBoundary(child: _buildBlock(index));
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: colMaxW),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: hPad),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
     final framed = ConstrainedBox(
       constraints: BoxConstraints(maxWidth: frameWidth),
       child: Padding(
@@ -333,69 +437,30 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
           onPointerMove: _handlePointerMove,
           onPointerUp: _handlePointerUp,
           onPointerCancel: (_) => _resetPointerTracking(),
-          child: SelectionArea(
-            focusNode: _selectionFocusNode,
-            onSelectionChanged: _handleSelectionChanged,
-            contextMenuBuilder: _buildSelectionMenu,
-            child: ScrollConfiguration(
+          child: () {
+            final body = ScrollConfiguration(
               behavior: ScrollConfiguration.of(
                 context,
               ).copyWith(scrollbars: false),
-              child:
-                  isPageMode
-                      ? SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (var index = 0; index < _blocks.length; index++)
-                              RepaintBoundary(child: _buildBlock(index)),
-                          ],
-                        ),
-                      )
-                      : ListView.builder(
-                        controller: widget.scrollController,
-                        physics: widget.scrollPhysics,
-                        padding: ReaderChromeLayout.scrollContentInsets(
-                          viewportHeight: MediaQuery.sizeOf(context).height,
-                          frame:
-                              ReaderChromeLayout.resolve(
-                                immersiveMode: widget.settings.immersiveMode,
-                                isPageMode: isPageMode,
-                                safePadding: MediaQuery.viewPaddingOf(context),
-                              ).contentPadding,
-                          immersiveMode: widget.settings.immersiveMode,
-                          safePadding: MediaQuery.viewPaddingOf(context),
-                        ),
-                        itemCount: _blocks.length + 1,
-                        itemExtentBuilder:
-                            extents == null
-                                ? null
-                                : (index, creator) =>
-                                    index < extents.length
-                                        ? extents[index] +
-                                            (_blocks[index] is HeadingBlock
-                                                ? ReaderViewContent
-                                                    .headingSlotSlack
-                                                : 0.0)
-                                        : (widget.footerExtent ??
-                                            ReaderViewContent
-                                                .trailingSpacerHeight),
-                        addAutomaticKeepAlives: false,
-                        addRepaintBoundaries: false,
-                        itemBuilder: (context, index) {
-                          if (index == _blocks.length) {
-                            return widget.footer ??
-                                const SizedBox(
-                                  height:
-                                      ReaderViewContent.trailingSpacerHeight,
-                                );
-                          }
-                          return RepaintBoundary(child: _buildBlock(index));
-                        },
-                      ),
-            ),
-          ),
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < _blocks.length; index++)
+                      RepaintBoundary(child: _buildBlock(index)),
+                  ],
+                ),
+              ),
+            );
+            if (widget.selectionDisabled) return body;
+            return SelectionArea(
+              focusNode: _selectionFocusNode,
+              onSelectionChanged: _handleSelectionChanged,
+              contextMenuBuilder: _buildSelectionMenu,
+              child: body,
+            );
+          }(),
         ),
       ),
     );
@@ -752,8 +817,36 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       if (hadSelection) {
         clearSelection();
       }
+      // 滚动模式下仅点击视口中央 30%-70% 区域切换顶底栏（对齐 ReaderView.tsx:419）。
+      if (widget.scrollPhysics is! NeverScrollableScrollPhysics) {
+        final w = context.size?.width ?? 0;
+        if (w > 0) {
+          final fx = event.localPosition.dx / w;
+          if (fx <= 0.30 || fx >= 0.70) return;
+        }
+      }
       widget.onTap?.call();
     });
+  }
+
+  void _handleScrollPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final ctrl = widget.scrollController;
+    if (ctrl == null || !ctrl.hasClients) return;
+    if (ctrl.offset <= 0.5 && event.scrollDelta.dy < 0) {
+      final now = DateTime.now();
+      if (now.difference(_topWheelWindowStart).inMilliseconds > 600) {
+        _topWheelAccum = 0;
+        _topWheelWindowStart = now;
+      }
+      _topWheelAccum += event.scrollDelta.dy.abs();
+      if (_topWheelAccum >= 180) {
+        _topWheelAccum = 0;
+        widget.onBackwardChapterRequest?.call();
+      }
+    } else {
+      _topWheelAccum = 0;
+    }
   }
 
   void _resetPointerTracking() {

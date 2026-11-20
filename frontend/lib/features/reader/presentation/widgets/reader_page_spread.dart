@@ -1,92 +1,156 @@
 part of 'reader_page_view.dart';
 
-/// 跨页中缝宽度（`reader.css:4` 的 `.bookview .spread .gutter` 三选择器
-/// 胜出 `more.css` 的两选择器；70px / margin-left -35px）。卷页按半页计算
-/// 宽度时也读它。
-const double _spreadGutterWidth = 70;
+/// 跨页中缝悬浮宽度（样例 `reader.css:4`，不占用纸页宽度）。
+const double _spreadGutterWidth = 70.0;
 
-/// 双页跨页单元（样例 `.bookview .spread`）：左右各一张纸，中缝是一条
-/// 70px 的渐变阴影。页码口径不变——左页是 `index`，右页是 `index + 1`，
-/// 章节页数为奇数时右页留白，避免把下一章的内容借过来。
+/// 双页跨页单元（样例 `.bookview .spread`）：
+/// 左右严格 50% / 50% 贴合，70px 中缝阴影悬浮叠在接缝之上，
+/// 左右动态厚度纸叠外挂于书框外缘，静动纸面共用同一份预烘焙噪点 Shader。
 class ReaderPageSpread extends StatelessWidget {
   const ReaderPageSpread({
     required this.left,
     required this.right,
     required this.surfaceColor,
+    this.paperEdgeColor,
+    this.leftBoundaryKey,
+    this.rightBoundaryKey,
     this.progress = 0,
+    this.curlOverlay,
     super.key,
   });
 
   final Widget left;
   final Widget? right;
   final Color surfaceColor;
+  final Color? paperEdgeColor;
 
-  /// 全书进度（0..1）：两侧纸边的厚度随剩余页数变化，像真书一样越读越薄。
+  /// 仅在静止态传入，卷页底层 underlay 必须传 null，杜绝 GlobalKey 冲突。
+  final GlobalKey? leftBoundaryKey;
+  final GlobalKey? rightBoundaryKey;
+
+  /// 全书/章内进度（0..1）：两侧纸叠厚度随进度动态变化。
   final double progress;
+
+  /// 整幅双页卷曲层（.curl-clip），覆盖左右两页允许纸页扫过书脊。
+  final Widget? curlOverlay;
 
   @override
   Widget build(BuildContext context) {
-    // 样例 `.spread`：外层 6px 圆角 + 两层投影，纸面朝书脊一侧压暗。
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.55),
-            blurRadius: 44,
-            spreadRadius: -26,
-            offset: const Offset(0, 22),
+    final p = progress.clamp(0.0, 1.0);
+    final leftStackW = 3.0 + p * 13.0;
+    final rightStackW = 3.0 + (1.0 - p) * 13.0;
+    final edgeColor =
+        paperEdgeColor ?? Color.lerp(surfaceColor, Colors.black, 0.08)!;
+
+    Widget wrapBoundary(GlobalKey? key, Widget child) =>
+        key == null ? child : RepaintBoundary(key: key, child: child);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // 左侧外挂纸叠（.spread .stack.l）
+        Positioned(
+          left: -leftStackW + 2,
+          top: 3,
+          bottom: 3,
+          width: leftStackW,
+          child: _PaperStack(
+            edgeColor: edgeColor,
+            paperColor: surfaceColor,
+            side: _SpreadSide.left,
           ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 12,
-            spreadRadius: -6,
-            offset: const Offset(0, 4),
+        ),
+        // 右侧外挂纸叠（.spread .stack.r）
+        Positioned(
+          right: -rightStackW + 2,
+          top: 3,
+          bottom: 3,
+          width: rightStackW,
+          child: _PaperStack(
+            edgeColor: edgeColor,
+            paperColor: surfaceColor,
+            side: _SpreadSide.right,
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+        ),
+        // 书本主体（6px 圆角 + 双层桌面阴影）
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.55),
+                blurRadius: 44,
+                spreadRadius: -26,
+                offset: const Offset(0, 22),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 12,
+                spreadRadius: -6,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: _SpreadPage(
-                    color: surfaceColor,
-                    side: _SpreadSide.left,
-                    child: left,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: wrapBoundary(
+                        leftBoundaryKey,
+                        _SpreadPage(
+                          color: surfaceColor,
+                          side: _SpreadSide.left,
+                          child: left,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: wrapBoundary(
+                        rightBoundaryKey,
+                        _SpreadPage(
+                          color: surfaceColor,
+                          side: _SpreadSide.right,
+                          child: right,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // 70px 中缝阴影悬浮叠在 50% 接缝之上（不占宽、不拦截选区）
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        width: _spreadGutterWidth,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.05),
+                              Colors.black.withValues(alpha: 0.15),
+                              Colors.black.withValues(alpha: 0.15),
+                              Colors.black.withValues(alpha: 0.05),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.30, 0.495, 0.505, 0.70, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const _SpreadGutter(),
-                Expanded(
-                  child: _SpreadPage(
-                    color: surfaceColor,
-                    side: _SpreadSide.right,
-                    child: right,
-                  ),
-                ),
+                if (curlOverlay != null)
+                  Positioned.fill(child: IgnorePointer(child: curlOverlay!)),
               ],
             ),
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 3 + progress.clamp(0.0, 1.0) * 13,
-              child: _PaperStack(color: surfaceColor, side: _SpreadSide.left),
-            ),
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: 3 + (1 - progress.clamp(0.0, 1.0)) * 13,
-              child: _PaperStack(color: surfaceColor, side: _SpreadSide.right),
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -106,67 +170,82 @@ class _SpreadPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 样例 `.bpage.left/right`：90% 之后开始向 #000 混（92%/74% 两档叠加），
-    // 让靠近书脊的一端自然压暗，读起来像纸张弯进装订线。
-    final edge = Color.lerp(color, Colors.black, 0.18)!;
+    final spineTint = Color.lerp(color, Colors.black, 0.08)!;
     final gradient =
         side == _SpreadSide.left
             ? LinearGradient(
-              colors: [color, color, edge],
-              stops: const [0, 0.86, 1],
+              colors: [color, color, spineTint],
+              stops: const [0.0, 0.90, 1.0],
             )
             : LinearGradient(
-              colors: [edge, color, color],
-              stops: const [0, 0.14, 1],
+              colors: [spineTint, color, color],
+              stops: const [0.0, 0.10, 1.0],
             );
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: gradient),
-      child: child ?? const SizedBox.expand(),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(gradient: gradient),
+          child: child ?? SizedBox.expand(child: ColoredBox(color: color)),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// 中缝：中间最深，向两侧散开，读起来像两张纸贴在一起。
-class _SpreadGutter extends StatelessWidget {
-  const _SpreadGutter();
+class _PaperGrainOverlayPainter extends CustomPainter {
+  _PaperGrainOverlayPainter()
+    : super(repaint: PaperGrainCache.shaderListenable);
 
   @override
-  Widget build(BuildContext context) {
-    // 终值由 reader.css 的三选择器决定：峰值 .15，侧档按同比例降至 .06。
-    return Container(
-      width: _spreadGutterWidth,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.transparent,
-            Colors.black.withValues(alpha: 0.06),
-            Colors.black.withValues(alpha: 0.15),
-            Colors.black.withValues(alpha: 0.15),
-            Colors.black.withValues(alpha: 0.06),
-            Colors.transparent,
-          ],
-          stops: const [0, 0.34, 0.496, 0.504, 0.66, 1],
-        ),
-      ),
+  void paint(Canvas canvas, Size size) {
+    final shader = PaperGrainCache.shader;
+    if (shader == null) return;
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = shader
+        ..blendMode = BlendMode.multiply,
     );
   }
+
+  @override
+  bool shouldRepaint(_PaperGrainOverlayPainter oldDelegate) => false;
 }
 
-/// 纸边堆叠（样例 `.spread .stack`）：一条 2.5px 周期的明暗条纹，
-/// 宽度随阅读进度收缩，读起来像压在下面的一叠纸。
 class _PaperStack extends StatelessWidget {
-  const _PaperStack({required this.color, required this.side});
+  const _PaperStack({
+    required this.edgeColor,
+    required this.paperColor,
+    required this.side,
+  });
 
-  final Color color;
+  final Color edgeColor;
+  final Color paperColor;
   final _SpreadSide side;
 
   @override
   Widget build(BuildContext context) {
-    final edge = Color.lerp(color, Colors.black, 0.07)!;
-    final gap = Color.lerp(color, Colors.black, 0.12)!;
+    final gapColor = Color.lerp(paperColor, Colors.black, 0.12)!;
+    final radius =
+        side == _SpreadSide.left
+            ? const BorderRadius.horizontal(left: Radius.circular(4))
+            : const BorderRadius.horizontal(right: Radius.circular(4));
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _PaperStackPainter(edge: edge, gap: gap, side: side),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: CustomPaint(
+          painter: _PaperStackPainter(
+            edge: edgeColor,
+            gap: gapColor,
+            side: side,
+          ),
+        ),
       ),
     );
   }
@@ -188,14 +267,13 @@ class _PaperStackPainter extends CustomPainter {
     final paint = Paint();
     for (var x = 0.0; x < size.width; x += 2.5) {
       paint.color = edge;
-      canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), paint);
+      canvas.drawRect(Rect.fromLTWH(x, 0, 1.0, size.height), paint);
       paint.color = gap;
-      canvas.drawRect(Rect.fromLTWH(x + 1, 0, 1.5, size.height), paint);
+      canvas.drawRect(Rect.fromLTWH(x + 1.0, 0, 1.5, size.height), paint);
     }
-    // 靠外侧压深一点，纸叠才有厚度。
-    final shade = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rect = Offset.zero & size;
     canvas.drawRect(
-      shade,
+      rect,
       Paint()
         ..shader = LinearGradient(
           begin:
@@ -206,8 +284,8 @@ class _PaperStackPainter extends CustomPainter {
               side == _SpreadSide.left
                   ? Alignment.centerLeft
                   : Alignment.centerRight,
-          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.18)],
-        ).createShader(shade),
+          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.22)],
+        ).createShader(rect),
     );
   }
 

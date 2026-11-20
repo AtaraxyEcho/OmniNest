@@ -81,6 +81,8 @@ class ChapterData {
   String? _navigatorFontFamily;
   double? _navigatorTextScale;
   bool? _navigatorFollowBookTypesetting;
+  bool? _navigatorJustify;
+  String? _navigatorMarginPreset;
 
   /// 获取或创建翻页导航器。
   ///
@@ -100,7 +102,9 @@ class ChapterData {
         _navigatorTextScale != textScale ||
         // 「跟随原书排版」改变段距、对齐与行高：漏这一项时同一份页链会被当成
         // 还是旧排版算出来的那些页，翻页按书的版式落位、装页按读者的默认档。
-        _navigatorFollowBookTypesetting != settings.followBookTypesetting;
+        _navigatorFollowBookTypesetting != settings.followBookTypesetting ||
+        _navigatorJustify != settings.justify ||
+        _navigatorMarginPreset != settings.marginPreset;
     if (_pageNavigator != null && layoutChanged) {
       _pageNavigator = null;
     }
@@ -124,6 +128,8 @@ class ChapterData {
     _navigatorFontFamily = settings.fontFamily;
     _navigatorTextScale = textScale;
     _navigatorFollowBookTypesetting = settings.followBookTypesetting;
+    _navigatorJustify = settings.justify;
+    _navigatorMarginPreset = settings.marginPreset;
     return _pageNavigator!;
   }
 
@@ -137,6 +143,8 @@ class ChapterData {
     _navigatorFontFamily = null;
     _navigatorTextScale = null;
     _navigatorFollowBookTypesetting = null;
+    _navigatorJustify = null;
+    _navigatorMarginPreset = null;
   }
 
   static bool _sameDimension(double? previous, double current) =>

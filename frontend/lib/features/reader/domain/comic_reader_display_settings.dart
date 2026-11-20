@@ -5,16 +5,24 @@ class ComicReaderDisplaySettings {
     this.fullWidth = false,
     this.contentWidth = 960,
     this.pageGap = 8,
+    this.dualPage = false,
+    this.rtlOverride,
   });
 
   factory ComicReaderDisplaySettings.fromPreferences(
     Map<String, dynamic> preferences, {
     required String defaultReadingMode,
+    String? itemId,
   }) {
     final rawMode = preferences['comicReadingMode']?.toString();
     final rawWidth =
         (preferences['comicContentWidth'] as num?)?.toDouble() ?? 960;
     final rawGap = (preferences['comicPageGap'] as num?)?.toDouble() ?? 8;
+    bool? rtlOverride;
+    final rawRtlMap = preferences['comicRtlByItem'];
+    if (itemId != null && rawRtlMap is Map && rawRtlMap[itemId] is bool) {
+      rtlOverride = rawRtlMap[itemId] as bool;
+    }
     return ComicReaderDisplaySettings(
       readingMode:
           rawMode == 'page' || rawMode == 'scroll'
@@ -23,6 +31,8 @@ class ComicReaderDisplaySettings {
       fullWidth: preferences['comicFullWidth'] as bool? ?? false,
       contentWidth: rawWidth.clamp(480, 1440),
       pageGap: rawGap.clamp(0, 24),
+      dualPage: preferences['comicDualPage'] as bool? ?? false,
+      rtlOverride: rtlOverride,
     );
   }
 
@@ -31,26 +41,48 @@ class ComicReaderDisplaySettings {
   final double contentWidth;
   final double pageGap;
 
+  /// 双页跨页浏览开关（对齐样例 `ReaderView.tsx:359`）。
+  final bool dualPage;
+
+  /// 单本漫画阅读方向覆写（true = RTL 日漫右翻左，null = 跟随清单默认）。
+  final bool? rtlOverride;
+
   ComicReaderDisplaySettings copyWith({
     String? readingMode,
     bool? fullWidth,
     double? contentWidth,
     double? pageGap,
+    bool? dualPage,
+    bool? rtlOverride,
+    bool clearRtlOverride = false,
   }) {
     return ComicReaderDisplaySettings(
       readingMode: readingMode ?? this.readingMode,
       fullWidth: fullWidth ?? this.fullWidth,
       contentWidth: contentWidth ?? this.contentWidth,
       pageGap: pageGap ?? this.pageGap,
+      dualPage: dualPage ?? this.dualPage,
+      rtlOverride: clearRtlOverride ? null : (rtlOverride ?? this.rtlOverride),
     );
   }
 
-  Map<String, dynamic> toPreferences() => {
-    'comicReadingMode': readingMode,
-    'comicFullWidth': fullWidth,
-    'comicContentWidth': contentWidth,
-    'comicPageGap': pageGap,
-  };
+  Map<String, dynamic> toPreferences({
+    String? itemId,
+    Map<String, dynamic>? existingRtlMap,
+  }) {
+    final nextRtlMap = <String, dynamic>{...?existingRtlMap};
+    if (itemId != null && rtlOverride != null) {
+      nextRtlMap[itemId] = rtlOverride;
+    }
+    return {
+      'comicReadingMode': readingMode,
+      'comicFullWidth': fullWidth,
+      'comicContentWidth': contentWidth,
+      'comicPageGap': pageGap,
+      'comicDualPage': dualPage,
+      if (nextRtlMap.isNotEmpty) 'comicRtlByItem': nextRtlMap,
+    };
+  }
 }
 
 /// 合并出一次要落盘的完整偏好字典。

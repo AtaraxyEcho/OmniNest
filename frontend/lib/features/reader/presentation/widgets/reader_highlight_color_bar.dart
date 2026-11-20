@@ -26,10 +26,10 @@ class ReaderHighlightColorBar extends StatelessWidget {
 
   static String labelFor(AppLocalizations l10n, String hex) {
     return switch (hex.toUpperCase()) {
-      '#FFEB3B' => l10n.readerHighlightColorYellow,
-      '#4CAF50' => l10n.readerHighlightColorGreen,
-      '#2196F3' => l10n.readerHighlightColorBlue,
-      '#E91E63' => l10n.readerHighlightColorPink,
+      '#F2D36B' || '#FFEB3B' => l10n.readerHighlightColorYellow,
+      '#8CC5B2' || '#4CAF50' => l10n.readerHighlightColorGreen,
+      '#E69A8D' || '#E91E63' => l10n.readerHighlightColorPink,
+      '#A99BD8' || '#2196F3' => l10n.readerHighlightColorBlue,
       '#E0E0E0' => l10n.readerHighlightColorGray,
       _ => l10n.readerHighlightColor,
     };

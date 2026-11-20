@@ -3,63 +3,158 @@ import 'dart:ui';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 
 /// 将阅读批注投影到内容块并按批注边界切分行内文本。
 abstract final class ReaderContentAnnotationProjector {
   static List<ContentBlock> apply(
     List<ContentBlock> blocks,
-    List<ReaderAnnotation> annotations,
-  ) {
-    if (annotations.isEmpty) return blocks;
-    // 批注按起点排一次，供所有行/块复用；逐行内切分时不再各自排序。
+    List<ReaderAnnotation> annotations, {
+    String? searchQuery,
+    Color searchHighlightColor = ReaderReadingPalette.searchHit,
+  }) {
+    final trimmedQuery = searchQuery?.trim() ?? '';
+    final hasSearch = trimmedQuery.length >= 2;
+    if (annotations.isEmpty && !hasSearch) return blocks;
     final orderedAnnotations = [...annotations]
       ..sort((left, right) => left.startOffset.compareTo(right.startOffset));
-    return blocks.map((block) {
-      if (block is ParagraphBlock) {
-        return ParagraphBlock(
-          lines: _applyToLines(block.lines, orderedAnnotations),
-          hasTrailingSpacing: block.hasTrailingSpacing,
-          style: block.style,
-        );
-      }
-      if (block is BlockquoteBlock) {
-        return BlockquoteBlock(
-          lines: _applyToLines(block.lines, orderedAnnotations),
-          startOffset: block.startOffset,
-          style: block.style,
-          hasTopPadding: block.hasTopPadding,
-          hasBottomPadding: block.hasBottomPadding,
-        );
-      }
-      if (block is ListBlock) {
-        return ListBlock(
-          items:
-              block.items.map((item) {
-                return ListItemData(
-                  spans: _applyToSpans(item.spans, orderedAnnotations),
+    final lowerNeedle = hasSearch ? trimmedQuery.toLowerCase() : null;
+    final projected =
+        orderedAnnotations.isEmpty
+            ? blocks
+            : blocks.map((block) {
+              if (block is ParagraphBlock) {
+                return ParagraphBlock(
+                  lines: _applyToLines(block.lines, orderedAnnotations),
+                  hasTrailingSpacing: block.hasTrailingSpacing,
+                  style: block.style,
                 );
-              }).toList(),
-          isOrdered: block.isOrdered,
-          startOffset: block.startOffset,
-        );
-      }
-      if (block is TableBlock) {
-        return TableBlock(
-          rows:
-              block.rows.map((row) {
-                return TableRowData(
-                  cells:
-                      row.cells.map((cell) {
-                        return _applyToSpans(cell, orderedAnnotations);
+              }
+              if (block is BlockquoteBlock) {
+                return BlockquoteBlock(
+                  lines: _applyToLines(block.lines, orderedAnnotations),
+                  startOffset: block.startOffset,
+                  style: block.style,
+                  hasTopPadding: block.hasTopPadding,
+                  hasBottomPadding: block.hasBottomPadding,
+                );
+              }
+              if (block is ListBlock) {
+                return ListBlock(
+                  items:
+                      block.items.map((item) {
+                        return ListItemData(
+                          spans: _applyToSpans(item.spans, orderedAnnotations),
+                        );
                       }).toList(),
-                  isHeader: row.isHeader,
+                  isOrdered: block.isOrdered,
+                  startOffset: block.startOffset,
                 );
-              }).toList(),
-          startOffset: block.startOffset,
-        );
+              }
+              if (block is TableBlock) {
+                return TableBlock(
+                  rows:
+                      block.rows.map((row) {
+                        return TableRowData(
+                          cells:
+                              row.cells.map((cell) {
+                                return _applyToSpans(cell, orderedAnnotations);
+                              }).toList(),
+                          isHeader: row.isHeader,
+                        );
+                      }).toList(),
+                  startOffset: block.startOffset,
+                );
+              }
+              return block;
+            }).toList();
+    if (lowerNeedle == null) return projected;
+    return projected
+        .map(
+          (block) =>
+              _applySearchToBlock(block, lowerNeedle, searchHighlightColor),
+        )
+        .toList();
+  }
+
+  static ContentBlock _applySearchToBlock(
+    ContentBlock block,
+    String lowerNeedle,
+    Color hitColor,
+  ) {
+    if (block is ParagraphBlock) {
+      return ParagraphBlock(
+        lines: _applySearchToLines(block.lines, lowerNeedle, hitColor),
+        hasTrailingSpacing: block.hasTrailingSpacing,
+        style: block.style,
+      );
+    }
+    if (block is BlockquoteBlock) {
+      return BlockquoteBlock(
+        lines: _applySearchToLines(block.lines, lowerNeedle, hitColor),
+        startOffset: block.startOffset,
+        style: block.style,
+        hasTopPadding: block.hasTopPadding,
+        hasBottomPadding: block.hasBottomPadding,
+      );
+    }
+    return block;
+  }
+
+  static List<LineData> _applySearchToLines(
+    List<LineData> lines,
+    String lowerNeedle,
+    Color hitColor,
+  ) {
+    return lines
+        .map(
+          (line) => LineData(
+            spans: [
+              for (final span in line.spans)
+                ..._splitSpanBySearch(span, lowerNeedle, hitColor),
+            ],
+            isNewParagraph: line.isNewParagraph,
+            collapsedChars: line.collapsedChars,
+            trailingCollapsedChars: line.trailingCollapsedChars,
+            softWrap: line.softWrap,
+            style: line.style,
+          ),
+        )
+        .toList();
+  }
+
+  static List<ReaderInlineSpan> _splitSpanBySearch(
+    ReaderInlineSpan span,
+    String lowerNeedle,
+    Color hitColor,
+  ) {
+    final lowerText = span.text.toLowerCase();
+    var pos = lowerText.indexOf(lowerNeedle);
+    if (pos < 0) return [span];
+    final out = <ReaderInlineSpan>[];
+    var cursor = 0;
+    final needleLen = lowerNeedle.length;
+    while (pos >= 0) {
+      if (pos > cursor) {
+        out.add(_copySpan(span, span.startOffset + cursor, pos - cursor));
       }
-      return block;
-    }).toList();
+      out.add(
+        _copySpan(
+          span,
+          span.startOffset + pos,
+          needleLen,
+          backgroundColor: hitColor,
+        ),
+      );
+      cursor = pos + needleLen;
+      pos = lowerText.indexOf(lowerNeedle, cursor);
+    }
+    if (cursor < span.text.length) {
+      out.add(
+        _copySpan(span, span.startOffset + cursor, span.text.length - cursor),
+      );
+    }
+    return out;
   }
 
   static List<LineData> _applyToLines(

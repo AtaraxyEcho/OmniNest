@@ -36,10 +36,10 @@ void main() {
   }
 
   Future<void> dragFontSizeSlider(WidgetTester tester) async {
-    // 稿子把行距换成了三档分段，面板里只剩字号一条滑杆。
-    final sliders = find.byType(AppSlider);
-    expect(sliders, findsOneWidget);
-    await tester.drag(sliders.first, const Offset(80, 0));
+    // 面板还有亮度与护眼暖色两条滑杆，按 Key 精确命中字号那条。
+    final slider = find.byKey(const Key('readerFontSizeSlider'));
+    expect(slider, findsOneWidget);
+    await tester.drag(slider, const Offset(80, 0));
     await tester.pumpAndSettle();
   }
 

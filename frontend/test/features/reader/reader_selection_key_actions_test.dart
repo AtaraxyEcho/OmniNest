@@ -9,10 +9,9 @@ void main() {
     LogicalKeyboardKey.digit2,
     LogicalKeyboardKey.digit3,
     LogicalKeyboardKey.digit4,
-    LogicalKeyboardKey.digit5,
   ];
 
-  test('数字键 1–5 按调色板同序选色，与工具栏圆点一一对应', () {
+  test('数字键 1–4 按调色板同序选色，与工具栏圆点一一对应', () {
     final applied = <String>[];
     final actions = ReaderSelectionKeyActions(
       colors: ReaderHighlightPalette.colors,

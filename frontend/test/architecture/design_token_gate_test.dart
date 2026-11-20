@@ -18,6 +18,7 @@ const _paletteSources = <String>{
   'lib/features/photos/presentation/widgets/frame_palette.dart',
   'lib/features/portal/presentation/theme/weather_atmospheres.dart',
   'lib/features/reader/presentation/theme/reader_space_colors.dart',
+  'lib/features/reader/presentation/widgets/reader_page_curl.dart',
   'lib/features/reader/presentation/widgets/reader_reading_palette.dart',
   'lib/features/search/presentation/theme/search_overlay_colors.dart',
   'lib/features/video/presentation/theme/movie_redesign_theme.dart',

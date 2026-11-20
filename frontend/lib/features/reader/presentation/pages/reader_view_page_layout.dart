@@ -61,8 +61,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     final screenWidth = viewport.width;
     final contentWidth = math.min(screenWidth, readerLayout.contentFrameWidth);
     final offset = (screenWidth - contentWidth) / 2;
-    // 侧边热区与翻页模式同档（各 1/4 内容宽），中段留给 chrome 开关。
-    final edgeWidth = ReaderControlLayout.sideTapZoneWidth(contentWidth);
+    // 滚动模式全视口由正文承接，不再计算边距侧按热区。
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final chromeLayout = ReaderChromeLayout.resolve(
       immersiveMode: _settings.immersiveMode,
@@ -73,17 +72,67 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
 
     return Stack(
       children: [
-        // 内容层：剔除应用字体档位仅保留系统缩放，保证自绘分页测量与渲染一致
+        // 内容层（z=1）+ 护眼暖色与亮度滤镜（z=2，严格置于顶底栏与浮层面板之下）。
         Positioned.fill(
-          child: FontScaleScope.withSystemScaleOnly(
-            context: context,
-            child: Padding(
-              key: const Key('readerContentViewportPadding'),
-              padding: chromeLayout.contentPadding,
-              child: _buildContent(content, detail),
+          key: const Key('readerContentViewportPadding'),
+          child: ReaderComfortFilter(
+            brightness: _settings.brightness,
+            warmth: _settings.warmth,
+            child: DecoratedBox(
+              decoration:
+                  _settings.usesBookDesk
+                      ? BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(0, -0.2),
+                          radius: 1.1,
+                          colors: [
+                            Color.lerp(
+                              _settings.bookDeskColor,
+                              Colors.white,
+                              0.12,
+                            )!,
+                            _settings.bookDeskColor,
+                          ],
+                          stops: const [0.0, 0.70],
+                        ),
+                      )
+                      : BoxDecoration(color: _settings.surfaceColor),
+              child: FontScaleScope.withSystemScaleOnly(
+                context: context,
+                child: _buildContent(content, detail),
+              ),
             ),
           ),
         ),
+        // Book 模式左右悬浮圆形翻页箭头（对齐样例 `.bk-arrow.l / .r`）
+        if (_settings.usesBookDesk &&
+            !sampleChrome &&
+            viewport.width >= 960) ...[
+          Positioned(
+            left: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: _BookFloatingArrow(
+                icon: Icons.chevron_left_rounded,
+                tooltip: AppLocalizations.of(context).readerPreviousPage,
+                onTap: () => _pageTurnController.previous(),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: _BookFloatingArrow(
+                icon: Icons.chevron_right_rounded,
+                tooltip: AppLocalizations.of(context).readerNextPage,
+                onTap: () => _pageTurnController.next(),
+              ),
+            ),
+          ),
+        ],
         // 本章图片降级计数提示：控制栏展开时让位，关闭后只在本章内静音。
         if (!_showControls &&
             _dismissedImageBudgetChapterId != _currentChapterId &&
@@ -112,29 +161,8 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),
-        // 点击区域（控制栏显示时禁用，翻页模式下由 ReaderPageView 自行处理）
-        if (!_showControls && !_isPageMode && !_selectionActive) ...[
-          // 左边缘：向上滚动
-          Positioned(
-            top: 35,
-            left: 0,
-            width: offset + edgeWidth,
-            bottom: 16,
-            child: SideTapZone(
-              onTap: () => handleSideTap(detail, forward: false),
-            ),
-          ),
-          // 右边缘：向下滚动
-          Positioned(
-            top: 35,
-            left: offset + contentWidth - edgeWidth,
-            right: 0,
-            bottom: 16,
-            child: SideTapZone(
-              onTap: () => handleSideTap(detail, forward: true),
-            ),
-          ),
-        ],
+        // 滚动模式对齐样例 ReaderView.tsx:419：不再在左右边距叠加 SideTapZone，
+        // 全视口交由 ListView 响应滚轮与触控，仅中央 30%-70% 单击切换控制栏。
         // 顶栏和底栏只占自己的几何范围。正文必须一直保留指针命中，才能在
         // chrome 首次显示时继续左右翻页、上下滚动；正文的中心点击由
         // ReaderPageView/ReaderViewContent 统一切换 chrome，避免一个全屏遮罩
@@ -443,4 +471,53 @@ List<ReaderChapter> readerChapterSource({
     return manifest;
   }
   return fromDetail;
+}
+
+/// Book 模式左右悬浮圆形翻页按钮（对齐样例 `.bk-arrow`：48×48 圆形半透明，悬停放大 1.1x）。
+class _BookFloatingArrow extends StatefulWidget {
+  const _BookFloatingArrow({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  State<_BookFloatingArrow> createState() => _BookFloatingArrowState();
+}
+
+class _BookFloatingArrowState extends State<_BookFloatingArrow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.tooltip,
+        child: AnimatedScale(
+          scale: _hovered ? 1.1 : 1.0,
+          duration: MotionToken.reduced(context, MotionToken.pageSwitch),
+          curve: Curves.easeOutBack,
+          child: Material(
+            color: Colors.white.withValues(alpha: _hovered ? 0.18 : 0.08),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: widget.onTap,
+              customBorder: const CircleBorder(),
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Icon(widget.icon, size: 24, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
