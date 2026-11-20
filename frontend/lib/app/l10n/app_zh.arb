@@ -6867,5 +6867,16 @@
   "desktopMediaImportNoFiles": "尚未选择文件。",
   "desktopMediaImportNoCompatibleFiles": "此文件夹中没有兼容的文件。",
   "desktopMediaImportMatchMetadata": "导入后匹配元数据",
-  "desktopMediaImportMetadataHint": "导入后获取海报、简介和演职人员信息。"
+  "desktopMediaImportMetadataHint": "导入后获取海报、简介和演职人员信息。",
+  "desktopMediaImportBooksTitle": "添加图书与漫画",
+  "desktopMediaImportBooksHint": "我的文件中的 EPUB、TXT、CBZ、PDF 与 ZIP 文件。按内容检测重复并跳过。",
+  "desktopMediaImportTaskBooks": "解析中",
+  "desktopMediaImportImportTo": "导入到",
+  "desktopMediaImportPersonalDesc": "仅你可见，并计入你的存储配额。",
+  "desktopMediaImportSharedDesc": "家庭中所有成员都可以浏览。",
+  "desktopMediaImportSelectAll": "全选",
+  "desktopMediaImportClearSelection": "清除选择",
+  "desktopMediaImportFilter": "筛选文件",
+  "desktopMediaImportNoMatches": "没有匹配的文件。",
+  "desktopMediaImportSharedTaskSuffix": " → 共享空间"
 }

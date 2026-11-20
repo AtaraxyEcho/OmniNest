@@ -28863,6 +28863,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fetch posters, synopsis and cast details after import.'**
   String get desktopMediaImportMetadataHint;
+
+  /// No description provided for @desktopMediaImportBooksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add books and comics'**
+  String get desktopMediaImportBooksTitle;
+
+  /// No description provided for @desktopMediaImportBooksHint.
+  ///
+  /// In en, this message translates to:
+  /// **'EPUB, TXT, CBZ, PDF and ZIP files in My files. Duplicates are detected by content and skipped.'**
+  String get desktopMediaImportBooksHint;
+
+  /// No description provided for @desktopMediaImportTaskBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsing'**
+  String get desktopMediaImportTaskBooks;
+
+  /// No description provided for @desktopMediaImportImportTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Import to'**
+  String get desktopMediaImportImportTo;
+
+  /// No description provided for @desktopMediaImportPersonalDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Only you can see it. Counts toward your quota.'**
+  String get desktopMediaImportPersonalDesc;
+
+  /// No description provided for @desktopMediaImportSharedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone in the household can browse it.'**
+  String get desktopMediaImportSharedDesc;
+
+  /// No description provided for @desktopMediaImportSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get desktopMediaImportSelectAll;
+
+  /// No description provided for @desktopMediaImportClearSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get desktopMediaImportClearSelection;
+
+  /// No description provided for @desktopMediaImportFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter files'**
+  String get desktopMediaImportFilter;
+
+  /// No description provided for @desktopMediaImportNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching files.'**
+  String get desktopMediaImportNoMatches;
+
+  /// No description provided for @desktopMediaImportSharedTaskSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' → Shared space'**
+  String get desktopMediaImportSharedTaskSuffix;
 }
 
 class _AppLocalizationsDelegate

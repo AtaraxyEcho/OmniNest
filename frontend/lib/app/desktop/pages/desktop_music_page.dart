@@ -119,7 +119,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     return MediaImportButton(
       key: _mediaImportKey,
       subsystemDirectory: 'Music',
-      allowSharedSpace: false,
+      allowSharedSpace: true,
       acceptedExtensions: const <String>[
         'mp3',
         'flac',
@@ -204,10 +204,14 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final selection = await showDesktopMediaImportDialog(
       context,
       kind: DesktopMediaImportKind.music,
+      allowSharedSpace: true,
     );
     if (!mounted || !context.mounted || selection == null) return;
     if (selection.deviceFiles.isNotEmpty) {
-      await _mediaImportKey.currentState?.importFiles(selection.deviceFiles);
+      await _mediaImportKey.currentState?.importFiles(
+        selection.deviceFiles,
+        spaceType: selection.spaceType,
+      );
       return;
     }
     if (selection.fileNodeIds.isNotEmpty) {

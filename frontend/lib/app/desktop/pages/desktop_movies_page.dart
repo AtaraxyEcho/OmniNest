@@ -228,7 +228,7 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
     return MediaImportButton(
       key: _mediaImportKey,
       subsystemDirectory: 'Media',
-      allowSharedSpace: false,
+      allowSharedSpace: true,
       acceptedExtensions: const <String>[
         'mp4',
         'mkv',
@@ -320,11 +320,15 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
     final selection = await showDesktopMediaImportDialog(
       context,
       kind: DesktopMediaImportKind.movies,
+      allowSharedSpace: true,
     );
     if (!mounted || !context.mounted || selection == null) return;
     _matchMetadataAfterImport = selection.matchMetadata;
     if (selection.deviceFiles.isNotEmpty) {
-      await _mediaImportKey.currentState?.importFiles(selection.deviceFiles);
+      await _mediaImportKey.currentState?.importFiles(
+        selection.deviceFiles,
+        spaceType: selection.spaceType,
+      );
       return;
     }
     if (selection.fileNodeIds.isNotEmpty) {

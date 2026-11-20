@@ -166,6 +166,7 @@ extension _DesktopPhotosImportActions on _DesktopPhotosPageState {
     final selection = await showDesktopMediaImportDialog(
       context,
       kind: DesktopMediaImportKind.photos,
+      allowSharedSpace: false,
     );
     if (!mounted || !context.mounted || selection == null) return;
     if (selection.deviceFiles.isNotEmpty) {

@@ -46,6 +46,17 @@ void main() {
     expect(find.text('1'), findsWidgets);
   });
 
+  testWidgets('阅读页导入按钮打开样例图书导入窗口', (tester) async {
+    await pumpReader(tester);
+
+    await tester.tap(find.text('Import').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(find.text('Add books and comics'), findsOneWidget);
+    expect(find.text('IMPORT TO'), findsOneWidget);
+  });
+
   testWidgets('书库视图按书名搜索并可切列表', (tester) async {
     await pumpReader(tester);
 

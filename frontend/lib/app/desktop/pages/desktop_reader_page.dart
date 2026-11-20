@@ -7,11 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/widgets/desktop_media_import_dialog.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
@@ -22,6 +25,9 @@ import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
+import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart'
+    show readerApiProvider;
 import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle;
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
@@ -145,6 +151,7 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                 ReaderLibraryImportAction(
                   style: ImportButtonStyle.outlinedButton,
                   label: l10n.filesImport,
+                  onPressedOverride: () => unawaited(_openImportDialog()),
                   buttonBuilder:
                       (context, {required onPressed, required busy}) =>
                           DesktopButton(
@@ -301,6 +308,62 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
       DesktopReaderFilter.finished => progress >= 90,
       DesktopReaderFilter.unread => progress <= 0,
     };
+  }
+
+  /// 样例 `ImportDialog(kind:"book")`：先选目录文件/本机文件与目标空间，
+  /// 再按来源分派到阅读导入队列或 `/reader/import`。
+  Future<void> _openImportDialog() async {
+    final l10n = AppLocalizations.of(context);
+    final selection = await showDesktopMediaImportDialog(
+      context,
+      kind: DesktopMediaImportKind.books,
+      allowSharedSpace: true,
+    );
+    if (!mounted || !context.mounted || selection == null) return;
+    final suffix =
+        selection.space == DesktopImportSpace.shared
+            ? l10n.desktopMediaImportSharedTaskSuffix
+            : '';
+    if (selection.deviceFiles.isNotEmpty) {
+      ref
+          .read(readerImportQueueProvider.notifier)
+          .enqueue(selection.deviceFiles, spaceType: selection.spaceType);
+      showDesktopToast(
+        context,
+        '${l10n.desktopMediaImportQueued(selection.deviceFiles.length)}$suffix',
+        icon: DesktopIcons.download,
+        actionLabel: l10n.desktopViewTasks,
+        onAction:
+            () => ref
+                .read(desktopShellProvider.notifier)
+                .setPanel(DesktopPanel.tasks),
+      );
+      return;
+    }
+    var imported = 0;
+    for (final fileNodeId in selection.fileNodeIds) {
+      try {
+        await ref.read(readerApiProvider).importFile(fileNodeId: fileNodeId);
+        imported++;
+      } on Object catch (error) {
+        if (!mounted || !context.mounted) return;
+        showDesktopToast(
+          context,
+          failureToast(l10n, l10n.filesImport, error),
+          kind: DesktopToastKind.error,
+          icon: DesktopIcons.info,
+        );
+      }
+    }
+    if (imported == 0 || !mounted || !context.mounted) return;
+    await ref.read(readerCenterControllerProvider.notifier).refresh();
+    if (!mounted || !context.mounted) return;
+    showDesktopToast(
+      context,
+      '${l10n.importProcessing(imported)}$suffix',
+      kind: DesktopToastKind.success,
+      icon: DesktopIcons.check,
+    );
   }
 
   void _openBook(ReaderItem item) {

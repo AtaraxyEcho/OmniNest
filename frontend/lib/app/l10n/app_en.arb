@@ -7363,5 +7363,16 @@
   "desktopMediaImportNoFiles": "No files chosen yet.",
   "desktopMediaImportNoCompatibleFiles": "No compatible files in this folder.",
   "desktopMediaImportMatchMetadata": "Match metadata after import",
-  "desktopMediaImportMetadataHint": "Fetch posters, synopsis and cast details after import."
+  "desktopMediaImportMetadataHint": "Fetch posters, synopsis and cast details after import.",
+  "desktopMediaImportBooksTitle": "Add books and comics",
+  "desktopMediaImportBooksHint": "EPUB, TXT, CBZ, PDF and ZIP files in My files. Duplicates are detected by content and skipped.",
+  "desktopMediaImportTaskBooks": "Parsing",
+  "desktopMediaImportImportTo": "Import to",
+  "desktopMediaImportPersonalDesc": "Only you can see it. Counts toward your quota.",
+  "desktopMediaImportSharedDesc": "Everyone in the household can browse it.",
+  "desktopMediaImportSelectAll": "Select all",
+  "desktopMediaImportClearSelection": "Clear selection",
+  "desktopMediaImportFilter": "Filter files",
+  "desktopMediaImportNoMatches": "No matching files.",
+  "desktopMediaImportSharedTaskSuffix": " → Shared space"
 }

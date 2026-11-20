@@ -14,6 +14,7 @@ class ReaderLibraryImportAction extends ConsumerWidget {
     this.style = ImportButtonStyle.iconButton,
     this.label,
     this.buttonBuilder,
+    this.onPressedOverride,
     super.key,
   });
 
@@ -25,6 +26,9 @@ class ReaderLibraryImportAction extends ConsumerWidget {
   /// Desktop shells supply their own sample-matched button while retaining the
   /// shared Reader import queue and validation flow.
   final MediaImportButtonBuilder? buttonBuilder;
+
+  /// 桌面端先打开自己的导入窗口时覆盖默认文件选择动作。
+  final VoidCallback? onPressedOverride;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,6 +57,7 @@ class ReaderLibraryImportAction extends ConsumerWidget {
       color: color,
       label: label,
       buttonBuilder: buttonBuilder,
+      onPressedOverride: onPressedOverride,
     );
     return SizedBox(
       width: isIcon ? 40 : null,

@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -16,34 +18,58 @@ import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart'
     show mediaImportFilePickerProvider;
 
-enum DesktopMediaImportKind { movies, photos, music }
+part 'desktop_media_import_dialog_parts.dart';
+
+/// 导入目标空间；样例 `useImportSpace` 会记住上一次的选择。
+enum DesktopImportSpace { personal, shared }
+
+const _importSpaceStorageKey = 'omninest:importSpace';
+
+enum DesktopMediaImportKind { movies, photos, music, books }
 
 class DesktopMediaImportSelection {
   const DesktopMediaImportSelection({
     this.fileNodeIds = const <String>[],
     this.deviceFiles = const <XFile>[],
     this.matchMetadata = true,
+    this.space = DesktopImportSpace.personal,
   });
 
   final List<String> fileNodeIds;
   final List<XFile> deviceFiles;
   final bool matchMetadata;
+  final DesktopImportSpace space;
+
+  String get spaceType =>
+      space == DesktopImportSpace.shared ? 'SHARED' : 'PERSONAL';
 }
 
 Future<DesktopMediaImportSelection?> showDesktopMediaImportDialog(
   BuildContext context, {
   required DesktopMediaImportKind kind,
+  bool allowSharedSpace = true,
 }) {
   return showDesktopDialog<DesktopMediaImportSelection>(
     context,
-    builder: (_) => DesktopMediaImportDialog(kind: kind),
+    builder:
+        (_) => DesktopMediaImportDialog(
+          kind: kind,
+          allowSharedSpace: allowSharedSpace,
+        ),
   );
 }
 
 class DesktopMediaImportDialog extends ConsumerStatefulWidget {
-  const DesktopMediaImportDialog({required this.kind, super.key});
+  const DesktopMediaImportDialog({
+    required this.kind,
+    this.allowSharedSpace = true,
+    super.key,
+  });
 
   final DesktopMediaImportKind kind;
+
+  /// 照片导入固定落在个人空间（样例对 photo 不显示 `SpacePicker`）。
+  final bool allowSharedSpace;
 
   @override
   ConsumerState<DesktopMediaImportDialog> createState() =>
@@ -62,12 +88,15 @@ class _DesktopMediaImportDialogState
   final List<XFile> _deviceFiles = <XFile>[];
   final Map<String, int> _deviceSizes = <String, int>{};
   final ScrollController _listScroll = ScrollController();
+  final TextEditingController _filterController = TextEditingController();
   String? _parentId;
   String? _loadError;
+  String _filter = '';
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = false;
   bool _matchMetadata = true;
+  DesktopImportSpace _space = DesktopImportSpace.personal;
   int _page = 0;
   int _loadGeneration = 0;
   int _autoScannedPages = 0;
@@ -76,13 +105,48 @@ class _DesktopMediaImportDialogState
   void initState() {
     super.initState();
     _listScroll.addListener(_onScroll);
+    _restoreImportSpace();
     _loadFiles(reset: true);
   }
+
+  Future<void> _restoreImportSpace() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      final stored = prefs.getString(_importSpaceStorageKey);
+      if (stored == 'shared') {
+        setState(() => _space = DesktopImportSpace.shared);
+      }
+    } on Object {
+      // 偏好存储不可用时保持个人空间，不影响导入本身。
+    }
+  }
+
+  Future<void> _setSpace(DesktopImportSpace value) async {
+    if (_space == value) return;
+    setState(() => _space = value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _importSpaceStorageKey,
+        value == DesktopImportSpace.shared ? 'shared' : 'personal',
+      );
+    } on Object {
+      // 记忆失败只影响下次默认值，本次选择仍然生效。
+    }
+  }
+
+  bool get _showSpacePicker =>
+      widget.allowSharedSpace && widget.kind != DesktopMediaImportKind.photos;
+
+  /// part 文件中的 UI 扩展通过这里触发重建，避免越权调用 `State.setState`。
+  void applyState(void Function() update) => setState(update);
 
   @override
   void dispose() {
     _loadGeneration++;
     _listScroll.dispose();
+    _filterController.dispose();
     super.dispose();
   }
 
@@ -134,29 +198,88 @@ class _DesktopMediaImportDialogState
       'wav',
       'wma',
     ],
+    DesktopMediaImportKind.books => const <String>[
+      'epub',
+      'txt',
+      'cbz',
+      'zip',
+      'pdf',
+    ],
   };
 
   String _title(AppLocalizations l10n) => switch (widget.kind) {
     DesktopMediaImportKind.movies => l10n.desktopMediaImportMoviesTitle,
     DesktopMediaImportKind.photos => l10n.desktopMediaImportPhotosTitle,
     DesktopMediaImportKind.music => l10n.desktopMediaImportMusicTitle,
+    DesktopMediaImportKind.books => l10n.desktopMediaImportBooksTitle,
   };
 
   String _hint(AppLocalizations l10n) => switch (widget.kind) {
     DesktopMediaImportKind.movies => l10n.desktopMediaImportMoviesHint,
     DesktopMediaImportKind.photos => l10n.desktopMediaImportPhotosHint,
     DesktopMediaImportKind.music => l10n.desktopMediaImportMusicHint,
+    DesktopMediaImportKind.books => l10n.desktopMediaImportBooksHint,
   };
 
   IconData get _mediaIcon => switch (widget.kind) {
     DesktopMediaImportKind.movies => DesktopIcons.film,
     DesktopMediaImportKind.photos => DesktopIcons.image,
     DesktopMediaImportKind.music => DesktopIcons.music,
+    DesktopMediaImportKind.books => DesktopIcons.book,
   };
 
   List<FileNode> get _visibleFiles => _entries
-      .where((node) => node.isFolder || _isSupported(node.name, node.mimeType))
+      .where(
+        (node) =>
+            (node.isFolder || _isSupported(node.name, node.mimeType)) &&
+            _matchesFilter(node.name),
+      )
       .toList(growable: false);
+
+  List<XFile> get _visibleDeviceFiles => _deviceFiles
+      .where((file) => _matchesFilter(file.name))
+      .toList(growable: false);
+
+  bool _matchesFilter(String name) =>
+      _filter.trim().isEmpty ||
+      name.toLowerCase().contains(_filter.trim().toLowerCase());
+
+  int get _sourceCount =>
+      _source == _ImportSource.files
+          ? _visibleFiles.length
+          : _visibleDeviceFiles.length;
+
+  bool get _allSelected =>
+      _sourceCount > 0 &&
+      (_source == _ImportSource.files
+          ? _visibleFiles.every((node) => _selectedFileIds.contains(node.id))
+          : _visibleDeviceFiles.every(
+            (file) => _selectedDeviceKeys.contains(_deviceKey(file)),
+          ));
+
+  void _toggleAll() {
+    final clear = _allSelected;
+    setState(() {
+      if (_source == _ImportSource.files) {
+        for (final node in _visibleFiles) {
+          if (clear) {
+            _selectedFileIds.remove(node.id);
+          } else {
+            _selectedFileIds.add(node.id);
+          }
+        }
+      } else {
+        for (final file in _visibleDeviceFiles) {
+          final key = _deviceKey(file);
+          if (clear) {
+            _selectedDeviceKeys.remove(key);
+          } else {
+            _selectedDeviceKeys.add(key);
+          }
+        }
+      }
+    });
+  }
 
   bool _isSupported(String name, String? mimeType) {
     final mime = mimeType?.toLowerCase() ?? '';
@@ -166,6 +289,11 @@ class _DesktopMediaImportDialogState
       DesktopMediaImportKind.movies => mime.startsWith('video/'),
       DesktopMediaImportKind.photos => mime.startsWith('image/'),
       DesktopMediaImportKind.music => mime.startsWith('audio/'),
+      DesktopMediaImportKind.books =>
+        mime.startsWith('text/') ||
+            mime.contains('epub') ||
+            mime.contains('pdf') ||
+            mime.contains('zip'),
     };
   }
 
@@ -314,6 +442,7 @@ class _DesktopMediaImportDialogState
                   .toList(growable: false)
               : const <XFile>[],
       matchMetadata: _matchMetadata,
+      space: _space,
     );
     closeDesktopModal(context, selection);
   }
@@ -333,6 +462,10 @@ class _DesktopMediaImportDialogState
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_showSpacePicker) ...[
+            _spacePicker(l10n, skin),
+            const SizedBox(height: 14),
+          ],
           _sourceTabs(l10n, skin),
           const SizedBox(height: 10),
           Text(
@@ -357,6 +490,7 @@ class _DesktopMediaImportDialogState
             _breadcrumbsView(l10n, skin),
           ],
           const SizedBox(height: 8),
+          if (_sourceCount > 5 || _filter.isNotEmpty) _listTools(l10n, skin),
           _fileList(l10n, skin),
           if (widget.kind == DesktopMediaImportKind.movies) ...[
             const SizedBox(height: 8),
@@ -377,344 +511,5 @@ class _DesktopMediaImportDialogState
         ),
       ],
     );
-  }
-
-  Widget _sourceTabs(AppLocalizations l10n, DesktopSkin skin) {
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: skin.raise,
-        border: Border.all(color: skin.line),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _sourceTab(
-            label: l10n.desktopMediaImportFromFiles,
-            icon: DesktopIcons.folder,
-            selected: _source == _ImportSource.files,
-            onPressed:
-                () => setState(() {
-                  _source = _ImportSource.files;
-                  _loadError = null;
-                }),
-          ),
-          _sourceTab(
-            label: l10n.desktopMediaImportFromDevice,
-            icon: DesktopIcons.upload,
-            selected: _source == _ImportSource.device,
-            onPressed:
-                () => setState(() {
-                  _source = _ImportSource.device;
-                  _loadError = null;
-                }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sourceTab({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onPressed,
-  }) {
-    final skin = DesktopSkin.of(context);
-    return DesktopHover(
-      builder:
-          (context, hovered) => GestureDetector(
-            onTap: onPressed,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MotionToken.reduced(context, MotionToken.fast),
-              curve: MotionToken.curve,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              height: 30,
-              decoration: BoxDecoration(
-                color: selected ? skin.raise2 : (hovered ? skin.raise : null),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 14,
-                    color: selected ? skin.text : skin.text2,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    label,
-                    style: DesktopType.dense(selected ? skin.text : skin.text2),
-                  ),
-                ],
-              ),
-            ),
-          ),
-    );
-  }
-
-  Widget _breadcrumbsView(AppLocalizations l10n, DesktopSkin skin) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          TextButton(
-            onPressed: () => _goToBreadcrumb(-1),
-            child: Text(l10n.filesRootDirectory),
-          ),
-          for (var index = 0; index < _breadcrumbs.length; index++) ...[
-            Icon(DesktopIcons.chevron, size: 14, color: skin.text3),
-            TextButton(
-              onPressed: () => _goToBreadcrumb(index),
-              child: Text(_breadcrumbs[index].name),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _fileList(AppLocalizations l10n, DesktopSkin skin) {
-    if (_loadError != null && _source == _ImportSource.device) {
-      return _listMessage(skin, _loadError!);
-    }
-    if (_loadError != null && _source == _ImportSource.files) {
-      return _listMessage(
-        skin,
-        _loadError!,
-        action: l10n.coreRetry,
-        onAction: () => _loadFiles(reset: true),
-      );
-    }
-    if (_loading && _source == _ImportSource.files) {
-      return const SizedBox(
-        height: 126,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
-    }
-    final deviceMode = _source == _ImportSource.device;
-    final rows = deviceMode ? _deviceFiles : _visibleFiles;
-    if (rows.isEmpty) {
-      return _listMessage(
-        skin,
-        deviceMode
-            ? l10n.desktopMediaImportNoFiles
-            : l10n.desktopMediaImportNoCompatibleFiles,
-      );
-    }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 340),
-      child: Scrollbar(
-        controller: _listScroll,
-        child: ListView.separated(
-          controller: _listScroll,
-          shrinkWrap: true,
-          itemCount: rows.length + (_loadingMore ? 1 : 0),
-          separatorBuilder: (_, _) => const SizedBox(height: 6),
-          itemBuilder: (context, index) {
-            if (index >= rows.length) {
-              return const Padding(
-                padding: EdgeInsets.all(12),
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              );
-            }
-            if (deviceMode) {
-              final file = _deviceFiles[index];
-              final key = _deviceKey(file);
-              return _candidateRow(
-                name: file.name,
-                detail:
-                    '${_extension(file.name).toUpperCase()} · ${_sizeText(_deviceSizes[key])}',
-                selected: _selectedDeviceKeys.contains(key),
-                icon: _mediaIcon,
-                onPressed:
-                    () => setState(() {
-                      if (!_selectedDeviceKeys.add(key)) {
-                        _selectedDeviceKeys.remove(key);
-                      }
-                    }),
-              );
-            }
-            final node = _visibleFiles[index];
-            if (node.isFolder) {
-              return _candidateRow(
-                name: node.name,
-                detail: '${l10n.filesFolder} · ${_sizeText(node.sizeBytes)}',
-                selected: _selectedFileIds.contains(node.id),
-                icon: DesktopIcons.folder,
-                onPressed:
-                    () => setState(() {
-                      if (!_selectedFileIds.add(node.id)) {
-                        _selectedFileIds.remove(node.id);
-                      }
-                    }),
-                onDoubleTap: () => _enterFolder(node),
-              );
-            }
-            return _candidateRow(
-              name: node.name,
-              detail:
-                  '${_extension(node.name).toUpperCase()} · ${_sizeText(node.sizeBytes)}',
-              selected: _selectedFileIds.contains(node.id),
-              icon: _mediaIcon,
-              onPressed:
-                  () => setState(() {
-                    if (!_selectedFileIds.add(node.id)) {
-                      _selectedFileIds.remove(node.id);
-                    }
-                  }),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _candidateRow({
-    required String name,
-    required String detail,
-    required bool selected,
-    required IconData icon,
-    required VoidCallback onPressed,
-    VoidCallback? onDoubleTap,
-  }) {
-    final skin = DesktopSkin.of(context);
-    return DesktopHover(
-      builder:
-          (context, hovered) => GestureDetector(
-            onTap: onPressed,
-            onDoubleTap: onDoubleTap,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MotionToken.reduced(context, MotionToken.fast),
-              curve: MotionToken.curve,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color:
-                    selected
-                        ? skin.accent.withValues(alpha: 0.10)
-                        : (hovered ? skin.raise2 : skin.raise),
-                border: Border.all(
-                  color:
-                      selected
-                          ? skin.accent.withValues(alpha: 0.45)
-                          : skin.line,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: selected ? skin.accent : Colors.transparent,
-                      border: Border.all(
-                        color: selected ? skin.accent : skin.line2,
-                      ),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child:
-                        selected
-                            ? Icon(
-                              DesktopIcons.check,
-                              size: 12,
-                              color: skin.accentInk,
-                            )
-                            : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(icon, size: 16, color: skin.text2),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.denseStrong(skin.text),
-                        ),
-                        Text(detail, style: DesktopType.caption(skin.text3)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-    );
-  }
-
-  Widget _listMessage(
-    DesktopSkin skin,
-    String text, {
-    String? action,
-    VoidCallback? onAction,
-  }) {
-    return SizedBox(
-      height: 110,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(text, style: DesktopType.secondary(skin.text3)),
-            if (action != null && onAction != null)
-              TextButton(onPressed: onAction, child: Text(action)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _metadataSetting(AppLocalizations l10n, DesktopSkin skin) {
-    return Container(
-      padding: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: skin.line)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.desktopMediaImportMatchMetadata,
-                  style: DesktopType.denseStrong(skin.text),
-                ),
-                Text(
-                  l10n.desktopMediaImportMetadataHint,
-                  style: DesktopType.caption(skin.text3),
-                ),
-              ],
-            ),
-          ),
-          DesktopToggle(
-            value: _matchMetadata,
-            label: l10n.desktopMediaImportMatchMetadata,
-            onChanged: (value) => setState(() => _matchMetadata = value),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _sizeText(int? bytes) {
-    if (bytes == null) return '—';
-    if (bytes >= 1000000000) {
-      return '${(bytes / 1000000000).toStringAsFixed(1)} GB';
-    }
-    if (bytes >= 1000000) return '${(bytes / 1000000).toStringAsFixed(1)} MB';
-    return '${(bytes / 1000).round().clamp(1, 999)} KB';
   }
 }

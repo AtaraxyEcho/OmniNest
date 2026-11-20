@@ -15383,4 +15383,38 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopMediaImportMetadataHint => '导入后获取海报、简介和演职人员信息。';
+
+  @override
+  String get desktopMediaImportBooksTitle => '添加图书与漫画';
+
+  @override
+  String get desktopMediaImportBooksHint =>
+      '我的文件中的 EPUB、TXT、CBZ、PDF 与 ZIP 文件。按内容检测重复并跳过。';
+
+  @override
+  String get desktopMediaImportTaskBooks => '解析中';
+
+  @override
+  String get desktopMediaImportImportTo => '导入到';
+
+  @override
+  String get desktopMediaImportPersonalDesc => '仅你可见，并计入你的存储配额。';
+
+  @override
+  String get desktopMediaImportSharedDesc => '家庭中所有成员都可以浏览。';
+
+  @override
+  String get desktopMediaImportSelectAll => '全选';
+
+  @override
+  String get desktopMediaImportClearSelection => '清除选择';
+
+  @override
+  String get desktopMediaImportFilter => '筛选文件';
+
+  @override
+  String get desktopMediaImportNoMatches => '没有匹配的文件。';
+
+  @override
+  String get desktopMediaImportSharedTaskSuffix => ' → 共享空间';
 }

@@ -190,12 +190,12 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
   }
 
   /// 通过与普通按钮相同的校验、上传与完成反馈流程导入外部选择器中的文件。
-  Future<void> importFiles(List<XFile> files) async {
+  Future<void> importFiles(List<XFile> files, {String? spaceType}) async {
     if (_busy || files.isEmpty) return;
     setState(() => _busy = true);
     final l10n = AppLocalizations.of(context);
     try {
-      await _processPickedFiles(files, l10n);
+      await _processPickedFiles(files, l10n, spaceType: spaceType);
     } on Object {
       if (mounted && context.mounted) {
         _showSnack(l10n.importFailed);
@@ -209,8 +209,9 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
 
   Future<void> _processPickedFiles(
     List<XFile> files,
-    AppLocalizations l10n,
-  ) async {
+    AppLocalizations l10n, {
+    String? spaceType,
+  }) async {
     if (!mounted || !context.mounted) return;
     final unsupportedFiles = _unsupportedFiles(files);
     if (unsupportedFiles.isNotEmpty) {
@@ -223,17 +224,22 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
       return;
     }
 
-    final spaceSelection = await showSpaceSelectorSheet(
-      context,
-      allowShared: widget.allowSharedSpace,
-    );
-    if (spaceSelection == null || !mounted) return;
+    final String effectiveSpace;
+    if (spaceType != null) {
+      effectiveSpace = spaceType;
+    } else {
+      final selection = await showSpaceSelectorSheet(
+        context,
+        allowShared: widget.allowSharedSpace,
+      );
+      if (selection == null || !mounted) return;
+      effectiveSpace =
+          selection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+    }
 
-    final spaceType =
-        spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
     final onFilesPicked = widget.onFilesPicked;
     if (onFilesPicked != null) {
-      onFilesPicked(files, spaceType);
+      onFilesPicked(files, effectiveSpace);
       return;
     }
 
@@ -246,11 +252,11 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
         context,
         importService: importService,
         files: files,
-        spaceType: spaceType,
+        spaceType: effectiveSpace,
         l10n: l10n,
       );
     } else {
-      _enqueueDesktopImport(files, spaceType, l10n);
+      _enqueueDesktopImport(files, effectiveSpace, l10n);
     }
   }
 
@@ -259,6 +265,11 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
     String spaceType,
     AppLocalizations l10n,
   ) {
+    // 样例 `spaceTag`：共享空间的任务标题带后缀，照片固定落个人空间所以没有。
+    final spaceTag =
+        spaceType == 'SHARED' && widget.allowSharedSpace
+            ? l10n.desktopMediaImportSharedTaskSuffix
+            : '';
     final container = ProviderScope.containerOf(context, listen: false);
     final epoch = container.read(sessionEpochProvider);
     container
@@ -268,7 +279,8 @@ class MediaImportButtonState extends ConsumerState<MediaImportButton> {
           directoryName: widget.subsystemDirectory,
           spaceType: spaceType,
           reuseExistingFiles: widget.reuseExistingFiles,
-          titleForFile: (file) => '${widget.subsystemDirectory} · ${file.name}',
+          titleForFile:
+              (file) => '${widget.subsystemDirectory} · ${file.name}$spaceTag',
           onComplete: (result) async {
             if (!mounted ||
                 !context.mounted ||

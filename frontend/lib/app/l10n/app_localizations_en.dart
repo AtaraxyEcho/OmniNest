@@ -15950,4 +15950,40 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get desktopMediaImportMetadataHint =>
       'Fetch posters, synopsis and cast details after import.';
+
+  @override
+  String get desktopMediaImportBooksTitle => 'Add books and comics';
+
+  @override
+  String get desktopMediaImportBooksHint =>
+      'EPUB, TXT, CBZ, PDF and ZIP files in My files. Duplicates are detected by content and skipped.';
+
+  @override
+  String get desktopMediaImportTaskBooks => 'Parsing';
+
+  @override
+  String get desktopMediaImportImportTo => 'Import to';
+
+  @override
+  String get desktopMediaImportPersonalDesc =>
+      'Only you can see it. Counts toward your quota.';
+
+  @override
+  String get desktopMediaImportSharedDesc =>
+      'Everyone in the household can browse it.';
+
+  @override
+  String get desktopMediaImportSelectAll => 'Select all';
+
+  @override
+  String get desktopMediaImportClearSelection => 'Clear selection';
+
+  @override
+  String get desktopMediaImportFilter => 'Filter files';
+
+  @override
+  String get desktopMediaImportNoMatches => 'No matching files.';
+
+  @override
+  String get desktopMediaImportSharedTaskSuffix => ' → Shared space';
 }
