@@ -268,19 +268,10 @@ class DesktopReaderBookCover extends StatelessWidget {
             ),
           ),
         );
+        // 外层仅画阴影；底色、图片、暗色遮罩统一收口至单一 ClipRRect(Clip.antiAlias)，
+        // 彻底移除 antiAliasWithSaveLayer 消除旋转与 3D 倾斜时的斜边像素锯齿。
         return DecoratedBox(
           decoration: BoxDecoration(
-            gradient:
-                hasArt
-                    ? null
-                    : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        skin.accent.withValues(alpha: large ? 0.38 : 0.32),
-                        Color.lerp(skin.accent, Colors.black, 0.55)!,
-                      ],
-                    ),
             borderRadius: _radius,
             boxShadow:
                 hovered
@@ -308,162 +299,187 @@ class DesktopReaderBookCover extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: _radius,
-            clipBehavior: Clip.antiAliasWithSaveLayer,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (hasArt)
-                  DesktopCover(
-                    url: coverUrl,
-                    kind: DesktopCoverKind.reader,
-                    readerItemId: itemId,
-                    fallbackIcon: DesktopIcons.book,
-                    cacheKey: 'desktop-reader-cover-$itemId',
-                    iconSize: large ? 28 : 20,
-                  ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: compact ? 5 : 12,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withValues(alpha: 0.35),
-                          Colors.white.withValues(alpha: 0.12),
-                          Colors.black.withValues(alpha: 0.10),
-                        ],
-                        stops: const [0, 0.4, 1],
-                      ),
-                    ),
-                  ),
-                ),
-                if (hasArt)
-                  // 原型 DOM 顺序是 image → spine → shade → text/gloss，
-                  // 因而底部暗部也覆盖书脊；Positioned.fill 明确保证
-                  // 遮罩覆盖整个圆角裁剪区域，不会在边框处缩短。
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.05),
-                              Colors.black.withValues(alpha: 0.78),
-                            ],
-                            stops: const [0.35, 1],
-                          ),
+            clipBehavior: Clip.antiAlias,
+            // Container 才同时支持 decoration 与 foregroundDecoration，
+            // 前景细描边必须与底色/图片同一裁切，避免悬停旋转时出锯齿。
+            child: Container(
+              decoration: BoxDecoration(
+                color: hasArt ? skin.panelSolid : null,
+                gradient:
+                    hasArt
+                        ? null
+                        : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            skin.accent.withValues(alpha: large ? 0.38 : 0.32),
+                            Color.lerp(skin.accent, Colors.black, 0.55)!,
+                          ],
                         ),
-                      ),
+              ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: _radius,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  width: 0.75,
+                ),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasArt)
+                    DesktopCover(
+                      url: coverUrl,
+                      kind: DesktopCoverKind.reader,
+                      readerItemId: itemId,
+                      fallbackIcon: DesktopIcons.book,
+                      cacheKey: 'desktop-reader-cover-$itemId',
+                      iconSize: large ? 28 : 20,
                     ),
-                  ),
-                if (!compact && !hasArt)
                   Positioned(
-                    left: 24,
-                    right: 16,
-                    top: 22,
-                    child: ColoredBox(
-                      color: (hasArt ? Colors.white : skin.text).withValues(
-                        alpha: 0.4,
-                      ),
-                      child: const SizedBox(height: 1),
-                    ),
-                  ),
-                if (isComic && !compact && hasArt)
-                  Positioned(
-                    top: 12,
-                    right: 10,
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: compact ? 5 : 12,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
-                        child: Text(
-                          tag,
-                          style: DesktopType.micro(Colors.white).copyWith(
-                            letterSpacing: 0.5,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withValues(alpha: 0.35),
+                            Colors.white.withValues(alpha: 0.12),
+                            Colors.black.withValues(alpha: 0.10),
+                          ],
+                          stops: const [0, 0.4, 1],
                         ),
                       ),
                     ),
                   ),
-                if (isComic && !compact && !hasArt)
-                  Positioned(
-                    top: 34,
-                    left: 24,
-                    child: Text(
-                      l10n.readerTypeComic,
-                      style: DesktopType.micro(
-                        skin.text.withValues(alpha: 0.7),
-                      ).copyWith(letterSpacing: 1.8),
-                    ),
-                  ),
-                if (!compact)
-                  Positioned(
-                    left: 24,
-                    right: hasArt ? 14 : 16,
-                    bottom: hasArt ? 14 : 16,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: large ? 4 : 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.coverTitle(
-                            hasArt ? Colors.white : skin.text,
-                            large: large,
-                          ).copyWith(
-                            shadows:
-                                hasArt
-                                    ? [
-                                      const Shadow(
-                                        color: Colors.black54,
-                                        blurRadius: 8,
-                                        offset: Offset(0, 1),
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.micro(
-                            (hasArt ? Colors.white : skin.text).withValues(
-                              alpha: 0.75,
+                  if (hasArt)
+                    // 原型 DOM 顺序是 image → spine → shade → text/gloss，
+                    // 因而底部暗部也覆盖书脊；Positioned.fill 明确保证
+                    // 遮罩覆盖整个圆角裁剪区域，不会在边框处缩短。
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.05),
+                                Colors.black.withValues(alpha: 0.78),
+                              ],
+                              stops: const [0.35, 1],
                             ),
-                          ).copyWith(
-                            shadows:
-                                hasArt
-                                    ? [
-                                      const Shadow(
-                                        color: Colors.black54,
-                                        blurRadius: 8,
-                                        offset: Offset(0, 1),
-                                      ),
-                                    ]
-                                    : null,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                if (!compact)
-                  Positioned.fill(child: IgnorePointer(child: gloss)),
-              ],
+                  if (!compact && !hasArt)
+                    Positioned(
+                      left: 24,
+                      right: 16,
+                      top: 22,
+                      child: ColoredBox(
+                        color: (hasArt ? Colors.white : skin.text).withValues(
+                          alpha: 0.4,
+                        ),
+                        child: const SizedBox(height: 1),
+                      ),
+                    ),
+                  if (isComic && !compact && hasArt)
+                    Positioned(
+                      top: 12,
+                      right: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          child: Text(
+                            tag,
+                            style: DesktopType.micro(Colors.white).copyWith(
+                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (isComic && !compact && !hasArt)
+                    Positioned(
+                      top: 34,
+                      left: 24,
+                      child: Text(
+                        l10n.readerTypeComic,
+                        style: DesktopType.micro(
+                          skin.text.withValues(alpha: 0.7),
+                        ).copyWith(letterSpacing: 1.8),
+                      ),
+                    ),
+                  if (!compact)
+                    Positioned(
+                      left: 24,
+                      right: hasArt ? 14 : 16,
+                      bottom: hasArt ? 14 : 16,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: large ? 4 : 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.coverTitle(
+                              hasArt ? Colors.white : skin.text,
+                              large: large,
+                            ).copyWith(
+                              shadows:
+                                  hasArt
+                                      ? [
+                                        const Shadow(
+                                          color: Colors.black54,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 1),
+                                        ),
+                                      ]
+                                      : null,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.micro(
+                              (hasArt ? Colors.white : skin.text).withValues(
+                                alpha: 0.75,
+                              ),
+                            ).copyWith(
+                              shadows:
+                                  hasArt
+                                      ? [
+                                        const Shadow(
+                                          color: Colors.black54,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 1),
+                                        ),
+                                      ]
+                                      : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (!compact)
+                    Positioned.fill(child: IgnorePointer(child: gloss)),
+                ],
+              ),
             ),
           ),
         );
@@ -510,16 +526,14 @@ class DesktopBookTilt extends StatelessWidget {
           duration: MotionToken.reduced(context, DesktopMotion.pageFlip),
           curve: DesktopMotion.spring,
           transformAlignment: Alignment.center,
-          // perspective(900px) 等价于 setEntry(3, 2, 1/900)。
+          // 将 hoverLift 合并入同一 Matrix4，避免双层变换离屏采样模糊与锯齿。
           transform:
               Matrix4.identity()
                 ..setEntry(3, 2, 1 / 900)
+                ..translateByDouble(0.0, active ? hoverLift : 0.0, 0.0, 1.0)
                 ..rotateX(x * math.pi / 180)
                 ..rotateY(y * math.pi / 180),
-          child: Transform.translate(
-            offset: Offset(0, active ? hoverLift : 0),
-            child: child,
-          ),
+          child: child,
         );
       },
     );

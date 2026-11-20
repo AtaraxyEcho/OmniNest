@@ -7,11 +7,15 @@ class ReaderViewSettingsPanel extends StatelessWidget {
     required this.onSettingsChanged,
     this.pageModeEnabled,
     this.mobile = false,
+    this.isFullscreen = false,
+    this.onToggleFullscreen,
     super.key,
   });
 
   final ReaderViewSettings settings;
   final ValueChanged<ReaderViewSettings> onSettingsChanged;
+  final bool isFullscreen;
+  final VoidCallback? onToggleFullscreen;
 
   /// 是否提供翻页模式；null 时跟随 [supportsPageMode]（Web 恒 false）。
   final bool? pageModeEnabled;
@@ -33,7 +37,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
     // 稿子 `.sheet-appearance` 的分区顺序与分隔：阅读方式 → 字号 → 字体+行距 →
     // 阅读背景，每段 `.setting-section` 上沿一条 --line 发丝线，首段不画。
     // 音量键翻页是本产品特有开关（稿子没有键盘控件），排在最后同一段式。
-    // 沉浸模式不再出现在设置里：chrome 的显隐由点按正文控制，页脚已有开关。
+    // 点按正文控制 chrome 显隐；全屏入口只在桌面抽屉底部（F11 同一动作）。
     final sections = <Widget>[
       if (showPageMode)
         _SettingSection(
@@ -441,6 +445,16 @@ class ReaderViewSettingsPanel extends StatelessWidget {
                   ),
             ),
           ),
+          if (onToggleFullscreen != null)
+            _DesktopSettingRow(
+              colors: colors,
+              label: '${l10n.portalImmersiveModeEnter} (F11)',
+              control: Switch.adaptive(
+                value: isFullscreen,
+                activeTrackColor: colors.accent,
+                onChanged: (_) => onToggleFullscreen?.call(),
+              ),
+            ),
         ],
       ),
     );

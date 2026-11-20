@@ -80,10 +80,7 @@ DesktopShellMode desktopShellModeForPath(String path) {
   // 剧集详情仍保留独立沉浸画布（`.video`），两者不共用路由姿态。
   // 样例的 `FilmDetail` 同时承载 Film 与 Series，剧集详情也是 `.main` 里的
   // `.page.film-page`，因此与影视详情一样保留工作区 chrome。
-  // 书本详情与参考稿一样铺满应用视口，阅读工作区壳层只在书架页保留。
-  if (RegExp(r'^/reader/items/[^/]+$').hasMatch(path)) {
-    return DesktopShellMode.immersive;
-  }
+  // 书本详情对齐样例 Reader.tsx:37-44，渲染在工作区 .main 内容区内（保留侧栏与顶栏）。
   if (path == '/music/now-playing' ||
       path == '/photos/slideshow' ||
       path.endsWith('/play') ||

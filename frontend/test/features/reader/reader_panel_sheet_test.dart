@@ -301,7 +301,7 @@ void main() {
         AppTypography.labelSmall,
       );
       // `.setting-label small`（当前值）与 `.segmented button` 同为 10px。
-      final scrollLabels = find.text('滑动');
+      final scrollLabels = find.text('滚动');
       expect(scrollLabels, findsNWidgets(2));
       for (final label in tester.widgetList<Text>(scrollLabels)) {
         expect(label.style?.fontSize, AppTypography.labelMicro);

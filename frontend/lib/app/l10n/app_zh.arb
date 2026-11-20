@@ -2722,9 +2722,9 @@
   "readerAutoNight": "自动夜间 (20:00–06:00)",
   "readerAutoNightHint": "夜间自动切换深色纸面",
   "readerReadingMode": "阅读模式",
-  "readerModeScroll": "滑动",
+  "readerModeScroll": "滚动",
   "readerModePage": "左右滑动",
-  "readerModeBook": "书本",
+  "readerModeBook": "图书",
   "readerModeSwipe": "滑动",
   "readerChapterPagePosition": "本章第 {current}/{total} 页",
   "@readerChapterPagePosition": {

@@ -209,19 +209,61 @@ class _SpreadPage extends StatelessWidget {
               colors: [spineTint, color, color],
               stops: const [0.0, 0.10, 1.0],
             );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(gradient: gradient),
-          child: child ?? SizedBox.expand(child: ColoredBox(color: color)),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+    // 对齐样例 polish.css:38-39：外缘 9px 圆角、书脊内侧 2px 圆角与纸缘亮边
+    final leafRadius =
+        side == _SpreadSide.left
+            ? const BorderRadius.only(
+              topLeft: Radius.circular(9),
+              bottomLeft: Radius.circular(9),
+              topRight: Radius.circular(2),
+              bottomRight: Radius.circular(2),
+            )
+            : const BorderRadius.only(
+              topRight: Radius.circular(9),
+              bottomRight: Radius.circular(9),
+              topLeft: Radius.circular(2),
+              bottomLeft: Radius.circular(2),
+            );
+    return ClipRRect(
+      borderRadius: leafRadius,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: gradient),
+            child: child ?? SizedBox.expand(child: ColoredBox(color: color)),
           ),
-        ),
-      ],
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              // Flutter 不允许「圆角 + 非均匀边框色」，黑色纸缘走均一细边，
+              // 外侧 2px 亮边单独贴边绘制，由父级 ClipRRect 收进圆角。
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: leafRadius,
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 7,
+            bottom: 7,
+            width: 2,
+            left: side == _SpreadSide.left ? 0 : null,
+            right: side == _SpreadSide.right ? 0 : null,
+            child: IgnorePointer(
+              child: ColoredBox(color: Colors.white.withValues(alpha: 0.40)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

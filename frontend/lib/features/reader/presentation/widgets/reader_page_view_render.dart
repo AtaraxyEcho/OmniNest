@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染。
+/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v4 终审定稿）。
 extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _buildPageOrEmpty(int index) {
     final page = widget.pageBuilder(index);
@@ -50,13 +50,16 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
             widget.turnMode == PageTurnMode.cover && frame.active;
 
         Widget mainContent;
-        if (_awaitingCurlStart ||
-            (!isCurlActive && _flipProgress <= 0 && !_isAnimating)) {
+        if (widget.turnMode == PageTurnMode.cover) {
+          // Book 仿真模式严禁回退 2D _buildCover 左右平推：
+          // 卷页激活且快照就绪时渲染真 3D 卷页层，其余时刻稳定保持静止书页。
+          if (isCurlActive && _hasReadyCurlPair(frame.direction)) {
+            mainContent = _buildCurlTurn(width, height) ?? _buildRestingPage();
+          } else {
+            mainContent = _buildRestingPage();
+          }
+        } else if (!_isAnimating && _flipProgress <= 0) {
           mainContent = _buildRestingPage();
-        } else if (isCurlActive && _hasReadyCurlPair(frame.direction)) {
-          // 卷页激活期间由 CustomPainter(repaint: _curlFrameNotifier) 独立重绘，
-          // 无需在每帧触发外层 AnimatedBuilder 重建整棵子树。
-          mainContent = _buildCurlTurn(width, height) ?? _buildRestingPage();
         } else {
           final current = _currentPageWidget ?? pageAt(widget.state.pageIndex);
           final target = _targetPageWidget;
@@ -71,8 +74,8 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
               builder: (context, _) {
                 final t = _isAnimating ? _animController!.value : _flipProgress;
                 return switch (widget.turnMode) {
-                  PageTurnMode.cover => _buildCover(current, target, t, width),
                   PageTurnMode.fade => _buildFade(current, target, t),
+                  PageTurnMode.cover ||
                   PageTurnMode.slide => const SizedBox.shrink(),
                 };
               },
@@ -80,14 +83,14 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
           }
         }
 
-        if (_pendingBackCaptureWidget == null) {
-          return mainContent;
-        }
+        // 关键修复：永久保持 Stack([底层抓图槽, 顶层 mainContent]) 结构不变，
+        // 绝不因 _pendingBackCaptureWidget 变化而销毁重建整棵书页子树。
         return Stack(
           fit: StackFit.expand,
+          clipBehavior: Clip.none,
           children: [
-            mainContent,
             _buildSingleBackCaptureSlot(leafWidth, height),
+            Positioned.fill(child: mainContent),
           ],
         );
       },
@@ -97,20 +100,6 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _constrainPage(Widget? page) {
     return SizedBox.expand(
       child: ColoredBox(color: widget.surfaceColor, child: page),
-    );
-  }
-
-  Widget _buildCover(Widget? current, Widget? target, double t, double width) {
-    final targetOffset = _isForward ? (1 - t) * width : (t - 1) * width;
-
-    return Stack(
-      children: [
-        _constrainPage(current),
-        Transform.translate(
-          offset: Offset(targetOffset, 0),
-          child: _constrainPage(target),
-        ),
-      ],
     );
   }
 

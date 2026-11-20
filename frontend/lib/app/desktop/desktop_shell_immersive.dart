@@ -24,16 +24,27 @@ class _DesktopImmersiveCanvas extends ConsumerWidget {
         backdropConfigured &&
         desktopBackdropAppliesToRoute(backdropScope, path);
     return BackdropGroup(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ColoredBox(color: skin.bg),
-          if (backdropActive)
-            DesktopBackdropLayer(path: path)
-          else
-            _AmbientLayer(imageUrl: ambientImage),
-          child,
-        ],
+      // 所有沉浸路由统一包裹 DesktopWindowFrame（恢复四边+四角边缘缩放），
+      // 并在 child 底层贴顶铺设 64px 兜底拖拽区，确保阅读器/播放器自动隐藏顶栏时仍可拖动窗口与双击最大化。
+      child: DesktopWindowFrame(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: skin.bg),
+            if (backdropActive)
+              DesktopBackdropLayer(path: path)
+            else
+              _AmbientLayer(imageUrl: ambientImage),
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 64,
+              child: DesktopWindowDragRegion(child: SizedBox.expand()),
+            ),
+            child,
+          ],
+        ),
       ),
     );
   }

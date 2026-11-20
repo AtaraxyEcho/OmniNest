@@ -13,6 +13,7 @@ import 'package:flutter/gestures.dart'
         kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_interaction_gate.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -194,6 +195,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
   bool _slideStageHovered = false;
   int _curlToken = 0;
   Timer? _curlWarmupTimer;
+  Completer<void>? _backCaptureLock;
+  Timer? _commitResetFallbackTimer;
   Widget? _pendingBackCaptureWidget;
   final GlobalKey _liveLeftKey = GlobalKey();
   final GlobalKey _liveRightKey = GlobalKey();
@@ -298,9 +301,14 @@ class _ReaderPageViewState extends State<ReaderPageView>
         oldWidget.surfaceColor != widget.surfaceColor ||
         oldWidget.paperEdgeColor != widget.paperEdgeColor ||
         oldWidget.contentRevision != widget.contentRevision) {
+      _commitResetFallbackTimer?.cancel();
+      _commitResetFallbackTimer = null;
       if (!_slideScrolling) {
         _transitionInFlight = false;
       }
+      _isAnimating = false;
+      _flipProgress = 0;
+      _targetPageWidget = null;
       _boundaryRequestInFlight = false;
       _curlFrameNotifier.value = CurlFrame.idle;
       _clearCurlImages();
@@ -324,6 +332,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
     widget.controller?.removeListener(_onExternalPageCommand);
     widget.pageCountNotifier?.removeListener(_onPageCountChanged);
     _boundaryResetTimer?.cancel();
+    _commitResetFallbackTimer?.cancel();
     _disposeControllers();
     _disposeCurlImages();
     _curlFrameNotifier.dispose();

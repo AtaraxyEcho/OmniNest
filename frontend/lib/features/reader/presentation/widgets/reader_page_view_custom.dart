@@ -125,7 +125,9 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         if (!wasActive && mounted) _updateState(() {});
       }
     }
-    if (_flipProgress > 0.05 && _targetPageWidget == null) {
+    if (widget.turnMode == PageTurnMode.fade &&
+        _flipProgress > 0.05 &&
+        _targetPageWidget == null) {
       final targetIndex =
           _isForward
               ? widget.state.pageIndex + pageStep
@@ -192,8 +194,10 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       _awaitingCurlStart = false;
       if (!mounted) return;
       if (!ready) {
-        // 极端跨域无法抓图时兜底
-        _runAutoFlipAnimation(useCurl: false);
+        // Book 模式绝不退化为 2D 平推：复位在途标志并直接提交翻页，防止闸门锁死。
+        _transitionInFlight = false;
+        _isAnimating = false;
+        _commitFlip();
         return;
       }
     }
@@ -266,6 +270,22 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       return;
     }
 
+    if (widget.turnMode == PageTurnMode.cover) {
+      // 保持卷页终帧直到 didUpdateWidget 收到新 pageIndex 再复位，消除 1 帧闪烁；
+      // 同步挂 120ms 安全定时器，防止父级未更新 pageIndex 时状态锁死。
+      _animController?.removeListener(_syncCurlFrameFromAnim);
+      _isAnimating = false;
+      _commitResetFallbackTimer?.cancel();
+      _commitResetFallbackTimer = Timer(const Duration(milliseconds: 120), () {
+        if (mounted &&
+            (_curlFrameNotifier.value.active || _transitionInFlight)) {
+          _resetFlip();
+        }
+      });
+      widget.callbacks.onPageChanged(newPage);
+      return;
+    }
+
     _resetFlip();
     widget.callbacks.onPageChanged(newPage);
   }
@@ -290,6 +310,8 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
   }
 
   void _resetFlip() {
+    _commitResetFallbackTimer?.cancel();
+    _commitResetFallbackTimer = null;
     _animController?.removeListener(_syncCurlFrameFromAnim);
     _curlFrameNotifier.value = CurlFrame.idle;
     _flipProgress = 0;

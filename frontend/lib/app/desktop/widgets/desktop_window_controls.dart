@@ -233,3 +233,23 @@ class DesktopWindowChrome extends ConsumerWidget {
     );
   }
 }
+
+/// 沉浸页顶栏空白处通用窗口拖拽区：拖动移动窗口，双击切换最大化，
+/// 子按钮的单击事件不受影响（HitTestBehavior.translucent）。
+class DesktopWindowDragRegion extends ConsumerWidget {
+  const DesktopWindowDragRegion({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!isDesktopPlatform) return child;
+    final chrome = ref.read(windowChromeControllerProvider.notifier);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (_) => chrome.startDragging(),
+      onDoubleTap: () => chrome.toggleMaximize(),
+      child: child,
+    );
+  }
+}

@@ -28,6 +28,14 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
     if (exitRequested) {
       return;
     }
+    if (isDesktopPlatform &&
+        ref.read(windowChromeControllerProvider).isFullscreen) {
+      unawaited(
+        ref.read(windowChromeControllerProvider.notifier).toggleFullscreen(),
+      );
+    } else if (isWebPlatform && fs.isFullscreen) {
+      fs.toggleFullscreen();
+    }
     clearReaderSelection();
     syncProgressSync();
     // 详情页必须等本次上报落库之后再失效：同一帧立即失效会让详情页重拉到

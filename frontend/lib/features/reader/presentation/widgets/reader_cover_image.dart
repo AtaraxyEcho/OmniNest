@@ -59,6 +59,8 @@ class AuthCoverImage extends ConsumerWidget {
               width: effectiveWidth,
               height: effectiveHeight,
               cacheWidth: cacheWidth,
+              filterQuality: FilterQuality.medium,
+              isAntiAlias: true,
               // 与 CachedNetworkImage 卡片的默认淡入过渡保持一致；
               // 同步解码（缓存命中重挂）不做动画避免闪烁。
               frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
@@ -121,6 +123,8 @@ class AuthCoverImage extends ConsumerWidget {
           width: effectiveWidth,
           height: effectiveHeight,
           cacheWidth: cacheWidth,
+          filterQuality: FilterQuality.medium,
+          isAntiAlias: true,
           gaplessPlayback: true,
           frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
             if (wasSynchronouslyLoaded) return child;

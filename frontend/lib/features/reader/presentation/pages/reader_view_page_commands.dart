@@ -221,6 +221,18 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
   }
 
   void _toggleReaderFullscreen() {
+    final entering =
+        isDesktopPlatform
+            ? !ref.read(windowChromeControllerProvider).isFullscreen
+            : !fs.isFullscreen;
+    if (entering) {
+      _hideTimer?.cancel();
+      _panelCoordinator.close();
+      _updateState(() {
+        _showControls = false;
+        _activeSearchQuery = '';
+      });
+    }
     switch (resolveFullscreenCommandTarget(
       isWeb: isWebPlatform,
       isDesktop: isDesktopPlatform,
@@ -530,6 +542,18 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           settings: _settings,
           onSettingsChanged: onSettingsChanged,
           mobile: sampleChrome,
+          isFullscreen:
+              isDesktopPlatform
+                  ? ref.watch(
+                    windowChromeControllerProvider.select(
+                      (s) => s.isFullscreen,
+                    ),
+                  )
+                  : fs.isFullscreen,
+          onToggleFullscreen:
+              (isDesktopPlatform || isWebPlatform)
+                  ? _toggleReaderFullscreen
+                  : null,
         ),
         ReaderPanelType.search => _buildSearchPanel(content),
         ReaderPanelType.annotations =>

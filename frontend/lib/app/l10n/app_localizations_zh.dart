@@ -6478,13 +6478,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerReadingMode => '阅读模式';
 
   @override
-  String get readerModeScroll => '滑动';
+  String get readerModeScroll => '滚动';
 
   @override
   String get readerModePage => '左右滑动';
 
   @override
-  String get readerModeBook => '书本';
+  String get readerModeBook => '图书';
 
   @override
   String get readerModeSwipe => '滑动';

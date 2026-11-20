@@ -114,7 +114,7 @@ class _ReadingBars extends StatelessWidget {
         SizedBox(
           height: 90,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var i = 0; i < chartDays.length; i++)
                 Expanded(
@@ -132,6 +132,10 @@ class _ReadingBars extends StatelessWidget {
                                 ? 0.04
                                 : math.max(0.04, chartDays[i]!.minutes / scale),
                         color: skin.accent,
+                        tooltip:
+                            chartDays[i] == null
+                                ? null
+                                : '${_shortDate(chartDays[i]!.date)} · ${chartDays[i]!.minutes} min',
                       ),
                     ),
                   ),
@@ -169,21 +173,27 @@ class _ReadingBars extends StatelessWidget {
 }
 
 class _ReadingBar extends StatelessWidget {
-  const _ReadingBar({required this.fraction, required this.color});
+  const _ReadingBar({
+    required this.fraction,
+    required this.color,
+    this.tooltip,
+  });
 
   final double fraction;
   final Color color;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: fraction.clamp(0.0, 1.0)),
+    final bar = TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: fraction.clamp(0.04, 1.0)),
       duration: MotionToken.resolve(context, MotionToken.chart),
       curve: DesktopMotion.spring,
       builder:
           (context, value, _) => Align(
             alignment: Alignment.bottomCenter,
             child: FractionallySizedBox(
+              widthFactor: 1.0,
               heightFactor: value,
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -197,10 +207,13 @@ class _ReadingBar extends StatelessWidget {
                     colors: [color, color.withValues(alpha: 0.35)],
                   ),
                 ),
+                child: const SizedBox.expand(),
               ),
             ),
           ),
     );
+    if (tooltip == null || tooltip!.isEmpty) return bar;
+    return Tooltip(message: tooltip!, child: bar);
   }
 }
 

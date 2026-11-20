@@ -31,16 +31,16 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
   Future<bool> _ensureCurlPairReady(CurlDirection dir) async {
     if (widget.turnMode != PageTurnMode.cover || !mounted) return false;
     if (_hasReadyCurlPair(dir)) return true;
-    if (_capturingDirs.contains(dir)) {
-      for (var i = 0; i < 6; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 16));
-        if (!mounted) return false;
-        if (_hasReadyCurlPair(dir)) return true;
-        if (!_capturingDirs.contains(dir)) break;
-      }
-      return _hasReadyCurlPair(dir);
+
+    // 串行化访问共享的 _singleBackCaptureKey，杜绝 next/prev 并发覆写抓图槽。
+    while (_backCaptureLock != null) {
+      await _backCaptureLock!.future;
+      if (!mounted) return false;
+      if (_hasReadyCurlPair(dir)) return true;
     }
 
+    final lock = Completer<void>();
+    _backCaptureLock = lock;
     _capturingDirs.add(dir);
     final token = _curlToken;
     try {
@@ -62,10 +62,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       }
 
       _updateState(() => _pendingBackCaptureWidget = backWidget);
-
-      final frameDone = Completer<void>();
-      WidgetsBinding.instance.addPostFrameCallback((_) => frameDone.complete());
-      await frameDone.future;
+      await SchedulerBinding.instance.endOfFrame;
       if (!mounted || token != _curlToken) {
         frontImg.dispose();
         return false;
@@ -100,6 +97,13 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       return true;
     } finally {
       _capturingDirs.remove(dir);
+      if (mounted && _pendingBackCaptureWidget != null) {
+        _updateState(() => _pendingBackCaptureWidget = null);
+      }
+      if (identical(_backCaptureLock, lock)) {
+        _backCaptureLock = null;
+      }
+      if (!lock.isCompleted) lock.complete();
     }
   }
 
@@ -117,14 +121,26 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     );
   }
 
+  /// 循环等待 RenderRepaintBoundary 完成本帧绘制后再调用 toImage，
+  /// 彻底杜绝 '!debugNeedsPaint' 异常导致静默返回 null。
   Future<ui.Image?> _captureBoundarySafe(GlobalKey key, double ratio) async {
-    final boundary = key.currentContext?.findRenderObject();
-    if (boundary is! RenderRepaintBoundary) return null;
-    try {
-      return await boundary.toImage(pixelRatio: ratio);
-    } on Object {
-      return null;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (!mounted) return null;
+      final ro = key.currentContext?.findRenderObject();
+      if (ro is RenderRepaintBoundary &&
+          !ro.debugNeedsPaint &&
+          ro.hasSize &&
+          !ro.size.isEmpty) {
+        try {
+          return await ro.toImage(pixelRatio: ratio);
+        } on Object {
+          return null;
+        }
+      }
+      WidgetsBinding.instance.scheduleFrame();
+      await SchedulerBinding.instance.endOfFrame;
     }
+    return null;
   }
 
   void _clearCurlImages() {
@@ -212,6 +228,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     );
   }
 
+  /// 置于底层全不透明绘制，且与 ReaderPageSpread 共享 6px 圆角防止露角。
   Widget _buildSingleBackCaptureSlot(double leafWidth, double height) {
     final child = _pendingBackCaptureWidget;
     if (child == null) return const SizedBox.shrink();
@@ -222,8 +239,8 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       height: height,
       child: ExcludeFocus(
         child: IgnorePointer(
-          child: Opacity(
-            opacity: 0.001,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
             child: RepaintBoundary(
               key: _singleBackCaptureKey,
               child: ColoredBox(color: widget.surfaceColor, child: child),

@@ -31,7 +31,7 @@ void main() {
         ),
       ),
     );
-    expect(find.text('滑动'), findsWidgets);
+    expect(find.text('滚动'), findsWidgets);
     expect(find.text('左右滑动'), findsWidgets);
   });
 
@@ -46,7 +46,7 @@ void main() {
       ),
     );
     expect(find.text('左右滑动'), findsNothing);
-    expect(find.text('滑动'), findsNothing);
+    expect(find.text('滚动'), findsNothing);
   });
 
   testWidgets('漫画设置在 Web 禁止翻页：隐藏翻页分段', (tester) async {

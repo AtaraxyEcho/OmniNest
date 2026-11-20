@@ -583,7 +583,6 @@ void main() {
     for (final path in const [
       '/video/v-1/play',
       '/photos/p-1',
-      '/reader/items/book-1',
       '/music/now-playing',
     ]) {
       router.go(path);
@@ -602,7 +601,11 @@ void main() {
     await pumpShell(tester);
     final router = GoRouter.of(tester.element(find.text('route:/portal')));
 
-    for (final path in const ['/video/v-1', '/video/series/s-1']) {
+    for (final path in const [
+      '/video/v-1',
+      '/video/series/s-1',
+      '/reader/items/book-1',
+    ]) {
       router.go(path);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 900));
@@ -631,7 +634,7 @@ void main() {
     );
     expect(
       desktopShellModeForPath('/reader/items/book-1'),
-      DesktopShellMode.immersive,
+      DesktopShellMode.chrome,
     );
     expect(
       desktopShellModeForPath('/reader/items/book-1/chapters/chapter-1'),

@@ -548,12 +548,15 @@ class _CurlPainter extends CustomPainter {
       canvas.save();
       canvas.translate(-2.0, 3.0);
       canvas.transform(geometry.flatTransform.storage);
-      canvas.drawPath(
-        geometry.flatClip,
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.30)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      final flatShadowAlpha = (0.30 * geometry.shadowOpacity).clamp(0.0, 0.30);
+      if (flatShadowAlpha > 0.002) {
+        canvas.drawPath(
+          geometry.flatClip,
+          Paint()
+            ..color = Colors.black.withValues(alpha: flatShadowAlpha)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+      }
       canvas.restore();
 
       canvas.save();
@@ -594,6 +597,14 @@ class _CurlPainter extends CustomPainter {
       Paint()
         ..strokeWidth = 2.0
         ..color = Colors.white.withValues(alpha: 0.55),
+    );
+    // 对齐样例 reader.css:18-19 顶边纸缘高光
+    canvas.drawLine(
+      Offset(rect.left, rect.top + 1.0),
+      Offset(rect.right, rect.top + 1.0),
+      Paint()
+        ..strokeWidth = 2.0
+        ..color = Colors.white.withValues(alpha: 0.30),
     );
   }
 
