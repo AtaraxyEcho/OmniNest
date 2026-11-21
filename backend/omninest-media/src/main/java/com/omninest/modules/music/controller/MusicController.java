@@ -628,7 +628,8 @@ public class MusicController {
                 currentUserContext.requireCurrentUserId(),
                 trackId,
                 request.lyrics(),
-                request.lyricsTranslation()));
+                request.lyricsTranslation(),
+                request.lyricsWords()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
@@ -803,7 +804,10 @@ public class MusicController {
         ));
     }
 
-    public record ApplyLyricsRequest(String lyrics, String lyricsTranslation) {
+    public record ApplyLyricsRequest(String lyrics, String lyricsTranslation, String lyricsWords) {
+        public ApplyLyricsRequest(String lyrics, String lyricsTranslation) {
+            this(lyrics, lyricsTranslation, null);
+        }
     }
 }
 

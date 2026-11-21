@@ -804,7 +804,8 @@ public class MusicLibraryService {
                 track.getUpdatedAt(),
                 track.getHue(),
                 MusicMetadataService.manualCoverUrl(track),
-                MusicMetadataService.hasManualOverride(track)
+                MusicMetadataService.hasManualOverride(track),
+                track.getLyricsWords()
         );
     }
 
@@ -835,7 +836,8 @@ public class MusicLibraryService {
                 track.getUpdatedAt(),
                 track.getHue(),
                 MusicMetadataService.manualCoverUrl(track),
-                MusicMetadataService.hasManualOverride(track)
+                MusicMetadataService.hasManualOverride(track),
+                null
         );
     }
 

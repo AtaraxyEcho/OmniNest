@@ -43,8 +43,53 @@ public final class MusicDtos {
             Instant updatedAt,
             Integer hue,
             String manualCoverUrl,
-            boolean hasManualOverride
+            boolean hasManualOverride,
+            String lyricsWords
     ) {
+        /** 保留 19 参历史签名，兼容既有调用点与测试桩。 */
+        public MusicTrackDto(
+                UUID id,
+                UUID fileNodeId,
+                String title,
+                String artistName,
+                String albumTitle,
+                Integer durationSeconds,
+                String format,
+                Integer bitrate,
+                Integer sampleRate,
+                Long fileSize,
+                String lyricsRaw,
+                String lyricsTranslation,
+                String genre,
+                String coverUrl,
+                boolean favorite,
+                Instant updatedAt,
+                Integer hue,
+                String manualCoverUrl,
+                boolean hasManualOverride) {
+            this(
+                    id,
+                    fileNodeId,
+                    title,
+                    artistName,
+                    albumTitle,
+                    durationSeconds,
+                    format,
+                    bitrate,
+                    sampleRate,
+                    fileSize,
+                    lyricsRaw,
+                    lyricsTranslation,
+                    genre,
+                    coverUrl,
+                    favorite,
+                    updatedAt,
+                    hue,
+                    manualCoverUrl,
+                    hasManualOverride,
+                    null);
+        }
+
         /** 保留旧签名：测试桩与历史调用点未传色相时按「未提取」处理。 */
         public MusicTrackDto(
                 UUID id,
@@ -82,7 +127,8 @@ public final class MusicDtos {
                     updatedAt,
                     null,
                     null,
-                    false);
+                    false,
+                    null);
         }
 
         /** 保留包含色相的历史签名，兼容现存调用点。 */
@@ -123,7 +169,8 @@ public final class MusicDtos {
                     updatedAt,
                     hue,
                     null,
-                    false);
+                    false,
+                    null);
         }
     }
 
@@ -375,9 +422,11 @@ public final class MusicDtos {
             UUID coverFileId,
             Boolean clearCover,
             @Size(max = 2048, message = "封面地址过长") String coverUrl,
-            Boolean restoreOriginal
+            Boolean restoreOriginal,
+            String lyricsTranslation,
+            String lyricsWords
     ) {
-        /** 保留既有请求签名，兼容调用点与测试桩。 */
+        /** 保留既有 7 参请求签名，兼容调用点与测试桩。 */
         public UpdateMusicTrackRequest(
                 String title,
                 String artistName,
@@ -386,7 +435,21 @@ public final class MusicDtos {
                 String lyricsRaw,
                 UUID coverFileId,
                 Boolean clearCover) {
-            this(title, artistName, albumTitle, genre, lyricsRaw, coverFileId, clearCover, null, null);
+            this(title, artistName, albumTitle, genre, lyricsRaw, coverFileId, clearCover, null, null, null, null);
+        }
+
+        /** 保留既有 9 参请求签名，兼容调用点与测试桩。 */
+        public UpdateMusicTrackRequest(
+                String title,
+                String artistName,
+                String albumTitle,
+                String genre,
+                String lyricsRaw,
+                UUID coverFileId,
+                Boolean clearCover,
+                String coverUrl,
+                Boolean restoreOriginal) {
+            this(title, artistName, albumTitle, genre, lyricsRaw, coverFileId, clearCover, coverUrl, restoreOriginal, null, null);
         }
     }
 

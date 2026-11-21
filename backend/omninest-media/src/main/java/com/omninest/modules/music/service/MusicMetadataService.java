@@ -42,6 +42,7 @@ public final class MusicMetadataService {
         track.setManualOriginalMetadata(original);
         track.setManualOriginalLyricsRaw(track.getLyricsRaw());
         track.setManualOriginalLyricsTranslation(track.getLyricsTranslation());
+        track.setManualOriginalLyricsWords(track.getLyricsWords());
     }
 
     public static boolean restoreOriginal(MusicTrack track) {
@@ -57,6 +58,7 @@ public final class MusicMetadataService {
         track.setMetadataStatus(stringValue(original.get("metadataStatus")));
         track.setLyricsRaw(track.getManualOriginalLyricsRaw());
         track.setLyricsTranslation(track.getManualOriginalLyricsTranslation());
+        track.setLyricsWords(track.getManualOriginalLyricsWords());
 
         track.setProviderMetadata(copyMap(original.get("providerMetadata")));
         clearOriginal(track);
@@ -67,6 +69,7 @@ public final class MusicMetadataService {
         track.setManualOriginalMetadata(null);
         track.setManualOriginalLyricsRaw(null);
         track.setManualOriginalLyricsTranslation(null);
+        track.setManualOriginalLyricsWords(null);
     }
 
     public static void setManualCoverUrl(MusicTrack track, String value) {

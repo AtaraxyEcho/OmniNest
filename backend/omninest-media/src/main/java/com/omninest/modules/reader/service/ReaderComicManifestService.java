@@ -44,6 +44,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -884,10 +887,54 @@ public class ReaderComicManifestService {
         pageRepository.deleteBySourceId(source.getId());
         pageRepository.saveAll(newPages);
         progressReporter.accept(90);
+        String comicInfoDirection = detectComicInfoReadingDirection(stagedArchive);
+        if (comicInfoDirection != null) {
+            source.setReadingDirection(normalizeReadingDirection(comicInfoDirection));
+        }
         source.setPageCount(newPages.size());
         source.setStatus(ReaderSourceStatus.READY);
         sourceRepository.save(source);
         return archiveParser.extractCover(stagedArchive::openStream, imageEntries.getFirst());
+    }
+
+    private static final Pattern COMIC_INFO_MANGA_TAG = Pattern.compile(
+            "<Manga>\s*([^<]+?)\s*</Manga>",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 解析 CBZ/ZIP 压缩包内的 ComicInfo.xml，提取 {@code <Manga>} 阅读方向提示。
+     */
+    private String detectComicInfoReadingDirection(StagedArchive stagedArchive) {
+        try (ZipInputStream zip = new ZipInputStream(stagedArchive.openStream(), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                String name = entry.getName().replace('\\', '/');
+                int slash = name.lastIndexOf('/');
+                String baseName = slash < 0 ? name : name.substring(slash + 1);
+                if (!"comicinfo.xml".equalsIgnoreCase(baseName)) {
+                    continue;
+                }
+                byte[] bytes = zip.readNBytes(128 * 1024);
+                String xml = new String(bytes, StandardCharsets.UTF_8);
+                Matcher matcher = COMIC_INFO_MANGA_TAG.matcher(xml);
+                if (!matcher.find()) {
+                    return null;
+                }
+                String mangaValue = matcher.group(1).trim().toLowerCase(Locale.ROOT);
+                return switch (mangaValue) {
+                    case "yes", "yesandrighttoleft" -> "rtl";
+                    case "no" -> "ltr";
+                    default -> null;
+                };
+            }
+        } catch (Exception exception) {
+            log.debug("读取 CBZ ComicInfo.xml 失败，忽略阅读方向提示: {}", exception.getMessage());
+        }
+        return null;
     }
 
     private void persistCoverAfterCommit(UUID itemId, ReaderCoverDraft cover) {

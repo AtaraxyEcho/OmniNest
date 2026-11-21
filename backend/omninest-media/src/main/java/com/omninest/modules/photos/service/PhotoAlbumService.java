@@ -30,9 +30,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,11 +41,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,22 +70,11 @@ public class PhotoAlbumService {
     private final MediaSyncEventService syncEventService;
     private final RateLimitService rateLimitService;
 
-    /**
-     * 查询用户所有相册，按更新时间倒序
-     */
     @Transactional(readOnly = true)
     public List<PhotoAlbumDto> listAlbums(UUID ownerUserId) {
         return toDtos(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId));
     }
 
-    /**
-     * 分页查询用户相册，按更新时间倒序。
-     *
-     * @param ownerUserId 用户标识
-     * @param page 页码，从零开始
-     * @param size 每页条数
-     * @return 相册分页
-     */
     @Transactional(readOnly = true)
     public Page<PhotoAlbumDto> listAlbumsPage(UUID ownerUserId, int page, int size) {
         Page<PhotoAlbum> result = albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(
@@ -96,9 +86,6 @@ public class PhotoAlbumService {
         );
     }
 
-    /**
-     * 创建新相册
-     */
     @Transactional(rollbackFor = Exception.class)
     public PhotoAlbumDto createAlbum(UUID ownerUserId, CreateAlbumRequest request) {
         PhotoAlbum album = new PhotoAlbum();
@@ -110,9 +97,6 @@ public class PhotoAlbumService {
         return toDto(saved);
     }
 
-    /**
-     * 更新相册名称和描述
-     */
     @Transactional(rollbackFor = Exception.class)
     public PhotoAlbumDto updateAlbum(UUID ownerUserId, UUID albumId, CreateAlbumRequest request) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
@@ -123,13 +107,9 @@ public class PhotoAlbumService {
         return toDto(saved);
     }
 
-    /**
-     * 删除相册及其所有关联条目
-     */
     @Transactional(rollbackFor = Exception.class)
     public void deleteAlbum(UUID ownerUserId, UUID albumId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
-        // 相册删除后公开链接必须立即失效，否则访客仍能凭 token 读已删除相册。
         resourceShareLinkService.revokeAll(albumId);
         List<PhotoAlbumItem> items = albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(ownerUserId, albumId);
         albumItemRepository.deleteAll(items);
@@ -137,11 +117,6 @@ public class PhotoAlbumService {
         recordAlbumEvent(ownerUserId, album, SyncAction.DELETED);
     }
 
-    /**
-     * 查询相册详情：相册元信息 + 首页照片（默认 50 张）。
-     *
-     * 大相册不再一次加载全量；后续页走 {@link #albumPhotosPage}。
-     */
     @Transactional(readOnly = true)
     public PhotoAlbumDetailDto albumDetail(UUID ownerUserId, UUID albumId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
@@ -152,15 +127,11 @@ public class PhotoAlbumService {
         return new PhotoAlbumDetailDto(albumDto, photos);
     }
 
-    /**
-     * 分页查询相册内照片，按相册排序序号升序。
-     */
     @Transactional(readOnly = true)
     public Page<PhotoItemDto> albumPhotosPage(UUID ownerUserId, UUID albumId, int page, int size) {
         requireAlbum(ownerUserId, albumId);
         int safePage = Math.max(0, page);
         int safeSize = PageClamps.safeSize(size);
-        // 总数与分页必须同一谓词：countByAlbumId 含回收站照片会让总数虚高、末页缺口。
         long total = albumItemRepository.countActivePhotosByAlbumId(albumId);
         List<UUID> photoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
                 albumId, PageRequest.of(safePage, safeSize));
@@ -175,10 +146,7 @@ public class PhotoAlbumService {
     }
 
     /**
-     * 向相册添加照片，自动去重。
-     *
-     * <p>photoIds 必须先按所有者与未删除状态过滤：只校验相册归属会让调用方塞入别人的
-     * 或已进回收站的照片 ID，相册计数随之虚增且点开后可见照片数与计数不一致。</p>
+     * 向相册添加照片，自动去重并按 maxSortOrder + 1 递增分配排序序号。
      */
     @Transactional(rollbackFor = Exception.class)
     public void addPhotos(UUID ownerUserId, UUID albumId, List<UUID> photoIds) {
@@ -196,6 +164,12 @@ public class PhotoAlbumService {
                 .distinct()
                 .filter(activePhotoIds::contains)
                 .toList();
+        List<PhotoAlbumItem> currentItems =
+                albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(ownerUserId, albumId);
+        int nextSortOrder = currentItems.stream()
+                .mapToInt(PhotoAlbumItem::getSortOrder)
+                .max()
+                .orElse(-1) + 1;
         Set<UUID> existing = new HashSet<>(albumItemRepository.findExistingPhotoIds(albumId, candidates));
         List<PhotoAlbumItem> items = new ArrayList<>();
         for (UUID photoId : candidates) {
@@ -204,6 +178,7 @@ public class PhotoAlbumService {
                 item.setOwnerUserId(ownerUserId);
                 item.setAlbumId(albumId);
                 item.setPhotoId(photoId);
+                item.setSortOrder(nextSortOrder++);
                 items.add(item);
             }
         }
@@ -215,8 +190,46 @@ public class PhotoAlbumService {
     }
 
     /**
-     * 从相册移除单张照片
+     * 批量重排相册内照片顺序：按传入 photoIds 顺序从 0 起递增赋 sortOrder，
+     * 未包含在列表中的既有条目保持相对顺序追加在末尾。
      */
+    @Transactional(rollbackFor = Exception.class)
+    public void reorderAlbumItems(UUID ownerUserId, UUID albumId, List<UUID> orderedPhotoIds) {
+        PhotoAlbum album = requireAlbum(ownerUserId, albumId);
+        List<PhotoAlbumItem> currentItems =
+                albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(ownerUserId, albumId);
+        if (currentItems.isEmpty()) {
+            return;
+        }
+        Map<UUID, PhotoAlbumItem> byPhotoId = new LinkedHashMap<>();
+        for (PhotoAlbumItem item : currentItems) {
+            byPhotoId.put(item.getPhotoId(), item);
+        }
+        List<PhotoAlbumItem> reordered = new ArrayList<>(currentItems.size());
+        Set<UUID> placed = new HashSet<>();
+        if (orderedPhotoIds != null) {
+            for (UUID photoId : orderedPhotoIds) {
+                if (photoId == null || !placed.add(photoId)) {
+                    continue;
+                }
+                PhotoAlbumItem item = byPhotoId.get(photoId);
+                if (item != null) {
+                    reordered.add(item);
+                }
+            }
+        }
+        for (PhotoAlbumItem item : currentItems) {
+            if (placed.add(item.getPhotoId())) {
+                reordered.add(item);
+            }
+        }
+        for (int index = 0; index < reordered.size(); index++) {
+            reordered.get(index).setSortOrder(index);
+        }
+        albumItemRepository.saveAll(reordered);
+        recordAlbumEvent(ownerUserId, album, SyncAction.UPDATED);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void removePhoto(UUID ownerUserId, UUID albumId, UUID photoId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
@@ -225,9 +238,6 @@ public class PhotoAlbumService {
         recordAlbumEvent(ownerUserId, album, SyncAction.UPDATED);
     }
 
-    /**
-     * 刷新相册照片计数
-     */
     private void refreshPhotoCount(UUID albumId) {
         albumRepository.findById(albumId).ifPresent(album -> {
             album.setPhotoCount((int) albumItemRepository.countActivePhotosByAlbumId(albumId));
@@ -235,9 +245,6 @@ public class PhotoAlbumService {
         });
     }
 
-    /**
-     * 查询相册并校验所有权，不存在则抛出异常
-     */
     private PhotoAlbum requireAlbum(UUID ownerUserId, UUID albumId) {
         return albumRepository.findByOwnerUserIdAndId(ownerUserId, albumId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "相册不存在"));
@@ -245,12 +252,6 @@ public class PhotoAlbumService {
 
     // ─── 相册分享 ───
 
-    /**
-     * 创建相册分享链接。
-     *
-     * <p>不声明事务：口令哈希由 {@link ResourceShareLinkService#create} 在事务外
-     * 计算，这里若再包一层事务会把 BCrypt 重新圈回数据库连接里。
-     */
     public PhotoShareLinkDto createAlbumShare(UUID ownerUserId, UUID albumId, CreateAlbumShareRequest request) {
         requireAlbum(ownerUserId, albumId);
         return toShareDto(resourceShareLinkService.create(
@@ -265,9 +266,6 @@ public class PhotoAlbumService {
         ));
     }
 
-    /**
-     * 列出相册的所有分享链接。
-     */
     @Transactional(readOnly = true)
     public List<PhotoShareLinkDto> listAlbumShares(UUID ownerUserId, UUID albumId) {
         requireAlbum(ownerUserId, albumId);
@@ -277,21 +275,11 @@ public class PhotoAlbumService {
                 .toList();
     }
 
-    /**
-     * 撤销分享链接。
-     */
     @Transactional(rollbackFor = Exception.class)
     public void revokeAlbumShare(UUID ownerUserId, UUID shareId) {
         resourceShareLinkService.revoke(ownerUserId, shareId);
     }
 
-    /**
-     * 原地更新分享链接的有效期、密码与可见范围，令牌保持不变。
-     *
-     * <p>与撤销后重建不同，已发出的地址在改设置后仍然可用。归属校验由
-     * {@link ResourceShareLinkService#update} 按所有者完成，与
-     * {@link #revokeAlbumShare} 同一口径。
-     */
     public PhotoShareLinkDto updatePhotoShare(
             UUID ownerUserId,
             UUID shareId,
@@ -313,37 +301,18 @@ public class PhotoAlbumService {
         ));
     }
 
-    /**
-     * 一次性撤销相册的全部有效分享链接。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param albumId 相册 ID
-     * @return 被撤销的链接条数
-     */
     @Transactional(rollbackFor = Exception.class)
     public int revokeAllAlbumShares(UUID ownerUserId, UUID albumId) {
         requireAlbum(ownerUserId, albumId);
         return resourceShareLinkService.revokeAll(albumId);
     }
 
-    /**
-     * 一次性撤销单张照片的全部有效分享链接。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param photoId 照片 ID
-     * @return 被撤销的链接条数
-     */
     @Transactional(rollbackFor = Exception.class)
     public int revokeAllPhotoShares(UUID ownerUserId, UUID photoId) {
         requirePhoto(ownerUserId, photoId);
         return resourceShareLinkService.revokeAll(photoId);
     }
 
-    /**
-     * 创建单张照片分享链接。
-     *
-     * <p>事务边界与 {@link #createAlbumShare} 一致：哈希在委托方法内、事务外完成。
-     */
     public PhotoShareLinkDto createPhotoShare(UUID ownerUserId, UUID photoId, CreateAlbumShareRequest request) {
         requirePhoto(ownerUserId, photoId);
         return toShareDto(resourceShareLinkService.create(
@@ -358,9 +327,6 @@ public class PhotoAlbumService {
         ));
     }
 
-    /**
-     * 列出单张照片的所有分享链接。
-     */
     @Transactional(readOnly = true)
     public List<PhotoShareLinkDto> listPhotoShares(UUID ownerUserId, UUID photoId) {
         requirePhoto(ownerUserId, photoId);
@@ -370,18 +336,11 @@ public class PhotoAlbumService {
                 .toList();
     }
 
-    /**
-     * 通过公开链接发起共享单张照片会话。
-     *
-     * <p>不声明事务：密码比对必须在委托方法的事务之外执行。
-     */
     public ShareAccessSessionDto issueSharedPhotoSession(
             String rawToken,
             String password,
             String clientAddress
     ) {
-        // 先确认照片仍然可见再消费访问次数：已移入回收站的照片不应让访客
-        // 白白消耗一次配额，也不能在扣次后才返回 404。
         ResourceShareLinkService.ShareTarget target =
                 resourceShareLinkService.resolveTarget(rawToken, "PHOTO_ITEM");
         photoItemRepository.findByOwnerUserIdAndId(target.ownerUserId(), target.resourceId())
@@ -390,9 +349,6 @@ public class PhotoAlbumService {
                 rawToken, password, "PHOTO_ITEM", clientAddress);
     }
 
-    /**
-     * 通过短期分享会话访问共享单张照片。
-     */
     @Transactional(rollbackFor = Exception.class)
     public PhotoItemDto accessSharedPhoto(String rawToken, String sessionToken, String clientAddress) {
         requirePhotoShareRateLimit(rawToken, clientAddress);
@@ -400,18 +356,10 @@ public class PhotoAlbumService {
                 rawToken, sessionToken, "PHOTO_ITEM");
         PhotoItem photo = photoItemRepository.findById(link.resourceId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
-        // 使用详情路径以支持原图签发，再按分享策略裁剪。
         PhotoItemDto dto = libraryService.photo(photo.getOwnerUserId(), photo.getId());
         return applySharePolicy(dto, link.includeLocation(), link.originalQuality());
     }
 
-    /**
-     * 按分享策略裁剪公开照片 DTO。
-     *
-     * <p>关闭“包含位置”时不签发任何原始文件直链（sourceUrl / motionVideoUrl / 以原图为封面），
-     * 并剥离 providerMetadata 中的位置键：原图与实况视频内嵌的 EXIF/XMP 会直接给出拍摄坐标，
-     * 流式重编码剥离元数据会破坏 ICC 色彩与 HDR 增益图，因此采用策略互斥而不是改写字节。</p>
-     */
     static PhotoItemDto applySharePolicy(
             PhotoItemDto dto,
             boolean includeLocation,
@@ -420,8 +368,6 @@ public class PhotoAlbumService {
         if (includeLocation && originalQuality) {
             return dto;
         }
-        // coverFileId 缺失或等于源文件时，coverUrl 实际就是原图：仅在隐藏位置时必须撤下。
-        // 包含位置但要求预览质量时保留封面，避免没有派生缩略图的照片直接破图。
         boolean coverIsOriginal = dto.coverFileId() == null
                 || dto.coverFileId().equals(dto.fileNodeId());
         String coverUrl = (!includeLocation && coverIsOriginal) ? null : dto.coverUrl();
@@ -469,9 +415,6 @@ public class PhotoAlbumService {
             "latitude", "longitude", "lat", "lon", "rawexifgps"
     );
 
-    /**
-     * 剥离 providerMetadata 中的位置键（键名大小写与下划线不敏感）。
-     */
     private static Map<String, Object> stripLocationMetadata(Map<String, Object> metadata) {
         if (metadata == null || metadata.isEmpty()) {
             return metadata;
@@ -489,10 +432,6 @@ public class PhotoAlbumService {
         return filtered;
     }
 
-    /**
-     * 照片分享的内容访问限流：会话令牌可被高频复用来刷预签名地址，
-     * 必须与文件分享一样按 IP + token 双阈值限制。
-     */
     private void requirePhotoShareRateLimit(String rawToken, String clientAddress) {
         String tokenHash = sha256(rawToken);
         if (clientAddress != null && !rateLimitService.tryAcquire(
@@ -520,11 +459,6 @@ public class PhotoAlbumService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
     }
 
-    /**
-     * 通过公开链接访问共享相册。
-     *
-     * <p>不声明事务：密码比对必须在委托方法的事务之外执行。
-     */
     public ShareAccessSessionDto issueSharedAlbumSession(
             String rawToken,
             String password,
@@ -534,7 +468,6 @@ public class PhotoAlbumService {
                 rawToken, password, "PHOTO_ALBUM", clientAddress);
     }
 
-    /** 分页访问公开相册，并在授权成功后消费一次分享访问次数。 */
     @Transactional(rollbackFor = Exception.class)
     public PhotoSharedAlbumDto accessSharedAlbum(
             String rawToken,
@@ -578,18 +511,10 @@ public class PhotoAlbumService {
         );
     }
 
-    /**
-     * 将相册实体转换为DTO，自动解析封面图片URL
-     */
     private PhotoAlbumDto toDto(PhotoAlbum album) {
         return toDtos(List.of(album)).getFirst();
     }
 
-    /**
-     * 批量转换相册 DTO：封面兜底文件一次查回，避免逐相册触发 N+1。
-     *
-     * <p>相册自身封面签名失败时仍退回首张有效照片，与单条转换的历史行为一致。</p>
-     */
     private List<PhotoAlbumDto> toDtos(List<PhotoAlbum> albums) {
         if (albums.isEmpty()) {
             return List.of();
@@ -630,11 +555,6 @@ public class PhotoAlbumService {
                 .toList();
     }
 
-    /**
-     * 按所有者分组批量签发封面地址，避免逐相册一次文件查询与签名。
-     *
-     * <p>批量签发会跳过缺失或已删除的封面文件；未拿到地址的相册由调用方回退首张照片。</p>
-     */
     private Map<UUID, String> signCoversByOwner(List<PhotoAlbum> albums, Map<UUID, UUID> coverFileIdByAlbum) {
         Map<UUID, List<UUID>> fileIdsByOwner = new HashMap<>();
         for (PhotoAlbum album : albums) {

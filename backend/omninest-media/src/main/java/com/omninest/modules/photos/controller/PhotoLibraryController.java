@@ -40,6 +40,8 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
 import com.omninest.modules.photos.service.PhotoAdminService;
 import com.omninest.modules.photos.service.PhotoAiTaskService;
+import com.omninest.modules.photos.domain.PhotoDisplayOrder;
+import com.omninest.modules.photos.repository.PhotoDisplayOrderRepository;
 import com.omninest.modules.photos.service.PhotoAlbumService;
 import com.omninest.modules.photos.service.PhotoBatchService;
 import com.omninest.modules.photos.service.PhotoEditService;
@@ -56,6 +58,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.time.Duration;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +90,7 @@ public class PhotoLibraryController {
 
     private final PhotoLibraryService libraryService;
     private final PhotoAlbumService albumService;
+    private final PhotoDisplayOrderRepository displayOrderRepository;
     private final PhotoAdminService adminService;
     private final PhotoBatchService batchService;
     private final PhotoEditService editService;
@@ -524,6 +529,83 @@ public class PhotoLibraryController {
         UUID userId = currentUserContext.requireCurrentUserId();
         albumService.removePhoto(userId, albumId, photoId);
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "重排相册照片顺序", description = "批量更新相册内照片的展示顺序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PutMapping("/api/v1/photos/albums/{albumId}/items/order")
+    ApiResponse<Void> reorderAlbumItems(
+            @PathVariable UUID albumId,
+            @Valid @RequestBody ReorderPhotosRequest body
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        albumService.reorderAlbumItems(userId, albumId, body.photoIds());
+        return ApiResponse.success();
+    }
+
+    // ─── 多视图自定义排序 ───
+
+    @Operation(summary = "获取照片自定义排序映射", description = "返回当前用户各视图上下文（按日分组、收藏等）的自定义排序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/orders")
+    ApiResponse<Map<String, List<UUID>>> listDisplayOrders() {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Map<String, List<UUID>> orders = new LinkedHashMap<>();
+        for (PhotoDisplayOrder record : displayOrderRepository.findByOwnerUserId(userId)) {
+            orders.put(record.getContextKey(), record.getOrderedPhotoIds() == null ? List.of() : List.copyOf(record.getOrderedPhotoIds()));
+        }
+        return ApiResponse.success(orders);
+    }
+
+    @Operation(summary = "保存指定上下文的照片排序", description = "创建或更新指定上下文键的照片展示顺序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PutMapping("/api/v1/photos/orders/{contextKey}")
+    ApiResponse<List<UUID>> saveDisplayOrder(
+            @PathVariable String contextKey,
+            @Valid @RequestBody ReorderPhotosRequest body
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        String normalizedKey = normalizeOrderContextKey(contextKey);
+        PhotoDisplayOrder record = displayOrderRepository
+                .findByOwnerUserIdAndContextKey(userId, normalizedKey)
+                .orElseGet(() -> {
+                    PhotoDisplayOrder created = new PhotoDisplayOrder();
+                    created.setOwnerUserId(userId);
+                    created.setContextKey(normalizedKey);
+                    return created;
+                });
+        List<UUID> deduped = new ArrayList<>();
+        for (UUID photoId : body.photoIds()) {
+            if (photoId != null && !deduped.contains(photoId)) {
+                deduped.add(photoId);
+            }
+        }
+        record.setOrderedPhotoIds(deduped);
+        displayOrderRepository.save(record);
+        return ApiResponse.success(deduped);
+    }
+
+    @Operation(summary = "删除指定上下文的照片排序", description = "清除指定上下文键的自定义展示顺序，恢复默认排序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @DeleteMapping("/api/v1/photos/orders/{contextKey}")
+    ApiResponse<Void> deleteDisplayOrder(@PathVariable String contextKey) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        String normalizedKey = normalizeOrderContextKey(contextKey);
+        displayOrderRepository
+                .findByOwnerUserIdAndContextKey(userId, normalizedKey)
+                .ifPresent(displayOrderRepository::delete);
+        return ApiResponse.success();
+    }
+
+    private String normalizeOrderContextKey(String contextKey) {
+        String trimmed = contextKey == null ? "" : contextKey.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 128) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "排序上下文键长度必须在 1 到 128 之间");
+        }
+        return trimmed;
+    }
+
+    public record ReorderPhotosRequest(@NotNull List<UUID> photoIds) {
     }
 
     // ─── 时间线与分组 ───

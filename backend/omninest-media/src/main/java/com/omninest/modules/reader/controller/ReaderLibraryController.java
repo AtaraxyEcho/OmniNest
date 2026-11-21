@@ -49,6 +49,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import java.util.ArrayList;
+import java.time.Duration;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -582,18 +588,32 @@ public class ReaderLibraryController {
     @Operation(summary = "获取漫画页面图片", description = "从 CBZ/ZIP 存档中提取指定页面的图片")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping(value = "/api/v1/reader/pages/{pageId}/image", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    ResponseEntity<StreamingResponseBody> getPageImage(@PathVariable UUID pageId) {
+    ResponseEntity<StreamingResponseBody> getPageImage(
+            @PathVariable UUID pageId,
+            @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         PageDownloadDescriptor descriptor = comicManifestService.preparePageImageDownload(
                 ownerUserId,
                 pageId
         );
+        String etag = "\"" + pageId + "-" + descriptor.sizeBytes() + "-" + descriptor.sourceUpdatedAtMillis() + "\"";
+        CacheControl cacheControl = CacheControl.maxAge(Duration.ofHours(24)).cachePrivate();
+        if (ifNoneMatch != null && ifNoneMatch.trim().equals(etag)) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .cacheControl(cacheControl)
+                    .eTag(etag)
+                    .build();
+        }
         MediaType contentType = MediaType.parseMediaType(descriptor.mimeType());
         StreamingResponseBody body = outputStream -> comicManifestService.streamPageImage(
                 descriptor,
                 outputStream
         );
-        ResponseEntity.BodyBuilder response = ResponseEntity.ok().contentType(contentType);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                .contentType(contentType)
+                .cacheControl(cacheControl)
+                .eTag(etag);
         if (descriptor.sizeBytes() > 0) {
             response.contentLength(descriptor.sizeBytes());
         }
@@ -652,6 +672,56 @@ public class ReaderLibraryController {
                 request.contentKindOverride());
         boolean onBookshelf = true; // 导入时自动加入书架
         return ApiResponse.success(readerItemService.toDto(item, onBookshelf));
+    }
+
+    @Operation(summary = "批量从文件库导入到阅读器", description = "接收多个 fileNodeId 批量导入 EPUB/TXT/CBZ/ZIP/PDF，单文件失败容错跳过并返回明细")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PostMapping("/api/v1/reader/items/import-from-files")
+    ApiResponse<BatchImportFromFilesResponse> importFromFiles(
+            @Valid @RequestBody BatchImportFromFilesRequest request
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        List<ReaderItemDto> imported = new ArrayList<>();
+        List<BatchImportSkippedItem> skipped = new ArrayList<>();
+        boolean force = Boolean.TRUE.equals(request.force());
+        for (UUID fileNodeId : request.fileNodeIds()) {
+            if (fileNodeId == null) {
+                continue;
+            }
+            try {
+                ReaderItem item = readerImportService.importFile(
+                        ownerUserId,
+                        fileNodeId,
+                        force,
+                        request.contentKindOverride());
+                imported.add(readerItemService.toDto(item, true));
+            } catch (RuntimeException exception) {
+                skipped.add(new BatchImportSkippedItem(
+                        fileNodeId,
+                        exception.getMessage() == null ? "导入失败" : exception.getMessage()));
+            }
+        }
+        return ApiResponse.success(new BatchImportFromFilesResponse(imported.size(), imported, skipped));
+    }
+
+    public record BatchImportFromFilesRequest(
+            @NotEmpty List<UUID> fileNodeIds,
+            Boolean force,
+            String contentKindOverride
+    ) {
+    }
+
+    public record BatchImportSkippedItem(
+            UUID fileNodeId,
+            String reason
+    ) {
+    }
+
+    public record BatchImportFromFilesResponse(
+            int importedCount,
+            List<ReaderItemDto> items,
+            List<BatchImportSkippedItem> skippedItems
+    ) {
     }
 
     @Operation(summary = "取消阅读导入", description = "取消排队中或执行中的解析任务，保留源文件和可重试条目")

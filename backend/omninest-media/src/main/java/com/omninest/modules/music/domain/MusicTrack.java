@@ -83,6 +83,9 @@ public class MusicTrack {
     @Column(name = "lyrics_translation", columnDefinition = "text")
     private String lyricsTranslation;
 
+    @Column(name = "lyrics_words", columnDefinition = "text")
+    private String lyricsWords;
+
     @Column(name = "cover_file_id")
     private UUID coverFileId;
 
@@ -111,6 +114,9 @@ public class MusicTrack {
 
     @Column(name = "manual_original_lyrics_translation", columnDefinition = "text")
     private String manualOriginalLyricsTranslation;
+
+    @Column(name = "manual_original_lyrics_words", columnDefinition = "text")
+    private String manualOriginalLyricsWords;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

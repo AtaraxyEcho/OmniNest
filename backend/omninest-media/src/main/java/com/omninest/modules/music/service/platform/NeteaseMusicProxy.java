@@ -313,7 +313,15 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                         songId, exception.getClass().getSimpleName());
                 json = null;
             }
-            if (json == null || !json.path("lrc").isObject()) {
+            // 逐字 yrc 不能替代行级 lrc：/lyric/new 只给 yrc 时仍要补调旧接口
+            // 拿行级文本，同时保留本次响应里的 yrc，避免逐字歌词被一并丢弃。
+            String primaryWordLyrics = blankToNull(
+                    json != null && json.path("yrc").isObject()
+                            ? json.path("yrc").path("lyric").asString(null)
+                            : null);
+            boolean hasLrc = json != null && json.path("lrc").isObject()
+                    && blankToNull(json.path("lrc").path("lyric").asString(null)) != null;
+            if (json == null || !hasLrc) {
                 json = requestJson("/lyric?id=" + encode(songId) + "&timestamp=" + nowMs, cookie);
                 usedLegacyEndpoint = true;
             }
@@ -325,7 +333,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             JsonNode tlyricObj = json.path("tlyric");
             String translatedLyrics = tlyricObj.isObject() ? tlyricObj.path("lyric").asString(null) : null;
             JsonNode yrcObj = json.path("yrc");
-            String wordLyrics = blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asString(null) : null);
+            String wordLyrics = primaryWordLyrics != null
+                    ? primaryWordLyrics
+                    : blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asString(null) : null);
             if (wordLyrics == null && usedLegacyEndpoint) {
                 // 旧接口不返回 yrc；逐字歌词属附加能力，失败时降级为不可用。
                 wordLyrics = fetchWordLyrics(songId, cookie);

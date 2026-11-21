@@ -189,7 +189,7 @@ public class MusicAdminService {
 
         int imported = 0;
         try {
-            Map<String, FileDescriptor> lyricFilesByBasePath = loadLyricFiles(ownerUserId);
+            Map<String, SidecarLyricFiles> lyricFilesByBasePath = loadLyricFiles(ownerUserId);
             // 进度分母用候选总量；共享文件里无权限的部分会让进度略低于 100%，完成时统一收敛。
             long totalCandidates = fileMetadataQueryService.countOwnedActiveFilesByCategories(
                             ownerUserId, MUSIC_SCAN_CATEGORIES)
@@ -296,7 +296,7 @@ public class MusicAdminService {
     private final class ScanSession {
         private final UUID jobId;
         private final UUID ownerUserId;
-        private final Map<String, FileDescriptor> lyricFilesByBasePath;
+        private final Map<String, SidecarLyricFiles> lyricFilesByBasePath;
         private final Semaphore ioPermits;
         private final ExecutorService ioExecutor;
         private final long totalCandidates;
@@ -311,7 +311,7 @@ public class MusicAdminService {
         private ScanSession(
                 UUID jobId,
                 UUID ownerUserId,
-                Map<String, FileDescriptor> lyricFilesByBasePath,
+                Map<String, SidecarLyricFiles> lyricFilesByBasePath,
                 Semaphore ioPermits,
                 ExecutorService ioExecutor,
                 long totalCandidates
@@ -382,23 +382,26 @@ public class MusicAdminService {
     /**
      * 歌词文件单独查询：数量级远小于音频，可一次载入并按目录基名匹配。
      */
-    private Map<String, FileDescriptor> loadLyricFiles(UUID ownerUserId) {
-        Map<String, FileDescriptor> lyrics = new LinkedHashMap<>();
+    private Map<String, SidecarLyricFiles> loadLyricFiles(UUID ownerUserId) {
+        Map<String, SidecarLyricFiles> lyrics = new LinkedHashMap<>();
         mergeLyricFiles(lyrics, fileMetadataQueryService.listOwnedLyricFiles(ownerUserId), false, ownerUserId);
         mergeLyricFiles(lyrics, fileMetadataQueryService.listSharedLyricFiles(ownerUserId), true, ownerUserId);
         return lyrics;
     }
 
     private void mergeLyricFiles(
-            Map<String, FileDescriptor> target,
+            Map<String, SidecarLyricFiles> target,
             List<FileDescriptor> candidates,
             boolean shared,
             UUID ownerUserId
     ) {
         for (FileDescriptor node : shared ? filterViewable(candidates, ownerUserId) : candidates) {
-            if (isLrcFile(node)) {
-                target.putIfAbsent(basePathKey(node.normalizedPath()), node);
+            SidecarLyricMatch match = matchSidecarLyric(node);
+            if (match == null) {
+                continue;
             }
+            SidecarLyricFiles existing = target.getOrDefault(match.basePathKey(), SidecarLyricFiles.EMPTY);
+            target.put(match.basePathKey(), existing.merge(match.kind(), node));
         }
     }
 
@@ -512,8 +515,19 @@ public class MusicAdminService {
         if (request.lyricsRaw() != null) {
             track.setLyricsRaw(request.lyricsRaw());
             if (request.lyricsRaw().isEmpty()) {
-                track.setLyricsTranslation(null);
+                if (request.lyricsTranslation() == null) {
+                    track.setLyricsTranslation(null);
+                }
+                if (request.lyricsWords() == null) {
+                    track.setLyricsWords(null);
+                }
             }
+        }
+        if (request.lyricsTranslation() != null) {
+            track.setLyricsTranslation(request.lyricsTranslation().isBlank() ? null : request.lyricsTranslation());
+        }
+        if (request.lyricsWords() != null) {
+            track.setLyricsWords(request.lyricsWords().isBlank() ? null : request.lyricsWords());
         }
         applyCoverUpdate(ownerUserId, track, request.coverFileId(), Boolean.TRUE.equals(request.clearCover()));
         if (request.coverUrl() != null) {
@@ -588,19 +602,34 @@ public class MusicAdminService {
 
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto applyLyrics(UUID ownerUserId, UUID trackId, String lyrics, String lyricsTranslation) {
+        return applyLyrics(ownerUserId, trackId, lyrics, lyricsTranslation, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public MusicTrackDto applyLyrics(
+            UUID ownerUserId,
+            UUID trackId,
+            String lyrics,
+            String lyricsTranslation,
+            String lyricsWords
+    ) {
         log.info("应用歌词: trackId={}", trackId);
         MusicTrack track = requireWritableTrack(ownerUserId, trackId);
         MusicMetadataService.captureOriginal(track);
         track.setLyricsRaw(lyrics);
         track.setLyricsTranslation(lyricsTranslation);
+        if (lyricsWords != null) {
+            track.setLyricsWords(lyricsWords.isBlank() ? null : lyricsWords);
+        }
         track.setMetadataStatus(MetadataStatus.MANUAL.getValue());
         trackRepository.save(track);
         recordTrackUpdated(track.getOwnerUserId(), track);
         log.info(
-                "歌词已应用: trackId={}, length={}, hasTranslation={}",
+                "歌词已应用: trackId={}, length={}, hasTranslation={}, hasWords={}",
                 trackId,
                 lyrics != null ? lyrics.length() : 0,
-                lyricsTranslation != null && !lyricsTranslation.isBlank()
+                lyricsTranslation != null && !lyricsTranslation.isBlank(),
+                lyricsWords != null && !lyricsWords.isBlank()
         );
         return musicLibraryService.toTrackDto(track, false);
     }
@@ -616,14 +645,15 @@ public class MusicAdminService {
         FileDescriptor file = fileMetadataQueryService.findActiveById(fileNodeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
         UUID catalogOwnerId = catalogOwnerId(file, ownerUserId);
-        // 查找同目录同名 .lrc 歌词文件（以文件所有者目录为准，共享文件由上传者持有）
-        String baseName = titleFromFileName(file.name());
-        FileDescriptor sidecarLyrics = fileMetadataQueryService
-                .listOwnedActiveChildren(catalogOwnerId, file.parentId())
-                .stream()
-                .filter(node -> isLrcFile(node) && titleFromFileName(node.name()).equals(baseName))
-                .findFirst()
-                .orElse(null);
+        // 查找同目录同名外挂歌词（.lrc / .zh.lrc / .tlyric.lrc / .yrc / .elrc / .krc）
+        String baseName = titleFromFileName(file.name()).toLowerCase(Locale.ROOT);
+        SidecarLyricFiles sidecarLyrics = SidecarLyricFiles.EMPTY;
+        for (FileDescriptor sibling : fileMetadataQueryService.listOwnedActiveChildren(catalogOwnerId, file.parentId())) {
+            SidecarLyricMatch match = matchSidecarLyric(sibling);
+            if (match != null && match.baseNameLower().equals(baseName)) {
+                sidecarLyrics = sidecarLyrics.merge(match.kind(), sibling);
+            }
+        }
         PrefetchedAudio prefetched;
         try {
             prefetched = prefetchAudio(file, ownerUserId, sidecarLyrics, new Semaphore(1));
@@ -643,7 +673,7 @@ public class MusicAdminService {
         });
     }
 
-    private void importAudioFile(UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics) {
+    private void importAudioFile(UUID ownerUserId, FileDescriptor file, SidecarLyricFiles sidecarLyrics) {
         try {
             importPrefetchedAudio(ownerUserId, prefetchAudio(file, ownerUserId, sidecarLyrics, new Semaphore(1)));
         } catch (IOException exception) {
@@ -661,6 +691,8 @@ public class MusicAdminService {
         FileDescriptor file = prefetched.file();
         MusicMetadataExtractor.Metadata metadata = prefetched.metadata();
         String lyricsRaw = prefetched.lyricsRaw();
+        String lyricsTranslation = prefetched.lyricsTranslation();
+        String lyricsWords = prefetched.lyricsWords();
         UUID catalogOwnerId = catalogOwnerId(file, ownerUserId);
         var existingTrack = trackRepository.findByFileNodeId(file.id());
         // 单曲导入同样受所有者边界与手动精修保护，避免自动导入冲掉用户编辑。
@@ -699,6 +731,12 @@ public class MusicAdminService {
         track.setAlbumTitle(albumTitle);
         track.setGenre(metadata.genre());
         track.setLyricsRaw(lyricsRaw);
+        if (hasText(lyricsTranslation)) {
+            track.setLyricsTranslation(lyricsTranslation);
+        }
+        if (hasText(lyricsWords)) {
+            track.setLyricsWords(lyricsWords);
+        }
         track.setTrackNumber(parseNullableInt(metadata.trackNumber()));
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());
@@ -720,7 +758,7 @@ public class MusicAdminService {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
         applyPrefetchedCover(track, prefetched);
-        track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
+        track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) || hasText(lyricsWords) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
         catalogService.refreshStatistics(catalogOwnerId, previousArtistId, previousAlbumId, track);
     }
@@ -735,40 +773,35 @@ public class MusicAdminService {
     private PrefetchedAudio prefetchAudio(
             FileDescriptor file,
             UUID scannerUserId,
-            Map<String, FileDescriptor> lyricFilesByBasePath,
+            Map<String, SidecarLyricFiles> lyricFilesByBasePath,
             Semaphore ioPermits
     ) throws IOException {
         return prefetchAudio(
                 file,
                 scannerUserId,
-                lyricFilesByBasePath.get(basePathKey(file.normalizedPath())),
+                lyricFilesByBasePath.getOrDefault(basePathKey(file.normalizedPath()), SidecarLyricFiles.EMPTY),
                 ioPermits);
     }
 
     /**
-     * 事务外预取标签、歌词与内嵌封面。
-     *
-     * @param file 音频文件节点
-     * @param scannerUserId 触发导入的用户（曲目归属优先取文件所有者）
-     * @param sidecarLyrics 同目录同名歌词文件，可为 null
-     * @param ioPermits 预取并发闸门
-     * @return 预取结果
+     * 事务外预取标签、多格式外挂歌词（原文/译文/逐字）与内嵌封面。
      */
     private PrefetchedAudio prefetchAudio(
             FileDescriptor file,
             UUID scannerUserId,
-            FileDescriptor sidecarLyrics,
+            SidecarLyricFiles sidecarLyrics,
             Semaphore ioPermits
     ) throws IOException {
         ioPermits.acquireUninterruptibly();
         try {
+            SidecarLyricFiles bundle = sidecarLyrics == null ? SidecarLyricFiles.EMPTY : sidecarLyrics;
             MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
-            String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(sidecarLyrics));
-            // 内嵌封面必须在这里落成派生资产：入库阶段已处于短事务内，
-            // DerivedAssetStorageService.store 走 REQUIRES_NEW 会再要一条连接。
+            String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(bundle.rawFile()));
+            String lyricsTranslation = readTextObject(bundle.translationFile());
+            String lyricsWords = readTextObject(bundle.wordsFile());
             UUID coverFileId = coverAssetStore.storeEmbeddedCoverAsset(
                     catalogOwnerId(file, scannerUserId), file, metadata.coverDataUrl());
-            return new PrefetchedAudio(file, metadata, lyricsRaw, coverFileId);
+            return new PrefetchedAudio(file, metadata, lyricsRaw, lyricsTranslation, lyricsWords, coverFileId);
         } finally {
             ioPermits.release();
         }
@@ -778,8 +811,39 @@ public class MusicAdminService {
             FileDescriptor file,
             MusicMetadataExtractor.Metadata metadata,
             String lyricsRaw,
+            String lyricsTranslation,
+            String lyricsWords,
             UUID coverFileId
     ) {
+    }
+
+    private enum SidecarLyricKind {
+        RAW,
+        TRANSLATION,
+        WORDS
+    }
+
+    private record SidecarLyricMatch(
+            SidecarLyricKind kind,
+            String basePathKey,
+            String baseNameLower
+    ) {
+    }
+
+    private record SidecarLyricFiles(
+            FileDescriptor rawFile,
+            FileDescriptor translationFile,
+            FileDescriptor wordsFile
+    ) {
+        static final SidecarLyricFiles EMPTY = new SidecarLyricFiles(null, null, null);
+
+        SidecarLyricFiles merge(SidecarLyricKind kind, FileDescriptor file) {
+            return switch (kind) {
+                case RAW -> rawFile == null ? new SidecarLyricFiles(file, translationFile, wordsFile) : this;
+                case TRANSLATION -> translationFile == null ? new SidecarLyricFiles(rawFile, file, wordsFile) : this;
+                case WORDS -> wordsFile == null ? new SidecarLyricFiles(rawFile, translationFile, file) : this;
+            };
+        }
     }
 
     private void importPrefetchedAudioCached(
@@ -790,6 +854,8 @@ public class MusicAdminService {
         FileDescriptor file = prefetched.file();
         MusicMetadataExtractor.Metadata metadata = prefetched.metadata();
         String lyricsRaw = prefetched.lyricsRaw();
+        String lyricsTranslation = prefetched.lyricsTranslation();
+        String lyricsWords = prefetched.lyricsWords();
         // 曲目行归属固定为文件所有者：共享空间文件被成员扫描时也由上传者持有，
         // 否则"谁先扫谁拥有"会让非所有者获得元数据写权限，且与唯一约束冲突。
         UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
@@ -851,6 +917,12 @@ public class MusicAdminService {
         track.setAlbumTitle(albumTitle);
         track.setGenre(metadata.genre());
         track.setLyricsRaw(lyricsRaw);
+        if (hasText(lyricsTranslation)) {
+            track.setLyricsTranslation(lyricsTranslation);
+        }
+        if (hasText(lyricsWords)) {
+            track.setLyricsWords(lyricsWords);
+        }
         track.setTrackNumber(parseNullableInt(metadata.trackNumber()));
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());
@@ -872,7 +944,7 @@ public class MusicAdminService {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
         applyPrefetchedCover(track, prefetched);
-        track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
+        track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) || hasText(lyricsWords) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
 
         // 收集受影响的 ID（不逐个刷新，最后按归属人批量刷新）。
@@ -1031,13 +1103,52 @@ public class MusicAdminService {
             return true;
         }
         return switch (formatFromFileName(file.name())) {
-            case "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "aiff", "alac" -> true;
+            case "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "ape", "aiff", "aif", "alac" -> true;
             default -> false;
         };
     }
 
     private boolean isLrcFile(FileDescriptor file) {
-        return NodeType.FILE.getValue().equals(file.nodeType()) && "lrc".equals(formatFromFileName(file.name()));
+        return matchSidecarLyric(file) != null;
+    }
+
+    private SidecarLyricMatch matchSidecarLyric(FileDescriptor file) {
+        if (file == null || !NodeType.FILE.getValue().equals(file.nodeType()) || file.name() == null) {
+            return null;
+        }
+        String lowerName = file.name().trim().toLowerCase(Locale.ROOT);
+        SidecarLyricKind kind;
+        String suffix;
+        if (lowerName.endsWith(".zh.lrc")) {
+            kind = SidecarLyricKind.TRANSLATION;
+            suffix = ".zh.lrc";
+        } else if (lowerName.endsWith(".tlyric.lrc")) {
+            kind = SidecarLyricKind.TRANSLATION;
+            suffix = ".tlyric.lrc";
+        } else if (lowerName.endsWith(".yrc")) {
+            kind = SidecarLyricKind.WORDS;
+            suffix = ".yrc";
+        } else if (lowerName.endsWith(".elrc")) {
+            kind = SidecarLyricKind.WORDS;
+            suffix = ".elrc";
+        } else if (lowerName.endsWith(".krc")) {
+            kind = SidecarLyricKind.WORDS;
+            suffix = ".krc";
+        } else if (lowerName.endsWith(".lrc")) {
+            kind = SidecarLyricKind.RAW;
+            suffix = ".lrc";
+        } else {
+            return null;
+        }
+        String baseNameLower = lowerName.substring(0, lowerName.length() - suffix.length());
+        if (baseNameLower.isEmpty()) {
+            return null;
+        }
+        String normalizedPath = file.normalizedPath() == null ? "" : file.normalizedPath().toLowerCase(Locale.ROOT);
+        String basePath = normalizedPath.endsWith(suffix)
+                ? normalizedPath.substring(0, normalizedPath.length() - suffix.length())
+                : basePathKey(file.normalizedPath());
+        return new SidecarLyricMatch(kind, basePath, baseNameLower);
     }
 
     private String titleFromFileName(String fileName) {
