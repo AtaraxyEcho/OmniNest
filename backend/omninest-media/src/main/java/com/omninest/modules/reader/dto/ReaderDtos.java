@@ -364,7 +364,8 @@ public final class ReaderDtos {
             String coverImageUrl,
             Boolean restoreOriginal,
             Boolean clearReleaseDate,
-            Boolean clearRating
+            Boolean clearRating,
+            Boolean clearCover
     ) {
         public UpdateItemMetadataRequest(
                 String title,
@@ -379,7 +380,32 @@ public final class ReaderDtos {
                 String isbn
         ) {
             this(title, authorName, description, publisher, language, releaseDate, rating, genres, serialStatus,
-                    isbn, null, null, null, null, null, null, null, null);
+                    isbn, null, null, null, null, null, null, null, null, null);
+        }
+
+        public UpdateItemMetadataRequest(
+                String title,
+                String authorName,
+                String description,
+                String publisher,
+                String language,
+                LocalDate releaseDate,
+                BigDecimal rating,
+                List<String> genres,
+                String serialStatus,
+                String isbn,
+                String readerType,
+                String seriesName,
+                Integer volumeNumber,
+                Boolean clearVolumeNumber,
+                String coverImageUrl,
+                Boolean restoreOriginal,
+                Boolean clearReleaseDate,
+                Boolean clearRating
+        ) {
+            this(title, authorName, description, publisher, language, releaseDate, rating, genres, serialStatus,
+                    isbn, readerType, seriesName, volumeNumber, clearVolumeNumber, coverImageUrl, restoreOriginal,
+                    clearReleaseDate, clearRating, null);
         }
     }
 

@@ -1138,4 +1138,30 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     Page<FileNode> findSharedFilesVisiblePage(@Param("userId") UUID userId, Pageable pageable);
 
+    /**
+     * 分页查询指定用户个人空间内最近更新的非目录可见文件。
+     *
+     * <p>供「最近文件」在访问记录为空时兜底返回真实文件，排除目录、回收站、
+     * 派生资产与本地只读挂载节点。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
+     * @param pageable 分页参数
+     * @return 按 updatedAt 倒序排列的最近文件分页
+     */
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.spaceType = :spaceType
+              AND n.nodeType <> 'FOLDER'
+              AND n.deleted = false
+              AND n.deletedAt IS NULL
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
+            ORDER BY n.updatedAt DESC, n.id DESC
+            """)
+    Page<FileNode> findRecentPersonalFilesByUpdatedAtDesc(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            Pageable pageable);
+
 }

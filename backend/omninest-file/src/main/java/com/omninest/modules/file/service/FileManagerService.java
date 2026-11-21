@@ -109,10 +109,17 @@ public class FileManagerService {
     public PageResponse<FileNodeDto> listRecentFiles(UUID ownerUserId, int page, int size) {
         int safePage = PageClamps.safePage(page);
         int safeSize = PageClamps.safeSize(size);
+        PageRequest pageRequest = PageRequest.of(safePage, safeSize);
         Page<FileNode> nodes = accessRecordRepository.findRecentNodes(
                 ownerUserId,
                 SpaceType.PERSONAL,
-                PageRequest.of(safePage, safeSize));
+                pageRequest);
+        if (nodes.isEmpty() && nodes.getTotalElements() == 0L) {
+            nodes = fileNodeRepository.findRecentPersonalFilesByUpdatedAtDesc(
+                    ownerUserId,
+                    SpaceType.PERSONAL,
+                    pageRequest);
+        }
         return PageResponse.of(
                 fileNodeSupport.toNodeDtos(nodes.getContent(), ownerUserId),
                 safePage,

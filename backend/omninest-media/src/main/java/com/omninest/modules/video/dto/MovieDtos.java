@@ -282,6 +282,11 @@ public final class MovieDtos {
     ) {
     }
 
+    public record VideoPosterUploadDto(
+            UUID fileNodeId
+    ) {
+    }
+
     public record MovieMetadataUpdateRequest(
             String title,
             String originalTitle,
@@ -296,7 +301,8 @@ public final class MovieDtos {
             List<String> cast,
             String posterUrl,
             Boolean restoreOriginal,
-            Boolean clearRuntime
+            Boolean clearRuntime,
+            Boolean clearPoster
     ) {
         public MovieMetadataUpdateRequest(
                 String title,
@@ -309,7 +315,27 @@ public final class MovieDtos {
                 String metadataStatus
         ) {
             this(title, originalTitle, releaseDate, overview, posterFileId, backdropFileId, runtimeSeconds,
-                    metadataStatus, null, null, null, null, false, false);
+                    metadataStatus, null, null, null, null, false, false, false);
+        }
+
+        public MovieMetadataUpdateRequest(
+                String title,
+                String originalTitle,
+                LocalDate releaseDate,
+                String overview,
+                UUID posterFileId,
+                UUID backdropFileId,
+                Integer runtimeSeconds,
+                String metadataStatus,
+                List<String> genres,
+                Double rating,
+                List<String> cast,
+                String posterUrl,
+                Boolean restoreOriginal,
+                Boolean clearRuntime
+        ) {
+            this(title, originalTitle, releaseDate, overview, posterFileId, backdropFileId, runtimeSeconds,
+                    metadataStatus, genres, rating, cast, posterUrl, restoreOriginal, clearRuntime, false);
         }
     }
 
@@ -328,8 +354,25 @@ public final class MovieDtos {
             List<String> genres,
             List<String> cast,
             String runtime,
-            String posterUrl
+            String posterUrl,
+            UUID posterFileId,
+            Boolean clearPoster,
+            Boolean restoreOriginal
     ) {
+        public UpdateSeriesMetadataRequest(
+                String title,
+                String overview,
+                String seriesType,
+                LocalDate firstAirDate,
+                Double rating,
+                List<String> genres,
+                List<String> cast,
+                String runtime,
+                String posterUrl
+        ) {
+            this(title, overview, seriesType, firstAirDate, rating, genres, cast, runtime, posterUrl,
+                    null, false, false);
+        }
     }
 
     public record MovieWatchHistoryDto(

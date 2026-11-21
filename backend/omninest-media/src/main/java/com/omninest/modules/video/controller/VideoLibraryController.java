@@ -36,6 +36,7 @@ import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleTrackDto;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleUpdateRequest;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleUploadRequest;
+import com.omninest.modules.video.dto.MovieDtos.VideoPosterUploadDto;
 import com.omninest.modules.video.service.MediaPlaybackTokenService;
 import com.omninest.modules.video.service.MovieEngagementService;
 import com.omninest.modules.video.service.MovieLibraryService;
@@ -64,7 +65,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "视频库", description = "视频资源的管理与元数据操作")
 @RestController
@@ -603,6 +606,16 @@ public class VideoLibraryController {
                 currentUserContext.requireCurrentUserId(),
                 videoItemId,
                 request
+        ));
+    }
+
+    @Operation(summary = "上传影视海报", description = "上传本地海报图片并保存为派生资产，返回可用于元数据更新的 fileNodeId")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    @PostMapping(value = "/api/v1/video/posters", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ApiResponse<VideoPosterUploadDto> uploadPoster(@RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(movieLibraryService.uploadPoster(
+                currentUserContext.requireCurrentUserId(),
+                file
         ));
     }
 }

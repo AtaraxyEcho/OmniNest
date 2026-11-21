@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /** 阅读元数据字段映射与手动覆盖快照。 */
 public class ReaderMetadataService {
@@ -84,8 +85,16 @@ public class ReaderMetadataService {
         } else if (Boolean.TRUE.equals(request.clearVolumeNumber())) {
             externalIds.remove(VOLUME_NUMBER_KEY);
         }
-        if (request.coverImageUrl() != null) {
-            externalIds.put(COVER_IMAGE_URL_KEY, validateCoverImageUrl(request.coverImageUrl()));
+        if (Boolean.TRUE.equals(request.clearCover())) {
+            item.setCoverFileId(null);
+            externalIds.remove(COVER_IMAGE_URL_KEY);
+        } else if (request.coverImageUrl() != null) {
+            String normalizedCoverUrl = validateCoverImageUrl(request.coverImageUrl());
+            if (normalizedCoverUrl.isEmpty()) {
+                externalIds.remove(COVER_IMAGE_URL_KEY);
+            } else {
+                externalIds.put(COVER_IMAGE_URL_KEY, normalizedCoverUrl);
+            }
         }
         item.setExternalIds(externalIds);
     }
@@ -104,6 +113,12 @@ public class ReaderMetadataService {
         item.setReleaseDate(dateValue(original.get("releaseDate")));
         item.setRating(decimalValue(original.get("rating")));
         item.setGenres(copyMap(original.get("genres")));
+        if (original.containsKey("coverFileId")) {
+            String originalCoverFileId = stringValue(original.get("coverFileId"));
+            item.setCoverFileId(originalCoverFileId == null || originalCoverFileId.isBlank()
+                    ? null
+                    : UUID.fromString(originalCoverFileId));
+        }
         item.setExternalIds(copyMap(original.get("externalIds")));
         return true;
     }
@@ -170,6 +185,7 @@ public class ReaderMetadataService {
         original.put("releaseDate", item.getReleaseDate() == null ? null : item.getReleaseDate().toString());
         original.put("rating", item.getRating());
         original.put("genres", copyMap(item.getGenres()));
+        original.put("coverFileId", item.getCoverFileId() == null ? null : item.getCoverFileId().toString());
         original.put("externalIds", externalIds);
         externalIds.put(ORIGINAL_METADATA_KEY, original);
         item.setExternalIds(externalIds);

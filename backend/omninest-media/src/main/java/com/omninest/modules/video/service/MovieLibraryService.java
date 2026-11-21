@@ -27,6 +27,7 @@ import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieContinueWatchingDto;
@@ -41,6 +42,7 @@ import com.omninest.modules.video.dto.MovieDtos.MovieSeriesDto;
 import com.omninest.modules.video.dto.MovieDtos.UpdateSeriesMetadataRequest;
 import com.omninest.modules.video.dto.MovieDtos.MovieStatsDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieVideoItemDto;
+import com.omninest.modules.video.dto.MovieDtos.VideoPosterUploadDto;
 import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaSeriesFavoriteRepository;
 import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
@@ -50,6 +52,10 @@ import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
 import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PushbackInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -72,7 +78,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -109,6 +117,89 @@ public class MovieLibraryService {
     private final MediaVideoFavoriteRepository videoFavoriteRepository;
     private final MediaWatchHistoryRepository watchHistoryRepository;
     private final MediaVideoCollectionRepository videoCollectionRepository;
+    private static final long MAX_POSTER_UPLOAD_BYTES = 10L * 1024 * 1024;
+    private DerivedAssetStorageService derivedAssetStorageService;
+
+    @Autowired(required = false)
+    void setDerivedAssetStorageService(DerivedAssetStorageService derivedAssetStorageService) {
+        this.derivedAssetStorageService = derivedAssetStorageService;
+    }
+
+    /**
+     * 将用户上传的本地图片保存为影视海报派生资产。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param file 上传文件
+     * @return 海报文件节点 ID
+     */
+    public VideoPosterUploadDto uploadPoster(UUID ownerUserId, MultipartFile file) {
+        if (derivedAssetStorageService == null) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "海报存储服务未初始化");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "海报文件不能为空");
+        }
+        if (file.getSize() > MAX_POSTER_UPLOAD_BYTES) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "海报文件不能超过 10MB");
+        }
+        try (InputStream raw = file.getInputStream();
+             PushbackInputStream input = new PushbackInputStream(raw, 32)) {
+            byte[] header = input.readNBytes(32);
+            input.unread(header);
+            PosterImageType imageType = detectPosterImageType(header);
+            UUID resourceId = UUID.randomUUID();
+            UUID fileId = derivedAssetStorageService.store(
+                    ownerUserId,
+                    "VIDEO_POSTER",
+                    resourceId,
+                    AssetType.POSTER.getValue(),
+                    "poster_" + resourceId + imageType.extension(),
+                    imageType.mimeType(),
+                    input
+            );
+            log.info("影视海报已上传: userId={}, fileId={}", ownerUserId, fileId);
+            return new VideoPosterUploadDto(fileId);
+        } catch (IOException ex) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "海报文件读取失败");
+        }
+    }
+
+    private PosterImageType detectPosterImageType(byte[] bytes) {
+        if (bytes.length >= 3
+                && bytes[0] == (byte) 0xFF
+                && bytes[1] == (byte) 0xD8
+                && bytes[2] == (byte) 0xFF) {
+            return new PosterImageType("image/jpeg", ".jpg");
+        }
+        if (matchesBytes(bytes, 0, new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})) {
+            return new PosterImageType("image/png", ".png");
+        }
+        if (matchesBytes(bytes, 0, "GIF87a".getBytes(StandardCharsets.US_ASCII))
+                || matchesBytes(bytes, 0, "GIF89a".getBytes(StandardCharsets.US_ASCII))) {
+            return new PosterImageType("image/gif", ".gif");
+        }
+        if (bytes.length >= 12
+                && matchesBytes(bytes, 0, "RIFF".getBytes(StandardCharsets.US_ASCII))
+                && matchesBytes(bytes, 8, "WEBP".getBytes(StandardCharsets.US_ASCII))) {
+            return new PosterImageType("image/webp", ".webp");
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR, "仅支持 JPEG、PNG、GIF 或 WebP 海报");
+    }
+
+    private boolean matchesBytes(byte[] bytes, int offset, byte[] expected) {
+        if (bytes.length < offset + expected.length) {
+            return false;
+        }
+        for (int index = 0; index < expected.length; index++) {
+            if (bytes[offset + index] != expected[index]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private record PosterImageType(String mimeType, String extension) {
+    }
 
     @Transactional(readOnly = true)
     public MovieDashboardDto dashboard(UUID ownerUserId) {
@@ -463,52 +554,92 @@ public class MovieLibraryService {
         // 都能借此改掉别人创建的剧集标题与简介。库来源条目的跨所有者维护
         // 只放行持有 MEDIA_LIBRARY_MANAGE 的管理员，并仍经库来源校验。
         MediaTvSeries series = requireWritableSeries(ownerUserId, seriesId);
-        String title = request.title() == null ? "" : request.title().trim();
-        if (title.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");
-        }
-        series.setTitle(title);
-        if (request.overview() != null) {
-            series.setOverview(request.overview());
-        }
-        if (request.seriesType() != null && !request.seriesType().isBlank()) {
-            series.setSeriesType(request.seriesType().trim());
-        }
-        if (request.firstAirDate() != null) {
-            series.setFirstAirDate(request.firstAirDate());
-        }
-        if (request.rating() != null) {
-            series.setRating(request.rating());
-        }
-        if (request.genres() != null) {
-            series.setGenres(request.genres().stream()
-                    .filter(name -> name != null && !name.isBlank())
-                    .map(name -> Map.<String, Object>of("name", name.trim()))
-                    .toList());
-        }
-        if (request.cast() != null) {
-            series.setCastMembers(request.cast().stream()
-                    .filter(name -> name != null && !name.isBlank())
-                    .map(name -> Map.<String, Object>of("name", name.trim()))
-                    .toList());
-        }
-        // 样例 FilmEditor 的手填字段没有对应实体列，统一落 provider_metadata；
-        // 客户端在 DTO 的 metadata 与 posterUrl 上读回同一份值。
-        Map<String, Object> metadata = new LinkedHashMap<>(series.getMetadata());
-        if (request.runtime() != null) {
-            metadata.put("manualRuntime", request.runtime().trim());
-        }
-        if (request.posterUrl() != null) {
-            String posterUrl = request.posterUrl().trim();
-            if (posterUrl.isEmpty()) {
-                metadata.remove("manualPosterUrl");
-            } else {
-                metadata.put("manualPosterUrl", posterUrl);
+        boolean restoreOriginal = Boolean.TRUE.equals(request.restoreOriginal());
+        if (restoreOriginal) {
+            restoreSeriesOriginal(ownerUserId, series);
+            series.setUpdatedAt(Instant.now());
+            tvSeriesRepository.save(series);
+        } else {
+            String title = request.title() == null ? "" : request.title().trim();
+            if (title.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");
             }
+            captureSeriesOriginal(ownerUserId, series);
+            series.setTitle(title);
+            if (request.overview() != null) {
+                series.setOverview(request.overview());
+            }
+            if (request.seriesType() != null && !request.seriesType().isBlank()) {
+                series.setSeriesType(request.seriesType().trim());
+            }
+            if (request.firstAirDate() != null) {
+                series.setFirstAirDate(request.firstAirDate());
+            }
+            if (request.rating() != null) {
+                if (!Double.isFinite(request.rating()) || request.rating() < 0 || request.rating() > 10) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "评分须为 0 到 10 之间的数字");
+                }
+                series.setRating(request.rating());
+            }
+            if (request.genres() != null) {
+                series.setGenres(request.genres().stream()
+                        .filter(name -> name != null && !name.isBlank())
+                        .map(name -> Map.<String, Object>of("name", name.trim()))
+                        .toList());
+            }
+            if (request.cast() != null) {
+                series.setCastMembers(request.cast().stream()
+                        .filter(name -> name != null && !name.isBlank())
+                        .map(name -> Map.<String, Object>of("name", name.trim()))
+                        .toList());
+            }
+            // 样例 FilmEditor 的手填字段没有对应实体列，统一落 provider_metadata；
+            // 客户端在 DTO 的 metadata 与 posterUrl 上读回同一份值。
+            Map<String, Object> metadata = new LinkedHashMap<>(series.getMetadata() == null ? Map.of() : series.getMetadata());
+            metadata.put("manualEdited", true);
+            metadata.put("manualEditedAt", Instant.now().toString());
+            if (request.runtime() != null) {
+                String runtime = request.runtime().trim();
+                if (runtime.isEmpty()) {
+                    metadata.remove("manualRuntime");
+                } else {
+                    metadata.put("manualRuntime", runtime);
+                }
+            }
+            if (Boolean.TRUE.equals(request.clearPoster())) {
+                contentAssetService.clearPrimaryAsset(
+                        ownerUserId,
+                        series.getId(),
+                        ResourceType.TV_SERIES.getValue(),
+                        AssetType.POSTER.getValue());
+                series.setPosterFileId(null);
+                metadata.remove("manualPosterUrl");
+            } else if (request.posterFileId() != null) {
+                series.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                        ownerUserId,
+                        series.getId(),
+                        ResourceType.TV_SERIES.getValue(),
+                        AssetType.POSTER.getValue(),
+                        request.posterFileId()));
+                metadata.remove("manualPosterUrl");
+            } else if (request.posterUrl() != null) {
+                String posterUrl = MovieMetadataService.validatePosterUrl(request.posterUrl());
+                if (posterUrl == null) {
+                    metadata.remove("manualPosterUrl");
+                } else {
+                    series.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
+                            ownerUserId,
+                            series.getId(),
+                            ResourceType.TV_SERIES.getValue(),
+                            AssetType.POSTER.getValue(),
+                            posterUrl));
+                    metadata.put("manualPosterUrl", posterUrl);
+                }
+            }
+            series.setMetadata(metadata);
+            series.setUpdatedAt(Instant.now());
+            tvSeriesRepository.save(series);
         }
-        series.setMetadata(metadata);
-        series.setUpdatedAt(Instant.now());
-        tvSeriesRepository.save(series);
         syncEventService.record(
                 series.getOwnerUserId(),
                 SyncScope.VIDEO,
@@ -638,6 +769,20 @@ public class MovieLibraryService {
             );
         }
         String newStatus = normalizeMetadataStatus(request.metadataStatus());
+        boolean clearPoster = Boolean.TRUE.equals(request.clearPoster());
+        if (item.getMovieId() == null && item.getEpisodeId() == null) {
+            if (restoreOriginal) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "没有可恢复的原始影片元数据");
+            }
+            MediaMovie created = new MediaMovie();
+            created.setId(UUID.randomUUID());
+            created.setOwnerUserId(item.getOwnerUserId());
+            created.setLibrarySourceId(item.getLibrarySourceId());
+            created.setTitle(request.title().trim());
+            created.setMetadataStatus(newStatus);
+            created = movieRepository.save(created);
+            item.setMovieId(created.getId());
+        }
         if (item.getMovieId() != null) {
             MediaMovie movie = movieRepository.findById(item.getMovieId()).orElse(null);
             if (movie != null) {
@@ -688,7 +833,21 @@ public class MovieLibraryService {
                     movie.setOriginalTitle(blankToNull(request.originalTitle()));
                     movie.setReleaseDate(request.releaseDate());
                     movie.setOverview(blankToNull(request.overview()));
-                    if (request.posterUrl() != null) {
+                    if (clearPoster) {
+                        contentAssetService.clearPrimaryAsset(
+                                ownerUserId,
+                                movie.getId(),
+                                ResourceType.MOVIE.getValue(),
+                                AssetType.POSTER.getValue());
+                        movie.setPosterFileId(null);
+                    } else if (request.posterFileId() != null) {
+                        movie.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                                ownerUserId,
+                                movie.getId(),
+                                ResourceType.MOVIE.getValue(),
+                                AssetType.POSTER.getValue(),
+                                request.posterFileId()));
+                    } else if (request.posterUrl() != null) {
                         String posterUrl = MovieMetadataService.validatePosterUrl(request.posterUrl());
                         if (posterUrl != null) {
                             movie.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
@@ -697,13 +856,6 @@ public class MovieLibraryService {
                                     ResourceType.MOVIE.getValue(),
                                     AssetType.POSTER.getValue(),
                                     posterUrl));
-                        } else if (request.posterFileId() != null) {
-                            movie.setPosterFileId(contentAssetService.setPrimaryFileAsset(
-                                    ownerUserId,
-                                    movie.getId(),
-                                    ResourceType.MOVIE.getValue(),
-                                    AssetType.POSTER.getValue(),
-                                    request.posterFileId()));
                         } else {
                             contentAssetService.clearPrimaryAsset(
                                     ownerUserId,
@@ -712,13 +864,6 @@ public class MovieLibraryService {
                                     AssetType.POSTER.getValue());
                             movie.setPosterFileId(null);
                         }
-                    } else if (request.posterFileId() != null) {
-                        movie.setPosterFileId(contentAssetService.setPrimaryFileAsset(
-                                ownerUserId,
-                                movie.getId(),
-                                ResourceType.MOVIE.getValue(),
-                                AssetType.POSTER.getValue(),
-                                request.posterFileId()));
                     }
                     if (request.backdropFileId() != null) {
                         UUID backdropFileId = contentAssetService.setPrimaryFileAsset(
@@ -736,6 +881,12 @@ public class MovieLibraryService {
                     }
                     movie.setMetadataStatus(newStatus);
                     MovieMetadataService.applySupplemental(movie, request);
+                    if (clearPoster || request.posterFileId() != null) {
+                        Map<String, Object> metadata = new LinkedHashMap<>(
+                                movie.getMetadata() == null ? Map.of() : movie.getMetadata());
+                        metadata.remove("manualPosterUrl");
+                        movie.setMetadata(metadata);
+                    }
                 }
                 movieRepository.save(movie);
             }
@@ -746,16 +897,82 @@ public class MovieLibraryService {
             MediaTvEpisode episode = episodeRepository.findById(item.getEpisodeId()).orElse(null);
             if (episode != null) {
                 episode.setTitle(request.title().trim());
+                episode.setOriginalTitle(blankToNull(request.originalTitle()));
                 episode.setOverview(blankToNull(request.overview()));
+                if (request.releaseDate() != null) {
+                    episode.setAirDate(request.releaseDate());
+                }
+                if (request.rating() != null) {
+                    if (!Double.isFinite(request.rating()) || request.rating() < 0 || request.rating() > 10) {
+                        throw new BusinessException(ErrorCode.PARAM_ERROR, "评分须为 0 到 10 之间的数字");
+                    }
+                    episode.setRating(request.rating());
+                }
                 if (request.runtimeSeconds() != null && request.runtimeSeconds() > 0) {
                     episode.setRuntimeSeconds(request.runtimeSeconds());
                 } else if (Boolean.TRUE.equals(request.clearRuntime())) {
                     episode.setRuntimeSeconds(null);
                 }
                 episode.setMetadataStatus(newStatus);
-                Map<String, Object> metadata = episode.getMetadata() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(episode.getMetadata());
+                Map<String, Object> metadata = episode.getMetadata() == null
+                        ? new LinkedHashMap<>()
+                        : new LinkedHashMap<>(episode.getMetadata());
                 metadata.put("manualEdited", true);
                 metadata.put("manualEditedAt", Instant.now().toString());
+                if (request.genres() != null) {
+                    metadata.put("manualGenres", request.genres().stream()
+                            .filter(Objects::nonNull)
+                            .map(String::trim)
+                            .filter(value -> !value.isEmpty())
+                            .distinct()
+                            .toList());
+                }
+                if (request.cast() != null) {
+                    metadata.put("manualCast", request.cast().stream()
+                            .filter(Objects::nonNull)
+                            .map(String::trim)
+                            .filter(value -> !value.isEmpty())
+                            .distinct()
+                            .toList());
+                }
+                if (clearPoster) {
+                    contentAssetService.clearPrimaryAsset(
+                            ownerUserId,
+                            item.getId(),
+                            ResourceType.VIDEO_ITEM.getValue(),
+                            AssetType.POSTER.getValue());
+                    episode.setStillFileId(null);
+                    metadata.remove("manualPosterUrl");
+                } else if (request.posterFileId() != null) {
+                    UUID posterFileId = contentAssetService.setPrimaryFileAsset(
+                            ownerUserId,
+                            item.getId(),
+                            ResourceType.VIDEO_ITEM.getValue(),
+                            AssetType.POSTER.getValue(),
+                            request.posterFileId());
+                    episode.setStillFileId(posterFileId);
+                    metadata.remove("manualPosterUrl");
+                } else if (request.posterUrl() != null) {
+                    String posterUrl = MovieMetadataService.validatePosterUrl(request.posterUrl());
+                    if (posterUrl != null) {
+                        UUID posterFileId = contentAssetService.setPrimaryRemoteAsset(
+                                ownerUserId,
+                                item.getId(),
+                                ResourceType.VIDEO_ITEM.getValue(),
+                                AssetType.POSTER.getValue(),
+                                posterUrl);
+                        episode.setStillFileId(posterFileId);
+                        metadata.put("manualPosterUrl", posterUrl);
+                    } else {
+                        contentAssetService.clearPrimaryAsset(
+                                ownerUserId,
+                                item.getId(),
+                                ResourceType.VIDEO_ITEM.getValue(),
+                                AssetType.POSTER.getValue());
+                        episode.setStillFileId(null);
+                        metadata.remove("manualPosterUrl");
+                    }
+                }
                 episode.setMetadata(metadata);
                 episodeRepository.save(episode);
             }
@@ -1213,6 +1430,107 @@ public class MovieLibraryService {
      * items 需已按 updatedAt 降序排列。
      * seriesId 在文件入库时即已设置，因此无需额外兜底策略。
      */
+    private void captureSeriesOriginal(UUID ownerUserId, MediaTvSeries series) {
+        Map<String, Object> metadata = new LinkedHashMap<>(
+                series.getMetadata() == null ? Map.of() : series.getMetadata());
+        if (metadata.containsKey("manualMetadataOriginal")) {
+            return;
+        }
+        Map<String, Object> original = new LinkedHashMap<>();
+        original.put("title", series.getTitle());
+        original.put("overview", series.getOverview());
+        original.put("seriesType", series.getSeriesType());
+        original.put("firstAirDate", series.getFirstAirDate() == null ? null : series.getFirstAirDate().toString());
+        original.put("rating", series.getRating());
+        original.put("genres", series.getGenres() == null ? List.of() : new ArrayList<>(series.getGenres()));
+        original.put("castMembers", series.getCastMembers() == null ? List.of() : new ArrayList<>(series.getCastMembers()));
+        UUID posterFileNodeId = contentAssetService.primaryFileNodeId(
+                ownerUserId,
+                series.getId(),
+                ResourceType.TV_SERIES.getValue(),
+                AssetType.POSTER.getValue());
+        UUID effectivePosterId = posterFileNodeId != null ? posterFileNodeId : series.getPosterFileId();
+        original.put("posterFileId", effectivePosterId == null ? null : effectivePosterId.toString());
+        original.put("posterExternalUrl", contentAssetService.primaryExternalUrl(
+                ownerUserId,
+                series.getId(),
+                ResourceType.TV_SERIES.getValue(),
+                AssetType.POSTER.getValue()));
+        original.put("metadata", new LinkedHashMap<>(metadata));
+        metadata.put("manualMetadataOriginal", original);
+        series.setMetadata(metadata);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreSeriesOriginal(UUID ownerUserId, MediaTvSeries series) {
+        Map<String, Object> metadata = series.getMetadata() == null ? Map.of() : series.getMetadata();
+        Object rawOriginal = metadata.get("manualMetadataOriginal");
+        if (!(rawOriginal instanceof Map<?, ?> originalMap) || originalMap.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "没有可恢复的原始剧集元数据");
+        }
+        Object title = originalMap.get("title");
+        if (title != null) {
+            series.setTitle(title.toString());
+        }
+        series.setOverview(originalMap.get("overview") == null ? null : originalMap.get("overview").toString());
+        if (originalMap.get("seriesType") != null) {
+            series.setSeriesType(originalMap.get("seriesType").toString());
+        }
+        Object firstAirDate = originalMap.get("firstAirDate");
+        series.setFirstAirDate(firstAirDate == null || firstAirDate.toString().isBlank()
+                ? null
+                : LocalDate.parse(firstAirDate.toString()));
+        Object rating = originalMap.get("rating");
+        series.setRating(rating instanceof Number number ? number.doubleValue() : null);
+        if (originalMap.get("genres") instanceof List<?> genresList) {
+            series.setGenres((List<Map<String, Object>>) (List<?>) new ArrayList<>(genresList));
+        }
+        if (originalMap.get("castMembers") instanceof List<?> castList) {
+            series.setCastMembers((List<Map<String, Object>>) (List<?>) new ArrayList<>(castList));
+        }
+        String posterExternalUrl = originalMap.get("posterExternalUrl") == null
+                ? null
+                : originalMap.get("posterExternalUrl").toString();
+        String posterFileIdText = originalMap.get("posterFileId") == null
+                ? null
+                : originalMap.get("posterFileId").toString();
+        UUID posterFileId = posterFileIdText == null || posterFileIdText.isBlank()
+                ? null
+                : UUID.fromString(posterFileIdText);
+        if (posterExternalUrl != null && !posterExternalUrl.isBlank()) {
+            series.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
+                    ownerUserId,
+                    series.getId(),
+                    ResourceType.TV_SERIES.getValue(),
+                    AssetType.POSTER.getValue(),
+                    posterFileId,
+                    posterExternalUrl));
+        } else if (posterFileId != null) {
+            series.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                    ownerUserId,
+                    series.getId(),
+                    ResourceType.TV_SERIES.getValue(),
+                    AssetType.POSTER.getValue(),
+                    posterFileId));
+        } else {
+            contentAssetService.clearPrimaryAsset(
+                    ownerUserId,
+                    series.getId(),
+                    ResourceType.TV_SERIES.getValue(),
+                    AssetType.POSTER.getValue());
+            series.setPosterFileId(null);
+        }
+        Map<String, Object> restoredMetadata = new LinkedHashMap<>();
+        if (originalMap.get("metadata") instanceof Map<?, ?> inner) {
+            inner.forEach((k, v) -> {
+                if (k instanceof String key) {
+                    restoredMetadata.put(key, v);
+                }
+            });
+        }
+        series.setMetadata(restoredMetadata);
+    }
+
     private List<MediaVideoItem> deduplicateBySeries(List<MediaVideoItem> items) {
         Set<UUID> seenSeriesIds = new HashSet<>();
         return items.stream().filter(item -> {
