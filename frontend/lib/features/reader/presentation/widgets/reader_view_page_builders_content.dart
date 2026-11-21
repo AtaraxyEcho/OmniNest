@@ -420,13 +420,18 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
 
   /// 稿子的章末两块：发丝线行写真实的章节位次与全书进度（原型那行
   /// "还剩约 7 分钟"是假数据），末章只留分隔行，不摆点了没反应的卡。
-  Widget _buildChapterEndCard(ReaderItemDetail detail) {
+  Widget _buildChapterEndCard(
+    ReaderItemDetail detail, {
+    bool withNextChapter = true,
+  }) {
     final l10n = AppLocalizations.of(context);
     final chapters = _chapterList(detail);
     final index = chapters.indexWhere(
       (chapter) => chapter.id == currentChapterId,
     );
-    final next = _nextChapterOf(detail);
+    // 仿真 Book 只保留发丝线行：章末页摆一张"下一章"卡会露出交互控件，
+    // 破坏整本书连续纸面的仿真感（卡片的跳转能力在书末翻页手势里已有）。
+    final next = withNextChapter ? _nextChapterOf(detail) : null;
     final percent = ((lastKnownBookProgress ?? 0) * 100).round();
     return ReaderChapterEndCard(
       settings: settings,
@@ -462,7 +467,14 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
-        children: [_buildChapterEndCard(detail)],
+        children: [
+          _buildChapterEndCard(
+            detail,
+            withNextChapter: readerChapterEndShowsNextChapter(
+              settings.pageTurnMode,
+            ),
+          ),
+        ],
       ),
     );
   }

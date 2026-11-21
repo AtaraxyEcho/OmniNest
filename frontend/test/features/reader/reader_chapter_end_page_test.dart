@@ -56,6 +56,14 @@ void main() {
     });
   });
 
+  group('章末页的提示卡', () {
+    test('仿真 Book 不摆下一章提示卡，Swipe/Fade 保留', () {
+      expect(readerChapterEndShowsNextChapter('cover'), isFalse);
+      expect(readerChapterEndShowsNextChapter('slide'), isTrue);
+      expect(readerChapterEndShowsNextChapter('fade'), isTrue);
+    });
+  });
+
   group('收页的位置记账', () {
     PageSlice slice(int start, int end) => PageSlice(
       startIndex: 0,

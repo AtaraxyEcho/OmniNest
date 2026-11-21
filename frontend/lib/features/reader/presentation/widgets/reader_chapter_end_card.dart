@@ -6,6 +6,13 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
+/// 章末收页是否摆"下一章"提示卡。
+///
+/// 仿真 Book（`pageTurnMode == 'cover'`）要保持整本书的连续纸面：卡片的跳转能力
+/// 在书末翻页手势里已有，摆一张可点卡片反而破坏仿真效果。Swipe / Fade 仍保留。
+bool readerChapterEndShowsNextChapter(String pageTurnMode) =>
+    pageTurnMode != 'cover';
+
 /// 稿子的章末两块：`.chapter-end` 发丝线行 + `.next-chapter` 下一章卡。
 ///
 /// 稿子那一行写的是"本章还剩约 7 分钟"，是原型里的假数据；这里换成真实的
