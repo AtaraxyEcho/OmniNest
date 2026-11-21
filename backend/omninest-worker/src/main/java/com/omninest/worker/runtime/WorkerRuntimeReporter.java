@@ -57,7 +57,7 @@ public class WorkerRuntimeReporter {
                 new WorkerRuntimeState(instanceId, Instant.now(), capabilities),
                 runtimeProperties.getHeartbeatTtl()
         );
-        log.debug("已执行 Worker 运行状态上报: instanceId={}, capabilities={}", instanceId, capabilities);
+//        log.debug("已执行 Worker 运行状态上报: instanceId={}, capabilities={}", instanceId, capabilities);
     }
 
     private String requireInstanceId() {
