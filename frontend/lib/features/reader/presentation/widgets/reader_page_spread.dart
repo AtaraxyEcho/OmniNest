@@ -17,6 +17,7 @@ class ReaderPageSpread extends StatelessWidget {
     this.progress = 0,
     this.curlOverlay,
     this.bookmarked = false,
+    this.showPaperGrain = true,
     super.key,
   });
 
@@ -35,6 +36,9 @@ class ReaderPageSpread extends StatelessWidget {
   /// 整幅双页卷曲层（.curl-clip），覆盖左右两页允许纸页扫过书脊。
   final Widget? curlOverlay;
   final bool bookmarked;
+
+  /// 是否叠加纸纹噪点；漫画深色页可关闭避免 `multiply` 混合使画面发灰。
+  final bool showPaperGrain;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +112,7 @@ class ReaderPageSpread extends StatelessWidget {
                         _SpreadPage(
                           color: surfaceColor,
                           side: _SpreadSide.left,
+                          showPaperGrain: showPaperGrain,
                           child: left,
                         ),
                       ),
@@ -118,6 +123,7 @@ class ReaderPageSpread extends StatelessWidget {
                         _SpreadPage(
                           color: surfaceColor,
                           side: _SpreadSide.right,
+                          showPaperGrain: showPaperGrain,
                           child: right,
                         ),
                       ),
@@ -195,11 +201,13 @@ class _SpreadPage extends StatelessWidget {
     required this.color,
     required this.side,
     required this.child,
+    this.showPaperGrain = true,
   });
 
   final Color color;
   final _SpreadSide side;
   final Widget? child;
+  final bool showPaperGrain;
 
   @override
   Widget build(BuildContext context) {
@@ -238,11 +246,12 @@ class _SpreadPage extends StatelessWidget {
             decoration: BoxDecoration(gradient: gradient),
             child: child ?? SizedBox.expand(child: ColoredBox(color: color)),
           ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+          if (showPaperGrain)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+              ),
             ),
-          ),
           Positioned.fill(
             child: IgnorePointer(
               // Flutter 不允许「圆角 + 非均匀边框色」，黑色纸缘走均一细边，

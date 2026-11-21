@@ -27,7 +27,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart'
-    show readerApiProvider;
+    show readerApiProvider, ReaderCenterState;
 import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle;
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
@@ -39,6 +39,7 @@ part 'desktop_reader_insights.dart';
 
 /// Library 是完整清单（搜索/排序/标签/网格-列表切换）。
 part 'desktop_reader_library.dart';
+part 'desktop_reader_book_cards.dart';
 
 enum DesktopReaderFilter { all, inProgress, finished, unread }
 
@@ -87,14 +88,32 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
         onRetry: () => ref.invalidate(readerCenterControllerProvider),
       );
     }
-    if (dashboard == null) {
-      return const Center(
-        child: SizedBox(
-          width: 320,
-          child: DesktopSkeletonRows(count: 6, avatar: false),
-        ),
-      );
-    }
+
+    return DesktopSkeletonSwitcher(
+      regionId: 'desktop-reader-home',
+      hasData: dashboard != null,
+      loading: dashboard == null,
+      skeleton: const _ReaderPageSkeleton(),
+      child:
+          dashboard == null
+              ? const SizedBox.shrink()
+              : _buildLoadedPage(
+                context: context,
+                l10n: l10n,
+                center: center,
+                dashboard: dashboard,
+                readingStats: readingStats,
+              ),
+    );
+  }
+
+  Widget _buildLoadedPage({
+    required BuildContext context,
+    required AppLocalizations l10n,
+    required ReaderCenterState? center,
+    required ReaderDashboard dashboard,
+    required ReaderReadingStats? readingStats,
+  }) {
     final items = <ReaderItem>[
       ...?center?.items,
       ...dashboard.recentItems,
@@ -483,6 +502,72 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
   }
 }
 
+/// Reader 首屏骨架：页头 + 继续阅读/洞察双栏占位 + 书架卡片网格。
+class _ReaderPageSkeleton extends StatelessWidget {
+  const _ReaderPageSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return DesktopSliverPage(
+      topPadding: DesktopMetrics.pageTopPaddingCompact,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const DesktopSkeletonBox(width: 140, height: 11, radius: 5.5),
+              const SizedBox(height: 10),
+              const DesktopSkeletonBox(width: 220, height: 32, radius: 8),
+              const SizedBox(height: 24),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 900;
+                  const hero = DesktopSkeletonBox(
+                    height: 320,
+                    radius: DesktopMetrics.radiusHero,
+                  );
+                  const insight = DesktopSkeletonBox(
+                    height: 320,
+                    radius: DesktopMetrics.radiusHero,
+                    index: 2,
+                  );
+                  if (wide) {
+                    final insightWidth = math.max(
+                      320.0,
+                      (constraints.maxWidth - 24) / 2.5,
+                    );
+                    return Row(
+                      children: [
+                        const Expanded(child: hero),
+                        const SizedBox(width: 24),
+                        SizedBox(width: insightWidth, child: insight),
+                      ],
+                    );
+                  }
+                  return const Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [hero, SizedBox(height: 20), insight],
+                  );
+                },
+              ),
+              const SizedBox(height: 34),
+              const DesktopSkeletonBox(width: 148, height: 20, radius: 6),
+              const SizedBox(height: 16),
+              const DesktopSkeletonCardGrid(
+                count: 8,
+                aspectRatio: 168 / 240,
+                minTileWidth: 160,
+                spacing: 26,
+                runSpacing: 30,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// 继续阅读大卡（样例 `.continue`）：纸面封面 + 章节眉标 + 衬线书名 + 引文 + 进度。
 class _ContinueCard extends StatelessWidget {
   const _ContinueCard({
@@ -660,153 +745,6 @@ class _ShelfSection extends StatelessWidget {
       actionLabel: AppLocalizations.of(context).desktopSeeAll,
       onAction: onSeeAll,
       child: _Shelf(items: items, onOpen: onOpen),
-    );
-  }
-}
-
-class _Shelf extends StatelessWidget {
-  const _Shelf({required this.items, required this.onOpen});
-
-  final List<ReaderItem> items;
-  final ValueChanged<ReaderItem> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final target = (MediaQuery.sizeOf(context).width * 0.12).clamp(
-          150.0,
-          190.0,
-        );
-        final columns = ((constraints.maxWidth + 26) / (target + 26))
-            .floor()
-            .clamp(2, 8);
-        final width = (constraints.maxWidth - (columns - 1) * 26) / columns;
-        return Wrap(
-          spacing: 26,
-          runSpacing: 30,
-          children: [
-            for (var i = 0; i < items.length; i++)
-              SizedBox(
-                width: width,
-                child: DesktopStagger(
-                  index: i,
-                  child: _BookCard(
-                    item: items[i],
-                    onTap: () => onOpen(items[i]),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _BookCard extends StatelessWidget {
-  const _BookCard({required this.item, required this.onTap});
-
-  final ReaderItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    final progress = (item.progressPercent ?? 0).clamp(0, 100);
-    return DesktopHover(
-      builder: (context, hovered) {
-        return AnimatedContainer(
-          key: ValueKey<String>('desktop-reader-book-card-${item.id}'),
-          duration: MotionToken.reduced(
-            context,
-            const Duration(milliseconds: 220),
-          ),
-          curve: Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
-          transform:
-              Matrix4.identity()
-                ..translateByDouble(0.0, hovered ? -10.0 : 0.0, 0, 1)
-                ..scaleByDouble(
-                  hovered ? 1.022 : 1.0,
-                  hovered ? 1.022 : 1.0,
-                  1.0,
-                  1.0,
-                ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Semantics(
-                button: true,
-                label: item.title,
-                child: GestureDetector(
-                  onTap: onTap,
-                  child: AspectRatio(
-                    aspectRatio: 168 / 240,
-                    child: _BookCover(item: item, hoveredOverride: hovered),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DesktopType.rowTitle(skin.text),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                item.authorName ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DesktopType.caption(skin.text3),
-              ),
-              if (progress > 0) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: SizedBox(
-                    height: 3,
-                    child: LinearProgressIndicator(
-                      value: progress / 100,
-                      backgroundColor: skin.raise3,
-                      valueColor: AlwaysStoppedAnimation<Color>(skin.accent),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _BookCover extends StatelessWidget {
-  const _BookCover({
-    required this.item,
-    this.large = false,
-    this.hoveredOverride,
-  });
-
-  final ReaderItem item;
-  final bool large;
-  final bool? hoveredOverride;
-
-  @override
-  Widget build(BuildContext context) {
-    return DesktopReaderBookCover(
-      itemId: item.id,
-      title: item.title,
-      author: item.authorName ?? '',
-      coverUrl: item.coverUrl,
-      isComic: item.isDisplayedAsComic,
-      readerType: item.readerType,
-      volumeNumber: item.volumeNumber,
-      large: large,
-      hoveredOverride: hoveredOverride,
     );
   }
 }

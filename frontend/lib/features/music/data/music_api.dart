@@ -10,6 +10,8 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
+part 'music_api_parsing.dart';
+
 class MusicApi {
   const MusicApi(this.apiClient);
 
@@ -39,7 +41,7 @@ class MusicApi {
       '/music/tracks',
       queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parsePage(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
+    return _parseMusicPage(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
   }
 
   /// 单曲完整投影（含歌词）。列表接口不带歌词，播放前按需取词。
@@ -59,7 +61,7 @@ class MusicApi {
       '/music/albums',
       queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parsePage(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+    return _parseMusicPage(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
   }
 
   Future<MusicPagedResult<MusicArtist>> artists({
@@ -71,28 +73,32 @@ class MusicApi {
       '/music/artists',
       queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parsePage(response.data, MusicArtist.fromJson, '艺术家列表格式不正确');
+    return _parseMusicPage(response.data, MusicArtist.fromJson, '艺术家列表格式不正确');
   }
 
   Future<List<MusicTrack>> favorites() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/favorites',
     );
-    return _parseList(response.data, MusicTrack.fromJson, '收藏歌曲格式不正确');
+    return _parseMusicList(response.data, MusicTrack.fromJson, '收藏歌曲格式不正确');
   }
 
   Future<List<MusicTrack>> recent() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/recent',
     );
-    return _parseList(response.data, MusicTrack.fromJson, '最近播放格式不正确');
+    return _parseMusicList(response.data, MusicTrack.fromJson, '最近播放格式不正确');
   }
 
   Future<List<MusicRecentEntry>> recentItems() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/recent-items',
     );
-    return _parseList(response.data, MusicRecentEntry.fromJson, '最近播放列表格式不正确');
+    return _parseMusicList(
+      response.data,
+      MusicRecentEntry.fromJson,
+      '最近播放列表格式不正确',
+    );
   }
 
   Future<MusicPagedResult<MusicPlayHistoryEntry>> playHistory({
@@ -103,7 +109,7 @@ class MusicApi {
       '/music/history',
       queryParameters: {'page': page, 'size': size},
     );
-    return _parsePage(
+    return _parseMusicPage(
       response.data,
       MusicPlayHistoryEntry.fromJson,
       '播放历史格式不正确',
@@ -114,7 +120,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/playlists',
     );
-    return _parseList(response.data, MusicPlaylist.fromJson, '歌单列表格式不正确');
+    return _parseMusicList(response.data, MusicPlaylist.fromJson, '歌单列表格式不正确');
   }
 
   Future<MusicPlaylist> createPlaylist({
@@ -163,7 +169,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/playlists/${Uri.encodeComponent(playlistId)}/items',
     );
-    return _parseList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
+    return _parseMusicList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
   }
 
   /// 分页获取歌单曲目：详情列表滚动加载；播放全量仍走 [playlistTracks]。
@@ -176,7 +182,7 @@ class MusicApi {
       '/music/playlists/${Uri.encodeComponent(playlistId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
-    return _parsePage(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
+    return _parseMusicPage(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
   }
 
   /// 获取专辑内全部曲目（碟号、音轨号排序）。
@@ -184,7 +190,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/albums/${Uri.encodeComponent(albumId)}/tracks',
     );
-    return _parseList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+    return _parseMusicList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
   }
 
   /// 分页获取专辑内曲目：详情列表滚动加载；播放全量仍走 [albumTracks]。
@@ -197,7 +203,7 @@ class MusicApi {
       '/music/albums/${Uri.encodeComponent(albumId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
-    return _parsePage(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+    return _parseMusicPage(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
   }
 
   /// 获取歌手内全部曲目（专辑名、碟号、音轨号排序）。
@@ -205,7 +211,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/artists/${Uri.encodeComponent(artistId)}/tracks',
     );
-    return _parseList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+    return _parseMusicList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
   }
 
   /// 分页获取歌手内曲目：详情列表滚动加载；播放全量仍走 [artistTracks]。
@@ -218,7 +224,7 @@ class MusicApi {
       '/music/artists/${Uri.encodeComponent(artistId)}/tracks/page',
       queryParameters: {'page': page, 'size': size},
     );
-    return _parsePage(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+    return _parseMusicPage(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
   }
 
   Future<MusicPlaylist> addPlaylistItems(
@@ -286,6 +292,8 @@ class MusicApi {
     String? albumTitle,
     String? genre,
     String? lyricsRaw,
+    String? lyricsTranslation,
+    String? lyricsWords,
     String? coverFileId,
     bool clearCover = false,
     String? coverUrl,
@@ -299,6 +307,8 @@ class MusicApi {
         if (albumTitle != null) 'albumTitle': albumTitle,
         if (genre != null) 'genre': genre,
         if (lyricsRaw != null) 'lyricsRaw': lyricsRaw,
+        if (lyricsTranslation != null) 'lyricsTranslation': lyricsTranslation,
+        if (lyricsWords != null) 'lyricsWords': lyricsWords,
         if (coverFileId != null) 'coverFileId': coverFileId,
         if (clearCover) 'clearCover': true,
         if (coverUrl != null) 'coverUrl': coverUrl,
@@ -472,7 +482,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/admin/music/tracks/${Uri.encodeComponent(trackId)}/scrape-candidates',
     );
-    return _parseList(
+    return _parseMusicList(
       response.data,
       MusicScrapeCandidate.fromJson,
       '音乐刮削候选格式不正确',
@@ -503,7 +513,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/artists/${Uri.encodeComponent(artistId)}/albums',
     );
-    return _parseList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+    return _parseMusicList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
   }
 
   /// 按当前曲目的艺术家/标题/专辑搜索在线歌词候选。
@@ -579,7 +589,7 @@ class MusicApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms',
     );
-    return _parseList(
+    return _parseMusicList(
       response.data,
       MusicPlatformStatus.fromJson,
       '平台状态列表格式不正确',
@@ -597,7 +607,11 @@ class MusicApi {
       '/music/platforms/${Uri.encodeComponent(platform)}/playlists',
       queryParameters: _listQuery(page, size, refresh),
     );
-    return _parsePage(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
+    return _parseMusicPage(
+      response.data,
+      OnlinePlaylist.fromJson,
+      '平台歌单列表格式不正确',
+    );
   }
 
   /// 获取在线平台歌单曲目
@@ -612,7 +626,7 @@ class MusicApi {
       '/music/platforms/${Uri.encodeComponent(platform)}/playlists/${Uri.encodeComponent(playlistId)}/tracks',
       queryParameters: _listQuery(page, size, refresh),
     );
-    return _parsePage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
+    return _parseMusicPage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
   }
 
   /// 获取在线平台喜欢歌曲
@@ -626,7 +640,7 @@ class MusicApi {
       '/music/platforms/${Uri.encodeComponent(platform)}/liked-tracks',
       queryParameters: _listQuery(page, size, refresh),
     );
-    return _parsePage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
+    return _parseMusicPage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
   }
 
   /// 平台列表查询参数；refresh 只在用户显式刷新时下发，让后端跳过短期缓存回源。
@@ -795,72 +809,6 @@ class MusicApi {
     return data;
   }
 
-  Map<String, dynamic> parseEnvelope(Map<String, dynamic>? body) {
-    if (body == null) {
-      throw const AppException(code: 'EMPTY_RESPONSE', message: '服务端没有返回音乐结果');
-    }
-    final code = body['code'];
-    if (code != 200) {
-      final errorName = body['errorName']?.toString();
-      throw AppException(
-        code: errorName ?? code?.toString() ?? 'MUSIC_ERROR',
-        message: body['message']?.toString() ?? '音乐操作失败',
-        details: {
-          if (errorName != null) 'errorName': errorName,
-          if (code != null) 'code': code.toString(),
-        },
-      );
-    }
-    return body;
-  }
-
-  MusicPagedResult<T> _parsePage<T>(
-    Map<String, dynamic>? body,
-    T Function(Map<String, dynamic>) mapper,
-    String errorMessage,
-  ) {
-    final data = parseEnvelope(body)['data'];
-    if (data is! Map) {
-      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
-    }
-    final rawItems = data['items'];
-    if (rawItems is! List) {
-      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
-    }
-    return MusicPagedResult<T>(
-      items:
-          rawItems
-              .whereType<Map>()
-              .map((item) => mapper(Map<String, dynamic>.from(item)))
-              .toList(),
-      page: _asIntOrNull(data['page']),
-      size: _asIntOrNull(data['size']),
-      totalElements: _asIntOrNull(data['totalElements']),
-    );
-  }
-
-  int _asIntOrNull(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    return 0;
-  }
-
-  List<T> _parseList<T>(
-    Map<String, dynamic>? body,
-    T Function(Map<String, dynamic>) mapper,
-    String errorMessage,
-  ) {
-    final data = parseEnvelope(body)['data'];
-    if (data is! List) {
-      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
-    }
-    return data
-        .whereType<Map>()
-        .map((item) => mapper(Map<String, dynamic>.from(item)))
-        .toList();
-  }
+  Map<String, dynamic> parseEnvelope(Map<String, dynamic>? body) =>
+      _parseMusicEnvelope(body);
 }

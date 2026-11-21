@@ -138,7 +138,11 @@ void main() {
     await tester.pump();
     await gesture.up();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450));
+    // 落位要经过两帧 postFrame 才启动 420ms 归位，再等动画跑完提交顺序。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump();
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(DesktopPhotosPage)),
@@ -227,6 +231,8 @@ void main() {
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    // v10 先在当帧把实体图恢复 1.0，幽灵 Overlay 在下一帧回收。
     await tester.pump();
     expect(
       find.byWidgetPredicate(

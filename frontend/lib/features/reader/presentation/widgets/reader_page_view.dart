@@ -113,6 +113,8 @@ class ReaderPageView extends StatefulWidget {
     this.paperEdgeColor,
     this.snapshotPageBuilder,
     this.crossChapterSnapshotBuilder,
+    this.prepareSnapshotPage,
+    this.showPaperGrain = true,
     this.contentRevision,
     this.bookmarked = false,
     this.reverse = false,
@@ -130,6 +132,13 @@ class ReaderPageView extends StatefulWidget {
 
   /// 跨章卷页时的邻章快照页构造器（+1 下一章首页，-1 上一章末页）。
   final Widget? Function(int chapterDelta)? crossChapterSnapshotBuilder;
+
+  /// 离屏抓图前等待目标页异步资源（如漫画图片字节与解码）就绪。
+  /// 返回 false 时放弃本轮抓图，彻底杜绝截到 Loading 菊花。
+  final Future<bool> Function(int pageIndex)? prepareSnapshotPage;
+
+  /// 是否在跨页书面上叠加纸纹噪点；漫画深色页可置为 false 避免画面发灰。
+  final bool showPaperGrain;
 
   /// 纸叠边缘色（样例 `--paper-edge`）；缺省由 surfaceColor 压暗派生。
   final Color? paperEdgeColor;
@@ -278,7 +287,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
     widget.controller?.addListener(_onExternalPageCommand);
     widget.pageCountNotifier?.addListener(_onPageCountChanged);
     _initForMode();
-    if (widget.turnMode == PageTurnMode.cover) {
+    if (widget.turnMode == PageTurnMode.cover && widget.showPaperGrain) {
       unawaited(PaperGrainCache.ensureLoaded());
     }
     _scheduleIdleNextCurlWarmup();
@@ -323,7 +332,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _clearCurlImages();
       _disposeControllers();
       _initForMode();
-      if (widget.turnMode == PageTurnMode.cover) {
+      if (widget.turnMode == PageTurnMode.cover && widget.showPaperGrain) {
         unawaited(PaperGrainCache.ensureLoaded());
       }
       _scheduleIdleNextCurlWarmup();
@@ -336,6 +345,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
         oldWidget.state.pageIndex != widget.state.pageIndex ||
         oldWidget.surfaceColor != widget.surfaceColor ||
         oldWidget.paperEdgeColor != widget.paperEdgeColor ||
+        oldWidget.showPaperGrain != widget.showPaperGrain ||
         oldWidget.contentRevision != widget.contentRevision ||
         oldWidget.reverse != widget.reverse;
 
@@ -398,22 +408,28 @@ class _ReaderPageViewState extends State<ReaderPageView>
   /// 一次翻页跨过的页数：跨页模式两张一起走。
   int get pageStep => widget.spread ? 2 : 1;
 
-  /// 取指定页码的呈现单元：跨页模式把左页与右页并排成一个单元。
-  /// 右页越界（章节页数为奇数）时留一张空白纸，不借用下一章的内容。
+  /// 取指定页码的呈现单元：跨页模式把左页与右页并排成一个单元，兼容 RTL 日漫右先左后。
+  /// 越界（章节页数为奇数）时留一张空白纸，不借用下一章的内容。
   Widget? pageAt(int index) {
     if (!widget.spread) {
       return widget.pageBuilder(index);
     }
-    final left = widget.pageBuilder(index);
-    if (left == null) {
+    final first = widget.pageBuilder(index);
+    if (first == null) {
       return null;
     }
+    final second = widget.pageBuilder(index + 1);
+    final left = widget.reverse ? (second ?? const SizedBox.expand()) : first;
+    final right = widget.reverse ? first : second;
     final last = widget.state.pageCount <= 1 ? 1 : widget.state.pageCount - 1;
+    final rawProgress = (index / last).clamp(0.0, 1.0);
     return ReaderPageSpread(
       left: left,
-      right: widget.pageBuilder(index + 1),
+      right: right,
       surfaceColor: widget.surfaceColor,
-      progress: (index / last).clamp(0.0, 1.0),
+      paperEdgeColor: widget.paperEdgeColor,
+      showPaperGrain: widget.showPaperGrain,
+      progress: widget.reverse ? (1.0 - rawProgress) : rawProgress,
     );
   }
 }

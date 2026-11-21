@@ -4,7 +4,6 @@ part of 'desktop_photos_page.dart';
 ///
 /// 独立成 part：主页面文件已经贴着源码行数棘轮，列表分组属于纯展示层，
 /// 搬出来不影响任何状态归属。
-
 class _PhotoGroups extends StatelessWidget {
   const _PhotoGroups({
     required this.photos,
@@ -14,8 +13,10 @@ class _PhotoGroups extends StatelessWidget {
     this.error,
     required this.density,
     required this.selection,
+    this.selectionMode = false,
     required this.onActivate,
     required this.onToggleSelect,
+    this.onSecondaryTap,
     required this.onSelectMany,
     required this.onOrderChanged,
     required this.onResetOrder,
@@ -28,8 +29,15 @@ class _PhotoGroups extends StatelessWidget {
   final VoidCallback onRetry;
   final double density;
   final Set<String> selection;
+  final bool selectionMode;
   final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
   final ValueChanged<PhotoItem> onToggleSelect;
+  final void Function(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    Offset globalPosition,
+  )?
+  onSecondaryTap;
   final ValueChanged<List<PhotoItem>> onSelectMany;
   final _PhotoOrderChanged onOrderChanged;
   final Future<void> Function(String contextKey) onResetOrder;
@@ -40,75 +48,91 @@ class _PhotoGroups extends StatelessWidget {
     if (error != null) {
       return DesktopErrorView(message: error!, onRetry: onRetry);
     }
-    if (loading) {
-      return DesktopSkeletonPhotoGrid(targetHeight: density);
-    }
+
+    Widget content;
     if (photos.isEmpty) {
-      return DesktopEmpty(
+      content = DesktopEmpty(
         icon: DesktopIcons.image,
         message: l10n.desktopHomeEmptyPhotos,
         description: l10n.desktopPhotosEmptyBody,
         large: true,
       );
+    } else {
+      final groups = _groupByDay(photos);
+      final browsePhotos = applyPhotoLibraryDisplayOrder(photos, displayOrders);
+      final selectionActive = selection.isNotEmpty || selectionMode;
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final entry in groups.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 34),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 缩小 DesktopHover 范围至日期分组头，避免悬停照片墙触发整组重绘。
+                  DesktopHover(
+                    cursor: SystemMouseCursors.basic,
+                    builder: (context, hovered) {
+                      final selectedCount =
+                          entry.value
+                              .where((photo) => selection.contains(photo.id))
+                              .length;
+                      return _GroupHead(
+                        label:
+                            entry.key == null
+                                ? '—'
+                                : DateFormat.yMMMMd(
+                                  Localizations.localeOf(context).toString(),
+                                ).format(entry.key!),
+                        count: entry.value.length,
+                        selectedCount: selectedCount,
+                        hovered: hovered,
+                        selectionActive: selectionActive,
+                        onToggleDay: () => onSelectMany(entry.value),
+                        onReset:
+                            displayOrders.containsKey(
+                                  photoOrderContextForDay(entry.key),
+                                )
+                                ? () => onResetOrder(
+                                  photoOrderContextForDay(entry.key),
+                                )
+                                : null,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _JustifiedPhotos(
+                    photos: applyPhotoDisplayOrder(
+                      entry.value,
+                      displayOrders[photoOrderContextForDay(entry.key)],
+                    ),
+                    targetHeight: density,
+                    selection: selection,
+                    selectionMode: selectionMode,
+                    onActivate: (photo, _) => onActivate(photo, browsePhotos),
+                    onToggleSelect: onToggleSelect,
+                    onSecondaryTap:
+                        onSecondaryTap == null
+                            ? null
+                            : (photo, _, globalPos) =>
+                                onSecondaryTap!(photo, browsePhotos, globalPos),
+                    orderContext: photoOrderContextForDay(entry.key),
+                    onOrderChanged: onOrderChanged,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
     }
-    final groups = _groupByDay(photos);
-    final browsePhotos = applyPhotoLibraryDisplayOrder(photos, displayOrders);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final entry in groups.entries)
-          DesktopHover(
-            cursor: SystemMouseCursors.basic,
-            builder: (context, hovered) {
-              final selectedCount =
-                  entry.value
-                      .where((photo) => selection.contains(photo.id))
-                      .length;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 34),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _GroupHead(
-                      label:
-                          entry.key == null
-                              ? '—'
-                              : DateFormat.yMMMMd(
-                                Localizations.localeOf(context).toString(),
-                              ).format(entry.key!),
-                      count: entry.value.length,
-                      selectedCount: selectedCount,
-                      hovered: hovered,
-                      selectionActive: selection.isNotEmpty,
-                      onToggleDay: () => onSelectMany(entry.value),
-                      onReset:
-                          displayOrders.containsKey(
-                                photoOrderContextForDay(entry.key),
-                              )
-                              ? () => onResetOrder(
-                                photoOrderContextForDay(entry.key),
-                              )
-                              : null,
-                    ),
-                    const SizedBox(height: 12),
-                    _JustifiedPhotos(
-                      photos: applyPhotoDisplayOrder(
-                        entry.value,
-                        displayOrders[photoOrderContextForDay(entry.key)],
-                      ),
-                      targetHeight: density,
-                      selection: selection,
-                      onActivate: (photo, _) => onActivate(photo, browsePhotos),
-                      onToggleSelect: onToggleSelect,
-                      orderContext: photoOrderContextForDay(entry.key),
-                      onOrderChanged: onOrderChanged,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
+
+    return DesktopSkeletonSwitcher(
+      regionId: 'photos-library',
+      hasData: photos.isNotEmpty,
+      loading: loading,
+      skeleton: DesktopSkeletonPhotoGrid(targetHeight: density),
+      child: content,
     );
   }
 
@@ -152,8 +176,8 @@ class _GroupHead extends StatelessWidget {
     final partiallySelected = selectedCount > 0 && !allSelected;
     final selectionLabel =
         allSelected ? l10n.photosDeselectDay : l10n.photosSelectDay;
-    // 样例 `.g-head`：22px 圆形日选择位于日期左侧，只在组 hover、已有
-    // 选择或键盘聚焦时显示；计数随该组选择数切换，右侧只保留重置排序。
+    // 样例 `.g-head`：22px 圆形日选择位于日期左侧，只在组头 hover、已有
+    // 选择或开启多选开关时显示；计数随该组选择数切换，右侧只保留重置排序。
     return Row(
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
@@ -214,8 +238,3 @@ class _GroupHead extends StatelessWidget {
     );
   }
 }
-
-/// 等高一排、按宽高比铺满（样例 `.justified` + `.ph`）。
-///
-/// 每行先按目标行高算出「加起来能铺满宽度」的照片，再按比例分配宽度：
-/// 这是相片墙的排法，固定列网格会把竖构图裁成一样的方块。

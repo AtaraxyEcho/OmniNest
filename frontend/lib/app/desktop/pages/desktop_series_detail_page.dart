@@ -10,6 +10,7 @@ import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';

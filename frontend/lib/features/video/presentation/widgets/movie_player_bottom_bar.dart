@@ -42,6 +42,8 @@ class MoviePlayerBottomBar extends StatelessWidget {
     required this.isMobile,
     this.onPreviousEpisode,
     this.onNextEpisode,
+    this.onSeekBackward,
+    this.onSeekForward,
     this.onRotateTap,
     this.isLandscapeOrientation = false,
     super.key,
@@ -76,6 +78,8 @@ class MoviePlayerBottomBar extends StatelessWidget {
   final bool isMobile;
   final VoidCallback? onPreviousEpisode;
   final VoidCallback? onNextEpisode;
+  final VoidCallback? onSeekBackward;
+  final VoidCallback? onSeekForward;
 
   /// 横竖屏手动旋转入口：null（Web/桌面）时隐藏旋转钮。
   final VoidCallback? onRotateTap;
@@ -85,110 +89,103 @@ class MoviePlayerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final textScale = MediaQuery.textScalerOf(context).scale(1);
-          final controlMaxWidth = constraints.maxWidth;
-          final density = _resolveDensity(controlMaxWidth, textScale);
-          final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-          // 样例 `.v-bar` 的左右内距固定 28px；移动端沿用比例内距，
-          // 窄屏上 28px 会把两枚时间挤掉。
-          final horizontalPadding =
-              isMobile
-                  ? (controlMaxWidth * 0.012).clamp(12.0, 22.0)
-                  : 28.0;
-          // 桌面无边框/全屏贴底：不再按窗口高度百分比抬升（4K 下会把
-          // 底栏浮到离屏幕底很远）。系统安全区仅在非全屏时参与。
-          final mediaQuery = MediaQuery.of(context);
-          final systemBottom =
-              isFullscreen ? 0.0 : mediaQuery.viewPadding.bottom;
-          final bottomInset =
-              switch ((isFullscreen, isMobile)) {
-                (true, true) => 12.0,
-                (true, false) => 8.0,
-                (false, true) => 8.0,
-                (false, false) => 12.0,
-              } +
-              systemBottom;
-          // 样例底栏上方有 70px 渐变（`.v-bar { padding-top: 70px }`），
-          // 让文字压在画面上时不贴边；移动端保持紧凑。
-          final topPadding =
-              isMobile
-                  ? (mediaQuery.size.height *
-                        (isFullscreen ? 0.028 : 0.024)).clamp(20.0, 40.0)
-                  : 70.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final controlMaxWidth = constraints.maxWidth;
+        final density = _resolveDensity(controlMaxWidth, textScale);
+        final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+        // 样例 `.v-bar` 的左右内距固定 28px；移动端沿用比例内距，
+        // 窄屏上 28px 会把两枚时间挤掉。
+        final horizontalPadding =
+            isMobile ? (controlMaxWidth * 0.012).clamp(12.0, 22.0) : 28.0;
+        // 桌面无边框/全屏贴底：不再按窗口高度百分比抬升（4K 下会把
+        // 底栏浮到离屏幕底很远）。系统安全区仅在非全屏时参与。
+        final mediaQuery = MediaQuery.of(context);
+        final systemBottom = isFullscreen ? 0.0 : mediaQuery.viewPadding.bottom;
+        final bottomInset =
+            switch ((isFullscreen, isMobile)) {
+              (true, true) => 12.0,
+              (true, false) => 8.0,
+              (false, true) => 8.0,
+              (false, false) => 12.0,
+            } +
+            systemBottom;
+        // 样例底栏上方有 70px 渐变（`.v-bar { padding-top: 70px }`），
+        // 让文字压在画面上时不贴边；移动端保持紧凑。
+        final topPadding =
+            isMobile
+                ? (mediaQuery.size.height * (isFullscreen ? 0.028 : 0.024))
+                    .clamp(20.0, 40.0)
+                : 70.0;
 
-          // 渐变铺满窗口底缘；全屏时不叠 SafeArea，避免任务栏残留 padding。
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.transparent, context.videoColors.playerBarBg],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+        // 渐变铺满窗口底缘；全屏时不叠 SafeArea，避免任务栏残留 padding。
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.transparent, context.videoColors.playerBarBg],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: SizedBox(
+            key: const Key('moviePlayerControlViewport'),
+            width: double.infinity,
+            child: AnimatedPadding(
+              key: const Key('moviePlayerBottomBarContent'),
+              duration:
+                  animationsDisabled
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                topPadding,
+                horizontalPadding,
+                _bottomPaddingFor(density) + bottomInset,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MoviePlayerProgressBar(
+                    polledPosition: polledPosition,
+                    durationSeconds: plan.durationSeconds,
+                    playerDuration: playerDuration,
+                    bufferProgress: bufferProgress,
+                    isSeeking: isSeeking,
+                    seekValue: seekValue,
+                    onSeekStart: onSeekStart,
+                    onSeeking: onSeeking,
+                    onSeekEnd: onSeekEnd,
+                    onMouseActivity: onMouseActivity,
+                    formatDuration: formatDuration,
+                  ),
+                  const SizedBox(height: 6),
+                  AnimatedSwitcher(
+                    duration:
+                        animationsDisabled
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    // 密度切换会整棵替换控制条，退场子树排除语义。
+                    layoutBuilder: excludeExitingSemanticsStack,
+                    child: switch (density) {
+                      _MoviePlayerControlDensity.compact =>
+                        _buildCompactControls(context),
+                      _MoviePlayerControlDensity.medium => _buildMediumControls(
+                        context,
+                      ),
+                      _MoviePlayerControlDensity.expanded =>
+                        _buildExpandedControls(context),
+                    },
+                  ),
+                ],
               ),
             ),
-            child: SizedBox(
-              key: const Key('moviePlayerControlViewport'),
-              width: double.infinity,
-              child: AnimatedPadding(
-                key: const Key('moviePlayerBottomBarContent'),
-                duration:
-                    animationsDisabled
-                        ? Duration.zero
-                        : const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  topPadding,
-                  horizontalPadding,
-                  _bottomPaddingFor(density) + bottomInset,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MoviePlayerProgressBar(
-                      polledPosition: polledPosition,
-                      durationSeconds: plan.durationSeconds,
-                      playerDuration: playerDuration,
-                      bufferProgress: bufferProgress,
-                      isSeeking: isSeeking,
-                      seekValue: seekValue,
-                      onSeekStart: onSeekStart,
-                      onSeeking: onSeeking,
-                      onSeekEnd: onSeekEnd,
-                      onMouseActivity: onMouseActivity,
-                      formatDuration: formatDuration,
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedSwitcher(
-                      duration:
-                          animationsDisabled
-                              ? Duration.zero
-                              : const Duration(milliseconds: 160),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      // 密度切换会整棵替换控制条，退场子树排除语义。
-                      layoutBuilder: excludeExitingSemanticsStack,
-                      child: switch (density) {
-                        _MoviePlayerControlDensity.compact =>
-                          _buildCompactControls(context),
-                        _MoviePlayerControlDensity.medium =>
-                          _buildMediumControls(context),
-                        _MoviePlayerControlDensity.expanded =>
-                          _buildExpandedControls(context),
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -412,11 +409,25 @@ class MoviePlayerBottomBar extends StatelessWidget {
           onPressed: onPreviousEpisode,
           size: targetSize,
         ),
+        if (!isMobile && onSeekBackward != null)
+          MoviePlayerIconButton(
+            icon: Icons.replay_10_rounded,
+            tooltip: l10n.videoSeekBackwardSeconds(10),
+            onPressed: onSeekBackward,
+            size: targetSize,
+          ),
         _PlayPauseButton(
           playing: playing,
           onPressed: onPlayPause,
           size: targetSize,
         ),
+        if (!isMobile && onSeekForward != null)
+          MoviePlayerIconButton(
+            icon: Icons.forward_10_rounded,
+            tooltip: l10n.videoSeekForwardSeconds(10),
+            onPressed: onSeekForward,
+            size: targetSize,
+          ),
         MoviePlayerIconButton(
           icon: Icons.skip_next_rounded,
           tooltip: l10n.videoNextEpisode,

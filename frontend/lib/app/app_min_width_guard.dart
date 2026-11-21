@@ -32,26 +32,23 @@ class DesktopFormMinWidth extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (mobileForm || !hoverCapable || constraints.maxWidth >= minWidth) {
-          return child;
-        }
-        final mediaQuery = MediaQuery.of(context);
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: minWidth,
-            height: constraints.maxHeight,
-            child: MediaQuery(
-              data: mediaQuery.copyWith(
-                size: Size(minWidth, constraints.maxHeight),
-              ),
-              child: child,
-            ),
-          ),
-        );
-      },
+    // 直接在正常 build 阶段读取 MediaQuery.sizeOf，避免用 LayoutBuilder 包裹
+    // Router 导致子树在 layout 阶段重建触发 GoRouterDelegate 断言崩溃。
+    final size = MediaQuery.sizeOf(context);
+    if (mobileForm || !hoverCapable || size.width >= minWidth) {
+      return child;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: minWidth,
+        height: size.height,
+        child: MediaQuery(
+          data: mediaQuery.copyWith(size: Size(minWidth, size.height)),
+          child: child,
+        ),
+      ),
     );
   }
 }

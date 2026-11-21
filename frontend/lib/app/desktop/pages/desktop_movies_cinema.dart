@@ -152,10 +152,12 @@ class _CinemaState extends State<_Cinema> {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final height = (MediaQuery.sizeOf(context).height * 0.52).clamp(
-      380.0,
-      560.0,
-    );
+    final size = MediaQuery.sizeOf(context);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final height = (size.height * 0.52).clamp(380.0, 560.0);
+    // 桌面 Hero 宽度可达 1600-2200px，叠加 1.14x Ken Burns 放大；按物理像素给足解码宽度，
+    // 避免低清位图二次拉伸产生亚像素锯齿与抖动。
+    final heroCacheWidth = (size.width * dpr * 1.15).round().clamp(1600, 2880);
     final active = widget.items[_index];
     return MouseRegion(
       onEnter: (_) => _paused = true,
@@ -194,16 +196,14 @@ class _CinemaState extends State<_Cinema> {
                     kind: DesktopCoverKind.network,
                     fallbackIcon: DesktopIcons.film,
                     cacheKey: 'desktop-cinema-${widget.items[i].id}',
+                    cacheWidth: heroCacheWidth,
                   ),
                 ),
               ),
             const _CinemaShade(),
             Positioned(
-              left: (MediaQuery.sizeOf(context).width * 0.04).clamp(28.0, 64.0),
-              bottom: (MediaQuery.sizeOf(context).height * 0.06).clamp(
-                34.0,
-                66.0,
-              ),
+              left: (size.width * 0.04).clamp(28.0, 64.0),
+              bottom: (size.height * 0.06).clamp(34.0, 66.0),
               child: _CinemaCopy(
                 key: ValueKey(active.id),
                 item: active,
@@ -468,8 +468,9 @@ String _resolutionLabel(MovieVideoItem item) {
 /// 样例 `desktop.css:310`：`.cin-slide.on .kb` 从 `scale(1.02)` 推到
 /// `scale(1.14) translate(-1.5%, -1%)`，14s ease-out forwards。
 ///
-/// 缩放配合位移抵消放大时的视觉重心漂移；`RepaintBoundary` 把位图缓存成
-/// 一张纹理供每帧变换，避免逐帧重绘边缘像素造成的抖动。
+/// 合并为单一 `Transform(filterQuality: FilterQuality.medium)` 并将
+/// `RepaintBoundary` 置于最外层，消除双层嵌套变换与低清缓存拉伸造成的
+/// 亚像素台阶抖动；退场时暂停并等 1250ms 淡出完成后再 `reset()`。
 class _KenBurns extends StatefulWidget {
   const _KenBurns({required this.active, required this.child});
 
@@ -488,6 +489,7 @@ class _KenBurnsState extends State<_KenBurns>
   );
 
   bool _started = false;
+  Timer? _resetTimer;
 
   @override
   void didChangeDependencies() {
@@ -508,36 +510,59 @@ class _KenBurnsState extends State<_KenBurns>
     if (oldWidget.active == widget.active) {
       return;
     }
-    if (widget.active &&
-        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
-      _controller.forward(from: 0);
+    if (widget.active) {
+      _resetTimer?.cancel();
+      _resetTimer = null;
+      if (!(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+        _controller.forward(from: 0);
+      }
     } else {
-      _controller.reset();
+      // 外层 AnimatedOpacity 淡出耗时 1200ms：先停在当前位置，等完全淡出后再复位，
+      // 避免退场过程中突然弹回 scale(1.02) 造成视觉跳位。
+      _controller.stop();
+      _resetTimer?.cancel();
+      _resetTimer = Timer(const Duration(milliseconds: 1250), () {
+        if (mounted && !widget.active) {
+          _controller.reset();
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _resetTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final t = DesktopMotion.easeOut.transform(_controller.value);
-        return Transform.scale(
-          scale: 1.02 + 0.12 * t,
-          // CSS 的 translate 发生在 scale 之前（变换列表从右往左应用）。
-          child: FractionalTranslation(
-            translation: Offset(-0.015 * t, -0.01 * t),
-            child: RepaintBoundary(child: child),
-          ),
-        );
-      },
-      child: widget.child,
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final t = DesktopMotion.easeOut.transform(_controller.value);
+              final scale = 1.02 + 0.12 * t;
+              final dx = -0.015 * t * width;
+              final dy = -0.01 * t * height;
+              final matrix = Matrix4.diagonal3Values(scale, scale, 1.0)
+                ..multiply(Matrix4.translationValues(dx, dy, 0.0));
+              return Transform(
+                alignment: Alignment.center,
+                filterQuality: FilterQuality.medium,
+                transform: matrix,
+                child: child,
+              );
+            },
+            child: widget.child,
+          );
+        },
+      ),
     );
   }
 }

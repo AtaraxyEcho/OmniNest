@@ -91,6 +91,10 @@ class ComicReaderView extends ConsumerStatefulWidget {
 
 class ComicReaderViewState extends ConsumerState<ComicReaderView>
     with WidgetsBindingObserver {
+  /// 漫画页深炭底色，与 Book 书桌舞台背景清晰区分。
+  static const Color _comicPageSurfaceColor = Color(0xFF15171A);
+  static const Color _comicPaperEdgeColor = Color(0xFF2B2F36);
+
   final ReaderPageTurnController _pageTurnController =
       ReaderPageTurnController();
   late ScrollController _scrollController;
@@ -139,7 +143,8 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       _displaySettings.rtlOverride ??
       (_manifest.readingDirection?.toLowerCase() == 'rtl');
   bool get _isPagedMode => _readingMode != ComicReadingMode.scroll;
-  bool get _imageZoomed => _currentZoomScale > 1.02;
+  bool get _imageZoomed =>
+      _readingMode == ComicReadingMode.page && _currentZoomScale > 1.02;
 
   /// 统一桌面阅读器视觉设置：不再强制纯黑，根据当前模式同步 Book 书桌色或主题纸面色。
   ReaderViewSettings get _controlSettings => _settings.copyWith(
@@ -182,6 +187,11 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
     _volumeKeyEventCancel = ReaderVolumeKeyService.instance().addListener(
       _handleVolumeKeyEvent,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _preloadAdjacent();
+      }
+    });
     unawaited(
       _loadSettings().then((_) {
         if (mounted) _syncVolumeKeyPaging();
@@ -704,33 +714,54 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       fontSize: AppTypography.titleMedium,
       textScale: MediaQuery.textScalerOf(context).scale(1),
     );
+    final isBookMode = _readingMode == ComicReadingMode.book;
+    final isBookSpread = isBookMode && viewport.width >= 720;
     final slots = _buildSpreadSlots(viewport.width);
     final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
     final activeSlot =
         (activeSlotIndex >= 0 && activeSlotIndex < slots.length)
             ? slots[activeSlotIndex]
             : null;
-    final visibleEndPageIndex =
-        _isPagedMode && activeSlot != null
-            ? activeSlot.endPageIndex
-            : _anchor.pageIndex;
-    final isDualSpreadActive =
-        _isPagedMode && activeSlot != null && activeSlot.pageIndices.length > 1;
+
+    final int visibleStartPageIndex;
+    final int visibleEndPageIndex;
+    final bool isDualSpreadActive;
+    if (isBookSpread && _totalPages > 0) {
+      visibleStartPageIndex = _anchor.pageIndex - (_anchor.pageIndex % 2);
+      visibleEndPageIndex = math.min(
+        _totalPages - 1,
+        visibleStartPageIndex + 1,
+      );
+      isDualSpreadActive = visibleEndPageIndex > visibleStartPageIndex;
+    } else if (_isPagedMode && activeSlot != null) {
+      visibleStartPageIndex = activeSlot.startPageIndex;
+      visibleEndPageIndex = activeSlot.endPageIndex;
+      isDualSpreadActive = activeSlot.pageIndices.length > 1;
+    } else {
+      visibleStartPageIndex = _anchor.pageIndex;
+      visibleEndPageIndex = _anchor.pageIndex;
+      isDualSpreadActive = false;
+    }
+
     final l10n = AppLocalizations.of(context);
     final pageSubtitle =
         _totalPages <= 0
             ? null
             : (isDualSpreadActive
                 ? l10n.readerPageRange(
-                  activeSlot.startPageIndex + 1,
-                  math.min(_totalPages, activeSlot.endPageIndex + 1),
+                  visibleStartPageIndex + 1,
+                  math.min(_totalPages, visibleEndPageIndex + 1),
                   _totalPages,
                 )
                 : l10n.readerPageOf(_anchor.pageIndex + 1, _totalPages));
     final currentBookmark = _findBookmarkForPage(bookmarks, _anchor.pageIndex);
     final isBookmarked = currentBookmark != null;
-    final stageBg = controlSettings.readerCanvasColor;
+    final deskBg = controlSettings.bookDeskColor;
+    final pageSurfaceBg =
+        isBookMode ? _comicPageSurfaceColor : controlSettings.surfaceColor;
+    final stageBg = isBookMode ? deskBg : pageSurfaceBg;
     final topBarVisible = _showControls || _panelCoordinator.isOpen;
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
 
     return Focus(
       autofocus: true,
@@ -743,14 +774,64 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
               child: ReaderComfortFilter(
                 brightness: _settings.brightness,
                 warmth: _settings.warmth,
-                child: _buildContent(
-                  slots: slots,
-                  activeSlotIndex: activeSlotIndex,
-                  isBookmarked: isBookmarked,
-                  stageBg: stageBg,
+                child: AnimatedContainer(
+                  duration:
+                      animationsDisabled
+                          ? Duration.zero
+                          : const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                  decoration:
+                      isBookMode
+                          ? BoxDecoration(
+                            gradient: RadialGradient(
+                              center: const Alignment(0, -0.2),
+                              radius: 1.1,
+                              colors: [
+                                Color.lerp(deskBg, Colors.white, 0.12)!,
+                                deskBg,
+                              ],
+                              stops: const [0.0, 0.70],
+                            ),
+                          )
+                          : BoxDecoration(color: pageSurfaceBg),
+                  child: _buildContent(
+                    slots: slots,
+                    activeSlotIndex: activeSlotIndex,
+                    isBookmarked: isBookmarked,
+                    pageSurfaceBg: pageSurfaceBg,
+                  ),
                 ),
               ),
             ),
+            // Book 模式宽屏（>= 960）左右 48×48 悬浮翻页箭头，与正文阅读器一致。
+            if (isBookMode && viewport.width >= 960 && _totalPages > 0) ...[
+              Positioned(
+                left: 20,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _ComicBookFloatingArrow(
+                    icon: Icons.chevron_left_rounded,
+                    tooltip:
+                        _isRtl ? l10n.readerNextPage : l10n.readerPreviousPage,
+                    onTap: () => _turnSlotByDelta(_isRtl ? 1 : -1),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 20,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _ComicBookFloatingArrow(
+                    icon: Icons.chevron_right_rounded,
+                    tooltip:
+                        _isRtl ? l10n.readerPreviousPage : l10n.readerNextPage,
+                    onTap: () => _turnSlotByDelta(_isRtl ? -1 : 1),
+                  ),
+                ),
+              ),
+            ],
             ComicReaderBottomBar(
               visible: _showControls && !_panelCoordinator.isOpen,
               currentPageIndex: _anchor.pageIndex,
@@ -760,10 +841,10 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
               isRtl: _isRtl,
               isDualPage: isDualSpreadActive,
               visibleEndPageIndex: visibleEndPageIndex,
-              zoomScale: _currentZoomScale,
+              zoomScale: isBookMode ? 1.0 : _currentZoomScale,
               onResetZoom: _imageZoomed ? _resetCurrentSlotZoom : null,
               onPrevious:
-                  _anchor.pageIndex > 0 ? () => _turnSlotByDelta(-1) : null,
+                  visibleStartPageIndex > 0 ? () => _turnSlotByDelta(-1) : null,
               onNext:
                   visibleEndPageIndex < _totalPages - 1
                       ? () => _turnSlotByDelta(1)

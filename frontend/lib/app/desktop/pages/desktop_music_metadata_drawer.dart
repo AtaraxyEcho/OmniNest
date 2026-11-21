@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,12 +7,14 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 Future<bool?> showDesktopMusicMetadataDrawer({
@@ -20,7 +23,7 @@ Future<bool?> showDesktopMusicMetadataDrawer({
 }) {
   return showDesktopDrawer<bool>(
     context,
-    width: 480,
+    width: 500,
     barrierDismissible: true,
     builder: (_) => _DesktopMusicMetadataDrawer(track: track),
   );
@@ -38,6 +41,8 @@ class _DesktopMusicMetadataDrawer extends ConsumerStatefulWidget {
 
 class _DesktopMusicMetadataDrawerState
     extends ConsumerState<_DesktopMusicMetadataDrawer> {
+  static const int _maxLyricsBytes = 2 * 1024 * 1024;
+
   late final TextEditingController _title = TextEditingController(
     text: widget.track.title,
   );
@@ -47,8 +52,12 @@ class _DesktopMusicMetadataDrawerState
   late final TextEditingController _album = TextEditingController(
     text: widget.track.albumTitle,
   );
+  late final TextEditingController _genre = TextEditingController(
+    text: widget.track.genre ?? '',
+  );
+  // 仅回填外部手动封面 URL，绝不把内部 `/api/v1/music/covers/{fileId}` 填入外链框。
   late final TextEditingController _coverUrl = TextEditingController(
-    text: widget.track.manualCoverUrl ?? widget.track.coverUrl ?? '',
+    text: _initialExternalCoverUrl(widget.track),
   );
   late final String _initialCoverUrl = _coverUrl.text;
   late final TextEditingController _lyrics = TextEditingController(
@@ -57,6 +66,8 @@ class _DesktopMusicMetadataDrawerState
   late final TextEditingController _lyricsTranslation = TextEditingController(
     text: widget.track.lyricsTranslation ?? '',
   );
+  DesktopPickedCover? _pickedCover;
+  bool _clearCover = false;
   bool _loadingLyrics = false;
   bool _lyricsChanged = false;
   bool _translationChanged = false;
@@ -64,6 +75,24 @@ class _DesktopMusicMetadataDrawerState
   bool _translationFocused = false;
   bool _saving = false;
   String? _coverUrlError;
+
+  static String _initialExternalCoverUrl(MusicTrack track) {
+    final manual = track.manualCoverUrl?.trim();
+    if (manual != null && manual.isNotEmpty && _isHttpUrl(manual)) {
+      return manual;
+    }
+    return '';
+  }
+
+  static bool _isHttpUrl(String value) {
+    if (value.length > 2048) return false;
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        (uri.scheme.toLowerCase() == 'http' ||
+            uri.scheme.toLowerCase() == 'https') &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty;
+  }
 
   @override
   void initState() {
@@ -80,6 +109,7 @@ class _DesktopMusicMetadataDrawerState
     _title.dispose();
     _artist.dispose();
     _album.dispose();
+    _genre.dispose();
     _coverUrl.dispose();
     _lyrics.dispose();
     _lyricsTranslation.dispose();
@@ -121,11 +151,59 @@ class _DesktopMusicMetadataDrawerState
     }
   }
 
+  Future<void> _importLyricsFile({required bool isTranslation}) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final files = await FilePick.pickFiles(
+        allowedExtensions: const ['lrc', 'txt', 'srt', 'vtt'],
+      );
+      if (!mounted || files.isEmpty) {
+        return;
+      }
+      final bytes = await files.first.readBytes();
+      if (!mounted || bytes.isEmpty) {
+        return;
+      }
+      if (bytes.length > _maxLyricsBytes) {
+        showDesktopToast(
+          context,
+          l10n.musicLyricsTooLarge,
+          kind: DesktopToastKind.warn,
+          icon: DesktopIcons.info,
+        );
+        return;
+      }
+      final decoded = utf8.decode(bytes, allowMalformed: true);
+      setState(() {
+        if (isTranslation) {
+          _lyricsTranslation.text = decoded;
+          _translationChanged = true;
+        } else {
+          _lyrics.text = decoded;
+          _lyricsChanged = true;
+        }
+      });
+    } on Object catch (_) {
+      if (mounted) {
+        showDesktopToast(
+          context,
+          l10n.musicLyricsReadFailed,
+          kind: DesktopToastKind.error,
+          icon: DesktopIcons.info,
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final coverUrl = _coverUrl.text.trim();
     final coverUrlChanged = coverUrl != _initialCoverUrl.trim();
-    if (coverUrlChanged && coverUrl.isNotEmpty && !_isHttpUrl(coverUrl)) {
+    if (_pickedCover == null &&
+        !_clearCover &&
+        coverUrlChanged &&
+        coverUrl.isNotEmpty &&
+        !_isHttpUrl(coverUrl)) {
       setState(() => _coverUrlError = l10n.musicCoverUrlInvalid);
       return;
     }
@@ -142,21 +220,23 @@ class _DesktopMusicMetadataDrawerState
     setState(() => _saving = true);
     try {
       final controller = ref.read(musicCenterControllerProvider.notifier);
+      // 合并曲目信息、封面、原文歌词与译文歌词为单次原子保存。
       await controller.updateTrackMetadata(
         trackId: widget.track.id,
         title: _title.text.trim(),
         artistName: _artist.text.trim(),
         albumTitle: _album.text.trim(),
+        genre: _genre.text.trim(),
         lyricsRaw: _lyricsChanged ? _lyrics.text : null,
-        coverUrl: coverUrlChanged ? coverUrl : null,
+        lyricsTranslation: _translationChanged ? _lyricsTranslation.text : null,
+        coverBytes: _pickedCover?.bytes,
+        coverFileName: _pickedCover?.fileName,
+        coverUrl:
+            !_clearCover && _pickedCover == null && coverUrlChanged
+                ? coverUrl
+                : null,
+        clearCover: _clearCover && _pickedCover == null,
       );
-      if (_translationChanged) {
-        await controller.applyLyrics(
-          widget.track,
-          _lyrics.text,
-          lyricsTranslation: _lyricsTranslation.text,
-        );
-      }
       if (!mounted) return;
       showDesktopToast(
         context,
@@ -179,16 +259,6 @@ class _DesktopMusicMetadataDrawerState
     }
   }
 
-  bool _isHttpUrl(String value) {
-    if (value.length > 2048) return false;
-    final uri = Uri.tryParse(value);
-    return uri != null &&
-        (uri.scheme.toLowerCase() == 'http' ||
-            uri.scheme.toLowerCase() == 'https') &&
-        uri.host.isNotEmpty &&
-        uri.userInfo.isEmpty;
-  }
-
   Future<void> _restoreOriginal() async {
     final l10n = AppLocalizations.of(context);
     setState(() => _saving = true);
@@ -203,7 +273,7 @@ class _DesktopMusicMetadataDrawerState
         kind: DesktopToastKind.success,
         icon: DesktopIcons.check,
       );
-      closeDesktopModal(context, false);
+      closeDesktopModal(context, true);
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -222,9 +292,6 @@ class _DesktopMusicMetadataDrawerState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final isZh = Localizations.localeOf(
-      context,
-    ).languageCode.toLowerCase().startsWith('zh');
 
     return DesktopDrawerFrame(
       eyebrow: l10n.musicMetadataEyebrow,
@@ -257,102 +324,89 @@ class _DesktopMusicMetadataDrawerState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 22),
-                child: SizedBox.square(
-                  dimension: 96,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                          spreadRadius: -10,
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: DesktopCover(
-                        url:
-                            _coverUrl.text.trim().isEmpty
-                                ? widget.track.coverUrl
-                                : _coverUrl.text.trim(),
-                        fallbackIcon: DesktopIcons.music,
-                        cacheKey:
-                            'music-metadata-cover:${widget.track.id}:${_coverUrl.text.trim()}',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DesktopTextField(
-                      controller: _title,
-                      label: l10n.musicFieldTitle,
-                      autofocus: true,
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 14),
-                    DesktopTextField(
-                      controller: _artist,
-                      label: l10n.musicFieldArtist,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          DesktopTextField(controller: _album, label: l10n.musicFieldAlbum),
-          const SizedBox(height: 14),
-          DesktopTextField(
-            controller: _coverUrl,
+          DesktopCoverField(
             label: l10n.musicCoverImageUrl,
-            hint: 'https://',
-            keyboardType: TextInputType.url,
-            error: _coverUrlError,
-            onChanged: (_) => setState(() => _coverUrlError = null),
+            shape: DesktopCoverFieldShape.square,
+            previewUrl: widget.track.coverUrl,
+            coverKind: DesktopCoverKind.music,
+            fallbackIcon: DesktopIcons.music,
+            urlController: _coverUrl,
+            pickedCover: _pickedCover,
+            cleared: _clearCover,
+            urlError: _coverUrlError,
+            enabled: !_saving,
+            onPicked: (picked) {
+              setState(() {
+                _pickedCover = picked;
+                _clearCover = false;
+                _coverUrlError = null;
+              });
+            },
+            onClear: () {
+              setState(() {
+                _pickedCover = null;
+                _clearCover = true;
+                _coverUrlError = null;
+              });
+            },
+            onUrlChanged: (_) {
+              setState(() {
+                _pickedCover = null;
+                _clearCover = false;
+                _coverUrlError = null;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          DesktopTextField(
+            controller: _title,
+            label: l10n.musicFieldTitle,
+            required: true,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    style: DesktopType.fieldLabel(skin.text2),
-                    children: [
-                      TextSpan(text: l10n.musicNowPlayingLyrics),
-                      TextSpan(
-                        text: ' · ${l10n.musicLyricsLineCount(_lineCount)}',
-                        style: DesktopType.fieldHint(skin.text3),
-                      ),
-                    ],
-                  ),
+                child: DesktopTextField(
+                  controller: _artist,
+                  label: l10n.musicFieldArtist,
                 ),
               ),
-              if (_loadingLyrics)
-                const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DesktopTextField(
+                  controller: _genre,
+                  label: l10n.musicFieldGenre,
                 ),
+              ),
             ],
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(controller: _album, label: l10n.musicFieldAlbum),
+          const SizedBox(height: 16),
+          _lyricsHeader(
+            skin: skin,
+            label: l10n.musicNowPlayingLyrics,
+            lineCount: _lineCount,
+            l10n: l10n,
+            hasText: _lyrics.text.isNotEmpty,
+            loading: _loadingLyrics,
+            onImport: () => unawaited(_importLyricsFile(isTranslation: false)),
+            onClear: () {
+              setState(() {
+                _lyrics.clear();
+                _lyricsChanged = true;
+              });
+            },
           ),
           const SizedBox(height: 6),
           _multilineLyricsField(
             skin: skin,
             controller: _lyrics,
             focused: _lyricsFocused,
-            minLines: 8,
+            minLines: 7,
             maxLines: 10,
             hintText: l10n.musicLyricsEditHint,
             onFocusChange: (focused) {
@@ -361,30 +415,29 @@ class _DesktopMusicMetadataDrawerState
             onChanged: (_) => setState(() => _lyricsChanged = true),
           ),
           const SizedBox(height: 14),
-          Text.rich(
-            TextSpan(
-              style: DesktopType.fieldLabel(skin.text2),
-              children: [
-                TextSpan(text: isZh ? '译文歌词（LRC）' : 'Translated lyrics (LRC)'),
-                TextSpan(
-                  text:
-                      ' · ${l10n.musicLyricsLineCount(_translationLineCount)}',
-                  style: DesktopType.fieldHint(skin.text3),
-                ),
-              ],
-            ),
+          _lyricsHeader(
+            skin: skin,
+            label: l10n.musicVisualizerLyricTranslation,
+            lineCount: _translationLineCount,
+            l10n: l10n,
+            hasText: _lyricsTranslation.text.isNotEmpty,
+            loading: false,
+            onImport: () => unawaited(_importLyricsFile(isTranslation: true)),
+            onClear: () {
+              setState(() {
+                _lyricsTranslation.clear();
+                _translationChanged = true;
+              });
+            },
           ),
           const SizedBox(height: 6),
           _multilineLyricsField(
             skin: skin,
             controller: _lyricsTranslation,
             focused: _translationFocused,
-            minLines: 6,
+            minLines: 5,
             maxLines: 8,
-            hintText:
-                isZh
-                    ? '可选：粘贴与原文时间戳对齐的译文 LRC（如 [00:12.34]译文内容）'
-                    : 'Optional: paste timestamp-aligned translated LRC lines',
+            hintText: l10n.musicLyricsEditHint,
             onFocusChange: (focused) {
               if (mounted) setState(() => _translationFocused = focused);
             },
@@ -398,6 +451,59 @@ class _DesktopMusicMetadataDrawerState
           const SizedBox(height: 12),
         ],
       ),
+    );
+  }
+
+  Widget _lyricsHeader({
+    required DesktopSkin skin,
+    required String label,
+    required int lineCount,
+    required AppLocalizations l10n,
+    required bool hasText,
+    required bool loading,
+    required VoidCallback onImport,
+    required VoidCallback onClear,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              style: DesktopType.fieldLabel(skin.text2),
+              children: [
+                TextSpan(text: label),
+                TextSpan(
+                  text: ' · ${l10n.musicLyricsLineCount(lineCount)}',
+                  style: DesktopType.fieldHint(skin.text3),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (loading) ...[
+          const SizedBox.square(
+            dimension: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+        ],
+        DesktopButton(
+          label: l10n.musicLyricsFile,
+          icon: DesktopIcons.upload,
+          variant: DesktopButtonVariant.ghost,
+          tooltip: l10n.musicLyricsPick,
+          onPressed: _saving ? null : onImport,
+        ),
+        if (hasText) ...[
+          const SizedBox(width: 4),
+          DesktopButton(
+            label: l10n.musicLyricsClear,
+            icon: DesktopIcons.close,
+            variant: DesktopButtonVariant.ghost,
+            onPressed: _saving ? null : onClear,
+          ),
+        ],
+      ],
     );
   }
 

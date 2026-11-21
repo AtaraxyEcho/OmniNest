@@ -6,10 +6,13 @@ import 'package:flutter/scheduler.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_np_style.dart';
+import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+
+part 'desktop_now_playing_lyric_fill.dart';
 
 /// 双语对照副行字号（样例译文按原文 `0.62×` 呈现，11.5 是 18.5px 原文的对齐值）。
 const _translationSize = 11.5;
@@ -21,7 +24,8 @@ const _translationSize = 11.5;
 /// - 单行 `RepaintBoundary` + 仅对 `1 <= d <= 3` 近邻行施加 `ImageFiltered(d * 0.7)` 景深模糊；
 /// - 双层 `Paint` 与可视行切片逐字填充共存（支持折行逐行扫过 + 上下分色/渐变）；
 /// - 悬停非当前行去模糊并浮现 `▶ mm:ss` 跳转胶囊，点击精准 `seekTo`；
-/// - 双语对照译文渲染（`0.62×` 字号，当前行整行提亮）。
+/// - 双语对照译文渲染（`0.62×` 字号，当前行整行提亮）；
+/// - 无歌词空态提供「编辑详情与歌词」入口按钮。
 class DesktopNowPlayingLyrics extends StatefulWidget {
   const DesktopNowPlayingLyrics({
     required this.lines,
@@ -34,6 +38,7 @@ class DesktopNowPlayingLyrics extends StatefulWidget {
     required this.hueColor,
     required this.showTranslation,
     required this.onSeek,
+    this.onEdit,
     super.key,
   });
 
@@ -47,6 +52,7 @@ class DesktopNowPlayingLyrics extends StatefulWidget {
   final Color hueColor;
   final bool showTranslation;
   final ValueChanged<Duration> onSeek;
+  final VoidCallback? onEdit;
 
   @override
   State<DesktopNowPlayingLyrics> createState() =>
@@ -302,9 +308,43 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
     final plain = widget.plainLines;
     if (timed.isEmpty && plain.isEmpty) {
       return Center(
-        child: Text(
-          l10n.musicNoLyrics,
-          style: DesktopType.dense(Colors.white.withValues(alpha: 0.55)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                DesktopIcons.music,
+                size: 32,
+                color: Colors.white.withValues(alpha: 0.35),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                l10n.musicNoLyrics,
+                textAlign: TextAlign.center,
+                style: DesktopType.medium(Colors.white.withValues(alpha: 0.82)),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isZh
+                    ? '为这首曲目添加歌词后，它们将随播放进度同步滚动。'
+                    : 'Add lyrics to this track and they will scroll in time with the music.',
+                textAlign: TextAlign.center,
+                style: DesktopType.dense(Colors.white.withValues(alpha: 0.52)),
+              ),
+              if (widget.onEdit != null) ...[
+                const SizedBox(height: 16),
+                DesktopButton(
+                  key: const ValueKey('desktop-np-lyrics-edit'),
+                  label: l10n.musicEditDetailsLyrics,
+                  icon: DesktopIcons.edit,
+                  variant: DesktopButtonVariant.glass,
+                  foregroundOverride: Colors.white,
+                  onPressed: widget.onEdit,
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
@@ -662,173 +702,3 @@ class _LyricRowItem extends StatelessWidget {
 /// 可视行切片双层渲染组件：将折行后的文本拆成独立可视行，
 /// 底层绘 `basePaint`（含 `baseOpacity`），顶层按 `fillPaint` 结合
 /// `BlendMode.dstIn` 做水平逐字裁切，实现上下分色/渐变与折行逐字填充完美共存。
-class _VisualLineWordFillText extends StatelessWidget {
-  const _VisualLineWordFillText({
-    required this.text,
-    required this.textStyle,
-    required this.progress,
-    required this.wordFill,
-    required this.fillPaint,
-    required this.basePaint,
-    required this.baseOpacity,
-    required this.glow,
-  });
-
-  final String text;
-  final TextStyle textStyle;
-  final double progress;
-  final bool wordFill;
-  final DesktopNpPaint fillPaint;
-  final DesktopNpPaint basePaint;
-  final double baseOpacity;
-  final bool glow;
-
-  @override
-  Widget build(BuildContext context) {
-    final glowShadows =
-        glow
-            ? <Shadow>[
-              Shadow(
-                color: fillPaint.primaryColor.withValues(alpha: 0.55),
-                blurRadius: 28,
-              ),
-            ]
-            : null;
-
-    if (!wordFill) {
-      return ShaderMask(
-        blendMode: BlendMode.srcIn,
-        shaderCallback: (rect) => fillPaint.createShader(rect),
-        child: Text(text, style: textStyle.copyWith(shadows: glowShadows)),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final segments = _splitVisualLines(
-          text: text,
-          style: textStyle,
-          maxWidth: maxWidth,
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-        );
-        final totalLen = segments.fold<int>(0, (sum, s) => sum + s.length);
-        final safeTotal = totalLen <= 0 ? 1 : totalLen;
-        final currentChar = progress.clamp(0.0, 1.0) * safeTotal;
-
-        var consumed = 0;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final segment in segments)
-              Builder(
-                builder: (context) {
-                  final segLen = segment.isEmpty ? 1 : segment.length;
-                  final segStart = consumed;
-                  consumed += segment.length;
-                  final lineFrac = ((currentChar - segStart) / segLen).clamp(
-                    0.0,
-                    1.0,
-                  );
-
-                  final baseLayer = ShaderMask(
-                    blendMode: BlendMode.srcIn,
-                    shaderCallback:
-                        (rect) =>
-                            basePaint.createShader(rect, opacity: baseOpacity),
-                    child: Text(segment, style: textStyle, maxLines: 1),
-                  );
-
-                  if (lineFrac <= 0.001) {
-                    return baseLayer;
-                  }
-
-                  final sungLayer = ShaderMask(
-                    blendMode: BlendMode.srcIn,
-                    shaderCallback: (rect) => fillPaint.createShader(rect),
-                    child: Text(
-                      segment,
-                      style: textStyle.copyWith(shadows: glowShadows),
-                      maxLines: 1,
-                    ),
-                  );
-
-                  if (lineFrac >= 0.999) {
-                    return sungLayer;
-                  }
-
-                  final softEdge = (lineFrac + 0.025).clamp(0.0, 1.0);
-                  return Stack(
-                    children: [
-                      baseLayer,
-                      ShaderMask(
-                        blendMode: BlendMode.dstIn,
-                        shaderCallback: (rect) {
-                          return LinearGradient(
-                            colors: const <Color>[
-                              Colors.white,
-                              Colors.white,
-                              Colors.transparent,
-                              Colors.transparent,
-                            ],
-                            stops: <double>[0.0, lineFrac, softEdge, 1.0],
-                          ).createShader(rect);
-                        },
-                        child: sungLayer,
-                      ),
-                    ],
-                  );
-                },
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  List<String> _splitVisualLines({
-    required String text,
-    required TextStyle style,
-    required double maxWidth,
-    required TextDirection textDirection,
-    required TextScaler textScaler,
-  }) {
-    if (text.isEmpty || !maxWidth.isFinite || maxWidth <= 0) {
-      return <String>[text];
-    }
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: textDirection,
-      textScaler: textScaler,
-    )..layout(maxWidth: maxWidth);
-
-    final metrics = painter.computeLineMetrics();
-    if (metrics.length <= 1) {
-      return <String>[text];
-    }
-
-    final result = <String>[];
-    var start = 0;
-    for (var i = 0; i < metrics.length; i++) {
-      final metric = metrics[i];
-      final y = metric.baseline - metric.ascent * 0.5;
-      final endOffset =
-          i == metrics.length - 1
-              ? text.length
-              : painter
-                  .getPositionForOffset(Offset(maxWidth, y))
-                  .offset
-                  .clamp(start, text.length);
-      if (endOffset > start) {
-        result.add(text.substring(start, endOffset).trimRight());
-        start = endOffset;
-      }
-    }
-    if (start < text.length) {
-      final tail = text.substring(start).trim();
-      if (tail.isNotEmpty) result.add(tail);
-    }
-    return result.isEmpty ? <String>[text] : result;
-  }
-}

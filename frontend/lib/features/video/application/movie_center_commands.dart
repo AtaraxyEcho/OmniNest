@@ -482,8 +482,20 @@ extension MovieCenterCommands on MovieCenterController {
     List<String>? cast,
     String? runtime,
     String? posterUrl,
+    List<int>? posterBytes,
+    String? posterFileName,
+    String? posterFileId,
+    bool clearPoster = false,
+    bool restoreOriginal = false,
   }) async {
     try {
+      final uploadedPosterId =
+          posterBytes == null
+              ? posterFileId
+              : await _api.uploadPoster(
+                bytes: posterBytes,
+                fileName: posterFileName ?? 'poster.jpg',
+              );
       await _api.updateSeriesMetadata(
         seriesId: seriesId,
         title: title,
@@ -494,7 +506,10 @@ extension MovieCenterCommands on MovieCenterController {
         genres: genres,
         cast: cast,
         runtime: runtime,
-        posterUrl: posterUrl,
+        posterUrl: uploadedPosterId != null ? null : posterUrl,
+        posterFileId: uploadedPosterId,
+        clearPoster: clearPoster && uploadedPosterId == null,
+        restoreOriginal: restoreOriginal,
       );
       await refresh();
       centerRef.invalidate(movieSeriesDetailProvider(seriesId));

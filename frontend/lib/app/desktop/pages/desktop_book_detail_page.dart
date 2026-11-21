@@ -204,6 +204,7 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                 Wrap(
                                   spacing: 10,
                                   runSpacing: 10,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     DesktopButton(
                                       label:
@@ -556,9 +557,12 @@ class _DesktopBookShelfButtonState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final added = widget.item.addedToBookshelf;
-    return DesktopIconButton(
+    return DesktopButton.iconOnly(
       icon: added ? DesktopIcons.bookmarkFilled : DesktopIcons.bookmark,
+      variant: DesktopButtonVariant.soft,
+      large: true,
       active: added,
+      foregroundOverride: added ? DesktopSkin.of(context).accent : null,
       onPressed: _busy ? null : _toggle,
       tooltip:
           added ? l10n.readerRemoveFromBookshelf : l10n.readerAddToBookshelf,

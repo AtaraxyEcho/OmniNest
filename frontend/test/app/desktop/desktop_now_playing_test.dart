@@ -38,8 +38,10 @@ void main() {
     expect(find.text('NOW PLAYING'), findsOneWidget);
     expect(find.text('Evening Drift'), findsWidgets);
     expect(find.textContaining('Aoi Trio'), findsWidgets);
-    expect(find.text('04:14'), findsOneWidget);
-    expect(find.text('01:36'), findsOneWidget);
+    // v10 底栏：左侧当前时间、右侧剩余时间，总时长并进专辑副标题。
+    expect(find.text('1:36'), findsOneWidget);
+    expect(find.text('-2:38'), findsOneWidget);
+    expect(find.textContaining('4:14'), findsOneWidget);
   });
 
   testWidgets('About 页有 64 柱动态频谱', (tester) async {

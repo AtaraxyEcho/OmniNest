@@ -1,14 +1,9 @@
 part of 'desktop_shell.dart';
 
 class _DesktopImmersiveCanvas extends ConsumerWidget {
-  const _DesktopImmersiveCanvas({
-    required this.path,
-    required this.ambientImage,
-    required this.child,
-  });
+  const _DesktopImmersiveCanvas({required this.path, required this.child});
 
   final String path;
-  final String? ambientImage;
   final Widget child;
 
   @override
@@ -34,7 +29,7 @@ class _DesktopImmersiveCanvas extends ConsumerWidget {
             if (backdropActive)
               DesktopBackdropLayer(path: path)
             else
-              _AmbientLayer(imageUrl: ambientImage),
+              _AmbientLayer(path: path),
             const Positioned(
               top: 0,
               left: 0,
@@ -51,15 +46,68 @@ class _DesktopImmersiveCanvas extends ConsumerWidget {
   }
 }
 
-/// 环境光层：只订阅「强度」与「减动效」两位。
-///
-/// 外观抽屉与设置页的强度滑杆每拖一格都会写一次外观偏好；若在 `_Workspace`
-/// 里 watch 整份外观，整条壳层（标题栏、侧栏、内容区、播放条）会跟着每帧
-/// 重建，而真正要变的只有这一层的整层 opacity。
+/// 环境光层：独立订阅当前路由的环境封面、「强度」与「减动效」，并用
+/// `ExcludeSemantics` 屏蔽装饰层，避免污染 Windows AXTree 或拖累壳层整树重建。
 class _AmbientLayer extends ConsumerWidget {
-  const _AmbientLayer({required this.imageUrl});
+  const _AmbientLayer({required this.path});
 
-  final String? imageUrl;
+  final String path;
+
+  String? _resolveAmbientImage(WidgetRef ref) {
+    if (path.startsWith('/music')) {
+      return ref.watch(
+        musicPortalSnapshotProvider.select((snapshot) {
+          final music = snapshot.asData?.value;
+          return music?.activeTrack?.coverUrl ?? music?.featuredAlbum?.coverUrl;
+        }),
+      );
+    }
+    if (path.startsWith('/video')) {
+      return ref.watch(
+        movieDashboardProvider.select((dashboard) {
+          for (final item
+              in dashboard.asData?.value.recentlyAdded ??
+                  const <MovieVideoItem>[]) {
+            final image = item.backdropImageUrl ?? item.posterImageUrl;
+            if (image != null) {
+              return image;
+            }
+          }
+          return null;
+        }),
+      );
+    }
+    if (path.startsWith('/reader')) {
+      return ref.watch(
+        readerDashboardProvider.select((dashboard) {
+          for (final item
+              in dashboard.asData?.value.continueReading ??
+                  const <ReaderItem>[]) {
+            final cover = item.coverUrl;
+            if (cover != null && cover.isNotEmpty) {
+              return cover;
+            }
+          }
+          return null;
+        }),
+      );
+    }
+    if (path.startsWith('/photos')) {
+      return ref.watch(
+        photoDashboardProvider.select((dashboard) {
+          for (final item
+              in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
+            if (item.coverUrl != null) {
+              return item.coverUrl;
+            }
+          }
+          return null;
+        }),
+      );
+    }
+    // 随包资产而不是网络 URL：`DesktopAmbient` 按前缀识别并走 `Image.asset`。
+    return bundledDefaultWallpaperAssetPath;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -69,30 +117,22 @@ class _AmbientLayer extends ConsumerWidget {
     final reduceMotion = ref.watch(
       desktopAppearanceProvider.select((appearance) => appearance.reduceMotion),
     );
-    return DesktopAmbient(
-      imageUrl: imageUrl,
-      intensity: intensity,
-      reduceMotion: reduceMotion,
+    final imageUrl = _resolveAmbientImage(ref);
+    return ExcludeSemantics(
+      child: DesktopAmbient(
+        imageUrl: imageUrl,
+        intensity: intensity,
+        reduceMotion: reduceMotion,
+      ),
     );
   }
 }
 
-bool _isShellBranchPath(String rawPath) {
-  final path = Uri.tryParse(rawPath)?.path ?? rawPath.split('?').first;
-  return path == '/portal' ||
-      path == '/library' ||
-      path == '/files' ||
-      path == '/reader' ||
-      path == '/reader/bookshelf' ||
-      path == '/reader/stats' ||
-      path == '/reader/admin';
-}
-
-/// 页面入场（样例 `.route`）：opacity + 12px translateY + 0.992 scale，
-/// 彻底移除每帧全屏 `ImageFilter.blur` 与 build 期重复构造 `CurvedAnimation`。
+/// 页面入场（样例 `.route`）：纯 GPU 合成层 `FadeTransition(alwaysIncludeSemantics: true)` +
+/// `SlideTransition` + `ScaleTransition`（300ms，`DesktopMotion.ease`），拓扑恒定不插拔节点。
 ///
-/// 一级壳层分支间切换由 `MobileAppShell` 桌面分支同步承载，避免双层叠动画；
-/// 本层负责顶部 2px 路由进度条及非分支主路由的丝滑入场。
+/// 桌面工作区（`DesktopShellMode.chrome`）内的一级分支与常规/二级路由统一由本层
+/// 单一承载过渡，不再与内层分支动画或路由动画叠跑，也不再强行展示伪进度条。
 class _RouteEnter extends StatefulWidget {
   const _RouteEnter({required this.path, required this.child});
 
@@ -105,43 +145,25 @@ class _RouteEnter extends StatefulWidget {
 
 class _RouteEnterState extends State<_RouteEnter>
     with SingleTickerProviderStateMixin {
+  static const Duration _transitionDuration = Duration(milliseconds: 300);
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: DesktopMotion.route,
+    duration: _transitionDuration,
     value: 1,
   );
   late final CurvedAnimation _curved = CurvedAnimation(
     parent: _controller,
     curve: DesktopMotion.ease,
   );
-
-  /// 路由正在切换：入场动画期间顶栏扫一条 2px 进度条（样例 `.route-load`）。
-  bool _loading = false;
-
-  /// 一级分支间切换由内层 `_DesktopBranchTransition` 承载内容过渡，本层仅播进度条。
-  bool _animateContent = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addStatusListener(_onEnterStatus);
-  }
-
-  void _onEnterStatus(AnimationStatus status) {
-    // 状态回调发生在 ticker 里，不在构建期，可以安全 setState。
-    if (!mounted) {
-      return;
-    }
-    final loading = status == AnimationStatus.forward;
-    if (loading != _loading) {
-      setState(() {
-        _loading = loading;
-        if (!loading) {
-          _animateContent = false;
-        }
-      });
-    }
-  }
+  late final Animation<Offset> _slideAnimation = Tween<Offset>(
+    begin: const Offset(0, 0.015),
+    end: Offset.zero,
+  ).animate(_curved);
+  late final Animation<double> _scaleAnimation = Tween<double>(
+    begin: 0.992,
+    end: 1.0,
+  ).animate(_curved);
 
   @override
   void didUpdateWidget(_RouteEnter oldWidget) {
@@ -150,23 +172,14 @@ class _RouteEnterState extends State<_RouteEnter>
       return;
     }
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      _loading = false;
-      _animateContent = false;
       _controller.value = 1;
       return;
     }
-    final bothBranches =
-        _isShellBranchPath(oldWidget.path) && _isShellBranchPath(widget.path);
-    // 这里不能 setState：`forward()` 会同步派发状态回调，而 didUpdateWidget
-    // 处在构建期。直接改字段，靠本次重建把进度条画出来。
-    _loading = true;
-    _animateContent = !bothBranches;
     _controller.forward(from: 0);
   }
 
   @override
   void dispose() {
-    _controller.removeStatusListener(_onEnterStatus);
     _curved.dispose();
     _controller.dispose();
     super.dispose();
@@ -174,33 +187,22 @@ class _RouteEnterState extends State<_RouteEnter>
 
   @override
   Widget build(BuildContext context) {
-    // 崩溃边界与进度条挂在动画**外面**：放进 builder 里会让
-    // `DesktopErrorBoundary.build` 在入场的每一帧去接管并还原全局
-    // `ErrorWidget.builder`。
+    // 崩溃边界挂在动画外面；过渡全程保持 FadeTransition -> SlideTransition ->
+    // ScaleTransition -> RepaintBoundary 拓扑恒定，避免动态插拔节点导致
+    // Windows AXTree 语义链断裂。
     return DesktopRouteContainer(
       path: widget.path,
-      loading: _loading,
-      child: AnimatedBuilder(
-        animation: _curved,
-        child: RepaintBoundary(child: widget.child),
-        builder: (context, child) {
-          if (!_animateContent) {
-            return child!;
-          }
-          final t = _curved.value.clamp(0.0, 1.0);
-          final scale = 0.992 + 0.008 * t;
-          return Opacity(
-            opacity: t,
-            child: Transform.translate(
-              offset: Offset(0, (1 - t) * 12),
-              child: Transform.scale(
-                scale: scale,
-                alignment: Alignment.topCenter,
-                child: child,
-              ),
-            ),
-          );
-        },
+      child: FadeTransition(
+        opacity: _curved,
+        alwaysIncludeSemantics: true,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            alignment: Alignment.topCenter,
+            child: RepaintBoundary(child: widget.child),
+          ),
+        ),
       ),
     );
   }

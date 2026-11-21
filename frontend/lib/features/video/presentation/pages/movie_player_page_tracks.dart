@@ -79,8 +79,32 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
               durationSeconds: plan.durationSeconds,
             );
 
-    // 取消上一次的 tracks 监听
+    // 取消上一次的 tracks / playing / error 监听
     _tracksSub?.cancel();
+    _playingSub?.cancel();
+    _errorSub?.cancel();
+    if (_playbackError != null) {
+      _updateState(() => _playbackError = null);
+    }
+
+    _errorSub = _player.stream.error.listen((message) {
+      if (!mounted || generation != _openGeneration) return;
+      final trimmed = message.trim();
+      if (trimmed.isEmpty) return;
+      devLog('[_openIfNeeded] 播放器流错误: $trimmed');
+      _updateState(() {
+        _isBuffering = false;
+        _playbackError = trimmed;
+        _showControls = true;
+      });
+    });
+
+    _playingSub = _player.stream.playing.listen((playing) {
+      if (!mounted || generation != _openGeneration) return;
+      if (_isPlaying != playing) {
+        _updateState(() => _isPlaying = playing);
+      }
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || generation != _openGeneration) {
@@ -104,6 +128,14 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         }
       } catch (e) {
         devLog('[_openIfNeeded] 播放器打开失败: $e');
+        if (mounted && generation == _openGeneration) {
+          _updateState(() {
+            _isBuffering = false;
+            _playbackError = '$e';
+            _showControls = true;
+          });
+        }
+        return;
       }
       if (!mounted || generation != _openGeneration) {
         return;

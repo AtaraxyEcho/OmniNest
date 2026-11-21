@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v5：静止态与翻页态共享同一节点树）。
+/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v6：支持 RTL 双页与 showPaperGrain）。
 extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _buildPageOrEmpty(int index) {
     final page = widget.pageBuilder(index);
@@ -22,19 +22,32 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
   }) {
     final idx = widget.state.pageIndex;
     if (widget.spread) {
-      final left =
-          leftOverride ?? widget.pageBuilder(idx) ?? const SizedBox.expand();
-      final right = rightOverride ?? widget.pageBuilder(idx + 1);
+      final Widget left;
+      final Widget? right;
+      if (widget.reverse) {
+        // RTL 日漫双页：右页显示 idx，左页显示 idx + 1。
+        left =
+            leftOverride ??
+            widget.pageBuilder(idx + 1) ??
+            const SizedBox.expand();
+        right = rightOverride ?? widget.pageBuilder(idx);
+      } else {
+        left =
+            leftOverride ?? widget.pageBuilder(idx) ?? const SizedBox.expand();
+        right = rightOverride ?? widget.pageBuilder(idx + 1);
+      }
       final last = widget.state.pageCount <= 1 ? 1 : widget.state.pageCount - 1;
+      final rawProgress = (idx / last).clamp(0.0, 1.0);
       return ReaderPageSpread(
         left: left,
         right: right,
         surfaceColor: widget.surfaceColor,
         paperEdgeColor: widget.paperEdgeColor,
+        showPaperGrain: widget.showPaperGrain,
         bookmarked: widget.bookmarked,
         leftBoundaryKey: _liveLeftKey,
         rightBoundaryKey: _liveRightKey,
-        progress: (idx / last).clamp(0.0, 1.0),
+        progress: widget.reverse ? (1.0 - rawProgress) : rawProgress,
         curlOverlay: curlOverlay,
       );
     }

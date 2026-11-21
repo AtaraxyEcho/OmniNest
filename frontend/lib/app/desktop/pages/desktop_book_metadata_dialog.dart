@@ -10,10 +10,10 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
@@ -52,7 +52,10 @@ class _DesktopBookMetadataDrawerState
     text: widget.item.coverImageUrl ?? '',
   );
   late String _readerType = widget.item.readerType;
+  DesktopPickedCover? _pickedCover;
+  bool _clearCover = false;
   bool _saving = false;
+  String? _coverUrlError;
 
   static const _readerTypes = ['BOOK', 'COMIC', 'MANGA'];
 
@@ -79,6 +82,16 @@ class _DesktopBookMetadataDrawerState
     if (value.isEmpty) return true;
     final parsed = int.tryParse(value);
     return parsed != null && parsed >= 1 && parsed <= 999;
+  }
+
+  static bool _isHttpUrl(String value) {
+    if (value.length > 2048) return false;
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        (uri.scheme.toLowerCase() == 'http' ||
+            uri.scheme.toLowerCase() == 'https') &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty;
   }
 
   @override
@@ -131,42 +144,51 @@ class _DesktopBookMetadataDrawerState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 72,
-                height: 102,
-                child: DesktopCover(
-                  url: widget.item.coverUrl,
-                  kind: DesktopCoverKind.reader,
-                  readerItemId: widget.item.id,
-                  fallbackIcon: DesktopIcons.book,
-                  borderRadius: BorderRadius.circular(
-                    DesktopMetrics.radiusSmall,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  children: [
-                    _field(
-                      l10n.desktopBookTitle,
-                      _title,
-                      required: true,
-                      error:
-                          _title.text.trim().isEmpty
-                              ? l10n.desktopBookTitleRequired
-                              : null,
-                    ),
-                    _field(l10n.desktopBookAuthor, _author),
-                  ],
-                ),
-              ),
-            ],
+          DesktopCoverField(
+            label: l10n.desktopBookCoverUrl,
+            shape: DesktopCoverFieldShape.poster,
+            previewUrl: widget.item.coverUrl,
+            coverKind: DesktopCoverKind.reader,
+            readerItemId: widget.item.id,
+            fallbackIcon: DesktopIcons.book,
+            urlController: _coverImageUrl,
+            pickedCover: _pickedCover,
+            cleared: _clearCover,
+            urlError: _coverUrlError,
+            enabled: !_saving,
+            onPicked: (picked) {
+              setState(() {
+                _pickedCover = picked;
+                _clearCover = false;
+                _coverUrlError = null;
+              });
+            },
+            onClear: () {
+              setState(() {
+                _pickedCover = null;
+                _clearCover = true;
+                _coverUrlError = null;
+              });
+            },
+            onUrlChanged: (_) {
+              setState(() {
+                _pickedCover = null;
+                _clearCover = false;
+                _coverUrlError = null;
+              });
+            },
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 16),
+          _field(
+            l10n.desktopBookTitle,
+            _title,
+            required: true,
+            error:
+                _title.text.trim().isEmpty
+                    ? l10n.desktopBookTitleRequired
+                    : null,
+          ),
+          _field(l10n.desktopBookAuthor, _author),
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
@@ -227,13 +249,6 @@ class _DesktopBookMetadataDrawerState
             maxLines: 5,
             counterBuilder: (text) => l10n.desktopFieldChars(text.length),
           ),
-          const SizedBox(height: 12),
-          DesktopTextField(
-            controller: _coverImageUrl,
-            label: l10n.desktopBookCoverUrl,
-            hint: l10n.desktopBookCoverUrlHint,
-            height: 36,
-          ),
         ],
       ),
     );
@@ -265,42 +280,58 @@ class _DesktopBookMetadataDrawerState
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
-    setState(() => _saving = true);
+    final coverUrl = _coverImageUrl.text.trim();
+    if (_pickedCover == null &&
+        !_clearCover &&
+        coverUrl.isNotEmpty &&
+        !_isHttpUrl(coverUrl)) {
+      setState(() => _coverUrlError = l10n.readerInvalidCoverUrl);
+      return;
+    }
+    setState(() {
+      _coverUrlError = null;
+      _saving = true;
+    });
     try {
-      await ref
-          .read(readerCenterControllerProvider.notifier)
-          .updateItemMetadata(
-            itemId: widget.item.id,
-            fields: {
-              'title': _title.text.trim(),
-              'authorName': _author.text.trim(),
-              'genres':
-                  _tags.text
-                      .split(',')
-                      .map((tag) => tag.trim())
-                      .where((tag) => tag.isNotEmpty)
-                      .toList(),
-              'description': _description.text.trim(),
-              if (_readerType != widget.item.readerType)
-                'readerType': _readerType,
-              if (_series.text.trim() != (widget.item.seriesName ?? ''))
-                'seriesName': _series.text.trim(),
-              if (_volume.text.trim().isEmpty &&
-                  widget.item.volumeNumber != null)
-                'clearVolumeNumber': true,
-              if (_volume.text.trim().isNotEmpty &&
-                  int.tryParse(_volume.text.trim()) != widget.item.volumeNumber)
-                'volumeNumber': int.parse(_volume.text.trim()),
-              if (_coverImageUrl.text.trim() !=
-                  (widget.item.coverImageUrl ?? ''))
-                'coverImageUrl': _coverImageUrl.text.trim(),
-            },
-          );
+      final controller = ref.read(readerCenterControllerProvider.notifier);
+      if (_pickedCover != null) {
+        await controller.uploadCover(
+          itemId: widget.item.id,
+          imageBytes: _pickedCover!.bytes,
+          fileName: _pickedCover!.fileName,
+        );
+      }
+      await controller.updateItemMetadata(
+        itemId: widget.item.id,
+        fields: {
+          'title': _title.text.trim(),
+          'authorName': _author.text.trim(),
+          'genres':
+              _tags.text
+                  .split(',')
+                  .map((tag) => tag.trim())
+                  .where((tag) => tag.isNotEmpty)
+                  .toList(),
+          'description': _description.text.trim(),
+          if (_readerType != widget.item.readerType) 'readerType': _readerType,
+          if (_series.text.trim() != (widget.item.seriesName ?? ''))
+            'seriesName': _series.text.trim(),
+          if (_volume.text.trim().isEmpty && widget.item.volumeNumber != null)
+            'clearVolumeNumber': true,
+          if (_volume.text.trim().isNotEmpty &&
+              int.tryParse(_volume.text.trim()) != widget.item.volumeNumber)
+            'volumeNumber': int.parse(_volume.text.trim()),
+          if (_clearCover && _pickedCover == null)
+            'clearCover': true
+          else if (_pickedCover == null &&
+              coverUrl != (widget.item.coverImageUrl ?? ''))
+            'coverImageUrl': coverUrl,
+        },
+      );
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
       if (!mounted) {
         return;
       }
-      // 样例 `MetaEditor.tsx:19`：保存成功先回一条 `Metadata saved` 提示，
-      // 再关抽屉——抽屉一关，用户就没别的线索了。
       showDesktopToast(
         context,
         l10n.desktopBookMetadataSaved,
@@ -329,6 +360,7 @@ class _DesktopBookMetadataDrawerState
             itemId: widget.item.id,
             fields: const {'restoreOriginal': true},
           );
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
       if (!mounted) return;
       showDesktopToast(
         context,

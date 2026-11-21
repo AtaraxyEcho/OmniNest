@@ -545,8 +545,11 @@ bool _isDesktopRouteContext(BuildContext context) {
   );
 }
 
-/// 桌面端二级详情页与管理后台统一页面过渡（`420ms` 淡入 + 上移 12px + 0.992 微缩收束，
-/// `200ms` 快速淡出）；移动端保持平台默认 `MaterialPage`。
+/// 桌面端二级详情页与管理后台页面构造。
+///
+/// 工作区（`DesktopShellMode.chrome`）内的常规与二级路由统一交由外层单一
+/// `_RouteEnter` 承载 GPU 合成层过渡，此处直接返回 `NoTransitionPage` 消除
+/// 双重入场动画打架；移动端保持平台默认 `MaterialPage`。
 Page<void> _desktopRoutePage(
   BuildContext context,
   GoRouterState state,
@@ -557,9 +560,12 @@ Page<void> _desktopRoutePage(
   if (!_isDesktopRouteContext(context)) {
     return buildAppRoutePage(key: key, child: child);
   }
+  if (desktopShellModeForPath(state.uri.path) == DesktopShellMode.chrome) {
+    return NoTransitionPage<void>(key: key, child: child);
+  }
   return CustomTransitionPage<void>(
     key: key,
-    transitionDuration: DesktopMotion.route,
+    transitionDuration: const Duration(milliseconds: 300),
     reverseTransitionDuration: DesktopMotion.routeExit,
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -571,28 +577,20 @@ Page<void> _desktopRoutePage(
         curve: DesktopMotion.ease,
         reverseCurve: DesktopMotion.exitCurve,
       );
-      final isReversing = animation.status == AnimationStatus.reverse;
-      return AnimatedBuilder(
-        animation: curved,
-        child: child,
-        builder: (context, child) {
-          final t = curved.value.clamp(0.0, 1.0);
-          if (isReversing) {
-            return Opacity(opacity: t, child: child);
-          }
-          final scale = 0.992 + 0.008 * t;
-          return Opacity(
-            opacity: t,
-            child: Transform.translate(
-              offset: Offset(0, (1 - t) * 12),
-              child: Transform.scale(
-                scale: scale,
-                alignment: Alignment.topCenter,
-                child: child,
-              ),
-            ),
-          );
-        },
+      return FadeTransition(
+        opacity: curved,
+        alwaysIncludeSemantics: true,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.015),
+            end: Offset.zero,
+          ).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.992, end: 1.0).animate(curved),
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        ),
       );
     },
   );
@@ -613,7 +611,7 @@ GoRoute _desktopDetailRoute(
   );
 }
 
-/// 分支内无路由级动效的阅读子路由（由壳层分支过渡承载）。
+/// 分支内无路由级动效的阅读子路由（由外层壳层过渡统一承载）。
 GoRoute _readerRoute(
   String path,
   Widget Function(GoRouterState state) builder,
@@ -669,6 +667,7 @@ GoRoute _desktopNowPlayingRoute(
           );
           return FadeTransition(
             opacity: curved,
+            alwaysIncludeSemantics: true,
             child: SlideTransition(
               position: Tween<Offset>(
                 begin: const Offset(0, 0.06),
@@ -705,6 +704,7 @@ Page<void> _immersiveTransitionPage(
       );
       return FadeTransition(
         opacity: curved,
+        alwaysIncludeSemantics: true,
         child: ScaleTransition(
           scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
           child: child,

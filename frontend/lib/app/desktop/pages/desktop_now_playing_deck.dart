@@ -28,7 +28,13 @@ class _Deck extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.min(constraints.maxWidth, 560.0);
+        final maxByHeight =
+            constraints.maxHeight.isFinite
+                ? constraints.maxHeight * 1.05
+                : 560.0;
+        final size = math
+            .min(math.min(constraints.maxWidth, maxByHeight), 560.0)
+            .clamp(0.0, 560.0);
         final height = size / 1.05;
         final platter = size * 0.8;
         return Center(
@@ -372,50 +378,110 @@ class _Tonearm extends StatelessWidget {
   }
 }
 
-/// 波形进度条（样例 `.wave`）：52 高、白色播放头，点击/拖动定位。
-class _WaveSeek extends StatelessWidget {
+/// 波形进度条（样例 `.wave`）：52 高、白色播放头，按 `trackId` 生成专属波形，
+/// 拖动仅更新预览位置，松手或点击时通过 `onCommit` 触发一次 `seek`。
+class _WaveSeek extends StatefulWidget {
   const _WaveSeek({
+    required this.trackId,
     required this.position,
     required this.duration,
-    required this.onSeek,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onCommit,
+    this.onDragCancel,
   });
 
+  final String trackId;
   final Duration position;
   final Duration duration;
-  final ValueChanged<Duration> onSeek;
+  final VoidCallback onDragStart;
+  final ValueChanged<Duration> onDragUpdate;
+  final ValueChanged<Duration> onCommit;
+  final VoidCallback? onDragCancel;
+
+  @override
+  State<_WaveSeek> createState() => _WaveSeekState();
+}
+
+class _WaveSeekState extends State<_WaveSeek> {
+  Duration? _pendingPosition;
+
+  Duration _positionAt(double dx, double width) {
+    final total = widget.duration.inMilliseconds;
+    if (total <= 0 || width <= 0) {
+      return Duration.zero;
+    }
+    final fraction = (dx / width).clamp(0.0, 1.0);
+    return Duration(milliseconds: (total * fraction).round());
+  }
+
+  static int _stableSeed(String id) {
+    var hash = 2166136261;
+    for (final unit in id.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 16777619) & 0x7fffffff;
+    }
+    return hash;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final total = duration.inMilliseconds;
+    final total = widget.duration.inMilliseconds;
     final progress =
-        total <= 0 ? 0.0 : (position.inMilliseconds / total).clamp(0.0, 1.0);
+        total <= 0
+            ? 0.0
+            : (widget.position.inMilliseconds / total).clamp(0.0, 1.0);
+    final seed = _stableSeed(widget.trackId);
+    final skin = DesktopSkin.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        void seekAt(double dx) {
-          if (total <= 0 || constraints.maxWidth <= 0) {
-            return;
-          }
-          final fraction = (dx / constraints.maxWidth).clamp(0.0, 1.0);
-          onSeek(Duration(milliseconds: (total * fraction).round()));
-        }
-
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) => seekAt(details.localPosition.dx),
-          onHorizontalDragUpdate: (details) => seekAt(details.localPosition.dx),
-          child: SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _WavePainter(
-                progress: progress,
-                played:
-                    Color.lerp(
-                      Colors.white,
-                      Theme.of(context).colorScheme.primary,
-                      0.35,
-                    )!,
-                rest: Colors.white.withValues(alpha: 0.22),
+        final width = constraints.maxWidth;
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) {
+              if (total <= 0 || width <= 0) return;
+              final target = _positionAt(details.localPosition.dx, width);
+              _pendingPosition = null;
+              widget.onCommit(target);
+            },
+            onHorizontalDragStart: (details) {
+              if (total <= 0 || width <= 0) return;
+              final target = _positionAt(details.localPosition.dx, width);
+              _pendingPosition = target;
+              widget.onDragStart();
+              widget.onDragUpdate(target);
+            },
+            onHorizontalDragUpdate: (details) {
+              if (total <= 0 || width <= 0) return;
+              final target = _positionAt(details.localPosition.dx, width);
+              _pendingPosition = target;
+              widget.onDragUpdate(target);
+            },
+            onHorizontalDragEnd: (_) {
+              final target = _pendingPosition ?? widget.position;
+              _pendingPosition = null;
+              if (total > 0) {
+                widget.onCommit(target);
+              } else {
+                widget.onDragCancel?.call();
+              }
+            },
+            onHorizontalDragCancel: () {
+              _pendingPosition = null;
+              widget.onDragCancel?.call();
+            },
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _WavePainter(
+                  progress: progress,
+                  seed: seed,
+                  played: Color.lerp(Colors.white, skin.accent, 0.35)!,
+                  rest: Colors.white.withValues(alpha: 0.22),
+                ),
               ),
             ),
           ),
@@ -428,11 +494,13 @@ class _WaveSeek extends StatelessWidget {
 class _WavePainter extends CustomPainter {
   const _WavePainter({
     required this.progress,
+    required this.seed,
     required this.played,
     required this.rest,
   });
 
   final double progress;
+  final int seed;
   final Color played;
   final Color rest;
 
@@ -442,9 +510,14 @@ class _WavePainter extends CustomPainter {
     final step = size.width / bars;
     final barWidth = math.max(1.0, step - 2);
     final paint = Paint()..strokeCap = StrokeCap.round;
+    final seedPhase = (seed % 997) * 0.317;
     for (var i = 0; i < bars; i++) {
-      final noise = (math.sin(i * 12.9898) * 43758.5453).abs() % 1;
-      final magnitude = 0.28 + noise * 0.72;
+      final noise =
+          (math.sin((i + 1) * 12.9898 + seedPhase * 78.233) * 43758.5453)
+              .abs() %
+          1;
+      final envelope = 0.72 + 0.28 * math.sin((i / bars) * math.pi);
+      final magnitude = (0.24 + noise * 0.76) * envelope;
       final left = i * step;
       final centerY = size.height / 2;
       final half = size.height / 2 * magnitude;
@@ -468,6 +541,7 @@ class _WavePainter extends CustomPainter {
   @override
   bool shouldRepaint(_WavePainter oldDelegate) =>
       oldDelegate.progress != progress ||
+      oldDelegate.seed != seed ||
       oldDelegate.played != played ||
       oldDelegate.rest != rest;
 }

@@ -62,25 +62,28 @@ class DesktopBackdropLayer extends ConsumerWidget {
     // 切出壁纸作用域时不再返回空盒子：那样会把 AppBackdropSurface 连同
     // media_kit 的视频纹理整棵树卸载，点回首页再从零挂载，跨栏那一下的
     // 顿挫就来自这里。改由 Offstage 保活（0 绘制、0 命中），并把 active
-    // 置 false 让会话立即暂停解码。
-    return Offstage(
-      offstage: !inScope,
-      child: KeyedSubtree(
-        key: const ValueKey('desktop-backdrop'),
-        child: AppBackdropSurface(
-          asset: asset,
-          settings: state.settings,
-          policy: AppBackdropPolicy(
-            scene: AppBackdropScene.work,
-            visible: true,
-            playbackMode: AppBackdropPlaybackMode.continuous,
-            readabilityMode: AppBackdropReadabilityMode.content,
-            motionAllowed: motionAllowed,
+    // 置 false 让会话立即暂停解码；外层包裹 ExcludeSemantics 防止装饰壁纸
+    // 节点污染 Windows AXTree。
+    return ExcludeSemantics(
+      child: Offstage(
+        offstage: !inScope,
+        child: KeyedSubtree(
+          key: const ValueKey('desktop-backdrop'),
+          child: AppBackdropSurface(
+            asset: asset,
+            settings: state.settings,
+            policy: AppBackdropPolicy(
+              scene: AppBackdropScene.work,
+              visible: true,
+              playbackMode: AppBackdropPlaybackMode.continuous,
+              readabilityMode: AppBackdropReadabilityMode.content,
+              motionAllowed: motionAllowed,
+            ),
+            // 桌面给 0：环境档的 sigma 是移动壳层语义，压到实底前景页上会沿
+            // 边界出现对角亮缝（`app_backdrop_surface.dart` 的既有结论）。
+            environmentBlurSigma: 0,
+            active: inScope && motionAllowed,
           ),
-          // 桌面给 0：环境档的 sigma 是移动壳层语义，压到实底前景页上会沿
-          // 边界出现对角亮缝（`app_backdrop_surface.dart` 的既有结论）。
-          environmentBlurSigma: 0,
-          active: inScope && motionAllowed,
         ),
       ),
     );

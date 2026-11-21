@@ -61,90 +61,99 @@ class _TrashSection extends StatelessWidget {
             ],
           ),
         ),
-        if (photos.isEmpty && loading)
-          const DesktopSkeletonPhotoGrid(targetHeight: 200)
-        else if (photos.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 54),
-            child: DesktopEmpty(
-              icon: DesktopIcons.trash,
-              message: l10n.photosTrashHint,
-              actionLabel: null,
-            ),
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // 样例 `.album-grid`：`minmax(220px,1fr)` + 26 的单一 gap。
-              // 列数要按同一个 26 反推，否则最后一列会挤出容器。
-              const gap = 26.0;
-              final columns = ((constraints.maxWidth + gap) / (220 + gap))
-                  .floor()
-                  .clamp(2, 7);
-              final width =
-                  (constraints.maxWidth - (columns - 1) * gap) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  for (var i = 0; i < photos.length; i++)
-                    SizedBox(
-                      width: width,
-                      child: DesktopStagger(
-                        index: i,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AspectRatio(
-                              aspectRatio: 4 / 3,
-                              child: DesktopImage(
-                                url: photos[i].coverUrl,
-                                cacheWidth: 640,
-                                borderRadius: BorderRadius.circular(
-                                  DesktopMetrics.radius,
+        DesktopSkeletonSwitcher(
+          regionId: 'photos-trash',
+          hasData: photos.isNotEmpty,
+          loading: photos.isEmpty && loading,
+          skeleton: const DesktopSkeletonPhotoGrid(
+            targetHeight: 200,
+            showGroupHeaders: false,
+          ),
+          child:
+              photos.isEmpty
+                  ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 54),
+                    child: DesktopEmpty(
+                      icon: DesktopIcons.trash,
+                      message: l10n.photosTrashHint,
+                      actionLabel: null,
+                    ),
+                  )
+                  : LayoutBuilder(
+                    builder: (context, constraints) {
+                      // 样例 `.album-grid`：`minmax(220px,1fr)` + 26 的单一 gap。
+                      // 列数要按同一个 26 反推，否则最后一列会挤出容器。
+                      const gap = 26.0;
+                      final columns = ((constraints.maxWidth + gap) /
+                              (220 + gap))
+                          .floor()
+                          .clamp(2, 7);
+                      final width =
+                          (constraints.maxWidth - (columns - 1) * gap) /
+                          columns;
+                      return Wrap(
+                        spacing: gap,
+                        runSpacing: gap,
+                        children: [
+                          for (var i = 0; i < photos.length; i++)
+                            SizedBox(
+                              width: width,
+                              child: DesktopStagger(
+                                index: i,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    AspectRatio(
+                                      aspectRatio: 4 / 3,
+                                      child: DesktopImage(
+                                        url: photos[i].coverUrl,
+                                        cacheWidth: 640,
+                                        borderRadius: BorderRadius.circular(
+                                          DesktopMetrics.radius,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      photos[i].title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.rowTitle(skin.text),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        DesktopButton(
+                                          label: l10n.photosRestore,
+                                          icon: DesktopIcons.undo,
+                                          variant: DesktopButtonVariant.ghost,
+                                          onPressed: () => onRestore(photos[i]),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        DesktopButton(
+                                          label: l10n.photosDeleteForever,
+                                          icon: DesktopIcons.trash,
+                                          variant: DesktopButtonVariant.ghost,
+                                          onPressed: () => onPurge(photos[i]),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              photos[i].title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.rowTitle(skin.text),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                DesktopButton(
-                                  label: l10n.photosRestore,
-                                  icon: DesktopIcons.undo,
-                                  variant: DesktopButtonVariant.ghost,
-                                  onPressed: () => onRestore(photos[i]),
-                                ),
-                                const SizedBox(width: 6),
-                                DesktopButton(
-                                  label: l10n.photosDeleteForever,
-                                  icon: DesktopIcons.trash,
-                                  variant: DesktopButtonVariant.ghost,
-                                  onPressed: () => onPurge(photos[i]),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
+                        ],
+                      );
+                    },
+                  ),
+        ),
       ],
     );
   }
 }
 
 /// 地点分区（样例 `Photos.tsx` 的 `seg === "Places"`）：左侧点阵地球
-/// （可拖动、选中转向）+ 右侧地点列表，下方是选中地点的照片墙。
+/// （可拖动、选中转向）+ 右侧地点列表，下方是选中地点的 Justified 照片墙。
 class _PlacesLoadingSkeleton extends StatelessWidget {
   const _PlacesLoadingSkeleton();
 
@@ -222,7 +231,11 @@ class _PlacesLoadingSkeleton extends StatelessWidget {
             const SizedBox(height: 8),
             const DesktopSkeletonBox(width: 110, height: 12),
             const SizedBox(height: 14),
-            const DesktopSkeletonPhotoGrid(targetHeight: 168),
+            const DesktopSkeletonPhotoGrid(
+              targetHeight: 168,
+              groups: 1,
+              showGroupHeaders: false,
+            ),
           ],
         );
       },
@@ -363,29 +376,14 @@ class _PlacesSectionState extends State<_PlacesSection> {
                 ),
               )
             else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (var i = 0; i < photos.length && i < 18; i++)
-                    SizedBox(
-                      width: 168,
-                      height: 168,
-                      child: DesktopStagger(
-                        index: i,
-                        child: DesktopHoverLift(
-                          onTap: () => widget.onOpen(photos[i], photos),
-                          child: DesktopImage(
-                            url: photos[i].coverUrl,
-                            cacheWidth: 512,
-                            borderRadius: BorderRadius.circular(
-                              DesktopMetrics.radiusSmall,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              _JustifiedPhotos(
+                photos: photos,
+                targetHeight: 180,
+                selection: const <String>{},
+                onActivate:
+                    (photo, groupPhotos) => widget.onOpen(photo, groupPhotos),
+                onToggleSelect: (_) {},
+                showSelectionControls: false,
               ),
           ],
         );

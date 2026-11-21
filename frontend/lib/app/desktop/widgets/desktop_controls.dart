@@ -150,8 +150,8 @@ class DesktopButton extends StatelessWidget {
           padding: EdgeInsets.symmetric(
             horizontal: label == null ? 0 : (large ? 20 : 14),
           ),
-          // 样例 `.btn.icon-only` 固定 34px 宽，large 只增加高度到 42px。
-          width: label == null ? DesktopMetrics.buttonHeight : null,
+          // 图标按钮保持与当前高度一致的正方形（34×34 / 42×42），与同排大按钮对齐。
+          width: label == null ? height : null,
           decoration: BoxDecoration(
             color: resolved,
             borderRadius: BorderRadius.circular(radius),

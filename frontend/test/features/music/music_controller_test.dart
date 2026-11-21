@@ -1522,6 +1522,8 @@ class _FakeMusicApi implements MusicApi {
     bool clearCover = false,
     String? coverUrl,
     bool restoreOriginal = false,
+    String? lyricsTranslation,
+    String? lyricsWords,
   }) async {
     updatedTrackId = trackId;
     updatedTrackTitle = title;

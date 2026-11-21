@@ -12,7 +12,6 @@ import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/providers.dart';
-import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -68,16 +67,9 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
       mobilePlatform: isMobilePlatform,
       width: width,
     )) {
-      // 桌面形态直接在 `StatefulNavigationShell` 上同步响应 `currentIndex`
-      // 变化触发平滑过渡（opacity + 12px translateY + 0.992 scale），
-      // 保留各分支内部 `IndexedStack` 滚动与页面状态，同时消除首帧硬闪。
-      return MobileShellScope(
-        hosted: false,
-        child: _DesktopBranchTransition(
-          branchIndex: widget.navigationShell.currentIndex,
-          child: widget.navigationShell,
-        ),
-      );
+      // 桌面工作区的路由过渡已统一由外层 `_RouteEnter` 单一承载，这里直接透传
+      // `widget.navigationShell`，消除双重入场动画打架与 Windows AXTree 语义断开。
+      return MobileShellScope(hosted: false, child: widget.navigationShell);
     }
     final branch = widget.navigationShell.currentIndex;
     final selectionActive = ref.watch(
@@ -170,81 +162,6 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
 
   void _openNowPlaying() {
     context.push('/music/now-playing');
-  }
-}
-
-/// 桌面一级分支同步过渡容器：响应 `navigationShell.currentIndex` 当帧起播
-/// `opacity + 12px translateY + 0.992 scale`，保留 `IndexedStack` 全部分支状态。
-class _DesktopBranchTransition extends StatefulWidget {
-  const _DesktopBranchTransition({
-    required this.branchIndex,
-    required this.child,
-  });
-
-  final int branchIndex;
-  final Widget child;
-
-  @override
-  State<_DesktopBranchTransition> createState() =>
-      _DesktopBranchTransitionState();
-}
-
-class _DesktopBranchTransitionState extends State<_DesktopBranchTransition>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: DesktopMotion.route,
-    value: 1,
-  );
-  late final CurvedAnimation _curved = CurvedAnimation(
-    parent: _controller,
-    curve: DesktopMotion.ease,
-  );
-
-  @override
-  void didUpdateWidget(covariant _DesktopBranchTransition oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.branchIndex == widget.branchIndex) {
-      return;
-    }
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      _controller.value = 1;
-      return;
-    }
-    _controller.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _curved.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _curved,
-      child: RepaintBoundary(child: widget.child),
-      builder: (context, child) {
-        final t = _curved.value.clamp(0.0, 1.0);
-        if (t >= 1.0) {
-          return child!;
-        }
-        final scale = 0.992 + 0.008 * t;
-        return Opacity(
-          opacity: t,
-          child: Transform.translate(
-            offset: Offset(0, (1 - t) * 12),
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.topCenter,
-              child: child,
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 

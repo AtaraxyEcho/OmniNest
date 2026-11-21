@@ -162,56 +162,12 @@ class _DesktopAlbumDetailState extends ConsumerState<_DesktopAlbumDetail> {
     final orders = ref.watch(photoDisplayOrderProvider);
     final orderedPhotos = applyPhotoDisplayOrder(_photos, orders[orderContext]);
     final album = _album;
-    if (_loading && album == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const DesktopSkeletonBox(width: 112, height: 12),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const DesktopSkeletonBox(width: 240, height: 30),
-                    const SizedBox(height: 8),
-                    const DesktopSkeletonBox(width: 120, height: 12),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              const DesktopSkeletonBox(width: 84, height: 34),
-              const SizedBox(width: 8),
-              const DesktopSkeletonBox(width: 96, height: 34),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const DesktopSkeletonPhotoGrid(targetHeight: 200),
-        ],
-      );
-    }
-    if (album == null) {
-      return DesktopEmpty(
-        icon: DesktopIcons.image,
-        message: l10n.photosOperationFailed,
-        actionLabel: l10n.commonRetry,
-        onAction: _retryLoadAlbum,
-        large: true,
-      );
-    }
 
-    return Column(
+    final skeleton = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DesktopLink(
-          label: l10n.photosTabAlbums,
-          icon: DesktopIcons.left,
-          trailing: false,
-          onPressed: widget.onBack,
-        ),
-        const SizedBox(height: 4),
+        const DesktopSkeletonBox(width: 112, height: 12),
+        const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -219,49 +175,107 @@ class _DesktopAlbumDetailState extends ConsumerState<_DesktopAlbumDetail> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(album.name, style: DesktopType.display(skin.text)),
-                  const SizedBox(height: 3),
-                  Text(
-                    l10n.desktopPhotosAlbumDetailCaption(album.photoCount),
-                    style: DesktopType.caption(skin.text3),
-                  ),
+                  const DesktopSkeletonBox(width: 240, height: 30),
+                  const SizedBox(height: 8),
+                  const DesktopSkeletonBox(width: 120, height: 12),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            Wrap(
-              spacing: 8,
-              children: [
-                DesktopButton(
-                  label: l10n.filesShare,
-                  icon: DesktopIcons.share,
-                  variant: DesktopButtonVariant.soft,
-                  onPressed: () => widget.onShare(album),
-                ),
-                DesktopButton(
-                  label: l10n.photosDeleteAlbumTitle,
-                  icon: DesktopIcons.trash,
-                  variant: DesktopButtonVariant.ghost,
-                  onPressed: () => widget.onDelete(album),
-                ),
-              ],
-            ),
+            const DesktopSkeletonBox(width: 84, height: 34),
+            const SizedBox(width: 8),
+            const DesktopSkeletonBox(width: 96, height: 34),
           ],
         ),
         const SizedBox(height: 18),
-        if (_photos.isEmpty)
-          DesktopEmpty(
-            icon: DesktopIcons.image,
-            message: l10n.photosAlbumEmpty,
-            description: l10n.photosAlbumEmptyHint,
-            actionLabel: l10n.desktopPhotosLibrary,
-            onAction: widget.onBack,
-            large: true,
-          )
-        else
-          IgnorePointer(
-            ignoring: _loadingMore,
-            child: _JustifiedPhotos(
+        const DesktopSkeletonPhotoGrid(
+          targetHeight: 200,
+          showGroupHeaders: false,
+        ),
+      ],
+    );
+
+    final Widget body;
+    if (album == null) {
+      body = DesktopEmpty(
+        icon: DesktopIcons.image,
+        message: l10n.photosOperationFailed,
+        actionLabel: l10n.commonRetry,
+        onAction: _retryLoadAlbum,
+        large: true,
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DesktopLink(
+            label: l10n.photosTabAlbums,
+            icon: DesktopIcons.left,
+            trailing: false,
+            onPressed: widget.onBack,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(album.name, style: DesktopType.display(skin.text)),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.desktopPhotosAlbumDetailCaption(album.photoCount),
+                      style: DesktopType.caption(skin.text3),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (orders.containsKey(orderContext))
+                    DesktopButton(
+                      label: l10n.desktopPhotosResetOrder,
+                      icon: DesktopIcons.undo,
+                      variant: DesktopButtonVariant.ghost,
+                      onPressed:
+                          () => unawaited(
+                            ref
+                                .read(photoDisplayOrderProvider.notifier)
+                                .resetOrder(orderContext),
+                          ),
+                    ),
+                  DesktopButton(
+                    label: l10n.filesShare,
+                    icon: DesktopIcons.share,
+                    variant: DesktopButtonVariant.soft,
+                    onPressed: () => widget.onShare(album),
+                  ),
+                  DesktopButton(
+                    label: l10n.photosDeleteAlbumTitle,
+                    icon: DesktopIcons.trash,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: () => widget.onDelete(album),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_photos.isEmpty)
+            DesktopEmpty(
+              icon: DesktopIcons.image,
+              message: l10n.photosAlbumEmpty,
+              description: l10n.photosAlbumEmptyHint,
+              actionLabel: l10n.desktopPhotosLibrary,
+              onAction: widget.onBack,
+              large: true,
+            )
+          else
+            // 解除分页加载期 IgnorePointer 锁死，允许用户在后台补页时正常浏览与交互。
+            _JustifiedPhotos(
               photos: orderedPhotos,
               targetHeight: 200,
               selection: const <String>{},
@@ -273,32 +287,35 @@ class _DesktopAlbumDetailState extends ConsumerState<_DesktopAlbumDetail> {
               showFavorite: false,
               showSelectionControls: false,
             ),
-          ),
-        if (_loadingMore)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 18),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: DesktopSpinner(size: 20, strokeWidth: 2)),
+            ),
+          if (_loadError != null && _photos.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: DesktopButton(
+                  label: l10n.commonRetry,
+                  variant: DesktopButtonVariant.soft,
+                  onPressed:
+                      () => unawaited(
+                        _loadRemaining(generation: _loadGeneration),
+                      ),
+                ),
               ),
             ),
-          ),
-        if (_loadError != null && _photos.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Center(
-              child: DesktopButton(
-                label: l10n.commonRetry,
-                variant: DesktopButtonVariant.soft,
-                onPressed:
-                    () =>
-                        unawaited(_loadRemaining(generation: _loadGeneration)),
-              ),
-            ),
-          ),
-      ],
+        ],
+      );
+    }
+
+    return DesktopSkeletonSwitcher(
+      regionId: 'photos-album-${widget.albumId}',
+      hasData: album != null,
+      loading: _loading && album == null,
+      skeleton: skeleton,
+      child: body,
     );
   }
 }

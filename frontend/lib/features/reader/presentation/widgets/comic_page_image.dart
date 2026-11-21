@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/reader/application/reader_comic_image_provider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
-import 'package:omninest/core/errors/error_message.dart';
 
 /// 漫画图片在阅读器中的布局类型。
 enum ComicPageImageLayout { paged, continuous }
@@ -18,6 +18,7 @@ class ComicPageImage extends ConsumerStatefulWidget {
     required this.itemId,
     required this.surfaceColor,
     required this.layout,
+    this.fit,
     this.onLayout,
     super.key,
   });
@@ -26,6 +27,9 @@ class ComicPageImage extends ConsumerStatefulWidget {
   final String itemId;
   final Color surfaceColor;
   final ComicPageImageLayout layout;
+
+  /// 图片填充模式（翻页模式透传 `contain` / `fitWidth` / `fitHeight`）。
+  final BoxFit? fit;
 
   /// 页面布局完成回调，参数依次为页码索引和渲染高度。
   final void Function(int index, double height)? onLayout;
@@ -43,7 +47,15 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
   @override
   void initState() {
     super.initState();
-    _loadImage();
+    final cached = _readCachedSync();
+    if (cached != null) {
+      _imageBytes = cached;
+      _loading = false;
+      _error = null;
+      _reportLayout();
+    } else {
+      _loadImage();
+    }
   }
 
   @override
@@ -52,8 +64,27 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     if (oldWidget.page.id != widget.page.id ||
         oldWidget.page.sourcePath != widget.page.sourcePath ||
         oldWidget.itemId != widget.itemId) {
-      _loadImage();
+      final cached = _readCachedSync();
+      if (cached != null) {
+        _loadGeneration++;
+        _imageBytes = cached;
+        _loading = false;
+        _error = null;
+        _reportLayout();
+      } else {
+        _loadImage();
+      }
     }
+  }
+
+  Uint8List? _readCachedSync() {
+    return ref
+        .read(comicImageLoaderProvider)
+        .getCachedBytesSync(
+          widget.itemId,
+          widget.page.id,
+          sourcePath: widget.page.sourcePath,
+        );
   }
 
   Future<void> _loadImage() async {
@@ -157,13 +188,15 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
       );
     }
     // 连续阅读且尺寸未知：宽度铺满、高度按图片真实比例撑开，撑出来的高度就是
-    // 上报给高度索引的那一份。翻页模式一屏一页，仍按 contain 居中。
+    // 上报给高度索引的那一份。翻页模式按传入 BoxFit（默认 contain）渲染。
     final isContinuousDynamic =
         widget.layout == ComicPageImageLayout.continuous &&
         !_hasKnownDimensions;
-    return Image.memory(
+    final effectiveFit =
+        isContinuousDynamic ? BoxFit.fitWidth : (widget.fit ?? BoxFit.contain);
+    final image = Image.memory(
       _imageBytes!,
-      fit: isContinuousDynamic ? BoxFit.fitWidth : BoxFit.contain,
+      fit: effectiveFit,
       width: double.infinity,
       height: isContinuousDynamic ? null : double.infinity,
       cacheWidth: cacheWidth,
@@ -182,6 +215,14 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
             message: AppLocalizations.of(context).readerComicImageDecodeFailed,
           ),
     );
+    if (widget.layout == ComicPageImageLayout.paged &&
+        effectiveFit != BoxFit.contain) {
+      return ColoredBox(
+        color: widget.surfaceColor,
+        child: ClipRect(child: image),
+      );
+    }
+    return ColoredBox(color: widget.surfaceColor, child: image);
   }
 }
 

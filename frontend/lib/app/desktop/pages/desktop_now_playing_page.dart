@@ -5,10 +5,15 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_np_style.dart';
+import 'package:omninest/app/desktop/desktop_player_bar.dart'
+    show formatDesktopClock;
+import 'package:omninest/app/desktop/desktop_routes.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
 import 'package:omninest/app/desktop/pages/desktop_now_playing_lyrics.dart';
@@ -27,14 +32,18 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
-import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_now_playing_deck.dart';
+part 'desktop_now_playing_panels.dart';
+part 'desktop_now_playing_transport.dart';
 
 /// 桌面「正在播放」覆盖层（样例 `Music.tsx` 的 NowPlaying）。
 ///
-/// 左半是黑胶 + 衬线曲名，右半是歌词/队列/关于三页，右侧全高外观抽屉，底部是走带。
+/// 顶栏全宽贴顶 64px（空白区与居中专辑标题支持拖拽窗口与双击最大化，
+/// 左右按钮与右上角 `DesktopWindowControls` 同级放置避免手势冲突）；
+/// 左半是黑胶唱机，右半是曲名+收藏红心与歌词/队列/关于三页，
+/// 右侧全高外观抽屉，底部是波形走带 + 播放模式/队列胶囊 + 实时音量控制。
 class DesktopNowPlayingPage extends ConsumerStatefulWidget {
   const DesktopNowPlayingPage({super.key});
 
@@ -46,6 +55,8 @@ class DesktopNowPlayingPage extends ConsumerStatefulWidget {
 class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     with SingleTickerProviderStateMixin {
   static const String _bilingualPrefKey = 'omninest.desktop.npShowTranslation';
+  static const Duration _seekStep = Duration(seconds: 5);
+  static const double _volumeStep = 5;
 
   late final AnimationController _spin = AnimationController(
     vsync: this,
@@ -56,9 +67,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   double? _dragValue;
   bool _styleOpen = false;
   bool _showTranslation = true;
-
-  /// 退场动画进行中：先播 400ms 收束再真正退出路由。
-  bool _closing = false;
+  double _lastAudibleVolume = 100;
 
   @override
   void initState() {
@@ -100,70 +109,155 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(
+      context,
+    ).languageCode.toLowerCase().startsWith('zh');
+    final outerTheme = Theme.of(context);
+    final accent = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.accent),
+    );
+    final darkSkin = DesktopSkin.resolve(isDark: true, accent: accent);
+
     final state = ref.watch(musicCenterControllerProvider).asData?.value;
+    final playMode = state?.playMode ?? MusicPlayMode.sequential;
     final actions = ref.watch(musicPortalActionsProvider);
     final timeline = ref.watch(musicPortalPlaybackTimelineProvider);
     final item = state?.currentItem;
     final track = item?.track;
     final playing = state?.isPlaying ?? false;
     final queue = state?.playbackItems ?? const <MusicPlayableItem>[];
+    final engine = track == null ? null : ref.watch(musicAudioPlaybackProvider);
+    final initialVolume = engine?.state.volume ?? _lastAudibleVolume;
+    if (initialVolume > 0) {
+      _lastAudibleVolume = initialVolume;
+    }
+
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final npStyle = ref.watch(desktopNpStyleProvider);
-    final hueColor = desktopTrackHue(track?.hue, skin.accent);
+    final hueColor = desktopTrackHue(track?.hue, darkSkin.accent);
 
-    if (playing && !_spin.isAnimating && !reduceMotion) {
+    if (playing && track != null && !_spin.isAnimating && !reduceMotion) {
       _spin.repeat();
-    } else if ((!playing || reduceMotion) && _spin.isAnimating) {
+    } else if ((!playing || track == null || reduceMotion) &&
+        _spin.isAnimating) {
       _spin.stop();
     }
 
     final cover = track?.coverUrl;
     final duration = Duration(seconds: track?.durationSeconds ?? 0);
     final audioSpecBadge = _audioSpecBadge(track);
+    final queueIndex =
+        queue.isEmpty
+            ? 0
+            : queue.indexWhere(
+                  (entry) => entry.playableKey == item?.playableKey,
+                ) +
+                1;
 
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) {
-          return KeyEventResult.ignored;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.escape) {
-          if (_styleOpen) {
-            setState(() => _styleOpen = false);
-          } else {
-            _close();
+    void setEngineVolume(double next) {
+      if (engine == null) return;
+      final clamped = next.clamp(0.0, 100.0).toDouble();
+      if (clamped > 0) {
+        _lastAudibleVolume = clamped;
+      }
+      engine.setVolume(clamped);
+    }
+
+    void toggleMute() {
+      if (engine == null) return;
+      final current = engine.state.volume;
+      if (current > 0) {
+        _lastAudibleVolume = current;
+        engine.setVolume(0);
+      } else {
+        final restore = _lastAudibleVolume > 0 ? _lastAudibleVolume : 100.0;
+        engine.setVolume(restore);
+      }
+    }
+
+    void seekBy(Duration delta) {
+      if (track == null || duration <= Duration.zero) return;
+      final baseMs =
+          _dragging && _dragValue != null
+              ? _dragValue!.round()
+              : timeline.position.inMilliseconds;
+      final targetMs = (baseMs + delta.inMilliseconds).clamp(
+        0,
+        duration.inMilliseconds,
+      );
+      unawaited(timeline.seek(Duration(milliseconds: targetMs)));
+    }
+
+    // 显式构造扩展列表：字面量里混入 `DesktopSkin` 时，前端编译器会把元素类型
+    // 推成 `ThemeExtension<ThemeExtension<dynamic>>`（analyze 不报，kernel 报）。
+    final mergedExtensions = outerTheme.extensions.values
+      .where((ext) => ext is! DesktopSkin)
+      .toList(growable: true)..add(darkSkin);
+    return Theme(
+      data: outerTheme.copyWith(
+        brightness: Brightness.dark,
+        extensions: mergedExtensions,
+      ),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          final isDown = event is KeyDownEvent;
+          final isRepeat = event is KeyRepeatEvent;
+          if (!isDown && !isRepeat) {
+            return KeyEventResult.ignored;
           }
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.space) {
-          unawaited(actions.togglePlayback());
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: _closing ? 0 : 1),
-        duration: MotionToken.reduced(
-          context,
-          _closing ? DesktopMotion.fade : DesktopMotion.rise,
-        ),
-        curve: _closing ? DesktopMotion.ease : DesktopMotion.easeOut,
-        builder: (context, t, child) {
-          final viewport = MediaQuery.sizeOf(context);
-          return Opacity(
-            opacity: t.clamp(0.0, 1.0),
-            child: Transform.translate(
-              offset: Offset(0, viewport.height * 0.08 * (1 - t)),
-              child: Transform.scale(
-                scale: 0.97 + 0.03 * t,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(30 * (1 - t)),
-                  child: child,
-                ),
-              ),
-            ),
-          );
+          final key = event.logicalKey;
+          if (isDown && key == LogicalKeyboardKey.escape) {
+            if (_styleOpen) {
+              setState(() => _styleOpen = false);
+            } else {
+              _close();
+            }
+            return KeyEventResult.handled;
+          }
+          if (isDown && key == LogicalKeyboardKey.space) {
+            if (track != null) {
+              unawaited(actions.togglePlayback());
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowLeft) {
+            if (track != null) {
+              seekBy(-_seekStep);
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowRight) {
+            if (track != null) {
+              seekBy(_seekStep);
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowUp) {
+            if (engine != null) {
+              setEngineVolume(engine.state.volume + _volumeStep);
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowDown) {
+            if (engine != null) {
+              setEngineVolume(engine.state.volume - _volumeStep);
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          if (isDown && key == LogicalKeyboardKey.keyM) {
+            if (engine != null) {
+              toggleMute();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          }
+          return KeyEventResult.ignored;
         },
         child: ColoredBox(
           color: const Color(0xFF07090B),
@@ -173,169 +267,166 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
               _NpBackdrop(
                 style: npStyle,
                 cover: cover,
-                playing: playing,
+                playing: playing && track != null,
                 hueColor: hueColor,
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DesktopWindowDragRegion(
-                      child: Row(
-                        children: [
-                          DesktopIconButton(
-                            icon: DesktopIcons.chevDown,
-                            size: 36,
-                            iconSize: 20,
-                            tooltip: l10n.photosClose,
-                            onPressed: _close,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.musicNowPlayingEyebrow,
-                                  style: DesktopType.eyebrow(
-                                    Colors.white.withValues(alpha: 0.6),
-                                  ),
-                                ),
-                                Text(
-                                  track?.albumTitle ??
-                                      l10n.desktopDockNowPlaying,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.caption(
-                                    Colors.white.withValues(alpha: 0.72),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (audioSpecBadge != null) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                ),
-                              ),
-                              child: Text(
-                                audioSpecBadge,
-                                style: DesktopType.nano(
-                                  Colors.white.withValues(alpha: 0.78),
-                                ).copyWith(letterSpacing: 0.6),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                          ],
-                          DesktopIconButton(
-                            icon: DesktopIcons.palette,
-                            size: 34,
-                            iconSize: 18,
-                            active: _styleOpen,
-                            tooltip: l10n.desktopNpAppearance,
-                            onPressed:
-                                () => setState(() => _styleOpen = !_styleOpen),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _NowPlayingTopBar(
+                    eyebrow: l10n.musicNowPlayingEyebrow,
+                    albumTitle: track?.albumTitle ?? l10n.desktopDockNowPlaying,
+                    audioSpecBadge: audioSpecBadge,
+                    accent: darkSkin.accent,
+                    styleOpen: _styleOpen,
+                    showStyleToggle: track != null,
+                    closeTooltip: l10n.photosClose,
+                    appearanceTooltip: l10n.desktopNpAppearance,
+                    onClose: _close,
+                    onToggleStyle:
+                        () => setState(() => _styleOpen = !_styleOpen),
+                  ),
+                  if (track == null)
                     Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            flex: 105,
-                            child: _Deck(
-                              spin: _spin,
-                              cover: cover,
-                              playing: playing,
-                              hueColor: hueColor,
-                              index:
-                                  queue.indexWhere(
-                                    (entry) =>
-                                        entry.playableKey == item?.playableKey,
-                                  ) +
-                                  1,
-                              total: queue.length,
+                      child: _NowPlayingEmptyState(
+                        title: l10n.desktopNothingPlaying,
+                        browseLabel: isZh ? '浏览音乐' : 'Browse music',
+                        onBrowse: _browseMusic,
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(32, 8, 32, 22),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    flex: 105,
+                                    child: _Deck(
+                                      spin: _spin,
+                                      cover: cover,
+                                      playing: playing,
+                                      hueColor: hueColor,
+                                      index: queueIndex,
+                                      total: queue.length,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: (MediaQuery.sizeOf(context).width *
+                                            0.04)
+                                        .clamp(24.0, 72.0),
+                                  ),
+                                  Expanded(
+                                    flex: 100,
+                                    child: _SidePanel(
+                                      track: track,
+                                      title: track.title,
+                                      artist: track.artistName,
+                                      album: track.albumTitle,
+                                      duration: duration,
+                                      format: track.format,
+                                      bitrate: track.bitrate,
+                                      sampleRate: track.sampleRate,
+                                      fileSize: track.fileSize,
+                                      position: timeline.position,
+                                      positionStream: timeline.positionStream,
+                                      playing: playing,
+                                      hueColor: hueColor,
+                                      tab: _tab,
+                                      onTab:
+                                          (value) =>
+                                              setState(() => _tab = value),
+                                      showTranslation: _showTranslation,
+                                      onToggleTranslation:
+                                          () => unawaited(_toggleTranslation()),
+                                      onSeek:
+                                          (value) =>
+                                              unawaited(timeline.seek(value)),
+                                      queue: queue,
+                                      currentKey: item?.playableKey,
+                                      onPickQueue:
+                                          (index) => unawaited(
+                                            actions.playQueueAt(index),
+                                          ),
+                                      onToggleFavorite:
+                                          () => unawaited(
+                                            ref
+                                                .read(
+                                                  musicCenterControllerProvider
+                                                      .notifier,
+                                                )
+                                                .toggleFavorite(track),
+                                          ),
+                                      onBrowseMusic: _browseMusic,
+                                      onEdit:
+                                          () => unawaited(
+                                            _editMetadata(track.id),
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          SizedBox(
-                            width: (MediaQuery.sizeOf(context).width * 0.04)
-                                .clamp(30.0, 72.0),
-                          ),
-                          Expanded(
-                            flex: 100,
-                            child: _SidePanel(
-                              track: track,
-                              title: track?.title ?? l10n.desktopNothingPlaying,
-                              artist: track?.artistName ?? '',
-                              album: track?.albumTitle ?? '',
-                              duration: duration,
-                              format: track?.format,
-                              bitrate: track?.bitrate,
-                              sampleRate: track?.sampleRate,
-                              fileSize: track?.fileSize,
+                            const SizedBox(height: 18),
+                            _Transport(
+                              trackId: track.id,
+                              playing: playing,
+                              playMode: playMode,
+                              queueLength: queue.length,
+                              queueIndex: queueIndex,
+                              queueActive: _tab == 1,
                               position: timeline.position,
                               positionStream: timeline.positionStream,
-                              playing: playing,
-                              hueColor: hueColor,
-                              tab: _tab,
-                              onTab: (value) => setState(() => _tab = value),
-                              showTranslation: _showTranslation,
-                              onToggleTranslation:
-                                  () => unawaited(_toggleTranslation()),
+                              duration: duration,
+                              dragging: _dragging,
+                              dragValue: _dragValue,
+                              volumeStream:
+                                  engine?.stream.volume ??
+                                  const Stream<double>.empty(),
+                              initialVolume: initialVolume,
                               onSeek:
                                   (value) => unawaited(timeline.seek(value)),
-                              queue: queue,
-                              currentKey: item?.playableKey,
-                              onPickQueue:
-                                  (index) =>
-                                      unawaited(actions.playQueueAt(index)),
-                              onEdit:
-                                  track == null
-                                      ? null
-                                      : () =>
-                                          unawaited(_editMetadata(track.id)),
+                              onDragStart:
+                                  () => setState(() => _dragging = true),
+                              onDragUpdate:
+                                  (value) => setState(() => _dragValue = value),
+                              onDragEnd: () {
+                                setState(() {
+                                  _dragging = false;
+                                  _dragValue = null;
+                                });
+                              },
+                              onCyclePlayMode:
+                                  () =>
+                                      ref
+                                          .read(
+                                            musicCenterControllerProvider
+                                                .notifier,
+                                          )
+                                          .cyclePlayMode(),
+                              onPrevious:
+                                  () => unawaited(actions.previousTrack()),
+                              onToggle:
+                                  () => unawaited(actions.togglePlayback()),
+                              onNext: () => unawaited(actions.nextTrack()),
+                              onToggleQueue:
+                                  () =>
+                                      setState(() => _tab = _tab == 1 ? 0 : 1),
+                              onToggleMute: toggleMute,
+                              onVolumeChanged: setEngineVolume,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 22),
-                    _Transport(
-                      playing: playing,
-                      position: timeline.position,
-                      positionStream: timeline.positionStream,
-                      duration: duration,
-                      dragging: _dragging,
-                      dragValue: _dragValue,
-                      onSeek: (value) => unawaited(timeline.seek(value)),
-                      onDragStart: () => setState(() => _dragging = true),
-                      onDragUpdate:
-                          (value) => setState(() => _dragValue = value),
-                      onDragEnd: () {
-                        setState(() => _dragging = false);
-                        _dragValue = null;
-                      },
-                      onPrevious: () => unawaited(actions.previousTrack()),
-                      onToggle: () => unawaited(actions.togglePlayback()),
-                      onNext: () => unawaited(actions.nextTrack()),
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                ),
+                ],
               ),
-              if (_styleOpen) ...[
+              if (_styleOpen && track != null) ...[
                 // 点击抽屉外透明区域即收起。
                 Positioned.fill(
                   child: GestureDetector(
@@ -372,15 +463,6 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                   ),
                 ),
               ],
-              if (track == null)
-                Center(
-                  child: Text(
-                    l10n.desktopNothingPlaying,
-                    style: DesktopType.displaySm(
-                      Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -409,18 +491,19 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  Future<void> _close() async {
-    if (_closing) {
+  void _close() {
+    if (!mounted) return;
+    exitDetailRoute(context, fallbackRoute: DesktopRoutes.music);
+  }
+
+  void _browseMusic() {
+    if (!mounted) return;
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      router.go(DesktopRoutes.music);
       return;
     }
-    setState(() => _closing = true);
-    await Future<void>.delayed(
-      MotionToken.reduced(context, DesktopMotion.fade),
-    );
-    if (!mounted) {
-      return;
-    }
-    exitDetailRoute(context, fallbackRoute: '/music');
+    exitDetailRoute(context, fallbackRoute: DesktopRoutes.music);
   }
 
   Future<void> _editMetadata(String trackId) async {
@@ -447,563 +530,198 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   }
 }
 
-class _SidePanel extends ConsumerWidget {
-  const _SidePanel({
-    required this.track,
-    required this.title,
-    required this.artist,
-    required this.album,
-    required this.duration,
-    required this.format,
-    required this.bitrate,
-    required this.sampleRate,
-    required this.fileSize,
-    required this.position,
-    required this.positionStream,
-    required this.playing,
-    required this.hueColor,
-    required this.tab,
-    required this.onTab,
-    required this.showTranslation,
-    required this.onToggleTranslation,
-    required this.onSeek,
-    required this.queue,
-    required this.currentKey,
-    required this.onPickQueue,
-    required this.onEdit,
+/// 顶栏全宽贴顶 64px 布局：底层铺满 `DesktopWindowDragRegion`（含顶部与两侧边缘），
+/// 居中专辑标题与非交互规格徽章透传手势，左右交互按钮与右上角三键位于同级上方。
+class _NowPlayingTopBar extends StatelessWidget {
+  const _NowPlayingTopBar({
+    required this.eyebrow,
+    required this.albumTitle,
+    required this.audioSpecBadge,
+    required this.accent,
+    required this.styleOpen,
+    required this.showStyleToggle,
+    required this.closeTooltip,
+    required this.appearanceTooltip,
+    required this.onClose,
+    required this.onToggleStyle,
   });
 
-  final MusicTrack? track;
-  final String title;
-  final String artist;
-  final String album;
-  final Duration duration;
-  final String? format;
-  final int? bitrate;
-  final int? sampleRate;
-  final int? fileSize;
-  final Duration position;
-  final Stream<Duration> positionStream;
-  final bool playing;
-  final Color hueColor;
-  final int tab;
-  final ValueChanged<int> onTab;
-  final bool showTranslation;
-  final VoidCallback onToggleTranslation;
-  final ValueChanged<Duration> onSeek;
-  final List<MusicPlayableItem> queue;
-  final String? currentKey;
-  final ValueChanged<int> onPickQueue;
-  final VoidCallback? onEdit;
+  final String eyebrow;
+  final String albumTitle;
+  final String? audioSpecBadge;
+  final Color accent;
+  final bool styleOpen;
+  final bool showStyleToggle;
+  final String closeTooltip;
+  final String appearanceTooltip;
+  final VoidCallback onClose;
+  final VoidCallback onToggleStyle;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final style = ref.watch(desktopNpStyleProvider);
-    final timedLyrics = track?.lyricLines ?? const <MusicLyricLine>[];
-    final plainLyrics =
-        timedLyrics.isEmpty
-            ? _plainLyricLines(track?.lyricsRaw)
-            : const <String>[];
-    final hasTranslation = timedLyrics.any((line) => line.hasTranslation);
-    final activeColor = style.effectiveFillPaint(hueColor).primaryColor;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          artist.isEmpty ? l10n.musicNowPlayingEyebrow : artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.eyebrow(
-            Colors.white.withValues(alpha: 0.6),
-          ).copyWith(letterSpacing: 1.6),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.displayXl(
-            Colors.white,
-            MediaQuery.sizeOf(context).width,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          [
-            if (album.isNotEmpty) album,
-            _Transport._format(duration),
-          ].join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.medium(Colors.white.withValues(alpha: 0.65)),
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            DesktopSeg<int>(
-              options: const [0, 1, 2],
-              value: tab,
-              labelOf:
-                  (value) => switch (value) {
-                    0 => l10n.musicNowPlayingLyrics,
-                    1 => l10n.musicQueueTitle,
-                    _ => l10n.musicNowPlayingAbout,
-                  },
-              small: true,
-              onChanged: onTab,
-            ),
-            if (tab == 0 && hasTranslation) ...[
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: onToggleTranslation,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: DesktopMotion.of(context, DesktopMotion.fast),
-                  height: 28,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color:
-                        showTranslation
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color:
-                          showTranslation
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Text(
-                    '译',
-                    style: DesktopType.chip(
-                      showTranslation
-                          ? const Color(0xFF0A0C0E)
-                          : Colors.white.withValues(alpha: 0.8),
-                    ).copyWith(fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 64,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DesktopWindowDragRegion(child: SizedBox.expand()),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(width: 24),
+              DesktopIconButton(
+                key: const ValueKey('desktop-np-close'),
+                icon: DesktopIcons.chevDown,
+                size: 36,
+                iconSize: 20,
+                color: Colors.white.withValues(alpha: 0.88),
+                tooltip: closeTooltip,
+                onPressed: onClose,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: IgnorePointer(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        eyebrow,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.eyebrow(
+                          Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        albumTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(
+                          Colors.white.withValues(alpha: 0.78),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child:
-              tab == 0
-                  ? DesktopNowPlayingLyrics(
-                    lines: timedLyrics,
-                    plainLines: plainLyrics,
-                    position: position,
-                    positionStream: positionStream,
-                    duration: duration,
-                    playing: playing,
-                    style: style,
-                    hueColor: hueColor,
-                    showTranslation: showTranslation,
-                    onSeek: onSeek,
-                  )
-                  : tab == 1
-                  ? (queue.isEmpty
-                      ? Center(
-                        child: Text(
-                          l10n.musicQueueEmpty,
-                          style: DesktopType.dense(
-                            Colors.white.withValues(alpha: 0.55),
+              const SizedBox(width: 12),
+              if (showStyleToggle)
+                DesktopIconButton(
+                  key: const ValueKey('desktop-np-appearance'),
+                  icon: DesktopIcons.palette,
+                  size: 34,
+                  iconSize: 18,
+                  active: styleOpen,
+                  color:
+                      styleOpen ? accent : Colors.white.withValues(alpha: 0.88),
+                  tooltip: appearanceTooltip,
+                  onPressed: onToggleStyle,
+                ),
+              if (audioSpecBadge != null) ...[
+                const SizedBox(width: 10),
+                IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accent,
+                            boxShadow: [
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.7),
+                                blurRadius: 8,
+                                spreadRadius: 0.5,
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                      : ListView.builder(
-                        itemCount: queue.length,
-                        itemBuilder: (context, index) {
-                          final item = queue[index];
-                          final active = item.playableKey == currentKey;
-                          return GestureDetector(
-                            onTap: () => onPickQueue(index),
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    active
-                                        ? Colors.white.withValues(alpha: 0.1)
-                                        : Colors.transparent,
-                                borderRadius: BorderRadius.circular(
-                                  DesktopMetrics.radiusSmall,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    active
-                                        ? DesktopIcons.play
-                                        : DesktopIcons.music,
-                                    size: 13,
-                                    color:
-                                        active
-                                            ? skin.accent
-                                            : Colors.white.withValues(
-                                              alpha: 0.45,
-                                            ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(7),
-                                    child: SizedBox(
-                                      width: 44,
-                                      height: 44,
-                                      child: DesktopImage(
-                                        url: item.track.coverUrl,
-                                        borderRadius: BorderRadius.circular(7),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item.track.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: DesktopType.dense(
-                                            active
-                                                ? Colors.white
-                                                : Colors.white.withValues(
-                                                  alpha: 0.82,
-                                                ),
-                                          ),
-                                        ),
-                                        Text(
-                                          item.track.artistName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: DesktopType.nano(
-                                            Colors.white.withValues(alpha: 0.5),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    _queueDuration(item.track.durationSeconds),
-                                    style: DesktopType.numeric(
-                                      Colors.white.withValues(alpha: 0.45),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ))
-                  : _NowPlayingAbout(
-                    playing: playing,
-                    color: activeColor,
-                    artist: artist,
-                    album: album,
-                    duration: duration,
-                    format: format,
-                    bitrate: bitrate,
-                    sampleRate: sampleRate,
-                    fileSize: fileSize,
-                    onEdit: onEdit,
-                  ),
-        ),
-      ],
-    );
-  }
-}
-
-class _NowPlayingAbout extends StatelessWidget {
-  const _NowPlayingAbout({
-    required this.playing,
-    required this.color,
-    required this.artist,
-    required this.album,
-    required this.duration,
-    required this.format,
-    required this.bitrate,
-    required this.sampleRate,
-    required this.fileSize,
-    required this.onEdit,
-  });
-
-  final bool playing;
-  final Color color;
-  final String artist;
-  final String album;
-  final Duration duration;
-  final String? format;
-  final int? bitrate;
-  final int? sampleRate;
-  final int? fileSize;
-  final VoidCallback? onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final rows = <MapEntry<String, String>>[
-      MapEntry(l10n.musicFieldArtist, artist),
-      MapEntry(l10n.musicFieldAlbum, album),
-      MapEntry(l10n.musicFieldDuration, _Transport._format(duration)),
-      MapEntry(l10n.musicFieldFormat, format?.toUpperCase() ?? '—'),
-      MapEntry(l10n.musicFieldBitrate, bitrate == null ? '—' : '$bitrate kbps'),
-      MapEntry(
-        l10n.musicFieldSampleRate,
-        sampleRate == null
-            ? '—'
-            : '${(sampleRate! / 1000).toStringAsFixed(1)} kHz',
-      ),
-      MapEntry(
-        l10n.musicFieldFileSize,
-        fileSize == null ? '—' : formatFileSize(fileSize!),
-      ),
-    ];
-    final skin = DesktopSkin.of(context);
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: DesktopButton(
-            label: l10n.musicEditDetailsLyrics,
-            icon: DesktopIcons.edit,
-            variant: DesktopButtonVariant.soft,
-            onPressed: onEdit,
-          ),
-        ),
-        const SizedBox(height: 18),
-        for (var index = 0; index < rows.length; index++) ...[
-          if (index > 0)
-            Container(height: 1, color: Colors.white.withValues(alpha: 0.10)),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    rows[index].key,
-                    style: DesktopType.caption(
-                      Colors.white.withValues(alpha: 0.55),
+                        const SizedBox(width: 7),
+                        Text(
+                          audioSpecBadge!,
+                          style: DesktopType.nano(
+                            Colors.white.withValues(alpha: 0.82),
+                          ).copyWith(letterSpacing: 0.6),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 6,
-                  child: Text(
-                    rows[index].value.isEmpty ? '—' : rows[index].value,
-                    textAlign: TextAlign.right,
-                    style: DesktopType.dense(skin.onStage),
-                  ),
-                ),
               ],
-            ),
+              const SizedBox(width: 12),
+              const Align(
+                alignment: Alignment.topRight,
+                child: DesktopWindowControls(),
+              ),
+            ],
           ),
         ],
-        const SizedBox(height: 18),
-        SizedBox(
-          height: 90,
-          child: Opacity(
-            opacity: 0.85,
-            child: DesktopVisualizer(
-              playing: playing,
-              color: color,
-              bars: 64,
-              seed: 5,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _Transport extends StatelessWidget {
-  const _Transport({
-    required this.playing,
-    required this.position,
-    required this.positionStream,
-    required this.duration,
-    required this.dragging,
-    required this.dragValue,
-    required this.onSeek,
-    required this.onDragStart,
-    required this.onDragUpdate,
-    required this.onDragEnd,
-    required this.onPrevious,
-    required this.onToggle,
-    required this.onNext,
+/// 无曲目空态：独立渲染，不覆盖唱机与底栏。
+class _NowPlayingEmptyState extends StatelessWidget {
+  const _NowPlayingEmptyState({
+    required this.title,
+    required this.browseLabel,
+    required this.onBrowse,
   });
 
-  final bool playing;
-  final Duration position;
-  final Stream<Duration> positionStream;
-  final Duration duration;
-  final bool dragging;
-  final double? dragValue;
-  final ValueChanged<Duration> onSeek;
-  final VoidCallback onDragStart;
-  final ValueChanged<double> onDragUpdate;
-  final VoidCallback onDragEnd;
-  final VoidCallback onPrevious;
-  final VoidCallback onToggle;
-  final VoidCallback onNext;
+  final String title;
+  final String browseLabel;
+  final VoidCallback onBrowse;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final max =
-        duration.inMilliseconds <= 0 ? 1.0 : duration.inMilliseconds.toDouble();
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 980),
+        constraints: const BoxConstraints(maxWidth: 360),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            StreamBuilder<Duration>(
-              stream: positionStream,
-              initialData: position,
-              builder: (context, snapshot) {
-                final value = (snapshot.data ?? position).inMilliseconds
-                    .toDouble()
-                    .clamp(0.0, max);
-                final shown =
-                    dragging && dragValue != null ? dragValue! : value;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _WaveSeek(
-                      position: Duration(milliseconds: shown.round()),
-                      duration: duration,
-                      onSeek: (value) {
-                        onDragStart();
-                        onDragUpdate(value.inMilliseconds.toDouble());
-                        onSeek(value);
-                        onDragEnd();
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Row(
-                        children: [
-                          Text(
-                            _format(Duration(milliseconds: shown.round())),
-                            style: DesktopType.numeric(
-                              Colors.white.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            _format(duration),
-                            style: DesktopType.numeric(
-                              Colors.white.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+            Icon(
+              DesktopIcons.music,
+              size: 42,
+              color: Colors.white.withValues(alpha: 0.35),
             ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                DesktopIconButton(
-                  icon: DesktopIcons.previous,
-                  size: 44,
-                  iconSize: 22,
-                  tooltip: l10n.coreBack,
-                  onPressed: onPrevious,
-                ),
-                const SizedBox(width: 14),
-                GestureDetector(
-                  onTap: onToggle,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        playing ? DesktopIcons.pause : DesktopIcons.play,
-                        size: 30,
-                        color: const Color(0xFF07090B),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                DesktopIconButton(
-                  icon: DesktopIcons.next,
-                  size: 44,
-                  iconSize: 22,
-                  tooltip: l10n.desktopActionNextTrack,
-                  onPressed: onNext,
-                ),
-              ],
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: DesktopType.displaySm(
+                Colors.white.withValues(alpha: 0.78),
+              ),
+            ),
+            const SizedBox(height: 18),
+            DesktopButton(
+              key: const ValueKey('desktop-np-empty-browse'),
+              label: browseLabel,
+              icon: DesktopIcons.music,
+              variant: DesktopButtonVariant.glass,
+              foregroundOverride: Colors.white,
+              onPressed: onBrowse,
             ),
           ],
         ),
       ),
     );
   }
-
-  static String _format(Duration value) {
-    final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-}
-
-/// 纯文本歌词回退：仅在无任何时间轴时按行展示。
-List<String> _plainLyricLines(String? raw) {
-  if (raw == null || raw.trim().isEmpty) {
-    return const <String>[];
-  }
-  final tag = RegExp(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]');
-  return raw
-      .split('\n')
-      .map((line) => line.replaceAll(tag, '').trim())
-      .where(
-        (line) =>
-            line.isNotEmpty &&
-            !line.startsWith('[') &&
-            !line.startsWith('{"t"') &&
-            !line.startsWith('{"c"'),
-      )
-      .toList(growable: false);
-}
-
-/// 队列行的时长（样例 `.q-row time`）：秒数缺失时留空而不是显示 00:00。
-String _queueDuration(int? seconds) {
-  if (seconds == null || seconds <= 0) {
-    return '';
-  }
-  final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
-  final rest = (seconds % 60).toString().padLeft(2, '0');
-  return '$minutes:$rest';
 }

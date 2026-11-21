@@ -39,6 +39,7 @@ class _PhotoTile extends StatelessWidget {
     required this.height,
     this.onTap,
     this.onToggleSelect,
+    this.onSecondaryTap,
     this.selected = false,
     this.pressing = false,
     this.dragging = false,
@@ -54,13 +55,14 @@ class _PhotoTile extends StatelessWidget {
   final double height;
   final ValueChanged<PhotoItem>? onTap;
   final ValueChanged<PhotoItem>? onToggleSelect;
+  final void Function(PhotoItem photo, Offset globalPosition)? onSecondaryTap;
   final bool selected;
   final bool pressing;
   final bool dragging;
   final bool reordering;
   final bool landed;
 
-  /// 已有选中项：所有缩略图的勾选圈一起显形（样例 `.justified:has(.sel)`）。
+  /// 已有选中项或开启顶栏多选开关：所有缩略图的勾选圈一起显形。
   final bool selectionActive;
   final bool showCaption;
   final bool showFavorite;
@@ -121,17 +123,27 @@ class _PhotoTile extends StatelessWidget {
               curve: DesktopMotion.photoReorderPressCurve,
               child: GestureDetector(
                 onTap: onTap == null ? null : () => onTap!(photo),
+                onSecondaryTapUp:
+                    onSecondaryTap == null
+                        ? null
+                        : (details) =>
+                            onSecondaryTap!(photo, details.globalPosition),
                 child: SizedBox(
                   height: height,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
+                      // 关键修复：dragging true -> false 时 0ms 瞬时恢复 opacity: 1.0，
+                      // 与下一帧销毁幽灵 Overlay 无缝衔接，彻底消除 350ms 半透明空洞。
                       AnimatedOpacity(
-                        opacity: dragging ? 0.22 : 1,
-                        duration: DesktopMotion.of(
-                          context,
-                          DesktopMotion.photoReorderSourceFade,
-                        ),
+                        opacity: dragging ? 0.22 : 1.0,
+                        duration:
+                            dragging
+                                ? DesktopMotion.of(
+                                  context,
+                                  DesktopMotion.photoReorderSourceFade,
+                                )
+                                : Duration.zero,
                         child: AnimatedScale(
                           scale:
                               pressing
@@ -283,20 +295,12 @@ class _PhotoTile extends StatelessWidget {
             ),
           ),
         );
-        return TweenAnimationBuilder<double>(
-          key: ValueKey<bool>(landed),
-          tween: Tween<double>(begin: landed ? 0.82 : 1, end: 1),
-          duration: DesktopMotion.of(context, DesktopMotion.photoReorderSettle),
+        // 移除 ValueKey<bool>(landed)，用稳定节点轻微缩放提示落位，绝不触发子树销毁重建闪烁。
+        return AnimatedScale(
+          scale: landed && !pressing ? 0.985 : 1.0,
+          duration: DesktopMotion.of(context, DesktopMotion.soft),
           curve: DesktopMotion.riseCurve,
           child: content,
-          builder:
-              (context, scale, child) => Transform.scale(
-                scale: pressing ? 1 : scale,
-                child: Opacity(
-                  opacity: landed ? ((scale - 0.82) / 0.18).clamp(0.0, 1.0) : 1,
-                  child: child,
-                ),
-              ),
         );
       },
     );
@@ -392,7 +396,6 @@ class _SelectCheck extends StatelessWidget {
   }
 }
 
-/// 选中后的动作条（样例 `.sel-bar`）：计数 + 收藏 + 删除 + 取消。
 /// 底部居中的多选操作条（样例 `.sel-bar`）。
 ///
 /// 它是浮层而不是页面流的一段：样例用 `position:absolute; left:50%;
@@ -601,7 +604,10 @@ extension _PhotoSelectionActions on _DesktopPhotosPageState {
           l10n.photosSavedCount(saved),
           icon: DesktopIcons.check,
         );
-        setState(_selection.clear);
+        setState(() {
+          _selection.clear();
+          _selectionMode = false;
+        });
       }
     } on Object catch (error) {
       if (!mounted) {

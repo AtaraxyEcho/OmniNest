@@ -17,9 +17,17 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 /// 时构造器已还原，仍会落到框架默认灰块。要覆盖那种情况只能全局常驻接管，
 /// 会影响移动端与测试，不划算。
 class DesktopErrorBoundary extends StatefulWidget {
-  const DesktopErrorBoundary({required this.child, this.message, super.key});
+  const DesktopErrorBoundary({
+    required this.child,
+    this.path,
+    this.message,
+    super.key,
+  });
 
   final Widget child;
+
+  /// 当前路由路径；切页时仅在上一页确实触发过错误时复位错误态，绝不销毁正常子树。
+  final String? path;
 
   /// 覆盖默认文案（`desktopRouteError`）。
   final String? message;
@@ -32,8 +40,25 @@ class _DesktopErrorBoundaryState extends State<DesktopErrorBoundary> {
   /// 重试就是重挂子树：换 key 让失败节点的状态一起丢掉。
   int _epoch = 0;
 
+  /// 标记当前子树是否触发过构建期错误。
+  bool _hasError = false;
+
   void _retry() {
-    setState(() => _epoch++);
+    setState(() {
+      _hasError = false;
+      _epoch++;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopErrorBoundary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 路由切换时绝不销毁正常 child（避免销毁整棵 Router）；仅在上一页确实
+    // 触发过构建期错误时才重置错误态。
+    if (oldWidget.path != widget.path && _hasError) {
+      _hasError = false;
+      _epoch++;
+    }
   }
 
   @override
@@ -46,6 +71,7 @@ class _DesktopErrorBoundaryState extends State<DesktopErrorBoundary> {
 
     final previous = ErrorWidget.builder;
     ErrorWidget.builder = (details) {
+      _hasError = true;
       return DesktopErrorView(
         message: message,
         retryLabel: retryLabel,
@@ -145,15 +171,15 @@ class _DesktopRouteProgressBarState extends State<DesktopRouteProgressBar>
   }
 }
 
-/// 路由切换期间的整页兜底：失败给 `.route-err`，切换中给 2px 扫描条。
+/// 路由切换期间的整页兜底：失败给 `.route-err`，仅真实异步加载挂起时给 2px 扫描条。
 ///
 /// 样例把这两件事分别放在 `Boundary`（错误）与 `Suspense fallback`（加载）里，
 /// 壳层只有这一个内容插槽，合在一处省得把 `path` 与动画状态各传两遍。
 class DesktopRouteContainer extends StatelessWidget {
   const DesktopRouteContainer({
     required this.path,
-    required this.loading,
     required this.child,
+    this.loading = false,
     super.key,
   });
 
@@ -166,7 +192,7 @@ class DesktopRouteContainer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        DesktopErrorBoundary(key: ValueKey<String>(path), child: child),
+        DesktopErrorBoundary(path: path, child: child),
         if (loading)
           const Positioned(
             top: 0,

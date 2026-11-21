@@ -7,6 +7,8 @@ class _JustifiedPhotos extends StatefulWidget {
     required this.selection,
     required this.onActivate,
     required this.onToggleSelect,
+    this.onSecondaryTap,
+    this.selectionMode = false,
     this.orderContext,
     this.onOrderChanged,
     this.showCaption = true,
@@ -19,6 +21,13 @@ class _JustifiedPhotos extends StatefulWidget {
   final Set<String> selection;
   final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
   final ValueChanged<PhotoItem> onToggleSelect;
+  final void Function(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    Offset globalPosition,
+  )?
+  onSecondaryTap;
+  final bool selectionMode;
   final String? orderContext;
   final _PhotoOrderChanged? onOrderChanged;
   final bool showCaption;
@@ -43,6 +52,8 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   String? _draggedPhotoId;
   bool _settling = false;
   _PhotoDragPayload? _activeDragPayload;
+  ({String contextKey, List<String> order, int movedCount})?
+  _pendingCommitOrder;
 
   late final _PhotoFlipTracker _flipTracker;
   final Map<String, GlobalKey<State<StatefulWidget>>> _tileKeys = {};
@@ -65,6 +76,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   Timer? _landedTimer;
   Timer? _clickGuardTimer;
   bool _trailingClickGuard = false;
+  bool _globalPointerAttached = false;
 
   int? _pressPointer;
   Offset? _pressOrigin;
@@ -94,6 +106,34 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     HardwareKeyboard.instance.addHandler(_handleKey);
   }
 
+  void _attachGlobalPointer() {
+    if (_globalPointerAttached) return;
+    _globalPointerAttached = true;
+    GestureBinding.instance.pointerRouter.addGlobalRoute(
+      _handleGlobalPointerEvent,
+    );
+  }
+
+  void _detachGlobalPointer() {
+    if (!_globalPointerAttached) return;
+    _globalPointerAttached = false;
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(
+      _handleGlobalPointerEvent,
+    );
+  }
+
+  void _handleGlobalPointerEvent(PointerEvent event) {
+    if (!_isDragging || _pressPointer != event.pointer) return;
+    if (event is PointerMoveEvent) {
+      _dragPointer = event.position;
+      _checkSwap();
+    } else if (event is PointerUpEvent) {
+      _finishDrag(accepted: true);
+    } else if (event is PointerCancelEvent) {
+      _finishDrag(accepted: false);
+    }
+  }
+
   void _startTrailingClickGuard() {
     _clickGuardTimer?.cancel();
     _trailingClickGuard = true;
@@ -117,6 +157,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   void _abortPress() {
+    _detachGlobalPointer();
     _pressTimer?.cancel();
     _holdTimer?.cancel();
     _pressPointer = null;
@@ -127,6 +168,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   void _cleanupImmediate() {
+    _detachGlobalPointer();
     _pressTimer?.cancel();
     _holdTimer?.cancel();
     _landedTimer?.cancel();
@@ -140,6 +182,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _pressOrigin = null;
     _settleStartRect = null;
     _settleTargetRect = null;
+    _pendingCommitOrder = null;
     if (mounted) {
       setState(() {
         _dragOrder = null;
@@ -204,6 +247,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   void _onTilePointerMove(PointerMoveEvent event) {
+    if (_globalPointerAttached) return;
     if (_pressPointer != event.pointer) return;
     _dragPointer = event.position;
     if (!_isDragging) {
@@ -217,6 +261,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   void _onTilePointerUp(PointerUpEvent event) {
+    if (_globalPointerAttached) return;
     if (_pressPointer != event.pointer) return;
     if (_isDragging) {
       _finishDrag(accepted: true);
@@ -226,6 +271,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   void _onTilePointerCancel(PointerCancelEvent event) {
+    if (_globalPointerAttached) return;
     if (_pressPointer != event.pointer) return;
     if (_isDragging) {
       _finishDrag(accepted: false);
@@ -279,6 +325,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _dragPointerSmooth = _dragPointer;
     _grabCenterK = 0.0;
     _activeDragPayload = livePayload;
+    _pendingCommitOrder = null;
 
     final localPointer = overlayBox.globalToLocal(_dragPointerSmooth);
     final initialPose = _GhostPose(
@@ -288,6 +335,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       height: livePayload.feedbackHeight,
     );
     _insertGhostOverlay(overlay, livePayload, initialPose);
+    _attachGlobalPointer();
 
     setState(() {
       _pressingPhotoIds = <String>{};
@@ -484,6 +532,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
 
   void _finishDrag({required bool accepted, bool canceledByEsc = false}) {
     final payload = _activeDragPayload;
+    _detachGlobalPointer();
     if (!mounted || payload == null || _settling) {
       _cleanupImmediate();
       return;
@@ -495,9 +544,8 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _pressPointer = null;
     _pressOrigin = null;
 
-    if (!canceledByEsc) {
-      _startTrailingClickGuard();
-    }
+    // Esc 取消也要屏蔽尾随 click：否则真实松手会被卡片当成一次点击直接打开照片。
+    _startTrailingClickGuard();
 
     final collapsedOrder = _dragOrder ?? payload.baseOrderIds;
     final expandedOrder =
@@ -505,11 +553,12 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     final orderChanged =
         accepted && !_sameOrder(payload.orderIds, expandedOrder);
 
-    // 原地松手与 Esc 取消都没有改变顺序：幽灵卡直接收起，不做 420ms 归位飞入，
-    // 否则用户会看到一张「飞回自己原位」的浮层，且 Esc 的取消语义被拖慢。
+    // 原地松手与 Esc 取消：先让实体图 0ms 恢复 1.0 不透明，再于下一帧销毁幽灵 Overlay。
     if (!orderChanged) {
-      _removeGhostOverlay();
+      final staleOverlay = _ghostOverlay;
+      _ghostOverlay = null;
       _flipTracker.clear();
+      _pendingCommitOrder = null;
       if (mounted) {
         setState(() {
           _settling = false;
@@ -524,23 +573,24 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
           _lastSwapPointer = null;
         });
       }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _ghostPose.value = null;
+        }
+        staleOverlay?.remove();
+        staleOverlay?.dispose();
+      });
       return;
     }
 
-    // 阶段 1：保持 `_draggedPhotoId` 占位态不清空（零双影），提交并展开新布局。
+    // 阶段 1：保持 `_draggedPhotoId` 占位态不清空（零双影），延后提交顺序直至落位完成。
     _flipTracker.skipPhotoId = payload.draggedId;
     _flipTracker.snapshot(_tileKeys);
-
-    final onOrderChanged = widget.onOrderChanged;
-    if (orderChanged && onOrderChanged != null) {
-      unawaited(
-        onOrderChanged(
-          payload.contextKey,
-          expandedOrder,
-          payload.movingPhotos.length,
-        ),
-      );
-    }
+    _pendingCommitOrder = (
+      contextKey: payload.contextKey,
+      order: expandedOrder,
+      movedCount: payload.movingPhotos.length,
+    );
 
     setState(() {
       _settling = true;
@@ -619,10 +669,14 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     required _PhotoDragPayload payload,
     required bool accepted,
   }) {
-    _removeGhostOverlay();
+    final staleOverlay = _ghostOverlay;
+    _ghostOverlay = null;
     _flipTracker.clear();
     _settleStartRect = null;
     _settleTargetRect = null;
+
+    final pendingCommit = _pendingCommitOrder;
+    _pendingCommitOrder = null;
 
     final companions =
         accepted && payload.movingIds.length > 1
@@ -636,13 +690,36 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       });
     }
 
+    // 关键修复：先清除 _draggedPhotoId 让实体图以 0ms 瞬时恢复 opacity: 1.0 渲染，
+    // 在本帧实体图上屏后的 postFrameCallback 中再销毁幽灵 Overlay，并提交新顺序。
     setState(() {
       _settling = false;
-      _settlingOrder = null;
       _draggedPhotoId = null;
       _activeDragPayload = null;
       _landedPhotoIds = companions;
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _ghostPose.value = null;
+      }
+      staleOverlay?.remove();
+      staleOverlay?.dispose();
+      if (mounted && _settlingOrder != null) {
+        setState(() => _settlingOrder = null);
+      }
+    });
+
+    final onOrderChanged = widget.onOrderChanged;
+    if (pendingCommit != null && onOrderChanged != null) {
+      unawaited(
+        onOrderChanged(
+          pendingCommit.contextKey,
+          pendingCommit.order,
+          pendingCommit.movedCount,
+        ),
+      );
+    }
   }
 
   Rect? _rectFor(String id) {
@@ -688,6 +765,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
 
   @override
   void dispose() {
+    _detachGlobalPointer();
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _pressTimer?.cancel();
     _holdTimer?.cancel();
@@ -721,12 +799,13 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       );
     }
     final isReordering = _draggedPhotoId != null;
+    final selectionActive = widget.selection.isNotEmpty || widget.selectionMode;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         if (photos.length == 1) {
-          return _soloLayout(context, photos.first, width);
+          return _soloLayout(context, photos.first, width, selectionActive);
         }
         final rows = _layout(width, photos);
         return Column(
@@ -744,6 +823,8 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                         child: LayoutBuilder(
                           builder: (context, tileConstraints) {
                             final photo = row[i].photo;
+                            // 关键修复：移除 isReordering ? tile : DesktopStagger(...) 拓扑切换，
+                            // 保持单张照片卡片在拖拽起落全过程节点树恒定，杜绝松手整组重播入场动画。
                             final tile = _PhotoTile(
                               key: ValueKey<String>(
                                 'desktop-photo-${photo.id}',
@@ -758,30 +839,33 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                                 widget.onActivate(selectedPhoto, photos);
                               },
                               onToggleSelect: widget.onToggleSelect,
+                              onSecondaryTap:
+                                  widget.onSecondaryTap == null
+                                      ? null
+                                      : (targetPhoto, globalPos) =>
+                                          widget.onSecondaryTap!(
+                                            targetPhoto,
+                                            photos,
+                                            globalPos,
+                                          ),
                               selected: widget.selection.contains(photo.id),
                               pressing: _pressingPhotoIds.contains(photo.id),
                               dragging: _draggedPhotoId == photo.id,
                               reordering: isReordering,
                               landed: _landedPhotoIds.contains(photo.id),
-                              selectionActive: widget.selection.isNotEmpty,
+                              selectionActive: selectionActive,
                               showCaption: widget.showCaption,
                               showFavorite: widget.showFavorite,
                               showSelectionControls:
                                   widget.showSelectionControls,
                             );
 
-                            // 拖拽/归位期间禁用 DesktopStagger，避免换位触发入场动画干扰。
-                            final card =
-                                isReordering
-                                    ? tile
-                                    : DesktopStagger(index: i, child: tile);
-
                             final orderContext = widget.orderContext;
                             final onOrderChanged = widget.onOrderChanged;
                             if (orderContext == null ||
                                 onOrderChanged == null ||
                                 photos.length < 2) {
-                              return card;
+                              return tile;
                             }
 
                             final selectedIds = widget.selection;
@@ -849,7 +933,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                                 onPointerMove: _onTilePointerMove,
                                 onPointerUp: _onTilePointerUp,
                                 onPointerCancel: _onTilePointerCancel,
-                                child: card,
+                                child: tile,
                               ),
                             );
                           },
@@ -866,22 +950,31 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   }
 
   /// 单张照片：照片按原比例 + `.solo-note` 旁注（polish.css:324-328）。
-  Widget _soloLayout(BuildContext context, PhotoItem photo, double width) {
+  Widget _soloLayout(
+    BuildContext context,
+    PhotoItem photo,
+    double width,
+    bool selectionActive,
+  ) {
     final ratio = _ratioOf(photo);
     final photoWidth = (widget.targetHeight * ratio).clamp(120.0, width);
     final noteWidth = (width - photoWidth - 20).clamp(220.0, 320.0);
+    final singleList = <PhotoItem>[photo];
     final tile = SizedBox(
       width: photoWidth,
       height: widget.targetHeight,
       child: _PhotoTile(
         photo: photo,
         height: widget.targetHeight,
-        onTap:
-            (selectedPhoto) =>
-                widget.onActivate(selectedPhoto, <PhotoItem>[photo]),
+        onTap: (selectedPhoto) => widget.onActivate(selectedPhoto, singleList),
         onToggleSelect: widget.onToggleSelect,
+        onSecondaryTap:
+            widget.onSecondaryTap == null
+                ? null
+                : (targetPhoto, globalPos) =>
+                    widget.onSecondaryTap!(targetPhoto, singleList, globalPos),
         selected: widget.selection.contains(photo.id),
-        selectionActive: widget.selection.isNotEmpty,
+        selectionActive: selectionActive,
         showCaption: widget.showCaption,
         showFavorite: widget.showFavorite,
         showSelectionControls: widget.showSelectionControls,

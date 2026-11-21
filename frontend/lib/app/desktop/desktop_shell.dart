@@ -135,8 +135,12 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   /// 会在同一次 go 里先后通知）。
   bool _historySyncScheduled = false;
 
-  /// 上一次同步到壳层的路由位置，用于在同帧内去重同步 `setState`。
+  /// 上一次同步到壳层的路由位置，用于在同帧内去重更新。
   String _lastSyncedPath = '';
+
+  /// 用独立 ValueNotifier 向下游分发路由变化，避免每次切页在顶层
+  /// `_DesktopShellHostState` 调用 `setState` 重建整棵 `Theme` / Scope 树。
+  late final ValueNotifier<String> _pathNotifier = ValueNotifier<String>(_path);
 
   /// 音乐中心状态变化后，同一帧只排一次播放会话同步。
   ///
@@ -159,6 +163,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   void initState() {
     super.initState();
     _lastSyncedPath = _path;
+    _pathNotifier.value = _lastSyncedPath;
     widget.router.routerDelegate.addListener(_onRouteChanged);
     widget.router.routeInformationProvider.addListener(_onRouteChanged);
     HardwareKeyboard.instance.addHandler(_handleKey);
@@ -177,10 +182,24 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 
   @override
+  void didUpdateWidget(covariant DesktopShellHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.router != widget.router) {
+      oldWidget.router.routerDelegate.removeListener(_onRouteChanged);
+      oldWidget.router.routeInformationProvider.removeListener(_onRouteChanged);
+      widget.router.routerDelegate.addListener(_onRouteChanged);
+      widget.router.routeInformationProvider.addListener(_onRouteChanged);
+      _lastSyncedPath = _path;
+      _pathNotifier.value = _lastSyncedPath;
+    }
+  }
+
+  @override
   void dispose() {
     widget.router.routerDelegate.removeListener(_onRouteChanged);
     widget.router.routeInformationProvider.removeListener(_onRouteChanged);
     HardwareKeyboard.instance.removeHandler(_handleKey);
+    _pathNotifier.dispose();
     super.dispose();
   }
 
@@ -190,18 +209,17 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     }
     final nextPath = _path;
     final phase = SchedulerBinding.instance.schedulerPhase;
-    // 非构建期（idle / postFrameCallbacks）直接同步 setState，确保 `_RouteEnter`
-    // 在新页面挂载的同一帧拿到最新 path，彻底消除原先推迟到 addPostFrameCallback
-    // 导致的“新页先以 opacity=1 硬闪 1 帧再淡入”问题。
+    // 非构建期（idle / postFrameCallbacks）同步更新 `_pathNotifier`，确保 `_RouteEnter`
+    // 在新页面挂载的同一帧拿到最新 path，且不会触发顶层 `Theme` 整树重建。
     if (nextPath != _lastSyncedPath) {
       _lastSyncedPath = nextPath;
       if (phase == SchedulerPhase.idle ||
           phase == SchedulerPhase.postFrameCallbacks) {
-        setState(() {});
+        _pathNotifier.value = nextPath;
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            setState(() {});
+            _pathNotifier.value = _lastSyncedPath;
           }
         });
       }
@@ -345,69 +363,6 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
             null;
   }
 
-  /// 环境光封面按路由取（样例 `Shell.tsx` 的 `covers` 映射）。
-  ///
-  /// 只有媒体路由借「当前内容」当封面；home / files / settings / admin 在
-  /// 样例里统一取同一张 `img.environment`，这里落成随包的默认场景。
-  /// 此前这些页面都退到「最近一张照片」，关掉背景库后环境光仍会画出用户
-  /// 自己的照片，看起来像壁纸没关——那不是壁纸层，但肉眼分不出来。
-  String? _ambientImage() {
-    final path = _path;
-    if (path.startsWith('/music')) {
-      return ref.watch(
-        musicPortalSnapshotProvider.select((snapshot) {
-          final music = snapshot.asData?.value;
-          return music?.activeTrack?.coverUrl ?? music?.featuredAlbum?.coverUrl;
-        }),
-      );
-    }
-    if (path.startsWith('/video')) {
-      return ref.watch(
-        movieDashboardProvider.select((dashboard) {
-          for (final item
-              in dashboard.asData?.value.recentlyAdded ??
-                  const <MovieVideoItem>[]) {
-            final image = item.backdropImageUrl ?? item.posterImageUrl;
-            if (image != null) {
-              return image;
-            }
-          }
-          return null;
-        }),
-      );
-    }
-    if (path.startsWith('/reader')) {
-      return ref.watch(
-        readerDashboardProvider.select((dashboard) {
-          for (final item
-              in dashboard.asData?.value.continueReading ??
-                  const <ReaderItem>[]) {
-            final cover = item.coverUrl;
-            if (cover != null && cover.isNotEmpty) {
-              return cover;
-            }
-          }
-          return null;
-        }),
-      );
-    }
-    if (path.startsWith('/photos')) {
-      return ref.watch(
-        photoDashboardProvider.select((dashboard) {
-          for (final item
-              in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
-            if (item.coverUrl != null) {
-              return item.coverUrl;
-            }
-          }
-          return null;
-        }),
-      );
-    }
-    // 随包资产而不是网络 URL：`DesktopAmbient` 按前缀识别并走 `Image.asset`。
-    return bundledDefaultWallpaperAssetPath;
-  }
-
   @override
   Widget build(BuildContext context) {
     // 桌面播放条与沉浸播放页只改音乐中心状态；真正开流由播放会话完成。
@@ -434,16 +389,9 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
     final theme = DesktopTheme.resolve(isDark: isDark, accent: accent);
-    final mode = desktopShellModeForPath(_routePath);
-    final backdropConfigured = ref.watch(
-      appBackdropControllerProvider.select(
-        (async) => async.asData?.value.hasActiveBackdrop ?? false,
-      ),
+    final bodyTextStyle = DesktopType.body(
+      theme.extension<DesktopSkin>()!.text,
     );
-    final backdropScope = ref.watch(desktopBackdropScopeProvider);
-    final backdropActive =
-        backdropConfigured &&
-        desktopBackdropAppliesToRoute(backdropScope, _routePath);
 
     return Theme(
       data: theme,
@@ -451,46 +399,22 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       // 缺 DefaultTextStyle 时 Text 会继承 WidgetsApp 的兜底样式（黄色
       // 双下划线），缺 Overlay 时 Tooltip 直接建不起来。两者都在这里补齐。
       child: DefaultTextStyle(
-        style: DesktopType.body(theme.extension<DesktopSkin>()!.text),
+        style: bodyTextStyle,
         child: DesktopSkeletonShimmerScope(
           child: DesktopToastScope(
             child: DesktopRouterScope(
               router: widget.router,
-              child: DesktopShellScope(
-                hosted: mode == DesktopShellMode.chrome,
-                backdropActive: backdropActive,
-                // 壳层与沉浸页都是自绘表面，没有 Scaffold/Card：Material 控件
-                // （TextField、Chip、Checkbox…）要求最近的 Material 祖先，缺了
-                // 会抛 “No Material widget found.”。这里补一层透明 Material，
-                // 并显式透传 DefaultTextStyle，避免 Material 自带 bodyMedium
-                // 改掉未指定 style 的文字尺寸。
-                child: Material(
-                  type: MaterialType.transparency,
-                  textStyle: DesktopType.body(
-                    theme.extension<DesktopSkin>()!.text,
-                  ),
-                  child: Overlay.wrap(
-                    child:
-                        mode == DesktopShellMode.chrome
-                            ? _Workspace(
-                              path: _path,
-                              ambientImage: _ambientImage(),
-                              child: widget.child,
-                            )
-                            : mode == DesktopShellMode.immersive
-                            ? _DesktopImmersiveCanvas(
-                              path: _path,
-                              ambientImage: _ambientImage(),
-                              child: widget.child,
-                            )
-                            : DesktopWindowChrome(
-                              child: ColoredBox(
-                                color: theme.scaffoldBackgroundColor,
-                                child: widget.child,
-                              ),
-                            ),
-                  ),
-                ),
+              child: ValueListenableBuilder<String>(
+                valueListenable: _pathNotifier,
+                child: widget.child,
+                builder: (context, path, child) {
+                  return _DesktopShellBody(
+                    path: path,
+                    scaffoldBackgroundColor: theme.scaffoldBackgroundColor,
+                    bodyTextStyle: bodyTextStyle,
+                    child: child!,
+                  );
+                },
               ),
             ),
           ),
@@ -500,23 +424,83 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 }
 
-class _Workspace extends ConsumerWidget {
-  const _Workspace({
+class _DesktopShellBody extends ConsumerWidget {
+  const _DesktopShellBody({
     required this.path,
-    required this.ambientImage,
+    required this.scaffoldBackgroundColor,
+    required this.bodyTextStyle,
     required this.child,
   });
 
   final String path;
-  final String? ambientImage;
+  final Color scaffoldBackgroundColor;
+  final TextStyle bodyTextStyle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
+    final mode = desktopShellModeForPath(routePath);
+    final backdropConfigured = ref.watch(
+      appBackdropControllerProvider.select(
+        (async) => async.asData?.value.hasActiveBackdrop ?? false,
+      ),
+    );
+    final backdropScope = ref.watch(desktopBackdropScopeProvider);
+    final backdropActive =
+        backdropConfigured &&
+        desktopBackdropAppliesToRoute(backdropScope, routePath);
+
+    return DesktopShellScope(
+      hosted: mode == DesktopShellMode.chrome,
+      backdropActive: backdropActive,
+      // 壳层与沉浸页都是自绘表面，没有 Scaffold/Card：Material 控件
+      // （TextField、Chip、Checkbox…）要求最近的 Material 祖先，缺了
+      // 会抛 “No Material widget found.”。这里补一层透明 Material，
+      // 并显式透传 DefaultTextStyle，避免 Material 自带 bodyMedium
+      // 改掉未指定 style 的文字尺寸。
+      child: Material(
+        type: MaterialType.transparency,
+        textStyle: bodyTextStyle,
+        child: Overlay.wrap(
+          child:
+              mode == DesktopShellMode.chrome
+                  ? _Workspace(path: path, child: child)
+                  : mode == DesktopShellMode.immersive
+                  ? _DesktopImmersiveCanvas(path: path, child: child)
+                  : DesktopWindowChrome(
+                    child: ColoredBox(
+                      color: scaffoldBackgroundColor,
+                      child: child,
+                    ),
+                  ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Workspace extends ConsumerWidget {
+  const _Workspace({required this.path, required this.child});
+
+  final String path;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final shell = ref.watch(desktopShellProvider);
-    final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;
+    // 细粒度订阅：仅关注工作区自身渲染的命令面板与快捷键表开关，
+    // 侧栏折叠、详情坞开关、右键菜单与顶栏浮层变化均不再触发工作区整树重建。
+    final commandPaletteOpen = ref.watch(
+      desktopShellProvider.select((s) => s.commandPaletteOpen),
+    );
+    final shortcutsOpen = ref.watch(
+      desktopShellProvider.select((s) => s.shortcutsOpen),
+    );
+    final offline = ref.watch(
+      appOnlineStatusProvider.select((async) => async.asData?.value == false),
+    );
     // 自定义壁纸在场时环境光整体让位（样例 `.bd-on .ambient { display:none }`）：
     // 两者叠在一起会把壁纸压成一层灰雾，暗纱也会重复叠加两次。
     // 只订阅这一位布尔：拖动暗化/模糊滑杆时 state 每帧都变，整份 watch 会把
@@ -547,7 +531,7 @@ class _Workspace extends ConsumerWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (!backdropActive) _AmbientLayer(imageUrl: ambientImage),
+              if (!backdropActive) _AmbientLayer(path: path),
               DesktopBackdropLayer(path: path),
               Column(
                 children: [
@@ -598,8 +582,8 @@ class _Workspace extends ConsumerWidget {
               const DesktopPanelLayer(),
               const DesktopToasts(),
               const DesktopContextMenu(),
-              if (shell.commandPaletteOpen) const DesktopCommandPalette(),
-              if (shell.shortcutsOpen) const DesktopShortcutsSheet(),
+              if (commandPaletteOpen) const DesktopCommandPalette(),
+              if (shortcutsOpen) const DesktopShortcutsSheet(),
             ],
           ),
         ),

@@ -53,6 +53,11 @@ class OmniNestApp extends ConsumerStatefulWidget {
 }
 
 class _OmniNestAppState extends ConsumerState<OmniNestApp> {
+  /// 持久锚定 Router 子树：跨登录态与壳层模式切换时仅 reparent，绝不销毁重建。
+  final GlobalKey _routerSubtreeKey = GlobalKey(
+    debugLabel: 'app-router-subtree',
+  );
+
   @override
   void initState() {
     super.initState();
@@ -205,6 +210,9 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       data: mediaQuery.copyWith(textScaler: effectiveScaler),
       child: content,
     );
+    // 在进入桌面/移动壳层、standaloneRoute 与 authenticated 分支之前用持久
+    // GlobalKey 保活 Router，跨登录态与壳层模式切换仅 reparent，绝不销毁重建。
+    content = KeyedSubtree(key: _routerSubtreeKey, child: content);
     // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
     // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
     // 设备例外，让它们直接走模块窄屏布局。

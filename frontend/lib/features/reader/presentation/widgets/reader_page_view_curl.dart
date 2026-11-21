@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 双向卷页双槽空闲预抓图与装配（v5：2.0x 高清截图 + front/back 统一 _SpreadPage 样式 + 零重建 underlay）。
+/// 双向卷页双槽空闲预抓图与装配（v6：离屏抓图前 await 资源就绪 + RTL 双页对称映射）。
 extension _ReaderPageViewCurl on _ReaderPageViewState {
   void _scheduleIdleNextCurlWarmup() {
     _curlWarmupTimer?.cancel();
@@ -44,6 +44,27 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     final token = _curlToken;
     try {
       if (token != _curlToken) return false;
+      final idx = widget.state.pageIndex;
+      final forward = _isLogicalForward(dir);
+      final frontPageIdx = widget.spread ? (forward ? idx + 1 : idx) : idx;
+      final backPageIdx =
+          forward ? (widget.spread ? idx + 2 : idx + 1) : idx - 1;
+
+      final prepare = widget.prepareSnapshotPage;
+      if (prepare != null) {
+        if (frontPageIdx >= 0 && frontPageIdx < widget.state.pageCount) {
+          final frontReady = await prepare(frontPageIdx);
+          if (!mounted || token != _curlToken || !frontReady) return false;
+        }
+        if (backPageIdx >= 0 && backPageIdx < widget.state.pageCount) {
+          final backReady = await prepare(backPageIdx);
+          if (!mounted || token != _curlToken || !backReady) return false;
+        }
+        // 等待一帧让刚就绪的正面图片完成首帧绘制，避免正面抓到占位或 Loading。
+        await SchedulerBinding.instance.endOfFrame;
+        if (!mounted || token != _curlToken) return false;
+      }
+
       // 高分屏截图 dpr 上限提升至 2.0，消除点击翻页瞬间文字变糊跳变。
       final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
       final liveKey =
@@ -73,6 +94,14 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       if (!mounted || token != _curlToken) {
         frontImg.dispose();
         return false;
+      }
+      if (prepare != null) {
+        // 图片页额外等一帧确保 Image.memory 同步缓存首帧解码落盘。
+        await SchedulerBinding.instance.endOfFrame;
+        if (!mounted || token != _curlToken) {
+          frontImg.dispose();
+          return false;
+        }
       }
 
       final backImg = await _captureBoundarySafe(_singleBackCaptureKey, dpr);
@@ -215,20 +244,43 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
 
     final idx = widget.state.pageIndex;
     final isVisualNext = frame.direction == CurlDirection.next;
-    final underlayLeft =
-        (isVisualNext
-            ? widget.pageBuilder(idx)
-            : (idx - 2 >= 0
-                ? widget.pageBuilder(idx - 2)
-                : widget.crossChapterSnapshotBuilder?.call(-1))) ??
-        const SizedBox.expand();
-    final underlayRight =
-        isVisualNext
-            ? (widget.pageBuilder(idx + 3) ??
-                (idx + 2 >= widget.state.pageCount
-                    ? widget.crossChapterSnapshotBuilder?.call(1)
-                    : null))
-            : widget.pageBuilder(idx + 1);
+    final Widget underlayLeft;
+    final Widget? underlayRight;
+
+    if (widget.reverse) {
+      // RTL 日漫双页：当前右页 idx、左页 idx + 1。
+      // 左向右掀（!isVisualNext = 逻辑前进）：左页露出 idx + 3，右页保持 idx；
+      // 右向左掀（isVisualNext = 逻辑后退）：左页保持 idx + 1，右页露出 idx - 2。
+      underlayLeft =
+          (isVisualNext
+              ? widget.pageBuilder(idx + 1)
+              : (widget.pageBuilder(idx + 3) ??
+                  (idx + 2 >= widget.state.pageCount
+                      ? widget.crossChapterSnapshotBuilder?.call(1)
+                      : null))) ??
+          const SizedBox.expand();
+      underlayRight =
+          isVisualNext
+              ? (idx - 2 >= 0
+                  ? widget.pageBuilder(idx - 2)
+                  : widget.crossChapterSnapshotBuilder?.call(-1))
+              : widget.pageBuilder(idx);
+    } else {
+      underlayLeft =
+          (isVisualNext
+              ? widget.pageBuilder(idx)
+              : (idx - 2 >= 0
+                  ? widget.pageBuilder(idx - 2)
+                  : widget.crossChapterSnapshotBuilder?.call(-1))) ??
+          const SizedBox.expand();
+      underlayRight =
+          isVisualNext
+              ? (widget.pageBuilder(idx + 3) ??
+                  (idx + 2 >= widget.state.pageCount
+                      ? widget.crossChapterSnapshotBuilder?.call(1)
+                      : null))
+              : widget.pageBuilder(idx + 1);
+    }
 
     // 复用 _buildRestingPage 保持 _liveLeftKey / _liveRightKey 挂载在同一 RepaintBoundary。
     return _buildRestingPage(
@@ -247,6 +299,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
             ? _SpreadPage(
               color: widget.surfaceColor,
               side: _pendingBackCaptureSide,
+              showPaperGrain: widget.showPaperGrain,
               child: child,
             )
             : ColoredBox(color: widget.surfaceColor, child: child);

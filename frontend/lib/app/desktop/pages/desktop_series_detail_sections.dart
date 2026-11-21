@@ -335,8 +335,8 @@ class _SeriesEditDialog extends ConsumerStatefulWidget {
   ConsumerState<_SeriesEditDialog> createState() => _SeriesEditDialogState();
 }
 
-/// 样例 `FilmEditor` 的剧集分支：封面预览 + 标题/类型/年份/时长/评分/
-/// 演员/海报地址/简介，字段与影片共用一套排版。
+/// 样例 `FilmEditor` 的剧集分支：统一封面控件 + 标题/类型/年份/时长/评分/
+/// 演员/简介 + 恢复原始元数据，字段与影片共用一套排版。
 class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
   late final TextEditingController _title = TextEditingController(
     text: widget.series.title,
@@ -357,19 +357,46 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
     text: widget.cast.map((member) => member.name).join(', '),
   );
   late final TextEditingController _posterUrl = TextEditingController(
-    text:
-        (widget.series.metadata['manualPosterUrl'] ??
-                widget.series.posterUrl ??
-                '')
-            .toString(),
+    text: _initialExternalPosterUrl(widget.series),
   );
+  late final String _initialPosterUrl = _posterUrl.text;
   late final TextEditingController _overview = TextEditingController(
     text: widget.series.overview ?? '',
   );
+  DesktopPickedCover? _pickedPoster;
+  bool _clearPoster = false;
   bool _saving = false;
   String? _titleError;
   String? _yearError;
   String? _ratingError;
+  String? _posterUrlError;
+
+  bool get _canRestoreOriginal =>
+      widget.series.metadata['manualMetadataOriginal'] is Map;
+
+  static String _initialExternalPosterUrl(MovieSeries series) {
+    final manual = series.metadata['manualPosterUrl']?.toString().trim();
+    if (manual != null && manual.isNotEmpty) {
+      return manual;
+    }
+    final fallback = series.posterUrl?.trim();
+    if (series.posterFileId == null &&
+        fallback != null &&
+        _isHttpUrl(fallback)) {
+      return fallback;
+    }
+    return '';
+  }
+
+  static bool _isHttpUrl(String value) {
+    if (value.length > 2048) return false;
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        (uri.scheme.toLowerCase() == 'http' ||
+            uri.scheme.toLowerCase() == 'https') &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty;
+  }
 
   @override
   void dispose() {
@@ -395,28 +422,41 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
     final title = _title.text.trim();
     final yearText = _year.text.trim();
     final ratingText = _rating.text.trim();
+    final posterUrl = _posterUrl.text.trim();
     final year = int.tryParse(yearText);
     final rating = double.tryParse(ratingText);
     setState(() {
       _titleError = title.isEmpty ? l10n.videoTitleRequired : null;
       _yearError =
-          yearText.isNotEmpty && (yearText.length != 4 || year == null)
-              ? l10n.videoMetaRuntimeInvalid
+          yearText.isNotEmpty &&
+                  (!RegExp(r'^\d{4}$').hasMatch(yearText) || year == null)
+              ? 'YYYY'
               : null;
       _ratingError =
           ratingText.isNotEmpty &&
                   (rating == null ||
-                      rating.isFinite == false ||
+                      !rating.isFinite ||
                       rating < 0 ||
                       rating > 10)
-              ? l10n.videoMetaFieldRating
+              ? '0.0 – 10.0'
+              : null;
+      _posterUrlError =
+          _pickedPoster == null &&
+                  !_clearPoster &&
+                  posterUrl.isNotEmpty &&
+                  !_isHttpUrl(posterUrl)
+              ? l10n.videoMetaPosterUrlInvalid
               : null;
     });
-    if (_titleError != null || _yearError != null || _ratingError != null) {
+    if (_titleError != null ||
+        _yearError != null ||
+        _ratingError != null ||
+        _posterUrlError != null) {
       return;
     }
     setState(() => _saving = true);
     try {
+      final posterUrlChanged = posterUrl != _initialPosterUrl.trim();
       await ref
           .read(movieCenterControllerProvider.notifier)
           .updateSeriesMetadata(
@@ -430,7 +470,13 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
             genres: _split(_genre.text),
             cast: _split(_cast.text),
             runtime: _runtime.text.trim(),
-            posterUrl: _posterUrl.text.trim(),
+            posterUrl:
+                !_clearPoster && _pickedPoster == null && posterUrlChanged
+                    ? posterUrl
+                    : null,
+            posterBytes: _pickedPoster?.bytes,
+            posterFileName: _pickedPoster?.fileName,
+            clearPoster: _clearPoster && _pickedPoster == null,
           );
       if (!mounted) return;
       ref.invalidate(movieSeriesDetailProvider(widget.series.id));
@@ -439,6 +485,44 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
         l10n.videoMetadataSaved,
         kind: DesktopToastKind.success,
         icon: DesktopIcons.check,
+      );
+      closeDesktopModal(context);
+    } on Object catch (error) {
+      if (mounted) {
+        showDesktopToast(
+          context,
+          failureToast(l10n, l10n.desktopMoviesEditDetails, error),
+          kind: DesktopToastKind.error,
+          icon: DesktopIcons.info,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _restoreOriginal() async {
+    if (_saving || !_canRestoreOriginal) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(movieCenterControllerProvider.notifier)
+          .updateSeriesMetadata(
+            seriesId: widget.series.id,
+            title:
+                _title.text.trim().isEmpty
+                    ? widget.series.title
+                    : _title.text.trim(),
+            restoreOriginal: true,
+          );
+      if (!mounted) return;
+      ref.invalidate(movieSeriesDetailProvider(widget.series.id));
+      showDesktopToast(
+        context,
+        l10n.readerMetadataRestored,
+        kind: DesktopToastKind.success,
+        icon: DesktopIcons.undo,
       );
       closeDesktopModal(context);
     } on Object catch (error) {
@@ -464,6 +548,12 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
       title: l10n.videoMetaEditDetails,
       footer: Row(
         children: [
+          if (_canRestoreOriginal)
+            DesktopButton(
+              label: l10n.readerRestoreOriginalMetadata,
+              icon: DesktopIcons.undo,
+              onPressed: _saving ? null : () => unawaited(_restoreOriginal()),
+            ),
           const Spacer(),
           DesktopButton(
             label: l10n.coreCancel,
@@ -481,49 +571,54 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 22),
-                child: SizedBox(
-                  width: 92,
-                  height: 138,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: DesktopCover(
-                      url:
-                          _posterUrl.text.trim().isEmpty
-                              ? widget.series.posterImageUrl
-                              : _posterUrl.text.trim(),
-                      fallbackIcon: DesktopIcons.film,
-                      cacheKey:
-                          'series-metadata-poster:${widget.series.id}:${_posterUrl.text.trim()}',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  children: [
-                    DesktopTextField(
-                      controller: _title,
-                      label: l10n.videoMetaFieldTitle,
-                      error: _titleError,
-                      autofocus: true,
-                    ),
-                    const SizedBox(height: 14),
-                    DesktopTextField(
-                      controller: _genre,
-                      label: l10n.videoMetaFieldGenre,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          DesktopCoverField(
+            label: l10n.videoMetaFieldPosterUrl,
+            shape: DesktopCoverFieldShape.poster,
+            previewUrl: widget.series.posterImageUrl,
+            fallbackIcon: DesktopIcons.film,
+            urlController: _posterUrl,
+            pickedCover: _pickedPoster,
+            cleared: _clearPoster,
+            urlError: _posterUrlError,
+            enabled: !_saving,
+            onPicked: (picked) {
+              setState(() {
+                _pickedPoster = picked;
+                _clearPoster = false;
+                _posterUrlError = null;
+              });
+            },
+            onClear: () {
+              setState(() {
+                _pickedPoster = null;
+                _clearPoster = true;
+                _posterUrlError = null;
+              });
+            },
+            onUrlChanged: (_) {
+              setState(() {
+                _pickedPoster = null;
+                _clearPoster = false;
+                _posterUrlError = null;
+              });
+            },
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
+          DesktopTextField(
+            controller: _title,
+            label: l10n.videoMetaFieldTitle,
+            required: true,
+            error: _titleError,
+            autofocus: true,
+            onChanged: (_) => setState(() => _titleError = null),
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _genre,
+            label: l10n.videoMetaFieldGenre,
+            hint: l10n.videoMetaCommaSeparated,
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -536,6 +631,7 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
                   maxLength: 4,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   error: _yearError,
+                  onChanged: (_) => setState(() => _yearError = null),
                 ),
               ),
               const SizedBox(width: 14),
@@ -558,6 +654,7 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
                     decimal: true,
                   ),
                   error: _ratingError,
+                  onChanged: (_) => setState(() => _ratingError = null),
                 ),
               ),
             ],
@@ -567,12 +664,6 @@ class _SeriesEditDialogState extends ConsumerState<_SeriesEditDialog> {
             controller: _cast,
             label: l10n.videoMetaFieldCast,
             hint: l10n.videoMetaCommaSeparated,
-          ),
-          const SizedBox(height: 14),
-          DesktopTextField(
-            controller: _posterUrl,
-            label: l10n.videoMetaFieldPosterUrl,
-            keyboardType: TextInputType.url,
           ),
           const SizedBox(height: 14),
           DesktopTextField(

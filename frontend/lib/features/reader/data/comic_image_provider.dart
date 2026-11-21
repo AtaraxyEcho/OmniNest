@@ -1,9 +1,9 @@
 import 'dart:collection';
 import 'dart:typed_data';
 
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
-import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// 漫画图片加载服务。
 ///
@@ -27,6 +27,20 @@ class ComicImageLoader {
   final Map<String, Future<Uint8List?>> _inFlight = {};
   int _currentBytes = 0;
 
+  /// 同步读取内存缓存中的图片字节。
+  ///
+  /// 命中时更新 LRU 活跃顺序并立即返回，未命中返回 null。
+  /// 供 `ComicPageImage.initState()` 与离屏卷页抓图路径避免首帧进入 `_loading = true`。
+  Uint8List? getCachedBytesSync(
+    String itemId,
+    String pageId, {
+    String sourcePath = '',
+  }) {
+    final normalizedPageId = pageId.isEmpty ? null : pageId;
+    final cacheKey = _cacheKey(itemId, sourcePath, normalizedPageId);
+    return _takeCached(cacheKey);
+  }
+
   /// 获取指定页面的图片字节。
   ///
   /// 优先从内存缓存读取。
@@ -42,7 +56,7 @@ class ComicImageLoader {
       return cached;
     }
 
-    if (pageId == null) {
+    if (pageId == null || pageId.isEmpty) {
       return null;
     }
 
@@ -96,6 +110,22 @@ class ComicImageLoader {
         ),
       );
     }
+  }
+
+  /// 预加载当前页前后的邻页图片（默认前 2 页、后 4 页），优先覆盖双页 Book 翻页所需页码。
+  Future<void> preloadAdjacent(
+    String itemId,
+    List<ComicPage> pages,
+    int currentIndex, {
+    int before = 2,
+    int after = 4,
+  }) {
+    if (pages.isEmpty) {
+      return Future<void>.value();
+    }
+    final start = (currentIndex - before).clamp(0, pages.length - 1).toInt();
+    final end = (currentIndex + after).clamp(0, pages.length - 1).toInt();
+    return preloadImages(itemId, pages.sublist(start, end + 1));
   }
 
   /// 清除指定漫画的缓存。

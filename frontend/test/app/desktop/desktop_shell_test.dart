@@ -299,12 +299,24 @@ void main() {
       find.ancestor(of: admin, matching: find.byType(FocusableActionDetector)),
       findsWidgets,
     );
-    expect(
-      tester.getSemantics(admin).getSemanticsData().flagsCollection.isButton,
-      isTrue,
-    );
+    // v10 把整行语义收敛到外层 Semantics(label:, button:, excludeSemantics:
+    // true)，文字节点本身不再带 button 语义，改查最近的按钮语义行。
+    final navRow =
+        find
+            .ancestor(
+              of: admin,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Semantics && widget.properties.button == true,
+              ),
+            )
+            .first;
+    // 直接校验行内 Semantics 的声明：`excludeSemantics` 会把文字节点并进这一层，
+    // 再查 getSemantics 拿到的是合并后的普通节点，读不到按钮标记。
+    final navSemantics = tester.widget<Semantics>(navRow);
+    expect(navSemantics.properties.button, isTrue);
     // 外显 label 与行内文字合并后只能是一份，不能重复播报。
-    expect(tester.getSemantics(admin).getSemanticsData().label, 'Admin');
+    expect(navSemantics.properties.label, 'Admin');
 
     Focus.of(tester.element(admin)).requestFocus();
     await tester.pump();
@@ -556,7 +568,7 @@ void main() {
     expect(find.text('Delete'), findsNothing);
   });
 
-  testWidgets('路由切换时顶部扫 2px 进度条，切换结束即收起', (tester) async {
+  testWidgets('普通路由切换不再强制播顶部进度条', (tester) async {
     await pumpShell(tester);
     final router = GoRouter.of(tester.element(find.text('route:/portal')));
 
@@ -564,8 +576,8 @@ void main() {
     // 壳层把 location 变化放到帧后记录，这里两帧才走完一次 path 更新。
     await tester.pump();
     await tester.pump();
-    // 入场动画进行中 = 路由正在切换（样例 `.route-load` 的窗口）。
-    expect(find.byType(DesktopRouteProgressBar), findsOneWidget);
+    // 样例只在真实异步懒加载挂起时显示 `.route-load`，普通切页不再假加载。
+    expect(find.byType(DesktopRouteProgressBar), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 900));
     expect(find.byType(DesktopRouteProgressBar), findsNothing);

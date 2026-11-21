@@ -447,6 +447,7 @@ class WindowChromeController extends Notifier<WindowChromeState>
       return;
     }
 
+    final wasFullscreen = _appliedFullscreen;
     if (target.chromeHidden) {
       await _applyHiddenChrome(revision, target.isFullscreen);
     } else {
@@ -457,6 +458,12 @@ class WindowChromeController extends Notifier<WindowChromeState>
     }
     if (!target.chromeHidden && !target.isFullscreen) {
       await _restoreNativeWindowPlacement();
+      if (revision != _desiredRevision) {
+        return;
+      }
+    }
+    if (wasFullscreen && !target.isFullscreen) {
+      await _refreshMaximizedFromNative(revision);
       if (revision != _desiredRevision) {
         return;
       }
@@ -474,6 +481,7 @@ class WindowChromeController extends Notifier<WindowChromeState>
     WindowChromeState target,
     int revision,
   ) async {
+    final wasFullscreen = _appliedFullscreen;
     try {
       await _windowFrameChannel.invokeMethod<void>(
         'applyWindowChrome',
@@ -493,16 +501,35 @@ class WindowChromeController extends Notifier<WindowChromeState>
     if (revision != _desiredRevision) {
       return;
     }
-    // 无边框/全屏切换后客户区可能与 Flutter 视图短暂不一致（黑屏/黑边），
-    // 统一做一次原生几何自愈；窗口态 chrome 已 ForceRedraw，无需 settle。
-    if (target.isFullscreen || target.chromeHidden) {
+    // 仅在全屏态执行原生几何自愈；退出全屏后异步回刷一次原生最大化状态，
+    // 同步自绘标题栏「最大化/还原」图标与窗口缩放边状态。
+    if (target.isFullscreen) {
       await _verifyNativeWindowFrame();
+      if (revision != _desiredRevision) {
+        return;
+      }
+    } else if (wasFullscreen) {
+      await _refreshMaximizedFromNative(revision);
       if (revision != _desiredRevision) {
         return;
       }
     }
     if (!target.chromeHidden) {
       await _applyResizableOnce();
+    }
+  }
+
+  Future<void> _refreshMaximizedFromNative(int revision) async {
+    try {
+      final maximized = await windowManager.isMaximized();
+      if (revision != _desiredRevision) {
+        return;
+      }
+      _syncMaximized(maximized);
+    } catch (error) {
+      if (kDebugMode) {
+        devLog('Window maximized sync failed: $error');
+      }
     }
   }
 

@@ -20,11 +20,20 @@ import 'package:omninest/app/theme/global_theme_colors.dart';
 ///    色），这是「一个产品一套壳」在颜色层的落点——模块间的割裂感主要
 ///    来自每模块一套强调色。
 abstract final class DesktopTheme {
+  /// 按 `(isDark, accent, fontScale)` 缓存已装配的 [ThemeData]，确保路由
+  /// 切换时零重复构图、不触发全应用 `Theme.of` 依赖者重建。
+  static final Map<(bool, DesktopAccent, double), ThemeData> _cache = {};
+
   static ThemeData resolve({
     required bool isDark,
     DesktopAccent accent = DesktopAccent.sage,
     double fontScale = 1,
   }) {
+    final cacheKey = (isDark, accent, fontScale);
+    final cached = _cache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
     final skin = DesktopSkin.resolve(isDark: isDark, accent: accent);
     final colors = _globalColors(skin);
     final base = OmniNestTheme.from(
@@ -35,7 +44,7 @@ abstract final class DesktopTheme {
       photosColors: PhotosColors.fromGlobal(colors),
       filesColors: FilesColors.fromGlobal(colors),
     );
-    return base.copyWith(
+    final resolved = base.copyWith(
       scaffoldBackgroundColor: skin.bg,
       canvasColor: skin.bg,
       splashFactory: NoSplash.splashFactory,
@@ -94,6 +103,8 @@ abstract final class DesktopTheme {
       ),
       extensions: [...base.extensions.values, skin],
     );
+    _cache[cacheKey] = resolved;
+    return resolved;
   }
 
   static GlobalThemeColors _globalColors(DesktopSkin skin) {

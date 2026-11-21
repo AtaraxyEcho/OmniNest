@@ -311,9 +311,25 @@ class DesktopRecentFiles extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Text(
-                            formatFileSize(files[index].sizeBytes),
-                            style: DesktopType.caption(skin.text3),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                formatFileSize(files[index].sizeBytes),
+                                style: DesktopType.caption(skin.text3),
+                              ),
+                              if (files[index].updatedAt != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  _formatRelativeTime(
+                                    l10n,
+                                    files[index].updatedAt!,
+                                  ),
+                                  style: DesktopType.micro(skin.text3),
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),
@@ -361,19 +377,64 @@ class DesktopRecentFiles extends ConsumerWidget {
 }
 
 /// 动态时间线（样例 `.timeline`），数据取通知中心。
-class DesktopActivityTimeline extends ConsumerWidget {
+class DesktopActivityTimeline extends ConsumerStatefulWidget {
   const DesktopActivityTimeline({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DesktopActivityTimeline> createState() =>
+      _DesktopActivityTimelineState();
+}
+
+class _DesktopActivityTimelineState
+    extends ConsumerState<DesktopActivityTimeline> {
+  bool _initialLoadDispatched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _initialLoadDispatched) {
+        return;
+      }
+      _initialLoadDispatched = true;
+      final state = ref.read(notificationControllerProvider);
+      if (state.items.isEmpty &&
+          !state.isLoading &&
+          !state.loadFailed &&
+          state.total == 0) {
+        ref
+            .read(notificationControllerProvider.notifier)
+            .load(page: 0, size: 10);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final items =
-        ref.watch(notificationControllerProvider).items.take(4).toList();
+    final notifState = ref.watch(notificationControllerProvider);
+    final items = notifState.items.take(4).toList();
+
+    if (notifState.isLoading && items.isEmpty) {
+      return const DesktopSkeletonRows(count: 4);
+    }
+    if (notifState.loadFailed && items.isEmpty) {
+      return DesktopErrorView(
+        message: l10n.notificationLoadFailed,
+        onRetry:
+            () => ref
+                .read(notificationControllerProvider.notifier)
+                .load(page: 0, size: 10),
+        minHeightFactor: 0.22,
+      );
+    }
     if (items.isEmpty) {
       return DesktopEmpty(
         message: l10n.desktopHomeEmptyActivity,
         icon: DesktopIcons.clock,
+        actionLabel: l10n.notificationTitle,
+        onAction: () => context.go(DesktopRoutes.notifications),
       );
     }
     return Column(
@@ -395,13 +456,16 @@ class DesktopActivityTimeline extends ConsumerWidget {
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                            color: skin.accentWash(0.14),
+                            color: _activityToneFor(
+                              skin,
+                              items[index].type,
+                            ).withValues(alpha: 0.14),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            DesktopIcons.sparkle,
+                            _activityIconFor(items[index].type),
                             size: 13,
-                            color: skin.accent,
+                            color: _activityToneFor(skin, items[index].type),
                           ),
                         ),
                         if (index != items.length - 1)
@@ -415,23 +479,37 @@ class DesktopActivityTimeline extends ConsumerWidget {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 14, top: 3),
-                      child: Column(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            items[index].title ?? items[index].type,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.denseStrong(skin.text),
-                          ),
-                          if ((items[index].message ?? '').isNotEmpty)
-                            Text(
-                              items[index].message!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(skin.text3),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  (items[index].title ?? '').isNotEmpty
+                                      ? items[index].title!
+                                      : items[index].type,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.denseStrong(skin.text),
+                                ),
+                                if ((items[index].message ?? '').isNotEmpty)
+                                  Text(
+                                    items[index].message!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: DesktopType.caption(skin.text3),
+                                  ),
+                              ],
                             ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _formatRelativeTime(l10n, items[index].createdAt),
+                            style: DesktopType.caption(skin.text3),
+                          ),
                         ],
                       ),
                     ),
@@ -443,4 +521,95 @@ class DesktopActivityTimeline extends ConsumerWidget {
       ],
     );
   }
+
+  static IconData _activityIconFor(String type) {
+    final lower = type.toLowerCase();
+    if (lower.contains('video') ||
+        lower.contains('movie') ||
+        lower.contains('transcode') ||
+        lower.contains('scrape')) {
+      return DesktopIcons.film;
+    }
+    if (lower.contains('music') || lower.contains('audio')) {
+      return DesktopIcons.music;
+    }
+    if (lower.contains('photo') ||
+        lower.contains('image') ||
+        lower.contains('album')) {
+      return DesktopIcons.image;
+    }
+    if (lower.contains('reader') ||
+        lower.contains('book') ||
+        lower.contains('comic') ||
+        lower.contains('manga')) {
+      return DesktopIcons.book;
+    }
+    if (lower.contains('share')) {
+      return DesktopIcons.share;
+    }
+    if (lower.contains('file') ||
+        lower.contains('upload') ||
+        lower.contains('download') ||
+        lower.contains('storage') ||
+        lower.contains('quota')) {
+      return DesktopIcons.folder;
+    }
+    if (lower.contains('security') ||
+        lower.contains('auth') ||
+        lower.contains('login') ||
+        lower.contains('password')) {
+      return DesktopIcons.shield;
+    }
+    if (lower.contains('task') ||
+        lower.contains('sync') ||
+        lower.contains('backup') ||
+        lower.contains('import')) {
+      return DesktopIcons.tasks;
+    }
+    return DesktopIcons.bell;
+  }
+
+  static Color _activityToneFor(DesktopSkin skin, String type) {
+    final lower = type.toLowerCase();
+    if (lower.contains('video') ||
+        lower.contains('movie') ||
+        lower.contains('transcode') ||
+        lower.contains('scrape')) {
+      return DesktopPalette.kindVideo;
+    }
+    if (lower.contains('music') || lower.contains('audio')) {
+      return DesktopPalette.kindAudio;
+    }
+    if (lower.contains('photo') ||
+        lower.contains('image') ||
+        lower.contains('album')) {
+      return DesktopPalette.kindImage;
+    }
+    if (lower.contains('reader') ||
+        lower.contains('book') ||
+        lower.contains('comic') ||
+        lower.contains('manga')) {
+      return DesktopPalette.kindDocument;
+    }
+    return skin.accent;
+  }
+}
+
+String _formatRelativeTime(AppLocalizations l10n, DateTime timestamp) {
+  final local = timestamp.toLocal();
+  final diff = DateTime.now().difference(local);
+  if (diff.isNegative || diff.inMinutes < 1) {
+    return l10n.videoJustNow;
+  }
+  if (diff.inHours < 1) {
+    return l10n.videoMinutesAgo(diff.inMinutes);
+  }
+  if (diff.inDays < 1) {
+    return l10n.videoHoursAgo(diff.inHours);
+  }
+  if (diff.inDays < 30) {
+    return l10n.videoDaysAgo(diff.inDays);
+  }
+  String two(int part) => part.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)}';
 }

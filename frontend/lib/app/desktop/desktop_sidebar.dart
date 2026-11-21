@@ -87,18 +87,61 @@ bool desktopNavIsActive(String path, String route) {
   return path == route || path.startsWith('$route/');
 }
 
-class DesktopSidebar extends ConsumerWidget {
+class DesktopSidebar extends ConsumerStatefulWidget {
   const DesktopSidebar({required this.path, super.key});
 
   final String path;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DesktopSidebar> createState() => _DesktopSidebarState();
+}
+
+class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
+    with SingleTickerProviderStateMixin {
+  /// 单一动画控制器统一驱动侧栏所有文字显隐，替代逐项 AnimatedOpacity。
+  late final AnimationController _labelController = AnimationController(
+    vsync: this,
+    duration: MotionToken.fast,
+    value: ref.read(desktopShellProvider).sidebarExpanded ? 1 : 0,
+  );
+  late final CurvedAnimation _labelOpacity = CurvedAnimation(
+    parent: _labelController,
+    curve: MotionToken.curve,
+  );
+  bool? _lastExpanded;
+
+  @override
+  void dispose() {
+    _labelOpacity.dispose();
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  void _syncLabelAnimation(BuildContext context, bool expanded) {
+    if (_lastExpanded == expanded) {
+      return;
+    }
+    _lastExpanded = expanded;
+    final disableAnimations =
+        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (disableAnimations) {
+      _labelController.value = expanded ? 1 : 0;
+    } else if (expanded) {
+      _labelController.forward();
+    } else {
+      _labelController.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final shell = ref.watch(desktopShellProvider);
-    final expanded = shell.sidebarExpanded;
-    final backdropActive = desktopBackdropVisibleForRoute(ref, path);
+    final expanded = ref.watch(
+      desktopShellProvider.select((s) => s.sidebarExpanded),
+    );
+    _syncLabelAnimation(context, expanded);
+    final backdropActive = desktopBackdropVisibleForRoute(ref, widget.path);
     // 只订阅「紧凑」这一位：整份 watch 会让拖动环境光强度滑杆时每帧重建
     // 整条侧栏（含每个导航项的图标与文字）。
     final compact = ref.watch(
@@ -126,85 +169,104 @@ class DesktopSidebar extends ConsumerWidget {
         alignment: Alignment.centerLeft,
         minWidth: _innerWidth,
         maxWidth: _innerWidth,
-        child: SizedBox(
-          width: _innerWidth,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 10, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final item in desktopNavItems(l10n))
-                  _SidebarItem(
-                    icon: item.icon,
-                    label: item.label,
-                    shortcut: 'Alt ${item.shortcut}',
-                    active: desktopNavIsActive(path, item.route),
+        child: RepaintBoundary(
+          child: SizedBox(
+            width: _innerWidth,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 10, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final item in desktopNavItems(l10n))
+                    _SidebarItem(
+                      icon: item.icon,
+                      label: item.label,
+                      shortcut: 'Alt ${item.shortcut}',
+                      active: desktopNavIsActive(widget.path, item.route),
+                      expanded: expanded,
+                      labelOpacity: _labelOpacity,
+                      height:
+                          compact
+                              ? DesktopMetrics.navItemHeightCompact
+                              : DesktopMetrics.navItemHeight,
+                      onTap: () => desktopGo(context, item.route),
+                    ),
+                  _SidebarSectionLabel(
+                    label: l10n.desktopPinned,
                     expanded: expanded,
-                    height:
-                        compact
-                            ? DesktopMetrics.navItemHeightCompact
-                            : DesktopMetrics.navItemHeight,
-                    onTap: () => desktopGo(context, item.route),
+                    labelOpacity: _labelOpacity,
                   ),
-                _SidebarSectionLabel(
-                  label: l10n.desktopPinned,
-                  expanded: expanded,
-                ),
-                // 样例 `Shell.tsx:160-174`：PINNED 是三条固定演示媒体，
-                // 右侧带数量角标，点击分别进入音乐 / 相册 / 影视。
-                _SidebarItem(
-                  icon: DesktopIcons.music,
-                  label: l10n.desktopPinnedEveningDrift,
-                  count: 42,
-                  active: false,
-                  expanded: expanded,
-                  height: DesktopMetrics.navItemSubHeight,
-                  dense: true,
-                  onTap: () => desktopGo(context, DesktopRoutes.music),
-                ),
-                _SidebarItem(
-                  icon: DesktopIcons.image,
-                  label: l10n.desktopPinnedGoldenHour,
-                  count: 42,
-                  active: false,
-                  expanded: expanded,
-                  height: DesktopMetrics.navItemSubHeight,
-                  dense: true,
-                  onTap: () => desktopGo(context, DesktopRoutes.photos),
-                ),
-                _SidebarItem(
-                  icon: DesktopIcons.film,
-                  label: l10n.desktopPinnedContinue,
-                  count: 3,
-                  active: false,
-                  expanded: expanded,
-                  height: DesktopMetrics.navItemSubHeight,
-                  dense: true,
-                  onTap: () => desktopGo(context, DesktopRoutes.movies),
-                ),
-                const Spacer(),
-                if (canAdmin)
+                  // 样例 `Shell.tsx:160-174`：PINNED 是三条固定演示媒体，
+                  // 右侧带数量角标，点击分别进入音乐 / 相册 / 影视。
                   _SidebarItem(
-                    icon: DesktopIcons.server,
-                    label: l10n.desktopNavAdmin,
-                    active: desktopNavIsActive(path, DesktopRoutes.admin),
+                    icon: DesktopIcons.music,
+                    label: l10n.desktopPinnedEveningDrift,
+                    count: 42,
+                    active: false,
                     expanded: expanded,
+                    labelOpacity: _labelOpacity,
+                    height: DesktopMetrics.navItemSubHeight,
+                    dense: true,
+                    onTap: () => desktopGo(context, DesktopRoutes.music),
+                  ),
+                  _SidebarItem(
+                    icon: DesktopIcons.image,
+                    label: l10n.desktopPinnedGoldenHour,
+                    count: 42,
+                    active: false,
+                    expanded: expanded,
+                    labelOpacity: _labelOpacity,
+                    height: DesktopMetrics.navItemSubHeight,
+                    dense: true,
+                    onTap: () => desktopGo(context, DesktopRoutes.photos),
+                  ),
+                  _SidebarItem(
+                    icon: DesktopIcons.film,
+                    label: l10n.desktopPinnedContinue,
+                    count: 3,
+                    active: false,
+                    expanded: expanded,
+                    labelOpacity: _labelOpacity,
+                    height: DesktopMetrics.navItemSubHeight,
+                    dense: true,
+                    onTap: () => desktopGo(context, DesktopRoutes.movies),
+                  ),
+                  const Spacer(),
+                  if (canAdmin)
+                    _SidebarItem(
+                      icon: DesktopIcons.server,
+                      label: l10n.desktopNavAdmin,
+                      active: desktopNavIsActive(
+                        widget.path,
+                        DesktopRoutes.admin,
+                      ),
+                      expanded: expanded,
+                      labelOpacity: _labelOpacity,
+                      height: DesktopMetrics.navItemHeight,
+                      onTap: () => desktopGo(context, DesktopRoutes.admin),
+                    ),
+                  _SidebarItem(
+                    icon: DesktopIcons.settings,
+                    label: l10n.desktopNavSettings,
+                    shortcut: 'Ctrl ,',
+                    active: desktopNavIsActive(
+                      widget.path,
+                      DesktopRoutes.settings,
+                    ),
+                    expanded: expanded,
+                    labelOpacity: _labelOpacity,
                     height: DesktopMetrics.navItemHeight,
-                    onTap: () => desktopGo(context, DesktopRoutes.admin),
+                    onTap: () => desktopGo(context, DesktopRoutes.settings),
                   ),
-                _SidebarItem(
-                  icon: DesktopIcons.settings,
-                  label: l10n.desktopNavSettings,
-                  shortcut: 'Ctrl ,',
-                  active: desktopNavIsActive(path, DesktopRoutes.settings),
-                  expanded: expanded,
-                  height: DesktopMetrics.navItemHeight,
-                  onTap: () => desktopGo(context, DesktopRoutes.settings),
-                ),
-                const SizedBox(height: 8),
-                _StorageCard(expanded: expanded, stats: storage),
-                const SizedBox(height: DesktopMetrics.playerBarClearance),
-              ],
+                  const SizedBox(height: 8),
+                  _StorageCard(
+                    expanded: expanded,
+                    labelOpacity: _labelOpacity,
+                    stats: storage,
+                  ),
+                  const SizedBox(height: DesktopMetrics.playerBarClearance),
+                ],
+              ),
             ),
           ),
         ),
@@ -225,26 +287,33 @@ class DesktopSidebar extends ConsumerWidget {
 const double _innerWidth = DesktopMetrics.sidebarWidth - 22;
 
 class _SidebarSectionLabel extends StatelessWidget {
-  const _SidebarSectionLabel({required this.label, required this.expanded});
+  const _SidebarSectionLabel({
+    required this.label,
+    required this.expanded,
+    required this.labelOpacity,
+  });
 
   final String label;
   final bool expanded;
+  final Animation<double> labelOpacity;
 
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return AnimatedOpacity(
-      duration: MotionToken.reduced(context, MotionToken.fast),
-      curve: MotionToken.curve,
-      opacity: expanded ? 1 : 0,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 18, 0, 6),
-        child: Text(
-          label.toUpperCase(),
-          maxLines: 1,
-          overflow: TextOverflow.clip,
-          softWrap: false,
-          style: DesktopType.eyebrow(skin.text3),
+    return ExcludeSemantics(
+      excluding: !expanded,
+      child: FadeTransition(
+        opacity: labelOpacity,
+        alwaysIncludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 18, 0, 6),
+          child: Text(
+            label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            softWrap: false,
+            style: DesktopType.eyebrow(skin.text3),
+          ),
         ),
       ),
     );
@@ -257,6 +326,7 @@ class _SidebarItem extends StatelessWidget {
     required this.label,
     required this.active,
     required this.expanded,
+    required this.labelOpacity,
     required this.height,
     required this.onTap,
     this.shortcut,
@@ -268,6 +338,7 @@ class _SidebarItem extends StatelessWidget {
   final String label;
   final bool active;
   final bool expanded;
+  final Animation<double> labelOpacity;
   final double height;
   final VoidCallback onTap;
   final String? shortcut;
@@ -285,7 +356,7 @@ class _SidebarItem extends StatelessWidget {
     return Semantics(
       button: true,
       selected: active,
-      // 折叠态下文字被 AnimatedOpacity 抹掉语义，外显 label 是唯一来源；
+      // 折叠态下文字被 ExcludeSemantics 屏蔽，外显 label 是唯一来源；
       // 展开态若同时保留子节点语义会被播报两次（"Admin\nAdmin"），
       // 因此整行语义由这里独占，计数折进 label 一并播报。
       label: count == null ? label : '$label · $count',
@@ -300,9 +371,7 @@ class _SidebarItem extends StatelessWidget {
                 (context, hovered) => GestureDetector(
                   onTap: onTap,
                   behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: MotionToken.reduced(context, MotionToken.fast),
-                    curve: MotionToken.curve,
+                  child: Container(
                     height: height,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
@@ -329,60 +398,54 @@ class _SidebarItem extends StatelessWidget {
                                   : skin.text2,
                         ),
                         Expanded(
-                          child: AnimatedOpacity(
-                            duration: MotionToken.reduced(
-                              context,
-                              MotionToken.fast,
-                            ),
-                            curve: MotionToken.curve,
-                            opacity: expanded ? 1 : 0,
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 12),
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      label,
-                                      maxLines: 1,
-                                      softWrap: false,
-                                      overflow: TextOverflow.fade,
-                                      style:
-                                          dense
-                                              ? DesktopType.navSub(
-                                                active || hovered
-                                                    ? skin.text
-                                                    : skin.text2,
-                                              )
-                                              : DesktopType.navItem(
-                                                active || hovered
-                                                    ? skin.text
-                                                    : skin.text2,
-                                              ),
-                                    ),
-                                  ),
-                                  if (shortcut != null) ...[
-                                    const SizedBox(width: 8),
-                                    AnimatedOpacity(
-                                      duration: MotionToken.reduced(
-                                        context,
-                                        MotionToken.fast,
-                                      ),
-                                      curve: MotionToken.curve,
-                                      opacity: hovered ? 0.8 : 0,
+                          child: ExcludeSemantics(
+                            excluding: !expanded,
+                            child: FadeTransition(
+                              opacity: labelOpacity,
+                              alwaysIncludeSemantics: true,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Row(
+                                  children: [
+                                    Flexible(
                                       child: Text(
-                                        shortcut!,
+                                        label,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.fade,
+                                        style:
+                                            dense
+                                                ? DesktopType.navSub(
+                                                  active || hovered
+                                                      ? skin.text
+                                                      : skin.text2,
+                                                )
+                                                : DesktopType.navItem(
+                                                  active || hovered
+                                                      ? skin.text
+                                                      : skin.text2,
+                                                ),
+                                      ),
+                                    ),
+                                    if (shortcut != null) ...[
+                                      const SizedBox(width: 8),
+                                      Opacity(
+                                        opacity: hovered ? 0.8 : 0,
+                                        child: Text(
+                                          shortcut!,
+                                          style: DesktopType.nano(skin.text3),
+                                        ),
+                                      ),
+                                    ],
+                                    if (count != null) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '$count',
                                         style: DesktopType.nano(skin.text3),
                                       ),
-                                    ),
+                                    ],
                                   ],
-                                  if (count != null) ...[
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '$count',
-                                      style: DesktopType.nano(skin.text3),
-                                    ),
-                                  ],
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -399,9 +462,14 @@ class _SidebarItem extends StatelessWidget {
 }
 
 class _StorageCard extends StatelessWidget {
-  const _StorageCard({required this.expanded, required this.stats});
+  const _StorageCard({
+    required this.expanded,
+    required this.labelOpacity,
+    required this.stats,
+  });
 
   final bool expanded;
+  final Animation<double> labelOpacity;
   final FileStorageStats? stats;
 
   @override
@@ -425,9 +493,7 @@ class _StorageCard extends StatelessWidget {
           (context, hovered) => GestureDetector(
             onTap: () => desktopGo(context, DesktopRoutes.filesStorage),
             behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MotionToken.reduced(context, MotionToken.fast),
-              curve: MotionToken.curve,
+            child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: hovered ? skin.raise2 : skin.raise,
@@ -456,32 +522,34 @@ class _StorageCard extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: AnimatedOpacity(
-                      duration: MotionToken.reduced(context, MotionToken.fast),
-                      curve: MotionToken.curve,
-                      opacity: expanded ? 1 : 0,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              // 样例 `Shell.tsx:180` 的服务器名。
-                              'OmniCloud',
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.fade,
-                              style: DesktopType.denseStrong(skin.text),
-                            ),
-                            Text(
-                              caption,
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.fade,
-                              style: DesktopType.micro(skin.text3),
-                            ),
-                          ],
+                    child: ExcludeSemantics(
+                      excluding: !expanded,
+                      child: FadeTransition(
+                        opacity: labelOpacity,
+                        alwaysIncludeSemantics: true,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                // 样例 `Shell.tsx:180` 的服务器名。
+                                'OmniCloud',
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.fade,
+                                style: DesktopType.denseStrong(skin.text),
+                              ),
+                              Text(
+                                caption,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.fade,
+                                style: DesktopType.micro(skin.text3),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

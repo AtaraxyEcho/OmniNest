@@ -102,6 +102,9 @@ mixin MovieApiCatalog on MovieApiBase {
     List<String>? cast,
     String? runtime,
     String? posterUrl,
+    String? posterFileId,
+    bool clearPoster = false,
+    bool restoreOriginal = false,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/admin/video/series/$seriesId/metadata',
@@ -120,9 +123,28 @@ mixin MovieApiCatalog on MovieApiBase {
         'cast': cast,
         'runtime': runtime,
         'posterUrl': posterUrl,
+        'posterFileId': posterFileId,
+        if (clearPoster) 'clearPoster': true,
+        if (restoreOriginal) 'restoreOriginal': true,
       }..removeWhere((_, value) => value == null),
     );
     return _seriesFromJson(parseData(response.data));
+  }
+
+  /// 上传本地影视海报，返回派生资产文件节点 ID。
+  Future<String> uploadPoster({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/posters',
+      data: formData,
+    );
+    final data = parseData(response.data);
+    return data['fileNodeId'] as String;
   }
 
   Future<List<MovieCollection>> collections() async {
@@ -188,6 +210,7 @@ mixin MovieApiCatalog on MovieApiBase {
     String metadataStatus = 'MANUAL',
     bool restoreOriginal = false,
     bool clearRuntime = false,
+    bool clearPoster = false,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/admin/video/items/$videoItemId/metadata',
@@ -206,6 +229,7 @@ mixin MovieApiCatalog on MovieApiBase {
         'metadataStatus': metadataStatus,
         'restoreOriginal': restoreOriginal,
         'clearRuntime': clearRuntime,
+        'clearPoster': clearPoster,
       },
     );
     return _videoItemFromJson(parseData(response.data));

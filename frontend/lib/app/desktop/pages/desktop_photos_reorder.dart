@@ -359,7 +359,7 @@ class _PhotoDragFeedback extends StatelessWidget {
           children: [
             for (var index = visibleCards - 1; index >= 0; index--)
               _PhotoFanCard(
-                key: ValueKey<String>('fan-card-${photos[index].id}-$dropping'),
+                key: ValueKey<String>('fan-card-${photos[index].id}'),
                 photo: photos[index],
                 source:
                     index < fanOffsets.length
@@ -408,7 +408,9 @@ class _PhotoDragFeedback extends StatelessWidget {
   }
 }
 
-class _PhotoFanCard extends StatelessWidget {
+/// 幽灵扇形卡片：使用稳定 `ValueKey('fan-card-${id}')` + 显式控制器，
+/// 松手收束时在 `didUpdateWidget` 平滑插值，绝不重建封面图。
+class _PhotoFanCard extends StatefulWidget {
   const _PhotoFanCard({
     super.key,
     required this.photo,
@@ -425,89 +427,165 @@ class _PhotoFanCard extends StatelessWidget {
   final bool dropping;
 
   @override
-  Widget build(BuildContext context) {
-    final targetOffset = switch (index) {
-      1 => const Offset(-9, 7),
-      2 => const Offset(10, 10),
-      _ => Offset.zero,
-    };
-    final targetAngle = switch (index) {
-      1 => -0.10472,
-      2 => 0.08727,
-      _ => 0.0,
-    };
-    final hidden = stack && index >= 3;
-    final duration =
-        dropping
-            ? (stack
-                ? DesktopMotion.photoReorderDrop
-                : DesktopMotion.photoReorderSettle)
-            : DesktopMotion.photoReorderFan +
-                (DesktopMotion.photoReorderFanStagger * index);
+  State<_PhotoFanCard> createState() => _PhotoFanCardState();
+}
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: duration,
-      curve: DesktopMotion.ease,
-      builder: (context, progress, child) {
-        final from = Offset(source.dx, source.dy);
-        final fan = hidden ? Offset.zero : targetOffset;
-        final position =
-            dropping
-                ? Offset.lerp(fan, Offset.zero, progress)!
-                : Offset.lerp(from, fan, progress)!;
-        final targetScale = stack && index == 0 ? 1.04 : (stack ? 1.0 : 1.05);
-        final scaleX = dropping ? 1.0 : _mix(source.sx, targetScale, progress);
-        final scaleY = dropping ? 1.0 : _mix(source.sy, targetScale, progress);
-        final rotation = targetAngle * (dropping ? 1 - progress : progress);
-        final opacity = hidden ? (dropping ? 0.0 : 1 - progress) : 1.0;
-        final dropScale = dropping && !stack ? 1 + (1 - progress) * 0.05 : 1.0;
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: opacity,
+class _PhotoFanCardState extends State<_PhotoFanCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _isDropPhase = false;
+
+  Offset _fromOffset = Offset.zero;
+  double _fromAngle = 0.0;
+  double _fromScaleX = 1.0;
+  double _fromScaleY = 1.0;
+  double _fromOpacity = 1.0;
+
+  Offset get _fanOffset => switch (widget.index) {
+    1 => const Offset(-9, 7),
+    2 => const Offset(10, 10),
+    _ => Offset.zero,
+  };
+
+  double get _fanAngle => switch (widget.index) {
+    1 => -0.10472,
+    2 => 0.08727,
+    _ => 0.0,
+  };
+
+  bool get _hidden => widget.stack && widget.index >= 3;
+
+  double get _fanScale =>
+      widget.stack && widget.index == 0 ? 1.04 : (widget.stack ? 1.0 : 1.05);
+
+  @override
+  void initState() {
+    super.initState();
+    _isDropPhase = widget.dropping;
+    _controller = AnimationController(
+      vsync: this,
+      duration: _phaseDuration(dropping: _isDropPhase),
+    );
+    if (_isDropPhase) {
+      _fromOffset = _hidden ? Offset.zero : _fanOffset;
+      _fromAngle = _fanAngle;
+      _fromScaleX = _fanScale;
+      _fromScaleY = _fanScale;
+      _fromOpacity = _hidden ? 0.0 : 1.0;
+    }
+    _controller.forward(from: 0.0);
+  }
+
+  Duration _phaseDuration({required bool dropping}) {
+    if (dropping) {
+      return widget.stack
+          ? DesktopMotion.photoReorderDrop
+          : DesktopMotion.photoReorderSettle;
+    }
+    return DesktopMotion.photoReorderFan +
+        (DesktopMotion.photoReorderFanStagger * widget.index);
+  }
+
+  ({Offset offset, double angle, double scaleX, double scaleY, double opacity})
+  _evaluatePose(double rawValue) {
+    final progress = DesktopMotion.ease.transform(rawValue.clamp(0.0, 1.0));
+    if (_isDropPhase) {
+      return (
+        offset: Offset.lerp(_fromOffset, Offset.zero, progress)!,
+        angle: _mix(_fromAngle, 0.0, progress),
+        scaleX: _mix(_fromScaleX, 1.0, progress),
+        scaleY: _mix(_fromScaleY, 1.0, progress),
+        opacity: _mix(_fromOpacity, _hidden ? 0.0 : 1.0, progress),
+      );
+    }
+    final startOffset = Offset(widget.source.dx, widget.source.dy);
+    final targetOffset = _hidden ? Offset.zero : _fanOffset;
+    return (
+      offset: Offset.lerp(startOffset, targetOffset, progress)!,
+      angle: _fanAngle * progress,
+      scaleX: _mix(widget.source.sx, _fanScale, progress),
+      scaleY: _mix(widget.source.sy, _fanScale, progress),
+      opacity: _hidden ? (1.0 - progress).clamp(0.0, 1.0) : 1.0,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhotoFanCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.dropping && widget.dropping) {
+      final snapshot = _evaluatePose(_controller.value);
+      _fromOffset = snapshot.offset;
+      _fromAngle = snapshot.angle;
+      _fromScaleX = snapshot.scaleX;
+      _fromScaleY = snapshot.scaleY;
+      _fromOpacity = snapshot.opacity;
+      _isDropPhase = true;
+      _controller.duration = _phaseDuration(dropping: true);
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final coverChild = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.6),
+            offset: const Offset(0, 16),
+            blurRadius: 34,
+            spreadRadius: -10,
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.4),
+            blurRadius: 0,
+            spreadRadius: 1.5,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox.expand(
+          child: DesktopCover(
+            url: widget.photo.coverUrl,
+            kind: DesktopCoverKind.network,
+            fit: BoxFit.cover,
+            fallbackIcon: DesktopIcons.image,
+            cacheKey: 'desktop-photo-${widget.photo.id}',
+          ),
+        ),
+      ),
+    );
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _controller,
+          child: coverChild,
+          builder: (context, child) {
+            final pose = _evaluatePose(_controller.value);
+            return Opacity(
+              opacity: pose.opacity,
               child: Transform.translate(
-                offset: position,
+                offset: pose.offset,
                 child: Transform.rotate(
-                  angle: rotation,
+                  angle: pose.angle,
                   child: Transform.scale(
-                    scaleX: scaleX * dropScale,
-                    scaleY: scaleY * dropScale,
+                    scaleX: pose.scaleX,
+                    scaleY: pose.scaleY,
                     child: child,
                   ),
                 ),
               ),
-            ),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              offset: const Offset(0, 16),
-              blurRadius: 34,
-              spreadRadius: -10,
-            ),
-            BoxShadow(
-              color: Colors.white.withValues(alpha: 0.4),
-              blurRadius: 0,
-              spreadRadius: 1.5,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox.expand(
-            child: DesktopCover(
-              url: photo.coverUrl,
-              kind: DesktopCoverKind.network,
-              fit: BoxFit.cover,
-              fallbackIcon: DesktopIcons.image,
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

@@ -415,6 +415,8 @@ class _StubMusicApi implements MusicApi {
     bool clearCover = false,
     String? coverUrl,
     bool restoreOriginal = false,
+    String? lyricsTranslation,
+    String? lyricsWords,
   }) async {
     updatedTrackClearCover = clearCover;
     updatedTrackLyricsRaw = lyricsRaw;

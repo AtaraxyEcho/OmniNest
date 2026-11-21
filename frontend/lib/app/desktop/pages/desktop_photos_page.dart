@@ -4,8 +4,10 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart'
     show
+        GestureBinding,
         PointerCancelEvent,
         PointerDownEvent,
+        PointerEvent,
         PointerMoveEvent,
         PointerUpEvent,
         kPrimaryButton;
@@ -69,6 +71,7 @@ part 'desktop_photos_reorder.dart';
 part 'desktop_photos_import_actions.dart';
 part 'desktop_photos_album_shelf.dart';
 part 'desktop_photos_solo.dart';
+part 'desktop_photos_actions.dart';
 
 /// 桌面相册页（样例 `Photos.tsx`）。
 ///
@@ -94,12 +97,15 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   DesktopPhotosTab _tab = DesktopPhotosTab.library;
   final ScrollController _photosScrollController = ScrollController();
   bool _loadingMorePhotos = false;
+  bool _morePhotosCheckScheduled = false;
 
   /// 缩略行高：样例 `.zoom` 的 150–320，默认 210。
   double _density = 210;
 
   /// 选中的照片 id（样例 `sel: Set<string>`）。只在胶片流与收藏两档生效。
   final Set<String> _selection = <String>{};
+  bool _selectionMode = false;
+  String? _lastSelectedPhotoId;
   final GlobalKey<MediaImportButtonState> _mediaImportKey =
       GlobalKey<MediaImportButtonState>();
   bool _selectionBusy = false;
@@ -110,14 +116,77 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   void initState() {
     super.initState();
     _photosScrollController.addListener(_maybeLoadMorePhotos);
+    HardwareKeyboard.instance.addHandler(_handlePageKey);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handlePageKey);
     _photosScrollController
       ..removeListener(_maybeLoadMorePhotos)
       ..dispose();
     super.dispose();
+  }
+
+  bool _handlePageKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    if (_tab != DesktopPhotosTab.library &&
+        _tab != DesktopPhotosTab.favorites) {
+      return false;
+    }
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute != null && !modalRoute.isCurrent) return false;
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    final textInputFocused =
+        focusContext?.widget is EditableText ||
+        focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+    if (textInputFocused) return false;
+
+    final hardware = HardwareKeyboard.instance;
+    final key = event.logicalKey;
+    if ((hardware.isControlPressed || hardware.isMetaPressed) &&
+        key == LogicalKeyboardKey.keyA) {
+      final items = _visibleSelectablePhotos();
+      if (items.isEmpty) return false;
+      setState(() {
+        _selectionMode = true;
+        _selection
+          ..clear()
+          ..addAll(items.map((item) => item.id));
+        _lastSelectedPhotoId = items.last.id;
+      });
+      return true;
+    }
+    if (key == LogicalKeyboardKey.escape &&
+        (_selection.isNotEmpty || _selectionMode)) {
+      setState(() {
+        _selection.clear();
+        _selectionMode = false;
+        _lastSelectedPhotoId = null;
+      });
+      return true;
+    }
+    if ((key == LogicalKeyboardKey.delete ||
+            key == LogicalKeyboardKey.backspace) &&
+        _selection.isNotEmpty &&
+        !_selectionBusy) {
+      unawaited(_deleteSelected());
+      return true;
+    }
+    return false;
+  }
+
+  List<PhotoItem> _visibleSelectablePhotos() {
+    final orders = ref.read(photoDisplayOrderProvider);
+    if (_tab == DesktopPhotosTab.favorites) {
+      final favs =
+          ref.read(photoFavoritesProvider).asData?.value.items ??
+          const <PhotoItem>[];
+      return applyPhotoDisplayOrder(favs, orders['favorites']);
+    }
+    final items =
+        ref.read(photoListProvider).asData?.value.items ?? const <PhotoItem>[];
+    return applyPhotoLibraryDisplayOrder(items, orders);
   }
 
   void _maybeLoadMorePhotos() {
@@ -162,8 +231,12 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
     }
   }
 
+  /// ScrollMetricsNotification 防重入锁，避免单帧内高频重复入队回调。
   void _checkForMorePhotosAfterFrame() {
+    if (_morePhotosCheckScheduled || _loadingMorePhotos) return;
+    _morePhotosCheckScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _morePhotosCheckScheduled = false;
       if (mounted) _maybeLoadMorePhotos();
     });
   }
@@ -197,6 +270,10 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
       DesktopPhotosTab.trash: l10n.photosTabTrash,
     };
 
+    final supportsSelection =
+        _tab == DesktopPhotosTab.library || _tab == DesktopPhotosTab.favorites;
+    final selectionActive = _selectionMode || _selection.isNotEmpty;
+
     return Stack(
       children: [
         Positioned.fill(
@@ -222,6 +299,32 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                     actionsRightAlignedWhenWrapped: true,
                     actions: [
                       _importAction(context, l10n),
+                      if (supportsSelection)
+                        DesktopButton(
+                          label:
+                              selectionActive
+                                  ? l10n.photosDone
+                                  : l10n.desktopPhotosSelect,
+                          icon:
+                              selectionActive
+                                  ? DesktopIcons.close
+                                  : DesktopIcons.check,
+                          variant:
+                              selectionActive
+                                  ? DesktopButtonVariant.soft
+                                  : DesktopButtonVariant.ghost,
+                          onPressed: () {
+                            setState(() {
+                              if (selectionActive) {
+                                _selection.clear();
+                                _selectionMode = false;
+                                _lastSelectedPhotoId = null;
+                              } else {
+                                _selectionMode = true;
+                              }
+                            });
+                          },
+                        ),
                       // 样例 `Photos.tsx:54-55`：`.head-actions` 里 Seg 在左、缩放
                       // 滑条在右；滑条只在 Library 档出现。
                       DesktopSeg<DesktopPhotosTab>(
@@ -236,6 +339,8 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                             }
                             // 换分区时清空选中：样例的选中集只作用于当前列表。
                             _selection.clear();
+                            _selectionMode = false;
+                            _lastSelectedPhotoId = null;
                           });
                           if (value == DesktopPhotosTab.library ||
                               value == DesktopPhotosTab.favorites) {
@@ -277,6 +382,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                       onRetry: () => ref.invalidate(photoListProvider),
                       density: _density,
                       selection: _selection,
+                      selectionMode: _selectionMode,
                       onActivate:
                           (photo, groupPhotos) => _activatePhoto(
                             photo,
@@ -284,6 +390,14 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                             source: PhotoBrowseSource.library,
                           ),
                       onToggleSelect: _toggleSelect,
+                      onSecondaryTap:
+                          (photo, groupPhotos, globalPos) =>
+                              _openPhotoContextMenu(
+                                photo,
+                                groupPhotos,
+                                globalPos,
+                                source: PhotoBrowseSource.library,
+                              ),
                       onSelectMany:
                           (items) => setState(() {
                             final ids = items.map((item) => item.id).toSet();
@@ -294,6 +408,9 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                               _selection.removeAll(ids);
                             } else {
                               _selection.addAll(ids);
+                              if (items.isNotEmpty) {
+                                _lastSelectedPhotoId = items.last.id;
+                              }
                             }
                           }),
                       onOrderChanged: _savePhotoOrder,
@@ -311,18 +428,22 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                                 () =>
                                     ref.invalidate(photoLocationGroupsProvider),
                           )
-                          : !locationGroupsAsync.hasValue
-                          ? const _PlacesLoadingSkeleton()
-                          : _PlacesSection(
-                            groups:
-                                locationGroupsAsync.asData?.value ??
-                                const <PhotoGroup>[],
-                            onOpen:
-                                (photo, photos) => _openPhoto(
-                                  photo,
-                                  photos,
-                                  PhotoBrowseSource.locations,
-                                ),
+                          : DesktopSkeletonSwitcher(
+                            regionId: 'photos-places',
+                            hasData: locationGroupsAsync.hasValue,
+                            loading: !locationGroupsAsync.hasValue,
+                            skeleton: const _PlacesLoadingSkeleton(),
+                            child: _PlacesSection(
+                              groups:
+                                  locationGroupsAsync.asData?.value ??
+                                  const <PhotoGroup>[],
+                              onOpen:
+                                  (photo, photos) => _openPhoto(
+                                    photo,
+                                    photos,
+                                    PhotoBrowseSource.locations,
+                                  ),
+                            ),
                           ),
                     DesktopPhotosTab.favorites =>
                       favorites == null && favoritesAsync.hasError
@@ -331,24 +452,58 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                             onRetry:
                                 () => ref.invalidate(photoFavoritesProvider),
                           )
-                          : favorites == null && favoritesAsync.isLoading
-                          ? const DesktopSkeletonPhotoGrid(targetHeight: 200)
-                          : _JustifiedPhotos(
-                            photos: applyPhotoDisplayOrder(
-                              favorites?.items ?? const <PhotoItem>[],
-                              photoOrders['favorites'],
+                          : DesktopSkeletonSwitcher(
+                            regionId: 'photos-favorites',
+                            hasData: favorites != null,
+                            loading:
+                                favorites == null && favoritesAsync.isLoading,
+                            skeleton: const DesktopSkeletonPhotoGrid(
+                              targetHeight: 200,
+                              showGroupHeaders: false,
                             ),
-                            targetHeight: 200,
-                            selection: _selection,
-                            onActivate:
-                                (photo, favoritePhotos) => _activatePhoto(
-                                  photo,
-                                  favoritePhotos,
-                                  source: PhotoBrowseSource.favorites,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (photoOrders.containsKey('favorites'))
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: DesktopLink(
+                                        label: l10n.desktopPhotosResetOrder,
+                                        onPressed:
+                                            () => _resetPhotoOrder('favorites'),
+                                      ),
+                                    ),
+                                  ),
+                                _JustifiedPhotos(
+                                  photos: applyPhotoDisplayOrder(
+                                    favorites?.items ?? const <PhotoItem>[],
+                                    photoOrders['favorites'],
+                                  ),
+                                  targetHeight: 200,
+                                  selection: _selection,
+                                  selectionMode: _selectionMode,
+                                  onActivate:
+                                      (photo, favoritePhotos) => _activatePhoto(
+                                        photo,
+                                        favoritePhotos,
+                                        source: PhotoBrowseSource.favorites,
+                                      ),
+                                  onToggleSelect: _toggleSelect,
+                                  onSecondaryTap:
+                                      (photo, favoritePhotos, globalPos) =>
+                                          _openPhotoContextMenu(
+                                            photo,
+                                            favoritePhotos,
+                                            globalPos,
+                                            source: PhotoBrowseSource.favorites,
+                                          ),
+                                  orderContext: 'favorites',
+                                  onOrderChanged: _savePhotoOrder,
                                 ),
-                            onToggleSelect: _toggleSelect,
-                            orderContext: 'favorites',
-                            onOrderChanged: _savePhotoOrder,
+                              ],
+                            ),
                           ),
                     DesktopPhotosTab.albums =>
                       albums == null && albumsAsync.hasError
@@ -397,11 +552,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 22),
                       child: Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                        child: DesktopSpinner(size: 18, strokeWidth: 2),
                       ),
                     ),
                   ),
@@ -421,307 +572,85 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
             onAlbum: () => _addSelectedToAlbum(setState),
             onDownload: () => _downloadSelected(setState),
             onDelete: _deleteSelected,
-            onClear: () => setState(_selection.clear),
+            onClear:
+                () => setState(() {
+                  _selection.clear();
+                  _selectionMode = false;
+                  _lastSelectedPhotoId = null;
+                }),
           ),
         ),
       ],
     );
   }
 
-  void _openPhoto(
+  void _openPhotoContextMenu(
     PhotoItem photo,
     List<PhotoItem> photos,
-    PhotoBrowseSource source,
-  ) {
-    ref.read(photoBrowseScopeProvider.notifier).set(photos, source);
-    desktopPush(context, DesktopRoutes.photoDetail(photo.id));
-  }
-
-  Future<void> _savePhotoOrder(
-    String contextKey,
-    List<String> ids,
-    int movedCount,
-  ) async {
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref
-          .read(photoDisplayOrderProvider.notifier)
-          .saveOrder(contextKey, ids);
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        movedCount > 1
-            ? l10n.desktopPhotosMovedCount(movedCount)
-            : l10n.desktopPhotosOrderSaved,
-        icon: DesktopIcons.check,
-      );
-    } on Object {
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.desktopPhotosOrderSaveFailed,
-        kind: DesktopToastKind.error,
-        icon: DesktopIcons.info,
-      );
-    }
-  }
-
-  Future<void> _resetPhotoOrder(String contextKey) async {
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref.read(photoDisplayOrderProvider.notifier).resetOrder(contextKey);
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.desktopPhotosOrderReset,
-        icon: DesktopIcons.check,
-      );
-    } on Object {
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.desktopPhotosOrderSaveFailed,
-        kind: DesktopToastKind.error,
-        icon: DesktopIcons.info,
-      );
-    }
-  }
-
-  void _openAlbum(PhotoAlbum album) {
-    setState(() {
-      _tab = DesktopPhotosTab.albums;
-      _selectedAlbumId = album.id;
-      _selection.clear();
-    });
-  }
-
-  void _openAlbumPhoto(PhotoItem photo, List<PhotoItem> photos) {
-    ref
-        .read(photoBrowseScopeProvider.notifier)
-        .set(photos, PhotoBrowseSource.album, sourceKey: _selectedAlbumId);
-    desktopPush(context, DesktopRoutes.photoDetail(photo.id));
-  }
-
-  Future<void> _shareAlbum(PhotoAlbum album) async {
-    final l10n = AppLocalizations.of(context);
-    final controller = ref.read(photoCenterControllerProvider.notifier);
-    late final List<PhotoShareLink> shares;
-    try {
-      shares = await controller.listAlbumShares(album.id);
-    } on Object catch (error) {
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        failureToast(l10n, l10n.photosShareAlbum, error),
-        kind: DesktopToastKind.error,
-        icon: DesktopIcons.info,
-      );
-      return;
-    }
-    if (!mounted) return;
-    final result = await showPhotoShareDialog(
-      context,
-      title: l10n.photosShareAlbum,
-      shares: shares,
-      onRevoke: controller.revokeAlbumShare,
-      onRevokeAll: () => controller.revokeAllAlbumShares(album.id),
-      shareUrlOf: (share) async {
-        final baseUrl =
-            await ref.read(webShareBaseUrlResolverProvider).resolve();
-        return '$baseUrl/#/shared/photos/${share.token}';
-      },
-    );
-    if (!mounted || result == null) return;
-    try {
-      final link = await controller.createAlbumShare(
-        album.id,
-        password: result.$1.isEmpty ? null : result.$1,
-        expiresAt: resolveShareExpiry(result.$2),
-      );
-      if (!mounted) return;
-      final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
-      if (!mounted) return;
-      final copied = await copyTextToClipboard(
-        '$baseUrl/#/shared/photos/${link.token}',
-      );
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        copied
-            ? l10n.filesCopiedClipboard
-            : l10n.photosShareLinkCreated(
-              '$baseUrl/#/shared/photos/${link.token}',
-            ),
-        icon: DesktopIcons.share,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosShareLinkFailed, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteAlbum(PhotoAlbum album) async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showDesktopDialog<bool>(
-      context,
-      builder:
-          (dialogContext) => DesktopDialog(
-            width: 440,
-            eyebrow: l10n.photosTabAlbums,
-            title: l10n.photosDeleteAlbumTitle,
-            content: Text(
-              l10n.photosDeleteAlbumConfirm(album.name),
-              style: DesktopType.dense(DesktopSkin.of(context).text2),
-            ),
-            actions: [
-              DesktopButton(
-                label: l10n.photosClose,
-                onPressed: () => closeDesktopModal(dialogContext, false),
-              ),
-              DesktopButton(
-                label: l10n.photosDelete,
-                icon: DesktopIcons.trash,
-                variant: DesktopButtonVariant.danger,
-                onPressed: () => closeDesktopModal(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .deleteAlbum(album.id);
-      if (!mounted) return;
-      setState(() => _selectedAlbumId = null);
-      showDesktopToast(
-        context,
-        l10n.photosDeletedAlbum(album.name),
-        icon: DesktopIcons.trash,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosDeleteAlbumTitle, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  Future<void> _createAlbum() async {
-    final l10n = AppLocalizations.of(context);
-    final takenNames =
-        ref
-            .read(photoAlbumsProvider)
-            .asData
-            ?.value
-            .map((album) => album.name)
-            .toList(growable: false) ??
-        const <String>[];
-    final name = await showDesktopDrawer<String>(
-      context,
-      width: 420,
-      builder: (_) => _NewAlbumDrawer(takenNames: takenNames),
-    );
-    if (name == null || !mounted) {
-      return;
-    }
-    try {
-      final album = await ref
-          .read(photoCenterControllerProvider.notifier)
-          .createAlbum(name: name);
-      if (mounted) {
-        showDesktopToast(
-          context,
-          l10n.photosAlbumCreated(album.name),
-          icon: DesktopIcons.plus,
-        );
-      }
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosNewAlbum, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  /// 样例 `Photos.tsx:65`：已经有选中项、或按住 Ctrl/Cmd 时点击是「切换选中」，
-  /// 否则才打开大图。没有这条规则，选中状态下一点就跳走，选不中第二张。
-  void _activatePhoto(
-    PhotoItem photo,
-    List<PhotoItem> photos, {
+    Offset globalPosition, {
     required PhotoBrowseSource source,
   }) {
-    final additive =
-        _selection.isNotEmpty ||
-        HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed;
-    if (additive) {
-      _toggleSelect(photo);
-      return;
-    }
-    _openPhoto(photo, photos, source);
-  }
-
-  void _toggleSelect(PhotoItem photo) {
-    setState(() {
-      if (!_selection.remove(photo.id)) {
-        _selection.add(photo.id);
-      }
-    });
-  }
-
-  Future<void> _favoriteSelected() async {
     final l10n = AppLocalizations.of(context);
-    final ids = _selection.toList(growable: false);
-    // `toggleFavorite` 要真实当前值，否则会把「已在收藏」误判成收藏。
-    final visible = <String, PhotoItem>{
-      for (final photo
-          in ref.read(photoFavoritesProvider).asData?.value.items ??
-              const <PhotoItem>[])
-        photo.id: photo,
-      for (final photo
-          in ref.read(photoListProvider).asData?.value.items ??
-              const <PhotoItem>[])
-        photo.id: photo,
-    };
-    final pending = ids
-        .map((id) => visible[id])
-        .whereType<PhotoItem>()
-        .where((photo) => !photo.favorite)
-        .toList(growable: false);
-    if (pending.isEmpty) {
-      setState(_selection.clear);
-      return;
-    }
-    setState(() => _selectionBusy = true);
+    final isSelected = _selection.contains(photo.id);
+    ref.read(desktopShellProvider.notifier).openMenu(globalPosition, [
+      DesktopMenuItem(
+        label: l10n.filesOpen,
+        icon: DesktopIcons.image,
+        onPressed: () => _openPhoto(photo, photos, source),
+      ),
+      DesktopMenuItem(
+        label:
+            isSelected
+                ? l10n.desktopPhotosClearSelection
+                : l10n.desktopPhotosSelect,
+        icon: DesktopIcons.check,
+        onPressed: () => _toggleSelect(photo),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: photo.favorite ? l10n.photosUnfavorite : l10n.photosFavorite,
+        icon: DesktopIcons.heart,
+        onPressed: () => unawaited(_toggleSingleFavorite(photo)),
+      ),
+      DesktopMenuItem(
+        label: l10n.photosAddToAlbum,
+        icon: DesktopIcons.album,
+        onPressed: () {
+          if (!_selection.contains(photo.id)) {
+            setState(() {
+              _selection
+                ..clear()
+                ..add(photo.id);
+            });
+          }
+          unawaited(_addSelectedToAlbum(setState));
+        },
+      ),
+      DesktopMenuItem(
+        label: l10n.photosDownload,
+        icon: DesktopIcons.download,
+        onPressed: () => unawaited(_downloadSinglePhoto(photo)),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: l10n.photosDelete,
+        icon: DesktopIcons.trash,
+        danger: true,
+        onPressed: () => unawaited(_deleteSinglePhoto(photo)),
+      ),
+    ]);
+  }
+
+  Future<void> _toggleSingleFavorite(PhotoItem photo) async {
+    final l10n = AppLocalizations.of(context);
     try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      for (final photo in pending) {
-        await controller.toggleFavorite(photo.id, currentFavorite: false);
-      }
-      if (!mounted) {
-        return;
-      }
-      setState(_selection.clear);
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
+      if (!mounted) return;
       showDesktopToast(
         context,
-        l10n.desktopPhotosFavorited(pending.length),
+        photo.favorite ? l10n.photosUnfavorite : l10n.desktopPhotosFavorited(1),
         icon: DesktopIcons.heart,
       );
     } on Object catch (error) {
@@ -733,29 +662,64 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
           icon: DesktopIcons.info,
         );
       }
-    } finally {
+    }
+  }
+
+  Future<void> _downloadSinglePhoto(PhotoItem photo) async {
+    final l10n = AppLocalizations.of(context);
+    final url = photo.sourceUrl;
+    if (url == null || url.isEmpty) {
+      showDesktopToast(
+        context,
+        l10n.photosDownloadNeedsOriginal,
+        kind: DesktopToastKind.warn,
+        icon: DesktopIcons.download,
+      );
+      return;
+    }
+    try {
+      final ext = photo.format.isEmpty ? 'jpg' : photo.format.toLowerCase();
+      final name = '${photo.title}.$ext';
+      final path = await resolvePhotoExportPath(suggestedName: name);
+      if (path == null || !mounted) return;
+      await ref
+          .read(photoRepositoryProvider)
+          .downloadPhotoFile(
+            url: url,
+            sizeBytes: photo.fileSize,
+            destinationPath: path,
+          );
+      await deliverPhotoExport(path: path, fileName: name);
+      if (!mounted) return;
+      showDesktopToast(
+        context,
+        l10n.photosSavedCount(1),
+        icon: DesktopIcons.check,
+      );
+    } on Object catch (error) {
       if (mounted) {
-        setState(() => _selectionBusy = false);
+        showDesktopToast(
+          context,
+          userFacingErrorText(error),
+          kind: DesktopToastKind.error,
+        );
       }
     }
   }
 
-  Future<void> _deleteSelected() async {
+  Future<void> _deleteSinglePhoto(PhotoItem photo) async {
     final l10n = AppLocalizations.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
-    final ids = _selection.toList(growable: false);
-    setState(() => _selectionBusy = true);
+    final ids = <String>[photo.id];
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .movePhotosToTrash(ids);
-      if (!mounted) {
-        return;
-      }
-      setState(_selection.clear);
+      if (!mounted) return;
+      setState(() => _selection.remove(photo.id));
       showDesktopToast(
         context,
-        l10n.desktopPhotosMovedToTrash(ids.length),
+        l10n.desktopPhotosMovedToTrash(1),
         icon: DesktopIcons.trash,
         actionLabel: l10n.desktopUndo,
         onAction:
@@ -770,163 +734,18 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
           icon: DesktopIcons.info,
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _selectionBusy = false);
-      }
     }
   }
 
-  Future<void> _restoreSelectedFromTrash(
-    ProviderContainer container,
-    List<String> photoIds,
-    AppLocalizations l10n,
-  ) async {
-    try {
-      final controller = container.read(photoCenterControllerProvider.notifier);
-      for (final photoId in photoIds) {
-        await controller.restorePhotoFromTrash(photoId);
-      }
-      container
-          .read(desktopToastProvider.notifier)
-          .show(
-            l10n.desktopPhotosRestoredFromTrash(photoIds.length),
-            icon: DesktopIcons.check,
-          );
-    } on Object catch (error) {
-      container
-          .read(desktopToastProvider.notifier)
-          .show(
-            failureToast(l10n, l10n.photosRestore, error),
-            kind: DesktopToastKind.error,
-            icon: DesktopIcons.info,
-          );
-    }
+  void _openPhoto(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    PhotoBrowseSource source,
+  ) {
+    ref.read(photoBrowseScopeProvider.notifier).set(photos, source);
+    desktopPush(context, DesktopRoutes.photoDetail(photo.id));
   }
 
-  Future<void> _restorePhoto(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .restorePhotoFromTrash(photo.id);
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosRestore, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  Future<void> _confirmPurgePhoto(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showDesktopDialog<bool>(
-      context,
-      builder:
-          (dialogContext) => DesktopDialog(
-            width: 440,
-            eyebrow: l10n.photosTabTrash,
-            title: l10n.photosDeleteForever,
-            content: Text(
-              photo.title,
-              style: DesktopType.dense(DesktopSkin.of(context).text2),
-            ),
-            actions: [
-              DesktopButton(
-                label: l10n.photosClose,
-                onPressed: () => closeDesktopModal(dialogContext, false),
-              ),
-              DesktopButton(
-                label: l10n.photosDeleteForever,
-                icon: DesktopIcons.trash,
-                variant: DesktopButtonVariant.danger,
-                onPressed: () => closeDesktopModal(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .purgePhotoFromTrash(photo.id);
-      if (mounted) {
-        showDesktopToast(
-          context,
-          l10n.photosDeleteForever,
-          icon: DesktopIcons.trash,
-        );
-      }
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosDeleteForever, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  Future<void> _confirmPurgeAllTrash() async {
-    if (_purgingTrash) return;
-    final l10n = AppLocalizations.of(context);
-    final state = ref.read(photoCenterControllerProvider).asData?.value;
-    final count = state?.trashTotalElements ?? state?.trashPhotos.length ?? 0;
-    if (count == 0) return;
-    final confirmed = await showDesktopDialog<bool>(
-      context,
-      builder:
-          (dialogContext) => DesktopDialog(
-            width: 440,
-            eyebrow: l10n.photosTabTrash,
-            title: l10n.photosEmptyTrashConfirmTitle,
-            content: Text(
-              l10n.photosEmptyTrashConfirmBody(count),
-              style: DesktopType.dense(DesktopSkin.of(context).text2),
-            ),
-            actions: [
-              DesktopButton(
-                label: l10n.photosClose,
-                onPressed: () => closeDesktopModal(dialogContext, false),
-              ),
-              DesktopButton(
-                label: l10n.photosDeleteForever,
-                icon: DesktopIcons.trash,
-                variant: DesktopButtonVariant.danger,
-                onPressed: () => closeDesktopModal(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() => _purgingTrash = true);
-    try {
-      await ref.read(photoCenterControllerProvider.notifier).purgeTrash();
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.photosTrashPurged,
-        icon: DesktopIcons.trash,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosEmptyTrash, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _purgingTrash = false);
-    }
-  }
+  /// 供拆分出的动作扩展调用的状态刷新出口。
+  void _update(VoidCallback fn) => setState(fn);
 }

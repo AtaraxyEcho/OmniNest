@@ -32,6 +32,7 @@ class MovieMetadataCommands {
     String metadataStatus = 'MANUAL',
     bool restoreOriginal = false,
     bool clearRuntime = false,
+    bool clearPoster = false,
   }) async {
     await _api.updateMetadata(
       videoItemId: videoItemId,
@@ -49,6 +50,14 @@ class MovieMetadataCommands {
       metadataStatus: metadataStatus,
       restoreOriginal: restoreOriginal,
       clearRuntime: clearRuntime,
+      clearPoster: clearPoster,
     );
+  }
+
+  Future<String> uploadPoster({
+    required List<int> bytes,
+    required String fileName,
+  }) {
+    return _api.uploadPoster(bytes: bytes, fileName: fileName);
   }
 }

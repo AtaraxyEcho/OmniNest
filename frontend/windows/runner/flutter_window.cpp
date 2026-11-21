@@ -404,6 +404,7 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   if (hwnd == nullptr) {
     return;
   }
+  const bool was_fullscreen = window_fullscreen_;
   CaptureNormalStylesIfNecessary();
 
   // Immersive fullscreen: one style write and one monitor snap. Do not split
@@ -489,16 +490,16 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
     SetDwmCornerPreference(hwnd, kDwmwcpDefault);
     SetDwmBorderVisible(hwnd, true);
   }
-  if (!hidden && window_placement_saved_) {
+  if ((was_fullscreen || !hidden) && window_placement_saved_) {
     RestoreWindowPlacement();
   } else {
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
                      SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOCOPYBITS);
+    SyncFlutterViewChild();
+    // See immersive path: never block the platform thread on DWM composition.
+    ForceFlutterRedraw();
   }
-  SyncFlutterViewChild();
-  // See immersive path: never block the platform thread on DWM composition.
-  ForceFlutterRedraw();
 }
 
 void FlutterWindow::SetWindowFrameHidden(bool hidden) {
@@ -588,11 +589,22 @@ void FlutterWindow::RestoreWindowPlacement() {
     return;
   }
   saved_window_placement_.length = sizeof(WINDOWPLACEMENT);
+  // 清洗异常 showCmd（如 SW_HIDE / SW_SHOWMINIMIZED），防止还原后窗口不可见
+  // 或处于半激活状态。
+  if (saved_window_placement_.showCmd != SW_SHOWMAXIMIZED &&
+      saved_window_placement_.showCmd != SW_SHOWNORMAL) {
+    saved_window_placement_.showCmd = SW_SHOWNORMAL;
+  }
   SetWindowPlacement(hwnd, &saved_window_placement_);
-  SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                   SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOCOPYBITS);
+  // 显式降回 HWND_NOTOPMOST 且不带 SWP_NOACTIVATE，通知 DWM 退出全屏独占
+  // 并恢复前台命中与任务栏层级。
+  SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW |
+                   SWP_FRAMECHANGED | SWP_NOCOPYBITS);
+  ::SetForegroundWindow(hwnd);
   window_placement_saved_ = false;
+  SyncFlutterViewChild();
+  ForceFlutterRedraw();
 }
 
 LRESULT

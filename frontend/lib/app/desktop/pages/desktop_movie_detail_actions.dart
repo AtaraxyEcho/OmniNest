@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -14,7 +15,6 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
 /// 影视详情概览页的动作行（样例 `MovieDetail.tsx:87-89` 的 `.row-actions`）。
@@ -156,7 +156,7 @@ class _DesktopMovieDetailActionsState
   }
 }
 
-/// 元数据编辑弹窗：标题 / 原名 / 年份 / 时长 / 简介，保存后回写详情。
+/// 元数据编辑弹窗：海报 / 标题 / 类型 / 年份 / 时长 / 评分 / 演员 / 简介，保存后回写详情。
 Future<void> showDesktopMovieMetadataDialog(
   BuildContext context,
   MovieVideoItem item,
@@ -199,14 +199,11 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
   late final TextEditingController _cast;
   late final TextEditingController _posterUrl;
   late final String _initialPosterUrl;
+  DesktopPickedCover? _pickedPoster;
+  bool _clearPoster = false;
   bool _saving = false;
+  String? _posterUrlError;
 
-  /// 样例 `FilmEditor` 对影视条目固定给全量字段（标题/类型/年份/时长/
-  /// 评分/演员/海报地址/简介）。只有剧集单集才走精简字段；未刮削的影片
-  /// 没有 `movieId`，不能据此把它误判成单集而少掉一半输入框。
-  bool get _isMovie =>
-      widget.item.movieId != null ||
-      widget.item.mediaType.toUpperCase() != 'EPISODE';
   bool get _canRestoreOriginal =>
       widget.item.metadata['manualMetadataOriginal'] is Map;
 
@@ -232,10 +229,18 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
     _cast = TextEditingController(
       text: item.castMembers.map((member) => member.name).join(', '),
     );
-    final storedPosterUrl = item.metadata['manualPosterUrl']?.toString();
-    final externalPosterUrl = item.posterFileId == null ? item.posterUrl : null;
+    final storedPosterUrl = item.metadata['manualPosterUrl']?.toString().trim();
+    final externalPosterUrl =
+        item.posterFileId == null &&
+                item.posterUrl != null &&
+                _isHttpUrl(item.posterUrl!.trim())
+            ? item.posterUrl!.trim()
+            : null;
     _posterUrl = TextEditingController(
-      text: storedPosterUrl ?? externalPosterUrl ?? '',
+      text:
+          (storedPosterUrl != null && storedPosterUrl.isNotEmpty)
+              ? storedPosterUrl
+              : (externalPosterUrl ?? ''),
     );
     _initialPosterUrl = _posterUrl.text;
   }
@@ -255,21 +260,20 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
 
   void _onFieldChanged(String _) => setState(() {});
 
-  bool get _canSave {
-    final titleValid = _title.text.trim().isNotEmpty;
-    if (!_isMovie) {
-      return titleValid;
-    }
-    final yearValid = RegExp(r'^\d{4}$').hasMatch(_year.text.trim());
-    final ratingText = _rating.text.trim();
-    final rating = ratingText.isEmpty ? 0 : double.tryParse(ratingText);
-    return titleValid &&
-        yearValid &&
-        rating != null &&
-        rating.isFinite &&
-        rating >= 0 &&
-        rating <= 10;
+  bool get _yearValid {
+    final text = _year.text.trim();
+    return text.isEmpty || RegExp(r'^\d{4}$').hasMatch(text);
   }
+
+  bool get _ratingValid {
+    final text = _rating.text.trim();
+    if (text.isEmpty) return true;
+    final value = double.tryParse(text);
+    return value != null && value.isFinite && value >= 0 && value <= 10;
+  }
+
+  bool get _canSave =>
+      _title.text.trim().isNotEmpty && _yearValid && _ratingValid;
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
@@ -277,10 +281,14 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
     if (!_canSave || _saving) {
       return;
     }
-    final year = int.tryParse(_year.text.trim());
+    final yearText = _year.text.trim();
+    final year = yearText.isEmpty ? null : int.tryParse(yearText);
     final runtimeText = _runtime.text.trim();
     final runtimeSeconds = _parseRuntime(runtimeText);
+    final ratingText = _rating.text.trim();
+    final rating = ratingText.isEmpty ? null : double.tryParse(ratingText);
     final posterUrl = _posterUrl.text.trim();
+
     if (runtimeText.isNotEmpty && runtimeSeconds == null) {
       showDesktopToast(
         context,
@@ -290,51 +298,56 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
       );
       return;
     }
-    if (_isMovie && posterUrl.isNotEmpty && !_isHttpUrl(posterUrl)) {
-      showDesktopToast(
-        context,
-        l10n.videoMetaPosterUrlInvalid,
-        kind: DesktopToastKind.warn,
-        icon: DesktopIcons.info,
-      );
+    if (_pickedPoster == null &&
+        !_clearPoster &&
+        posterUrl.isNotEmpty &&
+        !_isHttpUrl(posterUrl)) {
+      setState(() => _posterUrlError = l10n.videoMetaPosterUrlInvalid);
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _posterUrlError = null;
+      _saving = true;
+    });
     try {
-      await ref
-          .read(movieMetadataCommandsProvider)
-          .updateMetadata(
-            videoItemId: widget.item.id,
-            title: title,
-            originalTitle: widget.item.originalTitle,
-            releaseDate:
-                _isMovie && year != null
-                    ? DateTime(year)
-                    : widget.item.releaseDate,
-            overview: _overview.text.trim(),
-            posterFileId: widget.item.posterFileId,
-            backdropFileId: widget.item.backdropFileId,
-            runtimeSeconds:
-                runtimeText.isEmpty
-                    ? null
-                    : runtimeSeconds ?? widget.item.runtimeSeconds,
-            clearRuntime: runtimeText.isEmpty,
-            genres: _isMovie ? _splitCommaSeparated(_genre.text) : null,
-            rating:
-                _isMovie
-                    ? (_rating.text.trim().isEmpty
-                        ? 0
-                        : double.parse(_rating.text.trim()))
-                    : null,
-            cast: _isMovie ? _splitCommaSeparated(_cast.text) : null,
-            posterUrl:
-                _isMovie &&
-                        posterUrl.isNotEmpty &&
-                        posterUrl != _initialPosterUrl.trim()
-                    ? posterUrl
-                    : null,
-            metadataStatus: widget.item.metadataStatus,
-          );
+      final commands = ref.read(movieMetadataCommandsProvider);
+      String? uploadedPosterFileId;
+      if (_pickedPoster != null) {
+        uploadedPosterFileId = await commands.uploadPoster(
+          bytes: _pickedPoster!.bytes,
+          fileName: _pickedPoster!.fileName,
+        );
+      }
+      final shouldClearPoster = _clearPoster && uploadedPosterFileId == null;
+      final posterUrlChanged = posterUrl != _initialPosterUrl.trim();
+      await commands.updateMetadata(
+        videoItemId: widget.item.id,
+        title: title,
+        originalTitle: widget.item.originalTitle,
+        releaseDate: year != null ? DateTime(year) : widget.item.releaseDate,
+        overview: _overview.text.trim(),
+        posterFileId:
+            shouldClearPoster
+                ? null
+                : (uploadedPosterFileId ?? widget.item.posterFileId),
+        backdropFileId: widget.item.backdropFileId,
+        runtimeSeconds:
+            runtimeText.isEmpty
+                ? null
+                : runtimeSeconds ?? widget.item.runtimeSeconds,
+        clearRuntime: runtimeText.isEmpty,
+        clearPoster: shouldClearPoster,
+        genres: _splitCommaSeparated(_genre.text),
+        rating: rating,
+        cast: _splitCommaSeparated(_cast.text),
+        posterUrl:
+            !shouldClearPoster &&
+                    uploadedPosterFileId == null &&
+                    posterUrlChanged
+                ? posterUrl
+                : null,
+        metadataStatus: widget.item.metadataStatus,
+      );
       ref.invalidate(movieDetailProvider(widget.item.id));
       if (!mounted) {
         return;
@@ -342,8 +355,6 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
       unawaited(
         ref.read(movieCenterControllerProvider.notifier).refreshForRealtime(),
       );
-      // 先弹提示再关闭弹层：closeDesktopModal 会同步拆 Overlay，之后再用
-      // 弹层 context 取 ProviderScope 会拿不到容器。
       showDesktopToast(
         context,
         l10n.videoMetadataSaved,
@@ -479,140 +490,103 @@ class _MetadataEditDialogState extends ConsumerState<_MetadataEditDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_isMovie) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 22),
-                  child: SizedBox(
-                    width: 92,
-                    height: 138,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
-                            spreadRadius: -10,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: MoviePosterImage(
-                          imageUrl:
-                              _posterUrl.text.trim().isEmpty
-                                  ? widget.item.posterImageUrl
-                                  : _posterUrl.text.trim(),
-                          cacheKey:
-                              'movie-poster-editor:${widget.item.id}:${_posterUrl.text.trim()}',
-                          cacheWidth: MoviePosterImage.decodeWidth(
-                            context,
-                            92,
-                            cap: 276,
-                          ),
-                          fallback: ColoredBox(
-                            color: skin.raise2,
-                            child: Icon(DesktopIcons.film, color: skin.text3),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+          DesktopCoverField(
+            label: l10n.videoMetaFieldPosterUrl,
+            shape: DesktopCoverFieldShape.poster,
+            previewUrl: widget.item.posterImageUrl,
+            fallbackIcon: DesktopIcons.film,
+            urlController: _posterUrl,
+            pickedCover: _pickedPoster,
+            cleared: _clearPoster,
+            urlError: _posterUrlError,
+            enabled: !_saving,
+            onPicked: (picked) {
+              setState(() {
+                _pickedPoster = picked;
+                _clearPoster = false;
+                _posterUrlError = null;
+              });
+            },
+            onClear: () {
+              setState(() {
+                _pickedPoster = null;
+                _clearPoster = true;
+                _posterUrlError = null;
+              });
+            },
+            onUrlChanged: (_) {
+              setState(() {
+                _pickedPoster = null;
+                _clearPoster = false;
+                _posterUrlError = null;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          DesktopTextField(
+            controller: _title,
+            label: l10n.videoMetaFieldTitle,
+            required: true,
+            error: _title.text.trim().isEmpty ? l10n.videoTitleRequired : null,
+            autofocus: true,
+            onChanged: _onFieldChanged,
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _genre,
+            label: l10n.videoMetaFieldGenre,
+            hint: l10n.videoMetaCommaSeparated,
+            onChanged: _onFieldChanged,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                flex: 8,
+                child: DesktopTextField(
+                  controller: _year,
+                  label: l10n.videoMetaFieldYear,
+                  hint: '2024',
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  error: _yearValid ? null : 'YYYY',
+                  onChanged: _onFieldChanged,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    children: [
-                      DesktopTextField(
-                        controller: _title,
-                        label: l10n.videoMetaFieldTitle,
-                        autofocus: true,
-                        onChanged: _onFieldChanged,
-                      ),
-                      const SizedBox(height: 14),
-                      DesktopTextField(
-                        controller: _genre,
-                        label: l10n.videoMetaFieldGenre,
-                        onChanged: _onFieldChanged,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 14,
+                child: DesktopTextField(
+                  controller: _runtime,
+                  label: l10n.videoMetaFieldRuntime,
+                  hint: '2h 14m',
+                  onChanged: _onFieldChanged,
                 ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  flex: 8,
-                  child: DesktopTextField(
-                    controller: _year,
-                    label: l10n.videoMetaFieldYear,
-                    hint: '2024',
-                    keyboardType: TextInputType.number,
-                    maxLength: 4,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: _onFieldChanged,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 8,
+                child: DesktopTextField(
+                  controller: _rating,
+                  label: l10n.videoMetaFieldRating,
+                  hint: '8.0',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
+                  error: _ratingValid ? null : '0.0 – 10.0',
+                  onChanged: _onFieldChanged,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 14,
-                  child: DesktopTextField(
-                    controller: _runtime,
-                    label: l10n.videoMetaFieldRuntime,
-                    hint: '2h 14m',
-                    onChanged: _onFieldChanged,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 8,
-                  child: DesktopTextField(
-                    controller: _rating,
-                    label: l10n.videoMetaFieldRating,
-                    hint: '8.0',
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onChanged: _onFieldChanged,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            DesktopTextField(
-              controller: _cast,
-              label: l10n.videoMetaFieldCast,
-              hint: l10n.videoMetaCommaSeparated,
-              onChanged: _onFieldChanged,
-            ),
-            const SizedBox(height: 14),
-            DesktopTextField(
-              controller: _posterUrl,
-              label: l10n.videoMetaFieldPosterUrl,
-              keyboardType: TextInputType.url,
-              onChanged: _onFieldChanged,
-            ),
-          ] else ...[
-            DesktopTextField(
-              controller: _title,
-              label: l10n.videoMetaFieldTitle,
-              autofocus: true,
-              onChanged: _onFieldChanged,
-            ),
-            const SizedBox(height: 14),
-            DesktopTextField(
-              controller: _runtime,
-              label: l10n.videoMetaFieldRuntime,
-              hint: '2h 14m',
-              onChanged: _onFieldChanged,
-            ),
-          ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          DesktopTextField(
+            controller: _cast,
+            label: l10n.videoMetaFieldCast,
+            hint: l10n.videoMetaCommaSeparated,
+            onChanged: _onFieldChanged,
+          ),
           const SizedBox(height: 14),
           DesktopTextField(
             controller: _overview,
@@ -686,8 +660,6 @@ class _MatchCandidatesDialog extends ConsumerWidget {
       title: l10n.desktopMoviesMatchTitle,
       width: 560,
       content: candidates.when(
-        // 候选是一次 TMDB 搜索，通常几百毫秒；这里用静态占位，避免再引入一个
-        // 内联转圈（加载动画棘轮只降不升）。
         loading:
             () => Padding(
               padding: const EdgeInsets.symmetric(vertical: 18),

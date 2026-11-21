@@ -114,7 +114,7 @@ class _DesktopSkeletonShimmerInherited extends InheritedWidget {
       animation != oldWidget.animation;
 }
 
-/// 条目级骨架（样例新版 polish.css）：轻量无独立 Controller，共享根部单时钟。
+/// 条目级骨架（样例新版 polish.css）：105deg 微斜向扫光，共享根部单时钟。
 class DesktopSkeletonBox extends StatefulWidget {
   const DesktopSkeletonBox({
     this.width,
@@ -162,7 +162,7 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox> {
     final skin = DesktopSkin.of(context);
     final base = Color.lerp(skin.bg2, skin.text, skin.isDark ? 0.09 : 0.08)!;
     final highlight =
-        Color.lerp(base, Colors.white, skin.isDark ? 0.075 : 0.85)!;
+        Color.lerp(base, Colors.white, skin.isDark ? 0.10 : 0.85)!;
     final childIndex = widget.index + 1;
     final phase =
         childIndex % 3 == 0 ? 0.225 : (childIndex % 2 == 0 ? 0.1125 : 0.0);
@@ -183,15 +183,18 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox> {
         final sweep = DesktopMotion.skeletonCurve.transform(
           (animation.value - phase + 1) % 1,
         );
+        final dx = -1.6 + sweep * 3.2;
         return Container(
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.radius),
             gradient: LinearGradient(
-              begin: Alignment(-1.6 + sweep * 3.2, 0),
-              end: Alignment(-0.6 + sweep * 3.2, 0),
+              // 105deg 微斜向扫光（与水平方向夹角 15°，tan 15° ≈ 0.268）。
+              begin: Alignment(dx, -0.268),
+              end: Alignment(dx + 1.0, 0.268),
               colors: [base, highlight, base],
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
         );
@@ -551,48 +554,91 @@ class DesktopOverlayLoader extends StatelessWidget {
   }
 }
 
-/// 照片网格的骨架：两行 justified 占位，高度与真实缩略一致。
+/// 照片网格骨架：日期分组头 + 2 组 4 行错落 Justified 行流 + 严格 6px 间距与 10px 圆角。
 class DesktopSkeletonPhotoGrid extends StatelessWidget {
   const DesktopSkeletonPhotoGrid({
     this.targetHeight = 200,
     this.rows = 2,
+    this.groups = 2,
+    this.showGroupHeaders = true,
     super.key,
   });
 
   final double targetHeight;
   final int rows;
+  final int groups;
+  final bool showGroupHeaders;
+
+  static const List<List<int>> _staggeredRowFlexes = <List<int>>[
+    <int>[15, 10, 18, 12],
+    <int>[11, 17, 13, 14],
+    <int>[16, 12, 10, 17],
+    <int>[13, 15, 18, 10],
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var row = 0; row < rows; row++) ...[
+    final groupCount = math.max(1, groups);
+    final rowsPerGroup = math.max(1, rows);
+    var tileIndex = 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var group = 0; group < groupCount; group++) ...[
+          if (group > 0) const SizedBox(height: 34),
+          if (showGroupHeaders) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                DesktopSkeletonBox(
+                  width: group.isEven ? 156 : 132,
+                  height: 18,
+                  radius: 6,
+                  index: tileIndex++,
+                ),
+                const SizedBox(width: 12),
+                DesktopSkeletonBox(
+                  width: 56,
+                  height: 11,
+                  radius: 5.5,
+                  index: tileIndex++,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          for (var row = 0; row < rowsPerGroup; row++) ...[
+            if (row > 0) const SizedBox(height: 6),
             SizedBox(
               height: targetHeight,
               child: Row(
                 children: [
-                  for (var col = 0; col < 4; col++)
+                  for (
+                    var col = 0;
+                    col <
+                        _staggeredRowFlexes[(group * rowsPerGroup + row) %
+                                _staggeredRowFlexes.length]
+                            .length;
+                    col++
+                  ) ...[
+                    if (col > 0) const SizedBox(width: 6),
                     Expanded(
-                      flex: const [3, 2, 4, 3][col],
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: DesktopSkeletonBox(
-                          height: targetHeight - 8,
-                          radius: 10,
-                          index: row * 4 + col,
-                        ),
+                      flex:
+                          _staggeredRowFlexes[(group * rowsPerGroup + row) %
+                              _staggeredRowFlexes.length][col],
+                      child: DesktopSkeletonBox(
+                        height: targetHeight,
+                        radius: 10,
+                        index: tileIndex++,
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 8),
           ],
         ],
-      ),
+      ],
     );
   }
 }
