@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/app/desktop/desktop_import_filter.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
-/// 接收桌面文件拖放并转交给现有上传队列。
+/// 接收桌面文件及文件夹拖放并递归展开后转交给现有上传队列。
 class FileDropUploadSurface extends StatefulWidget {
   const FileDropUploadSurface({
     required this.enabled,
@@ -28,10 +29,16 @@ class FileDropUploadSurface extends StatefulWidget {
 class _FileDropUploadSurfaceState extends State<FileDropUploadSurface> {
   bool _dragging = false;
 
+  Future<void> _handleDrop(List<DropItem> droppedItems) async {
+    final files = await expandDroppedItems(droppedItems);
+    if (!mounted || files.isEmpty) {
+      return;
+    }
+    await widget.onFilesDropped(files);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // desktop_drop 只覆盖桌面原生端：Web 与触屏永远不会产生拖放事件，
-    // 与其挂一层无效的手势容器，不如按能力位直接透传子树。
     if (!PlatformCapabilities.current().supportsDragAndDropUpload) {
       return widget.child;
     }
@@ -41,13 +48,7 @@ class _FileDropUploadSurfaceState extends State<FileDropUploadSurface> {
       onDragExited: (_) => _setDragging(false),
       onDragDone: (details) {
         _setDragging(false);
-        final files = details.files
-            .whereType<DropItemFile>()
-            .cast<XFile>()
-            .toList(growable: false);
-        if (files.isNotEmpty) {
-          unawaited(widget.onFilesDropped(files));
-        }
+        unawaited(_handleDrop(details.files));
       },
       child: Stack(
         children: [

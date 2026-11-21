@@ -30,46 +30,69 @@ class _JustifiedPhotos extends StatefulWidget {
 }
 
 class _JustifiedPhotosState extends State<_JustifiedPhotos>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  static const double _dragSlop = 8.0;
+  static const double _edgeScrollZone = 80.0;
+
   List<String>? _dragOrder;
+  List<String>? _settlingOrder;
   String? _lastSwapTarget;
   DateTime? _lastSwapAt;
   Offset? _lastSwapPointer;
-  bool _dragCanceled = false;
 
-  /// Esc 取消时通知仍在 Flutter Overlay 里的拖拽反馈立即收起。
-  ///
-  /// `LongPressDraggable` 的 feedback 在起拖时就挂进 Overlay，父级重建或换 key
-  /// 不会同步替换那份 widget；不显式通知会出现「按了取消，预览还悬在屏幕上」。
-  final ValueNotifier<bool> _dragFeedbackDismissed = ValueNotifier<bool>(false);
-  final ValueNotifier<Offset> _dragFeedbackOffset = ValueNotifier<Offset>(
-    Offset.zero,
+  String? _draggedPhotoId;
+  bool _settling = false;
+  _PhotoDragPayload? _activeDragPayload;
+
+  late final _PhotoFlipTracker _flipTracker;
+  final Map<String, GlobalKey<State<StatefulWidget>>> _tileKeys = {};
+
+  late final Ticker _dragTicker;
+  late final AnimationController _settleController;
+  Rect? _settleStartRect;
+  Rect? _settleTargetRect;
+  OverlayEntry? _ghostOverlay;
+  final ValueNotifier<_GhostPose?> _ghostPose = ValueNotifier<_GhostPose?>(
+    null,
   );
-  late final Ticker _dragSmoothingTicker;
+
   Offset _dragPointer = Offset.zero;
   Offset _dragPointerSmooth = Offset.zero;
-  bool _dragPointerReady = false;
-  String? _draggedPhotoId;
-  _PhotoDragPayload? _activeDragPayload;
+  double _grabCenterK = 0.0;
+
+  Timer? _pressTimer;
+  Timer? _holdTimer;
+  Timer? _landedTimer;
   Timer? _clickGuardTimer;
   bool _trailingClickGuard = false;
-  int _dragGeneration = 0;
-  int _flipGeneration = 0;
-  final Map<String, GlobalKey<State<StatefulWidget>>> _tileKeys = {};
-  Map<String, Offset> _flipOffsets = const {};
-  Rect? _dragOriginRect;
-  Map<String, Rect> _dragStartRects = <String, Rect>{};
-  OverlayEntry? _settleOverlay;
-  Timer? _pressTimer;
-  Timer? _landedTimer;
+
   int? _pressPointer;
   Offset? _pressOrigin;
-  String? _pressPhotoId;
-  String? _blockedReorderPhotoId;
+
   Set<String> _pressingPhotoIds = <String>{};
   Set<String> _landedPhotoIds = <String>{};
 
   bool get _justDragged => _trailingClickGuard;
+  bool get _isDragging => _draggedPhotoId != null && !_settling;
+
+  double _currentScrollOffset() {
+    if (!mounted) return 0.0;
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable == null || !scrollable.position.hasPixels) return 0.0;
+    return scrollable.position.pixels;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _flipTracker = _PhotoFlipTracker(scrollOffsetOf: _currentScrollOffset);
+    _dragTicker = createTicker(_onDragTick);
+    _settleController = AnimationController(
+      vsync: this,
+      duration: DesktopMotion.photoReorderSettle,
+    )..addListener(_onSettleTick);
+    HardwareKeyboard.instance.addHandler(_handleKey);
+  }
 
   void _startTrailingClickGuard() {
     _clickGuardTimer?.cancel();
@@ -79,99 +102,59 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     });
   }
 
-  Set<String> _movingIds(_PhotoDragPayload payload) =>
-      Set<String>.of(payload.movingIds);
-
-  @override
-  void initState() {
-    super.initState();
-    _dragSmoothingTicker = createTicker((_) {
-      if (!_dragPointerReady) return;
-      final delta = _dragPointer - _dragPointerSmooth;
-      if (delta.distanceSquared < 0.01) {
-        _dragPointerSmooth = _dragPointer;
-      } else {
-        _dragPointerSmooth +=
-            delta * DesktopMotion.photoReorderPointerSmoothing;
-      }
-      _dragFeedbackOffset.value = _dragPointerSmooth - _dragPointer;
-    });
-    HardwareKeyboard.instance.addHandler(_handleKey);
-  }
-
-  void _startDragSmoothing() {
-    _dragPointerReady = false;
-    _dragFeedbackOffset.value = Offset.zero;
-    if (!_dragSmoothingTicker.isActive) {
-      _dragSmoothingTicker.start();
-    }
-  }
-
-  void _updateDragPointer(Offset position) {
-    if (!_dragPointerReady) {
-      _dragPointer = position;
-      _dragPointerSmooth = position;
-      _dragPointerReady = true;
-      _dragFeedbackOffset.value = Offset.zero;
-      return;
-    }
-    _dragPointer = position;
-  }
-
-  void _stopDragSmoothing() {
-    if (_dragSmoothingTicker.isActive) {
-      _dragSmoothingTicker.stop();
-    }
-    _dragPointerReady = false;
-    _dragFeedbackOffset.value = Offset.zero;
-  }
-
   bool _handleKey(KeyEvent event) {
     if (event is! KeyDownEvent ||
         event.logicalKey != LogicalKeyboardKey.escape ||
         (_draggedPhotoId == null && _pressPointer == null)) {
       return false;
     }
-    _cancelReorder();
+    if (_isDragging) {
+      _finishDrag(accepted: false, canceledByEsc: true);
+    } else {
+      _abortPress();
+    }
     return true;
   }
 
-  void _cancelReorder() {
-    if (_draggedPhotoId == null && _pressPointer == null) return;
+  void _abortPress() {
     _pressTimer?.cancel();
-    _landedTimer?.cancel();
-    _flipGeneration++;
-    _dragGeneration++;
-    // Esc 是「显式取消」，不是一次拖放结束；不能启动点击抑制窗口，
-    // 否则用户取消后立刻点另一张会被 `_justDragged` 静默吞掉。
-    _clickGuardTimer?.cancel();
-    _trailingClickGuard = false;
-    _dragCanceled = true;
-    _dragFeedbackDismissed.value = true;
-    _stopDragSmoothing();
-    _removeSettleOverlay();
-    setState(() {
-      _dragOrder = null;
-      _lastSwapTarget = null;
-      _lastSwapAt = null;
-      _lastSwapPointer = null;
-      _draggedPhotoId = null;
-      _activeDragPayload = null;
-      _pressPointer = null;
-      _pressOrigin = null;
-      _pressPhotoId = null;
-      _blockedReorderPhotoId = null;
-      _pressingPhotoIds = <String>{};
-      _landedPhotoIds = <String>{};
-      _flipOffsets = const {};
-    });
-    _dragOriginRect = null;
-    _dragStartRects = <String, Rect>{};
+    _holdTimer?.cancel();
+    _pressPointer = null;
+    _pressOrigin = null;
+    if (_pressingPhotoIds.isNotEmpty && mounted) {
+      setState(() => _pressingPhotoIds = <String>{});
+    }
   }
 
-  List<String> _collapsedOrder(_PhotoDragPayload payload) => payload.orderIds
-      .where((id) => id == payload.draggedId || !payload.movingIds.contains(id))
-      .toList(growable: false);
+  void _cleanupImmediate() {
+    _pressTimer?.cancel();
+    _holdTimer?.cancel();
+    _landedTimer?.cancel();
+    _clickGuardTimer?.cancel();
+    _trailingClickGuard = false;
+    if (_dragTicker.isActive) _dragTicker.stop();
+    if (_settleController.isAnimating) _settleController.stop();
+    _removeGhostOverlay();
+    _flipTracker.clear();
+    _pressPointer = null;
+    _pressOrigin = null;
+    _settleStartRect = null;
+    _settleTargetRect = null;
+    if (mounted) {
+      setState(() {
+        _dragOrder = null;
+        _settlingOrder = null;
+        _draggedPhotoId = null;
+        _settling = false;
+        _activeDragPayload = null;
+        _lastSwapTarget = null;
+        _lastSwapAt = null;
+        _lastSwapPointer = null;
+        _pressingPhotoIds = <String>{};
+        _landedPhotoIds = <String>{};
+      });
+    }
+  }
 
   List<String> _expandedOrder(
     List<String> collapsed,
@@ -186,114 +169,299 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     PointerDownEvent event,
     Offset localPosition,
   ) {
+    if (_draggedPhotoId != null || _settling) return;
     if ((event.buttons & kPrimaryButton) == 0) return;
-    _pressPointer = event.pointer;
-    _pressOrigin = event.position;
-    _pressPhotoId = payload.draggedId;
 
-    // 样例的勾选按钮是独立点击目标，按住勾选圈不应启动照片拖动。
+    // 勾选圈是独立点击目标，按住勾选圈不触发长按拖动。
     if (widget.showSelectionControls &&
         localPosition.dx >= 10 &&
         localPosition.dx <= 36 &&
         localPosition.dy >= 10 &&
         localPosition.dy <= 36) {
-      setState(() => _blockedReorderPhotoId = payload.draggedId);
       return;
     }
     if (payload.orderIds.length < 2) return;
 
     _pressTimer?.cancel();
+    _holdTimer?.cancel();
+    _pressPointer = event.pointer;
+    _pressOrigin = event.position;
+    _dragPointer = event.position;
+
+    final pointerId = event.pointer;
     _pressTimer = Timer(DesktopMotion.photoReorderPressPreview, () {
-      if (!mounted || _pressPointer != event.pointer) return;
-      setState(() => _pressingPhotoIds = _movingIds(payload));
+      if (!mounted || _pressPointer != pointerId || _draggedPhotoId != null) {
+        return;
+      }
+      setState(() => _pressingPhotoIds = Set<String>.of(payload.movingIds));
+    });
+    _holdTimer = Timer(DesktopMotion.photoReorderHold, () {
+      if (!mounted || _pressPointer != pointerId || _draggedPhotoId != null) {
+        return;
+      }
+      _beginDrag(payload);
     });
   }
 
   void _onTilePointerMove(PointerMoveEvent event) {
-    if (_pressPointer != event.pointer || _pressOrigin == null) return;
-    if ((event.position - _pressOrigin!).distance <= 8) return;
-    _pressTimer?.cancel();
-    setState(() {
-      _pressingPhotoIds = <String>{};
-      _blockedReorderPhotoId = _pressPhotoId;
-    });
-  }
-
-  void _onTilePointerEnd(PointerEvent event, {bool canceled = false}) {
     if (_pressPointer != event.pointer) return;
-    if (canceled && _draggedPhotoId != null) {
-      _cancelReorder();
+    _dragPointer = event.position;
+    if (!_isDragging) {
+      final origin = _pressOrigin;
+      if (origin != null && (event.position - origin).distance > _dragSlop) {
+        _abortPress();
+      }
       return;
     }
-    _pressTimer?.cancel();
-    if (_pressingPhotoIds.isNotEmpty || _blockedReorderPhotoId != null) {
-      setState(() {
-        _pressingPhotoIds = <String>{};
-        _blockedReorderPhotoId = null;
-      });
-    }
-    _pressPointer = null;
-    _pressOrigin = null;
-    _pressPhotoId = null;
+    _checkSwap();
   }
 
-  void _startDrag(_PhotoDragPayload payload, int generation) {
-    if (generation != _dragGeneration) return;
-    _dragStartRects = <String, Rect>{};
+  void _onTilePointerUp(PointerUpEvent event) {
+    if (_pressPointer != event.pointer) return;
+    if (_isDragging) {
+      _finishDrag(accepted: true);
+    } else {
+      _abortPress();
+    }
+  }
+
+  void _onTilePointerCancel(PointerCancelEvent event) {
+    if (_pressPointer != event.pointer) return;
+    if (_isDragging) {
+      _finishDrag(accepted: false);
+    } else {
+      _abortPress();
+    }
+  }
+
+  void _beginDrag(_PhotoDragPayload payload) {
+    _pressTimer?.cancel();
+    _holdTimer?.cancel();
+
+    final startRects = <String, Rect>{};
     for (final id in payload.movingIds) {
       final rect = _rectFor(id);
-      if (rect != null) _dragStartRects[id] = rect;
+      if (rect != null) startRects[id] = rect;
     }
-    _dragOriginRect =
-        _dragStartRects[payload.draggedId] ?? _rectFor(payload.draggedId);
-    _pressTimer?.cancel();
-    _draggedPhotoId = payload.draggedId;
-    _activeDragPayload = payload;
-    _dragCanceled = false;
-    _dragFeedbackDismissed.value = false;
-    _startDragSmoothing();
+    final originRect =
+        startRects[payload.draggedId] ?? _rectFor(payload.draggedId);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlayBox = overlay?.context.findRenderObject();
+    if (overlay == null || overlayBox is! RenderBox || !overlayBox.hasSize) {
+      _abortPress();
+      return;
+    }
+
+    final fanOffsets = _computeFanOffsets(
+      origin: originRect,
+      startRects: startRects,
+      movingPhotos: payload.movingPhotos,
+      feedbackWidth: payload.feedbackWidth,
+      feedbackHeight: payload.feedbackHeight,
+    );
+    final livePayload = _PhotoDragPayload(
+      contextKey: payload.contextKey,
+      orderIds: payload.orderIds,
+      baseOrderIds: payload.baseOrderIds,
+      draggedId: payload.draggedId,
+      movingIds: payload.movingIds,
+      movingPhotos: payload.movingPhotos,
+      feedbackWidth: payload.feedbackWidth,
+      feedbackHeight: payload.feedbackHeight,
+      fanOffsets: fanOffsets,
+      grabOffset: payload.grabOffset,
+    );
+
+    // 起拖折叠多选前先拍 FLIP 快照，让兄弟卡片平滑补位。
+    _flipTracker.skipPhotoId = livePayload.draggedId;
+    _flipTracker.snapshot(_tileKeys);
+
+    _dragPointerSmooth = _dragPointer;
+    _grabCenterK = 0.0;
+    _activeDragPayload = livePayload;
+
+    final localPointer = overlayBox.globalToLocal(_dragPointerSmooth);
+    final initialPose = _GhostPose(
+      left: localPointer.dx - livePayload.grabOffset.dx,
+      top: localPointer.dy - livePayload.grabOffset.dy,
+      width: livePayload.feedbackWidth,
+      height: livePayload.feedbackHeight,
+    );
+    _insertGhostOverlay(overlay, livePayload, initialPose);
+
     setState(() {
       _pressingPhotoIds = <String>{};
-      _blockedReorderPhotoId = null;
-      _dragOrder = _collapsedOrder(payload);
+      _draggedPhotoId = livePayload.draggedId;
+      _settling = false;
+      _settlingOrder = null;
+      _dragOrder = livePayload.baseOrderIds;
       _lastSwapTarget = null;
       _lastSwapAt = null;
       _lastSwapPointer = null;
     });
+
+    if (!_dragTicker.isActive) {
+      _dragTicker.start();
+    }
   }
 
-  void _trackTarget(
+  void _insertGhostOverlay(
+    OverlayState overlay,
     _PhotoDragPayload payload,
-    String targetId,
-    Offset pointer,
+    _GhostPose initialPose,
   ) {
-    if (targetId == payload.draggedId ||
-        payload.contextKey != widget.orderContext) {
-      return;
+    _removeGhostOverlay();
+    _ghostPose.value = initialPose;
+    final entry = OverlayEntry(
+      builder: (overlayContext) {
+        return ValueListenableBuilder<_GhostPose?>(
+          valueListenable: _ghostPose,
+          builder: (context, pose, _) {
+            if (pose == null) return const SizedBox.shrink();
+            return Positioned(
+              left: pose.left,
+              top: pose.top,
+              width: pose.width,
+              height: pose.height,
+              child: IgnorePointer(
+                child: _PhotoDragFeedback(
+                  photos: payload.movingPhotos,
+                  fanOffsets: payload.fanOffsets,
+                  width: pose.width,
+                  height: pose.height,
+                  dropping: pose.dropping,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    _ghostOverlay = entry;
+    overlay.insert(entry);
+  }
+
+  void _removeGhostOverlay() {
+    final entry = _ghostOverlay;
+    _ghostOverlay = null;
+    _ghostPose.value = null;
+    entry?.remove();
+    entry?.dispose();
+  }
+
+  void _onDragTick(Duration _) {
+    final payload = _activeDragPayload;
+    if (!mounted || !_isDragging || payload == null) return;
+
+    // 60fps 阻尼跟随（0.22 收敛系数），多选堆抓点平滑缓动至指针中心。
+    final delta = _dragPointer - _dragPointerSmooth;
+    if (delta.distanceSquared < 0.01) {
+      _dragPointerSmooth = _dragPointer;
+    } else {
+      _dragPointerSmooth += delta * DesktopMotion.photoReorderPointerSmoothing;
     }
-    final targetRect = _rectFor(targetId);
-    if (targetRect == null ||
-        pointer.dx < targetRect.left + targetRect.width * 0.22 ||
-        pointer.dx > targetRect.right - targetRect.width * 0.22 ||
-        pointer.dy < targetRect.top + targetRect.height * 0.22 ||
-        pointer.dy > targetRect.bottom - targetRect.height * 0.22) {
-      return;
+    final isMulti = payload.movingPhotos.length > 1;
+    if (isMulti && _grabCenterK < 1.0) {
+      _grabCenterK = math.min(1.0, _grabCenterK + 0.06);
     }
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlayBox = overlay?.context.findRenderObject();
+    if (overlayBox is RenderBox && overlayBox.hasSize) {
+      final localPointer = overlayBox.globalToLocal(_dragPointerSmooth);
+      final fx =
+          payload.grabOffset.dx +
+          (payload.feedbackWidth / 2 - payload.grabOffset.dx) * _grabCenterK;
+      final fy =
+          payload.grabOffset.dy +
+          (payload.feedbackHeight / 2 - payload.grabOffset.dy) * _grabCenterK;
+      _ghostPose.value = _GhostPose(
+        left: localPointer.dx - fx,
+        top: localPointer.dy - fy,
+        width: payload.feedbackWidth,
+        height: payload.feedbackHeight,
+      );
+    }
+
+    // 持续边缘自动滚屏（80px 热区，1..18px/帧），滚屏后立即复检换位。
+    if (_autoScroll(_dragPointer)) {
+      _checkSwap();
+    }
+  }
+
+  bool _autoScroll(Offset pointer) {
+    final scrollable = Scrollable.maybeOf(context);
+    final renderObject = scrollable?.context.findRenderObject();
+    if (scrollable == null ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize) {
+      return false;
+    }
+    final top = renderObject.localToGlobal(Offset.zero).dy;
+    final bottom = top + renderObject.size.height;
+    final distanceFromTop = top + _edgeScrollZone - pointer.dy;
+    final distanceFromBottom = pointer.dy - (bottom - _edgeScrollZone);
+    final delta =
+        distanceFromTop > 0
+            ? -((distanceFromTop / 5).ceil().clamp(1, 18))
+            : distanceFromBottom > 0
+            ? (distanceFromBottom / 5).ceil().clamp(1, 18)
+            : 0;
+    if (delta == 0) return false;
+    final position = scrollable.position;
+    final next = (position.pixels + delta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (next == position.pixels) return false;
+    position.jumpTo(next);
+    return true;
+  }
+
+  void _checkSwap() {
+    final payload = _activeDragPayload;
+    if (payload == null || !_isDragging) return;
+    final pointer = _dragPointer;
     final now = DateTime.now();
     final lastSwapAt = _lastSwapAt;
     if (lastSwapAt != null &&
         now.difference(lastSwapAt) < DesktopMotion.photoReorderSwapCooldown) {
       return;
     }
+
+    final currentOrder = _dragOrder ?? payload.baseOrderIds;
+    String? targetId;
+    Rect? targetRect;
+    for (final id in currentOrder) {
+      if (id == payload.draggedId) continue;
+      final rect = _rectFor(id);
+      if (rect != null && rect.contains(pointer)) {
+        targetId = id;
+        targetRect = rect;
+        break;
+      }
+    }
+    if (targetId == null || targetRect == null) return;
+
+    // 22% 内缩命中区，避免指针擦边触发换位。
+    final marginX = targetRect.width * 0.22;
+    final marginY = targetRect.height * 0.22;
+    if (pointer.dx < targetRect.left + marginX ||
+        pointer.dx > targetRect.right - marginX ||
+        pointer.dy < targetRect.top + marginY ||
+        pointer.dy > targetRect.bottom - marginY) {
+      return;
+    }
+
+    // 刚交换的目标需移出 max(36, width*0.35) 才允许回换。
     final lastSwapPointer = _lastSwapPointer;
     if (_lastSwapTarget == targetId &&
         lastSwapPointer != null &&
         (pointer - lastSwapPointer).distance <
-            (targetRect.width * 0.35 > 36 ? targetRect.width * 0.35 : 36)) {
+            math.max(36.0, targetRect.width * 0.35)) {
       return;
     }
-    final currentOrder = _dragOrder ?? payload.orderIds;
-    final oldPositions = _positionsFor(currentOrder);
+
     final nextOrder = movePhotoDisplayOrder(
       order: currentOrder,
       draggedId: payload.draggedId,
@@ -301,69 +469,180 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       selectedIds: const <String>{},
     );
     if (_sameOrder(currentOrder, nextOrder)) return;
+
+    // 同步 FLIP 快照：在 setState 之前记录所有卡片的滚动补偿坐标。
+    _flipTracker.skipPhotoId = payload.draggedId;
+    _flipTracker.snapshot(_tileKeys);
+
     setState(() {
       _dragOrder = nextOrder;
       _lastSwapTarget = targetId;
       _lastSwapAt = now;
       _lastSwapPointer = pointer;
     });
-    final generation = ++_flipGeneration;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _flipGeneration) return;
-      final offsets = <String, Offset>{};
-      for (final entry in oldPositions.entries) {
-        final newPosition = _positionFor(entry.key);
-        if (newPosition == null) continue;
-        final offset = entry.value - newPosition;
-        if (offset.distance > 1) offsets[entry.key] = offset;
+  }
+
+  void _finishDrag({required bool accepted, bool canceledByEsc = false}) {
+    final payload = _activeDragPayload;
+    if (!mounted || payload == null || _settling) {
+      _cleanupImmediate();
+      return;
+    }
+
+    if (_dragTicker.isActive) _dragTicker.stop();
+    _pressTimer?.cancel();
+    _holdTimer?.cancel();
+    _pressPointer = null;
+    _pressOrigin = null;
+
+    if (!canceledByEsc) {
+      _startTrailingClickGuard();
+    }
+
+    final collapsedOrder = _dragOrder ?? payload.baseOrderIds;
+    final expandedOrder =
+        accepted ? _expandedOrder(collapsedOrder, payload) : payload.orderIds;
+    final orderChanged =
+        accepted && !_sameOrder(payload.orderIds, expandedOrder);
+
+    // 原地松手与 Esc 取消都没有改变顺序：幽灵卡直接收起，不做 420ms 归位飞入，
+    // 否则用户会看到一张「飞回自己原位」的浮层，且 Esc 的取消语义被拖慢。
+    if (!orderChanged) {
+      _removeGhostOverlay();
+      _flipTracker.clear();
+      if (mounted) {
+        setState(() {
+          _settling = false;
+          _settlingOrder = null;
+          _dragOrder = null;
+          _draggedPhotoId = null;
+          _activeDragPayload = null;
+          _pressingPhotoIds = <String>{};
+          _landedPhotoIds = <String>{};
+          _lastSwapTarget = null;
+          _lastSwapAt = null;
+          _lastSwapPointer = null;
+        });
       }
-      setState(() => _flipOffsets = offsets);
+      return;
+    }
+
+    // 阶段 1：保持 `_draggedPhotoId` 占位态不清空（零双影），提交并展开新布局。
+    _flipTracker.skipPhotoId = payload.draggedId;
+    _flipTracker.snapshot(_tileKeys);
+
+    final onOrderChanged = widget.onOrderChanged;
+    if (orderChanged && onOrderChanged != null) {
+      unawaited(
+        onOrderChanged(
+          payload.contextKey,
+          expandedOrder,
+          payload.movingPhotos.length,
+        ),
+      );
+    }
+
+    setState(() {
+      _settling = true;
+      _dragOrder = null;
+      _settlingOrder = expandedOrder;
+      _lastSwapTarget = null;
+      _lastSwapAt = null;
+      _lastSwapPointer = null;
+    });
+
+    // 阶段 2：等两帧确保展开后的真实目标槽位完成布局，测量最终 Rect 并 420ms 飞入。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_settling) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_settling) return;
+        _animateGhostSettle(payload: payload, accepted: accepted);
+      });
     });
   }
 
-  String? _photoAt(Offset pointer, _PhotoDragPayload payload) {
-    for (final id in _dragOrder ?? payload.orderIds) {
-      if (id == payload.draggedId) continue;
-      final rect = _rectFor(id);
-      if (rect != null && rect.contains(pointer)) return id;
-    }
-    return null;
-  }
+  void _animateGhostSettle({
+    required _PhotoDragPayload payload,
+    required bool accepted,
+  }) {
+    final currentPose = _ghostPose.value;
+    final targetGlobal = _rectFor(payload.draggedId);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlayBox = overlay?.context.findRenderObject();
 
-  void _autoScroll(Offset pointer) {
-    final scrollable = Scrollable.maybeOf(context);
-    final renderObject = scrollable?.context.findRenderObject();
-    if (scrollable == null || renderObject is! RenderBox) return;
-    final top = renderObject.localToGlobal(Offset.zero).dy;
-    final bottom = top + renderObject.size.height;
-    final distanceFromTop = top + 80 - pointer.dy;
-    final distanceFromBottom = pointer.dy - (bottom - 80);
-    final delta =
-        distanceFromTop > 0
-            ? -((distanceFromTop / 5).ceil().clamp(1, 18))
-            : distanceFromBottom > 0
-            ? (distanceFromBottom / 5).ceil().clamp(1, 18)
-            : 0;
-    if (delta == 0) return;
-    final position = scrollable.position;
-    final next = (position.pixels + delta).clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
+    if (currentPose == null ||
+        targetGlobal == null ||
+        overlayBox is! RenderBox ||
+        !overlayBox.hasSize) {
+      _completeSettle(payload: payload, accepted: accepted);
+      return;
+    }
+
+    final targetLocalTopLeft = overlayBox.globalToLocal(targetGlobal.topLeft);
+    _settleStartRect = currentPose.rect;
+    _settleTargetRect = targetLocalTopLeft & targetGlobal.size;
+    _ghostPose.value = currentPose.copyWith(dropping: true);
+
+    final duration = DesktopMotion.of(
+      context,
+      DesktopMotion.photoReorderSettle,
     );
-    if (next != position.pixels) position.jumpTo(next);
-  }
-
-  Map<String, Offset> _positionsFor(List<String> ids) {
-    final positions = <String, Offset>{};
-    for (final id in ids) {
-      final position = _positionFor(id);
-      if (position != null) positions[id] = position;
+    if (duration == Duration.zero) {
+      _completeSettle(payload: payload, accepted: accepted);
+      return;
     }
-    return positions;
+    _settleController.duration = duration;
+    _settleController.forward(from: 0.0).whenComplete(() {
+      if (!mounted || !_settling) return;
+      _completeSettle(payload: payload, accepted: accepted);
+    });
   }
 
-  Offset? _positionFor(String id) {
-    return _rectFor(id)?.topLeft;
+  void _onSettleTick() {
+    final start = _settleStartRect;
+    final target = _settleTargetRect;
+    if (start == null || target == null || _ghostOverlay == null) return;
+    final t = DesktopMotion.photoReorderSettleCurve.transform(
+      _settleController.value.clamp(0.0, 1.0),
+    );
+    final rect = Rect.lerp(start, target, t)!;
+    _ghostPose.value = _GhostPose(
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      dropping: true,
+    );
+  }
+
+  void _completeSettle({
+    required _PhotoDragPayload payload,
+    required bool accepted,
+  }) {
+    _removeGhostOverlay();
+    _flipTracker.clear();
+    _settleStartRect = null;
+    _settleTargetRect = null;
+
+    final companions =
+        accepted && payload.movingIds.length > 1
+            ? payload.movingIds.where((id) => id != payload.draggedId).toSet()
+            : <String>{};
+
+    if (companions.isNotEmpty) {
+      _landedTimer?.cancel();
+      _landedTimer = Timer(DesktopMotion.photoReorderLanded, () {
+        if (mounted) setState(() => _landedPhotoIds = <String>{});
+      });
+    }
+
+    setState(() {
+      _settling = false;
+      _settlingOrder = null;
+      _draggedPhotoId = null;
+      _activeDragPayload = null;
+      _landedPhotoIds = companions;
+    });
   }
 
   Rect? _rectFor(String id) {
@@ -373,172 +652,67 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     try {
       object = tileContext.findRenderObject();
     } on FlutterError {
-      // GlobalKey 可能在拖动收拢选中项的同一帧仍指向已卸载的旧 tile。
       return null;
     }
     if (object is! RenderBox || !object.hasSize) return null;
     return object.localToGlobal(Offset.zero) & object.size;
   }
 
-  void _settleDragFeedback(
-    _PhotoDragPayload payload,
-    DraggableDetails details, {
-    required bool accepted,
-    Offset feedbackOffset = Offset.zero,
+  List<_PhotoFlyOffset> _computeFanOffsets({
+    required Rect? origin,
+    required Map<String, Rect> startRects,
+    required List<PhotoItem> movingPhotos,
+    required double feedbackWidth,
+    required double feedbackHeight,
   }) {
-    final targetRect = accepted ? _rectFor(payload.draggedId) : _dragOriginRect;
-    if (targetRect == null || !mounted) return;
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    final overlayObject = overlay?.context.findRenderObject();
-    if (overlay == null ||
-        overlayObject is! RenderBox ||
-        !overlayObject.hasSize) {
-      return;
-    }
-
-    _removeSettleOverlay();
-    final targetTopLeft = overlayObject.globalToLocal(targetRect.topLeft);
-    final startTopLeft = overlayObject.globalToLocal(
-      details.offset + feedbackOffset,
-    );
-    final target = targetTopLeft & targetRect.size;
-    final start = Rect.fromLTWH(
-      startTopLeft.dx,
-      startTopLeft.dy,
-      payload.feedbackWidth,
-      payload.feedbackHeight,
-    );
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder:
-          (overlayContext) => TweenAnimationBuilder<Rect>(
-            tween: _PhotoRectTween(begin: start, end: target),
-            duration: DesktopMotion.of(
-              overlayContext,
-              DesktopMotion.photoReorderSettle,
-            ),
-            curve: DesktopMotion.photoReorderSettleCurve,
-            onEnd: () {
-              if (identical(_settleOverlay, entry)) _removeSettleOverlay();
-            },
-            builder:
-                (context, rect, child) => Positioned.fromRect(
-                  rect: rect,
-                  child: IgnorePointer(
-                    child: SizedBox(
-                      width: rect.width,
-                      height: rect.height,
-                      child: FittedBox(fit: BoxFit.fill, child: child),
-                    ),
-                  ),
-                ),
-            child: _PhotoDragFeedback(
-              photos: payload.movingPhotos,
-              fanOffsets: payload.fanOffsets,
-              width: payload.feedbackWidth,
-              height: payload.feedbackHeight,
-              dropping: true,
-            ),
-          ),
-    );
-    _settleOverlay = entry;
-    overlay.insert(entry);
-  }
-
-  void _removeSettleOverlay() {
-    final entry = _settleOverlay;
-    _settleOverlay = null;
-    entry?.remove();
-    entry?.dispose();
-  }
-
-  void _finishDrag(
-    _PhotoDragPayload payload,
-    DraggableDetails details,
-    int generation,
-  ) {
-    if (!mounted || generation != _dragGeneration) return;
-    final feedbackOffset = _dragFeedbackOffset.value;
-    final activePayload = _activeDragPayload ?? payload;
-    final collapsedOrder = _dragOrder ?? activePayload.baseOrderIds;
-    final moved = !_sameOrder(activePayload.baseOrderIds, collapsedOrder);
-    final accepted = moved && !_dragCanceled;
-    final order =
-        accepted
-            ? _expandedOrder(collapsedOrder, activePayload)
-            : activePayload.orderIds;
-    // 样例 `reorder.tsx` 在所有已激活的拖拽结束后都记录 justDragged，
-    // 包含原地松手。否则 PointerUp 后紧随的合成 click 会把预览误判成
-    // 打开查看器；只有 Esc 是明确取消，才允许立即点击另一张照片。
-    _startTrailingClickGuard();
-    if (moved) {
-      // 真发生换位才播「飞回原位」的收束动画；长按后原地松手只是预览，
-      // 不能插入 rootOverlay，否则进入查看器后旧图仍浮在最上层。
-      _settleDragFeedback(
-        activePayload,
-        details,
-        accepted: accepted,
-        feedbackOffset: feedbackOffset,
-      );
-    } else {
-      _dragFeedbackDismissed.value = true;
-      _removeSettleOverlay();
-    }
-    _stopDragSmoothing();
-    final onOrderChanged = widget.onOrderChanged;
-    if (accepted &&
-        !_sameOrder(activePayload.orderIds, order) &&
-        onOrderChanged != null) {
-      unawaited(
-        onOrderChanged(
-          activePayload.contextKey,
-          order,
-          activePayload.movingPhotos.length,
-        ),
-      );
-    }
-    if (accepted && activePayload.movingIds.length > 1) {
-      _landedTimer?.cancel();
-      _landedPhotoIds = Set<String>.of(activePayload.movingIds);
-      _landedTimer = Timer(DesktopMotion.photoReorderLanded, () {
-        if (mounted) setState(() => _landedPhotoIds = <String>{});
-      });
-    }
-    setState(() {
-      _dragOrder = null;
-      _lastSwapTarget = null;
-      _lastSwapAt = null;
-      _lastSwapPointer = null;
-      _draggedPhotoId = null;
-      _activeDragPayload = null;
-    });
-    _dragOriginRect = null;
-    _dragStartRects = <String, Rect>{};
+    return movingPhotos
+        .map((photo) {
+          final source = startRects[photo.id];
+          if (origin == null ||
+              source == null ||
+              feedbackWidth <= 0 ||
+              feedbackHeight <= 0) {
+            return const _PhotoFlyOffset();
+          }
+          final originCenterX = origin.left + feedbackWidth / 2;
+          final originCenterY = origin.top + feedbackHeight / 2;
+          return _PhotoFlyOffset(
+            dx: source.center.dx - originCenterX,
+            dy: source.center.dy - originCenterY,
+            sx: source.width / feedbackWidth,
+            sy: source.height / feedbackHeight,
+          );
+        })
+        .toList(growable: false);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _pressTimer?.cancel();
+    _holdTimer?.cancel();
     _landedTimer?.cancel();
     _clickGuardTimer?.cancel();
-    _removeSettleOverlay();
-    _dragSmoothingTicker.dispose();
-    _dragFeedbackDismissed.dispose();
-    _dragFeedbackOffset.dispose();
+    _removeGhostOverlay();
+    _dragTicker.dispose();
+    _settleController
+      ..removeListener(_onSettleTick)
+      ..dispose();
+    _ghostPose.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeOrder = _dragOrder ?? _settlingOrder;
     final photos =
-        _dragOrder == null
+        activeOrder == null
             ? widget.photos
             : applyPhotoDisplayOrder(
               widget.photos
-                  .where((photo) => _dragOrder!.contains(photo.id))
+                  .where((photo) => activeOrder.contains(photo.id))
                   .toList(growable: false),
-              _dragOrder,
+              activeOrder,
             );
     for (final photo in photos) {
       _tileKeys.putIfAbsent(
@@ -546,12 +720,12 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
         () => GlobalObjectKey<State<StatefulWidget>>('photo-order-${photo.id}'),
       );
     }
+    final isReordering = _draggedPhotoId != null;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         if (photos.length == 1) {
-          // 样例 `.justified.solo`：单张照片不再按 flex 铺满整行，
-          // 而是保持自身比例，并在右侧（窄窗换行）显示一块拍摄信息。
           return _soloLayout(context, photos.first, width);
         }
         final rows = _layout(width, photos);
@@ -570,35 +744,38 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                         child: LayoutBuilder(
                           builder: (context, tileConstraints) {
                             final photo = row[i].photo;
-                            final card = DesktopStagger(
-                              index: i,
-                              child: _PhotoTile(
-                                key: ValueKey<String>(
-                                  'desktop-photo-${photo.id}',
-                                ),
-                                photo: photo,
-                                height: widget.targetHeight,
-                                onTap: (selectedPhoto) {
-                                  if (_draggedPhotoId != null) {
-                                    _cancelReorder();
-                                    return;
-                                  }
-                                  if (_justDragged) return;
-                                  widget.onActivate(selectedPhoto, photos);
-                                },
-                                onToggleSelect: widget.onToggleSelect,
-                                selected: widget.selection.contains(photo.id),
-                                pressing: _pressingPhotoIds.contains(photo.id),
-                                dragging: _draggedPhotoId == photo.id,
-                                reordering: _draggedPhotoId != null,
-                                landed: _landedPhotoIds.contains(photo.id),
-                                selectionActive: widget.selection.isNotEmpty,
-                                showCaption: widget.showCaption,
-                                showFavorite: widget.showFavorite,
-                                showSelectionControls:
-                                    widget.showSelectionControls,
+                            final tile = _PhotoTile(
+                              key: ValueKey<String>(
+                                'desktop-photo-${photo.id}',
                               ),
+                              photo: photo,
+                              height: widget.targetHeight,
+                              onTap: (selectedPhoto) {
+                                if (_draggedPhotoId != null) {
+                                  return;
+                                }
+                                if (_justDragged) return;
+                                widget.onActivate(selectedPhoto, photos);
+                              },
+                              onToggleSelect: widget.onToggleSelect,
+                              selected: widget.selection.contains(photo.id),
+                              pressing: _pressingPhotoIds.contains(photo.id),
+                              dragging: _draggedPhotoId == photo.id,
+                              reordering: isReordering,
+                              landed: _landedPhotoIds.contains(photo.id),
+                              selectionActive: widget.selection.isNotEmpty,
+                              showCaption: widget.showCaption,
+                              showFavorite: widget.showFavorite,
+                              showSelectionControls:
+                                  widget.showSelectionControls,
                             );
+
+                            // 拖拽/归位期间禁用 DesktopStagger，避免换位触发入场动画干扰。
+                            final card =
+                                isReordering
+                                    ? tile
+                                    : DesktopStagger(index: i, child: tile);
+
                             final orderContext = widget.orderContext;
                             final onOrderChanged = widget.onOrderChanged;
                             if (orderContext == null ||
@@ -606,6 +783,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                                 photos.length < 2) {
                               return card;
                             }
+
                             final selectedIds = widget.selection;
                             final movingPhotos =
                                 selectedIds.contains(photo.id) &&
@@ -623,132 +801,55 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
                             final orderIds = photos
                                 .map((item) => item.id)
                                 .toList(growable: false);
+                            final tileWidth = tileConstraints.maxWidth;
                             final feedbackWidth =
-                                movingPhotos.length > 1 &&
-                                        tileConstraints.maxWidth > 190
+                                movingPhotos.length > 1 && tileWidth > 190
                                     ? 190.0
-                                    : tileConstraints.maxWidth;
+                                    : tileWidth;
                             final feedbackHeight =
-                                widget.targetHeight *
-                                feedbackWidth /
-                                tileConstraints.maxWidth;
-                            final payload = _PhotoDragPayload(
-                              contextKey: orderContext,
-                              orderIds: orderIds,
-                              baseOrderIds: orderIds
-                                  .where(
-                                    (id) =>
-                                        id == photo.id ||
-                                        !movingIds.contains(id),
-                                  )
-                                  .toList(growable: false),
-                              draggedId: photo.id,
-                              movingIds: movingIds,
-                              movingPhotos: movingPhotos,
-                              feedbackWidth: feedbackWidth,
-                              feedbackHeight: feedbackHeight,
-                              fanOffsets: _fanOffsets(
-                                photo.id,
-                                movingPhotos,
-                                feedbackWidth,
-                                feedbackHeight,
-                              ),
-                            );
+                                tileWidth > 0
+                                    ? widget.targetHeight *
+                                        feedbackWidth /
+                                        tileWidth
+                                    : widget.targetHeight;
+
                             final tileKey = _tileKeys[photo.id]!;
-                            final dragGeneration = _dragGeneration;
-                            final draggable = LongPressDraggable<
-                              _PhotoDragPayload
-                            >(
-                              key: ValueKey<String>(
-                                'photo-drag-${photo.id}-$dragGeneration',
-                              ),
-                              data: payload,
-                              maxSimultaneousDrags:
-                                  _blockedReorderPhotoId == photo.id ? 0 : 1,
-                              delay: DesktopMotion.photoReorderHold,
-                              dragAnchorStrategy: childDragAnchorStrategy,
-                              feedback: ValueListenableBuilder<bool>(
-                                valueListenable: _dragFeedbackDismissed,
-                                builder: (context, dismissed, _) {
-                                  if (dismissed) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return ValueListenableBuilder<Offset>(
-                                    valueListenable: _dragFeedbackOffset,
-                                    builder:
-                                        (context, offset, _) =>
-                                            Transform.translate(
-                                              offset: offset,
-                                              child: _PhotoDragFeedback(
-                                                photos: movingPhotos,
-                                                fanOffsets: payload.fanOffsets,
-                                                width: feedbackWidth,
-                                                height: feedbackHeight,
-                                              ),
-                                            ),
+                            return _FlipPhotoTile(
+                              key: tileKey,
+                              photoId: photo.id,
+                              tracker: _flipTracker,
+                              epoch: _flipTracker.epoch,
+                              child: Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (event) {
+                                  final payload = _PhotoDragPayload(
+                                    contextKey: orderContext,
+                                    orderIds: orderIds,
+                                    baseOrderIds: orderIds
+                                        .where(
+                                          (id) =>
+                                              id == photo.id ||
+                                              !movingIds.contains(id),
+                                        )
+                                        .toList(growable: false),
+                                    draggedId: photo.id,
+                                    movingIds: movingIds,
+                                    movingPhotos: movingPhotos,
+                                    feedbackWidth: feedbackWidth,
+                                    feedbackHeight: feedbackHeight,
+                                    fanOffsets: const <_PhotoFlyOffset>[],
+                                    grabOffset: event.localPosition,
+                                  );
+                                  _onTilePointerDown(
+                                    payload,
+                                    event,
+                                    event.localPosition,
                                   );
                                 },
-                              ),
-                              onDragStarted:
-                                  () => _startDrag(payload, dragGeneration),
-                              onDragUpdate: (details) {
-                                final pointer = details.globalPosition;
-                                _updateDragPointer(pointer);
-                                final targetId = _photoAt(pointer, payload);
-                                if (targetId != null) {
-                                  _trackTarget(payload, targetId, pointer);
-                                }
-                                _autoScroll(pointer);
-                              },
-                              onDragEnd:
-                                  (details) => _finishDrag(
-                                    payload,
-                                    details,
-                                    dragGeneration,
-                                  ),
-                              childWhenDragging: card,
-                              child: card,
-                            );
-                            return TweenAnimationBuilder<Offset>(
-                              tween: Tween<Offset>(
-                                begin: _flipOffsets[photo.id] ?? Offset.zero,
-                                end: Offset.zero,
-                              ),
-                              duration: DesktopMotion.of(
-                                context,
-                                DesktopMotion.photoReorderFlip,
-                              ),
-                              curve: DesktopMotion.photoReorderFlipCurve,
-                              builder:
-                                  (context, offset, child) =>
-                                      Transform.translate(
-                                        offset: offset,
-                                        child: child,
-                                      ),
-                              child: DragTarget<_PhotoDragPayload>(
-                                onWillAcceptWithDetails:
-                                    (details) =>
-                                        details.data.contextKey ==
-                                            orderContext &&
-                                        details.data.draggedId != photo.id,
-                                key: tileKey,
-                                builder:
-                                    (context, candidates, rejected) => Listener(
-                                      onPointerDown:
-                                          (event) => _onTilePointerDown(
-                                            payload,
-                                            event,
-                                            event.localPosition,
-                                          ),
-                                      onPointerMove: _onTilePointerMove,
-                                      onPointerUp: _onTilePointerEnd,
-                                      onPointerCancel:
-                                          (event) => _onTilePointerEnd(
-                                            event,
-                                            canceled: true,
-                                          ),
-                                      child: draggable,
-                                    ),
+                                onPointerMove: _onTilePointerMove,
+                                onPointerUp: _onTilePointerUp,
+                                onPointerCancel: _onTilePointerCancel,
+                                child: card,
                               ),
                             );
                           },
@@ -762,36 +863,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
         );
       },
     );
-  }
-
-  List<_PhotoFlyOffset> _fanOffsets(
-    String draggedId,
-    List<PhotoItem> movingPhotos,
-    double feedbackWidth,
-    double feedbackHeight,
-  ) {
-    final activeDrag = _draggedPhotoId != null;
-    final origin =
-        _dragStartRects[draggedId] ?? (activeDrag ? null : _rectFor(draggedId));
-    return movingPhotos
-        .map((photo) {
-          final source =
-              _dragStartRects[photo.id] ??
-              (activeDrag ? null : _rectFor(photo.id));
-          if (origin == null ||
-              source == null ||
-              feedbackWidth <= 0 ||
-              feedbackHeight <= 0) {
-            return const _PhotoFlyOffset();
-          }
-          return _PhotoFlyOffset(
-            dx: source.center.dx - origin.center.dx,
-            dy: source.center.dy - origin.center.dy,
-            sx: source.width / feedbackWidth,
-            sy: source.height / feedbackHeight,
-          );
-        })
-        .toList(growable: false);
   }
 
   /// 单张照片：照片按原比例 + `.solo-note` 旁注（polish.css:324-328）。

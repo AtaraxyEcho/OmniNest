@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,21 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+
+/// 标记当前子树已挂载桌面新版 Toast 容器。
+///
+/// 共享业务页与管理后台的 `showOmniFeedback` 经 [maybeOf] 检测后，在桌面端
+/// 自动桥接至 [showDesktopToast]，避免弹出旧版顶部 toastification 提示条。
+class DesktopToastScope extends InheritedWidget {
+  const DesktopToastScope({required super.child, super.key});
+
+  static DesktopToastScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<DesktopToastScope>();
+  }
+
+  @override
+  bool updateShouldNotify(DesktopToastScope oldWidget) => false;
+}
 
 /// 提示的语义档（样例 `.toast.success/.error/.info/.warn` 的 `--tc`）。
 enum DesktopToastKind { success, info, warn, error }
@@ -37,6 +53,7 @@ class DesktopToastMessage {
     this.icon,
     this.actionLabel,
     this.onAction,
+    this.duration,
   });
 
   final int id;
@@ -45,12 +62,20 @@ class DesktopToastMessage {
   final IconData? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final Duration? duration;
 
-  /// 带动作的提示停留更久（样例 `--life: 6s` / 4.2s）。
-  Duration get life =>
-      actionLabel == null
-          ? const Duration(milliseconds: 4200)
-          : const Duration(milliseconds: 6000);
+  /// 普通提示 4.2s；带动作或警告/错误态停留 6s（样例 `--life: 6s` / `4.2s`）。
+  Duration get life {
+    if (duration != null) {
+      return duration!;
+    }
+    if (actionLabel != null ||
+        kind == DesktopToastKind.error ||
+        kind == DesktopToastKind.warn) {
+      return const Duration(milliseconds: 6000);
+    }
+    return const Duration(milliseconds: 4200);
+  }
 }
 
 /// 桌面提示栈。样例里每个动作（清空队列、全部已读、加入想看…）都经它回话，
@@ -67,6 +92,7 @@ class DesktopToastController extends Notifier<List<DesktopToastMessage>> {
     IconData? icon,
     String? actionLabel,
     VoidCallback? onAction,
+    Duration? duration,
   }) {
     final id = ++_sequence;
     // 样例按图标推断语义：删除类是错误、info 是提示，其余才是成功。
@@ -87,6 +113,7 @@ class DesktopToastController extends Notifier<List<DesktopToastMessage>> {
         icon: icon,
         actionLabel: actionLabel,
         onAction: onAction,
+        duration: duration,
       ),
     ];
     // 屏幕最多 4 条，超出时丢最旧的，避免连续操作铺满播放条上方。
@@ -112,6 +139,7 @@ void showDesktopToast(
   IconData? icon,
   String? actionLabel,
   VoidCallback? onAction,
+  Duration? duration,
 }) {
   ProviderScope.containerOf(context, listen: false)
       .read(desktopToastProvider.notifier)
@@ -121,6 +149,7 @@ void showDesktopToast(
         icon: icon,
         actionLabel: actionLabel,
         onAction: onAction,
+        duration: duration,
       );
 }
 
@@ -247,7 +276,7 @@ class _ToastItemState extends State<_ToastItem> with TickerProviderStateMixin {
   }
 
   void _setHovered(bool hovered) {
-    if (_hovered == hovered) {
+    if (_hovered == hovered || _leaving) {
       return;
     }
     _hovered = hovered;
@@ -256,8 +285,13 @@ class _ToastItemState extends State<_ToastItem> with TickerProviderStateMixin {
       _life.stop();
       setState(() {});
     } else {
-      final remaining = widget.toast.life * (1 - _life.value);
-      _life.forward();
+      final fraction = (1 - _life.value).clamp(0.0, 1.0);
+      final remaining = Duration(
+        milliseconds: (widget.toast.life.inMilliseconds * fraction).round(),
+      );
+      if (!(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+        _life.forward();
+      }
       _schedule(remaining);
       setState(() {});
     }
@@ -287,84 +321,94 @@ class _ToastItemState extends State<_ToastItem> with TickerProviderStateMixin {
             ),
           );
         },
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 260),
-          padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: skin.pop,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: skin.line2),
             boxShadow: skin.shadow,
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: tint.withValues(alpha: 0.18),
-                      shape: BoxShape.circle,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 260),
+                padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+                decoration: BoxDecoration(
+                  color: skin.pop,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: skin.line2),
+                ),
+                child: Stack(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: tint.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            toast.icon ?? toast.kind.icon(),
+                            size: 15,
+                            color: tint,
+                          ),
+                        ),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Text(
+                            toast.message,
+                            style: DesktopType.dense(
+                              skin.text,
+                            ).copyWith(height: 1.35),
+                          ),
+                        ),
+                        if (toast.actionLabel != null) ...[
+                          const SizedBox(width: 6),
+                          _ToastAction(
+                            label: toast.actionLabel!,
+                            color: tint,
+                            onTap: () {
+                              toast.onAction?.call();
+                              _dismiss();
+                            },
+                          ),
+                        ],
+                        const SizedBox(width: 2),
+                        _ToastClose(
+                          onTap: () {
+                            _dismiss();
+                          },
+                        ),
+                      ],
                     ),
-                    child: Icon(
-                      toast.icon ?? toast.kind.icon(),
-                      size: 15,
-                      color: tint,
-                    ),
-                  ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Text(
-                      toast.message,
-                      style: DesktopType.dense(
-                        skin.text,
-                      ).copyWith(height: 1.35),
-                    ),
-                  ),
-                  if (toast.actionLabel != null) ...[
-                    const SizedBox(width: 6),
-                    _ToastAction(
-                      label: toast.actionLabel!,
-                      color: tint,
-                      onTap: () {
-                        toast.onAction?.call();
-                        _dismiss();
-                      },
+                    // 生命条：线性缩到 0，悬停时暂停（样例 :hover 暂停动画）。
+                    Positioned(
+                      left: -12,
+                      right: -10,
+                      bottom: -11,
+                      child: AnimatedBuilder(
+                        animation: _life,
+                        builder: (context, _) {
+                          final remaining = 1 - _life.value;
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: remaining.clamp(0.0, 1.0),
+                              child: Container(
+                                height: 2,
+                                color: tint.withValues(alpha: 0.65),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
-                  const SizedBox(width: 2),
-                  _ToastClose(
-                    onTap: () {
-                      _dismiss();
-                    },
-                  ),
-                ],
-              ),
-              // 生命条：线性缩到 0，悬停时暂停（样例 :hover 暂停动画）。
-              Positioned(
-                left: -12,
-                right: -10,
-                bottom: -11,
-                child: AnimatedBuilder(
-                  animation: _life,
-                  builder: (context, _) {
-                    final remaining = 1 - _life.value;
-                    return Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: remaining.clamp(0.0, 1.0),
-                        child: Container(
-                          height: 2,
-                          color: tint.withValues(alpha: 0.65),
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

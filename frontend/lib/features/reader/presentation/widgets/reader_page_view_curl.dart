@@ -1,15 +1,15 @@
 part of 'reader_page_view.dart';
 
-/// 双向卷页双槽空闲预抓图与装配（v3：同时预热 next + prev，正反翻页 0ms 起手）。
+/// 双向卷页双槽空闲预抓图与装配（v5：2.0x 高清截图 + front/back 统一 _SpreadPage 样式 + 零重建 underlay）。
 extension _ReaderPageViewCurl on _ReaderPageViewState {
   void _scheduleIdleNextCurlWarmup() {
     _curlWarmupTimer?.cancel();
     if (widget.turnMode != PageTurnMode.cover) return;
     _curlWarmupTimer = Timer(const Duration(milliseconds: 80), () async {
       if (!mounted || _curlFrameNotifier.value.active || _isDragging) return;
-      await _ensureCurlPairReady(CurlDirection.next);
+      await _ensureCurlPairReady(_curlDirectionFor(true));
       if (!mounted || _curlFrameNotifier.value.active || _isDragging) return;
-      await _ensureCurlPairReady(CurlDirection.prev);
+      await _ensureCurlPairReady(_curlDirectionFor(false));
     });
   }
 
@@ -22,8 +22,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
 
   void _prepareCurlCapture([CurlDirection? explicitDir]) {
     if (widget.turnMode != PageTurnMode.cover) return;
-    final dir =
-        explicitDir ?? (_isForward ? CurlDirection.next : CurlDirection.prev);
+    final dir = explicitDir ?? _curlDirectionFor(_isForward);
     if (_hasReadyCurlPair(dir) || _capturingDirs.contains(dir)) return;
     unawaited(_ensureCurlPairReady(dir));
   }
@@ -45,7 +44,8 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     final token = _curlToken;
     try {
       if (token != _curlToken) return false;
-      final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 1.35);
+      // 高分屏截图 dpr 上限提升至 2.0，消除点击翻页瞬间文字变糊跳变。
+      final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
       final liveKey =
           widget.spread
               ? (dir == CurlDirection.next ? _liveRightKey : _liveLeftKey)
@@ -62,7 +62,13 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
         return false;
       }
 
-      _updateState(() => _pendingBackCaptureWidget = backWidget);
+      // 背面落位侧：向右翻（右页翻到左侧）背面为左页；向左翻（左页翻到右侧）背面为右页。
+      final backSide =
+          dir == CurlDirection.next ? _SpreadSide.left : _SpreadSide.right;
+      _updateState(() {
+        _pendingBackCaptureSide = backSide;
+        _pendingBackCaptureWidget = backWidget;
+      });
       await SchedulerBinding.instance.endOfFrame;
       if (!mounted || token != _curlToken) {
         frontImg.dispose();
@@ -96,7 +102,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
         });
       }
       // 关键修复：若抓图完成时用户仍在同方向拖拽，立刻补发当前进度首帧，杜绝偶发哑火！
-      final dragDir = _isForward ? CurlDirection.next : CurlDirection.prev;
+      final dragDir = _curlDirectionFor(_isForward);
       if (mounted && _isDragging && dragDir == dir && _flipProgress > 0.005) {
         final wasActive = _curlFrameNotifier.value.active;
         _curlFrameNotifier.value = CurlFrame(
@@ -121,16 +127,12 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
 
   Widget? _resolveCurlBackWidget(CurlDirection dir) {
     final idx = widget.state.pageIndex;
-    final targetIdx =
-        dir == CurlDirection.next
-            ? (widget.spread ? idx + 2 : idx + 1)
-            : idx - 1;
+    final forward = _isLogicalForward(dir);
+    final targetIdx = forward ? (widget.spread ? idx + 2 : idx + 1) : idx - 1;
     final builder = widget.snapshotPageBuilder ?? widget.pageBuilder;
     final inChapter = targetIdx >= 0 ? builder(targetIdx) : null;
     if (inChapter != null) return inChapter;
-    return widget.crossChapterSnapshotBuilder?.call(
-      dir == CurlDirection.next ? 1 : -1,
-    );
+    return widget.crossChapterSnapshotBuilder?.call(forward ? 1 : -1);
   }
 
   /// 循环等待 RenderRepaintBoundary 完成本帧绘制后再调用 toImage，
@@ -197,53 +199,57 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       spread: widget.spread,
     );
 
+    final forward = _isLogicalForward(frame.direction);
+
     if (!widget.spread) {
       final targetIndex =
-          frame.direction == CurlDirection.next
-              ? widget.state.pageIndex + 1
-              : widget.state.pageIndex - 1;
+          forward ? widget.state.pageIndex + 1 : widget.state.pageIndex - 1;
       final revealed =
           targetIndex >= 0 ? widget.pageBuilder(targetIndex) : null;
-      // 单页窄窗与静止态保持统一无圆角裁切，消除翻页起止瞬间四角闪烁。
-      return Stack(
-        fit: StackFit.expand,
-        children: [_constrainPage(revealed), Positioned.fill(child: curlLayer)],
+      // 复用 _buildRestingPage 保持 _liveSingleKey 挂载位置不变，杜绝第 1 帧重建闪烁。
+      return _buildRestingPage(
+        singleOverride: revealed,
+        curlOverlay: curlLayer,
       );
     }
 
     final idx = widget.state.pageIndex;
-    final last = widget.state.pageCount <= 1 ? 1 : widget.state.pageCount - 1;
-    final isNext = frame.direction == CurlDirection.next;
+    final isVisualNext = frame.direction == CurlDirection.next;
     final underlayLeft =
-        (isNext
+        (isVisualNext
             ? widget.pageBuilder(idx)
             : (idx - 2 >= 0
                 ? widget.pageBuilder(idx - 2)
                 : widget.crossChapterSnapshotBuilder?.call(-1))) ??
         const SizedBox.expand();
     final underlayRight =
-        isNext
+        isVisualNext
             ? (widget.pageBuilder(idx + 3) ??
                 (idx + 2 >= widget.state.pageCount
                     ? widget.crossChapterSnapshotBuilder?.call(1)
                     : null))
             : widget.pageBuilder(idx + 1);
 
-    return ReaderPageSpread(
-      left: underlayLeft,
-      right: underlayRight,
-      surfaceColor: widget.surfaceColor,
-      paperEdgeColor: widget.paperEdgeColor,
-      bookmarked: widget.bookmarked,
-      progress: (idx / last).clamp(0.0, 1.0),
+    // 复用 _buildRestingPage 保持 _liveLeftKey / _liveRightKey 挂载在同一 RepaintBoundary。
+    return _buildRestingPage(
+      leftOverride: underlayLeft,
+      rightOverride: underlayRight,
       curlOverlay: curlLayer,
     );
   }
 
-  /// 置于底层全不透明绘制，且与 ReaderPageSpread 共享 6px 圆角防止露角。
+  /// 置于底层全不透明绘制；双页模式统一采用 `_SpreadPage` 样式与正面截图严格对齐。
   Widget _buildSingleBackCaptureSlot(double leafWidth, double height) {
     final child = _pendingBackCaptureWidget;
     if (child == null) return const SizedBox.shrink();
+    final styledChild =
+        widget.spread
+            ? _SpreadPage(
+              color: widget.surfaceColor,
+              side: _pendingBackCaptureSide,
+              child: child,
+            )
+            : ColoredBox(color: widget.surfaceColor, child: child);
     return Positioned(
       left: 0,
       top: 0,
@@ -251,12 +257,9 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       height: height,
       child: ExcludeFocus(
         child: IgnorePointer(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: RepaintBoundary(
-              key: _singleBackCaptureKey,
-              child: ColoredBox(color: widget.surfaceColor, child: child),
-            ),
+          child: RepaintBoundary(
+            key: _singleBackCaptureKey,
+            child: styledChild,
           ),
         ),
       ),

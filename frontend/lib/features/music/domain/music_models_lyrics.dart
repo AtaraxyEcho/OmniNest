@@ -30,13 +30,18 @@ class MusicLyricLine {
   final Duration position;
   final String text;
 
-  /// 译文行（按时间戳就近对齐）。
+  /// 译文行（按时间戳就近对齐或同时间戳双行 LRC 自动合并）。
   final String? translation;
 
   /// 词级时间轴：为空表示只有行级时间戳（本地 LRC 或平台未返回逐字数据）。
   ///
-  /// 词级数据缺失时渲染层按"行时长线性估算"回退填充，不再整行读色。
+  /// 词级数据缺失时渲染层按 [estimatedVocalSpan] 平滑降级填充，唱完即停满格。
   final List<MusicLyricWord> words;
+
+  bool get hasTranslation =>
+      translation != null && translation!.trim().isNotEmpty;
+
+  bool get hasWords => words.isNotEmpty;
 
   /// 词级数据的结束时间（相对行首）；无词级数据时为 null。
   Duration? get wordsEnd => words.isEmpty ? null : words.last.end;
@@ -64,12 +69,26 @@ class MusicLyricLine {
   double? fillProgressAt(Duration withinLine) =>
       fillStateAt(withinLine)?.fraction;
 
+  /// 统一进度计算：有逐字数据时按词元真实 `offset/duration` 精确推进，
+  /// 无逐字数据时自动复用 [estimatedVocalSpan] 平滑降级。
+  double progressAt(Duration withinLine, {required Duration lineSpan}) {
+    if (withinLine <= Duration.zero) {
+      return 0.0;
+    }
+    final wordProgress = fillProgressAt(withinLine);
+    if (wordProgress != null) {
+      return wordProgress;
+    }
+    final vocalSpan = estimatedVocalSpan(lineSpan);
+    if (vocalSpan <= Duration.zero) {
+      return 1.0;
+    }
+    return (withinLine.inMilliseconds / vocalSpan.inMilliseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
   /// 行内时间 [withinLine] 处的填充进度，以及补间可以安全推进到的下一个目标。
-  ///
-  /// 只有非空白词元计入演唱时长：`yrc` 承载句末静默的空白词元不再被当成演唱，
-  /// 唱完最后一个词即停在满格。[nextFraction] 是下一个变化点的进度——正在唱的
-  /// 词元结束时其完整进度，或落在词间空隙时维持原值——[toNextFraction] 是到达
-  /// 那里的时长。补间若直接推到 1.0，就会把空隙（间奏）时长算进填充进度。
   ({double fraction, double nextFraction, Duration toNextFraction})?
   fillStateAt(Duration withinLine) {
     if (words.isEmpty) {
@@ -94,7 +113,6 @@ class MusicLyricLine {
       }
       final end = word.offset + word.duration;
       if (withinLine < word.offset) {
-        // 词间空隙：进度原地保持，补间只推进到下一个词元的起点。
         final current = ratio(completedMs);
         return (
           fraction: current,
@@ -104,7 +122,6 @@ class MusicLyricLine {
       }
       final beforeMs = completedMs;
       if (withinLine < end) {
-        // 正在演唱该词元：按已唱时长推进，补间目标为该词元结束处。
         completedMs += (withinLine - word.offset).inMilliseconds;
         return (
           fraction: ratio(completedMs),
@@ -114,13 +131,11 @@ class MusicLyricLine {
       }
       completedMs = beforeMs + word.duration.inMilliseconds;
     }
-    // 全部词元已唱完：保持满格，之后的间奏不再计入进度。
     return (fraction: 1.0, nextFraction: 1.0, toNextFraction: Duration.zero);
   }
 
-  /// 无词级时间轴时的演唱时长估算：字符数 × 平均语速，并以 [span]（本行与
-  /// 下一行的间隙）封顶。让行级歌词的填充在唱完后停在满格，而不是把整段
-  /// 间隙（含间奏）线性摊完。
+  /// 无词级时间轴时的演唱时长估算：字符数 × 平均语速（300ms），最低 1200ms，
+  /// 并以 [span]（本行与下一行的间隙）封顶。唱完即停在满格，不拖慢间奏。
   Duration estimatedVocalSpan(Duration span) {
     const msPerCharacter = 300;
     const minMs = 1200;
@@ -137,6 +152,20 @@ class MusicLyricLine {
     }
     return Duration(milliseconds: ms);
   }
+
+  MusicLyricLine copyWith({
+    Duration? position,
+    String? text,
+    String? translation,
+    List<MusicLyricWord>? words,
+  }) {
+    return MusicLyricLine(
+      position: position ?? this.position,
+      text: text ?? this.text,
+      translation: translation ?? this.translation,
+      words: words ?? this.words,
+    );
+  }
 }
 
 class MusicPlatformLyrics {
@@ -149,7 +178,7 @@ class MusicPlatformLyrics {
   final String lyrics;
   final String? translation;
 
-  /// 逐字歌词原始载荷（网易云 `yrc`），平台不提供时为 null。
+  /// 逐字歌词原始载荷（网易云 `yrc` / `elrc` / `krc`），平台不提供时为 null。
   final String? words;
 }
 

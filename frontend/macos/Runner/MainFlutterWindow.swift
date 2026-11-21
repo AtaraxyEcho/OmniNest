@@ -10,6 +10,11 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    // 保留 macOS 原生缩放/最小化丝滑动画与阴影，同时允许自绘标题栏铺满顶部。
+    self.styleMask.insert(.fullSizeContentView)
+    self.titlebarAppearsTransparent = true
+    self.titleVisibility = .hidden
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()

@@ -55,15 +55,14 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
       (_activeReadingDuration.inSeconds / 60).round(),
     );
     // 停留时长不是过渡动画，放变量里避免被“动画时长必须过 MotionToken”的行匹配误报。
-    const sessionSnackDuration = Duration(seconds: 2);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(
-          AppLocalizations.of(context).readerSessionSaved(displayMins),
-        ),
-        duration: sessionSnackDuration,
-        behavior: SnackBarBehavior.floating,
-      ),
+    const sessionToastDuration = Duration(seconds: 2);
+    // 桌面端经 showOmniFeedback 自动桥接新版底部磨砂 DesktopToast，
+    // 彻底消除残留的 Material SnackBar。
+    showOmniFeedback(
+      context,
+      AppLocalizations.of(context).readerSessionSaved(displayMins),
+      severity: OmniFeedbackSeverity.info,
+      duration: sessionToastDuration,
     );
     safePop();
   }

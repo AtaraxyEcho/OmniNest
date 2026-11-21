@@ -317,6 +317,72 @@ class PhotoApi {
     ensureEnvelopeSuccess(response.data, fallbackMessage: '添加照片到相册失败');
   }
 
+  /// 调整相册内照片排序。
+  Future<void> reorderAlbumItems({
+    required String albumId,
+    required List<String> photoIds,
+  }) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/photos/albums/${Uri.encodeComponent(albumId)}/items/order',
+      data: {'photoIds': photoIds},
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '保存相册排序失败');
+  }
+
+  /// 获取当前用户的全部上下文展示排序（按日分组 / 收藏）。
+  Future<Map<String, List<String>>> listDisplayOrders() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/orders',
+    );
+    final envelope = parseEnvelope(response.data);
+    final data = envelope['data'];
+    final result = <String, List<String>>{};
+    if (data is Map) {
+      for (final entry in data.entries) {
+        final key = entry.key?.toString();
+        final value = entry.value;
+        if (key != null && key.isNotEmpty && value is List) {
+          result[key] = value
+              .map((item) => item?.toString() ?? '')
+              .where((item) => item.isNotEmpty)
+              .toList(growable: false);
+        }
+      }
+    } else if (data is List) {
+      for (final item in data.whereType<Map>()) {
+        final key = item['contextKey']?.toString();
+        final ids = item['orderedPhotoIds'] ?? item['photoIds'];
+        if (key != null && key.isNotEmpty && ids is List) {
+          result[key] = ids
+              .map((entry) => entry?.toString() ?? '')
+              .where((entry) => entry.isNotEmpty)
+              .toList(growable: false);
+        }
+      }
+    }
+    return result;
+  }
+
+  /// 保存指定上下文（如 `library:YYYY-MM-DD` / `favorites`）的展示排序。
+  Future<void> saveDisplayOrder(
+    String contextKey,
+    List<String> photoIds,
+  ) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/photos/orders/${Uri.encodeComponent(contextKey)}',
+      data: {'photoIds': photoIds},
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '保存照片排序失败');
+  }
+
+  /// 重置指定上下文的自定义展示排序。
+  Future<void> deleteDisplayOrder(String contextKey) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/orders/${Uri.encodeComponent(contextKey)}',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '重置照片排序失败');
+  }
+
   /// 从相册移除照片
   Future<void> removePhotoFromAlbum({
     required String albumId,

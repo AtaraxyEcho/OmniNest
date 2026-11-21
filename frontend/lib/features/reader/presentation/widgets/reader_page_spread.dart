@@ -25,7 +25,7 @@ class ReaderPageSpread extends StatelessWidget {
   final Color surfaceColor;
   final Color? paperEdgeColor;
 
-  /// 仅在静止态传入，卷页底层 underlay 必须传 null，杜绝 GlobalKey 冲突。
+  /// 静止态与翻页态保持同一 RepaintBoundary 挂载槽，杜绝进入翻页第 1 帧整棵书页子树销毁重建。
   final GlobalKey? leftBoundaryKey;
   final GlobalKey? rightBoundaryKey;
 
@@ -44,8 +44,9 @@ class ReaderPageSpread extends StatelessWidget {
     final edgeColor =
         paperEdgeColor ?? Color.lerp(surfaceColor, Colors.black, 0.08)!;
 
+    // 关键修复：始终保持 RepaintBoundary 挂载在同一节点位置，不因 key 为空或状态切换拆卸边界节点。
     Widget wrapBoundary(GlobalKey? key, Widget child) =>
-        key == null ? child : RepaintBoundary(key: key, child: child);
+        RepaintBoundary(key: key, child: child);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -146,8 +147,12 @@ class ReaderPageSpread extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (curlOverlay != null)
-                  Positioned.fill(child: IgnorePointer(child: curlOverlay!)),
+                // 固定占位槽：静止态与翻页态保持 Stack 子节点结构完全一致，零槽位抖动。
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: curlOverlay ?? const SizedBox.shrink(),
+                  ),
+                ),
                 if (bookmarked)
                   Positioned.fill(
                     child: IgnorePointer(

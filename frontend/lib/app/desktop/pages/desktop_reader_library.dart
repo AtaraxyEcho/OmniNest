@@ -5,106 +5,114 @@ enum _ReaderSort { recent, title, author, progress, added }
 
 enum _ReaderType { all, books, comics }
 
-class _ReaderLibrary extends StatefulWidget {
-  const _ReaderLibrary({
-    required this.items,
-    required this.loadingMore,
-    required this.status,
-    required this.onStatus,
-    required this.onOpen,
-    required this.onRead,
+class _ReaderLibraryQueryResult {
+  const _ReaderLibraryQueryResult({
+    required this.visible,
+    required this.genres,
   });
 
-  final List<ReaderItem> items;
-  final bool loadingMore;
-  final DesktopReaderFilter status;
-  final ValueChanged<DesktopReaderFilter> onStatus;
-  final ValueChanged<ReaderItem> onOpen;
-  final ValueChanged<ReaderItem> onRead;
-
-  @override
-  State<_ReaderLibrary> createState() => _ReaderLibraryState();
+  final List<ReaderItem> visible;
+  final List<String> genres;
 }
 
-class _ReaderLibraryState extends State<_ReaderLibrary> {
-  final TextEditingController _search = TextEditingController();
-  _ReaderSort _sort = _ReaderSort.recent;
-  _ReaderType _type = _ReaderType.all;
-  String? _genre;
-  bool _grid = true;
+_ReaderLibraryQueryResult _buildReaderLibraryQuery({
+  required List<ReaderItem> items,
+  required String searchText,
+  required DesktopReaderFilter status,
+  required _ReaderType type,
+  required String? genre,
+  required _ReaderSort sort,
+}) {
+  final needle = searchText.trim().toLowerCase();
+  final typedItems = items
+      .where((item) {
+        final comic = item.isDisplayedAsComic;
+        return switch (type) {
+          _ReaderType.all => true,
+          _ReaderType.books => !comic,
+          _ReaderType.comics => comic,
+        };
+      })
+      .toList(growable: false);
+  final genres =
+      <String>{
+          for (final item in typedItems)
+            ...?item.genres?.where((g) => g.trim().isNotEmpty),
+        }.toList()
+        ..sort();
 
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
+  final visible =
+      typedItems.where((item) {
+        final progress = item.progressPercent ?? 0;
+        final matchesStatus = switch (status) {
+          DesktopReaderFilter.all => true,
+          DesktopReaderFilter.inProgress => progress > 0 && progress < 90,
+          DesktopReaderFilter.finished => progress >= 90,
+          DesktopReaderFilter.unread => progress <= 0,
+        };
+        if (!matchesStatus) {
+          return false;
+        }
+        if (genre != null && !(item.genres ?? const []).contains(genre)) {
+          return false;
+        }
+        if (needle.isEmpty) {
+          return true;
+        }
+        return '${item.title} ${item.authorName ?? ''} ${item.seriesName ?? ''} ${item.description ?? ''} ${(item.genres ?? const <String>[]).join(' ')}'
+            .toLowerCase()
+            .contains(needle);
+      }).toList();
+
+  visible.sort((a, b) {
+    return switch (sort) {
+      _ReaderSort.recent => (b.updatedAt ?? DateTime(0)).compareTo(
+        a.updatedAt ?? DateTime(0),
+      ),
+      _ReaderSort.title => a.title.toLowerCase().compareTo(
+        b.title.toLowerCase(),
+      ),
+      _ReaderSort.author => (a.authorName ?? '').toLowerCase().compareTo(
+        (b.authorName ?? '').toLowerCase(),
+      ),
+      _ReaderSort.progress => (b.progressPercent ?? 0).compareTo(
+        a.progressPercent ?? 0,
+      ),
+      _ReaderSort.added => (b.createdAt ?? DateTime(0)).compareTo(
+        a.createdAt ?? DateTime(0),
+      ),
+    };
+  });
+
+  return _ReaderLibraryQueryResult(visible: visible, genres: genres);
+}
+
+/// 书库顶部吸顶筛选/排序/视图切换栏（样例 `Reader.tsx:153-165` 的 `<StickyBar>`）。
+class _ReaderLibraryStickyBar extends StatelessWidget {
+  const _ReaderLibraryStickyBar({
+    required this.search,
+    required this.type,
+    required this.sort,
+    required this.grid,
+    required this.onSearchChanged,
+    required this.onTypeChanged,
+    required this.onSortChanged,
+    required this.onGridChanged,
+  });
+
+  final TextEditingController search;
+  final _ReaderType type;
+  final _ReaderSort sort;
+  final bool grid;
+  final VoidCallback onSearchChanged;
+  final ValueChanged<_ReaderType> onTypeChanged;
+  final ValueChanged<_ReaderSort> onSortChanged;
+  final ValueChanged<bool> onGridChanged;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final needle = _search.text.trim().toLowerCase();
-    final typedItems = widget.items
-        .where((item) {
-          final comic = item.isDisplayedAsComic;
-          return switch (_type) {
-            _ReaderType.all => true,
-            _ReaderType.books => !comic,
-            _ReaderType.comics => comic,
-          };
-        })
-        .toList(growable: false);
-    final genres =
-        <String>{
-            for (final item in typedItems)
-              ...?item.genres?.where((genre) => genre.trim().isNotEmpty),
-          }.toList()
-          ..sort();
-
-    final visible =
-        typedItems.where((item) {
-          final progress = item.progressPercent ?? 0;
-          final matchesStatus = switch (widget.status) {
-            DesktopReaderFilter.all => true,
-            DesktopReaderFilter.inProgress => progress > 0 && progress < 90,
-            DesktopReaderFilter.finished => progress >= 90,
-            DesktopReaderFilter.unread => progress <= 0,
-          };
-          if (!matchesStatus) {
-            return false;
-          }
-          if (_genre != null && !(item.genres ?? const []).contains(_genre)) {
-            return false;
-          }
-          if (needle.isEmpty) {
-            return true;
-          }
-          return '${item.title} ${item.authorName ?? ''} ${item.seriesName ?? ''} ${item.description ?? ''} ${(item.genres ?? const <String>[]).join(' ')}'
-              .toLowerCase()
-              .contains(needle);
-        }).toList();
-
-    visible.sort((a, b) {
-      final result = switch (_sort) {
-        _ReaderSort.recent => (b.updatedAt ?? DateTime(0)).compareTo(
-          a.updatedAt ?? DateTime(0),
-        ),
-        _ReaderSort.title => a.title.toLowerCase().compareTo(
-          b.title.toLowerCase(),
-        ),
-        _ReaderSort.author => (a.authorName ?? '').toLowerCase().compareTo(
-          (b.authorName ?? '').toLowerCase(),
-        ),
-        _ReaderSort.progress => (b.progressPercent ?? 0).compareTo(
-          a.progressPercent ?? 0,
-        ),
-        _ReaderSort.added => (b.createdAt ?? DateTime(0)).compareTo(
-          a.createdAt ?? DateTime(0),
-        ),
-      };
-      return result;
-    });
-
     final sortLabels = <_ReaderSort, String>{
       _ReaderSort.recent: l10n.desktopReaderSortRecent,
       _ReaderSort.title: l10n.desktopSortTitle,
@@ -113,103 +121,140 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
       _ReaderSort.added: l10n.desktopSortAdded,
     };
 
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: LayoutBuilder(
+        builder: (context, barConstraints) {
+          final searchField = DesktopTextField(
+            keyName: 'desktop-reader-search',
+            controller: search,
+            hint: l10n.desktopReaderSearchHint,
+            prefixIcon: DesktopIcons.search,
+            width: barConstraints.maxWidth < 920 ? 220 : 280,
+            height: 36,
+            onChanged: (_) => onSearchChanged(),
+          );
+          final typeSeg = DesktopSeg<_ReaderType>(
+            options: _ReaderType.values,
+            value: type,
+            small: true,
+            labelOf:
+                (value) => switch (value) {
+                  _ReaderType.all => l10n.desktopFilterAll,
+                  _ReaderType.books => l10n.readerSegmentBooks,
+                  _ReaderType.comics => l10n.readerSegmentComics,
+                },
+            onChanged: onTypeChanged,
+          );
+          final sortGroup = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.desktopReaderSortLabel,
+                style: DesktopType.caption(skin.text3),
+              ),
+              const SizedBox(width: 8),
+              DesktopSelect<_ReaderSort>(
+                value: sort,
+                width: 148,
+                variant: DesktopSelectVariant.small,
+                options: [
+                  for (final value in _ReaderSort.values)
+                    DesktopSelectOption(
+                      value: value,
+                      label: sortLabels[value] ?? '',
+                    ),
+                ],
+                onChanged: onSortChanged,
+              ),
+            ],
+          );
+          final viewToggle = _LibraryViewToggle(
+            isGrid: grid,
+            gridTooltip: l10n.desktopFilesGridView,
+            listTooltip: l10n.desktopFilesListView,
+            onChanged: onGridChanged,
+          );
+          if (barConstraints.maxWidth < 760) {
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [searchField, typeSeg, sortGroup, viewToggle],
+            );
+          }
+          return Row(
+            children: [
+              searchField,
+              const SizedBox(width: 12),
+              typeSeg,
+              const Spacer(),
+              sortGroup,
+              const SizedBox(width: 10),
+              viewToggle,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ReaderLibraryBody extends StatelessWidget {
+  const _ReaderLibraryBody({
+    required this.query,
+    required this.loadingMore,
+    required this.status,
+    required this.type,
+    required this.genre,
+    required this.grid,
+    required this.hasSearchNeedle,
+    required this.onStatus,
+    required this.onGenre,
+    required this.onClearFilters,
+    required this.onOpen,
+    required this.onRead,
+  });
+
+  final _ReaderLibraryQueryResult query;
+  final bool loadingMore;
+  final DesktopReaderFilter status;
+  final _ReaderType type;
+  final String? genre;
+  final bool grid;
+  final bool hasSearchNeedle;
+  final ValueChanged<DesktopReaderFilter> onStatus;
+  final ValueChanged<String?> onGenre;
+  final VoidCallback onClearFilters;
+  final ValueChanged<ReaderItem> onOpen;
+  final ValueChanged<ReaderItem> onRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final visible = query.visible;
+    final genres = query.genres;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 严格对齐样例 Reader.tsx:146-152 & more.css:157（.lib-bar + .sort-sel + .vtoggle）
-        LayoutBuilder(
-          builder: (context, barConstraints) {
-            final searchField = DesktopTextField(
-              keyName: 'desktop-reader-search',
-              controller: _search,
-              hint: l10n.desktopReaderSearchHint,
-              prefixIcon: DesktopIcons.search,
-              width: barConstraints.maxWidth < 920 ? 220 : 280,
-              height: 36,
-              onChanged: (_) => setState(() {}),
-            );
-            final typeSeg = DesktopSeg<_ReaderType>(
-              options: _ReaderType.values,
-              value: _type,
-              small: true,
-              labelOf:
-                  (value) => switch (value) {
-                    _ReaderType.all => l10n.desktopFilterAll,
-                    _ReaderType.books => l10n.readerSegmentBooks,
-                    _ReaderType.comics => l10n.readerSegmentComics,
-                  },
-              onChanged:
-                  (value) => setState(() {
-                    _type = value;
-                    _genre = null;
-                  }),
-            );
-            final sortGroup = Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  l10n.desktopReaderSortLabel,
-                  style: DesktopType.caption(skin.text3),
-                ),
-                const SizedBox(width: 8),
-                DesktopSelect<_ReaderSort>(
-                  value: _sort,
-                  width: 148,
-                  variant: DesktopSelectVariant.small,
-                  options: [
-                    for (final value in _ReaderSort.values)
-                      DesktopSelectOption(
-                        value: value,
-                        label: sortLabels[value] ?? '',
-                      ),
-                  ],
-                  onChanged: (value) => setState(() => _sort = value),
-                ),
-              ],
-            );
-            final viewToggle = _LibraryViewToggle(
-              isGrid: _grid,
-              gridTooltip: l10n.desktopFilesGridView,
-              listTooltip: l10n.desktopFilesListView,
-              onChanged: (grid) => setState(() => _grid = grid),
-            );
-            if (barConstraints.maxWidth < 760) {
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [searchField, typeSeg, sortGroup, viewToggle],
-              );
-            }
-            return Row(
-              children: [
-                searchField,
-                const SizedBox(width: 12),
-                typeSeg,
-                const Spacer(),
-                sortGroup,
-                const SizedBox(width: 10),
-                viewToggle,
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
-            for (final status in DesktopReaderFilter.values)
+            for (final filterStatus in DesktopReaderFilter.values)
               DesktopChipButton(
-                label: switch (status) {
+                label: switch (filterStatus) {
                   DesktopReaderFilter.all => l10n.desktopFilterAll,
                   DesktopReaderFilter.inProgress =>
                     l10n.desktopFilterInProgress,
                   DesktopReaderFilter.finished => l10n.desktopFilterFinished,
                   DesktopReaderFilter.unread => l10n.desktopFilterUnread,
                 },
-                selected: widget.status == status,
-                onTap: () => widget.onStatus(status),
+                selected: status == filterStatus,
+                onTap: () => onStatus(filterStatus),
               ),
           ],
         ),
@@ -220,20 +265,17 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
           children: [
             DesktopChipButton(
               label: l10n.desktopFilterAll,
-              selected: _genre == null,
-              onTap: () => setState(() => _genre = null),
+              selected: genre == null,
+              onTap: () => onGenre(null),
             ),
-            for (final genre in genres.take(10))
+            for (final itemGenre in genres.take(10))
               DesktopChipButton(
-                label: genre,
-                selected: _genre == genre,
-                onTap:
-                    () =>
-                        setState(() => _genre = _genre == genre ? null : genre),
+                label: itemGenre,
+                selected: genre == itemGenre,
+                onTap: () => onGenre(genre == itemGenre ? null : itemGenre),
               ),
           ],
         ),
-
         const SizedBox(height: 8),
         Row(
           children: [
@@ -242,20 +284,14 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
               style: DesktopType.caption(skin.text3),
             ),
             const Spacer(),
-            if (needle.isNotEmpty ||
-                widget.status != DesktopReaderFilter.all ||
-                _type != _ReaderType.all ||
-                _genre != null)
+            if (hasSearchNeedle ||
+                status != DesktopReaderFilter.all ||
+                type != _ReaderType.all ||
+                genre != null)
               DesktopLink(
                 label: l10n.desktopReaderClearFilters,
                 trailing: false,
-                onPressed:
-                    () => setState(() {
-                      _search.clear();
-                      widget.onStatus(DesktopReaderFilter.all);
-                      _type = _ReaderType.all;
-                      _genre = null;
-                    }),
+                onPressed: onClearFilters,
               ),
           ],
         ),
@@ -270,8 +306,8 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
               ),
             ),
           )
-        else if (_grid)
-          _Shelf(items: visible, onOpen: widget.onOpen)
+        else if (grid)
+          _Shelf(items: visible, onOpen: onOpen)
         else
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -281,13 +317,13 @@ class _ReaderLibraryState extends State<_ReaderLibrary> {
                   index: i,
                   child: _ReaderRow(
                     item: visible[i],
-                    onTap: () => widget.onOpen(visible[i]),
-                    onRead: () => widget.onRead(visible[i]),
+                    onTap: () => onOpen(visible[i]),
+                    onRead: () => onRead(visible[i]),
                   ),
                 ),
             ],
           ),
-        if (widget.loadingMore)
+        if (loadingMore)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(

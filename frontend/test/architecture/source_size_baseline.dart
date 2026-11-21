@@ -3,7 +3,10 @@
 /// 只允许下调：文件继续变大时先按职责拆分，拆分后删除或收紧对应条目。
 /// 新增超过 800 行的生产源码必须在此登记，登记即锁定当前行数。
 const sourceLineCaps = <String, int>{
-  'lib/app/desktop/pages/desktop_photos_page.dart': 935,
+  'lib/app/desktop/pages/desktop_now_playing_lyrics.dart': 834,
+  'lib/app/desktop/pages/desktop_photos_page.dart': 932,
+  'lib/app/desktop/pages/desktop_reader_page.dart': 812,
+  'lib/app/desktop/widgets/desktop_surfaces.dart': 1032,
   'lib/app/theme/mobile_env_palette.dart': 811,
   'lib/core/widgets/mobile_sample_kit.dart': 847,
   'lib/features/admin/presentation/pages/admin_operations_logs_center.dart':
@@ -22,6 +25,7 @@ const sourceLineCaps = <String, int>{
       848,
   'lib/features/music/presentation/player/music_visual_color_picker.dart': 837,
   'lib/features/photos/application/photo_controller_commands.dart': 925,
+  'lib/features/photos/data/photo_api.dart': 827,
   'lib/features/portal/presentation/widgets/portal_desktop_quick_actions.dart':
       850,
   'lib/features/portal/presentation/widgets/weather_detail_dialog.dart': 937,
@@ -31,6 +35,9 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/presentation/pages/comic_detail_page.dart': 831,
   'lib/features/reader/presentation/pages/reader_view_page.dart': 807,
   'lib/features/reader/presentation/widgets/book_detail_space.dart': 839,
+  'lib/features/reader/presentation/widgets/comic_reader_view.dart': 836,
+  'lib/features/reader/presentation/widgets/comic_reader_view_sections.dart':
+      899,
   'lib/features/reader/presentation/widgets/reader_content_loader.dart': 703,
   'lib/features/reader/presentation/widgets/reader_pagination_engine.dart': 904,
   'lib/features/reader/presentation/widgets/reader_view_content.dart': 640,

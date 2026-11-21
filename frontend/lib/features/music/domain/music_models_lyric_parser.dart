@@ -2,8 +2,14 @@ part of 'music_models.dart';
 
 /// 解析歌词原文。
 ///
+/// 支持：
+/// - 标准 LRC（含同时间戳 `<=20ms` 双行 LRC 自动合并为原文+译文）
+/// - 增强 LRC（`ELRC` 行内 `<mm:ss.xx>word` 逐字时间戳）
+/// - 网易云 `yrc`（`[startMs,durMs](wordStartMs,wordDurMs,0)text`）与行级 JSON
+/// - 酷狗 `krc`（`[startMs,durMs]<offsetMs,durMs,0>word`）
+///
 /// [translation] 为独立译文（LRC 或纯文本），按时间戳就近对齐；[wordLyrics]
-/// 为平台逐字载荷（网易云 `yrc`），逐行匹配后挂到对应行的 [MusicLyricLine.words] 上。
+/// 为逐字载荷（`yrc` / `elrc` / `krc`），逐行匹配后挂到对应行的 [MusicLyricLine.words] 上。
 List<MusicLyricLine> parseMusicLyrics(
   String? raw, {
   String? translation,
@@ -15,17 +21,20 @@ List<MusicLyricLine> parseMusicLyrics(
   }
   final lines = <MusicLyricLine>[];
   final timestampPattern = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  final elrcWordPattern = RegExp(r'<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>');
+  final yrcOrKrcHeaderPattern = RegExp(r'^\[(\d+),(\d+)\]');
+
   final translationByPosition = _parseTranslationTimestamps(
     _normalizeMusicLyricText(translation),
   );
   final wordsByPosition = parseMusicLyricWords(
     _normalizeMusicLyricText(wordLyrics),
   );
+
   String? nearestText(Map<Duration, String> table, Duration position) {
     if (table.isEmpty) {
       return null;
     }
-    // 优先精确毫秒匹配，其次取与原文时间差最小且不超过容差的译文行。
     final exact = table[position];
     if (exact != null) {
       return exact;
@@ -45,7 +54,10 @@ List<MusicLyricLine> parseMusicLyrics(
   }
 
   for (final rawLine in normalizedRaw.split(RegExp(r'\r?\n'))) {
-    final structured = _parseNeteaseLyricJsonLine(rawLine.trim());
+    final trimmed = rawLine.trim();
+    if (trimmed.isEmpty) continue;
+
+    final structured = _parseNeteaseLyricJsonLine(trimmed);
     if (structured != null) {
       lines.add(
         MusicLyricLine(
@@ -57,56 +69,198 @@ List<MusicLyricLine> parseMusicLyrics(
       );
       continue;
     }
+
     final matches = timestampPattern.allMatches(rawLine).toList();
     if (matches.isEmpty) {
-      final yrcHeader = RegExp(r'^\[(\d+),\d+\]').firstMatch(rawLine.trim());
-      if (yrcHeader != null) {
-        final startMs = int.tryParse(yrcHeader.group(1) ?? '');
-        final text = _yrcLineText(rawLine.substring(yrcHeader.end));
-        if (startMs != null && text.isNotEmpty) {
-          final position = Duration(milliseconds: startMs);
-          lines.add(
-            MusicLyricLine(
-              position: position,
-              text: text,
-              translation: nearestText(translationByPosition, position),
-              words: _nearestWords(wordsByPosition, position),
-            ),
-          );
+      final header = yrcOrKrcHeaderPattern.firstMatch(trimmed);
+      if (header != null) {
+        final startMs = int.tryParse(header.group(1) ?? '');
+        if (startMs != null) {
+          final body = trimmed.substring(header.end);
+          final parsedWords = _parseYrcOrKrcBodyWords(body, startMs);
+          final text =
+              parsedWords.isNotEmpty
+                  ? parsedWords.map((w) => w.text).join().trim()
+                  : _yrcLineText(body);
+          if (text.isNotEmpty) {
+            final position = Duration(milliseconds: startMs);
+            final matchedWords = _nearestWords(wordsByPosition, position);
+            lines.add(
+              MusicLyricLine(
+                position: position,
+                text: text,
+                translation: nearestText(translationByPosition, position),
+                words:
+                    matchedWords.isNotEmpty
+                        ? matchedWords
+                        : List<MusicLyricWord>.unmodifiable(parsedWords),
+              ),
+            );
+          }
         }
       }
       continue;
     }
-    final text = rawLine.replaceAll(timestampPattern, '').trim();
-    if (text.isEmpty) {
+
+    final bodyAfterTimestamps = rawLine.replaceAll(timestampPattern, '');
+    final hasInlineElrc = elrcWordPattern.hasMatch(bodyAfterTimestamps);
+    final cleanText =
+        hasInlineElrc
+            ? bodyAfterTimestamps.replaceAll(elrcWordPattern, '').trim()
+            : bodyAfterTimestamps.trim();
+    if (cleanText.isEmpty) {
       continue;
     }
+
     for (final match in matches) {
-      final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
-      final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
-      final fraction = match.group(3) ?? '0';
-      final millis = _lyricFractionToMilliseconds(fraction);
-      final position = Duration(
-        minutes: minutes,
-        seconds: seconds,
-        milliseconds: millis,
-      );
+      final position = _durationFromLrcMatch(match);
+      final externalWords = _nearestWords(wordsByPosition, position);
+      final inlineWords =
+          externalWords.isEmpty && hasInlineElrc
+              ? _parseElrcInlineWords(bodyAfterTimestamps, position)
+              : const <MusicLyricWord>[];
       lines.add(
         MusicLyricLine(
           position: position,
-          text: text,
+          text: cleanText,
           translation: nearestText(translationByPosition, position),
-          words: _nearestWords(wordsByPosition, position),
+          words: externalWords.isNotEmpty ? externalWords : inlineWords,
         ),
       );
     }
   }
+
   lines.sort((left, right) => left.position.compareTo(right.position));
-  return lines;
+
+  // 同时间戳（<=20ms）双行 LRC 自动合并为双语对照（原文在上、译文在下）。
+  if (lines.length < 2) {
+    return lines;
+  }
+  const mergeThreshold = Duration(milliseconds: 20);
+  final merged = <MusicLyricLine>[];
+  var index = 0;
+  while (index < lines.length) {
+    final current = lines[index];
+    if (index + 1 < lines.length) {
+      final next = lines[index + 1];
+      final diff = (next.position - current.position).abs();
+      if (diff <= mergeThreshold &&
+          !current.hasTranslation &&
+          next.text.trim().isNotEmpty &&
+          next.text.trim() != current.text.trim()) {
+        merged.add(
+          current.copyWith(
+            translation: next.text.trim(),
+            words: current.words.isNotEmpty ? current.words : next.words,
+          ),
+        );
+        index += 2;
+        continue;
+      }
+    }
+    merged.add(current);
+    index += 1;
+  }
+  return merged;
 }
 
-/// 网易云逐字歌词的行级 JSON 载荷。网易云会把作词/作曲等元信息也编码成
-/// `{"t":0,"c":[{"tx":"..."}]}`，不能把它当作普通文本直接交给 UI。
+Duration _durationFromLrcMatch(RegExpMatch match) {
+  final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
+  final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
+  final fraction = match.group(3) ?? '0';
+  final millis = _lyricFractionToMilliseconds(fraction);
+  return Duration(minutes: minutes, seconds: seconds, milliseconds: millis);
+}
+
+/// 解析增强 LRC 行内 `<mm:ss.xx>word` 逐字时间戳。
+List<MusicLyricWord> _parseElrcInlineWords(String body, Duration linePosition) {
+  final elrcTag = RegExp(r'<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>');
+  final matches = elrcTag.allMatches(body).toList(growable: false);
+  if (matches.isEmpty) return const <MusicLyricWord>[];
+
+  final words = <MusicLyricWord>[];
+  final lineStartMs = linePosition.inMilliseconds;
+
+  // 若首个 `<mm:ss.xx>` 前有文本，视作从行首到首个标签的词元。
+  final leading = body.substring(0, matches.first.start);
+  if (leading.isNotEmpty) {
+    final firstStartMs = _durationFromLrcMatch(matches.first).inMilliseconds;
+    final durMs = (firstStartMs - lineStartMs).clamp(0, 60000);
+    final leadingSpan = Duration(milliseconds: durMs > 0 ? durMs : 300);
+    words.add(
+      MusicLyricWord(
+        offset: Duration.zero,
+        duration: leadingSpan,
+        text: leading,
+      ),
+    );
+  }
+
+  for (var i = 0; i < matches.length; i++) {
+    final currentMatch = matches[i];
+    final wordStartMs = _durationFromLrcMatch(currentMatch).inMilliseconds;
+    final textEnd = i + 1 < matches.length ? matches[i + 1].start : body.length;
+    final wordText = body.substring(currentMatch.end, textEnd);
+    if (wordText.isEmpty) continue;
+    final nextStartMs =
+        i + 1 < matches.length
+            ? _durationFromLrcMatch(matches[i + 1]).inMilliseconds
+            : wordStartMs + 600;
+    final offsetMs = wordStartMs - lineStartMs;
+    final durMs = nextStartMs - wordStartMs;
+    final wordSpan = Duration(milliseconds: durMs > 0 ? durMs : 300);
+    words.add(
+      MusicLyricWord(
+        offset: Duration(milliseconds: offsetMs < 0 ? 0 : offsetMs),
+        duration: wordSpan,
+        text: wordText,
+      ),
+    );
+  }
+  return List<MusicLyricWord>.unmodifiable(words);
+}
+
+/// 解析单行 YRC `(absStartMs,durMs,0)text` 或 KRC `<offsetMs,durMs,0>text` 词元列表。
+List<MusicLyricWord> _parseYrcOrKrcBodyWords(String body, int lineStartMs) {
+  final yrcWord = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
+  final krcWord = RegExp(r'<(\d+),(\d+),\d+>([^<>]*)');
+
+  final words = <MusicLyricWord>[];
+  final yrcMatches = yrcWord.allMatches(body).toList(growable: false);
+  if (yrcMatches.isNotEmpty) {
+    for (final match in yrcMatches) {
+      _addWord(
+        words,
+        match.group(3),
+        match.group(1),
+        match.group(2),
+        lineStartMs,
+      );
+    }
+    return words;
+  }
+
+  final krcMatches = krcWord.allMatches(body).toList(growable: false);
+  if (krcMatches.isNotEmpty) {
+    for (final match in krcMatches) {
+      final offset = int.tryParse(match.group(1) ?? '');
+      final duration = int.tryParse(match.group(2) ?? '') ?? 0;
+      final text = match.group(3);
+      if (offset == null || text == null) continue;
+      final span = Duration(milliseconds: duration < 0 ? 0 : duration);
+      words.add(
+        MusicLyricWord(
+          offset: Duration(milliseconds: offset < 0 ? 0 : offset),
+          duration: span,
+          text: text,
+        ),
+      );
+    }
+  }
+  return words;
+}
+
+/// 网易云逐字歌词的行级 JSON 载荷。
 _StructuredMusicLyricLine? _parseNeteaseLyricJsonLine(String line) {
   if (!line.startsWith('{') && !line.startsWith('[')) {
     return null;
@@ -116,13 +270,11 @@ _StructuredMusicLyricLine? _parseNeteaseLyricJsonLine(String line) {
     if (decoded is Map) {
       return _structuredLineFromJson(decoded);
     }
-    // 少数代理把整段 yrc 压成一个 JSON 数组；解析首个可展示行，
-    // 其余行由逐行路径处理不到，因此只在数组恰好包含一行时使用。
     if (decoded is List && decoded.length == 1 && decoded.first is Map) {
       return _structuredLineFromJson(decoded.first as Map);
     }
   } on FormatException {
-    // 不是 JSON 的歌词行继续按 LRC/YRC 解析。
+    // 不是 JSON 的歌词行继续按 LRC/YRC/KRC 解析。
   }
   return null;
 }
@@ -155,7 +307,15 @@ int? _lyricMilliseconds(Object? value) {
 
 String _yrcLineText(String body) {
   final wordPattern = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
-  return wordPattern
+  final yrc =
+      wordPattern
+          .allMatches(body)
+          .map((match) => match.group(3) ?? '')
+          .join()
+          .trim();
+  if (yrc.isNotEmpty) return yrc;
+  final krcPattern = RegExp(r'<(\d+),(\d+),\d+>([^<>]*)');
+  return krcPattern
       .allMatches(body)
       .map((match) => match.group(3) ?? '')
       .join()
@@ -169,48 +329,55 @@ class _StructuredMusicLyricLine {
   final String text;
 }
 
-/// 解析逐字歌词载荷（网易云 `yrc`），返回"行起始时间 → 词列表"。
-///
-/// 行头为 `[行起始,行时长]`（毫秒，绝对时间），词元为 `(词起始,词时长,0)文本`，
-/// 词时长按毫秒。开头的 `{"t":0,…}` 元数据行没有行头，天然被跳过；
-/// 无法识别的行会被跳过；整段无法识别时返回空表，调用方退回行级显示。
+/// 解析逐字歌词载荷（支持网易云 `yrc`、酷狗 `krc` 与增强 LRC `elrc`），
+/// 返回「行起始时间 → 词列表」。
 Map<Duration, List<MusicLyricWord>> parseMusicLyricWords(String? raw) {
   final result = <Duration, List<MusicLyricWord>>{};
   final normalizedRaw = _normalizeMusicLyricText(raw);
   if (normalizedRaw == null || normalizedRaw.trim().isEmpty) {
     return result;
   }
-  final lineHeader = RegExp(r'^\[(\d+),(\d+)\]');
-  final yrcWord = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
+  final yrcOrKrcHeader = RegExp(r'^\[(\d+),(\d+)\]');
+  final lrcTimestamp = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  final elrcTag = RegExp(r'<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>');
+
   for (final rawLine in normalizedRaw.split(RegExp(r'\r?\n'))) {
     final line = rawLine.trim();
-    final header = lineHeader.firstMatch(line);
-    if (header == null) {
+    if (line.isEmpty) continue;
+
+    final header = yrcOrKrcHeader.firstMatch(line);
+    if (header != null) {
+      final startMs = int.tryParse(header.group(1) ?? '');
+      if (startMs == null) continue;
+      final body = line.substring(header.end);
+      final words = _parseYrcOrKrcBodyWords(body, startMs);
+      if (words.isEmpty) continue;
+      final position = Duration(milliseconds: startMs);
+      result.putIfAbsent(
+        position,
+        () => List<MusicLyricWord>.unmodifiable(words),
+      );
       continue;
     }
-    final startMs = int.tryParse(header.group(1) ?? '');
-    if (startMs == null) {
-      continue;
+
+    // 增强 LRC（ELRC）：`[mm:ss.xx]<mm:ss.xx>word...`
+    final lrcMatches = lrcTimestamp.allMatches(line).toList(growable: false);
+    if (lrcMatches.isNotEmpty) {
+      final body = line.replaceAll(lrcTimestamp, '');
+      if (!elrcTag.hasMatch(body)) continue;
+      for (final match in lrcMatches) {
+        final position = _durationFromLrcMatch(match);
+        final words = _parseElrcInlineWords(body, position);
+        if (words.isNotEmpty) {
+          result.putIfAbsent(position, () => words);
+        }
+      }
     }
-    final body = line.substring(header.end);
-    final words = <MusicLyricWord>[];
-    for (final match in yrcWord.allMatches(body)) {
-      _addWord(words, match.group(3), match.group(1), match.group(2), startMs);
-    }
-    if (words.isEmpty) {
-      continue;
-    }
-    final position = Duration(milliseconds: startMs);
-    result.putIfAbsent(
-      position,
-      () => List<MusicLyricWord>.unmodifiable(words),
-    );
   }
   return result;
 }
 
 /// 兼容部分第三方代理把歌词先按 Latin-1 转了一次或把 Unicode 转义保留为文本。
-/// 只在检测到明显的异常编码标记时修复，正常中文、日文和拉丁字符保持原样。
 String? _normalizeMusicLyricText(String? value) {
   if (value == null || value.isEmpty) {
     return value;
@@ -219,7 +386,6 @@ String? _normalizeMusicLyricText(String? value) {
     RegExp(r'\\u([0-9a-fA-F]{4})'),
     (match) => String.fromCharCode(int.parse(match.group(1)!, radix: 16)),
   );
-  // 某些代理会把 JSON 内的换行再次转义，先还原成真正的歌词行分隔符。
   text = text
       .replaceAll(r'\r\n', '\n')
       .replaceAll(r'\n', '\n')
@@ -237,7 +403,7 @@ String? _normalizeMusicLyricText(String? value) {
       text = repaired;
     }
   } on FormatException {
-    // 非 UTF-8 的合法拉丁歌词保持原文，不能用替换字符覆盖用户内容。
+    // 非 UTF-8 的合法拉丁歌词保持原文。
   }
   return text;
 }
@@ -256,7 +422,7 @@ int _mojibakeMarkerCount(String value) {
     'è',
     'é',
     'ï',
-    '�',
+    '',
   };
   var count = 0;
   for (final rune in value.runes) {
@@ -267,8 +433,6 @@ int _mojibakeMarkerCount(String value) {
   return count;
 }
 
-/// 将常见的 Windows-1252 标点映射回 UTF-8 字节，覆盖“ä¸­å›½”这类
-/// 由代理错误解码产生的文本；其它无法确定来源的字符不参与修复。
 List<int>? _mojibakeBytes(String value) {
   const cp1252 = <int, int>{
     0x20ac: 0x80,
@@ -326,26 +490,17 @@ void _addWord(
     return;
   }
   final duration = int.tryParse(durationMs ?? '') ?? 0;
-  // 词时间戳是绝对时间：换算成相对行首，负值（异常数据）按 0 处理。
   final offset = start - lineStartMs;
+  final span = Duration(milliseconds: duration < 0 ? 0 : duration);
   words.add(
     MusicLyricWord(
       offset: Duration(milliseconds: offset < 0 ? 0 : offset),
-      duration: Duration(milliseconds: duration < 0 ? 0 : duration),
+      duration: span,
       text: text,
     ),
   );
 }
 
-/// 就近挂载词级数据：行起始时间精确匹配优先，其次 500ms 容差内取最近一行。
-///
-/// 词偏移是相对 yrc 行首的（见 `_addWord`），而消费方按 LRC 行首计算行内进度。
-/// 按容差命中相邻行时必须把两份行首的时间差补回偏移，否则整块词级时间相对
-/// 人声恒定提前或滞后（逐字填充跟不上唱词）。精确匹配无位移，仍复用原列表实例。
-///
-/// 位移后的偏移允许为负：yrc 行首早于 LRC 行首时，前导词元在 LRC 锚点时刻已经
-/// 唱了一部分，[MusicLyricLine.fillStateAt] 按负偏移计入这段已唱时长。把负值夹到
-/// 0 会让行首若干词元同时起唱，表现为填充领先人声后再错位。
 List<MusicLyricWord> _nearestWords(
   Map<Duration, List<MusicLyricWord>> table,
   Duration position,
@@ -387,7 +542,6 @@ List<MusicLyricWord> _nearestWords(
   ]);
 }
 
-/// 解析译文时间轴；纯文本译文返回空表（逐行文本交给行级回退处理）。
 Map<Duration, String> _parseTranslationTimestamps(String? translation) {
   final result = <Duration, String>{};
   if (translation == null || translation.trim().isEmpty) {
@@ -403,15 +557,8 @@ Map<Duration, String> _parseTranslationTimestamps(String? translation) {
     if (text.isEmpty) {
       continue;
     }
-    final match = matches.first;
-    final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
-    final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
-    final fraction = match.group(3) ?? '0';
-    final millis = _lyricFractionToMilliseconds(fraction);
-    result.putIfAbsent(
-      Duration(minutes: minutes, seconds: seconds, milliseconds: millis),
-      () => text,
-    );
+    final position = _durationFromLrcMatch(matches.first);
+    result.putIfAbsent(position, () => text);
   }
   return result;
 }

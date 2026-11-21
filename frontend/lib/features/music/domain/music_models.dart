@@ -46,6 +46,7 @@ class MusicTrack {
       fileSize: _nullableInt(json['fileSize']),
       lyricsRaw: json['lyricsRaw']?.toString(),
       lyricsTranslation: json['lyricsTranslation']?.toString(),
+      lyricsWords: json['lyricsWords']?.toString(),
       genre: json['genre']?.toString(),
       coverUrl: json['coverUrl']?.toString(),
       manualCoverUrl: json['manualCoverUrl']?.toString(),
@@ -157,6 +158,7 @@ class MusicTrack {
       coverThumbUrl: coverThumbUrl,
       favorite: favorite ?? this.favorite,
       updatedAt: updatedAt,
+      hue: hue,
     );
   }
 }

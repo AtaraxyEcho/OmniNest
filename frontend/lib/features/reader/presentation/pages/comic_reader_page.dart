@@ -33,7 +33,9 @@ class ComicReaderPage extends ConsumerStatefulWidget {
 }
 
 class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
+  final GlobalKey<ComicReaderViewState> _readerViewKey = GlobalKey();
   ComicManifest? _manifest;
+  String? _bookTitle;
   int _initialPage = 0;
   double? _initialIntraPageOffset;
   bool _loading = true;
@@ -73,9 +75,13 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
 
     try {
       String? importStatus = manifest.importStatus;
+      String? bookTitle = _bookTitle;
       try {
         final detail = await comicService.loadDetail(widget.itemId);
         importStatus = detail.item.importStatus;
+        if (detail.item.title.trim().isNotEmpty) {
+          bookTitle = detail.item.title.trim();
+        }
       } on Exception {
         importStatus = manifest.importStatus;
       }
@@ -109,6 +115,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
               importStatus == ReaderImportStatus.parsing);
       setState(() {
         _manifest = manifest;
+        _bookTitle = bookTitle;
         _initialPage = initialPage;
         _loading = false;
         _waitingForParse = waitingForParse;
@@ -129,20 +136,33 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     }
   }
 
-  void _handleBack() {
+  /// 退出前等待当前阅读进度落库与同步完成，再刷新详情页避免页码回退竞态。
+  Future<void> _flushReadingProgress() async {
+    final viewState = _readerViewKey.currentState;
+    if (viewState != null) {
+      await viewState.flushReadingProgress();
+    }
+  }
+
+  Future<void> _handleBack() async {
     if (_leaving || !mounted) {
       return;
     }
     _leaving = true;
-    // 详情页的进度与目录高亮来自 readerItemDetailProvider：不失效就还停在进
-    // 阅读器之前的那一页，读者以为刚才没读进去。
+    try {
+      await _flushReadingProgress();
+    } on Exception {
+      // 落库异常不阻塞返回导航，本地进度已尽最大努力写入。
+    }
+    if (!mounted) {
+      return;
+    }
+    // 落库完成后再失效详情 Provider，彻底消除详情页抢跑拉到旧进度导致“继续阅读”回退。
     ref.invalidate(readerItemDetailProvider(widget.itemId));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      // 本页由漫画详情 push 进来：pop 才保得住来路；go 会把整条栈换成
-      // 详情页，之后的系统返回落在栈底，表现为直接退出应用。
       if (context.canPop()) {
         context.pop();
       } else {
@@ -181,8 +201,6 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     ReaderComicService comicService,
     ComicManifest manifest,
   ) async {
-    // 服务端详情与本地进度分开取：离线时 loadDetail 抛异常不得跳过 SQLite 里
-    // 已经保存的那份进度，否则断网续读永远回到第一页。
     ReaderProgress? serverProgress;
     try {
       final detail = await comicService.loadDetail(widget.itemId);
@@ -215,8 +233,6 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     final manifestMonitor = ref.watch(
       comicManifestMonitorProvider(widget.itemId),
     );
-    // 后台解析每 3 秒推一次清单：清单身份没变时不得重跑装配，否则每次轮询
-    // 都重算一次初始页码，把读者正在看的那一页顶掉。首次装配见 initState 的补读。
     ref.listen(comicManifestMonitorProvider(widget.itemId), (_, next) {
       final manifest = next.asData?.value.manifest;
       if (manifest == null) {
@@ -252,7 +268,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
             SafeArea(
               child: IconButton(
                 tooltip: AppLocalizations.of(context).coreBack,
-                onPressed: _handleBack,
+                onPressed: () => unawaited(_handleBack()),
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
             ),
@@ -299,7 +315,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
                 alignment: Alignment.topLeft,
                 child: IconButton(
                   tooltip: AppLocalizations.of(context).coreBack,
-                  onPressed: _handleBack,
+                  onPressed: () => unawaited(_handleBack()),
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
               ),
@@ -313,7 +329,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       return Scaffold(
         body: AppErrorView(
           message: _error ?? l10n.readerComicEmpty,
-          onBack: _handleBack,
+          onBack: () => unawaited(_handleBack()),
           onRetry: () {
             setState(() {
               _loading = true;
@@ -326,19 +342,18 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     }
 
     return ComicReaderView(
+      key: _readerViewKey,
       itemId: widget.itemId,
       manifest: _manifest!,
+      bookTitle: _bookTitle,
       initialPageIndex: _initialPage,
       initialIntraPageOffset: _initialIntraPageOffset,
-      onBack: _handleBack,
+      onBack: () => unawaited(_handleBack()),
     );
   }
 }
 
 /// 恢复位置：本地与服务端进度按记录时刻取较新的一份，再按锚点逐级落位。
-///
-/// 优先级为稳定页面锚点、来源页码、目录键、同版本页码、进度比例；一份都没有
-/// 时回到第一页。离线时 `serverProgress` 是 null，不得因此跳过 SQLite 里那份。
 ({int page, double intraPageOffset}) resolveComicRestore({
   required ComicManifest manifest,
   ReaderProgress? serverProgress,

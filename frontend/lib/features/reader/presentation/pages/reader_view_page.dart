@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dar
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -116,8 +117,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── 渲染状态 ──
   final ScrollController _scrollController = ScrollController();
 
-  /// 页模式就绪页数通知器：PageNavigator 预取进度直连 ReaderPageView，
-  /// 预取不再触发父级整页重建。
+  /// 页模式就绪页数通知器：PageNavigator 预取进度直连 ReaderPageView，不再触发父级整页重建。
   final ValueNotifier<int> _pageCountNotifier = ValueNotifier<int>(0);
   int _pageModePage = 0;
 

@@ -34,8 +34,13 @@ void main() {
     );
 
     expect(find.text('第一卷'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
-    await tester.tap(find.byIcon(Icons.swap_vert_rounded));
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+    // 宽屏是 Book/Swipe/Scroll 胶囊（图标态），紧凑屏退化成单键切换两种模式。
+    if (find.byIcon(Icons.view_stream_outlined).evaluate().isNotEmpty) {
+      await tester.tap(find.byIcon(Icons.view_stream_outlined));
+    } else {
+      await tester.tap(find.byIcon(Icons.swap_vert_rounded));
+    }
     await tester.tap(find.byIcon(Icons.toc_rounded));
 
     expect(backCount, 1);
@@ -121,7 +126,7 @@ void main() {
       ),
     );
 
-    expect(find.text('99 / 240'), findsOneWidget);
+    expect(find.text('Page 99 / 240'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -141,8 +146,9 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
     expect(find.byIcon(Icons.swap_horiz_rounded), findsNothing);
+    expect(find.byIcon(Icons.auto_stories_outlined), findsNothing);
+    expect(find.byIcon(Icons.view_stream_outlined), findsNothing);
 
     await tester.pumpWidget(
       buildApp(
@@ -158,8 +164,9 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
     expect(find.byIcon(Icons.swap_horiz_rounded), findsNothing);
+    expect(find.byIcon(Icons.auto_stories_outlined), findsNothing);
+    expect(find.byIcon(Icons.view_stream_outlined), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

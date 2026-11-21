@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 Future<bool> confirmDestructiveAction(
@@ -9,6 +12,17 @@ Future<bool> confirmDestructiveAction(
   String? confirmLabel,
 }) async {
   final l10n = AppLocalizations.of(context);
+  if (!MobileShellScope.isHosted(context) &&
+      Theme.of(context).extension<DesktopSkin>() != null) {
+    return showDesktopConfirm(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel ?? l10n.coreConfirm,
+      cancelLabel: l10n.coreCancel,
+      destructive: true,
+    );
+  }
   final result = await showWorkstationDialog<bool>(
     context: context,
     builder:

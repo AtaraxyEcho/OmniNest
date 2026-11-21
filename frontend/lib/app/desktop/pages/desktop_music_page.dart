@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_import_filter.dart';
 import 'package:omninest/app/desktop/desktop_player_bar.dart'
     show formatDesktopClock;
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -34,7 +35,6 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
-// 不带 show 白名单：控制器动作是**无名扩展**，show 会把它们一并滤掉。
 import 'package:omninest/features/files/media_import_ui.dart'
     show MediaImportButton, MediaImportButtonState;
 import 'package:omninest/features/files/application/file_browser_controller.dart';
@@ -56,9 +56,6 @@ part 'desktop_music_album_detail.dart';
 part 'desktop_music_platform.dart';
 
 /// 桌面音乐页（样例 `Music.tsx` 的 Home/Tracks/Albums）。
-///
-/// 与移动端的「玻璃卡组」是两套形态：桌面按样例走「当前播放主视觉 +
-/// 曲目表」——主视觉承担播放器身份，表格承担检索。
 enum DesktopMusicTab { home, tracks, albums, playlists, favorites }
 
 class DesktopMusicPage extends ConsumerStatefulWidget {
@@ -120,16 +117,7 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
       key: _mediaImportKey,
       subsystemDirectory: 'Music',
       allowSharedSpace: true,
-      acceptedExtensions: const <String>[
-        'mp3',
-        'flac',
-        'aac',
-        'm4a',
-        'ogg',
-        'opus',
-        'wav',
-        'wma',
-      ],
+      acceptedExtensions: importExtensionsFor(DesktopImportModule.music),
       label: l10n.filesImport,
       onPressedOverride: () => unawaited(_openImportDialog(context, l10n)),
       buttonBuilder:
@@ -366,7 +354,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
       await controller.playItems(
         favorites.map(MusicPlayableItem.local).toList(growable: false),
         startIndex: startIndex,
-        // 收藏列表是动态集合，当前队列必须保留本次快照，不能在重启时误还原为整库。
         source: MusicQueueSource.transient,
       );
       unawaited(
@@ -434,7 +421,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     }
   }
 
-  /// 播放歌单只把首屏放入队列，余下页在后台追加到队尾。
   Future<void> _streamPlaylistQueue({
     required String playlistId,
     required Set<String> seededTrackIds,
@@ -472,7 +458,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     }
   }
 
-  /// 收藏列表按曲库分页续载，避免一次把整个曲库解析到 UI isolate。
   Future<void> _streamFavoriteQueue({
     required Set<String> seededTrackIds,
     required String startTrackId,
@@ -615,7 +600,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final platformAsync = ref.watch(musicPlatformLibraryProvider);
     final platform =
         platformAsync.asData?.value ?? const MusicPlatformLibraryState();
-    // 同一帧内复用展开后的首屏列表，避免每个桌面区块重复创建临时集合。
     final likedTracks = platform.likedTracks;
     final onlinePlaylists = platform.playlists;
     final knownPlatformTracks = _knownPlatformTracks(platform);
@@ -654,8 +638,6 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
     final labels = <DesktopMusicTab, String>{
       DesktopMusicTab.home: l10n.desktopNavHome,
       DesktopMusicTab.tracks: l10n.desktopMusicTracks,
-      // 音乐专辑/歌单必须走音乐模块本地化键；误用照片模块的「相册」标签
-      // 会让 Music 页出现一个并不存在的相册栏。
       DesktopMusicTab.albums: l10n.musicNavAlbums,
       DesktopMusicTab.playlists: l10n.musicNavPlaylists,
       DesktopMusicTab.favorites: l10n.musicNavFavorites,
@@ -675,12 +657,12 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         }
         return false;
       },
-      child: SingleChildScrollView(
-        child: DesktopPage(
-          topPadding: DesktopMetrics.pageTopPaddingCompact,
-          children: [
-            if (selectedAlbum != null)
-              _AlbumDetail(
+      child: DesktopSliverPage(
+        topPadding: DesktopMetrics.pageTopPaddingCompact,
+        slivers: [
+          if (selectedAlbum != null)
+            SliverToBoxAdapter(
+              child: _AlbumDetail(
                 album: selectedAlbum,
                 tracks: albumTracks,
                 currentId: state?.currentItem?.playableKey,
@@ -695,9 +677,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 onAddToQueue: () => _enqueueAlbumTracks(albumTracks),
                 onTrackPlay:
                     (track) => _playAlbumTracks(albumTracks, startTrack: track),
-              )
-            else if (selectedPlaylist != null)
-              _PlaylistDetail(
+              ),
+            )
+          else if (selectedPlaylist != null)
+            SliverToBoxAdapter(
+              child: _PlaylistDetail(
                 playlist: selectedPlaylist,
                 tracks: state?.selectedPlaylistTracks ?? const <MusicTrack>[],
                 loadingMore: state?.detailPaging.loadingMore ?? false,
@@ -715,9 +699,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                 onDelete: () => _deletePlaylist(selectedPlaylist),
                 onTrackPlay:
                     (track) => _playSelectedPlaylist(startTrack: track),
-              )
-            else ...[
-              DesktopPageHead(
+              ),
+            )
+          else ...[
+            DesktopStickySliver(
+              child: DesktopPageHead(
                 eyebrow:
                     l10n
                         .desktopMusicHeadline(
@@ -739,7 +725,9 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   ),
                 ],
               ),
-              switch (_tab) {
+            ),
+            SliverToBoxAdapter(
+              child: switch (_tab) {
                 DesktopMusicTab.home when state == null => initialContent(),
                 DesktopMusicTab.home => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -869,9 +857,9 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   ],
                 ),
               },
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -917,8 +905,6 @@ class _Home extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // 首帧请求只取十张，后台回填全量列表；dashboard 作为旧缓存或异常回退。
-    // 后端已按 updatedAt 倒序返回，首页始终只展示十张。
     final albums =
         state?.albums.isNotEmpty == true
             ? state!.albums

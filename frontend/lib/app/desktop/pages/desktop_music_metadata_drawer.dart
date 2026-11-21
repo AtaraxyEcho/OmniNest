@@ -54,16 +54,22 @@ class _DesktopMusicMetadataDrawerState
   late final TextEditingController _lyrics = TextEditingController(
     text: widget.track.lyricsRaw ?? '',
   );
+  late final TextEditingController _lyricsTranslation = TextEditingController(
+    text: widget.track.lyricsTranslation ?? '',
+  );
   bool _loadingLyrics = false;
   bool _lyricsChanged = false;
+  bool _translationChanged = false;
   bool _lyricsFocused = false;
+  bool _translationFocused = false;
   bool _saving = false;
   String? _coverUrlError;
 
   @override
   void initState() {
     super.initState();
-    if (widget.track.lyricsRaw == null) {
+    if (widget.track.lyricsRaw == null ||
+        widget.track.lyricsTranslation == null) {
       _loadingLyrics = true;
       unawaited(_loadLyrics());
     }
@@ -76,6 +82,7 @@ class _DesktopMusicMetadataDrawerState
     _album.dispose();
     _coverUrl.dispose();
     _lyrics.dispose();
+    _lyricsTranslation.dispose();
     super.dispose();
   }
 
@@ -84,7 +91,7 @@ class _DesktopMusicMetadataDrawerState
       await ref
           .read(musicCenterControllerProvider.notifier)
           .ensureTrackDetail(widget.track.id);
-      if (!mounted || _lyricsChanged) return;
+      if (!mounted) return;
       final latest =
           ref
               .read(musicCenterControllerProvider)
@@ -93,7 +100,12 @@ class _DesktopMusicMetadataDrawerState
               .tracks
               .where((track) => track.id == widget.track.id)
               .firstOrNull;
-      _lyrics.text = latest?.lyricsRaw ?? '';
+      if (!_lyricsChanged && latest?.lyricsRaw != null) {
+        _lyrics.text = latest!.lyricsRaw!;
+      }
+      if (!_translationChanged && latest?.lyricsTranslation != null) {
+        _lyricsTranslation.text = latest!.lyricsTranslation!;
+      }
     } on Object catch (error) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
@@ -129,16 +141,22 @@ class _DesktopMusicMetadataDrawerState
     }
     setState(() => _saving = true);
     try {
-      await ref
-          .read(musicCenterControllerProvider.notifier)
-          .updateTrackMetadata(
-            trackId: widget.track.id,
-            title: _title.text.trim(),
-            artistName: _artist.text.trim(),
-            albumTitle: _album.text.trim(),
-            lyricsRaw: _lyricsChanged ? _lyrics.text : null,
-            coverUrl: coverUrlChanged ? coverUrl : null,
-          );
+      final controller = ref.read(musicCenterControllerProvider.notifier);
+      await controller.updateTrackMetadata(
+        trackId: widget.track.id,
+        title: _title.text.trim(),
+        artistName: _artist.text.trim(),
+        albumTitle: _album.text.trim(),
+        lyricsRaw: _lyricsChanged ? _lyrics.text : null,
+        coverUrl: coverUrlChanged ? coverUrl : null,
+      );
+      if (_translationChanged) {
+        await controller.applyLyrics(
+          widget.track,
+          _lyrics.text,
+          lyricsTranslation: _lyricsTranslation.text,
+        );
+      }
       if (!mounted) return;
       showDesktopToast(
         context,
@@ -204,6 +222,10 @@ class _DesktopMusicMetadataDrawerState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(
+      context,
+    ).languageCode.toLowerCase().startsWith('zh');
+
     return DesktopDrawerFrame(
       eyebrow: l10n.musicMetadataEyebrow,
       title: l10n.musicEditTrack,
@@ -326,65 +348,47 @@ class _DesktopMusicMetadataDrawerState
             ],
           ),
           const SizedBox(height: 6),
-          Focus(
+          _multilineLyricsField(
+            skin: skin,
+            controller: _lyrics,
+            focused: _lyricsFocused,
+            minLines: 8,
+            maxLines: 10,
+            hintText: l10n.musicLyricsEditHint,
             onFocusChange: (focused) {
               if (mounted) setState(() => _lyricsFocused = focused);
             },
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  DesktopMetrics.radiusButton,
+            onChanged: (_) => setState(() => _lyricsChanged = true),
+          ),
+          const SizedBox(height: 14),
+          Text.rich(
+            TextSpan(
+              style: DesktopType.fieldLabel(skin.text2),
+              children: [
+                TextSpan(text: isZh ? '译文歌词（LRC）' : 'Translated lyrics (LRC)'),
+                TextSpan(
+                  text:
+                      ' · ${l10n.musicLyricsLineCount(_translationLineCount)}',
+                  style: DesktopType.fieldHint(skin.text3),
                 ),
-                boxShadow:
-                    _lyricsFocused
-                        ? [
-                          BoxShadow(
-                            color: skin.accent.withValues(alpha: 0.18),
-                            blurRadius: 0,
-                            spreadRadius: 4,
-                          ),
-                        ]
-                        : const [],
-              ),
-              child: TextField(
-                controller: _lyrics,
-                onChanged: (_) => setState(() => _lyricsChanged = true),
-                minLines: 10,
-                maxLines: 10,
-                keyboardType: TextInputType.multiline,
-                textAlignVertical: TextAlignVertical.top,
-                style: DesktopType.field(skin.text),
-                cursorColor: skin.accent,
-                decoration: InputDecoration(
-                  hintText: l10n.musicLyricsEditHint,
-                  hintStyle: DesktopType.field(skin.text3),
-                  filled: true,
-                  fillColor: _lyricsFocused ? skin.raise2 : skin.raise,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(
-                      DesktopMetrics.radiusButton,
-                    ),
-                    borderSide: BorderSide(color: skin.line2),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(
-                      DesktopMetrics.radiusButton,
-                    ),
-                    borderSide: BorderSide(color: skin.line2),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(
-                      DesktopMetrics.radiusButton,
-                    ),
-                    borderSide: BorderSide(color: skin.accent),
-                  ),
-                ),
-              ),
+              ],
             ),
+          ),
+          const SizedBox(height: 6),
+          _multilineLyricsField(
+            skin: skin,
+            controller: _lyricsTranslation,
+            focused: _translationFocused,
+            minLines: 6,
+            maxLines: 8,
+            hintText:
+                isZh
+                    ? '可选：粘贴与原文时间戳对齐的译文 LRC（如 [00:12.34]译文内容）'
+                    : 'Optional: paste timestamp-aligned translated LRC lines',
+            onFocusChange: (focused) {
+              if (mounted) setState(() => _translationFocused = focused);
+            },
+            onChanged: (_) => setState(() => _translationChanged = true),
           ),
           const SizedBox(height: 14),
           Text(
@@ -397,8 +401,76 @@ class _DesktopMusicMetadataDrawerState
     );
   }
 
+  Widget _multilineLyricsField({
+    required DesktopSkin skin,
+    required TextEditingController controller,
+    required bool focused,
+    required int minLines,
+    required int maxLines,
+    required String hintText,
+    required ValueChanged<bool> onFocusChange,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Focus(
+      onFocusChange: onFocusChange,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
+          boxShadow:
+              focused
+                  ? [
+                    BoxShadow(
+                      color: skin.accent.withValues(alpha: 0.18),
+                      blurRadius: 0,
+                      spreadRadius: 4,
+                    ),
+                  ]
+                  : const [],
+        ),
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          minLines: minLines,
+          maxLines: maxLines,
+          keyboardType: TextInputType.multiline,
+          textAlignVertical: TextAlignVertical.top,
+          style: DesktopType.field(skin.text),
+          cursorColor: skin.accent,
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: DesktopType.field(skin.text3),
+            filled: true,
+            fillColor: focused ? skin.raise2 : skin.raise,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
+              borderSide: BorderSide(color: skin.line2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
+              borderSide: BorderSide(color: skin.line2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
+              borderSide: BorderSide(color: skin.accent),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   int get _lineCount =>
       _lyrics.text
+          .split(RegExp(r'\r?\n'))
+          .where((line) => line.trim().isNotEmpty)
+          .length;
+
+  int get _translationLineCount =>
+      _lyricsTranslation.text
           .split(RegExp(r'\r?\n'))
           .where((line) => line.trim().isNotEmpty)
           .length;

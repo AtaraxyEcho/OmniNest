@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_import_filter.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -40,10 +41,6 @@ part 'desktop_movies_cinema.dart';
 part 'desktop_movies_cards.dart';
 
 /// 桌面影视页（样例 `Movies.tsx` 的 `Browse`）。
-///
-/// 与模块内的移动页并行存在：壳层按形态分派到这一页，数据仍走同一批
-/// provider。首页那套「影院轮播 + 分区轨道 + 倾斜海报」的结构在这里
-/// 复用，避免影视模块又长出一套自己的排版语言。
 enum DesktopMoviesTab {
   forYou,
   continueWatching,
@@ -145,7 +142,6 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
     return copy;
   }
 
-  /// 当前页面确实没有可展示内容时显示空态，避免空库首屏留下大块空白。
   bool _isEmptyTab({
     required List<MovieVideoItem> movies,
     required List<MovieSeries> series,
@@ -229,18 +225,7 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
       key: _mediaImportKey,
       subsystemDirectory: 'Media',
       allowSharedSpace: true,
-      acceptedExtensions: const <String>[
-        'mp4',
-        'mkv',
-        'webm',
-        'mov',
-        'm4v',
-        'avi',
-        'flv',
-        'wmv',
-        'ts',
-        'm2ts',
-      ],
+      acceptedExtensions: importExtensionsFor(DesktopImportModule.film),
       label: l10n.filesImport,
       onPressedOverride: () => unawaited(_openImportDialog(context, l10n)),
       buttonBuilder:
@@ -443,150 +428,160 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
       DesktopMoviesTab.forYou => l10n.desktopForYou,
     };
 
-    return Scrollbar(
+    return DesktopSliverPage(
       controller: _scroll,
-      child: SingleChildScrollView(
-        controller: _scroll,
-        child: DesktopPage(
-          topPadding: DesktopMetrics.pageTopPaddingCompact,
-          children: [
-            if (heroItems.isNotEmpty)
-              _Cinema(items: heroItems, continueWatching: continueWatching)
-            else if (initialLoading)
-              const _CinemaSkeleton()
-            else
-              const _CinemaPlaceholder(),
-            _Head(
-              tab: _tab,
-              onChanged: _openTab,
-              importAction: _importAction(context, l10n),
-              // 生成方法的形参顺序是 (continueCount, titleCount)：ARB 里
-              // 两个占位符都是 Object，排序与文案顺序不一致，别按字面传。
-              subtitle: l10n.moviesModuleSubtitle(
-                continueWatching.length,
-                dashboard?.stats.movieCount ?? movies.length,
-              ),
+      topPadding: DesktopMetrics.pageTopPaddingCompact,
+      slivers: [
+        SliverToBoxAdapter(
+          child:
+              heroItems.isNotEmpty
+                  ? _Cinema(
+                    items: heroItems,
+                    continueWatching: continueWatching,
+                  )
+                  : initialLoading
+                  ? const _CinemaSkeleton()
+                  : const _CinemaPlaceholder(),
+        ),
+        DesktopStickySliver(
+          child: _Head(
+            tab: _tab,
+            onChanged: _openTab,
+            importAction: _importAction(context, l10n),
+            subtitle: l10n.moviesModuleSubtitle(
+              continueWatching.length,
+              dashboard?.stats.movieCount ?? movies.length,
             ),
-            _SortRow(sort: _sort, onSort: (v) => setState(() => _sort = v)),
-            if (initialLoading)
-              _MoviesLoadingTracks(tab: _tab)
-            else if (_tab == DesktopMoviesTab.forYou) ...[
-              if (continueWatching.isNotEmpty)
-                DesktopSection(
-                  eyebrow: l10n.desktopPickUpWhereYouLeft,
-                  title: l10n.desktopContinueWatching,
-                  actionLabel: l10n.desktopSeeAll,
-                  onAction: () => _openTab(DesktopMoviesTab.history),
-                  child: _WideRail(items: continueWatching),
-                ),
-              if (movies.isNotEmpty)
-                DesktopSection(
-                  eyebrow: l10n.desktopMoviesTitlesCount(movies.length),
-                  title: l10n.desktopMoviesFeatureFilms,
-                  actionLabel: l10n.desktopSeeAllCount(movies.length),
-                  onAction: () => _openTab(DesktopMoviesTab.movies),
-                  child: _PosterRail(items: _sorted(movies).take(10).toList()),
-                ),
-              if (series.isNotEmpty)
-                DesktopSection(
-                  eyebrow: l10n.desktopMoviesTitlesCount(series.length),
-                  title: l10n.videoSectionSeries,
-                  actionLabel: l10n.desktopSeeAllCount(series.length),
-                  onAction: () => _openTab(DesktopMoviesTab.series),
-                  child: _SeriesRail(items: series.take(10).toList()),
-                ),
-              if (anime.isNotEmpty)
-                DesktopSection(
-                  eyebrow: l10n.desktopMoviesTitlesCount(anime.length),
-                  title: l10n.videoSectionAnime,
-                  actionLabel: l10n.desktopSeeAllCount(anime.length),
-                  onAction: () => _openTab(DesktopMoviesTab.anime),
-                  child: _SeriesRail(items: anime.take(10).toList()),
-                ),
-            ] else ...[
-              if (_tab == DesktopMoviesTab.movies ||
-                  _tab == DesktopMoviesTab.series ||
-                  _tab == DesktopMoviesTab.anime)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: DesktopLink(
-                      label: l10n.desktopForYou,
-                      icon: DesktopIcons.left,
-                      trailing: false,
-                      onPressed: () => _openTab(DesktopMoviesTab.forYou),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SortRow(sort: _sort, onSort: (v) => setState(() => _sort = v)),
+              if (initialLoading)
+                _MoviesLoadingTracks(tab: _tab)
+              else if (_tab == DesktopMoviesTab.forYou) ...[
+                if (continueWatching.isNotEmpty)
+                  DesktopSection(
+                    eyebrow: l10n.desktopPickUpWhereYouLeft,
+                    title: l10n.desktopContinueWatching,
+                    actionLabel: l10n.desktopSeeAll,
+                    onAction: () => _openTab(DesktopMoviesTab.history),
+                    child: _WideRail(items: continueWatching),
+                  ),
+                if (movies.isNotEmpty)
+                  DesktopSection(
+                    eyebrow: l10n.desktopMoviesTitlesCount(movies.length),
+                    title: l10n.desktopMoviesFeatureFilms,
+                    actionLabel: l10n.desktopSeeAllCount(movies.length),
+                    onAction: () => _openTab(DesktopMoviesTab.movies),
+                    child: _PosterRail(
+                      items: _sorted(movies).take(10).toList(),
                     ),
                   ),
+                if (series.isNotEmpty)
+                  DesktopSection(
+                    eyebrow: l10n.desktopMoviesTitlesCount(series.length),
+                    title: l10n.videoSectionSeries,
+                    actionLabel: l10n.desktopSeeAllCount(series.length),
+                    onAction: () => _openTab(DesktopMoviesTab.series),
+                    child: _SeriesRail(items: series.take(10).toList()),
+                  ),
+                if (anime.isNotEmpty)
+                  DesktopSection(
+                    eyebrow: l10n.desktopMoviesTitlesCount(anime.length),
+                    title: l10n.videoSectionAnime,
+                    actionLabel: l10n.desktopSeeAllCount(anime.length),
+                    onAction: () => _openTab(DesktopMoviesTab.anime),
+                    child: _SeriesRail(items: anime.take(10).toList()),
+                  ),
+              ] else ...[
+                if (_tab == DesktopMoviesTab.movies ||
+                    _tab == DesktopMoviesTab.series ||
+                    _tab == DesktopMoviesTab.anime)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: DesktopLink(
+                        label: l10n.desktopForYou,
+                        icon: DesktopIcons.left,
+                        trailing: false,
+                        onPressed: () => _openTab(DesktopMoviesTab.forYou),
+                      ),
+                    ),
+                  ),
+                DesktopSection(
+                  eyebrow: l10n.desktopMoviesTitlesCount(activeTabCount),
+                  title: activeTabTitle,
+                  child: switch (_tab) {
+                    DesktopMoviesTab.continueWatching => _WideGrid(
+                      items: continueWatching,
+                    ),
+                    DesktopMoviesTab.movies => _PosterGrid(
+                      items: _sorted(movies),
+                    ),
+                    DesktopMoviesTab.favorites => _PosterGrid(
+                      items: _sorted(favorites),
+                    ),
+                    DesktopMoviesTab.watchlist => _PosterGrid(
+                      items: _sorted(watchlistItems),
+                    ),
+                    DesktopMoviesTab.anime => _SeriesGrid(items: anime),
+                    DesktopMoviesTab.history => _HistoryGrid(
+                      entries: history,
+                      onClear: () async {
+                        final snapshot = List<MovieWatchHistory>.of(history);
+                        try {
+                          await ref
+                              .read(movieCenterControllerProvider.notifier)
+                              .clearHistory();
+                          if (!context.mounted) {
+                            return;
+                          }
+                          showDesktopToast(
+                            context,
+                            l10n.videoClearHistory,
+                            kind: DesktopToastKind.success,
+                            actionLabel: l10n.desktopUndo,
+                            onAction:
+                                () => unawaited(_restoreHistory(snapshot)),
+                          );
+                        } on Exception catch (error) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          showDesktopToast(
+                            context,
+                            userFacingErrorText(error),
+                            kind: DesktopToastKind.error,
+                          );
+                        }
+                      },
+                    ),
+                    DesktopMoviesTab.series => _SeriesGrid(items: series),
+                    DesktopMoviesTab.forYou => const SizedBox.shrink(),
+                  },
                 ),
-              DesktopSection(
-                eyebrow: l10n.desktopMoviesTitlesCount(activeTabCount),
-                title: activeTabTitle,
-                child: switch (_tab) {
-                  DesktopMoviesTab.continueWatching => _WideGrid(
-                    items: continueWatching,
-                  ),
-                  DesktopMoviesTab.movies => _PosterGrid(
-                    items: _sorted(movies),
-                  ),
-                  DesktopMoviesTab.favorites => _PosterGrid(
-                    items: _sorted(favorites),
-                  ),
-                  DesktopMoviesTab.watchlist => _PosterGrid(
-                    items: _sorted(watchlistItems),
-                  ),
-                  DesktopMoviesTab.anime => _SeriesGrid(items: anime),
-                  DesktopMoviesTab.history => _HistoryGrid(
-                    entries: history,
-                    onClear: () async {
-                      final snapshot = List<MovieWatchHistory>.of(history);
-                      try {
-                        await ref
-                            .read(movieCenterControllerProvider.notifier)
-                            .clearHistory();
-                        if (!context.mounted) {
-                          return;
-                        }
-                        showDesktopToast(
-                          context,
-                          l10n.videoClearHistory,
-                          kind: DesktopToastKind.success,
-                          actionLabel: l10n.desktopUndo,
-                          onAction: () => unawaited(_restoreHistory(snapshot)),
-                        );
-                      } on Exception catch (error) {
-                        if (!context.mounted) {
-                          return;
-                        }
-                        showDesktopToast(
-                          context,
-                          userFacingErrorText(error),
-                          kind: DesktopToastKind.error,
-                        );
-                      }
-                    },
-                  ),
-                  DesktopMoviesTab.series => _SeriesGrid(items: series),
-                  DesktopMoviesTab.forYou => const SizedBox.shrink(),
-                },
-              ),
+              ],
+              if (!initialLoading &&
+                  !dashboardState.isLoading &&
+                  !centerState.isLoading &&
+                  _isEmptyTab(
+                    movies: movies,
+                    series: series,
+                    anime: anime,
+                    favorites: favorites,
+                    history: history,
+                    continueWatching: continueWatching,
+                    watchlistItems: watchlistItems,
+                  ))
+                _MoviesEmpty(tab: _tab),
             ],
-            if (!initialLoading &&
-                !dashboardState.isLoading &&
-                !centerState.isLoading &&
-                _isEmptyTab(
-                  movies: movies,
-                  series: series,
-                  anime: anime,
-                  favorites: favorites,
-                  history: history,
-                  continueWatching: continueWatching,
-                  watchlistItems: watchlistItems,
-                ))
-              _MoviesEmpty(tab: _tab),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -616,9 +611,6 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
 }
 
 /// 分档空态（样例 `Movies.tsx:83` 的 `Empty size="lg"`）。
-///
-/// 图标跟分档走：收藏是心形、历史是时钟、其余是胶片。文案也分档，
-/// 「还没有收藏」和「片库为空」是两件事，不该共用一句话。
 class _MoviesEmpty extends StatelessWidget {
   const _MoviesEmpty({required this.tab});
 
@@ -744,6 +736,3 @@ class _SortRow extends StatelessWidget {
     );
   }
 }
-
-/// 影院轮播（样例 `.cinema`）：7s 自动切换、悬停暂停、当前帧做 ken-burns
-/// 缓推，文案按 100ms 递增入场。

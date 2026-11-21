@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,7 @@ final photoDisplayOrderProvider = NotifierProvider.autoDispose<
 
 class PhotoDisplayOrderController extends Notifier<Map<String, List<String>>> {
   static const String _preferencesKey = 'photos.display_order.v1';
+  static const String _albumContextPrefix = 'album:';
 
   Future<void> _writeTail = Future<void>.value();
   String? _userId;
@@ -37,42 +39,131 @@ class PhotoDisplayOrderController extends Notifier<Map<String, List<String>>> {
     if (!ref.mounted || userId == null || userId.isEmpty || ids.isEmpty) {
       return;
     }
-    final next = Map<String, List<String>>.of(state)
+    final previous = state;
+    final next = Map<String, List<String>>.of(previous)
       ..[contextKey] = List<String>.unmodifiable(ids);
     state = Map<String, List<String>>.unmodifiable(next);
     final revision = ++_revision;
-    await _persist(userId, revision, next);
+    try {
+      await _persist(userId, revision, next);
+      await _syncSaveRemote(contextKey, ids);
+    } on Object {
+      if (ref.mounted && userId == _userId && revision == _revision) {
+        state = previous;
+        final rollbackRevision = ++_revision;
+        try {
+          await _persist(userId, rollbackRevision, previous);
+        } on Object catch (rollbackError) {
+          devLog(
+            'Could not rollback local photo display order: '
+            '${rollbackError.runtimeType}',
+          );
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<void> resetOrder(String contextKey) async {
     final userId = _userId;
     if (!ref.mounted || userId == null || userId.isEmpty) return;
-    final next = Map<String, List<String>>.of(state)..remove(contextKey);
+    final previous = state;
+    final next = Map<String, List<String>>.of(previous)..remove(contextKey);
     state = Map<String, List<String>>.unmodifiable(next);
     final revision = ++_revision;
-    await _persist(userId, revision, next);
+    try {
+      await _persist(userId, revision, next);
+      await _syncDeleteRemote(contextKey);
+    } on Object {
+      if (ref.mounted && userId == _userId && revision == _revision) {
+        state = previous;
+        final rollbackRevision = ++_revision;
+        try {
+          await _persist(userId, rollbackRevision, previous);
+        } on Object catch (rollbackError) {
+          devLog(
+            'Could not rollback reset photo display order: '
+            '${rollbackError.runtimeType}',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _syncSaveRemote(String contextKey, List<String> ids) async {
+    final api = ref.read(photoApiProvider);
+    if (contextKey.startsWith(_albumContextPrefix)) {
+      final albumId = contextKey.substring(_albumContextPrefix.length);
+      if (albumId.isEmpty) return;
+      await api.reorderAlbumItems(albumId: albumId, photoIds: ids);
+      return;
+    }
+    await api.saveDisplayOrder(contextKey, ids);
+  }
+
+  Future<void> _syncDeleteRemote(String contextKey) async {
+    if (contextKey.startsWith(_albumContextPrefix)) {
+      return;
+    }
+    final api = ref.read(photoApiProvider);
+    await api.deleteDisplayOrder(contextKey);
   }
 
   Future<void> _restore(String userId, int revision) async {
+    Map<String, List<String>> localOrders = const <String, List<String>>{};
     try {
       final preferences = await SharedPreferences.getInstance();
       final raw = preferences.getString(_key(userId));
       if (!ref.mounted || revision != _revision || userId != _userId) return;
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-      final orders = <String, List<String>>{};
-      for (final entry in decoded.entries) {
-        final value = entry.value;
-        if (value is List) {
-          orders[entry.key] = value.whereType<String>().toList(growable: false);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          final parsed = <String, List<String>>{};
+          for (final entry in decoded.entries) {
+            final value = entry.value;
+            if (value is List) {
+              parsed[entry.key] = value.whereType<String>().toList(
+                growable: false,
+              );
+            }
+          }
+          localOrders = Map<String, List<String>>.unmodifiable(parsed);
+          if (!ref.mounted || revision != _revision || userId != _userId) {
+            return;
+          }
+          state = localOrders;
         }
       }
-      if (!ref.mounted || revision != _revision || userId != _userId) return;
-      state = Map<String, List<String>>.unmodifiable(orders);
     } on Object catch (error) {
       if (ref.mounted && revision == _revision && userId == _userId) {
         devLog('Could not restore photo display order: ${error.runtimeType}');
+      }
+    }
+
+    // 启动后拉取服务端持久化排序覆盖本地缓存（保留本地相册排序键）。
+    try {
+      final remoteOrders = await ref.read(photoApiProvider).listDisplayOrders();
+      if (!ref.mounted || revision != _revision || userId != _userId) return;
+      final merged = <String, List<String>>{};
+      for (final entry in localOrders.entries) {
+        if (entry.key.startsWith(_albumContextPrefix)) {
+          merged[entry.key] = entry.value;
+        }
+      }
+      for (final entry in remoteOrders.entries) {
+        if (entry.value.isNotEmpty) {
+          merged[entry.key] = List<String>.unmodifiable(entry.value);
+        }
+      }
+      final next = Map<String, List<String>>.unmodifiable(merged);
+      state = next;
+      await _persist(userId, revision, next);
+    } on Object catch (error) {
+      if (ref.mounted && revision == _revision && userId == _userId) {
+        devLog(
+          'Could not fetch remote photo display orders: ${error.runtimeType}',
+        );
       }
     }
   }

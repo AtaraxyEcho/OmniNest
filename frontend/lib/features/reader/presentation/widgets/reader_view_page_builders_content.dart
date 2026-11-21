@@ -160,6 +160,18 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
             }
             final pageData = contentLoader?.get(currentChapterId, settings);
             if (pageData == null) return null;
+            // 补齐封面章首页快照分支，杜绝封面页点击翻页瞬间变成普通正文模板。
+            if (index == 0 && isDedicatedCoverPage(blocks: pageData.blocks)) {
+              return ReaderCoverPage(
+                title:
+                    pageData.content.title.isNotEmpty
+                        ? pageData.content.title
+                        : chapterTitle,
+                settings: settings,
+                visibleBlocks: _sliceVisibleBlocks(pageData, slice),
+                itemId: itemId,
+              );
+            }
             return _PageWithFolio(
               number: index + 1,
               folioBottom: folioBottom,

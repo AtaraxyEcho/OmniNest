@@ -1,5 +1,8 @@
 part of 'desktop_now_playing_page.dart';
 
+/// 极光 / 频谱背景的流动周期（样例 `amb-flow` 的 18s 循环）。
+const _flowCycle = Duration(seconds: 18);
+
 /// 唱机（样例 `.plinth`）：560 上限、1.05 比例的外壳，内部 80% 转盘、
 /// 右侧唱臂、底部 LED 与曲序号。播放时唱臂落下、唱片旋转、轴心浮现。
 class _Deck extends StatelessWidget {
@@ -35,9 +38,6 @@ class _Deck extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // 样例 `.deck-aura`：唱机后方一层曲目色相柔光，inset -14%/-10%，
-                // blur(40px)、opacity .55 → 播放时 .85，颜色随 --hue 补间。
-                // 局限在唱机这一块并单独保留层，不给整页叠全屏模糊。
                 Positioned(
                   left: -size * 0.10,
                   right: -size * 0.10,
@@ -102,7 +102,6 @@ class _Deck extends StatelessWidget {
                     size: platter,
                   ),
                 ),
-                // 玻璃反光：只在左上角留一道，避免整盘发灰。
                 Positioned(
                   left: size * 0.04,
                   top: size * 0.133,
@@ -130,7 +129,6 @@ class _Deck extends StatelessWidget {
                   left: size * 0.9,
                   top: size * 0.11,
                   child: AnimatedRotation(
-                    // 样例 `-8deg → 37deg`，播放时落下。
                     turns: (playing ? 37 : -8) / 360,
                     duration: DesktopMotion.of(context, DesktopMotion.tonearm),
                     curve: DesktopMotion.spring,
@@ -240,7 +238,6 @@ class _Platter extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // 唱片纹路：三圈细环 + 一道高光弧。
               for (final inset in const [0.08, 0.16, 0.24])
                 Container(
                   width: size * (0.9 - inset * 2),
@@ -446,7 +443,6 @@ class _WavePainter extends CustomPainter {
     final barWidth = math.max(1.0, step - 2);
     final paint = Paint()..strokeCap = StrokeCap.round;
     for (var i = 0; i < bars; i++) {
-      // 固定伪随机波形：同一首歌每次进来形状一致，不随帧跳动。
       final noise = (math.sin(i * 12.9898) * 43758.5453).abs() % 1;
       final magnitude = 0.28 + noise * 0.72;
       final left = i * step;
@@ -477,22 +473,63 @@ class _WavePainter extends CustomPainter {
 }
 
 /// Now Playing 背景（样例 `.np-bg` 的六档）：
-/// 模糊封面 / 极光 / 频谱脉动 / 壁纸库 / 渐变 / 纯色，外加遮罩与模糊两层调节。
-class _NpBackdrop extends ConsumerWidget {
-  const _NpBackdrop({required this.style, required this.cover});
+/// 支持 `style.wallId` 独立渲染不污染全局壁纸、自定义角度渐变、播放态
+/// `aurora` / `spectrum` 流动动画，外加遮罩与模糊两层调节。
+class _NpBackdrop extends ConsumerStatefulWidget {
+  const _NpBackdrop({
+    required this.style,
+    required this.cover,
+    required this.playing,
+    required this.hueColor,
+  });
 
   final DesktopNpStyle style;
   final String? cover;
+  final bool playing;
+  final Color hueColor;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NpBackdrop> createState() => _NpBackdropState();
+}
+
+class _NpBackdropState extends ConsumerState<_NpBackdrop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _flow = AnimationController(
+    vsync: this,
+    duration: _flowCycle,
+  );
+
+  bool get _needsFlow =>
+      widget.playing &&
+      (widget.style.background == DesktopNpBackground.aurora ||
+          widget.style.background == DesktopNpBackground.spectrum);
+
+  void _syncFlow(bool reduceMotion) {
+    final shouldRun = _needsFlow && !reduceMotion;
+    if (shouldRun && !_flow.isAnimating) {
+      _flow.repeat();
+    } else if (!shouldRun && _flow.isAnimating) {
+      _flow.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _flow.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final preset = DesktopNpPreset.all[style.preset];
-    final top = style.preset == 0 ? skin.accent : preset.top;
+    final style = widget.style;
+    final hue = widget.hueColor;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _syncFlow(reduceMotion);
 
     Widget base = switch (style.background) {
       DesktopNpBackground.cover =>
-        cover == null
+        widget.cover == null
             ? const ColoredBox(color: Color(0xFF07090B))
             : Opacity(
               opacity: 0.45,
@@ -505,7 +542,7 @@ class _NpBackdrop extends ConsumerWidget {
                 child: Transform.scale(
                   scale: 1.2,
                   child: Image.network(
-                    cover!,
+                    widget.cover!,
                     fit: BoxFit.cover,
                     filterQuality: FilterQuality.low,
                     errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -513,110 +550,118 @@ class _NpBackdrop extends ConsumerWidget {
                 ),
               ),
             ),
-      DesktopNpBackground.aurora => Stack(
-        fit: StackFit.expand,
-        children: [
-          const ColoredBox(color: Color(0xFF07090B)),
-          Positioned(
-            left: -220,
-            top: -260,
-            width: 620,
-            height: 620,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    skin.accent.withValues(alpha: 0.5),
-                    Colors.transparent,
-                  ],
+      DesktopNpBackground.aurora => AnimatedBuilder(
+        animation: _flow,
+        builder: (context, _) {
+          final theta = _flow.value * 2 * math.pi;
+          final dx1 = math.sin(theta) * 65;
+          final dy1 = math.cos(theta) * 45;
+          final dx2 = math.cos(theta * 1.1) * 70;
+          final dy2 = math.sin(theta * 0.9) * 55;
+          final dx3 = math.sin(theta * 0.7 + 1.2) * 55;
+          final dy3 = math.cos(theta * 0.8 + 0.6) * 40;
+          final dx4 = math.cos(theta * 1.3 + 2.0) * 50;
+          final dy4 = math.sin(theta * 1.2 + 1.0) * 38;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Color(0xFF07090B)),
+              Positioned(
+                left: -220 + dx1,
+                top: -260 + dy1,
+                width: 660,
+                height: 660,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [hue.withValues(alpha: 0.54), Colors.transparent],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            right: -260,
-            bottom: -300,
-            width: 700,
-            height: 700,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    skin.warm.withValues(alpha: 0.32),
-                    Colors.transparent,
-                  ],
+              Positioned(
+                right: -260 + dx2,
+                bottom: -300 + dy2,
+                width: 720,
+                height: 720,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        skin.warm.withValues(alpha: 0.34),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: 380,
-            bottom: -220,
-            width: 420,
-            height: 420,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF5D6FA8).withValues(alpha: 0.3),
-                    Colors.transparent,
-                  ],
+              Positioned(
+                left: 340 + dx3,
+                bottom: -220 + dy3,
+                width: 460,
+                height: 460,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF5D6FA8).withValues(alpha: 0.32),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          // 样例 `.aurora` 是四团（`extra.css:118`）：第四团是暖橙
-          // `#d9a05a`，尺寸 40%、贴右下、opacity .3。缺了它整面只剩冷色。
-          Positioned(
-            right: -80,
-            bottom: -180,
-            width: 300,
-            height: 300,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFD9A05A).withValues(alpha: 0.3),
-                    Colors.transparent,
-                  ],
+              Positioned(
+                right: -80 + dx4,
+                bottom: -180 + dy4,
+                width: 340,
+                height: 340,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFFD9A05A).withValues(alpha: 0.32),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
-      DesktopNpBackground.spectrum => AnimatedContainer(
-        duration: MotionToken.reduced(context, DesktopMotion.colorFade),
-        curve: DesktopMotion.ease,
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, 0.7),
-            radius: 1.1,
-            colors: [top.withValues(alpha: 0.55), const Color(0xFF07090B)],
-          ),
-        ),
+      DesktopNpBackground.spectrum => AnimatedBuilder(
+        animation: _flow,
+        builder: (context, _) {
+          final theta = _flow.value * 2 * math.pi;
+          final pulse = 0.5 + 0.5 * math.sin(theta * 3);
+          final radius = 0.95 + pulse * 0.28;
+          final alpha = 0.42 + pulse * 0.22;
+          final shiftX = math.sin(theta) * 0.14;
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(shiftX, 0.68),
+                radius: radius,
+                colors: [
+                  hue.withValues(alpha: alpha),
+                  Color.lerp(const Color(0xFF07090B), hue, 0.16)!,
+                  const Color(0xFF07090B),
+                ],
+                stops: const [0.0, 0.52, 1.0],
+              ),
+            ),
+          );
+        },
       ),
-      // 样例 `.np-grad { transition: background 1s }`：换预设时渐变要
-      // 缓缓过渡，不是硬切。
-      DesktopNpBackground.gradient => AnimatedContainer(
-        duration: MotionToken.reduced(context, DesktopMotion.colorFade),
-        curve: DesktopMotion.ease,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [top, preset.bottom],
-          ),
-        ),
-      ),
+      DesktopNpBackground.gradient => _angleGradient(context, style, hue),
       DesktopNpBackground.plain => const ColoredBox(color: Color(0xFF07090B)),
-      // 样例 `bg: "library"`：背景取自壁纸库当前选中的那一张。桌面壳的
-      // 壁纸层被 NP 的不透明舞台盖住，所以这里自己铺一层，不产生双背景。
-      DesktopNpBackground.library => _wallpaper(context, ref),
+      DesktopNpBackground.library => _wallpaper(context, ref, style.wallId),
     };
 
     if (style.blur > 0) {
@@ -641,24 +686,52 @@ class _NpBackdrop extends ConsumerWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF07090B).withValues(alpha: 0.7),
-                const Color(0xFF07090B).withValues(alpha: 0.86),
+                const Color(0xFF07090B).withValues(alpha: 0.62),
+                const Color(0xFF07090B).withValues(alpha: 0.80),
               ],
             ),
           ),
         ),
         if (style.mask > 0)
           ColoredBox(
-            color: Colors.black.withValues(alpha: style.mask / 100 * 0.8),
+            color: Colors.black.withValues(alpha: style.mask / 100 * 0.85),
           ),
       ],
     );
   }
 
-  Widget _wallpaper(BuildContext context, WidgetRef ref) {
+  Widget _angleGradient(BuildContext context, DesktopNpStyle style, Color hue) {
+    // CSS linear-gradient(angle deg): 0deg 向上、90deg 向右、180deg 向下。
+    final rad = style.gradAngle * math.pi / 180.0;
+    final dx = math.sin(rad);
+    final dy = -math.cos(rad);
+    return AnimatedContainer(
+      duration: MotionToken.reduced(context, DesktopMotion.colorFade),
+      curve: DesktopMotion.ease,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment(-dx, -dy),
+          end: Alignment(dx, dy),
+          colors: <Color>[
+            style.effectiveGradStart(hue),
+            style.effectiveGradEnd(hue),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wallpaper(BuildContext context, WidgetRef ref, String wallId) {
     final state = ref.watch(appBackdropControllerProvider).asData?.value;
-    final asset = state?.selectedBackdrop;
-    if (state == null || asset == null) {
+    if (state == null) {
+      return const ColoredBox(color: Color(0xFF07090B));
+    }
+    // 严格按播放页自身的 `style.wallId` 查找，绝不改动全局壁纸选择。
+    final asset =
+        state.backdrops.where((item) => item.id == wallId).firstOrNull ??
+        state.selectedBackdrop ??
+        state.backdrops.firstOrNull;
+    if (asset == null) {
       return const ColoredBox(color: Color(0xFF07090B));
     }
     final motionAllowed =

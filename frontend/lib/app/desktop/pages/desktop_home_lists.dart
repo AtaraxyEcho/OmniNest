@@ -22,7 +22,7 @@ import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 
-/// 最近照片条（样例 `.photo-strip`）：按原始宽高比分配宽度，悬停扩张。
+/// 最近照片条（样例 `.photo-strip`）：初始严格等宽，悬停目标扩展至 3 倍权重。
 class DesktopPhotoStrip extends ConsumerStatefulWidget {
   const DesktopPhotoStrip({super.key});
 
@@ -54,7 +54,7 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
           children: [
             for (var index = 0; index < 7; index++)
               Expanded(
-                flex: const [160, 120, 220, 140, 180, 140, 160][index],
+                flex: 1,
                 child: Padding(
                   padding: EdgeInsets.only(right: index == 6 ? 0 : 10),
                   child: DesktopSkeletonBox(
@@ -86,104 +86,100 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
             0.0,
             double.infinity,
           );
-          // 样例 `Home.tsx`：`flexGrow: p.ratio`（宽高比原值），
-          // hover 时 `.ps:hover { flex-grow: 3 !important }`。
-          // 两边同乘 100 保留比例，避免把比例 clamp 到某个像素区间。
-          final grow = <double>[
-            for (final photo in photos)
-              ((photo.width ?? 4) / (photo.height ?? 3) * 100).clamp(
-                20.0,
-                800.0,
-              ),
-          ];
-          if (_hovered != null && _hovered! < grow.length) {
-            grow[_hovered!] = 300;
+          // 样例 `Home.tsx:109-113` & `polish.css:619-620`：
+          // 默认所有缩略图严格等宽 `flex-grow: 1`，悬停项扩展为 `flex-grow: 3`。
+          final grow = List<double>.filled(count, 1.0);
+          if (_hovered != null && _hovered! < count) {
+            grow[_hovered!] = 3.0;
           }
           final total = grow.fold<double>(0, (sum, value) => sum + value);
           return Row(
             children: [
               for (var index = 0; index < count; index++)
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  // 命中区包住卡片的间隙内边缘，宽度动画时指针不会因
-                  // padding 重新布局而短暂离开 MouseRegion。
-                  onEnter: (_) {
-                    if (_hovered != index) {
-                      setState(() => _hovered = index);
-                    }
-                  },
-                  onExit: (_) {
-                    if (_hovered == index) {
-                      setState(() => _hovered = null);
-                    }
-                  },
-                  child: AnimatedContainer(
-                    duration: DesktopMotion.of(
-                      context,
-                      DesktopMotion.photoStrip,
-                    ),
-                    curve: Curves.easeOutCubic,
-                    width: total == 0 ? 0 : available * grow[index] / total,
-                    padding: EdgeInsets.only(
-                      right: index == count - 1 ? 0 : gap,
-                    ),
-                    child: GestureDetector(
-                      onTap:
-                          () => context.push(
-                            DesktopRoutes.photoDetail(photos[index].id),
-                          ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            RepaintBoundary(
-                              child: DesktopCover(
-                                url: photos[index].coverUrl,
-                                fallbackIcon: DesktopIcons.image,
-                                // 原型的 `<Img>` 首帧保持照片条的玻璃/背景层，
-                                // 不先替换成带图标的深色卡片；图片到达后直接覆盖。
-                                fallback: const SizedBox.expand(),
-                                cacheKey: photos[index].coverCacheKey,
-                                // 悬停会改变卡片宽度；固定解码宽度，避免
-                                // LayoutBuilder 每帧生成新的图片提供器而闪回占位。
-                                cacheWidth: 1200,
-                              ),
+                () {
+                  final itemWidth =
+                      total == 0 ? 0.0 : available * grow[index] / total;
+                  final trailingGap = index == count - 1 ? 0.0 : gap;
+                  return MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    // 命中区包住卡片的间隙内边缘，宽度动画时指针不会因
+                    // padding 重新布局而短暂离开 MouseRegion。
+                    onEnter: (_) {
+                      if (_hovered != index) {
+                        setState(() => _hovered = index);
+                      }
+                    },
+                    onExit: (_) {
+                      if (_hovered == index) {
+                        setState(() => _hovered = null);
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: DesktopMotion.of(
+                        context,
+                        DesktopMotion.photoStrip,
+                      ),
+                      curve: Curves.easeOutCubic,
+                      width: itemWidth + trailingGap,
+                      padding: EdgeInsets.only(right: trailingGap),
+                      child: GestureDetector(
+                        onTap:
+                            () => context.push(
+                              DesktopRoutes.photoDetail(photos[index].id),
                             ),
-                            AnimatedOpacity(
-                              duration: MotionToken.reduced(
-                                context,
-                                MotionToken.fast,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              RepaintBoundary(
+                                child: DesktopCover(
+                                  url: photos[index].coverUrl,
+                                  fallbackIcon: DesktopIcons.image,
+                                  // 原型的 `<Img>` 首帧保持照片条的玻璃/背景层，
+                                  // 不先替换成带图标的深色卡片；图片到达后直接覆盖。
+                                  fallback: const SizedBox.expand(),
+                                  cacheKey: photos[index].coverCacheKey,
+                                  // 悬停会改变卡片宽度；固定解码宽度，避免
+                                  // LayoutBuilder 每帧生成新的图片提供器而闪回占位。
+                                  cacheWidth: 1200,
+                                ),
                               ),
-                              curve: MotionToken.curve,
-                              opacity: _hovered == index ? 1 : 0,
-                              child: Align(
-                                alignment: Alignment.bottomLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    12,
-                                    12,
-                                    10,
-                                  ),
-                                  child: Text(
-                                    // 样例标签显示 `place`，不是照片标题。
-                                    _photoPlaceLabel(photos[index]) ?? '',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: DesktopType.caption(
-                                      DesktopPalette.onStage,
+                              AnimatedOpacity(
+                                duration: MotionToken.reduced(
+                                  context,
+                                  MotionToken.fast,
+                                ),
+                                curve: MotionToken.curve,
+                                opacity: _hovered == index ? 1 : 0,
+                                child: Align(
+                                  alignment: Alignment.bottomLeft,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      12,
+                                      12,
+                                      10,
+                                    ),
+                                    child: Text(
+                                      // 样例标签显示 `place`，不是照片标题。
+                                      _photoPlaceLabel(photos[index]) ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.caption(
+                                        DesktopPalette.onStage,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }(),
             ],
           );
         },

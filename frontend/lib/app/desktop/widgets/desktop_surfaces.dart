@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
@@ -27,6 +31,21 @@ class DesktopEyebrow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 计算桌面页面内容区左右留白，使 [DesktopSliverPage] 与 [DesktopPage] 对齐。
+double _desktopContentSideInset(
+  double viewportWidth, {
+  double maxWidth = DesktopMetrics.pageMaxWidth,
+}) {
+  final horizontal = (viewportWidth * 0.03).clamp(
+    DesktopMetrics.pageHorizontalMin,
+    DesktopMetrics.pageHorizontalMax,
+  );
+  if (!maxWidth.isFinite || viewportWidth <= maxWidth) {
+    return horizontal;
+  }
+  return (viewportWidth - maxWidth) / 2 + horizontal;
 }
 
 /// 样例 `.page`：限宽 1560、左右 24-52 自适应、底部为播放条留白。
@@ -76,6 +95,247 @@ class DesktopPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 通用吸顶页面骨架：基于 [CustomScrollView]，保持与 [DesktopPage] 一致的最大
+/// 内容宽度与水平内边距，同时让 [DesktopStickySliver] 在吸顶态实现全出血磨砂背板。
+class DesktopSliverPage extends StatelessWidget {
+  const DesktopSliverPage({
+    this.controller,
+    this.topPadding = DesktopMetrics.pageTopPadding,
+    this.bottomPadding = 130.0,
+    required this.slivers,
+    super.key,
+  });
+
+  final ScrollController? controller;
+  final double topPadding;
+  final double bottomPadding;
+  final List<Widget> slivers;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth =
+            constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+        final sideInset = _desktopContentSideInset(viewportWidth);
+        return Scrollbar(
+          controller: controller,
+          child: CustomScrollView(
+            controller: controller,
+            slivers: [
+              if (topPadding > 0)
+                SliverToBoxAdapter(child: SizedBox(height: topPadding)),
+              for (final sliver in slivers)
+                sliver is DesktopStickySliver
+                    ? sliver
+                    : SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: sideInset),
+                      sliver: sliver,
+                    ),
+              if (bottomPadding > 0)
+                SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 通用 Sticky 分类栏 Sliver（样例 `.page-head.sticky` / `.cat-sticky`）。
+///
+/// 吸顶时铺满全宽（忽略内容区左右 padding，实现 `inset: 0 -100vw` 全出血磨砂），
+/// 外层严格包裹 [ClipRect] 再套 [BackdropFilter]（blur: 18），并自测量真实高度
+/// 驱动 [SliverPersistentHeader]，防止窄窗口换行时触发 RenderFlex 溢出。
+class DesktopStickySliver extends StatefulWidget {
+  const DesktopStickySliver({
+    required this.child,
+    this.minHeight,
+    this.maxHeight,
+    super.key,
+  });
+
+  final Widget child;
+  final double? minHeight;
+  final double? maxHeight;
+
+  @override
+  State<DesktopStickySliver> createState() => _DesktopStickySliverState();
+}
+
+class _DesktopStickySliverState extends State<DesktopStickySliver> {
+  double? _measuredHeight;
+
+  void _onChildSizeChanged(Size size) {
+    final next = size.height;
+    if (next <= 0 || !next.isFinite) {
+      return;
+    }
+    if (_measuredHeight != null && (_measuredHeight! - next).abs() < 0.5) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _measuredHeight = next);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedMin = widget.minHeight ?? _measuredHeight ?? 68.0;
+    final resolvedMax = math.max(
+      resolvedMin,
+      widget.maxHeight ?? _measuredHeight ?? resolvedMin,
+    );
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _DesktopStickySliverDelegate(
+        minExtent: resolvedMin,
+        maxExtent: resolvedMax,
+        child: widget.child,
+        onMeasured:
+            widget.minHeight != null && widget.maxHeight != null
+                ? null
+                : _onChildSizeChanged,
+      ),
+    );
+  }
+}
+
+class _DesktopStickySliverDelegate extends SliverPersistentHeaderDelegate {
+  _DesktopStickySliverDelegate({
+    required this.minExtent,
+    required this.maxExtent,
+    required this.child,
+    this.onMeasured,
+  });
+
+  @override
+  final double minExtent;
+
+  @override
+  final double maxExtent;
+
+  final Widget child;
+  final ValueChanged<Size>? onMeasured;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final skin = DesktopSkin.of(context);
+    final stuck = shrinkOffset > 0.5 || overlapsContent;
+    final duration = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 250),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth =
+            constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+        final sideInset = _desktopContentSideInset(viewportWidth);
+        Widget content = Padding(
+          padding: EdgeInsets.symmetric(horizontal: sideInset),
+          child: child,
+        );
+        if (onMeasured != null) {
+          content = _StickyMeasureSize(onChange: onMeasured!, child: content);
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: stuck ? 1.0 : 0.0,
+                  duration: duration,
+                  curve: DesktopMotion.ease,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: skin.bg.withValues(alpha: 0.78),
+                          border: Border(bottom: BorderSide(color: skin.line)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 用不可滚的单子滚动容器包裹内容，确保首帧测量尚未完成或窄窗
+            // 换行时绝不触发 RenderFlex overflow。
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: content,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _DesktopStickySliverDelegate oldDelegate) {
+    return oldDelegate.minExtent != minExtent ||
+        oldDelegate.maxExtent != maxExtent ||
+        oldDelegate.child != child;
+  }
+}
+
+class _StickyMeasureSize extends SingleChildRenderObjectWidget {
+  const _StickyMeasureSize({required this.onChange, required super.child});
+
+  final ValueChanged<Size> onChange;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderStickyMeasureSize(onChange);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderStickyMeasureSize renderObject,
+  ) {
+    renderObject.onChange = onChange;
+  }
+}
+
+class _RenderStickyMeasureSize extends RenderProxyBox {
+  _RenderStickyMeasureSize(this.onChange);
+
+  ValueChanged<Size> onChange;
+  Size? _lastSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final current = child?.size;
+    if (current != null && current != _lastSize) {
+      _lastSize = current;
+      onChange(current);
+    }
   }
 }
 
@@ -310,11 +570,6 @@ class DesktopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    // `.card { backdrop-filter: blur(24px) saturate(1.3) }`：模糊的是背后的
-    // 环境光，而不是卡片内容，所以滤镜放在容器外层。
-    // 卡片间距必须留在滤镜**外面**：放进 ClipRRect 里时那 16px 全透明带
-    // 也会被模糊采样，卡与卡之间出现一条糊掉的条纹（CSS 的 margin 本来就是
-    // 元素外的东西），同时白付一份 16px 高的模糊面积。
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: ClipRRect(
@@ -323,8 +578,6 @@ class DesktopCard extends StatelessWidget {
           filterConfig: ImageFilterConfig(
             desktopGlassFilter(blur: 24, saturation: 1.3),
           ),
-          // 卡内交互（按钮 hover、滑杆、进度）与卡片的背板模糊隔离成两层：
-          // 否则任一处重绘都要把 24σ 的全卡面积重糊一次。
           child: RepaintBoundary(
             child: Container(
               padding: padding,
@@ -500,7 +753,6 @@ class DesktopEmpty extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     final accent = skin.accent;
     final compact = small && !large;
-    // 样例 `polish.css:235-239` 的三档内边距（`.empty` 被 polish 覆盖成 44/24）。
     final padding =
         large
             ? const EdgeInsets.symmetric(vertical: 90, horizontal: 20)
@@ -508,11 +760,9 @@ class DesktopEmpty extends StatelessWidget {
             ? const EdgeInsets.symmetric(vertical: 24, horizontal: 16)
             : const EdgeInsets.symmetric(vertical: 44, horizontal: 24);
     final iconSize = compact ? 18.0 : 24.0;
-    // `box-sizing: content-box`：圆由「图标 + 内边距」撑出，不写死直径。
     final iconPadding = compact ? 11.0 : 16.0;
     return Semantics(
       container: true,
-      // 样例 `ui.tsx:128`：空态是 `role=status`，读屏会主动播报。
       liveRegion: true,
       label: message,
       child: Padding(
@@ -526,10 +776,6 @@ class DesktopEmpty extends StatelessWidget {
                 padding: EdgeInsets.all(iconPadding),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  // `radial-gradient(circle at 30% 25%, accent 22%, accent 8%)`：
-                  // 圆心换算成 Alignment 就是 (30%,25%) → (-0.4,-0.5)；CSS 的
-                  // 默认半径是 farthest-corner（正方形对角 ≈1.03 个边长），
-                  // 压成 0.5 会让边缘过早掉到 8%，整体发暗。
                   gradient: RadialGradient(
                     center: const Alignment(-0.4, -0.5),
                     radius: 1.03,
@@ -538,7 +784,6 @@ class DesktopEmpty extends StatelessWidget {
                       accent.withValues(alpha: 0.08),
                     ],
                   ),
-                  // `0 0 0 7px accent 6%`：圆外的柔光环。
                   boxShadow: [
                     BoxShadow(
                       color: accent.withValues(alpha: 0.06),
@@ -547,9 +792,6 @@ class DesktopEmpty extends StatelessWidget {
                     ),
                   ],
                 ),
-                // `inset 0 0 0 1px accent 22%` 画在盒内：用 foregroundDecoration
-                // 而不是 border，后者会按 CSS `border` 语义把边宽算进盒子尺寸，
-                // 圆就从 56 涨到 58。
                 foregroundDecoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: accent.withValues(alpha: 0.22)),
@@ -562,7 +804,6 @@ class DesktopEmpty extends StatelessWidget {
               child: Text(
                 message,
                 textAlign: TextAlign.center,
-                // `.empty > strong`：15 / 600 / 正文色。
                 style: DesktopType.medium(
                   skin.text,
                 ).copyWith(fontWeight: FontWeight.w600),
@@ -576,7 +817,6 @@ class DesktopEmpty extends StatelessWidget {
                   child: Text(
                     description!,
                     textAlign: TextAlign.center,
-                    // `.empty p`：13 / 1.55 / text3。
                     style: DesktopType.dense(skin.text3).copyWith(height: 1.55),
                   ),
                 ),
@@ -637,7 +877,6 @@ class DesktopImage extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         cacheWidth: cacheWidth,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          // 解码完成才把图挂上去，首帧从 0 淡到 1（`.img.ok`）。
           if (wasSynchronouslyLoaded || frame != null) {
             return _ImageFadeIn(child: child);
           }
@@ -770,9 +1009,6 @@ class DesktopHoverLift extends StatelessWidget {
       enabled: onTap != null,
       builder:
           (context, hovered) => TweenAnimationBuilder<double>(
-            // 样例 `.stat:hover { transform: translateY(-3px) }` 与
-            // `.album:hover { translateY(-4px) }` 都是固定 px，时长 350ms
-            // 且走 `--spring`；用百分比位移会让卡片越高抬得越多。
             tween: Tween<double>(end: hovered ? -lift : 0),
             duration: MotionToken.reduced(context, DesktopMotion.lift),
             curve: DesktopMotion.spring,

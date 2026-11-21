@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:toastification/toastification.dart';
@@ -43,6 +44,14 @@ ToastificationType _toastType(OmniFeedbackSeverity severity) =>
       OmniFeedbackSeverity.error => ToastificationType.error,
     };
 
+DesktopToastKind _desktopToastKind(OmniFeedbackSeverity severity) =>
+    switch (severity) {
+      OmniFeedbackSeverity.info => DesktopToastKind.info,
+      OmniFeedbackSeverity.success => DesktopToastKind.success,
+      OmniFeedbackSeverity.warning => DesktopToastKind.warn,
+      OmniFeedbackSeverity.error => DesktopToastKind.error,
+    };
+
 Duration _resolveAutoClose(
   OmniFeedbackSeverity severity,
   bool hasAction,
@@ -65,7 +74,8 @@ void _pruneStaleFeedback() {
   );
 }
 
-/// 全局瞬时反馈入口：顶部居中、限宽、分级配色、同文案合并重置计时。
+/// 全局瞬时反馈入口：桌面端自动桥接新版磨砂 [showDesktopToast]，移动端保持
+/// 顶部居中 toastification 提示条。
 ///
 /// [actionLabel] 与 [onAction] 成对提供时在文案下方渲染动作按钮（如撤销、
 /// 查看通知），并延长停留时间。[duration] 仅在调用方有明确节奏诉求时覆盖
@@ -83,6 +93,19 @@ void showOmniFeedback(
   }
   final trimmed = message.trim();
   if (trimmed.isEmpty) {
+    return;
+  }
+  // 桌面端检测到 DesktopToastScope 时统一路由至新版底部磨砂 Toast，
+  // 彻底收口共享业务页与管理后台残留的旧版提示条。
+  if (DesktopToastScope.maybeOf(context) != null) {
+    showDesktopToast(
+      context,
+      trimmed,
+      kind: _desktopToastKind(severity),
+      actionLabel: actionLabel,
+      onAction: onAction,
+      duration: duration,
+    );
     return;
   }
   _pruneStaleFeedback();

@@ -11,6 +11,7 @@ class _PhotoDragPayload {
     required this.feedbackWidth,
     required this.feedbackHeight,
     required this.fanOffsets,
+    required this.grabOffset,
   });
 
   final String contextKey;
@@ -22,6 +23,7 @@ class _PhotoDragPayload {
   final double feedbackWidth;
   final double feedbackHeight;
   final List<_PhotoFlyOffset> fanOffsets;
+  final Offset grabOffset;
 }
 
 class _PhotoFlyOffset {
@@ -33,12 +35,298 @@ class _PhotoFlyOffset {
   final double sy;
 }
 
-class _PhotoRectTween extends Tween<Rect> {
-  _PhotoRectTween({required Rect begin, required Rect end})
-    : super(begin: begin, end: end);
+@immutable
+class _GhostPose {
+  const _GhostPose({
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    this.dropping = false,
+  });
+
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final bool dropping;
+
+  Rect get rect => Rect.fromLTWH(left, top, width, height);
+
+  _GhostPose copyWith({
+    double? left,
+    double? top,
+    double? width,
+    double? height,
+    bool? dropping,
+  }) {
+    return _GhostPose(
+      left: left ?? this.left,
+      top: top ?? this.top,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      dropping: dropping ?? this.dropping,
+    );
+  }
+}
+
+/// 跨卡片共享的 FLIP 快照追踪器：在 `setState` 变更顺序前一次性记录
+/// 所有卡片带滚动偏移补偿的视觉坐标，在下一帧 `paint` 前同步起播补间，
+/// 彻底杜绝 1 帧瞬移闪烁。
+class _PhotoFlipTracker {
+  _PhotoFlipTracker({required this.scrollOffsetOf});
+
+  final double Function() scrollOffsetOf;
+  int epoch = 0;
+  String? skipPhotoId;
+  final Map<String, Offset> previousPositions = <String, Offset>{};
+  final Map<String, Offset> activeVisualOffsets = <String, Offset>{};
+
+  void snapshot(Map<String, GlobalKey<State<StatefulWidget>>> tileKeys) {
+    previousPositions.clear();
+    final scrollOffset = scrollOffsetOf();
+    for (final entry in tileKeys.entries) {
+      final ctx = entry.value.currentContext;
+      if (ctx == null || !ctx.mounted) continue;
+      RenderObject? renderObject;
+      try {
+        renderObject = ctx.findRenderObject();
+      } on FlutterError {
+        continue;
+      }
+      if (renderObject is! RenderBox || !renderObject.hasSize) continue;
+      final visualOffset = activeVisualOffsets[entry.key] ?? Offset.zero;
+      final globalTopLeft = renderObject.localToGlobal(Offset.zero);
+      previousPositions[entry.key] = Offset(
+        globalTopLeft.dx + visualOffset.dx,
+        globalTopLeft.dy + scrollOffset + visualOffset.dy,
+      );
+    }
+    epoch++;
+  }
+
+  void clear() {
+    previousPositions.clear();
+    activeVisualOffsets.clear();
+    skipPhotoId = null;
+  }
+}
+
+/// 零闪烁同步 FLIP 容器：使用显式 `AnimationController(460ms)` 与自定义
+/// `RenderProxyBox`，在新布局首帧 `paint` 前即时计算带 `scrollOffset` 补偿的
+/// 位移差并绘制在旧坐标，随后由控制器平滑归零。
+class _FlipPhotoTile extends StatefulWidget {
+  const _FlipPhotoTile({
+    super.key,
+    required this.photoId,
+    required this.tracker,
+    required this.epoch,
+    required this.child,
+  });
+
+  final String photoId;
+  final _PhotoFlipTracker tracker;
+  final int epoch;
+  final Widget child;
 
   @override
-  Rect lerp(double t) => Rect.lerp(begin!, end!, t)!;
+  State<_FlipPhotoTile> createState() => _FlipPhotoTileState();
+}
+
+class _FlipPhotoTileState extends State<_FlipPhotoTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Offset _flipDelta = Offset.zero;
+  Offset _currentOffset = Offset.zero;
+  int _handledEpoch = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _handledEpoch = widget.epoch;
+    _controller = AnimationController(
+      vsync: this,
+      duration: DesktopMotion.photoReorderFlip,
+    )..addListener(_onTick);
+  }
+
+  @override
+  void didUpdateWidget(_FlipPhotoTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoId != widget.photoId) {
+      oldWidget.tracker.activeVisualOffsets.remove(oldWidget.photoId);
+      _flipDelta = Offset.zero;
+      _currentOffset = Offset.zero;
+      _controller.stop();
+      _handledEpoch = widget.epoch;
+    }
+  }
+
+  void _onTick() {
+    final eased = DesktopMotion.photoReorderFlipCurve.transform(
+      _controller.value.clamp(0.0, 1.0),
+    );
+    final next = _flipDelta * (1.0 - eased);
+    _currentOffset = next.distanceSquared < 0.04 ? Offset.zero : next;
+    if (_currentOffset == Offset.zero) {
+      widget.tracker.activeVisualOffsets.remove(widget.photoId);
+    } else {
+      widget.tracker.activeVisualOffsets[widget.photoId] = _currentOffset;
+    }
+    final renderObject = context.findRenderObject();
+    if (renderObject is _RenderFlipPhotoTile) {
+      renderObject.paintOffset = _currentOffset;
+    }
+  }
+
+  Offset _consumePendingFlip(Offset newCompensatedPosition) {
+    if (widget.epoch == _handledEpoch) {
+      return _currentOffset;
+    }
+    _handledEpoch = widget.epoch;
+    if (widget.photoId == widget.tracker.skipPhotoId) {
+      _flipDelta = Offset.zero;
+      _currentOffset = Offset.zero;
+      widget.tracker.activeVisualOffsets.remove(widget.photoId);
+      return Offset.zero;
+    }
+    final oldPos = widget.tracker.previousPositions[widget.photoId];
+    if (oldPos == null) {
+      return _currentOffset;
+    }
+    final delta = oldPos - newCompensatedPosition;
+    if (delta.distance <= 1.0) {
+      return _currentOffset;
+    }
+    final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduced) {
+      _flipDelta = Offset.zero;
+      _currentOffset = Offset.zero;
+      widget.tracker.activeVisualOffsets.remove(widget.photoId);
+      return Offset.zero;
+    }
+    _flipDelta = delta;
+    _currentOffset = delta;
+    widget.tracker.activeVisualOffsets[widget.photoId] = delta;
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      _controller.duration = DesktopMotion.of(
+        context,
+        DesktopMotion.photoReorderFlip,
+      );
+      _controller.forward(from: 0.0);
+    });
+    return delta;
+  }
+
+  @override
+  void dispose() {
+    widget.tracker.activeVisualOffsets.remove(widget.photoId);
+    _controller
+      ..removeListener(_onTick)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FlipPhotoRenderWidget(
+      epoch: widget.epoch,
+      scrollOffsetOf: widget.tracker.scrollOffsetOf,
+      onResolveFlip: _consumePendingFlip,
+      initialOffset: _currentOffset,
+      child: widget.child,
+    );
+  }
+}
+
+class _FlipPhotoRenderWidget extends SingleChildRenderObjectWidget {
+  const _FlipPhotoRenderWidget({
+    required this.epoch,
+    required this.scrollOffsetOf,
+    required this.onResolveFlip,
+    required this.initialOffset,
+    super.child,
+  });
+
+  final int epoch;
+  final double Function() scrollOffsetOf;
+  final Offset Function(Offset compensatedPosition) onResolveFlip;
+  final Offset initialOffset;
+
+  @override
+  _RenderFlipPhotoTile createRenderObject(BuildContext context) {
+    return _RenderFlipPhotoTile(
+      epoch: epoch,
+      scrollOffsetOf: scrollOffsetOf,
+      onResolveFlip: onResolveFlip,
+      paintOffset: initialOffset,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderFlipPhotoTile renderObject,
+  ) {
+    renderObject
+      ..scrollOffsetOf = scrollOffsetOf
+      ..onResolveFlip = onResolveFlip
+      ..epoch = epoch;
+  }
+}
+
+class _RenderFlipPhotoTile extends RenderProxyBox {
+  _RenderFlipPhotoTile({
+    required int epoch,
+    required this.scrollOffsetOf,
+    required this.onResolveFlip,
+    required Offset paintOffset,
+  }) : _epoch = epoch,
+       _paintOffset = paintOffset;
+
+  double Function() scrollOffsetOf;
+  Offset Function(Offset compensatedPosition) onResolveFlip;
+
+  int _epoch;
+  bool _pendingResolve = false;
+  Offset _paintOffset;
+
+  set epoch(int value) {
+    if (_epoch == value) return;
+    _epoch = value;
+    _pendingResolve = true;
+    markNeedsPaint();
+  }
+
+  set paintOffset(Offset value) {
+    if (_paintOffset == value) return;
+    _paintOffset = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (_pendingResolve) {
+      _pendingResolve = false;
+      final globalTopLeft = localToGlobal(Offset.zero);
+      final compensated = Offset(
+        globalTopLeft.dx,
+        globalTopLeft.dy + scrollOffsetOf(),
+      );
+      _paintOffset = onResolveFlip(compensated);
+    }
+    if (_paintOffset == Offset.zero) {
+      super.paint(context, offset);
+      return;
+    }
+    context.pushTransform(
+      needsCompositing,
+      offset,
+      Matrix4.translationValues(_paintOffset.dx, _paintOffset.dy, 0),
+      super.paint,
+    );
+  }
 }
 
 class _PhotoDragFeedback extends StatelessWidget {
@@ -69,8 +357,9 @@ class _PhotoDragFeedback extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            for (var index = 0; index < visibleCards; index++)
+            for (var index = visibleCards - 1; index >= 0; index--)
               _PhotoFanCard(
+                key: ValueKey<String>('fan-card-${photos[index].id}-$dropping'),
                 photo: photos[index],
                 source:
                     index < fanOffsets.length
@@ -121,6 +410,7 @@ class _PhotoDragFeedback extends StatelessWidget {
 
 class _PhotoFanCard extends StatelessWidget {
   const _PhotoFanCard({
+    super.key,
     required this.photo,
     required this.source,
     required this.index,
@@ -194,9 +484,6 @@ class _PhotoFanCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          // 原型 `.ph-card` 在普通、堆叠和 drop 阶段都使用同一组
-          // 16/34/-10 阴影与 1.5px 白边。旧实现把单卡换位改成大范围
-          // 60px 黑影，松手时会读成一圈黑边，且和多选卡的边缘不一致。
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.6),
@@ -213,10 +500,13 @@ class _PhotoFanCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: DesktopCover(
-            url: photo.coverUrl,
-            kind: DesktopCoverKind.network,
-            fallbackIcon: DesktopIcons.image,
+          child: SizedBox.expand(
+            child: DesktopCover(
+              url: photo.coverUrl,
+              kind: DesktopCoverKind.network,
+              fit: BoxFit.cover,
+              fallbackIcon: DesktopIcons.image,
+            ),
           ),
         ),
       ),

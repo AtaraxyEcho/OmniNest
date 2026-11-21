@@ -32,6 +32,9 @@ class MotionToken {
   /// 图标提示，不是交互反馈，所以不占 <320ms 的交互预算。
   static const playerFlash = Duration(milliseconds: 700);
 
+  /// 桌面细环加载指示器的旋转周期（样例 `.spinner` 1s 一圈的近似值）。
+  static const spinner = Duration(milliseconds: 900);
+
   /// 根据当前无障碍设置解析动画时长。
   static Duration resolve(BuildContext context, Duration duration) {
     // 只订阅 disableAnimations 的精细节点，避免窗口缩放/软键盘变化触发重建。

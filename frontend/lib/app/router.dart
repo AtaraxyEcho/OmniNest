@@ -230,7 +230,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       // 搜索结果直接打开文件预览：命中项只有文件 ID，先回源节点再渲染。
-      _animatedRoute(
+      _desktopDetailRoute(
         '/files/preview/:fileId',
         (state) => MobileHostedRoute(
           child: FilePreviewRoutePage(fileId: state.pathParameters['fileId']!),
@@ -283,7 +283,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/video/:videoId',
         (state) => DesktopFormSwitch(
           desktop: DesktopMovieDetailPage(
@@ -296,7 +296,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      _animatedRoute('/video/series/:seriesId', (state) {
+      _desktopDetailRoute('/video/series/:seriesId', (state) {
         final seriesId = state.pathParameters['seriesId'] ?? '';
         return DesktopFormSwitch(
           desktop: DesktopSeriesDetailPage(seriesId: seriesId),
@@ -313,7 +313,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
         duration: DesktopMotion.immersiveViewerEnter,
       ),
-      _readerRoute(
+      _desktopNowPlayingRoute(
         '/music/now-playing',
         (state) => DesktopFormSwitch(
           desktop: const DesktopNowPlayingPage(),
@@ -331,20 +331,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/music/history',
         (_) => const MobileHostedRoute(child: MusicHistoryPage()),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/music/scan',
         (_) => const MobileHostedRoute(child: MusicScanPage()),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/photos/albums/:albumId',
         (state) =>
             PhotoAlbumDetailPage(albumId: state.pathParameters['albumId']!),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/photos/albums/:albumId/add',
         (state) => PhotoAlbumPhotoPickerPage(
           albumId: state.pathParameters['albumId']!,
@@ -361,7 +361,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               extra['source'] as PhotoBrowseSource? ??
               PhotoBrowseSource.library;
           final sourceKey = extra['sourceKey'] as String?;
-          return _materialTransition(
+          return _immersiveTransitionPage(
             context,
             state,
             AppRouteSurface.environmental(
@@ -375,14 +375,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 initialPhotoId: initialPhotoId,
               ),
             ),
+            duration: DesktopMotion.photoViewerEnter,
           );
         },
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/photos/groups',
         (_) => const MobileHostedRoute(child: PhotoGroupsPage()),
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/photos/period/:year/:month',
         (state) => PhotoPeriodPage(
           year: int.tryParse(state.pathParameters['year'] ?? '') ?? 0,
@@ -405,9 +406,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         );
       }, duration: DesktopMotion.photoViewerEnter),
-      _animatedRoute(
+      _desktopViewerRoute(
         '/photos/:photoId/edit',
         (state) => PhotoEditorPage(photoId: state.pathParameters['photoId']!),
+        duration: DesktopMotion.immersiveViewerEnter,
       ),
       _animatedRoute(
         '/shared/photos/:token',
@@ -437,11 +439,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // 书本详情是全屏覆盖层（样例 `.module-overlay`/`.book-detail` 都是
-      // position: fixed; inset: 0），所以和章节阅读页一样挂在壳层之外：挂在
-      // /reader 分支里时它只能盖住内容区，壳层顶栏与底栏那两条环境带会留在
-      // 纸面之上，从阅读页返回就露出接缝。MobileHostedRoute 补托管 scope。
-      _readerRoute('/reader/items/:itemId', buildReaderItemRoute),
+      // 书本详情桌面端统一走 `_desktopRoutePage()`，移动端保留既有详情页。
+      _desktopDetailRoute('/reader/items/:itemId', buildReaderItemRoute),
       _desktopViewerRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
@@ -454,12 +453,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
         duration: DesktopMotion.immersiveViewerEnter,
       ),
-      _animatedRoute(
+      _desktopDetailRoute(
         '/reader/items/:itemId/metadata',
         (state) =>
             ReaderMetadataEditPage(itemId: state.pathParameters['itemId']!),
       ),
-      _animatedRoute('/reader/items/:itemId/import-status', (state) {
+      _desktopDetailRoute('/reader/items/:itemId/import-status', (state) {
         final args = state.extra as ComicImportConfirmArgs?;
         final itemId = state.pathParameters['itemId']!;
         return ComicImportConfirmPage(
@@ -476,28 +475,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           fileName: args?.fileName ?? '',
         );
       }),
-      _animatedRoute(
+      _desktopViewerRoute(
         '/reader/comics/:itemId/read',
         (state) => ComicReaderPage(
           itemId: state.pathParameters['itemId']!,
           initialCatalogNodeId: state.uri.queryParameters['catalogNodeId'],
         ),
+        duration: DesktopMotion.immersiveViewerEnter,
       ),
-      _animatedRoute(
+      _desktopViewerRoute(
         '/reader/pdfs/:itemId/read',
         (state) => PdfReaderPage(itemId: state.pathParameters['itemId']!),
+        duration: DesktopMotion.immersiveViewerEnter,
       ),
       // Admin 作为 Portal 之上的独立路由节点（push 进入、pop 返回）。
-      // 分区深链使用 /admin/:section（与 AdminSection.location 对齐）；
-      // 路径段非法时 AdminSection.fromPathSegment 回落到 overview。
-      // 两条路由共用固定 pageKey：首次点击侧边栏（/admin → /admin/:section）
-      // 属跨路由跳转，若各自使用 location 派生的 pageKey，Navigator 会整页
-      // 替换并重跑 initState（表现为重新加载页面）；共用 key 后原地更新，
-      // 仅触发 didUpdateWidget 分区切换，与常驻分支模块行为一致。
+      // 两条路由共用固定 pageKey 保证跨分区跳转原地更新；桌面端统一走
+      // `_desktopRoutePage()`，消除移动端 MaterialPage 侧滑过渡。
       GoRoute(
         path: '/admin',
         pageBuilder:
-            (context, state) => _materialTransition(
+            (context, state) => _desktopRoutePage(
               context,
               state,
               _routeSurface('/admin', const AdminDashboardPage()),
@@ -507,7 +504,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/:section',
         pageBuilder:
-            (context, state) => _materialTransition(
+            (context, state) => _desktopRoutePage(
               context,
               state,
               _routeSurface(
@@ -541,10 +538,82 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-/// 无路由级动效的覆盖层路由。
-///
-/// Music Now Playing 自己实现了样例的 `npin/.npout`（700/400ms）；再让
-/// Navigator 参与一次过渡会造成两次缩放，因此必须只保留页面自身动效。
+bool _isDesktopRouteContext(BuildContext context) {
+  return !shouldUseResponsiveMobileShell(
+    mobilePlatform: isMobilePlatform,
+    width: MediaQuery.sizeOf(context).width,
+  );
+}
+
+/// 桌面端二级详情页与管理后台统一页面过渡（`420ms` 淡入 + 上移 12px + 0.992 微缩收束，
+/// `200ms` 快速淡出）；移动端保持平台默认 `MaterialPage`。
+Page<void> _desktopRoutePage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child, {
+  LocalKey? pageKey,
+}) {
+  final key = pageKey ?? state.pageKey;
+  if (!_isDesktopRouteContext(context)) {
+    return buildAppRoutePage(key: key, child: child);
+  }
+  return CustomTransitionPage<void>(
+    key: key,
+    transitionDuration: DesktopMotion.route,
+    reverseTransitionDuration: DesktopMotion.routeExit,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+        return child;
+      }
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: DesktopMotion.ease,
+        reverseCurve: DesktopMotion.exitCurve,
+      );
+      final isReversing = animation.status == AnimationStatus.reverse;
+      return AnimatedBuilder(
+        animation: curved,
+        child: child,
+        builder: (context, child) {
+          final t = curved.value.clamp(0.0, 1.0);
+          if (isReversing) {
+            return Opacity(opacity: t, child: child);
+          }
+          final scale = 0.992 + 0.008 * t;
+          return Opacity(
+            opacity: t,
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * 12),
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+GoRoute _desktopDetailRoute(
+  String path,
+  Widget Function(GoRouterState state) builder,
+) {
+  return GoRoute(
+    path: path,
+    pageBuilder:
+        (context, state) => _desktopRoutePage(
+          context,
+          state,
+          _routeSurface(path, builder(state)),
+        ),
+  );
+}
+
+/// 分支内无路由级动效的阅读子路由（由壳层分支过渡承载）。
 GoRoute _readerRoute(
   String path,
   Widget Function(GoRouterState state) builder,
@@ -552,9 +621,6 @@ GoRoute _readerRoute(
   return GoRoute(
     path: path,
     pageBuilder: (context, state) {
-      // 表面与场景档必须在这里挂上：书本详情是从首页 push 进来的分支路由，
-      // 壳层仍停在来源空间，没有这一层就没人把阅读档（focus）注册进背景场景，
-      // 页面底就还是首页的环境档。壳层自有路径由 _routeSurface 自行跳过。
       return NoTransitionPage<void>(
         key: state.pageKey,
         child: _routeSurface(path, builder(state)),
@@ -575,12 +641,80 @@ Widget buildReaderItemRoute(GoRouterState state) {
   );
 }
 
-/// 全局查看器的单层淡入路由。
-///
-/// React 样例分别在 Photos 的 `.viewer` 与 Video/Reader 的 `.video` /
-/// `.bookview` 上定义淡入；平台默认路由动画既不稳定也会在不同入口显得
-/// 突兀。这里把动画附着在 Navigator 生命周期上，退出时采用同一条曲线，
-/// 使查看器的异步内容加载不会重新触发入场。
+/// 音乐沉浸播放页专属上滑淡入（500ms）与下滑淡出（320ms）。
+GoRoute _desktopNowPlayingRoute(
+  String path,
+  Widget Function(GoRouterState state) builder,
+) {
+  return GoRoute(
+    path: path,
+    pageBuilder: (context, state) {
+      final child = _routeSurface(path, builder(state));
+      if (!_isDesktopRouteContext(context)) {
+        return NoTransitionPage<void>(key: state.pageKey, child: child);
+      }
+      return CustomTransitionPage<void>(
+        key: state.pageKey,
+        transitionDuration: DesktopMotion.nowPlayingIn,
+        reverseTransitionDuration: DesktopMotion.nowPlayingOut,
+        child: child,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+            return child;
+          }
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: DesktopMotion.ease,
+            reverseCurve: DesktopMotion.exitCurve,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.06),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Page<void> _immersiveTransitionPage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child, {
+  required Duration duration,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+        return child;
+      }
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: DesktopMotion.ease,
+        reverseCurve: DesktopMotion.exitCurve,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// 全局查看器（Video / Reader / Comic / PhotoViewer）的柔和缩放淡入淡出路由。
 GoRoute _desktopViewerRoute(
   String path,
   Widget Function(GoRouterState state) builder, {
@@ -589,19 +723,11 @@ GoRoute _desktopViewerRoute(
   return GoRoute(
     path: path,
     pageBuilder:
-        (context, state) => CustomTransitionPage<void>(
-          key: state.pageKey,
-          transitionDuration: duration,
-          reverseTransitionDuration: duration,
-          child: _routeSurface(path, builder(state)),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curved = CurvedAnimation(
-              parent: animation,
-              curve: DesktopMotion.ease,
-              reverseCurve: DesktopMotion.ease,
-            );
-            return FadeTransition(opacity: curved, child: child);
-          },
+        (context, state) => _immersiveTransitionPage(
+          context,
+          state,
+          _routeSurface(path, builder(state)),
+          duration: duration,
         ),
   );
 }
@@ -673,11 +799,7 @@ Page<void> _materialTransition(
   bool desktopNoTransition = false,
 }) {
   final key = pageKey ?? state.pageKey;
-  if (desktopNoTransition &&
-      !shouldUseResponsiveMobileShell(
-        mobilePlatform: isMobilePlatform,
-        width: MediaQuery.sizeOf(context).width,
-      )) {
+  if (desktopNoTransition && _isDesktopRouteContext(context)) {
     return NoTransitionPage<void>(key: key, child: child);
   }
   return buildAppRoutePage(key: key, child: child);

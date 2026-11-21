@@ -5,6 +5,7 @@ import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
@@ -13,7 +14,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
@@ -530,19 +530,19 @@ class _DesktopBookShelfButtonState
         return;
       }
       ref.invalidate(readerItemDetailProvider(widget.item.id));
-      showOmniFeedback(
+      showDesktopToast(
         context,
         result.addedToBookshelf
             ? l10n.readerAddedToBookshelf
             : l10n.readerRemovedFromBookshelf,
-        severity: OmniFeedbackSeverity.success,
+        kind: DesktopToastKind.success,
       );
     } on Object catch (error) {
       if (mounted) {
-        showOmniFeedback(
+        showDesktopToast(
           context,
           errorReason(error, l10n),
-          severity: OmniFeedbackSeverity.error,
+          kind: DesktopToastKind.error,
         );
       }
     } finally {

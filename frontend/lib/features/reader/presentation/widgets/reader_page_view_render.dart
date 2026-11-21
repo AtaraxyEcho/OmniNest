@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v4 终审定稿）。
+/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v5：静止态与翻页态共享同一节点树）。
 extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _buildPageOrEmpty(int index) {
     final page = widget.pageBuilder(index);
@@ -12,24 +12,42 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
     );
   }
 
-  Widget _buildRestingPage() {
+  /// 静止态与翻页态统一复用同一棵书页 Widget 树，始终保持左右/单页
+  /// RepaintBoundary 挂载在同一位置，杜绝点击第 1 帧整棵书页子树销毁重建。
+  Widget _buildRestingPage({
+    Widget? leftOverride,
+    Widget? rightOverride,
+    Widget? singleOverride,
+    Widget? curlOverlay,
+  }) {
     final idx = widget.state.pageIndex;
     if (widget.spread) {
-      final left = widget.pageBuilder(idx) ?? const SizedBox.expand();
+      final left =
+          leftOverride ?? widget.pageBuilder(idx) ?? const SizedBox.expand();
+      final right = rightOverride ?? widget.pageBuilder(idx + 1);
       final last = widget.state.pageCount <= 1 ? 1 : widget.state.pageCount - 1;
       return ReaderPageSpread(
         left: left,
-        right: widget.pageBuilder(idx + 1),
+        right: right,
         surfaceColor: widget.surfaceColor,
         paperEdgeColor: widget.paperEdgeColor,
         bookmarked: widget.bookmarked,
         leftBoundaryKey: _liveLeftKey,
         rightBoundaryKey: _liveRightKey,
         progress: (idx / last).clamp(0.0, 1.0),
+        curlOverlay: curlOverlay,
       );
     }
-    final current = _currentPageWidget ?? pageAt(idx);
-    return RepaintBoundary(key: _liveSingleKey, child: _constrainPage(current));
+    final current = singleOverride ?? _currentPageWidget ?? pageAt(idx);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(key: _liveSingleKey, child: _constrainPage(current)),
+        Positioned.fill(
+          child: IgnorePointer(child: curlOverlay ?? const SizedBox.shrink()),
+        ),
+      ],
+    );
   }
 
   Widget _buildAnimationContent() {
@@ -70,7 +88,7 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
         Widget mainContent;
         if (widget.turnMode == PageTurnMode.cover) {
           // Book 仿真模式严禁回退 2D _buildCover 左右平推：
-          // 卷页激活且快照就绪时渲染真 3D 卷页层，其余时刻稳定保持静止书页。
+          // 卷页激活且快照就绪时在同棵书页树上叠加 3D 卷页层，其余时刻稳定保持静止书页。
           if (isCurlActive && _hasReadyCurlPair(frame.direction)) {
             mainContent = _buildCurlTurn(width, height) ?? _buildRestingPage();
           } else {

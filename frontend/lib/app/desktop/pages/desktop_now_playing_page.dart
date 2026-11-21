@@ -5,25 +5,27 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_np_style.dart';
-import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
+import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
+import 'package:omninest/app/desktop/pages/desktop_now_playing_lyrics.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_track_hue.dart';
 import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
-import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
-import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/theme/motion_token.dart';
-import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/music_portal.dart';
@@ -32,9 +34,7 @@ part 'desktop_now_playing_deck.dart';
 
 /// 桌面「正在播放」覆盖层（样例 `Music.tsx` 的 NowPlaying）。
 ///
-/// 左半是黑胶 + 衬线曲名，右半是歌词/队列两页，底部是走带。
-/// 数据全部来自音乐门面：当前曲目、队列、播放进度与命令各走各的 provider，
-/// 不复制一份播放状态。
+/// 左半是黑胶 + 衬线曲名，右半是歌词/队列/关于三页，右侧全高外观抽屉，底部是走带。
 class DesktopNowPlayingPage extends ConsumerStatefulWidget {
   const DesktopNowPlayingPage({super.key});
 
@@ -45,6 +45,8 @@ class DesktopNowPlayingPage extends ConsumerStatefulWidget {
 
 class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     with SingleTickerProviderStateMixin {
+  static const String _bilingualPrefKey = 'omninest.desktop.npShowTranslation';
+
   late final AnimationController _spin = AnimationController(
     vsync: this,
     duration: DesktopMotion.vinylSpin,
@@ -53,6 +55,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   bool _dragging = false;
   double? _dragValue;
   bool _styleOpen = false;
+  bool _showTranslation = true;
 
   /// 退场动画进行中：先播 400ms 收束再真正退出路由。
   bool _closing = false;
@@ -62,6 +65,30 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     super.initState();
     _spin.repeat();
     unawaited(ref.read(desktopNpStyleProvider.notifier).load());
+    unawaited(_loadBilingualPref());
+  }
+
+  Future<void> _loadBilingualPref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool(_bilingualPrefKey);
+      if (saved != null && mounted) {
+        setState(() => _showTranslation = saved);
+      }
+    } on Object {
+      // 忽略偏好读取异常，默认开启双语。
+    }
+  }
+
+  Future<void> _toggleTranslation() async {
+    final next = !_showTranslation;
+    setState(() => _showTranslation = next);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_bilingualPrefKey, next);
+    } on Object {
+      // 忽略偏好写入异常。
+    }
   }
 
   @override
@@ -73,6 +100,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
     final state = ref.watch(musicCenterControllerProvider).asData?.value;
     final actions = ref.watch(musicPortalActionsProvider);
     final timeline = ref.watch(musicPortalPlaybackTimelineProvider);
@@ -82,6 +110,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     final queue = state?.playbackItems ?? const <MusicPlayableItem>[];
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final npStyle = ref.watch(desktopNpStyleProvider);
+    final hueColor = desktopTrackHue(track?.hue, skin.accent);
 
     if (playing && !_spin.isAnimating && !reduceMotion) {
       _spin.repeat();
@@ -91,6 +120,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
 
     final cover = track?.coverUrl;
     final duration = Duration(seconds: track?.durationSeconds ?? 0);
+    final audioSpecBadge = _audioSpecBadge(track);
 
     return Focus(
       autofocus: true,
@@ -112,8 +142,6 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
         }
         return KeyEventResult.ignored;
       },
-      // 样例 `npin .7s` / `npout .4s`：淡入 + 上移 8% + 从 .97 放大，
-      // 入场还带 30px 圆角收束（`npin from { border-radius: 30px }`）。
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(begin: 0, end: _closing ? 0 : 1),
         duration: MotionToken.reduced(
@@ -142,7 +170,12 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _NpBackdrop(style: npStyle, cover: cover),
+              _NpBackdrop(
+                style: npStyle,
+                cover: cover,
+                playing: playing,
+                hueColor: hueColor,
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
                 child: Column(
@@ -181,8 +214,30 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                               ],
                             ),
                           ),
+                          if (audioSpecBadge != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                ),
+                              ),
+                              child: Text(
+                                audioSpecBadge,
+                                style: DesktopType.nano(
+                                  Colors.white.withValues(alpha: 0.78),
+                                ).copyWith(letterSpacing: 0.6),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
                           DesktopIconButton(
-                            icon: DesktopIcons.sparkle,
+                            icon: DesktopIcons.palette,
                             size: 34,
                             iconSize: 18,
                             active: _styleOpen,
@@ -198,17 +253,13 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 样例 `.np-main`：`minmax(0,1.05fr) minmax(0,1fr)`。
                           Expanded(
                             flex: 105,
                             child: _Deck(
                               spin: _spin,
                               cover: cover,
                               playing: playing,
-                              hueColor: desktopTrackHue(
-                                track?.hue,
-                                DesktopSkin.of(context).accent,
-                              ),
+                              hueColor: hueColor,
                               index:
                                   queue.indexWhere(
                                     (entry) =>
@@ -225,6 +276,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                           Expanded(
                             flex: 100,
                             child: _SidePanel(
+                              track: track,
                               title: track?.title ?? l10n.desktopNothingPlaying,
                               artist: track?.artistName ?? '',
                               album: track?.albumTitle ?? '',
@@ -234,10 +286,16 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                               sampleRate: track?.sampleRate,
                               fileSize: track?.fileSize,
                               position: timeline.position,
+                              positionStream: timeline.positionStream,
                               playing: playing,
+                              hueColor: hueColor,
                               tab: _tab,
                               onTab: (value) => setState(() => _tab = value),
-                              lyrics: track?.lyricsRaw,
+                              showTranslation: _showTranslation,
+                              onToggleTranslation:
+                                  () => unawaited(_toggleTranslation()),
+                              onSeek:
+                                  (value) => unawaited(timeline.seek(value)),
                               queue: queue,
                               currentKey: item?.playableKey,
                               onPickQueue:
@@ -278,7 +336,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                 ),
               ),
               if (_styleOpen) ...[
-                // 样例 NpStyle 在面板外点击即收起，避免设置面板长期挡住歌词/队列。
+                // 点击抽屉外透明区域即收起。
                 Positioned.fill(
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
@@ -286,11 +344,31 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                     child: const SizedBox.expand(),
                   ),
                 ),
+                // 全高右侧抽屉（top/right/bottom: 0，400ms 右侧滑入）。
                 Positioned(
-                  top: 62,
-                  right: 24,
-                  child: DesktopNpStylePanel(
-                    onClose: () => setState(() => _styleOpen = false),
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: MotionToken.reduced(
+                      context,
+                      const Duration(milliseconds: 400),
+                    ),
+                    curve: DesktopMotion.ease,
+                    builder: (context, t, child) {
+                      return Opacity(
+                        opacity: t.clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(24 * (1 - t), 0),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: DesktopNpStylePanel(
+                      hueColor: hueColor,
+                      onClose: () => setState(() => _styleOpen = false),
+                    ),
                   ),
                 ),
               ],
@@ -310,12 +388,31 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     );
   }
 
+  String? _audioSpecBadge(MusicTrack? track) {
+    if (track == null) return null;
+    final parts = <String>[];
+    final fmt = track.format.trim().toUpperCase();
+    if (fmt.isNotEmpty && fmt != 'AUDIO') {
+      parts.add(fmt);
+    }
+    final sr = track.sampleRate;
+    if (sr != null && sr > 0) {
+      final khz = sr / 1000.0;
+      parts.add(
+        '${khz.toStringAsFixed(khz.truncateToDouble() == khz ? 0 : 1)} kHz',
+      );
+    }
+    final br = track.bitrate;
+    if (br != null && br > 0) {
+      parts.add('$br kbps');
+    }
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   Future<void> _close() async {
     if (_closing) {
       return;
     }
-    // 样例 `.np.closing { animation: npout .4s }`：先收束再退路由，
-    // 直接 pop 会硬切。
     setState(() => _closing = true);
     await Future<void>.delayed(
       MotionToken.reduced(context, DesktopMotion.fade),
@@ -352,6 +449,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
 
 class _SidePanel extends ConsumerWidget {
   const _SidePanel({
+    required this.track,
     required this.title,
     required this.artist,
     required this.album,
@@ -361,16 +459,21 @@ class _SidePanel extends ConsumerWidget {
     required this.sampleRate,
     required this.fileSize,
     required this.position,
+    required this.positionStream,
     required this.playing,
+    required this.hueColor,
     required this.tab,
     required this.onTab,
-    required this.lyrics,
+    required this.showTranslation,
+    required this.onToggleTranslation,
+    required this.onSeek,
     required this.queue,
     required this.currentKey,
     required this.onPickQueue,
     required this.onEdit,
   });
 
+  final MusicTrack? track;
   final String title;
   final String artist;
   final String album;
@@ -380,10 +483,14 @@ class _SidePanel extends ConsumerWidget {
   final int? sampleRate;
   final int? fileSize;
   final Duration position;
+  final Stream<Duration> positionStream;
   final bool playing;
+  final Color hueColor;
   final int tab;
   final ValueChanged<int> onTab;
-  final String? lyrics;
+  final bool showTranslation;
+  final VoidCallback onToggleTranslation;
+  final ValueChanged<Duration> onSeek;
   final List<MusicPlayableItem> queue;
   final String? currentKey;
   final ValueChanged<int> onPickQueue;
@@ -394,29 +501,14 @@ class _SidePanel extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final style = ref.watch(desktopNpStyleProvider);
-    final lines = _lyricLines(lyrics);
-    // 样例歌词：衬线 clamp(24, 2.4vw, 36)，非当前行 28% 白，当前行纯白 + 光晕。
-    final lyricSize =
-        (MediaQuery.sizeOf(context).width * 0.024).clamp(24.0, 36.0) *
-        style.lyricScale;
-    // 逐字填充：按播放进度把歌词总时长切成行，行内再按比例点亮。
-    final totalMs = duration.inMilliseconds;
-    final progress =
-        totalMs <= 0
-            ? 0.0
-            : (position.inMilliseconds / totalMs).clamp(0.0, 0.999);
-    final lineIndex =
-        lines.isEmpty
-            ? -1
-            : (progress * lines.length).floor().clamp(0, lines.length - 1);
-    final lineFill =
-        lines.isEmpty ? 0.0 : (progress * lines.length) - lineIndex;
-    final brushColor = DesktopNpBrush.values[style.brush.clamp(0, 4)].color;
-    // 样例 `Paint.split`：当前行上半区 / 下半区各用一套颜料，分界按 pos%。
-    final lowerColor =
-        DesktopNpBrush.values[style.lowerBrush.clamp(0, 4)].color;
-    final splitAt = style.splitPos.clamp(5, 95) / 100;
-    // 样例 `.np-right`：标题块在歌词/队列之上，本身不再套一层玻璃卡。
+    final timedLyrics = track?.lyricLines ?? const <MusicLyricLine>[];
+    final plainLyrics =
+        timedLyrics.isEmpty
+            ? _plainLyricLines(track?.lyricsRaw)
+            : const <String>[];
+    final hasTranslation = timedLyrics.any((line) => line.hasTranslation);
+    final activeColor = style.effectiveFillPaint(hueColor).primaryColor;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -463,96 +555,58 @@ class _SidePanel extends ConsumerWidget {
               small: true,
               onChanged: onTab,
             ),
+            if (tab == 0 && hasTranslation) ...[
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: onToggleTranslation,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.fast),
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        showTranslation
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color:
+                          showTranslation
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Text(
+                    '译',
+                    style: DesktopType.chip(
+                      showTranslation
+                          ? const Color(0xFF0A0C0E)
+                          : Colors.white.withValues(alpha: 0.8),
+                    ).copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Expanded(
           child:
               tab == 0
-                  ? (lines.isEmpty
-                      ? Center(
-                        child: Text(
-                          l10n.musicNoLyrics,
-                          style: DesktopType.dense(
-                            Colors.white.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      )
-                      : ListView.builder(
-                        itemCount: lines.length,
-                        itemBuilder: (context, index) {
-                          final current = index == lineIndex;
-                          final lyric = Text(
-                            lines[index],
-                            style: DesktopType.sectionTitle(
-                              current
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.28),
-                            ).copyWith(
-                              fontSize: lyricSize,
-                              height: 1.25,
-                              shadows:
-                                  current && style.glow
-                                      ? [
-                                        Shadow(
-                                          color: brushColor.withValues(
-                                            alpha: 0.55,
-                                          ),
-                                          blurRadius: 34,
-                                        ),
-                                      ]
-                                      : null,
-                            ),
-                          );
-                          final filled =
-                              current && style.splitPaint
-                                  ? ShaderMask(
-                                    blendMode: BlendMode.srcIn,
-                                    shaderCallback:
-                                        (rect) => LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            brushColor,
-                                            brushColor,
-                                            lowerColor,
-                                            lowerColor,
-                                          ],
-                                          stops: [0, splitAt, splitAt, 1],
-                                        ).createShader(rect),
-                                    child: lyric,
-                                  )
-                                  : current && style.wordFill
-                                  ? ShaderMask(
-                                    blendMode: BlendMode.srcIn,
-                                    shaderCallback:
-                                        (rect) => LinearGradient(
-                                          colors: [
-                                            brushColor,
-                                            brushColor,
-                                            Colors.white.withValues(
-                                              alpha: 0.28,
-                                            ),
-                                            Colors.white.withValues(
-                                              alpha: 0.28,
-                                            ),
-                                          ],
-                                          stops: [
-                                            0,
-                                            lineFill.clamp(0.0, 1.0),
-                                            lineFill.clamp(0.0, 1.0),
-                                            1,
-                                          ],
-                                        ).createShader(rect),
-                                    child: lyric,
-                                  )
-                                  : lyric;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 7),
-                            child: filled,
-                          );
-                        },
-                      ))
+                  ? DesktopNowPlayingLyrics(
+                    lines: timedLyrics,
+                    plainLines: plainLyrics,
+                    position: position,
+                    positionStream: positionStream,
+                    duration: duration,
+                    playing: playing,
+                    style: style,
+                    hueColor: hueColor,
+                    showTranslation: showTranslation,
+                    onSeek: onSeek,
+                  )
                   : tab == 1
                   ? (queue.isEmpty
                       ? Center(
@@ -601,7 +655,6 @@ class _SidePanel extends ConsumerWidget {
                                             ),
                                   ),
                                   const SizedBox(width: 8),
-                                  // 样例 `.np-queue .q-row`：22 序号 + 44 封面列。
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
                                     child: SizedBox(
@@ -657,7 +710,7 @@ class _SidePanel extends ConsumerWidget {
                       ))
                   : _NowPlayingAbout(
                     playing: playing,
-                    color: brushColor,
+                    color: activeColor,
                     artist: artist,
                     album: album,
                     duration: duration,
@@ -762,8 +815,6 @@ class _NowPlayingAbout extends StatelessWidget {
             ),
           ),
         ],
-        // 样例 `Music.tsx:248` 的 `.np-viz-sm`：About 页元数据下方一条
-        // 64 柱、90px、85% 不透明度的动态频谱，颜色跟随当前外观笔刷。
         const SizedBox(height: 18),
         SizedBox(
           height: 90,
@@ -928,14 +979,10 @@ class _Transport extends StatelessWidget {
   }
 }
 
-/// 歌词：LRC 去时间戳后逐行保留；没有时间轴就按纯文本滚动。
-List<String> _lyricLines(String? raw) {
+/// 纯文本歌词回退：仅在无任何时间轴时按行展示。
+List<String> _plainLyricLines(String? raw) {
   if (raw == null || raw.trim().isEmpty) {
     return const <String>[];
-  }
-  final parsed = parseMusicLyrics(raw);
-  if (parsed.isNotEmpty) {
-    return parsed.map((line) => line.text).toList(growable: false);
   }
   final tag = RegExp(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]');
   return raw

@@ -1,9 +1,16 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart'
-    show PointerDownEvent, PointerMoveEvent, PointerEvent, kPrimaryButton;
+    show
+        PointerCancelEvent,
+        PointerDownEvent,
+        PointerMoveEvent,
+        PointerUpEvent,
+        kPrimaryButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderProxyBox;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart'
     show HardwareKeyboard, KeyDownEvent, KeyEvent, LogicalKeyboardKey;
@@ -198,12 +205,12 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
               _checkForMorePhotosAfterFrame();
               return false;
             },
-            child: SingleChildScrollView(
+            child: DesktopSliverPage(
               controller: _photosScrollController,
-              child: DesktopPage(
-                topPadding: DesktopMetrics.pageTopPaddingCompact,
-                children: [
-                  DesktopPageHead(
+              topPadding: DesktopMetrics.pageTopPaddingCompact,
+              slivers: [
+                DesktopStickySliver(
+                  child: DesktopPageHead(
                     eyebrow:
                         l10n
                             .desktopPhotosCount(
@@ -256,7 +263,9 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                         ),
                     ],
                   ),
-                  switch (_tab) {
+                ),
+                SliverToBoxAdapter(
+                  child: switch (_tab) {
                     DesktopPhotosTab.library => _PhotoGroups(
                       photos: page?.items ?? const <PhotoItem>[],
                       displayOrders: photoOrders,
@@ -382,8 +391,10 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                       onPurgeAll: _confirmPurgeAllTrash,
                     ),
                   },
-                  if (_loadingMorePhotos)
-                    const Padding(
+                ),
+                if (_loadingMorePhotos)
+                  const SliverToBoxAdapter(
+                    child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 22),
                       child: Center(
                         child: SizedBox(
@@ -393,8 +404,8 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

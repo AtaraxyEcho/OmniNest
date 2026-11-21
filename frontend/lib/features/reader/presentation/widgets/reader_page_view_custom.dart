@@ -1,6 +1,9 @@
 part of 'reader_page_view.dart';
 
-/// Cover/Fade 模式手势拖动与翻页动画（v7：单向方向锁 + 永不锁死代数状态机）。
+/// 连点翻页时把当前卷页动画加速收尾的时长。
+const _accelerateFlipDuration = Duration(milliseconds: 120);
+
+/// Cover/Fade 模式手势拖动与翻页动画（v8：0.0 平滑起跳 + easeOutCubic + RTL 与缩放拖拽保护 + 加速收尾）。
 extension _ReaderPageViewCustom on _ReaderPageViewState {
   Widget _buildCustomMode() {
     return MouseRegion(
@@ -19,12 +22,16 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
   }
 
   void _onDragStart(DragStartDetails details) {
-    if (ReaderInteractionGate.blocksInput(_blockReason)) return;
+    if (!widget.dragEnabled ||
+        ReaderInteractionGate.blocksInput(_blockReason)) {
+      return;
+    }
     final w = context.size?.width ?? 1;
     final h = context.size?.height ?? 1;
-    final wantForward = details.localPosition.dx >= w * 0.5;
+    final dragFromRight = details.localPosition.dx >= w * 0.5;
+    final wantForward = widget.reverse ? !dragFromRight : dragFromRight;
 
-    // 边界预检：在末页按右侧或首页按左侧时直接拒绝启动拖拽，不残留任何状态。
+    // 边界预检：在末页向前或首页向后时直接拒绝启动拖拽，不残留任何状态。
     if (wantForward &&
         widget.state.isLastPage &&
         !widget.state.hasMore &&
@@ -38,10 +45,10 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     }
 
     // 单向锁定整次拖拽方向（1:1 对齐样例 ReaderView.tsx:182），
-    // 按右侧只能左拉翻下一页，往右拉回起点绝不反转触发上翻！
+    // 按右侧只能左拉，按左侧只能右拉，拉回起点绝不反转触发反方向翻页。
     _isDragging = true;
     _isForward = wantForward;
-    _dragLockedDir = wantForward ? CurlDirection.next : CurlDirection.prev;
+    _dragLockedDir = _curlDirectionFor(wantForward);
     _totalDeltaX = 0;
     _dragStartX = details.localPosition.dx;
     final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.08, 0.92);
@@ -50,7 +57,9 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    if (!_isDragging || ReaderInteractionGate.blocksInput(_blockReason)) {
+    if (!widget.dragEnabled ||
+        !_isDragging ||
+        ReaderInteractionGate.blocksInput(_blockReason)) {
       return;
     }
     final lockedDir = _dragLockedDir;
@@ -77,7 +86,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
 
     _flipProgress = (dist / dragSpan).clamp(0.0, 1.0);
 
-    // 实时平滑跟随鼠标 Y 坐标微调折角斜率，纸角自然粘在指针上。
+    // 长按拖拽保留全角度 fy 跟随手感，纸角自然粘在指针上。
     final fy = (details.localPosition.dy / math.max(1.0, h)).clamp(0.08, 0.92);
     final targetCfg = CurlGrabConfig.fromPointerFy(fy);
     _activeCurlConfig = CurlGrabConfig(
@@ -146,7 +155,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     if (widget.turnMode != PageTurnMode.cover) return;
     final ctrl = _animController;
     if (ctrl == null) return;
-    final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+    final dir = _curlDirectionFor(_isForward);
     if (_hasReadyCurlPair(dir)) {
       _curlFrameNotifier.value = CurlFrame(
         progress: ctrl.value,
@@ -161,16 +170,17 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     required double to,
     required bool commit,
   }) {
-    final ms = ((commit ? 400 : 260) + 260 * (to - from).abs()).round().clamp(
-      180,
-      640,
-    );
+    final delta = (to - from).abs();
+    final ms =
+        commit
+            ? (520 + 320 * delta).round().clamp(220, 860)
+            : (260 + 260 * delta).round().clamp(180, 560);
     return Duration(milliseconds: ms);
   }
 
   Future<void> _startAutoFlip() async {
     if (_awaitingCurlStart) return;
-    final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+    final dir = _curlDirectionFor(_isForward);
 
     if (widget.turnMode == PageTurnMode.cover && !_hasReadyCurlPair(dir)) {
       _awaitingCurlStart = true;
@@ -185,6 +195,38 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       }
     }
     _runAutoFlipAnimation(useCurl: widget.turnMode == PageTurnMode.cover);
+  }
+
+  /// 连点快翻平滑加速收尾：取消硬切断，120ms 自然落平并无缝衔接 `_pendingTurnDirection`。
+  void _accelerateActiveFlip() {
+    final ctrl = _animController;
+    if (ctrl == null || !_isAnimating) return;
+    final current = ctrl.value.clamp(0.0, 1.0);
+    if (current >= 0.995) {
+      _animGeneration++;
+      _isAnimating = false;
+      _commitFlip();
+      return;
+    }
+    final gen = ++_animGeneration;
+    ctrl.removeListener(_syncCurlFrameFromAnim);
+    ctrl.addListener(_syncCurlFrameFromAnim);
+    ctrl
+        .animateTo(
+          1.0,
+          duration: _accelerateFlipDuration,
+          curve: Curves.easeOutCubic,
+        )
+        .then<void>(
+          (_) {
+            if (!mounted || gen != _animGeneration) return;
+            _commitFlip();
+          },
+          onError: (_) {
+            if (!mounted || gen != _animGeneration) return;
+            _resetFlip();
+          },
+        );
   }
 
   void _runAutoFlipAnimation({required bool useCurl}) {
@@ -204,10 +246,11 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       }
     }
 
+    // 关键修复：点击翻页从 startValue = 0.0 平滑起步，确保第 1 帧阴影与卷曲高度从 0 连续生长。
     final startValue =
         _curlFrameNotifier.value.isPeek
             ? _curlFrameNotifier.value.progress
-            : math.max(0.02, _flipProgress);
+            : _flipProgress.clamp(0.0, 1.0);
 
     // 关键修复：若已拖到 1.0，AnimationController.animateTo(1) 不会派发 completed 回调！
     // 直接提交翻页，彻底根除 gate=pageAnimation 永久锁死。
@@ -224,7 +267,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     ctrl.addListener(_syncCurlFrameFromAnim);
     ctrl.value = startValue;
     if (useCurl) {
-      final dir = _isForward ? CurlDirection.next : CurlDirection.prev;
+      final dir = _curlDirectionFor(_isForward);
       _curlFrameNotifier.value = CurlFrame(
         progress: startValue,
         direction: dir,
@@ -234,11 +277,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     if (mounted) _updateState(() {});
 
     ctrl
-        .animateTo(
-          1.0,
-          duration: ctrl.duration,
-          curve: const Cubic(0.22, 1.0, 0.36, 1.0),
-        )
+        .animateTo(1.0, duration: ctrl.duration, curve: Curves.easeOutCubic)
         .then<void>(
           (_) {
             if (!mounted || gen != _animGeneration) return;
@@ -336,6 +375,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     _awaitingCurlStart = false;
     _dragLockedDir = null;
     _isDragging = false;
+    _pendingTurnAttachRetry = false;
     _commitResetFallbackTimer?.cancel();
     _commitResetFallbackTimer = null;
     _animController?.removeListener(_syncCurlFrameFromAnim);

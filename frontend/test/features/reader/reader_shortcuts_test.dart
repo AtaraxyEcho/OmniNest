@@ -41,32 +41,30 @@ void main() {
     );
   });
 
-  test(
-    'comic mode ignores text-only commands while keeping shared commands',
-    () {
-      expect(
-        resolver.resolve(
-          key: LogicalKeyboardKey.keyB,
-          mode: ReaderShortcutMode.comicPage,
-        ),
-        isNull,
-      );
-      expect(
-        resolver.resolve(
-          key: LogicalKeyboardKey.keyN,
-          mode: ReaderShortcutMode.comicScroll,
-        ),
-        isNull,
-      );
-      expect(
-        resolver.resolve(
-          key: LogicalKeyboardKey.keyT,
-          mode: ReaderShortcutMode.comicScroll,
-        ),
-        ReaderCommand.toggleContents,
-      );
-    },
-  );
+  test('comic mode keeps shared commands and drops text-only ones', () {
+    // 漫画阅读器已接入书签，B 在漫画模式下同样切换书签。
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.keyB,
+        mode: ReaderShortcutMode.comicPage,
+      ),
+      ReaderCommand.toggleBookmark,
+    );
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.keyN,
+        mode: ReaderShortcutMode.comicScroll,
+      ),
+      isNull,
+    );
+    expect(
+      resolver.resolve(
+        key: LogicalKeyboardKey.keyT,
+        mode: ReaderShortcutMode.comicScroll,
+      ),
+      ReaderCommand.toggleContents,
+    );
+  });
 
   test('text input focus only allows escape to close a layer', () {
     expect(

@@ -65,6 +65,70 @@ Future<T?> showDesktopDialog<T>(
   );
 }
 
+/// 通用桌面确认弹窗（样例 `.modal` 确认形态）：blur(4) 全窗遮罩 + 20px 圆角卡。
+///
+/// 内部通过 `Theme.of(context).extension<DesktopSkin>()` 取色（未登录态由
+/// `DesktopThemeScope` 挂载，不依赖登录后才存在的 `DesktopShellHost`），确保
+/// 登录页/首启页触发关窗确认也能正常渲染新版桌面弹窗。
+Future<bool> showDesktopConfirm(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String? confirmLabel,
+  String? cancelLabel,
+  bool destructive = false,
+  bool barrierDismissible = true,
+  Widget? lead,
+  Widget? extraContent,
+  double width = 440,
+}) async {
+  final skin =
+      Theme.of(context).extension<DesktopSkin>() ?? DesktopSkin.of(context);
+  final l10n = MaterialLocalizations.of(context);
+  final resolvedConfirm = confirmLabel ?? l10n.okButtonLabel;
+  final resolvedCancel = cancelLabel ?? l10n.cancelButtonLabel;
+  final result = await showDesktopDialog<bool>(
+    context,
+    barrierDismissible: barrierDismissible,
+    builder:
+        (dialogContext) => DesktopDialog(
+          title: title,
+          lead: lead,
+          width: width,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                message,
+                style: DesktopType.body(skin.text2).copyWith(height: 1.55),
+              ),
+              if (extraContent != null) ...[
+                const SizedBox(height: 14),
+                extraContent,
+              ],
+            ],
+          ),
+          actions: [
+            DesktopButton(
+              label: resolvedCancel,
+              variant: DesktopButtonVariant.ghost,
+              onPressed: () => closeDesktopModal(dialogContext, false),
+            ),
+            DesktopButton(
+              label: resolvedConfirm,
+              variant:
+                  destructive
+                      ? DesktopButtonVariant.danger
+                      : DesktopButtonVariant.primary,
+              onPressed: () => closeDesktopModal(dialogContext, true),
+            ),
+          ],
+        ),
+  );
+  return result == true;
+}
+
 /// 弹层卡片本体：标题行 + 内容 + 右侧动作。
 class DesktopDialog extends StatelessWidget {
   const DesktopDialog({
@@ -89,7 +153,8 @@ class DesktopDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
+    final skin =
+        Theme.of(context).extension<DesktopSkin>() ?? DesktopSkin.of(context);
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(

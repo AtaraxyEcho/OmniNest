@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_import_filter.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -44,10 +45,6 @@ part 'desktop_files_sections.dart';
 part 'desktop_files_table.dart';
 
 /// 桌面文件页（样例 `Files.tsx`）。
-///
-/// 分区轨 + 文件夹树 + 面包屑 + 工具栏 + 列表/网格，数据全部走
-/// `fileBrowserControllerProvider`：这一页只是它的另一种排版，不另起
-/// 一套取数与选中状态，否则桌面与移动会看到两份不同的选中集。
 class DesktopFilesPage extends ConsumerStatefulWidget {
   const DesktopFilesPage({this.initialSection, super.key});
 
@@ -62,18 +59,10 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
   final TextEditingController _search = TextEditingController();
   final FocusNode _pageFocus = FocusNode(debugLabel: 'desktop-files');
 
-  /// 已消费的深链分区：只在首次数据到达后加载一次，之后滚动/切换不重载。
   FileManagerSection? _appliedSection;
   bool _dragging = false;
-
-  /// 外部拖入时悬停在哪一行文件夹上（`null` = 没有）。
   String? _externalHoverId;
-
-  /// 悬停满 650ms 后才展开目录：样例 `expandOnHover` 的同一档延迟。
   Timer? _expandTimer;
-
-  /// 文件夹行的渲染锚点：外部拖拽没有 Flutter 的 DragTarget 可用，
-  /// 只能按指针位置在这些矩形里做命中测试。
   final Map<String, GlobalKey> _folderKeys = <String, GlobalKey>{};
 
   @override
@@ -84,8 +73,6 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
     super.dispose();
   }
 
-  /// 拖放遮罩的开合。`setState` 是 `State` 的受保护成员，
-  /// 因此它必须留在类里，不能随动作层挪进扩展。
   void _setDragging(bool value) {
     if (!mounted || _dragging == value) {
       return;
@@ -93,10 +80,8 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
     setState(() => _dragging = value);
   }
 
-  /// 某个文件夹行的锚点（懒建，按节点 id 复用）。
   GlobalKey _folderKey(String id) => _folderKeys.putIfAbsent(id, GlobalKey.new);
 
-  /// 指针落点在哪个文件夹行上；不在任何行上返回 null。
   String? _folderAt(Offset globalPosition) {
     for (final entry in _folderKeys.entries) {
       final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
@@ -111,7 +96,6 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
     return null;
   }
 
-  /// 外部拖入时的悬停跟踪：更新高亮，并在同一行上停满 650ms 后展开它。
   void _trackExternalHover(
     Offset globalPosition,
     FileBrowserController controller,
@@ -154,6 +138,18 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
     setState(() => _externalHoverId = null);
   }
 
+  Future<void> _handleDroppedItems(
+    List<DropItem> droppedItems,
+    FileBrowserController controller,
+    FileBrowserState? state,
+  ) async {
+    final files = await expandDroppedItems(droppedItems);
+    if (!mounted || files.isEmpty) {
+      return;
+    }
+    await _upload(files, controller, state);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -176,9 +172,6 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
         section == FileManagerSection.allFiles ||
         section == FileManagerSection.sharedSpace;
 
-    // 样例 `extra.css:70` 的表头是 `position: sticky`：它粘在**列表容器**
-    // 的顶部，而不是整页。主区玻璃面板只包住工具栏与列表，表头才能在
-    // 面板内部滚动并保持自己的模糊层。
     final page = DesktopPage(
       maxWidth: double.infinity,
       topPadding: DesktopMetrics.pageTopPaddingCompact,
@@ -190,7 +183,6 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
               if (showTree) ...[
                 SizedBox(
                   width: 244,
-                  // 侧栏条目随窗口高度变化，超出时自己滚，不挤压列表。
                   child: SingleChildScrollView(
                     child: _FilesRail(
                       state: state,
@@ -488,10 +480,6 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                                     )
                                     : CustomScrollView(
                                       slivers: [
-                                        // 表头吸顶：行真的从表头下方滑过，模糊层
-                                        // 才有可见对象（样例 `extra.css:70`）。
-                                        // 空列表不画表头（样例 `Files.tsx:345` 的
-                                        // `rows.length > 0` 条件）。
                                         if (items.isNotEmpty)
                                           SliverPersistentHeader(
                                             pinned: true,
@@ -628,29 +616,18 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
         _setDragging(false);
         _clearExternalHover();
       },
-      // 外部拖入时指针位置只有这条回调给得到：用它找出悬停的文件夹行，
-      // 先高亮，悬停满 650ms 再把该目录打开（样例 `expandOnHover`）。
       onDragUpdated:
           (details) => _trackExternalHover(details.globalPosition, controller),
       onDragDone: (details) {
         _setDragging(false);
         _clearExternalHover();
-        final files = details.files
-            .whereType<DropItemFile>()
-            .cast<XFile>()
-            .toList(growable: false);
-        if (files.isEmpty) {
-          return;
-        }
-        unawaited(_upload(files, controller, state));
+        unawaited(_handleDroppedItems(details.files, controller, state));
       },
       child: content,
     );
   }
 }
 
-/// 让整页接键盘：`Focus` 只在没有子控件抢焦点时收到事件，
-/// 因此搜索框/弹窗内的按键不会被列表快捷键吃掉。
 class _PageFocus extends StatelessWidget {
   const _PageFocus({
     required this.focusNode,

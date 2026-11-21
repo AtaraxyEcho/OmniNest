@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/gestures.dart'
+    show PointerScrollEvent, PointerSignalEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +14,7 @@ import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/reader/application/reader_comic_image_provider.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_sync_service.dart';
@@ -20,39 +24,44 @@ import 'package:omninest/features/reader/domain/comic_layout_index.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 import 'package:omninest/features/reader/domain/comic_navigation.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
+import 'package:omninest/features/reader/domain/reader_bookmark.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_page_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_overlays.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_comfort_filter.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tap_detector.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_comfort_filter.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
 
 part 'comic_reader_view_sections.dart';
 
-/// 漫画阅读模式。
+/// 漫画阅读模式：支持 Book 3D 仿真翻页、Swipe 水平滑动、Scroll 竖向卷轴。
 enum ComicReadingMode {
-  /// 单页翻页（水平滑动）。
+  /// Book 3D 仿真翻页。
+  book,
+
+  /// Swipe 水平滑动翻页。
   page,
 
-  /// 竖向连续滚动。
+  /// Scroll 竖向连续滚动。
   scroll,
 }
 
 /// 漫画阅读器视图。
 ///
-/// 支持单页翻页和竖向连续滚动两种模式。
-/// 图片通过后端 page API 按需读取，阅读态不直接解析漫画源文件。
+/// 支持 Book 3D 翻页、Swipe 滑动、Scroll 卷轴三模式，单/双页跨页、RTL 日漫方向、
+/// 每页独立缩放（放大 > 1.02 自动锁翻页拖拽）与漫画书签管理。
 class ComicReaderView extends ConsumerStatefulWidget {
   const ComicReaderView({
     required this.itemId,
     required this.manifest,
     required this.onBack,
+    this.bookTitle,
     this.initialPageIndex = 0,
     this.initialIntraPageOffset,
     super.key,
@@ -67,6 +76,9 @@ class ComicReaderView extends ConsumerStatefulWidget {
   /// 退出阅读器并返回条目详情页。
   final VoidCallback onBack;
 
+  /// 漫画正式书名（`item.title`）；缺省时从 `readerItemDetailProvider` 或目录回退。
+  final String? bookTitle;
+
   /// 初始页码索引。
   final int initialPageIndex;
 
@@ -74,22 +86,24 @@ class ComicReaderView extends ConsumerStatefulWidget {
   final double? initialIntraPageOffset;
 
   @override
-  ConsumerState<ComicReaderView> createState() => _ComicReaderViewState();
+  ConsumerState<ComicReaderView> createState() => ComicReaderViewState();
 }
 
-class _ComicReaderViewState extends ConsumerState<ComicReaderView>
+class ComicReaderViewState extends ConsumerState<ComicReaderView>
     with WidgetsBindingObserver {
-  late PageController _pageController;
+  final ReaderPageTurnController _pageTurnController =
+      ReaderPageTurnController();
   late ScrollController _scrollController;
   late ComicLayoutIndex _layoutIndex;
-  final TransformationController _transformationController =
-      TransformationController();
+
+  /// 每页/每对页独立缩放控制器：离屏自动复位 1.0x，彻底消除缩放串页。
+  final Map<int, TransformationController> _slotTransformControllers = {};
+  Offset? _lastDoubleTapLocalPosition;
+  double _currentZoomScale = 1.0;
 
   /// 当前阅读锚点（统一真相源）。
   ComicAnchor _anchor = const ComicAnchor(pageId: '', pageIndex: 0);
 
-  // 与样例 BookReader 的 chrome=true 保持一致：进入漫画阅读页后立即给出
-  // 返回、目录、模式和页码入口，用户不需要先猜测中心热区。
   bool _showControls = true;
   late ComicReadingMode _readingMode;
   late ComicReaderDisplaySettings _displaySettings;
@@ -97,18 +111,15 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   Timer? _hideControlsTimer;
   Timer? _scrollSaveTimer;
   Timer? _displaySettingsSaveTimer;
-  // 防抖中尚未落盘的最新设置：dispose 只 cancel 会丢最后一次调整，
-  // 在 deactivate（ref 仍可用）补一次落盘。
   ComicReaderDisplaySettings? _pendingDisplaySettings;
   bool _pendingInitialScrollRestore = false;
   int _initialScrollRestoreAttempts = 0;
-  // 初始恢复的时间兜底：超过后放弃视觉恢复，保持意图锚点不再重试。
   DateTime? _initialRestoreDeadline;
   bool _suppressScrollProgress = false;
   ComicAnchor? _pendingScrollRestoreAnchor;
   bool _scrollRestoreScheduled = false;
-  bool _imageZoomed = false;
   bool _exitRequested = false;
+  bool _progressFlushedForExit = false;
   late ReaderProgressSyncService _progressSync;
   final ReaderPanelCoordinator _panelCoordinator = ReaderPanelCoordinator();
   final ReaderCommandGate _commandGate = ReaderCommandGate();
@@ -127,15 +138,19 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   bool get _isRtl =>
       _displaySettings.rtlOverride ??
       (_manifest.readingDirection?.toLowerCase() == 'rtl');
-  ReaderViewSettings get _controlSettings =>
-      _settings.copyWith(paletteId: ReaderReadingPalette.dark.id);
+  bool get _isPagedMode => _readingMode != ComicReadingMode.scroll;
+  bool get _imageZoomed => _currentZoomScale > 1.02;
+
+  /// 统一桌面阅读器视觉设置：不再强制纯黑，根据当前模式同步 Book 书桌色或主题纸面色。
+  ReaderViewSettings get _controlSettings => _settings.copyWith(
+    readingMode: _readingMode == ComicReadingMode.scroll ? 'scroll' : 'page',
+    pageTurnMode: _readingMode == ComicReadingMode.book ? 'cover' : 'slide',
+  );
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 计时起点必须在进场就定下：只在 resumed 回调里赋值的话，用户从没切过后台时
-    // activeReading 恒为 0 秒，会话被 10 秒阈值丢掉，漫画时长永远不进统计。
     _lastResumedAt = DateTime.now();
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     final defaultMode = kIsWeb ? 'scroll' : 'page';
@@ -162,7 +177,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
       intraPageOffset: widget.initialIntraPageOffset ?? 0.0,
       manifestVersion: _manifest.manifestVersion,
     );
-    _pageController = PageController(initialPage: initialPage);
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _volumeKeyEventCancel = ReaderVolumeKeyService.instance().addListener(
@@ -175,9 +189,19 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     );
   }
 
+  /// 退出前等待进度落库与服务端同步完成，彻底消除详情页刷新竞态。
+  Future<void> flushReadingProgress() async {
+    if (_progressFlushedForExit) {
+      return;
+    }
+    _progressFlushedForExit = true;
+    _scrollSaveTimer?.cancel();
+    _scrollSaveTimer = null;
+    await _persistProgress(force: true);
+  }
+
   @override
   void deactivate() {
-    // 防抖中的设置变更在离开树前落盘（dispose 中 ref 不可用）。
     _displaySettingsSaveTimer?.cancel();
     _displaySettingsSaveTimer = null;
     final pending = _pendingDisplaySettings;
@@ -190,8 +214,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 仅以 paused（切后台、窗口隐藏）作为挂机边界：inactive 在桌面端弹窗或失焦时也会
-    // 触发，跟着结算会把正常阅读的时间算没。判据与文本阅读页保持一致。
     if (state == AppLifecycleState.resumed) {
       _lastResumedAt ??= DateTime.now();
       return;
@@ -206,7 +228,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
   }
 
-  /// 阅读会话只记一次：退出与后台挂起都可能触发，重复记录会把时长算两遍。
   void _recordSession() {
     if (_sessionRecorded) {
       return;
@@ -226,14 +247,16 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // 看漫画也是阅读：不记会话就没有时长，连续天数与统计对漫画永远是空的。
     _recordSession();
-    // 退出前补一次最终落库：滚动进度走 500ms 防抖，直接 cancel 会丢
-    // 最近一次未落盘的位置；持久化不依赖 ref，可在 dispose 中执行。
-    _persistProgress(force: true);
-    _pageController.dispose();
+    if (!_progressFlushedForExit) {
+      unawaited(_persistProgress(force: true));
+    }
+    _pageTurnController.dispose();
     _scrollController.dispose();
-    _transformationController.dispose();
+    for (final ctrl in _slotTransformControllers.values) {
+      ctrl.dispose();
+    }
+    _slotTransformControllers.clear();
     _hideControlsTimer?.cancel();
     _scrollSaveTimer?.cancel();
     _displaySettingsSaveTimer?.cancel();
@@ -249,7 +272,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     super.dispose();
   }
 
-  /// 将音量键拦截开关同步到原生层（仅 Android 实际生效）。
   void _syncVolumeKeyPaging() {
     final shouldEnable = isAndroidPlatform && _settings.volumeKeyPaging;
     if (_volumeKeyPagingPushed == shouldEnable) {
@@ -263,26 +285,24 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     );
   }
 
-  /// 音量键事件映射为阅读命令：下键向后翻，上键向前翻（页模式随阅读方向）。
   void _handleVolumeKeyEvent(ReaderVolumeKeyDirection direction) {
     if (!mounted) {
       return;
     }
     final forward = direction == ReaderVolumeKeyDirection.down;
-    if (_readingMode == ComicReadingMode.page) {
-      final delta = forward ? (_isRtl ? -1 : 1) : (_isRtl ? 1 : -1);
+    if (_isPagedMode) {
+      final delta = forward ? 1 : -1;
       final command =
           delta > 0 ? ReaderCommand.nextPage : ReaderCommand.previousPage;
       if (_requiresCommandGate(command) && !_commandGate.accept()) {
         return;
       }
-      _goToRelativePage(delta);
+      _turnSlotByDelta(delta);
       return;
     }
     _scrollByPage(forward ? 1 : -1);
   }
 
-  /// 设置面板切换音量键翻页：更新本地设置、推送平台态并落库。
   void _updateVolumeKeyPaging(bool value) {
     setState(() {
       _settings = _settings.copyWith(volumeKeyPaging: value);
@@ -291,9 +311,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     unawaited(_saveMergedPreferences({'volumeKeyPaging': value}));
   }
 
-  /// 合并整张偏好字典后再落盘。
-  ///
-  /// 只传单键的 `save` 会把偏好字典覆盖成只剩这一项：字号、主题与漫画显示设置一起丢。
   Future<void> _saveMergedPreferences(Map<String, dynamic> patch) async {
     final current = await ref.read(readerPreferencesProvider.future);
     if (!mounted) {
@@ -307,6 +324,7 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
             pendingDisplaySettings: _pendingDisplaySettings,
             appliedDisplaySettings: _displaySettings,
             patch: patch,
+            itemId: widget.itemId,
           ),
         );
   }
@@ -317,7 +335,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     final viewport = MediaQuery.sizeOf(context);
     final contentWidth = _resolveLayout(viewport).contentWidth;
     if (_layoutIndex.updateContentWidth(contentWidth)) {
-      // 旋转/resize 后重新定位当前锚点
       if (_readingMode == ComicReadingMode.scroll &&
           _scrollController.hasClients) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -336,7 +353,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
   }
 
-  /// 加载阅读器设置。
   Future<void> _loadSettings() async {
     final values = await ref.read(readerPreferencesProvider.future);
     final loaded =
@@ -347,6 +363,7 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     final displaySettings = ComicReaderDisplaySettings.fromPreferences(
       values,
       defaultReadingMode: kIsWeb ? 'scroll' : 'page',
+      itemId: widget.itemId,
     );
     final contentWidth =
         _resolveLayout(
@@ -361,10 +378,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
       _readingMode = _modeFromName(displaySettings.readingMode);
     });
 
-    // 滚动模式：首帧后跳转到初始锚点位置。
-    // 抑制滚动回调：图片未加载、maxScrollExtent 未收敛时 jumpTo 会被
-    // clamp 到错误位置，未抑制的 _onScroll 会用 hitTest 覆写 _anchor，
-    // 错误随后被落库。
     if (_readingMode == ComicReadingMode.scroll &&
         (_anchor.pageIndex > 0 || _anchor.intraPageOffset > 0)) {
       _pendingInitialScrollRestore = true;
@@ -374,7 +387,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
   }
 
-  /// 页面布局回调：更新布局索引中的真实高度。
   void _onPageLayout(int index, double height) {
     _layoutIndex.updateHeight(index, height);
     if (_pendingInitialScrollRestore && index <= _anchor.pageIndex) {
@@ -399,7 +411,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
     final max = _scrollController.position.maxScrollExtent;
     if (max <= 0) {
-      // 布局尚未产出：等待 _onPageLayout 回报真实高度后由事件驱动重试。
       return;
     }
     final viewportHeight = _scrollController.position.viewportDimension;
@@ -417,8 +428,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
     final deadline = _initialRestoreDeadline;
     if (deadline != null && DateTime.now().isAfter(deadline)) {
-      // 高度迟迟未回报：放弃视觉恢复，但 _anchor 保持意图值
-      // （suppress 已防污染），已存进度不被 clamp 位置覆盖。
       _pendingInitialScrollRestore = false;
       _suppressScrollProgress = false;
       return;
@@ -514,10 +523,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
         (intraOffset - anchor.intraPageOffset).abs() <= 0.02;
   }
 
-  /// 滚动事件监听（竖向滚动模式）。
-  ///
-  /// 使用 ComicLayoutIndex 精确定位当前页。
-  /// 滚动停止后节流保存进度（500ms）。
   void _onScroll() {
     if (_readingMode != ComicReadingMode.scroll) return;
     if (!_scrollController.hasClients) return;
@@ -552,12 +557,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
       });
     }
 
-    // 滚动节流保存：500ms 后触发
     _scheduleProgressSave();
   }
 
-  /// 进度落库节流：翻页与滚动共用 500ms 防抖，快速连翻/连续滚动合并为
-  /// 一次本地写入与服务端同步；dispose 的最终持久化兜底防丢。
   void _scheduleProgressSave() {
     _scrollSaveTimer?.cancel();
     _scrollSaveTimer = Timer(const Duration(milliseconds: 500), () {
@@ -565,12 +567,10 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     });
   }
 
-  /// 页面切换回调（翻页模式）。
   void _onPageChanged(int index) {
     if (index < 0 || index >= _totalPages) return;
     if (_anchor.pageIndex == index) return;
     final page = _pages[index];
-    _resetImageTransform();
     setState(() {
       _anchor = ComicAnchor(
         pageId: page.id,
@@ -579,20 +579,16 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
         sourceId: page.sourceId,
         sourcePageIndex: page.sourcePageIndex,
         catalogKey: page.catalogKey,
-        intraPageOffset: 0.0, // 翻页模式无页内偏移
+        intraPageOffset: 0.0,
         manifestVersion: _manifest.manifestVersion,
       );
     });
-    // 预加载立即执行，持久化走防抖合并
     _preloadAdjacent();
     _scheduleProgressSave();
   }
 
-  /// 保存阅读进度到本地和服务器。
   void _saveProgress() {
-    _persistProgress();
-
-    // 预加载前后页
+    unawaited(_persistProgress());
     _preloadAdjacent();
   }
 
@@ -600,20 +596,16 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   double? _lastSyncedProgress;
   int? _lastSyncedPageIndex;
 
-  /// 服务端同步最小间隔，与文本阅读器保持同一节流策略。
   static const _serverSyncMinInterval = Duration(seconds: 20);
 
-  /// 将当前锚点写入本地与服务端；不依赖 ref，dispose 时也可安全调用。
-  ///
-  /// 本地写入保持每次执行；服务端上报仅在 force（离场补报）或
-  /// 「距上次超过最小间隔且页码确有变化」时执行。
-  void _persistProgress({bool force = false}) {
+  /// 将当前锚点写入本地与服务端，返回 Future 以便退出前 `await` 落库完成。
+  Future<void> _persistProgress({bool force = false}) async {
     if (_pages.isEmpty || _anchor.pageIndex >= _pages.length) return;
     final progress =
         _totalPages > 0
             ? ((_anchor.pageIndex + 1) / _totalPages).clamp(0.0, 1.0)
             : 0.0;
-    final mode = _readingMode == ComicReadingMode.page ? 'page' : 'scroll';
+    final mode = _readingMode == ComicReadingMode.scroll ? 'scroll' : 'page';
     final chapterId =
         _anchor.pageIndex < _pages.length
             ? _pages[_anchor.pageIndex].catalogNodeId ?? ''
@@ -623,26 +615,22 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
             ? _anchor.intraPageOffset
             : null;
 
-    // 本地保存
-    unawaited(
-      ReaderLocalProgress.save(
-        itemId: widget.itemId,
-        chapterProgress: progress,
-        mode: mode,
-        chapterId: chapterId,
-        charOffset: _anchor.pageIndex,
-        pageId: _anchor.pageId,
-        pageIndex: _anchor.pageIndex,
-        pageFingerprint: _anchor.pageFingerprint,
-        sourceId: _anchor.sourceId,
-        sourcePageIndex: _anchor.sourcePageIndex,
-        catalogKey: _anchor.catalogKey,
-        manifestVersion: _anchor.manifestVersion,
-        intraPageOffset: intraPageOffset,
-      ),
+    await ReaderLocalProgress.save(
+      itemId: widget.itemId,
+      chapterProgress: progress,
+      mode: mode,
+      chapterId: chapterId,
+      charOffset: _anchor.pageIndex,
+      pageId: _anchor.pageId,
+      pageIndex: _anchor.pageIndex,
+      pageFingerprint: _anchor.pageFingerprint,
+      sourceId: _anchor.sourceId,
+      sourcePageIndex: _anchor.sourcePageIndex,
+      catalogKey: _anchor.catalogKey,
+      manifestVersion: _manifest.manifestVersion,
+      intraPageOffset: intraPageOffset,
     );
 
-    // 服务端同步（漫画锚点）：节流判定与文本阅读器一致
     final now = DateTime.now();
     final moved =
         _anchor.pageIndex != (_lastSyncedPageIndex ?? -1) ||
@@ -656,23 +644,21 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     _lastServerSyncAt = now;
     _lastSyncedProgress = progress;
     _lastSyncedPageIndex = _anchor.pageIndex;
-    unawaited(
-      _progressSync.sync(
-        itemId: widget.itemId,
-        charOffset: _anchor.pageIndex,
-        progressPercent: progress,
-        readingMode: mode,
-        chapterId: chapterId,
-        pageId: _anchor.pageId,
-        pageIndex: _anchor.pageIndex,
-        pageFingerprint: _anchor.pageFingerprint,
-        sourceId: _anchor.sourceId,
-        sourcePageIndex: _anchor.sourcePageIndex,
-        catalogKey: _anchor.catalogKey,
-        manifestVersion: _anchor.manifestVersion,
-        intraPageOffset: intraPageOffset,
-        clientUpdatedAt: now,
-      ),
+    await _progressSync.sync(
+      itemId: widget.itemId,
+      charOffset: _anchor.pageIndex,
+      progressPercent: progress,
+      readingMode: mode,
+      chapterId: chapterId,
+      pageId: _anchor.pageId,
+      pageIndex: _anchor.pageIndex,
+      pageFingerprint: _anchor.pageFingerprint,
+      sourceId: _anchor.sourceId,
+      sourcePageIndex: _anchor.sourcePageIndex,
+      catalogKey: _anchor.catalogKey,
+      manifestVersion: _manifest.manifestVersion,
+      intraPageOffset: intraPageOffset,
+      clientUpdatedAt: now,
     );
 
     if (kDebugMode) {
@@ -682,75 +668,115 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
     }
   }
 
-  /// 将状态变更封装为回调，供扩展中的方法触发重建。
   void _update(VoidCallback fn) {
-    setState(fn);
+    if (mounted) {
+      setState(fn);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     ref.watch(comicImageLoaderProvider);
+    final bookmarksAsync = ref.watch(
+      readerItemBookmarksProvider(widget.itemId),
+    );
+    final bookmarks = bookmarksAsync.asData?.value ?? const <ReaderBookmark>[];
+    final detailTitle =
+        ref
+            .watch(readerItemDetailProvider(widget.itemId))
+            .asData
+            ?.value
+            .item
+            .title;
+    final resolvedBookTitle =
+        (widget.bookTitle?.trim().isNotEmpty == true)
+            ? widget.bookTitle!.trim()
+            : (detailTitle?.trim().isNotEmpty == true)
+            ? detailTitle!.trim()
+            : (_manifest.catalog.isNotEmpty
+                ? _manifest.catalog.first.title
+                : '');
+
     final controlSettings = _controlSettings;
+    final viewport = MediaQuery.sizeOf(context);
     final layout = ReaderControlLayout.resolve(
-      viewport: MediaQuery.sizeOf(context),
+      viewport: viewport,
       fontSize: AppTypography.titleMedium,
       textScale: MediaQuery.textScalerOf(context).scale(1),
     );
+    final slots = _buildSpreadSlots(viewport.width);
+    final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
+    final activeSlot =
+        (activeSlotIndex >= 0 && activeSlotIndex < slots.length)
+            ? slots[activeSlotIndex]
+            : null;
+    final visibleEndPageIndex =
+        _isPagedMode && activeSlot != null
+            ? activeSlot.endPageIndex
+            : _anchor.pageIndex;
+    final isDualSpreadActive =
+        _isPagedMode && activeSlot != null && activeSlot.pageIndices.length > 1;
+    final l10n = AppLocalizations.of(context);
+    final pageSubtitle =
+        _totalPages <= 0
+            ? null
+            : (isDualSpreadActive
+                ? l10n.readerPageRange(
+                  activeSlot.startPageIndex + 1,
+                  math.min(_totalPages, activeSlot.endPageIndex + 1),
+                  _totalPages,
+                )
+                : l10n.readerPageOf(_anchor.pageIndex + 1, _totalPages));
+    final currentBookmark = _findBookmarkForPage(bookmarks, _anchor.pageIndex);
+    final isBookmarked = currentBookmark != null;
+    final stageBg = controlSettings.readerCanvasColor;
+    final topBarVisible = _showControls || _panelCoordinator.isOpen;
+
     return Focus(
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: stageBg,
         body: Stack(
           children: [
             Positioned.fill(
               child: ReaderComfortFilter(
                 brightness: _settings.brightness,
                 warmth: _settings.warmth,
-                child: _buildContent(),
+                child: _buildContent(
+                  slots: slots,
+                  activeSlotIndex: activeSlotIndex,
+                  isBookmarked: isBookmarked,
+                  stageBg: stageBg,
+                ),
               ),
             ),
-            // 控件条与页码常驻挂载，仅切换可见性：条件挂载会让父 Stack
-            // 存续期间整棵摘除/加回语义子树，触发 Windows 辅助功能桥
-            // "will not be in the tree" 更新失败。
-            ComicReaderTopBar(
-              visible: _showControls,
-              catalogTitle:
-                  _manifest.catalog.isNotEmpty
-                      ? _manifest.catalog.first.title
-                      : '',
-              isPageMode: _readingMode == ComicReadingMode.page,
-              settings: controlSettings,
-              onBack: _requestExit,
-              onShowContents: () => _togglePanel(ReaderPanelType.contents),
-              onShowSettings: () => _togglePanel(ReaderPanelType.settings),
-              onShowShortcuts: () => _togglePanel(ReaderPanelType.shortcuts),
-              // 移动浏览器不提供翻页入口；顶栏与底栏必须跟随同一平台能力，
-              // 否则绕过面板照样能切进 Web 不支持的模式。
-              onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
-            ),
             ComicReaderBottomBar(
-              visible: _showControls,
+              visible: _showControls && !_panelCoordinator.isOpen,
               currentPageIndex: _anchor.pageIndex,
               totalPages: _totalPages,
-              isPageMode: _readingMode == ComicReadingMode.page,
+              isPageMode: _isPagedMode,
               settings: controlSettings,
+              isRtl: _isRtl,
+              isDualPage: isDualSpreadActive,
+              visibleEndPageIndex: visibleEndPageIndex,
+              zoomScale: _currentZoomScale,
+              onResetZoom: _imageZoomed ? _resetCurrentSlotZoom : null,
               onPrevious:
-                  _anchor.pageIndex > 0 ? () => _goToRelativePage(-1) : null,
+                  _anchor.pageIndex > 0 ? () => _turnSlotByDelta(-1) : null,
               onNext:
-                  _anchor.pageIndex < _totalPages - 1
-                      ? () => _goToRelativePage(1)
+                  visibleEndPageIndex < _totalPages - 1
+                      ? () => _turnSlotByDelta(1)
                       : null,
               onSeek: _jumpToPage,
               onShowContents: () => _togglePanel(ReaderPanelType.contents),
-              // 移动浏览器不提供翻页入口；顶栏与底栏必须跟随同一平台能力，
-              // 否则绕过面板照样能切进 Web 不支持的模式。
               onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
             ),
             ComicPageIndicator(
-              visible: !_showControls,
+              visible: !topBarVisible,
               currentPageIndex: _anchor.pageIndex,
               totalPages: _totalPages,
+              visibleEndPageIndex: visibleEndPageIndex,
             ),
             if (_panelCoordinator.active != null)
               Positioned.fill(
@@ -762,15 +788,46 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
                   currentPageIndex: _anchor.pageIndex,
                   displaySettings: _displaySettings,
                   volumeKeyPaging: _settings.volumeKeyPaging,
+                  bookmarks: bookmarks,
+                  effectiveRtl: _isRtl,
                   onClose: _closePanel,
                   onCatalogNodeTap: (node) {
                     _closePanel();
                     _jumpToCatalogNode(node);
                   },
+                  onBookmarkTap: (bm) {
+                    _closePanel();
+                    _jumpToPage(bm.charOffset);
+                  },
+                  onBookmarkDelete: (bm) => _deleteBookmark(bm),
                   onDisplaySettingsChanged: _applyDisplaySettings,
                   onVolumeKeyPagingChanged: _updateVolumeKeyPaging,
                 ),
               ),
+            // 顶栏置于抽屉浮层之上，展开右侧磨砂抽屉时顶栏保持可见且支持一键切换面板。
+            ComicReaderTopBar(
+              visible: topBarVisible,
+              catalogTitle:
+                  _manifest.catalog.isNotEmpty
+                      ? _manifest.catalog.first.title
+                      : '',
+              bookTitle: resolvedBookTitle,
+              pageSubtitle: pageSubtitle,
+              readingMode: _modeName(_readingMode),
+              isPageMode: _isPagedMode,
+              settings: controlSettings,
+              isBookmarked: isBookmarked,
+              bookmarkCount: bookmarks.length,
+              activePanel: _panelCoordinator.active,
+              onBack: _requestExit,
+              onShowContents: () => _togglePanel(ReaderPanelType.contents),
+              onToggleBookmark: () => _toggleCurrentPageBookmark(bookmarks),
+              onShowBookmarks: () => _togglePanel(ReaderPanelType.annotations),
+              onShowSettings: () => _togglePanel(ReaderPanelType.settings),
+              onShowShortcuts: () => _togglePanel(ReaderPanelType.shortcuts),
+              onSelectReadingMode: supportsPageMode ? _selectReadingMode : null,
+              onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
+            ),
           ],
         ),
       ),

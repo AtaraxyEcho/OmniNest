@@ -5,6 +5,9 @@ import 'package:flutter/semantics.dart' show SemanticsRole;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/desktop/desktop_palette.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_mobile_sheet.dart';
@@ -24,7 +27,7 @@ import 'package:omninest/core/widgets/workstation_mobile_sheet.dart';
 /// 移动端托管态（MobileShellScope）自动分流为底部玻璃面板
 /// （[showWorkstationMobileSheet]）：调用方、builder 与返回值语义不变，
 /// [WorkstationDialogFrame] 在面板内自动切换为无边框分区形态。
-/// 桌面与未挂壳层的上下文（含桌面窄窗 compact 态）保持居中弹窗不变。
+/// 桌面态检测到 `DesktopSkin` 时自动切换为新版 20px 圆角磨砂弹窗样式。
 Future<T?> showWorkstationDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -82,7 +85,7 @@ Future<T?> showWorkstationDialog<T>({
 class WorkstationBlurScrim extends StatelessWidget {
   const WorkstationBlurScrim({this.color, this.animation, super.key});
 
-  /// 叠加在模糊之上的着色；缺省 black/45。
+  /// 叠加在模糊之上的着色；桌面态缺省 [DesktopPalette.scrim]，其余缺省 black/45。
   final Color? color;
 
   /// 可选的路由淡入淡出；缺省不淡入（弹窗路由的屏障自己负责显隐）。
@@ -94,10 +97,17 @@ class WorkstationBlurScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = Theme.of(context).extension<DesktopSkin>() != null;
+    final sigma = isDesktop ? 4.0 : 12.0;
+    final tint =
+        color ??
+        (isDesktop
+            ? DesktopPalette.scrim
+            : Colors.black.withValues(alpha: 0.45));
     final surface = ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: ColoredBox(color: color ?? Colors.black.withValues(alpha: 0.45)),
+        filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        child: ColoredBox(color: tint),
       ),
     );
     return Positioned.fill(
@@ -182,7 +192,7 @@ void _restoreFocus(FocusNode? node) {
   });
 }
 
-/// 标准确认弹窗：直角容器 + 焦点陷阱 + 焦点还原，默认聚焦取消。
+/// 标准确认弹窗：桌面态自动呈现新版 20px 圆角磨砂样式 + 焦点陷阱 + 焦点还原，默认聚焦取消。
 Future<bool> showWorkstationConfirmDialog(
   BuildContext context, {
   required String title,
@@ -474,7 +484,8 @@ class _WorkstationFocusTrapState extends State<WorkstationFocusTrap> {
   }
 }
 
-/// 直角弹窗容器：1px 强边框、零阴影、固定 Header/Body/Footer 三段。
+/// 弹窗容器：移动端底部面板自动去边框，桌面端检测到 [DesktopSkin] 时
+/// 自动套用新版 20px 圆角磨砂卡片样式与阴影。
 ///
 /// [destructive] 为 true 时呈现高危确认形态：顶部绯红警示线，
 /// 需搭配 `showWorkstationDialog(dismissible: false)` 与默认聚焦取消按钮。
@@ -506,22 +517,51 @@ class WorkstationDialogFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final desktopSkin = Theme.of(context).extension<DesktopSkin>();
+    final inMobileSheet = WorkstationSheetAmbient.isActive(context);
+    final useDesktopSurface = desktopSkin != null && !inMobileSheet;
+
+    final dividerColor =
+        useDesktopSurface ? desktopSkin.line : scheme.outlineVariant;
+    final headerPadding =
+        useDesktopSurface
+            ? const EdgeInsets.fromLTRB(24, 20, 20, 14)
+            : const EdgeInsets.fromLTRB(20, 16, 20, 14);
+    final bodyPadding =
+        useDesktopSurface
+            ? const EdgeInsets.fromLTRB(24, 16, 24, 18)
+            : const EdgeInsets.fromLTRB(20, 16, 20, 16);
+    final footerPadding =
+        useDesktopSurface
+            ? const EdgeInsets.fromLTRB(24, 14, 24, 18)
+            : const EdgeInsets.fromLTRB(20, 12, 20, 14);
+
     final column = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (destructive) Container(height: 2, color: scheme.error),
+        if (destructive)
+          Container(
+            height: 2,
+            color: useDesktopSurface ? desktopSkin.bad : scheme.error,
+          ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+          padding: headerPadding,
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: destructive ? scheme.error : scheme.onSurface,
-                  ),
+                  style:
+                      useDesktopSurface
+                          ? DesktopType.displaySm(
+                            destructive ? desktopSkin.bad : desktopSkin.text,
+                          )
+                          : Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color:
+                                destructive ? scheme.error : scheme.onSurface,
+                          ),
                 ),
               ),
               if (headerLabel != null) ...[
@@ -533,51 +573,72 @@ class WorkstationDialogFrame extends StatelessWidget {
                     fontFamilyFallback: AppTypography.monoFamilyFallback,
                     fontSize: AppTypography.labelSmall,
                     letterSpacing: 1.2,
-                    color: scheme.onSurfaceVariant,
+                    color:
+                        useDesktopSurface
+                            ? desktopSkin.text3
+                            : scheme.onSurfaceVariant,
                   ),
                 ),
               ],
               const SizedBox(width: 8),
-              _WorkstationDialogCloseButton(),
+              _WorkstationDialogCloseButton(desktopSkin: desktopSkin),
             ],
           ),
         ),
-        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        Divider(height: 1, thickness: 1, color: dividerColor),
         Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-            child: body,
-          ),
+          child: SingleChildScrollView(padding: bodyPadding, child: body),
         ),
         if (actions.isNotEmpty) ...[
-          Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+          Divider(height: 1, thickness: 1, color: dividerColor),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+            padding: footerPadding,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Wrap(spacing: 8, runSpacing: 4, children: actions),
+              child: Wrap(spacing: 10, runSpacing: 6, children: actions),
             ),
           ),
         ],
       ],
     );
-    // 移动面板形态：面板容器已提供底色、圆角与把手，框架退化为无边框
-    // 分区结构；[width] 与直角边框仅桌面居中弹窗使用。
-    final surface =
-        WorkstationSheetAmbient.isActive(context)
-            ? Material(color: Colors.transparent, child: column)
-            : Material(
-              color: scheme.surfaceContainer,
-              child: Container(
-                width: width,
-                // 上限跟随请求宽度：宽详情弹窗（如 620）在小屏由父级约束自然收窄。
-                constraints: BoxConstraints(maxWidth: width),
-                decoration: BoxDecoration(
-                  border: Border.all(color: scheme.outline, width: 1),
-                ),
-                child: column,
-              ),
-            );
+    // 移动面板形态：面板容器已提供底色、圆角与把手，框架退化为无边框分区结构；
+    // 桌面态：自动升级为新版 20px 圆角磨砂面板；其余回退原工位样式。
+    final Widget surface;
+    if (inMobileSheet) {
+      surface = Material(color: Colors.transparent, child: column);
+    } else if (useDesktopSurface) {
+      surface = Material(
+        type: MaterialType.transparency,
+        child: Container(
+          width: width,
+          constraints: BoxConstraints(
+            maxWidth: width,
+            maxHeight: MediaQuery.sizeOf(context).height - 96,
+          ),
+          decoration: BoxDecoration(
+            color: desktopSkin.panelSolid,
+            borderRadius: BorderRadius.circular(DesktopMetrics.radiusDialog),
+            border: Border.all(color: desktopSkin.line2),
+            boxShadow: desktopSkin.shadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: column,
+        ),
+      );
+    } else {
+      surface = Material(
+        color: scheme.surfaceContainer,
+        child: Container(
+          width: width,
+          // 上限跟随请求宽度：宽详情弹窗（如 620）在小屏由父级约束自然收窄。
+          constraints: BoxConstraints(maxWidth: width),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outline, width: 1),
+          ),
+          child: column,
+        ),
+      );
+    }
     return Semantics(
       scopesRoute: true,
       explicitChildNodes: true,
@@ -613,29 +674,40 @@ class WorkstationDialogSectionLabel extends StatelessWidget {
   }
 }
 
-/// 弹窗右上角关闭钮：28px 直角 hairline，点击 maybePop 关闭当前弹窗。
+/// 弹窗右上角关闭钮：桌面态采用 28px 圆角柔和按钮，其余保持 28px 直角 hairline。
 class _WorkstationDialogCloseButton extends StatelessWidget {
+  const _WorkstationDialogCloseButton({this.desktopSkin});
+
+  final DesktopSkin? desktopSkin;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = MaterialLocalizations.of(context);
+    final isDesktop = desktopSkin != null;
+    final radius = isDesktop ? BorderRadius.circular(8) : BorderRadius.zero;
     return Tooltip(
       message: l10n.closeButtonTooltip,
       waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: () => Navigator.of(context).maybePop(),
-        customBorder: const RoundedRectangleBorder(),
+        customBorder: RoundedRectangleBorder(borderRadius: radius),
         child: Container(
           width: 28,
           height: 28,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border.all(color: scheme.outline, width: 1),
+            color: isDesktop ? desktopSkin!.raise : null,
+            borderRadius: radius,
+            border: Border.all(
+              color: isDesktop ? desktopSkin!.line : scheme.outline,
+              width: 1,
+            ),
           ),
           child: Icon(
             Icons.close_rounded,
             size: 14,
-            color: scheme.onSurfaceVariant,
+            color: isDesktop ? desktopSkin!.text2 : scheme.onSurfaceVariant,
           ),
         ),
       ),

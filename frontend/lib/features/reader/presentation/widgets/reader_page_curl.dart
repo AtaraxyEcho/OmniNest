@@ -401,18 +401,35 @@ class _CurlPainter extends CustomPainter {
     required this.back,
     required this.paper,
     required this.spread,
-  }) : super(
-         repaint: Listenable.merge([
-           frameListenable,
-           PaperGrainCache.shaderListenable,
-         ]),
-       );
+  }) : super(repaint: frameListenable);
 
   final ValueListenable<CurlFrame> frameListenable;
   final ui.Image front;
   final ui.Image back;
   final Color paper;
   final bool spread;
+
+  /// 与静止态 `_SpreadPage` 完全一致的叶面圆角（外缘 9px、书脊内侧 2px）。
+  RRect _leafRRect(Rect rect, {required bool isRightLeaf}) {
+    if (!spread) {
+      return RRect.fromRectAndRadius(rect, Radius.zero);
+    }
+    return isRightLeaf
+        ? RRect.fromRectAndCorners(
+          rect,
+          topRight: const Radius.circular(9),
+          bottomRight: const Radius.circular(9),
+          topLeft: const Radius.circular(2),
+          bottomLeft: const Radius.circular(2),
+        )
+        : RRect.fromRectAndCorners(
+          rect,
+          topLeft: const Radius.circular(9),
+          bottomLeft: const Radius.circular(9),
+          topRight: const Radius.circular(2),
+          bottomRight: const Radius.circular(2),
+        );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -429,25 +446,19 @@ class _CurlPainter extends CustomPainter {
       front.height.toDouble(),
     );
     final imgPaint = Paint()..filterQuality = FilterQuality.medium;
-    final paperPaint = Paint()..color = paper;
-    final grainShader = PaperGrainCache.shader;
-    final grainPaint =
-        grainShader == null
-            ? null
-            : (Paint()
-              ..shader = grainShader
-              ..blendMode = BlendMode.multiply);
 
     if (!frame.active) {
-      // 进度为 0 时直接贴合纸面平铺，无折痕。
+      // 进度为 0 时直接按静止态 leafRadius 裁切平铺 front（已烘焙纸纹与纸面样式）。
       canvas.save();
       final spineX = spread ? size.width / 2.0 : 0.0;
-      if (frame.direction == CurlDirection.next) {
+      final isRightLeaf = frame.direction == CurlDirection.next;
+      if (isRightLeaf) {
         canvas.translate(spineX, 0);
       }
-      canvas.drawRect(imageRect, paperPaint);
+      if (spread) {
+        canvas.clipRRect(_leafRRect(imageRect, isRightLeaf: isRightLeaf));
+      }
       canvas.drawImageRect(front, frontSrc, imageRect, imgPaint);
-      if (grainPaint != null) canvas.drawRect(imageRect, grainPaint);
       canvas.restore();
       return;
     }
@@ -483,13 +494,14 @@ class _CurlPainter extends CustomPainter {
             math.min(1.0, (1.0 - frame.progress) * 3.0))
         .clamp(0.0, 1.0);
 
-    // 1. 正面平铺段
+    // 1. 正面平铺段（front 截图已烘焙 _SpreadPage 纸纹与圆角，严禁再叠 paperPaint / grainPaint）
     canvas.save();
     canvas.transform(geometry.frontTransform.storage);
     canvas.clipPath(geometry.frontClip);
-    canvas.drawRect(imageRect, paperPaint);
+    if (spread) {
+      canvas.clipRRect(_leafRRect(imageRect, isRightLeaf: !isPrev));
+    }
     canvas.drawImageRect(front, frontSrc, imageRect, imgPaint);
-    if (grainPaint != null) canvas.drawRect(imageRect, grainPaint);
     if (frontShadeFactor > 0.003) {
       canvas.drawRect(
         imageRect,
@@ -519,7 +531,7 @@ class _CurlPainter extends CustomPainter {
         intensity: frontSpineIntensity,
       );
     }
-    _drawPaperRim(canvas, imageRect, isRightLeaf: !isPrev);
+    _drawPaperRim(canvas, imageRect, isRightLeaf: !isPrev, arch: arch);
     canvas.restore();
 
     // 2. 折线投射在下层纸面的软阴影条带（.cu-strip）
@@ -546,12 +558,15 @@ class _CurlPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // 3. 28 片圆柱卷曲条带（内部关闭抗锯齿杜绝 1px 白缝）
+    // 3. 28 片圆柱卷曲条带（内部关闭抗锯齿杜绝 1px 白缝；按对应 leafRadius 裁切不露直角）
     for (final slice in geometry.slices) {
       canvas.save();
       canvas.transform(slice.transform.storage);
       canvas.clipPath(slice.clip, doAntiAlias: false);
-      canvas.drawRect(imageRect, paperPaint);
+      if (spread) {
+        final sliceIsRightLeaf = slice.isBack ? isPrev : !isPrev;
+        canvas.clipRRect(_leafRRect(imageRect, isRightLeaf: sliceIsRightLeaf));
+      }
       canvas.drawImageRect(
         slice.isBack ? back : front,
         slice.isBack ? backSrc : frontSrc,
@@ -610,9 +625,10 @@ class _CurlPainter extends CustomPainter {
       canvas.save();
       canvas.transform(geometry.flatTransform.storage);
       canvas.clipPath(geometry.flatClip);
-      canvas.drawRect(imageRect, paperPaint);
+      if (spread) {
+        canvas.clipRRect(_leafRRect(imageRect, isRightLeaf: isPrev));
+      }
       canvas.drawImageRect(back, backSrc, imageRect, imgPaint);
-      if (grainPaint != null) canvas.drawRect(imageRect, grainPaint);
       if (backShadeFactor > 0.003) {
         canvas.drawRect(
           imageRect,
@@ -642,7 +658,7 @@ class _CurlPainter extends CustomPainter {
           intensity: backSpineIntensity,
         );
       }
-      _drawPaperRim(canvas, imageRect, isRightLeaf: isPrev);
+      _drawPaperRim(canvas, imageRect, isRightLeaf: isPrev, arch: arch);
       canvas.restore();
     }
 
@@ -684,34 +700,32 @@ class _CurlPainter extends CustomPainter {
     );
   }
 
-  void _drawPaperRim(Canvas canvas, Rect rect, {required bool isRightLeaf}) {
-    canvas.drawRect(
-      rect,
+  /// 纸缘描边仅在纸页真正拱起时随 arch 从 0 平滑淡入，移除静止态不存在的顶部白线与直角硬框。
+  void _drawPaperRim(
+    Canvas canvas,
+    Rect rect, {
+    required bool isRightLeaf,
+    required double arch,
+  }) {
+    final fade = arch.clamp(0.0, 1.0);
+    if (fade <= 0.002) return;
+    canvas.drawRRect(
+      _leafRRect(rect, isRightLeaf: isRightLeaf),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0
-        ..color = Colors.black.withValues(alpha: 0.14),
+        ..color = Colors.black.withValues(alpha: 0.12 * fade),
     );
-    // 暗色主题下自适应降低纸缘白边亮度，杜绝深炭灰书页四周出现刺眼亮白框。
     final isDarkPaper =
         ThemeData.estimateBrightnessForColor(paper) == Brightness.dark;
-    final sideHighlightAlpha = isDarkPaper ? 0.10 : 0.55;
-    final topHighlightAlpha = isDarkPaper ? 0.06 : 0.30;
+    final sideHighlightAlpha = (isDarkPaper ? 0.09 : 0.40) * fade;
     final edgeX = isRightLeaf ? rect.right - 1.0 : rect.left + 1.0;
     canvas.drawLine(
-      Offset(edgeX, rect.top),
-      Offset(edgeX, rect.bottom),
+      Offset(edgeX, rect.top + 7.0),
+      Offset(edgeX, rect.bottom - 7.0),
       Paint()
         ..strokeWidth = 2.0
         ..color = Colors.white.withValues(alpha: sideHighlightAlpha),
-    );
-    // 对齐样例 reader.css:18-19 顶边纸缘高光
-    canvas.drawLine(
-      Offset(rect.left, rect.top + 1.0),
-      Offset(rect.right, rect.top + 1.0),
-      Paint()
-        ..strokeWidth = 2.0
-        ..color = Colors.white.withValues(alpha: topHighlightAlpha),
     );
   }
 

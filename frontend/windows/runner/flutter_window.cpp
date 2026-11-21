@@ -3,6 +3,7 @@
 #include <flutter/standard_method_codec.h>
 #include <dwmapi.h>
 #include <optional>
+#include <string>
 #include <variant>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -12,6 +13,7 @@ constexpr const char kWindowFrameChannel[] = "omninest/window_frame";
 constexpr const char kSetFrameHiddenMethod[] = "setFrameHidden";
 constexpr const char kSetWindowFullscreenMethod[] = "setWindowFullscreen";
 constexpr const char kApplyWindowChromeMethod[] = "applyWindowChrome";
+constexpr const char kWindowActionMethod[] = "windowAction";
 constexpr const char kSaveWindowPlacementMethod[] = "saveWindowPlacement";
 constexpr const char kRestoreWindowPlacementMethod[] = "restoreWindowPlacement";
 constexpr const char kVerifyWindowFrameMethod[] = "verifyWindowFrame";
@@ -20,6 +22,7 @@ constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
 constexpr const char kFinishTrayMenuPopupMethod[] = "finishTrayMenuPopup";
 constexpr const char kHiddenArgument[] = "hidden";
 constexpr const char kFullscreenArgument[] = "fullscreen";
+constexpr const char kActionArgument[] = "action";
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -75,6 +78,45 @@ bool FlutterWindow::OnCreate() {
             return;
           }
           ApplyWindowChrome(*hidden, *fullscreen);
+          result->Success(flutter::EncodableValue(true));
+          return;
+        }
+        if (call.method_name() == kWindowActionMethod) {
+          const auto* arguments =
+              std::get_if<flutter::EncodableMap>(call.arguments());
+          if (arguments == nullptr) {
+            result->Error("bad_args", "action argument is required");
+            return;
+          }
+          const auto action_entry =
+              arguments->find(flutter::EncodableValue(kActionArgument));
+          if (action_entry == arguments->end()) {
+            result->Error("bad_args", "action argument is required");
+            return;
+          }
+          const auto* action = std::get_if<std::string>(&action_entry->second);
+          if (action == nullptr) {
+            result->Error("bad_args", "action argument must be a string");
+            return;
+          }
+          HWND hwnd = GetHandle();
+          if (hwnd == nullptr) {
+            result->Success(flutter::EncodableValue(false));
+            return;
+          }
+          WPARAM command = 0;
+          if (*action == "minimize") {
+            command = SC_MINIMIZE;
+          } else if (*action == "maximize") {
+            command = SC_MAXIMIZE;
+          } else if (*action == "restore") {
+            command = SC_RESTORE;
+          } else {
+            result->Error("bad_args", "unsupported window action");
+            return;
+          }
+          // 走原生 WM_SYSCOMMAND，触发 DWM 硬件加速的最大化/还原/最小化动画。
+          ::PostMessage(hwnd, WM_SYSCOMMAND, command, 0);
           result->Success(flutter::EncodableValue(true));
           return;
         }
@@ -294,6 +336,12 @@ void FlutterWindow::PaintSizingGap(HWND hwnd) {
 }
 
 namespace {
+// Win11 原生圆角与描边属性常量（兼容旧版 Windows SDK 头文件）。
+constexpr DWORD kDwmwaWindowCornerPreference = 33;
+constexpr DWORD kDwmwcpDefault = 0;
+constexpr DWORD kDwmwcpDoNotRound = 1;
+constexpr DWORD kDwmwcpRound = 2;
+
 // Win11 给每个窗口描一条 1px 边框，深色自绘窗口上就是一圈白边。
 // DWMWA_BORDER_COLOR(34) 取 DWMWA_COLOR_NONE(0xFFFFFFFE) 可关掉它；
 // 恢复带框窗口时再置回 DWMWA_COLOR_DEFAULT(0xFFFFFFFF)。
@@ -311,33 +359,43 @@ bool SetDwmBorderVisible(HWND hwnd, bool visible) {
       DwmSetWindowAttribute(hwnd, kDwmwaBorderColor, &color, sizeof(color)));
 }
 
-// DWMWA_BORDER_COLOR 只在 Win11 22000+ 生效，旧系统上属性写入会失败。
-// 此时靠零边距扩展帧 + NCCALCSIZE 钉扎客户区 + 抑制 WM_NCPAINT，让系统
-// 没有非客户区可描。窗口激活、DPI/主题变化都会让 DWM 重绘并重置边框色，
-// 所以每次 NC 重绘机会都重新声明一次，而不是只在切换样式时下发。
-void ReassertFramelessBorder(HWND hwnd) {
-  if (!SetDwmBorderVisible(hwnd, false)) {
-    MARGINS margins = {0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
-  }
+void SetDwmCornerPreference(HWND hwnd, DWORD preference) {
+  DwmSetWindowAttribute(hwnd, kDwmwaWindowCornerPreference, &preference,
+                        sizeof(preference));
 }
 
-// 无边框窗口保留了 WS_THICKFRAME，系统默认的最大化矩形是「显示器 + 一圈
-// 边框」，而 WM_NCCALCSIZE 已把客户区钉成整个窗口矩形，于是最大化后内容
-// 会被显示器裁掉一圈。这里把最大矩形钉回工作区。
-void PinMaximizedRectToWorkArea(HWND hwnd, MINMAXINFO* info) {
-  MONITORINFO monitor_info = {};
-  monitor_info.cbSize = sizeof(MONITORINFO);
-  if (!GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
-                      &monitor_info)) {
-    return;
+// DWMWA_BORDER_COLOR 只在 Win11 22000+ 生效，旧系统上属性写入会失败。
+// 非全屏无边框态保留 {0, 0, 0, 1} 扩展帧以维持 DWM 原生阴影与最大/最小化
+// 动画；全屏态使用 {0, 0, 0, 0} 彻底去掉阴影。
+void ReassertFramelessBorder(HWND hwnd, bool fullscreen) {
+  SetDwmBorderVisible(hwnd, false);
+  MARGINS margins = fullscreen ? MARGINS{0, 0, 0, 0} : MARGINS{0, 0, 0, 1};
+  DwmExtendFrameIntoClientArea(hwnd, &margins);
+  SetDwmCornerPreference(hwnd, fullscreen ? kDwmwcpDoNotRound : kDwmwcpRound);
+}
+
+UINT QueryDpiForWindow(HWND hwnd) {
+  using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
+  static const auto get_dpi_for_window = reinterpret_cast<GetDpiForWindowFn>(
+      GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+  if (get_dpi_for_window != nullptr) {
+    const UINT dpi = get_dpi_for_window(hwnd);
+    if (dpi > 0) {
+      return dpi;
+    }
   }
-  const RECT& work = monitor_info.rcWork;
-  const RECT& monitor = monitor_info.rcMonitor;
-  info->ptMaxPosition.x = work.left - monitor.left;
-  info->ptMaxPosition.y = work.top - monitor.top;
-  info->ptMaxSize.x = work.right - work.left;
-  info->ptMaxSize.y = work.bottom - work.top;
+  return 96;
+}
+
+int QuerySystemMetricsForDpi(int index, UINT dpi) {
+  using GetSystemMetricsForDpiFn = int(WINAPI*)(int, UINT);
+  static const auto get_metrics_for_dpi =
+      reinterpret_cast<GetSystemMetricsForDpiFn>(GetProcAddress(
+          GetModuleHandleW(L"user32.dll"), "GetSystemMetricsForDpi"));
+  if (get_metrics_for_dpi != nullptr) {
+    return get_metrics_for_dpi(index, dpi);
+  }
+  return GetSystemMetrics(index);
 }
 }  // namespace
 
@@ -372,9 +430,7 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
     window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    MARGINS margins = {0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
-    ReassertFramelessBorder(hwnd);
+    ReassertFramelessBorder(hwnd, true);
     const RECT& monitor = monitor_info.rcMonitor;
     RECT current = {};
     const bool geometry_matches =
@@ -414,26 +470,23 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   window_frame_hidden_ = hidden;
   if (hidden) {
     LONG_PTR style = normal_window_style_;
-    // 描边要剥（WS_BORDER/WS_DLGFRAME 留下的细线就是那圈白边），但
-    // WS_THICKFRAME 必须留着：系统正是靠它判断"这个窗口可以缩放"，
-    // 缩放的模态循环（WM_NCLBUTTONDOWN + HTLEFT/…）才会启动。视觉上
-    // 看不到边框，是因为 WM_NCCALCSIZE 把客户区钉成了整个窗口。
-    style &= ~(WS_CAPTION | WS_BORDER | WS_DLGFRAME);
-    style |= WS_THICKFRAME;
+    // 非全屏无边框保留 WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX |
+    // WS_MAXIMIZEBOX，恢复 Windows DWM 原生最大化/还原/最小化动画、
+    // Snap Layouts 与 Win11 圆角；标题栏与边框由 WM_NCCALCSIZE 吞掉。
+    style &= ~WS_POPUP;
+    style |= (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
     LONG_PTR ex_style = normal_window_ex_style_;
     ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
                   WS_EX_WINDOWEDGE);
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    MARGINS margins = {0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    ReassertFramelessBorder(hwnd, false);
   } else {
     SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
-  }
-  if (hidden) {
-    ReassertFramelessBorder(hwnd);
-  } else {
+    MARGINS margins = {0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    SetDwmCornerPreference(hwnd, kDwmwcpDefault);
     SetDwmBorderVisible(hwnd, true);
   }
   if (!hidden && window_placement_saved_) {
@@ -546,21 +599,6 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // window_manager 注册的顶层 WndProc 委托先于本函数运行，而它对
-  // WM_GETMINMAXINFO 无条件 return 0（只写 min/max track 尺寸）。照常规
-  // 早退会让下面的工作区钉扎永远不执行；且旧写法 break 到 DefWindowProc
-  // 还会把刚钉好的 ptMaxPosition/ptMaxSize 覆盖回系统默认值。这里先让插件
-  // 写完 track，再补钉扎并直接返回，两份约束都保留。
-  if (message == WM_GETMINMAXINFO && window_frame_hidden_ &&
-      !window_fullscreen_) {
-    if (flutter_controller_) {
-      flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
-                                                    lparam);
-    }
-    PinMaximizedRectToWorkArea(hwnd, reinterpret_cast<MINMAXINFO*>(lparam));
-    return 0;
-  }
-
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -579,7 +617,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // 落到 DefWindowProc 去重绘非客户区——那圈白边正是这里画出来的。
       // 自己接管：重申边框色后返回 TRUE，禁止系统重绘 NC 帧。
       if (window_frame_hidden_) {
-        ReassertFramelessBorder(hwnd);
+        ReassertFramelessBorder(hwnd, window_fullscreen_);
         return 1;
       }
       break;
@@ -589,21 +627,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // DWM 属性写入反而拖慢缩放。
       sizing_move_active_ = true;
       if (window_frame_hidden_) {
-        ReassertFramelessBorder(hwnd);
+        ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
       break;
     case WM_EXITSIZEMOVE:
       sizing_move_active_ = false;
       ResetSizingBrush();
       if (window_frame_hidden_) {
-        ReassertFramelessBorder(hwnd);
+        ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
       SyncFlutterViewChild();
       break;
     case WM_WINDOWPOSCHANGED: {
       const auto* pos = reinterpret_cast<const WINDOWPOS*>(lparam);
       if (window_frame_hidden_ && (pos->flags & SWP_FRAMECHANGED) != 0) {
-        ReassertFramelessBorder(hwnd);
+        ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
       break;
     }
@@ -615,7 +653,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // 这正是「点一下冒出一圈白边」的时机。break 后仍交给基类处理
       // SetFocus / 几何更新 / 沉浸式深色模式。
       if (window_frame_hidden_) {
-        ReassertFramelessBorder(hwnd);
+        ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
       break;
     case WM_FONTCHANGE:
@@ -656,10 +694,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       return size_result;
     }
     case WM_NCHITTEST: {
-      // Frameless windowed: styles were stripped, so the OS no longer offers
-      // resize borders. Hand back the eight grips ourselves, otherwise a
-      // frameless window can never be resized by its edges.
-      if (!window_frame_hidden_ || window_fullscreen_) {
+      // Frameless windowed: return the eight resize grips ourselves when not
+      // maximized so edges remain draggable.
+      if (!window_frame_hidden_ || window_fullscreen_ || ::IsZoomed(hwnd)) {
         break;
       }
       RECT rect;
@@ -685,10 +722,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     }
     case WM_NCCALCSIZE:
-      // Frameless (fullscreen or immersive windowed): pin the client area to
-      // the full window rect. Without this, maximize/style switches can inset
-      // the client and leave black/white bands around the Flutter view.
+      // 无边框态吞掉系统标题栏；最大化时系统会把窗口外扩一圈不可见缩放边
+      // （SM_CXSIZEFRAME + SM_CXPADDEDBORDER），按当前 DPI 对 rgrc[0] 四边
+      // 内缩，避免内容被显示器边缘裁切，同时保留 DWM 原生最大化动画。
       if (window_frame_hidden_ && wparam) {
+        if (!window_fullscreen_ && ::IsZoomed(hwnd)) {
+          auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+          const UINT dpi = QueryDpiForWindow(hwnd);
+          const int frame_x = QuerySystemMetricsForDpi(SM_CXSIZEFRAME, dpi) +
+                              QuerySystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+          const int frame_y = QuerySystemMetricsForDpi(SM_CYSIZEFRAME, dpi) +
+                              QuerySystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+          params->rgrc[0].left += frame_x;
+          params->rgrc[0].top += frame_y;
+          params->rgrc[0].right -= frame_x;
+          params->rgrc[0].bottom -= frame_y;
+        }
         return 0;
       }
       break;

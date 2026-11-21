@@ -115,6 +115,8 @@ class ReaderPageView extends StatefulWidget {
     this.crossChapterSnapshotBuilder,
     this.contentRevision,
     this.bookmarked = false,
+    this.reverse = false,
+    this.dragEnabled = true,
     super.key,
   });
 
@@ -148,6 +150,12 @@ class ReaderPageView extends StatefulWidget {
   /// 只改呈现与翻页步进，页码范围、页数与进度口径都不变。
   final bool spread;
 
+  /// RTL 翻页方向（日漫从右向左读）：翻转左右点击热区、拖拽方向与 3D 翻页映射。
+  final bool reverse;
+
+  /// 是否允许手势拖拽翻页；漫画放大态（scale > 1.02）置为 false 防止与平移冲突。
+  final bool dragEnabled;
+
   @override
   State<ReaderPageView> createState() => _ReaderPageViewState();
 }
@@ -160,6 +168,16 @@ class _ReaderPageViewState extends State<ReaderPageView>
       setState(update);
     }
   }
+
+  /// 将视觉卷页方向映射为逻辑前进（true）或后退（false），兼容 RTL。
+  bool _isLogicalForward(CurlDirection dir) =>
+      widget.reverse ? dir == CurlDirection.prev : dir == CurlDirection.next;
+
+  /// 将逻辑翻页方向映射为视觉卷页方向（next=右向左卷，prev=左向右卷）。
+  CurlDirection _curlDirectionFor(bool logicalForward) =>
+      widget.reverse
+          ? (logicalForward ? CurlDirection.prev : CurlDirection.next)
+          : (logicalForward ? CurlDirection.next : CurlDirection.prev);
 
   // ── PageView (slide 模式) ──
   PageController? _pageController;
@@ -204,6 +222,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   Completer<void>? _backCaptureLock;
   Timer? _commitResetFallbackTimer;
   Widget? _pendingBackCaptureWidget;
+  _SpreadSide _pendingBackCaptureSide = _SpreadSide.left;
   final GlobalKey _liveLeftKey = GlobalKey();
   final GlobalKey _liveRightKey = GlobalKey();
   final GlobalKey _liveSingleKey = GlobalKey();
@@ -293,6 +312,11 @@ class _ReaderPageViewState extends State<ReaderPageView>
       }
     }
 
+    if (oldWidget.dragEnabled && !widget.dragEnabled && _isDragging) {
+      _isDragging = false;
+      _cancelFlip();
+    }
+
     if (oldWidget.turnMode != widget.turnMode ||
         oldWidget.spread != widget.spread) {
       _curlFrameNotifier.value = CurlFrame.idle;
@@ -307,12 +331,15 @@ class _ReaderPageViewState extends State<ReaderPageView>
 
     // 跨章页流软切换：chapterId 变化不重挂载控制器，保持翻页手势连续。
     // 仅 turnMode 变化才重建。
-
-    if (oldWidget.state.chapterId != widget.state.chapterId ||
+    final pageOrThemeChanged =
+        oldWidget.state.chapterId != widget.state.chapterId ||
         oldWidget.state.pageIndex != widget.state.pageIndex ||
         oldWidget.surfaceColor != widget.surfaceColor ||
         oldWidget.paperEdgeColor != widget.paperEdgeColor ||
-        oldWidget.contentRevision != widget.contentRevision) {
+        oldWidget.contentRevision != widget.contentRevision ||
+        oldWidget.reverse != widget.reverse;
+
+    if (pageOrThemeChanged) {
       _commitResetFallbackTimer?.cancel();
       _commitResetFallbackTimer = null;
       if (!_slideScrolling) {
@@ -329,6 +356,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _curlFrameNotifier.value = CurlFrame.idle;
       _clearCurlImages();
       _scheduleIdleNextCurlWarmup();
+      if (_pendingTurnDirection != null && !_pendingTurnAttachRetry) {
+        _scheduleTransitionRelease();
+      }
     }
 
     if (widget.turnMode == PageTurnMode.slide &&

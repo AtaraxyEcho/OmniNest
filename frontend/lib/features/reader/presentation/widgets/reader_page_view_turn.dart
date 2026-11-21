@@ -1,11 +1,14 @@
 part of 'reader_page_view.dart';
 
-/// 翻页命令、输入闸门与待执行翻页意图。
+/// 翻页命令、输入闸门与待执行翻页意图（v8：平滑连点加速收尾排队 + 清零 _pendingTurnAttachRetry）。
 extension _ReaderPageViewTurn on _ReaderPageViewState {
-  /// 桌面滚轮翻页（样例 `onWheel`）：位移超过 24px、距上次 520ms 才认，
+  /// 桌面滚轮翻页（样例 `onWheel`）：位移超过 24px、距上次 320ms 才认，
   /// 触控板一次轻扫不会连翻好几页。
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
+      return;
+    }
+    if (!widget.dragEnabled) {
       return;
     }
     if (event.scrollDelta.dy.abs() < 24) {
@@ -28,37 +31,44 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
 
   void _onExternalPageCommand() {
     if (widget.selectionActive) widget.onClearSelection?.call();
-    // Book 模式连点快翻：若上一页卷页动画已过 62%，立即结算并无缝起手下一页。
-    if (widget.turnMode == PageTurnMode.cover &&
-        _isAnimating &&
-        (_animController?.value ?? 0) > 0.62) {
-      _animGeneration++;
-      _animController?.stop();
-      _commitFlip();
+    final direction = widget.controller?.direction ?? 0;
+    if (direction == 0) return;
+
+    // Book 模式连点快翻：取消 0.62 硬切断，改为加速收尾当前动画（120ms）并排队衔接下一页。
+    if (widget.turnMode == PageTurnMode.cover && _isAnimating && !_isDragging) {
+      _pendingTurnDirection = direction > 0 ? 1 : -1;
+      _pendingTurnAttachRetry = false;
+      _accelerateActiveFlip();
       return;
     }
+
     if (ReaderInteractionGate.blocksTapTurn(_blockReason)) return;
-    final direction = widget.controller?.direction ?? 0;
     if (direction > 0) {
       _goNextPage(tapTurn: true);
-    } else if (direction < 0) {
+    } else {
       _goPreviousPage(tapTurn: true);
     }
+  }
+
+  /// 统一复位翻页状态机（模式切换/初始化/重置时清零所有残留标记含 `_pendingTurnAttachRetry`）。
+  void resetTurnState() {
+    _isAnimating = false;
+    _pendingTurnDirection = null;
+    _pendingTurnAttachRetry = false;
+    _pendingTurnFrames = 0;
+    _probingNext = false;
+    _slideScrolling = false;
+    _transitionInFlight = false;
+    _boundaryRequestInFlight = false;
+    _pendingSlideBoundaryDirection = 0;
   }
 
   void _initForMode() {
     // 控制器重建后旧翻页意图的目标已失效，显式丢弃；在途动画的
     // status listener 随旧控制器销毁不再回调，动画标志必须一并复位，
     // 否则 pageAnimationActive 恒真锁死翻页闸门。
-    _isAnimating = false;
-    _pendingTurnDirection = null;
-    _pendingTurnFrames = 0;
+    resetTurnState();
     _localPageCount = widget.state.pageCount;
-    _probingNext = false;
-    _slideScrolling = false;
-    _transitionInFlight = false;
-    _boundaryRequestInFlight = false;
-    _pendingSlideBoundaryDirection = 0;
     if (widget.turnMode == PageTurnMode.slide) {
       _pageController = PageController(initialPage: widget.state.pageIndex);
     } else {
@@ -99,13 +109,6 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   /// 空闲期把物理页对齐到状态页。
-  ///
-  /// ReaderPageView 挂载早于分页完成时，PageController.initialPage 会因
-  /// item 数不足被钳制到 0；若恢复目标恰与挂载时的 state.pageIndex 相同
-  /// （模式切换回页模式的典型路径），此后 pageIndex 不再变化，仅靠
-  /// didUpdateWidget 的索引差异判定永远触发不了 _syncPageView，物理页
-  /// 滞留章首。在无加载、无边界请求、无动画且非拖拽的空闲期补一次对齐；
-  /// 恢复静默窗会吞掉对齐产生的 onPageChanged 回声，不污染进度写入。
   void _reconcilePagePositionIfIdle() {
     if (widget.turnMode != PageTurnMode.slide) {
       return;
@@ -135,9 +138,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
         pageTransitionInFlight: _transitionInFlight,
       );
 
-  /// 翻页链路诊断快照（D0 观测）：rightTapReceived=false 说明 HitTest/
-  /// 手势层有问题；tapBlocked=true 说明闸门/残留状态有问题；两者正常而
-  /// 画面不动说明 PageFlow/Transition 有问题。
+  /// 翻页链路诊断快照（D0 观测）。
   String get _pageTurnDebugState =>
       'chapter=${widget.state.chapterId} '
       'pageIndex=${widget.state.pageIndex} '
@@ -156,7 +157,21 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   /// 统一：下一页。
-  void _goNextPage({bool tapTurn = false, double? tapFy}) {
+  void _goNextPage({bool tapTurn = false}) {
+    // Book 模式点击连翻：若正在播卷页动画，不吞点击，加速收尾并排队下一页。
+    if (tapTurn &&
+        widget.turnMode == PageTurnMode.cover &&
+        _isAnimating &&
+        !_isDragging &&
+        !_boundaryRequestInFlight &&
+        !widget.state.isPaginating) {
+      _pendingTurnDirection = 1;
+      _pendingTurnAttachRetry = false;
+      _debugPageTurn('nextQueuedDuringCurl');
+      _accelerateActiveFlip();
+      return;
+    }
+
     final reason = _blockReason;
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
@@ -175,12 +190,12 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
         !_boundaryRequestInFlight &&
         _pageController != null) {
       _pendingTurnDirection = 1;
+      _pendingTurnAttachRetry = false;
       _debugPageTurn('nextDeferredDuringAnimation');
       return;
     }
 
-    // 目标基于控制器实际物理页：state 与物理页脱节时（历史 onPageChanged
-    // 被吞等）按物理页前进，点击不再空转（方案 §8 最新状态重算）。
+    // 目标基于控制器实际物理页：state 与物理页脱节时按物理页前进，点击不再空转。
     final ctrl = _pageController;
     final basePage =
         ctrl != null && ctrl.hasClients
@@ -216,10 +231,8 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('nextStart', detail: 'target=$nextIndex mode=flip');
       _transitionInFlight = true;
       _isForward = true;
-      _activeCurlConfig =
-          tapFy != null
-              ? CurlGrabConfig.fromPointerFy(tapFy)
-              : CurlGrabConfig.defaultNext;
+      // 点击翻页固定采用优雅下角斜卷预设 CurlGrabConfig.defaultNext（slant: -0.26）。
+      _activeCurlConfig = CurlGrabConfig.defaultNext;
       _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
       unawaited(_startAutoFlip());
     }
@@ -239,10 +252,13 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         _pendingTurnDirection = null;
+        _pendingTurnAttachRetry = false;
+        _pendingTurnFrames = 0;
         return;
       }
       final direction = _pendingTurnDirection;
       if (direction == null) {
+        _pendingTurnAttachRetry = false;
         return;
       }
       final ctrl = _pageController;
@@ -261,6 +277,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _pendingTurnFrames++;
       if (_pendingTurnFrames > _ReaderPageViewState._maxPendingTurnFrames) {
         _pendingTurnDirection = null;
+        _pendingTurnAttachRetry = false;
         _pendingTurnFrames = 0;
         _debugPageTurn(
           'pendingTurnDropped',
@@ -273,7 +290,20 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
   }
 
   /// 统一：上一页。
-  void _goPreviousPage({bool tapTurn = false, double? tapFy}) {
+  void _goPreviousPage({bool tapTurn = false}) {
+    if (tapTurn &&
+        widget.turnMode == PageTurnMode.cover &&
+        _isAnimating &&
+        !_isDragging &&
+        !_boundaryRequestInFlight &&
+        !widget.state.isPaginating) {
+      _pendingTurnDirection = -1;
+      _pendingTurnAttachRetry = false;
+      _debugPageTurn('previousQueuedDuringCurl');
+      _accelerateActiveFlip();
+      return;
+    }
+
     final reason = _blockReason;
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
@@ -290,6 +320,7 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
         !_boundaryRequestInFlight &&
         _pageController != null) {
       _pendingTurnDirection = -1;
+      _pendingTurnAttachRetry = false;
       _debugPageTurn('previousDeferredDuringAnimation');
       return;
     }
@@ -327,10 +358,8 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       _debugPageTurn('previousStart', detail: 'mode=flip');
       _transitionInFlight = true;
       _isForward = false;
-      _activeCurlConfig =
-          tapFy != null
-              ? CurlGrabConfig.fromPointerFy(tapFy)
-              : CurlGrabConfig.defaultNext;
+      // 点击翻页固定采用优雅下角斜卷预设 CurlGrabConfig.defaultNext（slant: -0.26）。
+      _activeCurlConfig = CurlGrabConfig.defaultNext;
       _flipProgress = widget.turnMode == PageTurnMode.cover ? 0.0 : 0.01;
       unawaited(_startAutoFlip());
     }
@@ -361,7 +390,8 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
       if (!mounted ||
           _slideScrolling ||
           _boundaryRequestInFlight ||
-          _probingNext) {
+          _probingNext ||
+          _isAnimating) {
         return;
       }
       if (_transitionInFlight) {

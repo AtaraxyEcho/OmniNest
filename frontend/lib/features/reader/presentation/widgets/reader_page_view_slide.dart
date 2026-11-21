@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// Slide 模式 PageView、点击热区与探测页。
+/// Slide 模式 PageView、点击热区与探测页（支持 RTL 与缩放态拖拽锁）。
 extension _ReaderPageViewSlide on _ReaderPageViewState {
   // ══════════════════════════════════════════
   // Slide 模式：PageView + 交互层
@@ -37,9 +37,11 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
               ),
               child: PageView.builder(
                 controller: _pageController,
+                reverse: widget.reverse,
                 itemCount: effectiveCount,
                 physics:
-                    ReaderInteractionGate.locksScroll(_blockReason)
+                    (!widget.dragEnabled ||
+                            ReaderInteractionGate.locksScroll(_blockReason))
                         ? const NeverScrollableScrollPhysics()
                         : const PageScrollPhysics(),
                 onPageChanged: _onSlidePageChanged,
@@ -159,6 +161,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     if (delta.distance > _ReaderPageViewState._tapMoveThreshold) {
       _pointerMoved = true;
     }
+    if (!widget.dragEnabled) return;
     // 放宽斜向掀角判定（支持从右下角往左上角 65° 以内自然拖拽掀页，不再偶发失效）
     if (widget.turnMode != PageTurnMode.slide &&
         !widget.selectionActive &&
@@ -218,14 +221,16 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
 
     // 拖动过长则不算点击，交给 PageView 处理
     if (_pointerMoved) {
+      if (!widget.dragEnabled) return;
       final deltaX = event.localPosition.dx - startPos.dx;
       if (deltaX.abs() >= 48) {
-        if (deltaX < 0 &&
+        final swipeForward = widget.reverse ? deltaX > 0 : deltaX < 0;
+        if (swipeForward &&
             widget.state.isLastPage &&
             !widget.state.hasMore &&
             widget.state.hasNextChapter) {
           _pendingSlideBoundaryDirection = 1;
-        } else if (deltaX > 0 &&
+        } else if (!swipeForward &&
             widget.state.isFirstPage &&
             widget.state.hasPreviousChapter) {
           _pendingSlideBoundaryDirection = -1;
@@ -240,9 +245,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     }
 
     final w = context.size?.width ?? 1;
-    final h = context.size?.height ?? 1;
     final x = startPos.dx;
-    final tapFy = (startPos.dy / math.max(1.0, h)).clamp(0.05, 0.95);
     final leftBound = w * _ReaderPageViewState._leftZoneRatio;
     final rightBound = w * (1 - _ReaderPageViewState._rightZoneRatio);
 
@@ -251,12 +254,22 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
       if (x >= leftBound && x <= rightBound) return;
     }
 
+    // 点击翻页固定采用优雅下角斜卷预设 CurlGrabConfig.defaultNext（slant: -0.26），
+    // 不再传 tapFy，杜绝点击页面中部出现僵硬竖直折痕；RTL 自动翻转左右热区。
     if (x < leftBound) {
       _debugPageTurn('leftTapReceived');
-      _goPreviousPage(tapTurn: true, tapFy: tapFy);
+      if (widget.reverse) {
+        _goNextPage(tapTurn: true);
+      } else {
+        _goPreviousPage(tapTurn: true);
+      }
     } else if (x > rightBound) {
       _debugPageTurn('rightTapReceived');
-      _goNextPage(tapTurn: true, tapFy: tapFy);
+      if (widget.reverse) {
+        _goPreviousPage(tapTurn: true);
+      } else {
+        _goNextPage(tapTurn: true);
+      }
     } else {
       widget.callbacks.onToggleControls();
     }

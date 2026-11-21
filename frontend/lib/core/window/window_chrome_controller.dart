@@ -310,10 +310,27 @@ class WindowChromeController extends Notifier<WindowChromeState>
     await windowManager.startDragging();
   }
 
-  /// 最大化/还原切换（自绘标题栏的中键）。
+  /// 最大化/还原切换（自绘标题栏的中键与双击标题栏）。
   Future<void> toggleMaximize() async {
     if (!isDesktopPlatform) {
       return;
+    }
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      // Windows 直接依据已同步的内存状态单次派发 WM_SYSCOMMAND，避免
+      // isMaximized + maximize/unmaximize 双次 MethodChannel 往返延迟。
+      final targetMaximized = !state.isMaximized;
+      try {
+        await _windowFrameChannel.invokeMethod<void>(
+          'windowAction',
+          <String, dynamic>{'action': targetMaximized ? 'maximize' : 'restore'},
+        );
+        _syncMaximized(targetMaximized);
+        return;
+      } on Object catch (error) {
+        if (kDebugMode) {
+          devLog('Windows 原生最大化/还原通道失败，回退 window_manager: $error');
+        }
+      }
     }
     if (await windowManager.isMaximized()) {
       await windowManager.unmaximize();
@@ -327,6 +344,19 @@ class WindowChromeController extends Notifier<WindowChromeState>
   Future<void> minimize() async {
     if (!isDesktopPlatform) {
       return;
+    }
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        await _windowFrameChannel.invokeMethod<void>(
+          'windowAction',
+          const <String, dynamic>{'action': 'minimize'},
+        );
+        return;
+      } on Object catch (error) {
+        if (kDebugMode) {
+          devLog('Windows 原生最小化通道失败，回退 window_manager: $error');
+        }
+      }
     }
     await windowManager.minimize();
   }

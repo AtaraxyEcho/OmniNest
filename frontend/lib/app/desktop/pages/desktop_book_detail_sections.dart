@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
@@ -14,7 +15,6 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 
@@ -110,7 +110,8 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
               key: ValueKey(
                 '${_showFullDescription ? 'expanded' : 'collapsed'}:$description',
               ),
-              maxLines: canExpandDescription && !_showFullDescription ? 3 : null,
+              maxLines:
+                  canExpandDescription && !_showFullDescription ? 3 : null,
               overflow:
                   canExpandDescription && !_showFullDescription
                       ? TextOverflow.ellipsis
@@ -459,21 +460,22 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
     );
     if (saved == true && mounted) {
       ref.invalidate(readerItemDetailProvider(widget.item.id));
-      showOmniFeedback(
+      showDesktopToast(
         context,
         l10n.desktopBookMetadataSaved,
-        severity: OmniFeedbackSeverity.success,
+        kind: DesktopToastKind.success,
       );
     }
   }
 
   Future<void> _reparse() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showWorkstationConfirmDialog(
+    final confirmed = await showDesktopConfirm(
       context,
       title: l10n.desktopBookReparse,
       message: l10n.desktopBookReparseConfirm,
       confirmLabel: l10n.desktopBookReparse,
+      cancelLabel: l10n.coreCancel,
     );
     if (!confirmed || !mounted) {
       return;
@@ -488,17 +490,17 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
       }
       ref.invalidate(readerItemDetailProvider(widget.item.id));
       ref.invalidate(readerDashboardProvider);
-      showOmniFeedback(
+      showDesktopToast(
         context,
         l10n.desktopBookReparsed,
-        severity: OmniFeedbackSeverity.success,
+        kind: DesktopToastKind.success,
       );
     } on Object catch (error) {
       if (mounted) {
-        showOmniFeedback(
+        showDesktopToast(
           context,
           errorReason(error, l10n),
-          severity: OmniFeedbackSeverity.error,
+          kind: DesktopToastKind.error,
         );
       }
     } finally {
@@ -528,18 +530,18 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
       if (!mounted) {
         return;
       }
-      showOmniFeedback(
+      showDesktopToast(
         context,
         l10n.desktopBookRemoved,
-        severity: OmniFeedbackSeverity.success,
+        kind: DesktopToastKind.success,
       );
       exitDetailRoute(context, fallbackRoute: DesktopRoutes.reader);
     } on Object catch (error) {
       if (mounted) {
-        showOmniFeedback(
+        showDesktopToast(
           context,
           errorReason(error, l10n),
-          severity: OmniFeedbackSeverity.error,
+          kind: DesktopToastKind.error,
         );
       }
     } finally {

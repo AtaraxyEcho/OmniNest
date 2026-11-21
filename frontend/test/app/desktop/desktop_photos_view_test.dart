@@ -14,6 +14,7 @@ import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_theme.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 import 'package:omninest/features/photos/application/photo_display_order_controller.dart';
+import 'package:omninest/features/photos/data/photo_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'desktop_test_harness.dart';
@@ -109,7 +110,8 @@ void main() {
 
   testWidgets('长按已选照片拖到目标位：整组选中项一起换位并在松开后保存', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    await pumpPhotos(tester);
+    final api = _FakePhotoApi();
+    await pumpPhotos(tester, extra: [photoApiProvider.overrideWithValue(api)]);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.tap(find.text('Frame 1'));
@@ -154,6 +156,15 @@ void main() {
       container.read(desktopToastProvider).single.message,
       'Moved 2 photos',
     );
+    expect(api.savedOrders['library:unknown'], <String>[
+      'p-2',
+      'p-0',
+      'p-1',
+      'p-3',
+      'p-4',
+      'p-5',
+      'p-6',
+    ]);
   });
 
   testWidgets('Escape 取消长按拖动后清理预览，再点击打开所点照片', (tester) async {
@@ -367,4 +378,41 @@ void main() {
     expect(find.text('No photos yet.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+/// 只实现展示排序端点的照片 API 桩：其余方法在测试里不应被触达。
+class _FakePhotoApi implements PhotoApi {
+  final Map<String, List<String>> savedOrders = <String, List<String>>{};
+
+  @override
+  Future<void> saveDisplayOrder(
+    String contextKey,
+    List<String> photoIds,
+  ) async {
+    savedOrders[contextKey] = List<String>.of(photoIds);
+  }
+
+  @override
+  Future<Map<String, List<String>>> listDisplayOrders() async {
+    return <String, List<String>>{
+      for (final entry in savedOrders.entries)
+        entry.key: List<String>.of(entry.value),
+    };
+  }
+
+  @override
+  Future<void> deleteDisplayOrder(String contextKey) async {
+    savedOrders.remove(contextKey);
+  }
+
+  @override
+  Future<void> reorderAlbumItems({
+    required String albumId,
+    required List<String> photoIds,
+  }) async {
+    savedOrders['album:$albumId'] = List<String>.of(photoIds);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

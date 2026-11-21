@@ -15,7 +15,6 @@ import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
 /// 书籍元数据编辑：样例 `Reader.tsx` 的 `MetaDialog`，由右侧抽屉承载。
@@ -311,10 +310,10 @@ class _DesktopBookMetadataDrawerState
     } on Object catch (error) {
       if (mounted) {
         setState(() => _saving = false);
-        showOmniFeedback(
+        showDesktopToast(
           context,
           errorReason(error, l10n),
-          severity: OmniFeedbackSeverity.error,
+          kind: DesktopToastKind.error,
         );
       }
     }
@@ -340,10 +339,10 @@ class _DesktopBookMetadataDrawerState
     } on Object catch (error) {
       if (mounted) {
         setState(() => _saving = false);
-        showOmniFeedback(
+        showDesktopToast(
           context,
           errorReason(error, l10n),
-          severity: OmniFeedbackSeverity.error,
+          kind: DesktopToastKind.error,
         );
       }
     }

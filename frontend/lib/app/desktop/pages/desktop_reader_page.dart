@@ -58,6 +58,17 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
   DesktopReaderFilter _filter = DesktopReaderFilter.all;
   late _ReaderView _view =
       widget.initialLibrary ? _ReaderView.library : _ReaderView.overview;
+  final TextEditingController _librarySearch = TextEditingController();
+  _ReaderSort _librarySort = _ReaderSort.recent;
+  _ReaderType _libraryType = _ReaderType.all;
+  String? _libraryGenre;
+  bool _libraryGrid = true;
+
+  @override
+  void dispose() {
+    _librarySearch.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,8 +77,6 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
     final center = centerAsync.asData?.value;
     final dashboard = center?.dashboard;
     final readingStats = ref.watch(readerStatsProvider).asData?.value;
-    // 加载中/失败都不能退化成「书架还是空的」：dashboard 是非 autoDispose
-    // FutureProvider，失败会一直缓存 AsyncError，没有重试入口就永远空态。
     if (dashboard == null && centerAsync.hasError) {
       return DesktopErrorView(
         message: failureToast(
@@ -108,6 +117,12 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
         .where((item) => item.isDisplayedAsComic)
         .toList(growable: false);
     final visible = unique.where(_matches).toList();
+    final visibleBooks = visible
+        .where((item) => !item.isDisplayedAsComic)
+        .toList(growable: false);
+    final visibleComics = visible
+        .where((item) => item.isDisplayedAsComic)
+        .toList(growable: false);
     final inProgress =
         unique.where((item) {
           final progress = _progressOf(item);
@@ -121,6 +136,15 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
       DesktopReaderFilter.unread: l10n.desktopFilterUnread,
     };
 
+    final libraryQuery = _buildReaderLibraryQuery(
+      items: unique,
+      searchText: _librarySearch.text,
+      status: _filter,
+      type: _libraryType,
+      genre: _libraryGenre,
+      sort: _librarySort,
+    );
+
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (_view == _ReaderView.library &&
@@ -133,11 +157,11 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
         }
         return false;
       },
-      child: SingleChildScrollView(
-        child: DesktopPage(
-          topPadding: DesktopMetrics.pageTopPaddingCompact,
-          children: [
-            DesktopPageHead(
+      child: DesktopSliverPage(
+        topPadding: DesktopMetrics.pageTopPaddingCompact,
+        slivers: [
+          SliverToBoxAdapter(
+            child: DesktopPageHead(
               eyebrow:
                   l10n
                       .desktopReaderHeadline(
@@ -175,85 +199,124 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                 ),
               ],
             ),
-            if (_view == _ReaderView.library)
-              _ReaderLibrary(
-                items: unique,
+          ),
+          if (_view == _ReaderView.library) ...[
+            DesktopStickySliver(
+              child: _ReaderLibraryStickyBar(
+                search: _librarySearch,
+                type: _libraryType,
+                sort: _librarySort,
+                grid: _libraryGrid,
+                onSearchChanged: () => setState(() {}),
+                onTypeChanged:
+                    (value) => setState(() {
+                      _libraryType = value;
+                      _libraryGenre = null;
+                    }),
+                onSortChanged: (value) => setState(() => _librarySort = value),
+                onGridChanged: (grid) => setState(() => _libraryGrid = grid),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: _ReaderLibraryBody(
+                query: libraryQuery,
                 loadingMore: center?.itemsLoadingMore ?? false,
                 status: _filter,
+                type: _libraryType,
+                genre: _libraryGenre,
+                grid: _libraryGrid,
+                hasSearchNeedle: _librarySearch.text.trim().isNotEmpty,
                 onStatus: (value) => setState(() => _filter = value),
+                onGenre: (value) => setState(() => _libraryGenre = value),
+                onClearFilters:
+                    () => setState(() {
+                      _librarySearch.clear();
+                      _filter = DesktopReaderFilter.all;
+                      _libraryType = _ReaderType.all;
+                      _libraryGenre = null;
+                    }),
                 onOpen: _openBook,
                 onRead: (item) => unawaited(_openContinueReading(item)),
-              )
-            else ...[
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final insights = _InsightRow(
-                    books: books.length,
-                    comics: comics.length,
-                    readingHours:
-                        readingStats == null
-                            ? '—'
-                            : (readingStats.totalMinutesThisWeek / 60)
-                                .toStringAsFixed(1),
-                    streakDays: readingStats?.currentStreak,
-                    dailyReading: dashboard.overview.dailyReading,
-                    columns: constraints.maxWidth >= 860 ? 4 : 2,
-                    panelWidth: constraints.maxWidth,
-                  );
-                  if (current == null) {
-                    return insights;
-                  }
-                  final resume = _ContinueCard(
-                    item: current,
-                    onContinue: _openContinueReading,
-                    onOpen: _openBook,
-                  );
-                  // 样例 `.read-top`：1.5fr / minmax(320px, 1fr)，
-                  // 且只有 900px 以下才切成单列。
-                  if (constraints.maxWidth < 900) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [resume, const SizedBox(height: 24), insights],
-                    );
-                  }
-                  final insightWidth = math.max(
-                    320.0,
-                    (constraints.maxWidth - 24) / 2.5,
-                  );
-                  final insightColumns = insightWidth - 56 >= 860 ? 4 : 2;
-                  final alignedInsights = _InsightRow(
-                    books: books.length,
-                    comics: comics.length,
-                    readingHours:
-                        readingStats == null
-                            ? '—'
-                            : (readingStats.totalMinutesThisWeek / 60)
-                                .toStringAsFixed(1),
-                    streakDays: readingStats?.currentStreak,
-                    dailyReading: dashboard.overview.dailyReading,
-                    columns: insightColumns,
-                    panelWidth: insightWidth,
-                  );
-                  // CSS Grid 会把同一行的两个 grid item 拉伸到统一行高。
-                  // 统计卡的列数和宽度在外层 LayoutBuilder 中已确定，
-                  // 因而这里可以安全使用 IntrinsicHeight；任何 LayoutBuilder
-                  // 都不能放进 intrinsic 子树，否则 Flutter 会在滚动列的
-                  // 无界高度下拒绝计算并让整个 Reader 总览无法布局。
-                  return IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: resume),
-                        const SizedBox(width: 24),
-                        SizedBox(width: insightWidth, child: alignedInsights),
-                      ],
-                    ),
-                  );
-                },
               ),
-              const SizedBox(height: 44),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+            ),
+          ] else ...[
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final insights = _InsightRow(
+                        books: books.length,
+                        comics: comics.length,
+                        readingHours:
+                            readingStats == null
+                                ? '—'
+                                : (readingStats.totalMinutesThisWeek / 60)
+                                    .toStringAsFixed(1),
+                        streakDays: readingStats?.currentStreak,
+                        dailyReading: dashboard.overview.dailyReading,
+                        columns: constraints.maxWidth >= 860 ? 4 : 2,
+                        panelWidth: constraints.maxWidth,
+                      );
+                      if (current == null) {
+                        return insights;
+                      }
+                      final resume = _ContinueCard(
+                        item: current,
+                        onContinue: _openContinueReading,
+                        onOpen: _openBook,
+                      );
+                      if (constraints.maxWidth < 900) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            resume,
+                            const SizedBox(height: 24),
+                            insights,
+                          ],
+                        );
+                      }
+                      final insightWidth = math.max(
+                        320.0,
+                        (constraints.maxWidth - 24) / 2.5,
+                      );
+                      final insightColumns = insightWidth - 56 >= 860 ? 4 : 2;
+                      final alignedInsights = _InsightRow(
+                        books: books.length,
+                        comics: comics.length,
+                        readingHours:
+                            readingStats == null
+                                ? '—'
+                                : (readingStats.totalMinutesThisWeek / 60)
+                                    .toStringAsFixed(1),
+                        streakDays: readingStats?.currentStreak,
+                        dailyReading: dashboard.overview.dailyReading,
+                        columns: insightColumns,
+                        panelWidth: insightWidth,
+                      );
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: resume),
+                            const SizedBox(width: 24),
+                            SizedBox(
+                              width: insightWidth,
+                              child: alignedInsights,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 34),
+                ],
+              ),
+            ),
+            DesktopStickySliver(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: DesktopSeg<DesktopReaderFilter>(
@@ -265,35 +328,47 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                   ),
                 ),
               ),
-              if (visible.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 70),
-                  child: Center(
-                    child: Text(
-                      l10n.desktopReaderEmpty,
-                      style: DesktopType.medium(DesktopSkin.of(context).text3),
-                    ),
-                  ),
-                )
-              else ...[
-                if (books.isNotEmpty)
-                  _ShelfSection(
-                    title: l10n.readerSegmentBooks,
-                    items: books,
-                    onOpen: _openBook,
-                    onSeeAll: () => setState(() => _view = _ReaderView.library),
-                  ),
-                if (comics.isNotEmpty)
-                  _ShelfSection(
-                    title: l10n.readerSegmentComics,
-                    items: comics,
-                    onOpen: _openBook,
-                    onSeeAll: () => setState(() => _view = _ReaderView.library),
-                  ),
-              ],
-            ],
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  if (visible.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 70),
+                      child: Center(
+                        child: Text(
+                          l10n.desktopReaderEmpty,
+                          style: DesktopType.medium(
+                            DesktopSkin.of(context).text3,
+                          ),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    if (visibleBooks.isNotEmpty)
+                      _ShelfSection(
+                        title: l10n.readerSegmentBooks,
+                        items: visibleBooks,
+                        onOpen: _openBook,
+                        onSeeAll:
+                            () => setState(() => _view = _ReaderView.library),
+                      ),
+                    if (visibleComics.isNotEmpty)
+                      _ShelfSection(
+                        title: l10n.readerSegmentComics,
+                        items: visibleComics,
+                        onOpen: _openBook,
+                        onSeeAll:
+                            () => setState(() => _view = _ReaderView.library),
+                      ),
+                  ],
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -429,7 +504,6 @@ class _ContinueCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.fromLTRB(44, 36, 44, 36),
       decoration: BoxDecoration(
-        // 样例 `.continue`：accent 14% 混 panelSolid 的斜向渐变 + 26 圆角。
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -447,8 +521,6 @@ class _ContinueCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  // 样例 `.continue`：`grid-template-columns: 220px 1fr`；封面
-                  // 常态 `rotateY(-18deg) rotateX(3deg)`，hover 收平并上抬 6px。
                   width: 220,
                   height: 300,
                   child: DesktopBookTilt(
@@ -568,7 +640,6 @@ class _ContinueCard extends StatelessWidget {
   }
 }
 
-/// 洞察行（样例 `.insight` 的 i-cards）：四张统计卡。
 class _ShelfSection extends StatelessWidget {
   const _ShelfSection({
     required this.title,
@@ -607,8 +678,6 @@ class _Shelf extends StatelessWidget {
           150.0,
           190.0,
         );
-        // 样例 `.shelf`：`minmax(clamp(150px,12vw,190px),1fr)` + `gap: 30px 26px`
-        // （行距 30、列距 26），列宽要按列距反推，否则最后一列会溢出。
         final columns = ((constraints.maxWidth + 26) / (target + 26))
             .floor()
             .clamp(2, 8);
@@ -647,7 +716,6 @@ class _BookCard extends StatelessWidget {
     final progress = (item.progressPercent ?? 0).clamp(0, 100);
     return DesktopHover(
       builder: (context, hovered) {
-        // 移除 1.2° 微旋转彻底根治 GPU 裁剪斜边阶梯锯齿，改用 220ms 利落上浮 + 微缩放。
         return AnimatedContainer(
           key: ValueKey<String>('desktop-reader-book-card-${item.id}'),
           duration: MotionToken.reduced(
@@ -716,7 +784,6 @@ class _BookCard extends StatelessWidget {
   }
 }
 
-/// 纸面封面（样例 `.book-cover`）：有封面图就用图，没有就用强调色纸面 + 书名。
 class _BookCover extends StatelessWidget {
   const _BookCover({
     required this.item,

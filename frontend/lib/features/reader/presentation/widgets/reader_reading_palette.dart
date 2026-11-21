@@ -167,6 +167,9 @@ class ReaderReadingPalette {
   /// 桌面毛玻璃浮层上的主文字色（比夜间纸面文字更亮）。
   static const desktopPopoverOnSurface = Color(0xFFEFF2F5);
 
+  /// 桌面毛玻璃浮层上的次级文字色（与 [ReaderPanelColors.darkGlass] 同源）。
+  static const desktopPopoverMuted = Color(0xFFAAB4BE);
+
   /// 选区浮动工具条（样例 `.sel-pop`）的暗色胶囊底。
   static const selectionToolbarSurface = Color(0xFF1C2125);
 
@@ -281,6 +284,13 @@ class ReaderPanelSurfaceScope extends InheritedWidget {
   });
 
   final bool darkGlass;
+
+  /// 是否处于桌面暗色毛玻璃浮层内，供只做取色分支的浮层组件直接判定。
+  static bool isDarkGlass(BuildContext context) {
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<ReaderPanelSurfaceScope>();
+    return scope?.darkGlass ?? false;
+  }
 
   @override
   bool updateShouldNotify(ReaderPanelSurfaceScope oldWidget) =>

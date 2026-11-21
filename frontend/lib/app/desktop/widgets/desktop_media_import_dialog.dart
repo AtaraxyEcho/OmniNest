@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:ui' show PathMetric;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_import_filter.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
@@ -17,6 +21,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart'
     show mediaImportFilePickerProvider;
+import 'package:omninest/platform/platform_capabilities.dart';
 
 part 'desktop_media_import_dialog_parts.dart';
 
@@ -87,6 +92,7 @@ class _DesktopMediaImportDialogState
   final List<FileNode> _breadcrumbs = <FileNode>[];
   final List<XFile> _deviceFiles = <XFile>[];
   final Map<String, int> _deviceSizes = <String, int>{};
+  final List<ImportRejectedItem> _rejectedItems = <ImportRejectedItem>[];
   final ScrollController _listScroll = ScrollController();
   final TextEditingController _filterController = TextEditingController();
   String? _parentId;
@@ -96,6 +102,8 @@ class _DesktopMediaImportDialogState
   bool _loadingMore = false;
   bool _hasMore = false;
   bool _matchMetadata = true;
+  bool _dragOver = false;
+  bool _scanningDrop = false;
   DesktopImportSpace _space = DesktopImportSpace.personal;
   int _page = 0;
   int _loadGeneration = 0;
@@ -139,6 +147,13 @@ class _DesktopMediaImportDialogState
   bool get _showSpacePicker =>
       widget.allowSharedSpace && widget.kind != DesktopMediaImportKind.photos;
 
+  DesktopImportModule get _importModule => switch (widget.kind) {
+    DesktopMediaImportKind.movies => DesktopImportModule.film,
+    DesktopMediaImportKind.photos => DesktopImportModule.photo,
+    DesktopMediaImportKind.music => DesktopImportModule.music,
+    DesktopMediaImportKind.books => DesktopImportModule.book,
+  };
+
   /// part 文件中的 UI 扩展通过这里触发重建，避免越权调用 `State.setState`。
   void applyState(void Function() update) => setState(update);
 
@@ -150,62 +165,7 @@ class _DesktopMediaImportDialogState
     super.dispose();
   }
 
-  List<String> get _extensions => switch (widget.kind) {
-    DesktopMediaImportKind.movies => const <String>[
-      'mp4',
-      'mkv',
-      'webm',
-      'mov',
-      'm4v',
-      'avi',
-      'flv',
-      'wmv',
-      'ts',
-      'm2ts',
-    ],
-    DesktopMediaImportKind.photos => const <String>[
-      'jpg',
-      'jpeg',
-      'png',
-      'gif',
-      'heic',
-      'heif',
-      'bmp',
-      'tif',
-      'tiff',
-      'cr2',
-      'nef',
-      'arw',
-      'dng',
-      'mp4',
-      'mkv',
-      'webm',
-      'mov',
-      'm4v',
-      'avi',
-      'flv',
-      'wmv',
-      'ts',
-      'm2ts',
-    ],
-    DesktopMediaImportKind.music => const <String>[
-      'mp3',
-      'flac',
-      'aac',
-      'm4a',
-      'ogg',
-      'opus',
-      'wav',
-      'wma',
-    ],
-    DesktopMediaImportKind.books => const <String>[
-      'epub',
-      'txt',
-      'cbz',
-      'zip',
-      'pdf',
-    ],
-  };
+  List<String> get _extensions => importExtensionsFor(_importModule);
 
   String _title(AppLocalizations l10n) => switch (widget.kind) {
     DesktopMediaImportKind.movies => l10n.desktopMediaImportMoviesTitle,
@@ -219,6 +179,13 @@ class _DesktopMediaImportDialogState
     DesktopMediaImportKind.photos => l10n.desktopMediaImportPhotosHint,
     DesktopMediaImportKind.music => l10n.desktopMediaImportMusicHint,
     DesktopMediaImportKind.books => l10n.desktopMediaImportBooksHint,
+  };
+
+  String get _supportedTypesSummary => switch (widget.kind) {
+    DesktopMediaImportKind.movies => 'MKV, MP4, MOV, AVI, WEBM, TS…',
+    DesktopMediaImportKind.photos => 'JPG, HEIC, PNG, AVIF, RAW, MP4, MOV…',
+    DesktopMediaImportKind.music => 'FLAC, MP3, AAC, WAV, APE, AIFF…',
+    DesktopMediaImportKind.books => 'EPUB, TXT, CBZ, ZIP, PDF',
   };
 
   IconData get _mediaIcon => switch (widget.kind) {
@@ -235,6 +202,13 @@ class _DesktopMediaImportDialogState
             _matchesFilter(node.name),
       )
       .toList(growable: false);
+
+  int get _hiddenFilesCount =>
+      _entries
+          .where(
+            (node) => !node.isFolder && !_isSupported(node.name, node.mimeType),
+          )
+          .length;
 
   List<XFile> get _visibleDeviceFiles => _deviceFiles
       .where((file) => _matchesFilter(file.name))
@@ -281,26 +255,11 @@ class _DesktopMediaImportDialogState
     });
   }
 
-  bool _isSupported(String name, String? mimeType) {
-    final mime = mimeType?.toLowerCase() ?? '';
-    final extension = _extension(name);
-    if (_extensions.contains(extension)) return true;
-    return switch (widget.kind) {
-      DesktopMediaImportKind.movies => mime.startsWith('video/'),
-      DesktopMediaImportKind.photos => mime.startsWith('image/'),
-      DesktopMediaImportKind.music => mime.startsWith('audio/'),
-      DesktopMediaImportKind.books =>
-        mime.startsWith('text/') ||
-            mime.contains('epub') ||
-            mime.contains('pdf') ||
-            mime.contains('zip'),
-    };
-  }
+  bool _isSupported(String name, String? mimeType) =>
+      !isJunkFile(name) &&
+      acceptsImportFile(_importModule, name, mimeType: mimeType);
 
-  String _extension(String name) {
-    final dot = name.lastIndexOf('.');
-    return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
-  }
+  String _extension(String name) => importExtensionOf(name);
 
   void _onScroll() {
     if (_source == _ImportSource.files &&
@@ -385,35 +344,65 @@ class _DesktopMediaImportDialogState
     _loadFiles(reset: true);
   }
 
+  Future<void> _ingestDeviceFiles(List<XFile> incoming) async {
+    if (incoming.isEmpty) return;
+    final sizes = await Future.wait<int?>(
+      incoming.map((file) async {
+        try {
+          return await file.length();
+        } on Object {
+          return null;
+        }
+      }),
+    );
+    if (!mounted) return;
+    final candidates = <ImportCandidate<XFile>>[
+      for (var i = 0; i < incoming.length; i++)
+        ImportCandidate<XFile>(
+          name: incoming[i].name,
+          sizeBytes: sizes[i],
+          item: incoming[i],
+          key: _deviceKey(incoming[i]),
+          mimeType: incoming[i].mimeType,
+        ),
+    ];
+    final knownKeys = _deviceFiles.map(_deviceKey).toSet();
+    final filtered = filterImportCandidates<XFile>(
+      candidates,
+      _importModule,
+      existingKeys: knownKeys,
+    );
+    setState(() {
+      _loadError = null;
+      _rejectedItems
+        ..clear()
+        ..addAll(filtered.rejected);
+      for (final accepted in filtered.accepted) {
+        final key = _deviceKey(accepted.item);
+        _deviceFiles.add(accepted.item);
+        if (accepted.sizeBytes != null) {
+          _deviceSizes[key] = accepted.sizeBytes!;
+        }
+        _selectedDeviceKeys.add(key);
+      }
+    });
+    if (filtered.duplicateCount > 0 && mounted) {
+      showDesktopToast(
+        context,
+        '已跳过 ${filtered.duplicateCount} 个重复文件',
+        kind: DesktopToastKind.info,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+
   Future<void> _chooseDeviceFiles(AppLocalizations l10n) async {
     try {
       final files = await ref.read(mediaImportFilePickerProvider)(<XTypeGroup>[
         XTypeGroup(label: _title(l10n), extensions: _extensions),
       ]);
       if (!mounted || files.isEmpty) return;
-      final knownKeys = _deviceFiles.map(_deviceKey).toSet();
-      final additions = files.where(
-        (file) => !knownKeys.contains(_deviceKey(file)),
-      );
-      final newFiles = additions.toList(growable: false);
-      final sizes = await Future.wait<int?>(
-        newFiles.map((file) async {
-          try {
-            return await file.length();
-          } on Object {
-            return null;
-          }
-        }),
-      );
-      if (!mounted) return;
-      setState(() {
-        _deviceFiles.addAll(newFiles);
-        for (var index = 0; index < newFiles.length; index++) {
-          final size = sizes[index];
-          if (size != null) _deviceSizes[_deviceKey(newFiles[index])] = size;
-          _selectedDeviceKeys.add(_deviceKey(newFiles[index]));
-        }
-      });
+      await _ingestDeviceFiles(files);
     } on Object catch (error) {
       if (!mounted) return;
       setState(() {
@@ -422,6 +411,54 @@ class _DesktopMediaImportDialogState
           l10n: AppLocalizations.of(context),
         );
       });
+    }
+  }
+
+  Future<void> _chooseDeviceFolder() async {
+    setState(() => _scanningDrop = true);
+    try {
+      final dirPath = await getDirectoryPath();
+      if (!mounted || dirPath == null || dirPath.isEmpty) return;
+      final expanded = await expandDirectoryPath(dirPath);
+      if (!mounted) return;
+      await _ingestDeviceFiles(expanded);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = userFacingErrorText(
+          error,
+          l10n: AppLocalizations.of(context),
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _scanningDrop = false);
+      }
+    }
+  }
+
+  Future<void> _handleDroppedItems(List<DropItem> items) async {
+    if (items.isEmpty) return;
+    setState(() {
+      _dragOver = false;
+      _scanningDrop = true;
+    });
+    try {
+      final expanded = await expandDroppedItems(items);
+      if (!mounted) return;
+      await _ingestDeviceFiles(expanded);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = userFacingErrorText(
+          error,
+          l10n: AppLocalizations.of(context),
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _scanningDrop = false);
+      }
     }
   }
 
@@ -445,6 +482,199 @@ class _DesktopMediaImportDialogState
       space: _space,
     );
     closeDesktopModal(context, selection);
+  }
+
+  Widget _hiddenFilesNotice(DesktopSkin skin) {
+    final hidden = _hiddenFilesCount;
+    if (hidden <= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: skin.raise,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: skin.line),
+        ),
+        child: Row(
+          children: [
+            Icon(DesktopIcons.info, size: 14, color: skin.text3),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '当前目录已自动隐藏 $hidden 个此媒体库不支持的文件',
+                style: DesktopType.caption(skin.text3),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dropZone(AppLocalizations l10n, DesktopSkin skin) {
+    final borderColor =
+        _dragOver ? skin.accent : skin.line2.withValues(alpha: 0.9);
+    final fillColor =
+        _dragOver ? skin.accent.withValues(alpha: 0.08) : skin.raise;
+    final zone = AnimatedContainer(
+      duration: MotionToken.reduced(context, MotionToken.fast),
+      curve: MotionToken.curve,
+      decoration: BoxDecoration(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: CustomPaint(
+        painter: _DashedRectPainter(
+          color: borderColor,
+          radius: 14,
+          strokeWidth: _dragOver ? 1.6 : 1.2,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: skin.accent.withValues(alpha: 0.14),
+                ),
+                child: Icon(DesktopIcons.upload, size: 18, color: skin.accent),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _scanningDrop ? '正在扫描拖入的文件与文件夹…' : '拖拽文件或文件夹到此处',
+                style: DesktopType.denseStrong(skin.text),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '支持递归扫描子文件夹 · 格式：$_supportedTypesSummary',
+                textAlign: TextAlign.center,
+                style: DesktopType.caption(skin.text3),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  DesktopButton(
+                    label: l10n.desktopMediaImportChooseFiles,
+                    icon: DesktopIcons.upload,
+                    variant: DesktopButtonVariant.soft,
+                    onPressed:
+                        _scanningDrop ? null : () => _chooseDeviceFiles(l10n),
+                  ),
+                  DesktopButton(
+                    label: '选择文件夹',
+                    icon: DesktopIcons.folder,
+                    variant: DesktopButtonVariant.ghost,
+                    onPressed: _scanningDrop ? null : _chooseDeviceFolder,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!PlatformCapabilities.current().supportsDragAndDropUpload) {
+      return zone;
+    }
+    return DropTarget(
+      enable: !_scanningDrop,
+      onDragEntered: (_) {
+        if (mounted && !_dragOver) setState(() => _dragOver = true);
+      },
+      onDragExited: (_) {
+        if (mounted && _dragOver) setState(() => _dragOver = false);
+      },
+      onDragDone: (details) {
+        unawaited(_handleDroppedItems(details.files));
+      },
+      child: zone,
+    );
+  }
+
+  Widget _rejectedReportCard(DesktopSkin skin) {
+    if (_rejectedItems.isEmpty) return const SizedBox.shrink();
+    final preview = _rejectedItems.take(6).toList(growable: false);
+    final overflow = _rejectedItems.length - preview.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: skin.bad.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: skin.bad.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(DesktopIcons.info, size: 14, color: skin.bad),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '已过滤 ${_rejectedItems.length} 个未添加项目',
+                    style: DesktopType.denseStrong(skin.bad),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _rejectedItems.clear()),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      DesktopIcons.close,
+                      size: 13,
+                      color: skin.text2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final item in preview)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(skin.text2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      item.reason == ImportRejectReason.emptyFile
+                          ? '空文件 (0 B)'
+                          : '不支持的格式 .${item.extension.isEmpty ? '?' : item.extension}',
+                      style: DesktopType.caption(skin.bad),
+                    ),
+                  ],
+                ),
+              ),
+            if (overflow > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '另有 $overflow 项未显示',
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -476,18 +706,14 @@ class _DesktopMediaImportDialogState
           ),
           if (_source == _ImportSource.device) ...[
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: DesktopButton(
-                label: l10n.desktopMediaImportChooseFiles,
-                icon: DesktopIcons.upload,
-                variant: DesktopButtonVariant.soft,
-                onPressed: () => _chooseDeviceFiles(l10n),
-              ),
-            ),
-          ] else if (_breadcrumbs.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _breadcrumbsView(l10n, skin),
+            _dropZone(l10n, skin),
+            _rejectedReportCard(skin),
+          ] else ...[
+            _hiddenFilesNotice(skin),
+            if (_breadcrumbs.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _breadcrumbsView(l10n, skin),
+            ],
           ],
           const SizedBox(height: 8),
           if (_sourceCount > 5 || _filter.isNotEmpty) _listTools(l10n, skin),
@@ -511,5 +737,48 @@ class _DesktopMediaImportDialogState
         ),
       ],
     );
+  }
+}
+
+class _DashedRectPainter extends CustomPainter {
+  const _DashedRectPainter({
+    required this.color,
+    required this.radius,
+    required this.strokeWidth,
+  });
+
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth;
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    const dashLength = 6.0;
+    const gapLength = 4.0;
+    for (final PathMetric metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + dashLength).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += dashLength + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

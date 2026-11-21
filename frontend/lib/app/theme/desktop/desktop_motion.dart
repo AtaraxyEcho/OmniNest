@@ -107,8 +107,14 @@ abstract final class DesktopMotion {
   /// `.dock` 的宽度收展。
   static const Duration dock = Duration(milliseconds: 550);
 
-  /// `.route` 的入场（opacity + 12px 位移 + 4px 模糊）。
-  static const Duration route = Duration(milliseconds: 600);
+  /// `.route` 的入场（opacity + 12px 位移 + 0.992 缩放收束）。
+  static const Duration route = Duration(milliseconds: 420);
+
+  /// 路由退场淡出时长。
+  static const Duration routeExit = Duration(milliseconds: 200);
+
+  /// 骨架切换到真实内容的淡入时长（样例 `.sk-done` 350ms）。
+  static const Duration skeletonReveal = Duration(milliseconds: 350);
 
   /// 首页最近照片条的弹性扩张：样例 `.ps { transition: flex-grow .6s }`。
   static const Duration photoStrip = Duration(milliseconds: 600);
@@ -153,10 +159,10 @@ abstract final class DesktopMotion {
   static const Duration viewerChrome = Duration(milliseconds: 600);
 
   /// Photos `PhotoViewer` 外层 `.viewer` 的入场淡入。
-  static const Duration photoViewerEnter = Duration(milliseconds: 350);
+  static const Duration photoViewerEnter = Duration(milliseconds: 320);
 
-  /// Video 与 Reader 全局查看器外层的 `.4s fade` 入场。
-  static const Duration immersiveViewerEnter = Duration(milliseconds: 400);
+  /// Video 与 Reader 全局查看器外层的柔和缩放淡入。
+  static const Duration immersiveViewerEnter = Duration(milliseconds: 320);
 
   /// Files 触控长按后开始移动文件的识别延迟（桌面鼠标仍立即拖动）。
   static const Duration longPressDrag = Duration(milliseconds: 500);
@@ -203,8 +209,14 @@ abstract final class DesktopMotion {
   static const Duration ambientFade = Duration(milliseconds: 1600);
 
   /// `.np` 的入场与退场。
-  static const Duration nowPlayingIn = Duration(milliseconds: 700);
-  static const Duration nowPlayingOut = Duration(milliseconds: 400);
+  static const Duration nowPlayingIn = Duration(milliseconds: 500);
+  static const Duration nowPlayingOut = Duration(milliseconds: 320);
+
+  /// 歌词换句时滚到视口中央的跟随时长。
+  static const Duration lyricsFollow = Duration(milliseconds: 480);
+
+  /// 当前行歌词 1.06× 放大的收束时长。
+  static const Duration lyricLineScale = Duration(milliseconds: 320);
 
   /// 书页翻页。
   static const Duration pageFlip = Duration(milliseconds: 820);
@@ -259,9 +271,9 @@ abstract final class DesktopMotion {
         : duration;
   }
 
-  /// 第 [index] 个元素的交错延迟。
+  /// 第 [index] 个元素的交错延迟（索引封顶至 8，最大延迟 440ms，避免长列表尾部久等）。
   static Duration stagger(BuildContext context, int index) {
-    return of(context, staggerStep * index);
+    return of(context, staggerStep * index.clamp(0, 8));
   }
 
   /// 菜单项第 [index] 个的延迟，与区块 stagger 分开取值。

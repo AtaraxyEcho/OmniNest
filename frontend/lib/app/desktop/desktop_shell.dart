@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +26,7 @@ import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_boundary.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_frame.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_popovers.dart';
@@ -130,9 +131,12 @@ class DesktopShellHost extends ConsumerStatefulWidget {
 }
 
 class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
-  /// 本帧是否已经排过一次路由后同步（delegate 与 routeInformationProvider
+  /// 本帧是否已经排过一次历史记录同步（delegate 与 routeInformationProvider
   /// 会在同一次 go 里先后通知）。
-  bool _routeSyncScheduled = false;
+  bool _historySyncScheduled = false;
+
+  /// 上一次同步到壳层的路由位置，用于在同帧内去重同步 `setState`。
+  String _lastSyncedPath = '';
 
   /// 音乐中心状态变化后，同一帧只排一次播放会话同步。
   ///
@@ -154,6 +158,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   @override
   void initState() {
     super.initState();
+    _lastSyncedPath = _path;
     widget.router.routerDelegate.addListener(_onRouteChanged);
     widget.router.routeInformationProvider.addListener(_onRouteChanged);
     HardwareKeyboard.instance.addHandler(_handleKey);
@@ -180,22 +185,38 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 
   void _onRouteChanged() {
-    if (!mounted || _routeSyncScheduled) {
+    if (!mounted) {
       return;
     }
-    // delegate 与 routeInformationProvider 会在同一次 go 里各通知一次；
-    // `_routeSyncScheduled` 把同帧的两次合并成一次帧后记录 + setState。
-    _routeSyncScheduled = true;
-    // delegate 可能在路由子树构建过程中 notify；provider 写入与 setState
-    // 一律延到帧后，避免「构建期修改 provider」断言。
+    final nextPath = _path;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    // 非构建期（idle / postFrameCallbacks）直接同步 setState，确保 `_RouteEnter`
+    // 在新页面挂载的同一帧拿到最新 path，彻底消除原先推迟到 addPostFrameCallback
+    // 导致的“新页先以 opacity=1 硬闪 1 帧再淡入”问题。
+    if (nextPath != _lastSyncedPath) {
+      _lastSyncedPath = nextPath;
+      if (phase == SchedulerPhase.idle ||
+          phase == SchedulerPhase.postFrameCallbacks) {
+        setState(() {});
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+      }
+    }
+    if (_historySyncScheduled) {
+      return;
+    }
+    _historySyncScheduled = true;
+    // Provider 写入一律延到帧后，避免路由在构建期通知时触发 Riverpod 断言。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 先解锁再判存活：dispose 后残留的锁会让下一次路由变化被静默吞掉。
-      _routeSyncScheduled = false;
+      _historySyncScheduled = false;
       if (!mounted) {
         return;
       }
       ref.read(desktopHistoryProvider.notifier).record(_path);
-      setState(() {});
     });
     WidgetsBinding.instance.scheduleFrame();
   }
@@ -431,39 +452,45 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       // 双下划线），缺 Overlay 时 Tooltip 直接建不起来。两者都在这里补齐。
       child: DefaultTextStyle(
         style: DesktopType.body(theme.extension<DesktopSkin>()!.text),
-        child: DesktopRouterScope(
-          router: widget.router,
-          child: DesktopShellScope(
-            hosted: mode == DesktopShellMode.chrome,
-            backdropActive: backdropActive,
-            // 壳层与沉浸页都是自绘表面，没有 Scaffold/Card：Material 控件
-            // （TextField、Chip、Checkbox…）要求最近的 Material 祖先，缺了
-            // 会抛 “No Material widget found.”。这里补一层透明 Material，
-            // 并显式透传 DefaultTextStyle，避免 Material 自带 bodyMedium
-            // 改掉未指定 style 的文字尺寸。
-            child: Material(
-              type: MaterialType.transparency,
-              textStyle: DesktopType.body(theme.extension<DesktopSkin>()!.text),
-              child: Overlay.wrap(
-                child:
-                    mode == DesktopShellMode.chrome
-                        ? _Workspace(
-                          path: _path,
-                          ambientImage: _ambientImage(),
-                          child: widget.child,
-                        )
-                        : mode == DesktopShellMode.immersive
-                        ? _DesktopImmersiveCanvas(
-                          path: _path,
-                          ambientImage: _ambientImage(),
-                          child: widget.child,
-                        )
-                        : DesktopWindowChrome(
-                          child: ColoredBox(
-                            color: theme.scaffoldBackgroundColor,
-                            child: widget.child,
-                          ),
-                        ),
+        child: DesktopSkeletonShimmerScope(
+          child: DesktopToastScope(
+            child: DesktopRouterScope(
+              router: widget.router,
+              child: DesktopShellScope(
+                hosted: mode == DesktopShellMode.chrome,
+                backdropActive: backdropActive,
+                // 壳层与沉浸页都是自绘表面，没有 Scaffold/Card：Material 控件
+                // （TextField、Chip、Checkbox…）要求最近的 Material 祖先，缺了
+                // 会抛 “No Material widget found.”。这里补一层透明 Material，
+                // 并显式透传 DefaultTextStyle，避免 Material 自带 bodyMedium
+                // 改掉未指定 style 的文字尺寸。
+                child: Material(
+                  type: MaterialType.transparency,
+                  textStyle: DesktopType.body(
+                    theme.extension<DesktopSkin>()!.text,
+                  ),
+                  child: Overlay.wrap(
+                    child:
+                        mode == DesktopShellMode.chrome
+                            ? _Workspace(
+                              path: _path,
+                              ambientImage: _ambientImage(),
+                              child: widget.child,
+                            )
+                            : mode == DesktopShellMode.immersive
+                            ? _DesktopImmersiveCanvas(
+                              path: _path,
+                              ambientImage: _ambientImage(),
+                              child: widget.child,
+                            )
+                            : DesktopWindowChrome(
+                              child: ColoredBox(
+                                color: theme.scaffoldBackgroundColor,
+                                child: widget.child,
+                              ),
+                            ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -625,11 +652,13 @@ class _DesktopThemeScopeState extends ConsumerState<DesktopThemeScope> {
       data: theme,
       child: DefaultTextStyle(
         style: DesktopType.body(theme.extension<DesktopSkin>()!.text),
-        child: Material(
-          type: MaterialType.transparency,
-          child: ColoredBox(
-            color: theme.scaffoldBackgroundColor,
-            child: DesktopWindowChrome(child: widget.child),
+        child: DesktopSkeletonShimmerScope(
+          child: Material(
+            type: MaterialType.transparency,
+            child: ColoredBox(
+              color: theme.scaffoldBackgroundColor,
+              child: DesktopWindowChrome(child: widget.child),
+            ),
           ),
         ),
       ),

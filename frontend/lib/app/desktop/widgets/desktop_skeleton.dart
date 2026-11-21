@@ -1,10 +1,120 @@
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
-/// 条目级骨架（样例新版 polish.css）：保留真实布局，每个条目画成
-/// 「封面 + 两条文本占位」，整块有一次缓慢扫光，而不是页面中央一个转圈。
+/// 骨架占位文案字号（对齐样例 13px 的 `sk-line` 标签）。
+const _skeletonLabelSize = 13.0;
+
+/// 全局单时钟骨架扫光作用域。
+///
+/// 挂在桌面壳层根部，全应用仅维护 1 个 [AnimationController]：有活跃骨架时
+/// 自动启动循环扫光，无活跃骨架时立即停表零功耗，彻底消除一屏 30–50 个独立
+/// Ticker 造成的切页掉帧。
+class DesktopSkeletonShimmerScope extends StatefulWidget {
+  const DesktopSkeletonShimmerScope({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<DesktopSkeletonShimmerScope> createState() =>
+      _DesktopSkeletonShimmerScopeState();
+}
+
+class _DesktopSkeletonShimmerScopeState
+    extends State<DesktopSkeletonShimmerScope>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: DesktopMotion.skeletonSweep,
+  );
+  int _activeCount = 0;
+  bool _disableAnimations = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final disabled = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (disabled != _disableAnimations) {
+      _disableAnimations = disabled;
+      _syncTicker();
+    }
+  }
+
+  void _attach() {
+    _activeCount++;
+    _syncTicker();
+  }
+
+  void _detach() {
+    if (_activeCount > 0) {
+      _activeCount--;
+    }
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    if (!mounted) {
+      return;
+    }
+    if (_disableAnimations || _activeCount <= 0) {
+      if (_controller.isAnimating) {
+        _controller.stop();
+      }
+      if (_disableAnimations && _controller.value != 0) {
+        _controller.value = 0;
+      }
+      return;
+    }
+    if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DesktopSkeletonShimmerInherited(
+      animation: _controller,
+      attach: _attach,
+      detach: _detach,
+      child: widget.child,
+    );
+  }
+}
+
+class _DesktopSkeletonShimmerInherited extends InheritedWidget {
+  const _DesktopSkeletonShimmerInherited({
+    required this.animation,
+    required this.attach,
+    required this.detach,
+    required super.child,
+  });
+
+  final Animation<double> animation;
+  final VoidCallback attach;
+  final VoidCallback detach;
+
+  static _DesktopSkeletonShimmerInherited? maybeOf(BuildContext context) {
+    return context
+        .getInheritedWidgetOfExactType<_DesktopSkeletonShimmerInherited>();
+  }
+
+  @override
+  bool updateShouldNotify(_DesktopSkeletonShimmerInherited oldWidget) =>
+      animation != oldWidget.animation;
+}
+
+/// 条目级骨架（样例新版 polish.css）：轻量无独立 Controller，共享根部单时钟。
 class DesktopSkeletonBox extends StatefulWidget {
   const DesktopSkeletonBox({
     this.width,
@@ -19,35 +129,31 @@ class DesktopSkeletonBox extends StatefulWidget {
   final double radius;
 
   /// 条目序号：`:nth-child(2n)` 与 `(3n)` 的 .18/.36s 延迟换算成循环
-  /// 动画的相位差，不再为每一格创建 Timer。
+  /// 动画的相位差，不再为每一格创建 Timer 或独立 Controller。
   final int index;
 
   @override
   State<DesktopSkeletonBox> createState() => _DesktopSkeletonBoxState();
 }
 
-class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: DesktopMotion.skeletonSweep,
-  );
+class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox> {
+  _DesktopSkeletonShimmerInherited? _scope;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 减弱动效时样例把骨架动画整体关掉，而不是继续无限重复。
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      _controller.stop();
-      _controller.value = 0;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
+    final next = _DesktopSkeletonShimmerInherited.maybeOf(context);
+    if (!identical(next, _scope)) {
+      _scope?.detach();
+      _scope = next;
+      _scope?.attach();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _scope?.detach();
+    _scope = null;
     super.dispose();
   }
 
@@ -60,11 +166,22 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox>
     final childIndex = widget.index + 1;
     final phase =
         childIndex % 3 == 0 ? 0.225 : (childIndex % 2 == 0 ? 0.1125 : 0.0);
+    final animation = _scope?.animation;
+    if (animation == null) {
+      return Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.radius),
+          color: base,
+        ),
+      );
+    }
     return AnimatedBuilder(
-      animation: _controller,
+      animation: animation,
       builder: (context, _) {
         final sweep = DesktopMotion.skeletonCurve.transform(
-          (_controller.value - phase + 1) % 1,
+          (animation.value - phase + 1) % 1,
         );
         return Container(
           width: widget.width,
@@ -79,6 +196,357 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox>
           ),
         );
       },
+    );
+  }
+}
+
+/// 骨架 → 真实内容平滑切换器（对齐样例 `.sk-done` 350ms 淡入 + `skelSeen` 会话记忆）。
+///
+/// 当提供 [regionId] 时，首次加载完成即记入本次会话已见集合；切回该区域若已有
+/// 缓存数据（[hasData] 为 true），不再重复闪出骨架屏。
+class DesktopSkeletonSwitcher extends StatefulWidget {
+  const DesktopSkeletonSwitcher({
+    required this.loading,
+    required this.skeleton,
+    required this.child,
+    this.regionId,
+    this.hasData = false,
+    super.key,
+  });
+
+  final bool loading;
+  final Widget skeleton;
+  final Widget child;
+  final String? regionId;
+  final bool hasData;
+
+  static final Set<String> _seenRegions = <String>{};
+
+  @visibleForTesting
+  static void resetSeenRegions() => _seenRegions.clear();
+
+  @override
+  State<DesktopSkeletonSwitcher> createState() =>
+      _DesktopSkeletonSwitcherState();
+}
+
+class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
+  void _markSeenIfReady() {
+    final id = widget.regionId;
+    if (!widget.loading && id != null && id.isNotEmpty) {
+      DesktopSkeletonSwitcher._seenRegions.add(id);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _markSeenIfReady();
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopSkeletonSwitcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _markSeenIfReady();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seen =
+        widget.regionId != null &&
+        DesktopSkeletonSwitcher._seenRegions.contains(widget.regionId);
+    final showSkeleton = widget.loading && !(seen && widget.hasData);
+    return AnimatedSwitcher(
+      duration: DesktopMotion.of(context, DesktopMotion.skeletonReveal),
+      switchInCurve: DesktopMotion.ease,
+      switchOutCurve: DesktopMotion.exitCurve,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.topLeft,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      child:
+          showSkeleton
+              ? KeyedSubtree(
+                key: const ValueKey<String>('desktop-skeleton-loading'),
+                child: widget.skeleton,
+              )
+              : KeyedSubtree(
+                key: const ValueKey<String>('desktop-skeleton-content'),
+                child: widget.child,
+              ),
+    );
+  }
+}
+
+/// 等形卡片网格骨架：支持 `2/3` 海报与书封、`1/1` 专辑封面及双行圆头文本条。
+class DesktopSkeletonCardGrid extends StatelessWidget {
+  const DesktopSkeletonCardGrid({
+    this.count = 8,
+    this.aspectRatio = 2 / 3,
+    this.minTileWidth = 172,
+    this.spacing = 16,
+    this.runSpacing = 22,
+    this.radius = 12,
+    this.showTextLines = true,
+    super.key,
+  });
+
+  final int count;
+  final double aspectRatio;
+  final double minTileWidth;
+  final double spacing;
+  final double runSpacing;
+  final double radius;
+  final bool showTextLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
+        final columns = ((maxWidth + spacing) / (minTileWidth + spacing))
+            .floor()
+            .clamp(2, 8);
+        final rows = (count / columns).ceil();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var row = 0; row < rows; row++) ...[
+              if (row > 0) SizedBox(height: runSpacing),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var col = 0; col < columns; col++) ...[
+                    if (col > 0) SizedBox(width: spacing),
+                    Expanded(
+                      child:
+                          row * columns + col < count
+                              ? _SkeletonCardTile(
+                                index: row * columns + col,
+                                aspectRatio: aspectRatio,
+                                radius: radius,
+                                showTextLines: showTextLines,
+                              )
+                              : const SizedBox.shrink(),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonCardTile extends StatelessWidget {
+  const _SkeletonCardTile({
+    required this.index,
+    required this.aspectRatio,
+    required this.radius,
+    required this.showTextLines,
+  });
+
+  final int index;
+  final double aspectRatio;
+  final double radius;
+  final bool showTextLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AspectRatio(
+          aspectRatio: aspectRatio,
+          child: DesktopSkeletonBox(
+            height: double.infinity,
+            radius: radius,
+            index: index * 3,
+          ),
+        ),
+        if (showTextLines) ...[
+          const SizedBox(height: 10),
+          FractionallySizedBox(
+            widthFactor: 0.66,
+            child: DesktopSkeletonBox(
+              height: 11,
+              radius: 5.5,
+              index: index * 3 + 1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          FractionallySizedBox(
+            widthFactor: 0.40,
+            child: DesktopSkeletonBox(
+              height: 9,
+              radius: 4.5,
+              index: index * 3 + 2,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// 桌面细环加载指示器（对齐样例 `.spinner`，替代裸露的 Material 转圈）。
+class DesktopSpinner extends StatefulWidget {
+  const DesktopSpinner({
+    this.size = 16,
+    this.strokeWidth = 2,
+    this.color,
+    super.key,
+  });
+
+  final double size;
+  final double strokeWidth;
+  final Color? color;
+
+  @override
+  State<DesktopSpinner> createState() => _DesktopSpinnerState();
+}
+
+class _DesktopSpinnerState extends State<DesktopSpinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: MotionToken.spinner,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      _controller.stop();
+      _controller.value = 0.25;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final arcColor = widget.color ?? skin.accent;
+    final trackColor = skin.line2;
+    return SizedBox.square(
+      dimension: widget.size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return CustomPaint(
+            painter: _DesktopSpinnerPainter(
+              progress: _controller.value,
+              color: arcColor,
+              trackColor: trackColor,
+              strokeWidth: widget.strokeWidth,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DesktopSpinnerPainter extends CustomPainter {
+  const _DesktopSpinnerPainter({
+    required this.progress,
+    required this.color,
+    required this.trackColor,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color color;
+  final Color trackColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.max(0.0, (size.shortestSide - strokeWidth) / 2);
+    final trackPaint =
+        Paint()
+          ..color = trackColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    final arcPaint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
+    final startAngle = progress * math.pi * 2 - math.pi / 2;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      math.pi * 1.45,
+      false,
+      arcPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DesktopSpinnerPainter oldDelegate) =>
+      progress != oldDelegate.progress ||
+      color != oldDelegate.color ||
+      trackColor != oldDelegate.trackColor ||
+      strokeWidth != oldDelegate.strokeWidth;
+}
+
+/// 磨砂遮罩全区加载器（对齐样例 `.overlay-load`）。
+class DesktopOverlayLoader extends StatelessWidget {
+  const DesktopOverlayLoader({this.label, this.blur = 10, super.key});
+
+  final String? label;
+  final double blur;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: ColoredBox(
+          color: skin.bg.withValues(alpha: 0.56),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const DesktopSpinner(size: 28, strokeWidth: 2.5),
+                if (label != null && label!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    label!,
+                    style: TextStyle(
+                      fontSize: _skeletonLabelSize,
+                      color: skin.text2,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

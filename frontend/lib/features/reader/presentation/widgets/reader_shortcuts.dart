@@ -58,7 +58,7 @@ class ReaderShortcutResolver {
     if (key == LogicalKeyboardKey.keyT) {
       return ReaderCommand.toggleContents;
     }
-    if (isTextMode && key == LogicalKeyboardKey.keyB) {
+    if (key == LogicalKeyboardKey.keyB) {
       return ReaderCommand.toggleBookmark;
     }
     // N 只在没有选区键盘动作时开放批注面板，否则同一个按键会一边取消高亮
@@ -76,11 +76,10 @@ class ReaderShortcutResolver {
     if (shiftPressed && key == LogicalKeyboardKey.slash) {
       return ReaderCommand.showShortcuts;
     }
-    if (isTextMode) {
-      final typography = _resolveTypography(key);
-      if (typography != null) {
-        return typography;
-      }
+    // 放开缩放快捷键限制：文本阅读器用于字号缩放，漫画阅读器用于 + / - / 0 图片缩放与复位。
+    final typography = _resolveTypography(key);
+    if (typography != null) {
+      return typography;
     }
     if ((mode == ReaderShortcutMode.comicPage ||
             mode == ReaderShortcutMode.comicScroll) &&
@@ -98,7 +97,9 @@ class ReaderShortcutResolver {
   }
 
   ReaderCommand? _resolveTypography(LogicalKeyboardKey key) {
-    if (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.add) {
+    if (key == LogicalKeyboardKey.equal ||
+        key == LogicalKeyboardKey.add ||
+        key == LogicalKeyboardKey.numpadAdd) {
       return ReaderCommand.increaseFont;
     }
     if (key == LogicalKeyboardKey.minus ||
