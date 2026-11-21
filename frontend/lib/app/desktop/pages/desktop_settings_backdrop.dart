@@ -250,7 +250,7 @@ class _BackdropMasterCard extends ConsumerWidget {
               aspectRatio: 16 / 6.2,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: DesktopPalette.onStage,
+                  color: Colors.black,
                   border: Border.all(color: skin.line2),
                 ),
                 child: Stack(
@@ -266,7 +266,7 @@ class _BackdropMasterCard extends ConsumerWidget {
                       ),
                     if (selected != null && settings.dimAmount > 0.01)
                       ColoredBox(
-                        color: DesktopPalette.onStage.withValues(
+                        color: Colors.black.withValues(
                           alpha: settings.dimAmount,
                         ),
                       ),
@@ -276,7 +276,7 @@ class _BackdropMasterCard extends ConsumerWidget {
                       child: FractionallySizedBox(
                         widthFactor: 0.17,
                         child: ColoredBox(
-                          color: DesktopPalette.onStage.withValues(alpha: 0.45),
+                          color: Colors.black.withValues(alpha: 0.45),
                         ),
                       ),
                     ),
@@ -298,7 +298,7 @@ class _BackdropMasterCard extends ConsumerWidget {
                     ),
                     if (!settings.enabled)
                       ColoredBox(
-                        color: DesktopPalette.onStage.withValues(alpha: 0.82),
+                        color: Colors.black.withValues(alpha: 0.55),
                         child: Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -306,12 +306,18 @@ class _BackdropMasterCard extends ConsumerWidget {
                               Icon(
                                 DesktopIcons.sparkle,
                                 size: 16,
-                                color: skin.text2,
+                                color: DesktopPalette.onStage.withValues(
+                                  alpha: 0.88,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 l10n.desktopBackdropDefaultScene,
-                                style: DesktopType.caption(skin.text2),
+                                style: DesktopType.caption(
+                                  DesktopPalette.onStage.withValues(
+                                    alpha: 0.88,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -388,7 +394,7 @@ class _BackdropPresentationCard extends ConsumerWidget {
           unawaited(notifier.setDimAmount(0.35));
           unawaited(notifier.setBlurAmount(0));
           unawaited(notifier.setVideoMuted(true));
-          unawaited(scopeController.select(DesktopBackdropScope.homeMusic));
+          unawaited(scopeController.select(DesktopBackdropScope.everywhere));
           showDesktopToast(
             context,
             l10n.desktopBackdropResetDone,

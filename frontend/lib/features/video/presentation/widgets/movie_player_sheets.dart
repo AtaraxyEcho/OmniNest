@@ -12,6 +12,7 @@ import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 /// 显示字幕选择面板。
 void showSubtitleSheet({
@@ -25,6 +26,8 @@ void showSubtitleSheet({
   required Future<void> Function() onImport,
   required VoidCallback onDisable,
   required VoidCallback onClosed,
+  double subtitleScale = 1.0,
+  ValueChanged<double>? onSubtitleScaleChanged,
 }) {
   final l10n = AppLocalizations.of(context);
   final items = <Widget>[
@@ -107,6 +110,13 @@ void showSubtitleSheet({
               icon: const Icon(Icons.file_open_rounded),
             ),
       ),
+      footer:
+          onSubtitleScaleChanged == null
+              ? null
+              : _SubtitleSizeSelector(
+                initialScale: subtitleScale,
+                onChanged: onSubtitleScaleChanged,
+              ),
       items: items,
     ).whenComplete(onClosed),
   );
@@ -381,6 +391,7 @@ Future<void> _showPlayerPanel({
   required String title,
   required List<Widget> items,
   Widget? headerAction,
+  Widget? footer,
   String? emptyMessage,
 }) async {
   final useBottomSheet =
@@ -390,6 +401,7 @@ Future<void> _showPlayerPanel({
     title: title,
     items: items,
     headerAction: headerAction,
+    footer: footer,
     emptyMessage: emptyMessage,
     bottomSheet: useBottomSheet,
   );
@@ -405,11 +417,12 @@ Future<void> _showPlayerPanel({
     );
     return;
   }
+  // 桌面端轻量贴底 Popover：无全屏暗遮罩（barrierColor: transparent），紧贴底栏上方弹出。
   await showWorkstationGeneralDialog<void>(
     context: context,
     dismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black38,
+    barrierColor: Colors.transparent,
     transitionDuration:
         reducedMotion ? Duration.zero : const Duration(milliseconds: 180),
     pageBuilder:
@@ -417,7 +430,7 @@ Future<void> _showPlayerPanel({
           child: Align(
             alignment: Alignment.bottomRight,
             child: Padding(
-              padding: const EdgeInsets.only(right: 16, bottom: 84),
+              padding: const EdgeInsets.only(right: 28, bottom: 84),
               child: builder(context),
             ),
           ),
@@ -428,17 +441,136 @@ Future<void> _showPlayerPanel({
             parent: animation,
             curve: Curves.easeOutCubic,
           ),
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.04),
-              end: Offset.zero,
-            ).animate(
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
-            child: child,
+            alignment: Alignment.bottomRight,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
           ),
         ),
   );
+}
+
+class _SubtitleSizeSelector extends StatefulWidget {
+  const _SubtitleSizeSelector({
+    required this.initialScale,
+    required this.onChanged,
+  });
+
+  final double initialScale;
+  final ValueChanged<double> onChanged;
+
+  @override
+  State<_SubtitleSizeSelector> createState() => _SubtitleSizeSelectorState();
+}
+
+class _SubtitleSizeSelectorState extends State<_SubtitleSizeSelector> {
+  static const List<({String label, double scale})> _presets = [
+    (label: 'S', scale: 0.85),
+    (label: 'M', scale: 1.0),
+    (label: 'L', scale: 1.2),
+  ];
+
+  late double _scale = widget.initialScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.videoColors;
+    final isZh = Localizations.localeOf(
+      context,
+    ).languageCode.toLowerCase().startsWith('zh');
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: colors.playerControlMuted.withValues(alpha: 0.14),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            isZh ? '字幕字号' : 'Subtitle size',
+            style: TextStyle(
+              color: colors.playerControlMuted,
+              fontSize: AppTypography.bodySmall,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          for (final preset in _presets) ...[
+            if (preset != _presets.first) const SizedBox(width: 6),
+            _SubtitleSizeChip(
+              label: preset.label,
+              selected: (_scale - preset.scale).abs() < 0.05,
+              onTap: () {
+                setState(() => _scale = preset.scale);
+                widget.onChanged(preset.scale);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SubtitleSizeChip extends StatelessWidget {
+  const _SubtitleSizeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.videoColors;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: MotionToken.reduced(
+          context,
+          const Duration(milliseconds: 140),
+        ),
+        width: 34,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? colors.playerControlForeground
+                  : colors.playerControlHover,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color:
+                selected
+                    ? colors.playerPanelSurface
+                    : colors.playerControlForeground,
+            fontSize: AppTypography.bodySmall,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PlayerPanelFrame extends StatelessWidget {
@@ -447,6 +579,7 @@ class _PlayerPanelFrame extends StatelessWidget {
     required this.items,
     required this.bottomSheet,
     this.headerAction,
+    this.footer,
     this.emptyMessage,
   });
 
@@ -454,6 +587,7 @@ class _PlayerPanelFrame extends StatelessWidget {
   final List<Widget> items;
   final bool bottomSheet;
   final Widget? headerAction;
+  final Widget? footer;
   final String? emptyMessage;
 
   @override
@@ -463,23 +597,38 @@ class _PlayerPanelFrame extends StatelessWidget {
         mediaQuery.size.height -
         mediaQuery.padding.vertical -
         mediaQuery.viewInsets.vertical;
-    final height = math.min(
-      bottomSheet ? 640.0 : 560.0,
-      availableHeight * (bottomSheet ? 0.82 : 0.72),
+    final maxHeight = math.min(
+      bottomSheet ? 640.0 : 440.0,
+      availableHeight * (bottomSheet ? 0.82 : 0.65),
     );
     final colors = context.videoColors;
     return Material(
-      color: colors.playerPanelSurface,
-      elevation: bottomSheet ? 0 : 12,
-      borderRadius:
-          bottomSheet
-              ? const BorderRadius.vertical(top: Radius.circular(12))
-              : BorderRadius.circular(8),
+      color: colors.playerPanelSurface.withValues(
+        alpha: bottomSheet ? 1.0 : 0.94,
+      ),
+      elevation: bottomSheet ? 0 : 16,
+      shadowColor: Colors.black.withValues(alpha: 0.65),
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            bottomSheet
+                ? const BorderRadius.vertical(top: Radius.circular(12))
+                : BorderRadius.circular(12),
+        side:
+            bottomSheet
+                ? BorderSide.none
+                : BorderSide(
+                  color: colors.playerControlForeground.withValues(alpha: 0.12),
+                ),
+      ),
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: bottomSheet ? double.infinity : 360,
-        height: height,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: bottomSheet ? double.infinity : 260,
+          maxWidth: bottomSheet ? double.infinity : 310,
+          maxHeight: maxHeight,
+        ),
         child: Column(
+          mainAxisSize: bottomSheet ? MainAxisSize.max : MainAxisSize.min,
           children: [
             if (bottomSheet)
               Padding(
@@ -494,9 +643,9 @@ class _PlayerPanelFrame extends StatelessWidget {
                 ),
               ),
             SizedBox(
-              height: 56,
+              height: bottomSheet ? 56 : 46,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
                     Expanded(
@@ -506,7 +655,10 @@ class _PlayerPanelFrame extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: colors.playerControlForeground,
-                          fontSize: AppTypography.titleMedium,
+                          fontSize:
+                              bottomSheet
+                                  ? AppTypography.titleMedium
+                                  : AppTypography.bodyLarge,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -515,6 +667,7 @@ class _PlayerPanelFrame extends StatelessWidget {
                     IconButton(
                       tooltip: AppLocalizations.of(context).videoClose,
                       onPressed: () => Navigator.pop(context),
+                      iconSize: bottomSheet ? 22 : 18,
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
@@ -525,28 +678,28 @@ class _PlayerPanelFrame extends StatelessWidget {
               height: 1,
               color: colors.playerControlMuted.withValues(alpha: 0.12),
             ),
-            Expanded(
+            Flexible(
               child:
                   emptyMessage != null
-                      ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            emptyMessage!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: colors.playerControlMuted,
-                              fontSize: AppTypography.bodyLarge,
-                            ),
+                      ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          emptyMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colors.playerControlMuted,
+                            fontSize: AppTypography.bodyMedium,
                           ),
                         ),
                       )
                       : ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        shrinkWrap: !bottomSheet,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         itemCount: items.length,
                         itemBuilder: (context, index) => items[index],
                       ),
             ),
+            if (footer != null) footer!,
           ],
         ),
       ),

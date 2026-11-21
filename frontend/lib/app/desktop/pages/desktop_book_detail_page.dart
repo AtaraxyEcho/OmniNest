@@ -15,6 +15,8 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart'
+    show readerApiProvider;
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
 import 'desktop_book_detail_sections.dart';
@@ -35,6 +37,7 @@ class DesktopBookDetailPage extends ConsumerWidget {
     // 章节清单走 parsedBookProvider（GET /text/manifest），与移动端书详同源。
     // detail.chapters 只在后端将来补字段或测试桩注入时才非空。
     final bookAsync = ref.watch(parsedBookProvider(itemId));
+    final stats = ref.watch(readerStatsProvider).asData?.value;
 
     return ColoredBox(
       color:
@@ -196,9 +199,13 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                   child: _ProgressBar(value: percent / 100),
                                 ),
                                 const SizedBox(height: 6),
-                                Text(
-                                  progressLabel,
-                                  style: DesktopType.caption(skin.text3),
+                                _HeroDurationLine(
+                                  progressLabel: progressLabel,
+                                  percent: percent,
+                                  chaptersCount: chapters.length,
+                                  isComic: item.isComic,
+                                  totalMinutesThisWeek:
+                                      stats?.totalMinutesThisWeek,
                                 ),
                                 const SizedBox(height: 22),
                                 Wrap(
@@ -244,6 +251,11 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                                 ),
                                       ),
                                     _DesktopBookShelfButton(item: item),
+                                    _DesktopBookReadToggleButton(
+                                      item: item,
+                                      isCompleted: percent >= 90,
+                                      chapters: chapters,
+                                    ),
                                   ],
                                 ),
                               ],
@@ -574,4 +586,156 @@ String _shortDate(DateTime value) {
   final local = value.toLocal();
   String two(int part) => part.toString().padLeft(2, '0');
   return '${local.year}-${two(local.month)}-${two(local.day)}';
+}
+
+class _HeroDurationLine extends StatelessWidget {
+  const _HeroDurationLine({
+    required this.progressLabel,
+    required this.percent,
+    required this.chaptersCount,
+    required this.isComic,
+    required this.totalMinutesThisWeek,
+  });
+
+  final String progressLabel;
+  final double percent;
+  final int chaptersCount;
+  final bool isComic;
+  final int? totalMinutesThisWeek;
+
+  String _formatMinutes(int minutes, bool isZh) {
+    if (minutes <= 0) {
+      return isZh ? '< 1 分钟' : '< 1m';
+    }
+    final hours = minutes ~/ 60;
+    final rem = minutes % 60;
+    if (hours == 0) {
+      return isZh ? '$rem 分钟' : '${rem}m';
+    }
+    if (rem == 0) {
+      return isZh ? '$hours 小时' : '${hours}h';
+    }
+    return isZh ? '$hours 小时 $rem 分钟' : '${hours}h ${rem}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final estimatedTotalMinutes =
+        chaptersCount > 0
+            ? chaptersCount * (isComic ? 6 : 14)
+            : (isComic ? 45 : 120);
+    final remainingMinutes =
+        (estimatedTotalMinutes * (1.0 - (percent / 100.0).clamp(0.0, 1.0)))
+            .round();
+    final remainingLabel =
+        percent >= 99.5
+            ? (isZh ? '已读完' : 'Finished')
+            : (isZh
+                ? '预计剩余 ${_formatMinutes(remainingMinutes, true)}'
+                : '${_formatMinutes(remainingMinutes, false)} left');
+    final cumulativeMinutes = totalMinutesThisWeek;
+    final cumulativeLabel =
+        cumulativeMinutes != null && cumulativeMinutes > 0
+            ? (isZh
+                ? '本周累计 ${_formatMinutes(cumulativeMinutes, true)}'
+                : '${_formatMinutes(cumulativeMinutes, false)} read this week')
+            : null;
+    final parts = <String>[
+      progressLabel,
+      remainingLabel,
+      if (cumulativeLabel != null) cumulativeLabel,
+    ];
+    return Text(parts.join(' · '), style: DesktopType.caption(skin.text3));
+  }
+}
+
+/// 详情英雄区已读/未读一键切换按钮。
+class _DesktopBookReadToggleButton extends ConsumerStatefulWidget {
+  const _DesktopBookReadToggleButton({
+    required this.item,
+    required this.isCompleted,
+    required this.chapters,
+  });
+
+  final ReaderItem item;
+  final bool isCompleted;
+  final List<ReaderChapter> chapters;
+
+  @override
+  ConsumerState<_DesktopBookReadToggleButton> createState() =>
+      _DesktopBookReadToggleButtonState();
+}
+
+class _DesktopBookReadToggleButtonState
+    extends ConsumerState<_DesktopBookReadToggleButton> {
+  bool _busy = false;
+
+  Future<void> _toggleReadStatus() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final markAsRead = !widget.isCompleted;
+    try {
+      await ref
+          .read(readerApiProvider)
+          .updateProgress(
+            itemId: widget.item.id,
+            progressPercent: markAsRead ? 1.0 : 0.0,
+            chapterId:
+                widget.chapters.isEmpty
+                    ? null
+                    : (markAsRead
+                        ? widget.chapters.last.id
+                        : widget.chapters.first.id),
+            clientUpdatedAt: DateTime.now().toUtc(),
+          );
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
+      ref.invalidate(readerCenterControllerProvider);
+      showDesktopToast(
+        context,
+        markAsRead
+            ? (isZh ? '已标记为已读' : 'Marked as read')
+            : (isZh ? '已标记为未读' : 'Marked as unread'),
+        kind: DesktopToastKind.success,
+        icon: DesktopIcons.check,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        showDesktopToast(
+          context,
+          errorReason(error, l10n),
+          kind: DesktopToastKind.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final completed = widget.isCompleted;
+    return DesktopButton(
+      label:
+          completed
+              ? (isZh ? '标为未读' : 'Mark Unread')
+              : (isZh ? '标为已读' : 'Mark Read'),
+      icon: completed ? DesktopIcons.undo : DesktopIcons.check,
+      variant: DesktopButtonVariant.soft,
+      large: true,
+      busy: _busy,
+      onPressed: _busy ? null : _toggleReadStatus,
+    );
+  }
 }

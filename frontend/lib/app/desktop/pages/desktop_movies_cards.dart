@@ -82,83 +82,6 @@ class _MoviePosterGridSkeleton extends StatelessWidget {
   }
 }
 
-/// 海报右上角的「加入待看清单」（样例 `Movies.tsx:38` 的菜单项与
-/// `MovieDetail.tsx:65` 的按钮）。清单与其他设备同步，卡片自己读 provider，
-/// 不必把回调从页面一路穿到网格里。
-class _WatchlistButton extends ConsumerWidget {
-  const _WatchlistButton({required this.item, required this.visible});
-
-  final MovieVideoItem item;
-  final bool visible;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final saved = ref
-        .watch(movieWatchlistProvider)
-        .any((watchlistItem) => watchlistItem.id == item.id);
-    final interactive = visible || saved;
-    return AnimatedOpacity(
-      opacity: interactive ? 1 : 0,
-      duration: DesktopMotion.fast,
-      child: IgnorePointer(
-        ignoring: !interactive,
-        child: Tooltip(
-          message:
-              saved
-                  ? l10n.desktopMoviesRemoveWatchlist
-                  : l10n.desktopMoviesAddWatchlist,
-          child: GestureDetector(
-            onTap: () async {
-              try {
-                final added = await ref
-                    .read(movieWatchlistProvider.notifier)
-                    .toggle(item);
-                if (!context.mounted || added == null) {
-                  return;
-                }
-                showDesktopToast(
-                  context,
-                  added
-                      ? l10n.desktopMoviesAddedWatchlist
-                      : l10n.desktopMoviesRemovedWatchlist,
-                  kind:
-                      added ? DesktopToastKind.success : DesktopToastKind.info,
-                  icon: added ? DesktopIcons.check : DesktopIcons.trash,
-                );
-              } on Object catch (error) {
-                if (!context.mounted) {
-                  return;
-                }
-                showDesktopToast(
-                  context,
-                  failureToast(l10n, l10n.desktopMoviesWatchlist, error),
-                  kind: DesktopToastKind.error,
-                  icon: DesktopIcons.info,
-                );
-              }
-            },
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.62),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-              ),
-              child: Icon(
-                saved ? DesktopIcons.check : DesktopIcons.plus,
-                size: 16,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// CSS 的 `vw` 按视口宽度算，不是栅格容器宽度；窄窗口里固定 200/230
 /// 会把海报压出两列以下或撑出多余留白。
 double _railPosterWidth(BuildContext context) =>
@@ -172,21 +95,82 @@ int _posterGridColumns(BuildContext context, double maxWidth) {
   return ((maxWidth + 22) / (minTile + 22)).floor().clamp(2, 8);
 }
 
-class _PosterCard extends StatefulWidget {
+Future<void> _toggleMovieWatchlist(
+  BuildContext context,
+  WidgetRef ref,
+  MovieVideoItem item,
+) async {
+  final l10n = AppLocalizations.of(context);
+  try {
+    final added = await ref.read(movieWatchlistProvider.notifier).toggle(item);
+    if (!context.mounted || added == null) {
+      return;
+    }
+    showDesktopToast(
+      context,
+      added
+          ? l10n.desktopMoviesAddedWatchlist
+          : l10n.desktopMoviesRemovedWatchlist,
+      kind: added ? DesktopToastKind.success : DesktopToastKind.info,
+      icon: added ? DesktopIcons.check : DesktopIcons.trash,
+    );
+  } on Object catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    showDesktopToast(
+      context,
+      failureToast(l10n, l10n.desktopMoviesWatchlist, error),
+      kind: DesktopToastKind.error,
+      icon: DesktopIcons.info,
+    );
+  }
+}
+
+class _PosterCard extends ConsumerStatefulWidget {
   const _PosterCard({required this.item});
 
   final MovieVideoItem item;
 
   @override
-  State<_PosterCard> createState() => _PosterCardState();
+  ConsumerState<_PosterCard> createState() => _PosterCardState();
 }
 
-class _PosterCardState extends State<_PosterCard> {
+class _PosterCardState extends ConsumerState<_PosterCard> {
   bool _hovered = false;
+
+  void _openContextMenu(BuildContext context, Offset position) {
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final saved = ref
+        .read(movieWatchlistProvider)
+        .any((entry) => entry.id == item.id);
+    ref.read(desktopShellProvider.notifier).openMenu(position, [
+      DesktopMenuItem(
+        label: l10n.desktopPlay,
+        icon: DesktopIcons.play,
+        onPressed: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopOpenDetails,
+        icon: DesktopIcons.info,
+        onPressed:
+            () => desktopPush(context, DesktopRoutes.movieDetail(item.id)),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label:
+            saved
+                ? l10n.desktopMoviesRemoveWatchlist
+                : l10n.desktopMoviesAddWatchlist,
+        icon: saved ? DesktopIcons.check : DesktopIcons.plus,
+        onPressed: () => unawaited(_toggleMovieWatchlist(context, ref, item)),
+      ),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
     final item = widget.item;
     return MouseRegion(
@@ -194,6 +178,8 @@ class _PosterCardState extends State<_PosterCard> {
       onExit: (_) => setState(() => _hovered = false),
       child: DesktopTilt(
         onTap: () => desktopPush(context, DesktopRoutes.movieDetail(item.id)),
+        onSecondaryTapDown:
+            (details) => _openContextMenu(context, details.globalPosition),
         child: AspectRatio(
           aspectRatio: 2 / 3,
           child: Stack(
@@ -206,11 +192,6 @@ class _PosterCardState extends State<_PosterCard> {
                 cacheKey: 'desktop-poster-${item.id}',
               ),
               const _PosterShade(),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: _WatchlistButton(item: item, visible: _hovered),
-              ),
               if (item.rating != null)
                 Positioned(
                   top: 12,
@@ -220,33 +201,9 @@ class _PosterCardState extends State<_PosterCard> {
                     tone: Colors.white,
                   ),
                 ),
-              AnimatedPositioned(
-                duration: DesktopMotion.of(
-                  context,
-                  const Duration(milliseconds: 400),
-                ),
-                curve: DesktopMotion.spring,
-                right: 14,
-                bottom: _hovered ? 66 : 56,
-                child: AnimatedOpacity(
-                  duration: DesktopMotion.of(
-                    context,
-                    const Duration(milliseconds: 400),
-                  ),
-                  opacity: _hovered ? 1 : 0,
-                  child: _CardPlay(
-                    label: l10n.desktopPlayTitle(item.title),
-                    onTap:
-                        () => desktopPush(
-                          context,
-                          DesktopRoutes.moviePlay(item.id),
-                        ),
-                  ),
-                ),
-              ),
               Positioned(
                 left: 14,
-                right: 14,
+                right: 66,
                 bottom: 14,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,9 +231,53 @@ class _PosterCardState extends State<_PosterCard> {
                   ],
                 ),
               ),
-              if (skin.isDark) const SizedBox.shrink(),
+              Positioned(
+                right: 14,
+                bottom: 14,
+                child: _HoverCardPlay(
+                  visible: _hovered,
+                  label: l10n.desktopPlayTitle(item.title),
+                  onTap:
+                      () => desktopPush(
+                        context,
+                        DesktopRoutes.moviePlay(item.id),
+                      ),
+                ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HoverCardPlay extends StatelessWidget {
+  const _HoverCardPlay({
+    required this.visible,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool visible;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        duration: MotionToken.reduced(
+          context,
+          const Duration(milliseconds: 280),
+        ),
+        opacity: visible ? 1 : 0,
+        child: AnimatedSlide(
+          duration: MotionToken.reduced(context, DesktopMotion.cardSlide),
+          curve: DesktopMotion.spring,
+          offset: visible ? Offset.zero : const Offset(0, 0.18),
+          child: _CardPlay(label: label, onTap: onTap),
         ),
       ),
     );
@@ -292,28 +293,40 @@ class _CardPlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return Tooltip(
-      message: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: skin.accent,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-                spreadRadius: -6,
+    return DesktopHover(
+      builder:
+          (context, hovered) => Tooltip(
+            message: label,
+            child: GestureDetector(
+              onTap: onTap,
+              child: AnimatedScale(
+                scale: hovered ? 1.1 : 1.0,
+                duration: DesktopMotion.of(context, DesktopMotion.springHover),
+                curve: DesktopMotion.spring,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: skin.accent,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                        spreadRadius: -6,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    DesktopIcons.play,
+                    size: 18,
+                    color: skin.accentInk,
+                  ),
+                ),
               ),
-            ],
+            ),
           ),
-          child: Icon(DesktopIcons.play, size: 18, color: skin.accentInk),
-        ),
-      ),
     );
   }
 }
@@ -394,53 +407,105 @@ class _SeriesRail extends StatelessWidget {
   }
 }
 
-class _SeriesPoster extends StatelessWidget {
+class _SeriesPoster extends ConsumerStatefulWidget {
   const _SeriesPoster({required this.series});
 
   final MovieSeries series;
 
   @override
+  ConsumerState<_SeriesPoster> createState() => _SeriesPosterState();
+}
+
+class _SeriesPosterState extends ConsumerState<_SeriesPoster> {
+  bool _hovered = false;
+
+  void _openContextMenu(BuildContext context, Offset position) {
+    final l10n = AppLocalizations.of(context);
+    final series = widget.series;
+    ref.read(desktopShellProvider.notifier).openMenu(position, [
+      DesktopMenuItem(
+        label: l10n.desktopOpenDetails,
+        icon: DesktopIcons.info,
+        onPressed: () => desktopPush(context, '/video/series/${series.id}'),
+      ),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return DesktopTilt(
-      onTap: () => desktopPush(context, '/video/series/${series.id}'),
-      child: AspectRatio(
-        aspectRatio: 2 / 3,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            DesktopCover(
-              url: series.posterUrl ?? series.backdropUrl,
-              kind: DesktopCoverKind.network,
-              fallbackIcon: DesktopIcons.film,
-              cacheKey: 'desktop-series-${series.id}',
-            ),
-            const _PosterShade(),
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 14,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    series.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.cardTitle(Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.videoSectionSeries,
-                    style: DesktopType.caption(
-                      Colors.white.withValues(alpha: 0.75),
-                    ),
-                  ),
-                ],
+    final series = widget.series;
+    final meta = [
+      if (series.firstAirDate != null) '${series.firstAirDate!.year}',
+      ...series.genres.take(1),
+    ].join(' · ');
+    final subtitle = meta.isEmpty ? l10n.videoSectionSeries : meta;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: DesktopTilt(
+        onTap: () => desktopPush(context, '/video/series/${series.id}'),
+        onSecondaryTapDown:
+            (details) => _openContextMenu(context, details.globalPosition),
+        child: AspectRatio(
+          aspectRatio: 2 / 3,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DesktopCover(
+                url: series.posterUrl ?? series.backdropUrl,
+                kind: DesktopCoverKind.network,
+                fallbackIcon: DesktopIcons.film,
+                cacheKey: 'desktop-series-${series.id}',
               ),
-            ),
-          ],
+              const _PosterShade(),
+              if (series.rating != null)
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: DesktopChip(
+                    '★ ${series.rating!.toStringAsFixed(1)}',
+                    tone: Colors.white,
+                  ),
+                ),
+              Positioned(
+                left: 14,
+                right: 66,
+                bottom: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      series.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.cardTitle(Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.caption(
+                        Colors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                right: 14,
+                bottom: 14,
+                child: _HoverCardPlay(
+                  visible: _hovered,
+                  label: l10n.desktopPlayTitle(series.title),
+                  onTap:
+                      () => desktopPush(context, '/video/series/${series.id}'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -474,72 +539,159 @@ class _WideRail extends StatelessWidget {
   }
 }
 
-class _WideCard extends StatelessWidget {
+class _WideCard extends ConsumerStatefulWidget {
   const _WideCard({required this.item});
 
   final MovieContinueWatching item;
 
   @override
+  ConsumerState<_WideCard> createState() => _WideCardState();
+}
+
+class _WideCardState extends ConsumerState<_WideCard> {
+  bool _hovered = false;
+
+  void _openContextMenu(BuildContext context, Offset position) {
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final detailRoute =
+        item.seriesId != null && item.seriesId!.isNotEmpty
+            ? '/video/series/${item.seriesId}'
+            : DesktopRoutes.movieDetail(item.id);
+    ref.read(desktopShellProvider.notifier).openMenu(position, [
+      DesktopMenuItem(
+        label: l10n.desktopContinue,
+        icon: DesktopIcons.play,
+        onPressed: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopOpenDetails,
+        icon: DesktopIcons.info,
+        onPressed: () => desktopPush(context, detailRoute),
+      ),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return DesktopTilt(
-      radius: 16,
-      maxDegrees: 5,
-      onTap: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            DesktopCover(
-              url: item.posterUrl,
-              kind: DesktopCoverKind.network,
-              fallbackIcon: DesktopIcons.film,
-              cacheKey: 'desktop-continue-${item.id}',
-            ),
-            const _PosterShade(),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.cardTitle(Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${item.progressPercent.round()}% · ${l10n.desktopContinue}',
-                    style: DesktopType.caption(
-                      Colors.white.withValues(alpha: 0.75),
-                    ),
-                  ),
-                ],
+    final item = widget.item;
+    final center = ref.watch(movieCenterControllerProvider).asData?.value;
+    double? rating;
+    if (center != null) {
+      for (final movie in center.movies) {
+        if (movie.id == item.id) {
+          rating = movie.rating;
+          break;
+        }
+      }
+      if (rating == null && item.seriesId != null) {
+        for (final s in [...center.tvSeries, ...center.animeSeries]) {
+          if (s.id == item.seriesId) {
+            rating = s.rating;
+            break;
+          }
+        }
+      }
+    }
+    final episodeTag =
+        item.seasonNumber != null && item.episodeNumber != null
+            ? 'S${item.seasonNumber}E${item.episodeNumber}'
+            : null;
+    final subtitle = [
+      if (episodeTag != null) episodeTag,
+      '${item.progressPercent.round()}%',
+      l10n.desktopContinue,
+    ].join(' · ');
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: DesktopTilt(
+        radius: 16,
+        maxDegrees: 5,
+        onTap: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
+        onSecondaryTapDown:
+            (details) => _openContextMenu(context, details.globalPosition),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DesktopCover(
+                url: item.posterUrl,
+                kind: DesktopCoverKind.network,
+                fallbackIcon: DesktopIcons.film,
+                cacheKey: 'desktop-continue-${item.id}',
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                height: 3,
-                color: Colors.white.withValues(alpha: 0.20),
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: (item.progressPercent / 100).clamp(0.0, 1.0),
-                  child: ColoredBox(
-                    color: DesktopSkin.of(context).accent,
-                    child: const SizedBox.expand(),
+              const _PosterShade(),
+              if (rating != null)
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: DesktopChip(
+                    '★ ${rating.toStringAsFixed(1)}',
+                    tone: Colors.white,
+                  ),
+                ),
+              Positioned(
+                left: 16,
+                right: 66,
+                bottom: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.cardTitle(Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.caption(
+                        Colors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                right: 14,
+                bottom: 14,
+                child: _HoverCardPlay(
+                  visible: _hovered,
+                  label: l10n.desktopPlayTitle(item.title),
+                  onTap:
+                      () => desktopPush(
+                        context,
+                        DesktopRoutes.moviePlay(item.id),
+                      ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  height: 3,
+                  color: Colors.white.withValues(alpha: 0.20),
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: (item.progressPercent / 100).clamp(0.0, 1.0),
+                    child: ColoredBox(
+                      color: DesktopSkin.of(context).accent,
+                      child: const SizedBox.expand(),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

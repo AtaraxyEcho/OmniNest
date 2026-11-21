@@ -278,6 +278,9 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
       onImport: _importSubtitle,
       onDisable: _disableSubtitle,
       onClosed: _onPanelClosed,
+      subtitleScale: _subtitleScale,
+      onSubtitleScaleChanged:
+          (scale) => _updateState(() => _subtitleScale = scale),
     );
   }
 

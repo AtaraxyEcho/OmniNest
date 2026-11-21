@@ -72,6 +72,7 @@ part 'desktop_photos_import_actions.dart';
 part 'desktop_photos_album_shelf.dart';
 part 'desktop_photos_solo.dart';
 part 'desktop_photos_actions.dart';
+part 'desktop_photos_justified_shell.dart';
 
 /// 桌面相册页（样例 `Photos.tsx`）。
 ///

@@ -80,24 +80,28 @@ class _DesktopPopoverState extends State<DesktopPopover>
       },
       child: Material(
         color: Colors.transparent,
-        child: DesktopGlassSurface(
+        child: DesktopOutsetShadow(
           borderRadius: BorderRadius.circular(DesktopMetrics.radiusPop),
-          blur: 30,
-          saturation: 1.5,
-          child: Container(
-            width: widget.width,
-            constraints: BoxConstraints(
-              maxHeight:
-                  widget.maxHeight ?? MediaQuery.sizeOf(context).height * 0.78,
+          shadows: skin.shadow,
+          child: DesktopGlassSurface(
+            borderRadius: BorderRadius.circular(DesktopMetrics.radiusPop),
+            blur: 30,
+            saturation: 1.5,
+            child: Container(
+              width: widget.width,
+              constraints: BoxConstraints(
+                maxHeight:
+                    widget.maxHeight ??
+                    MediaQuery.sizeOf(context).height * 0.78,
+              ),
+              padding: widget.padding,
+              decoration: BoxDecoration(
+                color: skin.pop,
+                borderRadius: BorderRadius.circular(DesktopMetrics.radiusPop),
+                border: Border.all(color: skin.line2),
+              ),
+              child: widget.child,
             ),
-            padding: widget.padding,
-            decoration: BoxDecoration(
-              color: skin.pop,
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusPop),
-              border: Border.all(color: skin.line2),
-              boxShadow: skin.shadow,
-            ),
-            child: widget.child,
           ),
         ),
       ),

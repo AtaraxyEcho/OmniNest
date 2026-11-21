@@ -91,10 +91,6 @@ class ComicReaderView extends ConsumerStatefulWidget {
 
 class ComicReaderViewState extends ConsumerState<ComicReaderView>
     with WidgetsBindingObserver {
-  /// 漫画页深炭底色，与 Book 书桌舞台背景清晰区分。
-  static const Color _comicPageSurfaceColor = Color(0xFF15171A);
-  static const Color _comicPaperEdgeColor = Color(0xFF2B2F36);
-
   final ReaderPageTurnController _pageTurnController =
       ReaderPageTurnController();
   late ScrollController _scrollController;
@@ -104,6 +100,14 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   final Map<int, TransformationController> _slotTransformControllers = {};
   Offset? _lastDoubleTapLocalPosition;
   double _currentZoomScale = 1.0;
+
+  double get currentZoomScale => _currentZoomScale;
+
+  void zoomIn() => _zoomByStep(0.25);
+
+  void zoomOut() => _zoomByStep(-0.25);
+
+  void resetZoom() => _resetCurrentSlotZoom();
 
   /// 当前阅读锚点（统一真相源）。
   ComicAnchor _anchor = const ComicAnchor(pageId: '', pageIndex: 0);
@@ -756,9 +760,32 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
                 : l10n.readerPageOf(_anchor.pageIndex + 1, _totalPages));
     final currentBookmark = _findBookmarkForPage(bookmarks, _anchor.pageIndex);
     final isBookmarked = currentBookmark != null;
+    ref.listen<AsyncValue<Map<String, dynamic>>>(readerPreferencesProvider, (
+      _,
+      next,
+    ) {
+      final values = next.asData?.value;
+      if (values == null || values.isEmpty || !mounted) {
+        return;
+      }
+      final updated = ReaderViewSettings.fromJson(values);
+      if (updated.paletteId != _settings.paletteId ||
+          updated.brightness != _settings.brightness ||
+          updated.warmth != _settings.warmth ||
+          updated.autoNight != _settings.autoNight) {
+        setState(() {
+          _settings = _settings.copyWith(
+            paletteId: updated.paletteId,
+            brightness: updated.brightness,
+            warmth: updated.warmth,
+            autoNight: updated.autoNight,
+          );
+        });
+      }
+    });
+
     final deskBg = controlSettings.bookDeskColor;
-    final pageSurfaceBg =
-        isBookMode ? _comicPageSurfaceColor : controlSettings.surfaceColor;
+    final pageSurfaceBg = controlSettings.surfaceColor;
     final stageBg = isBookMode ? deskBg : pageSurfaceBg;
     final topBarVisible = _showControls || _panelCoordinator.isOpen;
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);

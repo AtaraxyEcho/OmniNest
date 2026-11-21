@@ -260,11 +260,9 @@ class _AdminSystemLogsPageState extends ConsumerState<AdminSystemLogsPage> {
                       ),
                     DesktopPager(
                       page: result.page,
-                      totalPages: result.totalPages,
                       pageSize: _size,
+                      totalItems: result.totalElements,
                       pageSizeOptions: _pageSizes,
-                      summary:
-                          '${result.totalElements} ${l10n.adminSystemLogs}',
                       onPageChanged:
                           (value) => setState(() {
                             _page = value;

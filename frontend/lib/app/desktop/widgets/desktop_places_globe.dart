@@ -1,27 +1,37 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
 
-/// 地点（样例 `Globe.tsx` 的 `GlobePlace`）：名称、照片数与经纬度。
+/// 地点（样例 `Globe.tsx` 的 `GlobePlace`）：名称、照片数、经纬度与封面图。
 class DesktopGlobePlace {
   const DesktopGlobePlace({
     required this.name,
     required this.count,
     required this.latitude,
     required this.longitude,
+    this.coverPhoto,
   });
 
   final String name;
   final int count;
   final double latitude;
   final double longitude;
+  final PhotoItem? coverPhoto;
 }
 
-/// 可拖动点阵地球（样例 `Globe.tsx`）：粗粒度大陆轮廓只画点，不画边界、
-/// 不标地名；选中地点时地球缓动转向它。
+/// 可拖动点阵地球（对齐 `Globe.tsx:95-136` & `desktop.css:350-352`）：
+/// 通透大气球体 + 30° 完整经纬网 + 主题自适应大陆点阵 + 全可见 Pin 脉冲环 +
+/// 悬停/选中毛玻璃 `.pin-card` 缩略图卡片 + 底部拖拽提示胶囊。
 class DesktopPlacesGlobe extends StatefulWidget {
   const DesktopPlacesGlobe({
     required this.places,
@@ -40,22 +50,21 @@ class DesktopPlacesGlobe extends StatefulWidget {
 
 class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     with TickerProviderStateMixin {
-  // 不能用 DesktopMotion.of(context)：字段初始化跑在 initState 之前，
-  // 那时读 MediaQuery 会直接断言。转向时长取令牌常量即可。
   late final AnimationController _turn = AnimationController(
     vsync: this,
-    duration: DesktopMotion.pageFlip,
+    duration: MotionToken.resolveForPlatform(DesktopMotion.globeTurn),
   );
-  // 样例 `.pin b` 的 `ping 2.4s ease-out infinite`：只有一条描边圆环在动，
-  // 单独一个控制器 + RepaintBoundary，不牵连地球 Canvas 的重绘。
   late final AnimationController _ping = AnimationController(
     vsync: this,
     duration: DesktopMotion.placePing,
   );
+
   Offset _from = Offset.zero;
   Offset _to = Offset.zero;
   double _lon = 12;
   double _lat = 18;
+  bool _dragging = false;
+  String? _hoveredPlace;
 
   @override
   void initState() {
@@ -81,13 +90,16 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selected != widget.selected) {
       _faceSelected(animate: true);
+    } else if (oldWidget.places.isEmpty && widget.places.isNotEmpty) {
+      _faceSelected(animate: false);
     }
     _syncPing();
   }
 
   void _syncPing() {
     final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (widget.selected != null && !reduce) {
+    // 只有选中地标才需要脉冲；否则这个 2.4s 循环会让整颗地球常驻一个 ticker。
+    if (widget.selected != null && widget.places.isNotEmpty && !reduce) {
       if (!_ping.isAnimating) {
         _ping.repeat();
       }
@@ -108,7 +120,8 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     final place =
         widget.places
             .where((entry) => entry.name == widget.selected)
-            .firstOrNull;
+            .firstOrNull ??
+        widget.places.firstOrNull;
     if (place == null) {
       return;
     }
@@ -119,7 +132,7 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
       return;
     }
     _from = Offset(_lon, _lat);
-    var dLon = (place.longitude - _lon + 540) % 360 - 180;
+    final dLon = (place.longitude - _lon + 540) % 360 - 180;
     _to = Offset(_lon + dLon, targetLat);
     _turn.forward(from: 0);
   }
@@ -127,125 +140,345 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
+    final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = constraints.maxWidth.clamp(260.0, 440.0);
-        final radius = size / 2 - 4;
-        Offset? pingAt;
-        final selectedPlace =
-            widget.places
-                .where((entry) => entry.name == widget.selected)
-                .firstOrNull;
-        if (selectedPlace != null) {
-          final point = _project(
-            selectedPlace.longitude,
-            selectedPlace.latitude,
-            _lon,
-            _lat,
-          );
-          if (point.z > 0.05) {
-            pingAt = Offset(
-              size / 2 + radius * point.x,
-              size / 2 + radius * point.y,
-            );
+        final maxW =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 420.0;
+        final maxH =
+            constraints.maxHeight.isFinite ? constraints.maxHeight - 36 : 420.0;
+        final size = math.min(maxW, maxH).clamp(240.0, 420.0);
+        final radius = size / 2 - 6;
+
+        final projectedPins = <({DesktopGlobePlace place, _Projected q})>[];
+        for (final place in widget.places) {
+          final q = _project(place.longitude, place.latitude, _lon, _lat);
+          if (q.z > 0.08) {
+            projectedPins.add((place: place, q: q));
           }
         }
-        return Center(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanUpdate: (details) {
-              _turn.stop();
-              setState(() {
-                _lon -= details.delta.dx * 0.4;
-                _lat = (_lat + details.delta.dy * 0.4).clamp(-80.0, 80.0);
-              });
-            },
-            onTapUp: (details) {
-              final hit = _hitTest(details.localPosition, size);
-              if (hit != null) {
-                widget.onSelect(hit);
-              }
-            },
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Stack(
-                children: [
-                  // 脉冲环每帧变，地球 Canvas 不该跟着重画：拆成独立层。
-                  Positioned.fill(
-                    child: RepaintBoundary(
-                      key: const ValueKey('places-globe-canvas'),
-                      child: CustomPaint(
-                        painter: _GlobePainter(
-                          lon: _lon,
-                          lat: _lat,
-                          places: widget.places,
-                          selected: widget.selected,
-                          accent: skin.accent,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (pingAt != null)
-                    Positioned(
-                      left: pingAt.dx - 15,
-                      top: pingAt.dy - 15,
-                      width: 30,
-                      height: 30,
-                      child: IgnorePointer(
+        // 选中或悬停的 Pin 置顶渲染，确保 .pin-card 不被其他点遮挡。
+        projectedPins.sort((a, b) {
+          final aTop =
+              a.place.name == _hoveredPlace
+                  ? 2
+                  : (a.place.name == widget.selected ? 1 : 0);
+          final bTop =
+              b.place.name == _hoveredPlace
+                  ? 2
+                  : (b.place.name == widget.selected ? 1 : 0);
+          return aTop.compareTo(bTop);
+        });
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            MouseRegion(
+              cursor:
+                  _dragging
+                      ? SystemMouseCursors.grabbing
+                      : SystemMouseCursors.grab,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanStart: (_) {
+                  _turn.stop();
+                  if (!_dragging) {
+                    setState(() => _dragging = true);
+                  }
+                },
+                onPanUpdate: (details) {
+                  _turn.stop();
+                  final degPerPx = (110.0 / size) * 1.6;
+                  setState(() {
+                    _lon -= details.delta.dx * degPerPx;
+                    _lat = (_lat + details.delta.dy * degPerPx).clamp(
+                      -70.0,
+                      70.0,
+                    );
+                  });
+                },
+                onPanEnd: (_) {
+                  if (_dragging) {
+                    setState(() => _dragging = false);
+                  }
+                },
+                onPanCancel: () {
+                  if (_dragging) {
+                    setState(() => _dragging = false);
+                  }
+                },
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
                         child: RepaintBoundary(
-                          key: const ValueKey('places-globe-ping'),
-                          child: AnimatedBuilder(
-                            animation: _ping,
-                            builder: (context, _) {
-                              final t = _ping.value;
-                              // `.pin b`：`ping 2.4s ease-out`，
-                              // 0% scale(.5)/opacity .9 → 100% 2.2/0。
-                              return Opacity(
-                                opacity: 0.9 * (1 - t),
-                                child: Transform.scale(
-                                  scale: 0.5 + 1.7 * t,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: skin.accent,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
+                          key: const ValueKey('places-globe-canvas'),
+                          child: CustomPaint(
+                            painter: _GlobePainter(
+                              lon: _lon,
+                              lat: _lat,
+                              ink: skin.text,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                      for (final item in projectedPins)
+                        _GlobePin(
+                          key: ValueKey('globe-pin-${item.place.name}'),
+                          place: item.place,
+                          position: Offset(
+                            size / 2 + radius * item.q.x,
+                            size / 2 + radius * item.q.y,
+                          ),
+                          pinOpacity: (item.q.z * 3.0).clamp(0.0, 1.0),
+                          selected: item.place.name == widget.selected,
+                          hovered: item.place.name == _hoveredPlace,
+                          ping: _ping,
+                          accent: skin.accent,
+                          popColor: skin.pop,
+                          line2Color: skin.line2,
+                          textColor: skin.text,
+                          text3Color: skin.text3,
+                          shadow: skin.shadow,
+                          countLabel: l10n.desktopPhotosPlaceCount(
+                            item.place.count,
+                          ),
+                          onHoverChanged: (hovering) {
+                            setState(() {
+                              if (hovering) {
+                                _hoveredPlace = item.place.name;
+                              } else if (_hoveredPlace == item.place.name) {
+                                _hoveredPlace = null;
+                              }
+                            });
+                          },
+                          onTap: () => widget.onSelect(item.place.name),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: skin.raise,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: skin.line),
+              ),
+              child: Text(
+                isZh ? '拖拽旋转' : 'Drag to rotate',
+                style: DesktopType.caption(skin.text3),
+              ),
+            ),
+          ],
         );
       },
     );
   }
+}
 
-  String? _hitTest(Offset local, double size) {
-    DesktopGlobePlace? best;
-    var bestDistance = 22.0;
-    for (final place in widget.places) {
-      final point = _project(place.longitude, place.latitude, _lon, _lat);
-      if (point.z <= 0.05) {
-        continue;
-      }
-      final screen = Offset(size / 2 * (1 + point.x), size / 2 * (1 + point.y));
-      final distance = (screen - local).distance;
-      if (distance < bestDistance) {
-        best = place;
-        bestDistance = distance;
-      }
-    }
-    return best?.name;
+class _GlobePin extends StatelessWidget {
+  const _GlobePin({
+    required this.place,
+    required this.position,
+    required this.pinOpacity,
+    required this.selected,
+    required this.hovered,
+    required this.ping,
+    required this.accent,
+    required this.popColor,
+    required this.line2Color,
+    required this.textColor,
+    required this.text3Color,
+    required this.shadow,
+    required this.countLabel,
+    required this.onHoverChanged,
+    required this.onTap,
+    super.key,
+  });
+
+  final DesktopGlobePlace place;
+  final Offset position;
+  final double pinOpacity;
+  final bool selected;
+  final bool hovered;
+  final Animation<double> ping;
+  final Color accent;
+  final Color popColor;
+  final Color line2Color;
+  final Color textColor;
+  final Color text3Color;
+  final List<BoxShadow> shadow;
+  final String countLabel;
+  final ValueChanged<bool> onHoverChanged;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final showCard = selected || hovered;
+    final shortName = place.name.split(',').first.trim();
+    final displayName = shortName.isEmpty ? place.name : shortName;
+
+    return Positioned(
+      left: position.dx - 9,
+      top: position.dy - 9,
+      width: 18,
+      height: 18,
+      child: Opacity(
+        opacity: pinOpacity,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            // `.pin b`: ping 2.4s ease-out infinite —— 只为选中的地标挂独立脉冲层，
+            // 否则每个 pin 都常驻一个 ticker/RepaintBoundary，整颗地球每帧重绘。
+            if (selected)
+              Positioned(
+                left: -6,
+                top: -6,
+                right: -6,
+                bottom: -6,
+                child: IgnorePointer(
+                  child: RepaintBoundary(
+                    key: const ValueKey('places-globe-ping'),
+                    child: AnimatedBuilder(
+                      animation: ping,
+                      builder: (context, _) {
+                        final t = Curves.easeOut.transform(ping.value);
+                        return Opacity(
+                          opacity: (0.9 * (1.0 - t)).clamp(0.0, 1.0),
+                          child: Transform.scale(
+                            scale: 0.5 + 1.7 * t,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: accent, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            // `.pin-card`: 悬停或选中时浮现毛玻璃缩略图卡片
+            Positioned(
+              bottom: 26,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: DesktopMotion.of(context, DesktopMotion.soft),
+                  curve: DesktopMotion.ease,
+                  opacity: showCard ? 1.0 : 0.0,
+                  child: AnimatedSlide(
+                    duration: DesktopMotion.of(context, DesktopMotion.soft),
+                    curve: DesktopMotion.spring,
+                    offset: showCard ? Offset.zero : const Offset(0, 0.18),
+                    child: AnimatedScale(
+                      duration: DesktopMotion.of(context, DesktopMotion.soft),
+                      curve: DesktopMotion.spring,
+                      scale: showCard ? 1.0 : 0.9,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+                            decoration: BoxDecoration(
+                              color: popColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: line2Color),
+                              boxShadow: shadow,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: DesktopImage(
+                                    url: place.coverPhoto?.coverUrl,
+                                    cacheWidth: 160,
+                                    fallbackIcon: DesktopIcons.pin,
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.rowTitle(
+                                        textColor,
+                                      ).copyWith(
+                                        fontSize: 13,
+                                      ), // ignore: font_size_whitelist
+                                    ),
+                                    Text(
+                                      countLabel,
+                                      maxLines: 1,
+                                      style: DesktopType.caption(text3Color),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // `.pin i`: 中心圆点 + 悬停/选中 1.6x 弹簧放大
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              onEnter: (_) => onHoverChanged(true),
+              onExit: (_) => onHoverChanged(false),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: Center(
+                  child: AnimatedScale(
+                    duration: DesktopMotion.of(context, DesktopMotion.soft),
+                    curve: DesktopMotion.spring,
+                    scale: showCard ? 1.6 : 1.0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent,
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(alpha: 0.30),
+                            blurRadius: 0,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -499,96 +732,92 @@ class _GlobePainter extends CustomPainter {
   const _GlobePainter({
     required this.lon,
     required this.lat,
-    required this.places,
-    required this.selected,
-    required this.accent,
+    required this.ink,
   });
 
   final double lon;
   final double lat;
-  final List<DesktopGlobePlace> places;
-  final String? selected;
-  final Color accent;
+  final Color ink;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 4;
-    // 球体底盘：深色径向，边缘收暗，像一颗被照亮的球。
+    final radius = size.width / 2 - 6;
+    if (radius <= 0) {
+      return;
+    }
+
+    // 1. 通透大气球体：径向渐变 + 1px 轮廓（对齐 Globe.tsx:97-100）
     canvas.drawCircle(
       center,
       radius,
       Paint()
         ..shader = const RadialGradient(
-          center: Alignment(-0.3, -0.35),
-          radius: 1.1,
-          colors: [Color(0xFF13222B), Color(0xFF070B14)],
+          center: Alignment(-0.35, -0.4),
+          radius: 1.0,
+          colors: [
+            Color.fromRGBO(120, 170, 190, 0.16),
+            Color.fromRGBO(120, 170, 190, 0.03),
+          ],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = const Color.fromRGBO(128, 150, 160, 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
 
-    final dot = Paint()..style = PaintingStyle.fill;
-    for (final land in _landDots()) {
-      final point = _project(land.x, land.y, lon, lat);
-      if (point.z <= 0.02) {
-        continue;
-      }
-      dot.color = const Color(
-        0xFF8CC5B2,
-      ).withValues(alpha: 0.12 + point.z * 0.34);
-      canvas.drawCircle(
-        Offset(center.dx + radius * point.x, center.dy + radius * point.y),
-        0.9 + point.z * 0.7,
-        dot,
-      );
-    }
-
-    for (final place in places) {
-      final point = _project(place.longitude, place.latitude, lon, lat);
-      if (point.z <= 0.05) {
-        continue;
-      }
-      final position = Offset(
-        center.dx + radius * point.x,
-        center.dy + radius * point.y,
-      );
-      final active = place.name == selected;
-      if (active) {
-        canvas.drawCircle(
-          position,
-          11,
-          Paint()..color = accent.withValues(alpha: 0.24),
-        );
-      }
-      canvas.drawCircle(position, active ? 5.5 : 4, Paint()..color = accent);
-      canvas.drawCircle(position, 2, Paint()..color = const Color(0xFF0B1014));
-    }
-
-    // 经纬网：只画正面两条经线与赤道，给球体一点方向感。
+    // 2. 完整 30° 经纬网（对齐 Globe.tsx:102-105）
     final grid =
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.06)
+          ..color = const Color.fromRGBO(128, 150, 160, 0.16)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
-    for (final ringLat in const [-45.0, 0.0, 45.0]) {
+          ..strokeWidth = 0.7;
+
+    void drawCurve(List<(double, double)> pts) {
       final path = Path();
-      // 围绕当前中心经度扫一圈采样，只连朝向观察者的段。
-      for (var step = 0; step <= 120; step++) {
-        final sampleLon = lon - 90 + step * 1.5;
-        final point = _project(sampleLon, ringLat, lon, lat);
-        if (point.z <= 0.02) {
+      var pen = false;
+      for (final (lo, la) in pts) {
+        final q = _project(lo, la, lon, lat);
+        if (q.z <= 0) {
+          pen = false;
           continue;
         }
-        final position = Offset(
-          center.dx + radius * point.x,
-          center.dy + radius * point.y,
-        );
-        if (step == 0) {
-          path.moveTo(position.dx, position.dy);
+        final x = center.dx + q.x * radius;
+        final y = center.dy + q.y * radius;
+        if (pen) {
+          path.lineTo(x, y);
         } else {
-          path.lineTo(position.dx, position.dy);
+          path.moveTo(x, y);
+          pen = true;
         }
       }
       canvas.drawPath(path, grid);
+    }
+
+    for (var ringLat = -60.0; ringLat <= 60.0; ringLat += 30.0) {
+      drawCurve([for (var i = 0; i <= 72; i++) (-180.0 + i * 5.0, ringLat)]);
+    }
+    for (var ringLon = -180.0; ringLon < 180.0; ringLon += 30.0) {
+      drawCurve([for (var i = 0; i <= 36; i++) (ringLon, -90.0 + i * 5.0)]);
+    }
+
+    // 3. 主题自适应大陆点阵（对齐 Globe.tsx:107-111）
+    final dot = Paint()..style = PaintingStyle.fill;
+    for (final land in _landDots()) {
+      final q = _project(land.x, land.y, lon, lat);
+      if (q.z <= 0.02) {
+        continue;
+      }
+      dot.color = ink.withValues(alpha: (0.18 + 0.5 * q.z).clamp(0.0, 1.0));
+      canvas.drawCircle(
+        Offset(center.dx + q.x * radius, center.dy + q.y * radius),
+        0.55 + 0.6 * q.z,
+        dot,
+      );
     }
   }
 
@@ -596,7 +825,5 @@ class _GlobePainter extends CustomPainter {
   bool shouldRepaint(_GlobePainter oldDelegate) =>
       oldDelegate.lon != lon ||
       oldDelegate.lat != lat ||
-      oldDelegate.selected != selected ||
-      oldDelegate.places != places ||
-      oldDelegate.accent != accent;
+      oldDelegate.ink != ink;
 }

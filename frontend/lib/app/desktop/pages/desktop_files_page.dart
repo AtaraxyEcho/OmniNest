@@ -18,6 +18,7 @@ import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/widgets/desktop_pager.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -60,6 +61,7 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
   final FocusNode _pageFocus = FocusNode(debugLabel: 'desktop-files');
 
   FileManagerSection? _appliedSection;
+  String? _selectionAnchorId;
   bool _dragging = false;
   String? _externalHoverId;
   Timer? _expandTimer;
@@ -208,367 +210,464 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                 const SizedBox(width: 22),
               ],
               Expanded(
-                child: DesktopGlassSurface(
-                  borderRadius: BorderRadius.circular(18),
-                  blur: 28,
-                  saturation: 1.25,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
-                    decoration: BoxDecoration(
-                      color: skin.panel,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: skin.line),
-                      boxShadow: const <BoxShadow>[],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _FilesToolbar(
-                          controller: controller,
-                          section: section,
-                          state: state,
-                          search: _search,
-                          onSearch: controller.setSearchQuery,
-                          grid: grid,
-                          canUpload: canUpload,
-                          onNewFolder: () => _beginNewFolder(controller, state),
-                          onUpload: () => _pickAndUpload(controller, state),
-                          onEmptyRecycle:
-                              () => _showPurgeDialog(
-                                context,
-                                controller,
-                                state?.recycleBin ?? const <FileNode>[],
-                              ),
-                        ),
-                        if (state != null && state.lastActionError != null) ...[
-                          const SizedBox(height: 10),
-                          _ActionErrorBanner(
-                            message: state.lastActionError!.displayMessage,
-                            onDismiss: controller.clearActionError,
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        _SectionNotices(section: section, state: state),
-                        if (state != null && selected.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _SelectionBar(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: DesktopGlassSurface(
+                    borderRadius: BorderRadius.circular(18),
+                    blur: 28,
+                    saturation: 1.25,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                      decoration: BoxDecoration(
+                        // 浅色主题对齐 polish.css:548：半透明柔白底 + 柔和投影。
+                        color:
+                            skin.isDark ? skin.panel : const Color(0xCCF7F9F6),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: skin.line),
+                        boxShadow:
+                            skin.isDark
+                                ? const <BoxShadow>[]
+                                : const <BoxShadow>[
+                                  BoxShadow(
+                                    color: Color(0x0F1C2320),
+                                    blurRadius: 24,
+                                    offset: Offset(0, 8),
+                                  ),
+                                  BoxShadow(
+                                    color: Color(0x081C2320),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _FilesToolbar(
+                            controller: controller,
                             section: section,
                             state: state,
-                            onClear: controller.clearSelection,
-                            onDownload:
-                                () => _downloadSelected(state, controller),
-                            onDelete: () => _deleteSelected(controller, state),
-                            onRestore: () => _restoreSelected(controller),
-                            onPurge:
+                            search: _search,
+                            onSearch: controller.setSearchQuery,
+                            grid: grid,
+                            canUpload: canUpload,
+                            onNewFolder:
+                                () => _beginNewFolder(controller, state),
+                            onUpload: () => _pickAndUpload(controller, state),
+                            onEmptyRecycle:
                                 () => _showPurgeDialog(
                                   context,
                                   controller,
-                                  _selectedNodes(state),
-                                ),
-                            onFavorite:
-                                () => _favoriteSelected(state, controller),
-                            onMoveToShared:
-                                () => _moveSelectedToSpace(
-                                  controller,
-                                  state,
-                                  toShared: true,
-                                ),
-                            onMoveToPersonal:
-                                () => _moveSelectedToSpace(
-                                  controller,
-                                  state,
-                                  toShared: false,
-                                ),
-                            onShare:
-                                () => _showShareDialog(
-                                  context,
-                                  controller,
-                                  _selectedNodes(state).first,
-                                ),
-                            onRename:
-                                () => _showRenameDialog(
-                                  context,
-                                  controller,
-                                  _selectedNodes(state).first,
+                                  state?.recycleBin ?? const <FileNode>[],
                                 ),
                           ),
-                        ],
-                        if (section == FileManagerSection.externalStorage) ...[
+                          if (state != null &&
+                              state.lastActionError != null) ...[
+                            const SizedBox(height: 10),
+                            _ActionErrorBanner(
+                              message: state.lastActionError!.displayMessage,
+                              onDismiss: controller.clearActionError,
+                            ),
+                          ],
                           const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _ExternalSection(
-                                state: state,
-                                controller: controller,
+                          _SectionNotices(section: section, state: state),
+                          if (state != null && selected.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _SelectionBar(
+                              section: section,
+                              state: state,
+                              onClear: controller.clearSelection,
+                              onDownload:
+                                  () => _downloadSelected(state, controller),
+                              onDelete:
+                                  () => _deleteSelected(controller, state),
+                              onRestore: () => _restoreSelected(controller),
+                              onPurge:
+                                  () => _showPurgeDialog(
+                                    context,
+                                    controller,
+                                    _selectedNodes(state),
+                                  ),
+                              onFavorite:
+                                  () => _favoriteSelected(state, controller),
+                              onMoveToShared:
+                                  () => _moveSelectedToSpace(
+                                    controller,
+                                    state,
+                                    toShared: true,
+                                  ),
+                              onMoveToPersonal:
+                                  () => _moveSelectedToSpace(
+                                    controller,
+                                    state,
+                                    toShared: false,
+                                  ),
+                              onShare:
+                                  () => _showShareDialog(
+                                    context,
+                                    controller,
+                                    _selectedNodes(state).first,
+                                  ),
+                              onRename:
+                                  () => _showRenameDialog(
+                                    context,
+                                    controller,
+                                    _selectedNodes(state).first,
+                                  ),
+                            ),
+                          ],
+                          if (section ==
+                              FileManagerSection.externalStorage) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _ExternalSection(
+                                  state: state,
+                                  controller: controller,
+                                ),
                               ),
                             ),
-                          ),
-                        ] else if (section == FileManagerSection.myShares ||
-                            section == FileManagerSection.shareManagement) ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _SharesSection(
-                                state: state,
-                                controller: controller,
-                                onCopy:
-                                    (link) => _copyShareLink(controller, link),
+                          ] else if (section == FileManagerSection.myShares ||
+                              section ==
+                                  FileManagerSection.shareManagement) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _SharesSection(
+                                  state: state,
+                                  controller: controller,
+                                  onCopy:
+                                      (link) =>
+                                          _copyShareLink(controller, link),
+                                ),
                               ),
                             ),
-                          ),
-                        ] else if (section ==
-                            FileManagerSection.sharedWithMe) ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _WithMeSection(
-                                state: state,
-                                controller: controller,
+                          ] else if (section ==
+                              FileManagerSection.sharedWithMe) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _WithMeSection(
+                                  state: state,
+                                  controller: controller,
+                                ),
                               ),
                             ),
-                          ),
-                        ] else if (section ==
-                            FileManagerSection.uploadQueue) ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _UploadQueueSection(
-                                state: state,
-                                controller: controller,
+                          ] else if (section ==
+                              FileManagerSection.uploadQueue) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _UploadQueueSection(
+                                  state: state,
+                                  controller: controller,
+                                ),
                               ),
                             ),
-                          ),
-                        ] else if (section ==
-                            FileManagerSection.importTasks) ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _ImportTasksSection(state: state),
-                            ),
-                          ),
-                        ] else if (section ==
-                            FileManagerSection.storageStats) ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _StorageSection(
-                                stats: state?.storageStats ?? stats,
+                          ] else if (section ==
+                              FileManagerSection.importTasks) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _ImportTasksSection(state: state),
                               ),
                             ),
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child:
-                                state == null && async.isLoading
-                                    ? SingleChildScrollView(
-                                      child:
-                                          grid
-                                              ? const _FileGridSkeleton()
-                                              : const DesktopSkeletonRows(
-                                                count: 8,
+                          ] else if (section ==
+                              FileManagerSection.storageStats) ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: SingleChildScrollView(
+                                child: _StorageSection(
+                                  stats: state?.storageStats ?? stats,
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            const SizedBox(height: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child:
+                                  state == null && async.isLoading
+                                      ? SingleChildScrollView(
+                                        child:
+                                            grid
+                                                ? const _FileGridSkeleton()
+                                                : const DesktopSkeletonRows(
+                                                  count: 8,
+                                                ),
+                                      )
+                                      : state == null && async.hasError
+                                      ? DesktopErrorView(
+                                        message: errorReason(
+                                          async.error!,
+                                          l10n,
+                                        ),
+                                        onRetry:
+                                            () => ref.invalidate(
+                                              fileBrowserControllerProvider,
+                                            ),
+                                        minHeightFactor: 0.24,
+                                      )
+                                      : grid
+                                      ? SingleChildScrollView(
+                                        child:
+                                            items.isEmpty &&
+                                                    (section !=
+                                                            FileManagerSection
+                                                                .allFiles ||
+                                                        state?.draftFolderName ==
+                                                            null)
+                                                ? _FilesEmpty(
+                                                  section: section,
+                                                  shared:
+                                                      state?.spaceType ==
+                                                      'SHARED',
+                                                  filtered:
+                                                      (state
+                                                              ?.searchQuery
+                                                              .isNotEmpty ??
+                                                          false) ||
+                                                      state?.fileCategory !=
+                                                          FileBrowserFileCategory
+                                                              .all,
+                                                  onClear: () {
+                                                    _search.clear();
+                                                    controller.setSearchQuery(
+                                                      '',
+                                                    );
+                                                    controller.setFileCategory(
+                                                      FileBrowserFileCategory
+                                                          .all,
+                                                    );
+                                                  },
+                                                )
+                                                : _FileGrid(
+                                                  items: items,
+                                                  draftFolderName:
+                                                      section ==
+                                                              FileManagerSection
+                                                                  .allFiles
+                                                          ? state
+                                                              ?.draftFolderName
+                                                          : null,
+                                                  onDraftSubmit:
+                                                      controller
+                                                          .commitFolderCreation,
+                                                  onDraftCancel:
+                                                      controller
+                                                          .cancelFolderCreation,
+                                                  selected: selected,
+                                                  draggable:
+                                                      section !=
+                                                      FileManagerSection
+                                                          .recycleBin,
+                                                  externalHoverId:
+                                                      _externalHoverId,
+                                                  folderKeyBuilder: _folderKey,
+                                                  onDropFiles:
+                                                      (ids, targetId) =>
+                                                          unawaited(
+                                                            controller
+                                                                .moveFilesTo(
+                                                                  ids,
+                                                                  targetId,
+                                                                ),
+                                                          ),
+                                                  onTap:
+                                                      (node) => _activate(
+                                                        controller,
+                                                        node,
+                                                        shared:
+                                                            state?.spaceType ==
+                                                            'SHARED',
+                                                      ),
+                                                  onSelect:
+                                                      (node) => _select(
+                                                        controller,
+                                                        node,
+                                                        orderedItems: items,
+                                                      ),
+                                                  onToggleSelect:
+                                                      (node) => _toggleSelect(
+                                                        controller,
+                                                        node,
+                                                      ),
+                                                  onMenu:
+                                                      (node, position) =>
+                                                          _openRowMenu(
+                                                            context,
+                                                            controller,
+                                                            state,
+                                                            node,
+                                                            position,
+                                                          ),
+                                                  onFavorite:
+                                                      section ==
+                                                                  FileManagerSection
+                                                                      .recycleBin ||
+                                                              state?.spaceType ==
+                                                                  'SHARED'
+                                                          ? null
+                                                          : (node) => unawaited(
+                                                            node.favorited
+                                                                ? controller
+                                                                    .removeFavorite(
+                                                                      node,
+                                                                    )
+                                                                : controller
+                                                                    .addFavorite(
+                                                                      node,
+                                                                    ),
+                                                          ),
+                                                  onShare:
+                                                      section ==
+                                                                  FileManagerSection
+                                                                      .recycleBin ||
+                                                              state?.spaceType ==
+                                                                  'SHARED'
+                                                          ? null
+                                                          : (node) =>
+                                                              _showShareDialog(
+                                                                context,
+                                                                controller,
+                                                                node,
+                                                              ),
+                                                ),
+                                      )
+                                      : CustomScrollView(
+                                        shrinkWrap: true,
+                                        slivers: [
+                                          if (items.isNotEmpty)
+                                            SliverPersistentHeader(
+                                              pinned: true,
+                                              delegate: _StickyFileTableHead(
+                                                sort:
+                                                    state?.sortBy ??
+                                                    FileBrowserSortBy.name,
+                                                ascending:
+                                                    state?.sortAscending ??
+                                                    true,
+                                                onSort:
+                                                    (value) => _sortBy(
+                                                      controller,
+                                                      state,
+                                                      value,
+                                                    ),
+                                                allSelected:
+                                                    items.isNotEmpty &&
+                                                    items.every(
+                                                      (node) => selected
+                                                          .contains(node.id),
+                                                    ),
+                                                someSelected: items.any(
+                                                  (node) => selected.contains(
+                                                    node.id,
+                                                  ),
+                                                ),
+                                                onToggleSelectAll:
+                                                    () => _toggleSelectAll(
+                                                      controller,
+                                                      items,
+                                                      selected,
+                                                    ),
                                               ),
-                                    )
-                                    : state == null && async.hasError
-                                    ? DesktopErrorView(
-                                      message: errorReason(async.error!, l10n),
-                                      onRetry:
-                                          () => ref.invalidate(
-                                            fileBrowserControllerProvider,
-                                          ),
-                                      minHeightFactor: 0.24,
-                                    )
-                                    : grid
-                                    ? SingleChildScrollView(
-                                      child:
-                                          items.isEmpty &&
+                                            ),
+                                          SliverList(
+                                            delegate: SliverChildListDelegate([
+                                              if (section ==
+                                                      FileManagerSection
+                                                          .allFiles &&
+                                                  state?.draftFolderName !=
+                                                      null)
+                                                _DesktopDraftFolderRow(
+                                                  defaultName:
+                                                      state!.draftFolderName!,
+                                                  onSubmit:
+                                                      controller
+                                                          .commitFolderCreation,
+                                                  onCancel:
+                                                      controller
+                                                          .cancelFolderCreation,
+                                                ),
+                                              ..._groupedRows(
+                                                state,
+                                                controller,
+                                                items,
+                                                selected,
+                                              ),
+                                              if (state != null &&
+                                                  !state.isBusy &&
+                                                  items.isEmpty &&
                                                   (section !=
                                                           FileManagerSection
                                                               .allFiles ||
-                                                      state?.draftFolderName ==
-                                                          null)
-                                              ? _FilesEmpty(
-                                                section: section,
-                                                shared:
-                                                    state?.spaceType ==
-                                                    'SHARED',
-                                                filtered:
-                                                    (state
-                                                            ?.searchQuery
-                                                            .isNotEmpty ??
-                                                        false) ||
-                                                    state?.fileCategory !=
-                                                        FileBrowserFileCategory
-                                                            .all,
-                                                onClear: () {
-                                                  _search.clear();
-                                                  controller.setSearchQuery('');
-                                                  controller.setFileCategory(
-                                                    FileBrowserFileCategory.all,
-                                                  );
-                                                },
-                                              )
-                                              : _FileGrid(
-                                                items: items,
-                                                draftFolderName:
-                                                    section ==
-                                                            FileManagerSection
-                                                                .allFiles
-                                                        ? state?.draftFolderName
-                                                        : null,
-                                                onDraftSubmit:
-                                                    controller
-                                                        .commitFolderCreation,
-                                                onDraftCancel:
-                                                    controller
-                                                        .cancelFolderCreation,
-                                                selected: selected,
-                                                onTap:
-                                                    (node) => _activate(
-                                                      controller,
-                                                      node,
-                                                      shared:
-                                                          state?.spaceType ==
-                                                          'SHARED',
-                                                    ),
-                                                onSelect:
-                                                    (node) => _select(
-                                                      controller,
-                                                      node,
-                                                    ),
-                                                onMenu:
-                                                    (node, position) =>
-                                                        _openRowMenu(
-                                                          context,
-                                                          controller,
-                                                          state,
-                                                          node,
-                                                          position,
-                                                        ),
-                                                onFavorite:
-                                                    section ==
-                                                                FileManagerSection
-                                                                    .recycleBin ||
-                                                            state?.spaceType ==
-                                                                'SHARED'
-                                                        ? null
-                                                        : (node) => unawaited(
-                                                          node.favorited
-                                                              ? controller
-                                                                  .removeFavorite(
-                                                                    node,
-                                                                  )
-                                                              : controller
-                                                                  .addFavorite(
-                                                                    node,
-                                                                  ),
-                                                        ),
-                                                onShare:
-                                                    section ==
-                                                                FileManagerSection
-                                                                    .recycleBin ||
-                                                            state?.spaceType ==
-                                                                'SHARED'
-                                                        ? null
-                                                        : (node) =>
-                                                            _showShareDialog(
-                                                              context,
-                                                              controller,
-                                                              node,
-                                                            ),
-                                              ),
-                                    )
-                                    : CustomScrollView(
-                                      slivers: [
-                                        if (items.isNotEmpty)
-                                          SliverPersistentHeader(
-                                            pinned: true,
-                                            delegate: _StickyFileTableHead(
-                                              sort:
-                                                  state?.sortBy ??
-                                                  FileBrowserSortBy.name,
-                                              ascending:
-                                                  state?.sortAscending ?? true,
-                                              onSort:
-                                                  (value) => _sortBy(
-                                                    controller,
-                                                    state,
-                                                    value,
-                                                  ),
-                                            ),
+                                                      state.draftFolderName ==
+                                                          null))
+                                                _FilesEmpty(
+                                                  section: section,
+                                                  shared:
+                                                      state.spaceType ==
+                                                      'SHARED',
+                                                  filtered:
+                                                      (state
+                                                          .searchQuery
+                                                          .isNotEmpty) ||
+                                                      state.fileCategory !=
+                                                          FileBrowserFileCategory
+                                                              .all,
+                                                  onClear: () {
+                                                    _search.clear();
+                                                    controller.setSearchQuery(
+                                                      '',
+                                                    );
+                                                    controller.setFileCategory(
+                                                      FileBrowserFileCategory
+                                                          .all,
+                                                    );
+                                                  },
+                                                ),
+                                            ]),
                                           ),
-                                        SliverList(
-                                          delegate: SliverChildListDelegate([
-                                            if (section ==
-                                                    FileManagerSection
-                                                        .allFiles &&
-                                                state?.draftFolderName != null)
-                                              _DesktopDraftFolderRow(
-                                                defaultName:
-                                                    state!.draftFolderName!,
-                                                onSubmit:
-                                                    controller
-                                                        .commitFolderCreation,
-                                                onCancel:
-                                                    controller
-                                                        .cancelFolderCreation,
-                                              ),
-                                            ..._groupedRows(
-                                              state,
-                                              controller,
-                                              items,
-                                              selected,
-                                            ),
-                                            if (state != null &&
-                                                !state.isBusy &&
-                                                items.isEmpty &&
-                                                (section !=
-                                                        FileManagerSection
-                                                            .allFiles ||
-                                                    state.draftFolderName ==
-                                                        null))
-                                              _FilesEmpty(
-                                                section: section,
-                                                shared:
-                                                    state.spaceType == 'SHARED',
-                                                filtered:
-                                                    (state
-                                                        .searchQuery
-                                                        .isNotEmpty) ||
-                                                    state.fileCategory !=
-                                                        FileBrowserFileCategory
-                                                            .all,
-                                                onClear: () {
-                                                  _search.clear();
-                                                  controller.setSearchQuery('');
-                                                  controller.setFileCategory(
-                                                    FileBrowserFileCategory.all,
-                                                  );
-                                                },
-                                              ),
-                                          ]),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
+                            ),
+                          ],
+                          if (state != null &&
+                              _isPagedSection(section) &&
+                              _totalCount(state, section) > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: DesktopPager(
+                                page: _currentPage(state, section),
+                                pageSize: _pageSize(state, section),
+                                totalItems: _totalCount(state, section),
+                                pageSizeOptions: const [10, 20, 50],
+                                onPageChanged:
+                                    (nextPage) => unawaited(
+                                      controller.goToPage(
+                                        section,
+                                        page: nextPage,
+                                      ),
                                     ),
-                          ),
-                        ],
-                        if (state != null && _hasMore(state, section))
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: DesktopButton(
-                                label: l10n.desktopFilesLoadMore(
-                                  _loadedCount(state, section),
-                                  _totalCount(state, section),
-                                ),
-                                variant: DesktopButtonVariant.ghost,
-                                onPressed:
-                                    () => _loadMore(controller, state, section),
+                                onPageSizeChanged:
+                                    (nextSize) => unawaited(
+                                      controller.goToPage(
+                                        section,
+                                        page: 0,
+                                        size: nextSize,
+                                      ),
+                                    ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

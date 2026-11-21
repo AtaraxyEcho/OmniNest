@@ -120,12 +120,12 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Mira Han'), findsOneWidget);
     expect(find.text('Jun Park'), findsOneWidget);
-    expect(find.textContaining('12 users'), findsOneWidget);
+    // v11 的 AdminCard 不再在标题行重复渲染总数，改由分页条给出区间统计。
     expect(find.text('Create User'), findsOneWidget);
     expect(find.text('All roles'), findsOneWidget);
     expect(find.text('PROTECTED'), findsOneWidget);
-    // 12 个用户按 10 条一页分成两页，翻页条给两颗页码按钮。
-    expect(find.byTooltip('Jump to'), findsNWidgets(2));
+    // 12 个用户按 10 条一页分成两页；分页条统一给首/前/页码/后/末一组按钮。
+    expect(find.byTooltip('First page'), findsOneWidget);
     // 桌面分支不再叠移动口径的指标卡与分页条。
     expect(find.byType(WorkstationPaginationBar), findsNothing);
   });

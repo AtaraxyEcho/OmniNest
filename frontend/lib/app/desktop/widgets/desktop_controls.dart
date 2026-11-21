@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'
     show KeyDownEvent, KeyRepeatEvent, LogicalKeyboardKey;
 
 import 'package:omninest/app/desktop/widgets/desktop_focus_outline.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_press.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -102,7 +103,7 @@ class DesktopButton extends StatelessWidget {
     final (background, hoverBackground, foreground, border) = switch (variant) {
       DesktopButtonVariant.primary => (
         skin.accent,
-        Color.lerp(skin.accent, skin.text, 0.12)!,
+        skin.accent,
         skin.accentInk,
         null,
       ),
@@ -137,7 +138,7 @@ class DesktopButton extends StatelessWidget {
       enabled: enabled,
       builder: (context, hovered) {
         final resolved = hovered ? hoverBackground : background;
-        return AnimatedContainer(
+        final box = AnimatedContainer(
           duration: MotionToken.reduced(context, MotionToken.fast),
           curve: MotionToken.curve,
           height: height,
@@ -162,7 +163,7 @@ class DesktopButton extends StatelessWidget {
                       BoxShadow(
                         color: skin.accentWash(hovered ? 0.42 : 0.28),
                         blurRadius: hovered ? 28 : 20,
-                        offset: const Offset(0, 8),
+                        offset: Offset(0, hovered ? 10 : 8),
                         spreadRadius: -8,
                       ),
                     ]
@@ -206,6 +207,15 @@ class DesktopButton extends StatelessWidget {
             ],
           ),
         );
+        if (variant == DesktopButtonVariant.glass) {
+          return DesktopGlassSurface(
+            borderRadius: BorderRadius.circular(radius),
+            blur: 16,
+            saturation: 1.4,
+            child: box,
+          );
+        }
+        return box;
       },
     );
 
@@ -584,7 +594,7 @@ class _DesktopSegState<T> extends State<DesktopSeg<T>> {
                   // 样例 `desktop.css:90`：指示块带一层 1px/6px 的投影。
                   boxShadow: [
                     BoxShadow(
-                      color: DesktopPalette.onStage.withValues(alpha: 0.18),
+                      color: Colors.black.withValues(alpha: 0.18),
                       blurRadius: 6,
                       offset: const Offset(0, 1),
                     ),

@@ -67,18 +67,18 @@ class _PhotoGroups extends StatelessWidget {
           for (final entry in groups.entries)
             Padding(
               padding: const EdgeInsets.only(bottom: 34),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 缩小 DesktopHover 范围至日期分组头，避免悬停照片墙触发整组重绘。
-                  DesktopHover(
-                    cursor: SystemMouseCursors.basic,
-                    builder: (context, hovered) {
-                      final selectedCount =
-                          entry.value
-                              .where((photo) => selection.contains(photo.id))
-                              .length;
-                      return _GroupHead(
+              child: DesktopHover(
+                cursor: SystemMouseCursors.basic,
+                builder: (context, hovered) {
+                  final selectedCount =
+                      entry.value
+                          .where((photo) => selection.contains(photo.id))
+                          .length;
+                  final contextKey = photoOrderContextForDay(entry.key);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _GroupHead(
                         label:
                             entry.key == null
                                 ? '—'
@@ -91,36 +91,36 @@ class _PhotoGroups extends StatelessWidget {
                         selectionActive: selectionActive,
                         onToggleDay: () => onSelectMany(entry.value),
                         onReset:
-                            displayOrders.containsKey(
-                                  photoOrderContextForDay(entry.key),
-                                )
-                                ? () => onResetOrder(
-                                  photoOrderContextForDay(entry.key),
-                                )
+                            displayOrders.containsKey(contextKey)
+                                ? () => onResetOrder(contextKey)
                                 : null,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _JustifiedPhotos(
-                    photos: applyPhotoDisplayOrder(
-                      entry.value,
-                      displayOrders[photoOrderContextForDay(entry.key)],
-                    ),
-                    targetHeight: density,
-                    selection: selection,
-                    selectionMode: selectionMode,
-                    onActivate: (photo, _) => onActivate(photo, browsePhotos),
-                    onToggleSelect: onToggleSelect,
-                    onSecondaryTap:
-                        onSecondaryTap == null
-                            ? null
-                            : (photo, _, globalPos) =>
-                                onSecondaryTap!(photo, browsePhotos, globalPos),
-                    orderContext: photoOrderContextForDay(entry.key),
-                    onOrderChanged: onOrderChanged,
-                  ),
-                ],
+                      ),
+                      const SizedBox(height: 12),
+                      _JustifiedPhotos(
+                        photos: applyPhotoDisplayOrder(
+                          entry.value,
+                          displayOrders[contextKey],
+                        ),
+                        targetHeight: density,
+                        selection: selection,
+                        selectionMode: selectionMode,
+                        onActivate:
+                            (photo, _) => onActivate(photo, browsePhotos),
+                        onToggleSelect: onToggleSelect,
+                        onSecondaryTap:
+                            onSecondaryTap == null
+                                ? null
+                                : (photo, _, globalPos) => onSecondaryTap!(
+                                  photo,
+                                  browsePhotos,
+                                  globalPos,
+                                ),
+                        orderContext: contextKey,
+                        onOrderChanged: onOrderChanged,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
         ],
@@ -176,11 +176,10 @@ class _GroupHead extends StatelessWidget {
     final partiallySelected = selectedCount > 0 && !allSelected;
     final selectionLabel =
         allSelected ? l10n.photosDeselectDay : l10n.photosSelectDay;
-    // 样例 `.g-head`：22px 圆形日选择位于日期左侧，只在组头 hover、已有
-    // 选择或开启多选开关时显示；计数随该组选择数切换，右侧只保留重置排序。
+    // 样例 `.g-head`：22px 圆形日选择位于日期左侧，悬停整日区块任意照片、
+    // 已有选择或开启多选开关时显现；右侧在悬停或有自定义排序时展示重置排序。
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         AnimatedOpacity(
           opacity: hovered || selectionActive ? 1 : 0,
@@ -231,7 +230,14 @@ class _GroupHead extends StatelessWidget {
           ),
         ),
         if (onReset != null) ...[
-          DesktopLink(label: l10n.desktopPhotosResetOrder, onPressed: onReset),
+          AnimatedOpacity(
+            opacity: hovered || selectionActive ? 1 : 0,
+            duration: DesktopMotion.fast,
+            child: DesktopLink(
+              label: l10n.desktopPhotosResetOrder,
+              onPressed: onReset,
+            ),
+          ),
           const SizedBox(width: 12),
         ],
       ],

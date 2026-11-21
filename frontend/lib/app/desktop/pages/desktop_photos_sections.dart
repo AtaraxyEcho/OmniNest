@@ -1,6 +1,6 @@
 part of 'desktop_photos_page.dart';
 
-/// 回收站分区（样例 `seg === "Trash"`）：保留期提示 + 可还原/永久删除的网格。
+/// 回收站分区（样例 `seg === "Trash"`）：告警横幅 + Justified 照片墙 + 悬停 Restore 胶囊。
 class _TrashSection extends StatelessWidget {
   const _TrashSection({
     required this.state,
@@ -30,20 +30,21 @@ class _TrashSection extends StatelessWidget {
     if (error != null) {
       return DesktopErrorView(message: error!, onRetry: onRetry);
     }
+    final warnColor = Color.lerp(skin.accent, const Color(0xFFE0A458), 0.72)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          margin: const EdgeInsets.only(bottom: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: skin.raise,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusSmall),
-            border: Border.all(color: skin.line),
+            color: warnColor.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(DesktopMetrics.radius),
+            border: Border.all(color: warnColor.withValues(alpha: 0.28)),
           ),
           child: Row(
             children: [
-              Icon(DesktopIcons.info, size: 15, color: skin.text3),
+              Icon(DesktopIcons.info, size: 16, color: warnColor),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -51,6 +52,7 @@ class _TrashSection extends StatelessWidget {
                   style: DesktopType.caption(skin.text2),
                 ),
               ),
+              const SizedBox(width: 12),
               DesktopButton(
                 label: l10n.photosEmptyTrash,
                 icon: DesktopIcons.trash,
@@ -81,65 +83,35 @@ class _TrashSection extends StatelessWidget {
                   )
                   : LayoutBuilder(
                     builder: (context, constraints) {
-                      // 样例 `.album-grid`：`minmax(220px,1fr)` + 26 的单一 gap。
-                      // 列数要按同一个 26 反推，否则最后一列会挤出容器。
-                      const gap = 26.0;
-                      final columns = ((constraints.maxWidth + gap) /
-                              (220 + gap))
-                          .floor()
-                          .clamp(2, 7);
-                      final width =
-                          (constraints.maxWidth - (columns - 1) * gap) /
-                          columns;
-                      return Wrap(
-                        spacing: gap,
-                        runSpacing: gap,
+                      const targetHeight = 200.0;
+                      const gap = 8.0;
+                      final rows = _layoutTrashRows(
+                        constraints.maxWidth,
+                        photos,
+                        targetHeight,
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (var i = 0; i < photos.length; i++)
-                            SizedBox(
-                              width: width,
-                              child: DesktopStagger(
-                                index: i,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    AspectRatio(
-                                      aspectRatio: 4 / 3,
-                                      child: DesktopImage(
-                                        url: photos[i].coverUrl,
-                                        cacheWidth: 640,
-                                        borderRadius: BorderRadius.circular(
-                                          DesktopMetrics.radius,
-                                        ),
+                          for (final row in rows)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: gap),
+                              child: Row(
+                                children: [
+                                  for (var i = 0; i < row.length; i++) ...[
+                                    if (i > 0) const SizedBox(width: gap),
+                                    Expanded(
+                                      flex: (row[i].ratio * 1000).round(),
+                                      child: _TrashPhotoTile(
+                                        photo: row[i].photo,
+                                        height: targetHeight,
+                                        onRestore:
+                                            () => onRestore(row[i].photo),
+                                        onPurge: () => onPurge(row[i].photo),
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      photos[i].title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: DesktopType.rowTitle(skin.text),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        DesktopButton(
-                                          label: l10n.photosRestore,
-                                          icon: DesktopIcons.undo,
-                                          variant: DesktopButtonVariant.ghost,
-                                          onPressed: () => onRestore(photos[i]),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        DesktopButton(
-                                          label: l10n.photosDeleteForever,
-                                          icon: DesktopIcons.trash,
-                                          variant: DesktopButtonVariant.ghost,
-                                          onPressed: () => onPurge(photos[i]),
-                                        ),
-                                      ],
-                                    ),
                                   ],
-                                ),
+                                ],
                               ),
                             ),
                         ],
@@ -150,10 +122,156 @@ class _TrashSection extends StatelessWidget {
       ],
     );
   }
+
+  List<List<({PhotoItem photo, double ratio})>> _layoutTrashRows(
+    double width,
+    List<PhotoItem> photos,
+    double targetHeight,
+  ) {
+    final rows = <List<({PhotoItem photo, double ratio})>>[];
+    var current = <({PhotoItem photo, double ratio})>[];
+    var ratioSum = 0.0;
+    for (final photo in photos) {
+      final w = photo.width ?? 0;
+      final h = photo.height ?? 0;
+      final ratio = w > 0 && h > 0 ? (w / h).clamp(0.5, 2.2) : 1.5;
+      current.add((photo: photo, ratio: ratio));
+      ratioSum += ratio;
+      if (ratioSum * targetHeight >= width) {
+        rows.add(current);
+        current = <({PhotoItem photo, double ratio})>[];
+        ratioSum = 0;
+      }
+    }
+    if (current.isNotEmpty) {
+      rows.add(current);
+    }
+    return rows;
+  }
+}
+
+class _TrashPhotoTile extends StatelessWidget {
+  const _TrashPhotoTile({
+    required this.photo,
+    required this.height,
+    required this.onRestore,
+    required this.onPurge,
+  });
+
+  final PhotoItem photo;
+  final double height;
+  final VoidCallback onRestore;
+  final VoidCallback onPurge;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    return DesktopHover(
+      builder: (context, hovered) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            height: height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                DesktopImage(
+                  url: photo.coverUrl,
+                  cacheWidth: 640,
+                  fallbackIcon: DesktopIcons.image,
+                ),
+                AnimatedOpacity(
+                  duration: DesktopMotion.of(context, DesktopMotion.soft),
+                  opacity: hovered ? 1.0 : 0.0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.42),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: onRestore,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 14,
+                                    sigmaY: 14,
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 7,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: skin.pop.withValues(alpha: 0.88),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(color: skin.line2),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          DesktopIcons.undo,
+                                          size: 14,
+                                          color: skin.text,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          l10n.photosRestore,
+                                          style: DesktopType.denseStrong(
+                                            skin.text,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: DesktopIconButton(
+                            icon: DesktopIcons.trash,
+                            size: 30,
+                            iconSize: 15,
+                            tooltip: l10n.photosDeleteForever,
+                            onPressed: onPurge,
+                          ),
+                        ),
+                        Positioned(
+                          left: 10,
+                          right: 10,
+                          bottom: 8,
+                          child: Text(
+                            photo.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.caption(Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// 地点分区（样例 `Photos.tsx` 的 `seg === "Places"`）：左侧点阵地球
-/// （可拖动、选中转向）+ 右侧地点列表，下方是选中地点的 Justified 照片墙。
+/// （可拖动、选中转向）+ 右侧地点列表，下方是选中地点的完整分页 Justified 照片墙。
 class _PlacesLoadingSkeleton extends StatelessWidget {
   const _PlacesLoadingSkeleton();
 
@@ -243,41 +361,159 @@ class _PlacesLoadingSkeleton extends StatelessWidget {
   }
 }
 
-class _PlacesSection extends StatefulWidget {
+class _PlacesSection extends ConsumerStatefulWidget {
   const _PlacesSection({required this.groups, required this.onOpen});
 
   final List<PhotoGroup> groups;
   final void Function(PhotoItem photo, List<PhotoItem> photos) onOpen;
 
   @override
-  State<_PlacesSection> createState() => _PlacesSectionState();
+  ConsumerState<_PlacesSection> createState() => _PlacesSectionState();
 }
 
-class _PlacesSectionState extends State<_PlacesSection> {
+class _PlacesSectionState extends ConsumerState<_PlacesSection> {
+  static const int _pageSize = 60;
+
   String? _selected;
+  int _requestToken = 0;
+  bool _loading = false;
+  bool _hasMore = false;
+  int _nextPage = 0;
+  List<PhotoItem>? _loadedPhotos;
+  int? _loadedTotal;
+  String? _loadedLocation;
+  final Map<String, ({double lat, double lon})> _resolvedCoords = {};
+
+  String? get _effectiveSelectedName {
+    if (widget.groups.isEmpty) {
+      return null;
+    }
+    if (_selected != null &&
+        widget.groups.any((group) => group.groupKey == _selected)) {
+      return _selected;
+    }
+    final places = _places;
+    return places.isNotEmpty ? places.first.name : widget.groups.first.groupKey;
+  }
 
   List<DesktopGlobePlace> get _places {
     final result = <DesktopGlobePlace>[];
     for (final group in widget.groups) {
-      final photo =
+      final photoWithGps =
           group.photos
               .where(
                 (item) => item.gpsLatitude != null && item.gpsLongitude != null,
               )
               .firstOrNull;
-      if (photo == null) {
+      final cached = _resolvedCoords[group.groupKey];
+      final lat = photoWithGps?.gpsLatitude ?? cached?.lat;
+      final lon = photoWithGps?.gpsLongitude ?? cached?.lon;
+      if (lat == null || lon == null) {
         continue;
       }
       result.add(
         DesktopGlobePlace(
           name: group.groupKey,
           count: group.photoCount,
-          latitude: photo.gpsLatitude!,
-          longitude: photo.gpsLongitude!,
+          latitude: lat,
+          longitude: lon,
+          coverPhoto: group.photos.firstOrNull ?? photoWithGps,
         ),
       );
     }
     return result;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = _effectiveSelectedName;
+    if (initial != null) {
+      unawaited(_loadLocationPage(initial, reset: true));
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PlacesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final current = _effectiveSelectedName;
+    if (current != null && current != _loadedLocation) {
+      unawaited(_loadLocationPage(current, reset: true));
+    }
+  }
+
+  void _selectLocation(String location) {
+    if (_selected == location && _loadedLocation == location) {
+      return;
+    }
+    setState(() {
+      _selected = location;
+    });
+    unawaited(_loadLocationPage(location, reset: true));
+  }
+
+  Future<void> _loadLocationPage(String location, {required bool reset}) async {
+    if (!reset && (_loading || !_hasMore)) {
+      return;
+    }
+    final token = ++_requestToken;
+    final targetPage = reset ? 0 : _nextPage;
+    setState(() {
+      _loading = true;
+      if (reset) {
+        _loadedLocation = location;
+        _loadedPhotos = null;
+        _loadedTotal = null;
+        _nextPage = 0;
+        _hasMore = false;
+      }
+    });
+
+    try {
+      final page = await ref
+          .read(photoRepositoryProvider)
+          .listByLocationPage(location, page: targetPage, size: _pageSize);
+      if (!mounted || token != _requestToken) {
+        return;
+      }
+      final base =
+          reset
+              ? <PhotoItem>[]
+              : List<PhotoItem>.from(_loadedPhotos ?? const <PhotoItem>[]);
+      final existingIds = base.map((item) => item.id).toSet();
+      for (final item in page.items) {
+        if (existingIds.add(item.id)) {
+          base.add(item);
+        }
+      }
+      final gpsPhoto =
+          base
+              .where(
+                (item) => item.gpsLatitude != null && item.gpsLongitude != null,
+              )
+              .firstOrNull;
+      setState(() {
+        _loadedLocation = location;
+        _loadedPhotos = base;
+        _loadedTotal = page.totalElements;
+        _nextPage = page.page + 1;
+        _hasMore = page.hasMore;
+        _loading = false;
+        if (gpsPhoto != null && !_resolvedCoords.containsKey(location)) {
+          _resolvedCoords[location] = (
+            lat: gpsPhoto.gpsLatitude!,
+            lon: gpsPhoto.gpsLongitude!,
+          );
+        }
+      });
+    } on Object {
+      if (!mounted || token != _requestToken) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -295,9 +531,7 @@ class _PlacesSectionState extends State<_PlacesSection> {
       );
     }
     final places = _places;
-    final selectedName =
-        _selected ??
-        (places.isNotEmpty ? places.first.name : widget.groups.first.groupKey);
+    final selectedName = _effectiveSelectedName ?? widget.groups.first.groupKey;
     final selectedGroup =
         widget.groups
             .where((group) => group.groupKey == selectedName)
@@ -311,31 +545,31 @@ class _PlacesSectionState extends State<_PlacesSection> {
           _PlaceRow(
             group: group,
             selected: group.groupKey == selectedName,
-            onTap: () => setState(() => _selected = group.groupKey),
+            onTap: () => _selectLocation(group.groupKey),
           ),
       ],
     );
 
-    final photos = selectedGroup.photos;
+    final photos =
+        (_loadedLocation == selectedName && _loadedPhotos != null)
+            ? _loadedPhotos!
+            : selectedGroup.photos;
+    final displayCount =
+        (_loadedLocation == selectedName && _loadedTotal != null)
+            ? math.max(_loadedTotal!, photos.length)
+            : selectedGroup.photoCount;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
-        final globe = Container(
+        final globe = SizedBox(
           height: 460,
-          alignment: Alignment.center,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: skin.raise,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-          ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
-            border: Border.all(color: skin.line),
-          ),
-          child: DesktopPlacesGlobe(
-            places: places,
-            selected: selectedName,
-            onSelect: (name) => setState(() => _selected = name),
+          child: Center(
+            child: DesktopPlacesGlobe(
+              places: places,
+              selected: selectedName,
+              onSelect: _selectLocation,
+            ),
           ),
         );
         return Column(
@@ -362,11 +596,11 @@ class _PlacesSectionState extends State<_PlacesSection> {
             ),
             const SizedBox(height: 4),
             Text(
-              l10n.desktopPhotosPlaceCount(selectedGroup.photoCount),
+              l10n.desktopPhotosPlaceCount(displayCount),
               style: DesktopType.caption(skin.text3),
             ),
             const SizedBox(height: 14),
-            if (photos.isEmpty)
+            if (photos.isEmpty && !_loading)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40),
                 child: DesktopEmpty(
@@ -375,7 +609,7 @@ class _PlacesSectionState extends State<_PlacesSection> {
                   actionLabel: null,
                 ),
               )
-            else
+            else ...[
               _JustifiedPhotos(
                 photos: photos,
                 targetHeight: 180,
@@ -385,6 +619,24 @@ class _PlacesSectionState extends State<_PlacesSection> {
                 onToggleSelect: (_) {},
                 showSelectionControls: false,
               ),
+              if (_hasMore)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Center(
+                    child: DesktopButton(
+                      label: l10n.adminLoadMore(photos.length, displayCount),
+                      variant: DesktopButtonVariant.soft,
+                      busy: _loading,
+                      onPressed:
+                          _loading
+                              ? null
+                              : () => unawaited(
+                                _loadLocationPage(selectedName, reset: false),
+                              ),
+                    ),
+                  ),
+                ),
+            ],
           ],
         );
       },

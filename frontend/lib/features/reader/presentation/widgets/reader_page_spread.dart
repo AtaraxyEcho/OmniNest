@@ -4,9 +4,10 @@ part of 'reader_page_view.dart';
 const double _spreadGutterWidth = 70.0;
 
 /// 双页跨页单元（样例 `.bookview .spread`）：
+/// 硬壳封底底座（`.spread::before` 深棕硬壳衬板）+ 静息 `rotateX(6deg)` / hover 展平透视 +
 /// 左右严格 50% / 50% 贴合，70px 中缝阴影悬浮叠在接缝之上，
 /// 左右动态厚度纸叠外挂于书框外缘，静动纸面共用同一份预烘焙噪点 Shader。
-class ReaderPageSpread extends StatelessWidget {
+class ReaderPageSpread extends StatefulWidget {
   const ReaderPageSpread({
     required this.left,
     required this.right,
@@ -41,155 +42,230 @@ class ReaderPageSpread extends StatelessWidget {
   final bool showPaperGrain;
 
   @override
+  State<ReaderPageSpread> createState() => _ReaderPageSpreadState();
+}
+
+class _ReaderPageSpreadState extends State<ReaderPageSpread> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final p = progress.clamp(0.0, 1.0);
+    final p = widget.progress.clamp(0.0, 1.0);
     final leftStackW = 3.0 + p * 13.0;
     final rightStackW = 3.0 + (1.0 - p) * 13.0;
     final edgeColor =
-        paperEdgeColor ?? Color.lerp(surfaceColor, Colors.black, 0.08)!;
+        widget.paperEdgeColor ??
+        Color.lerp(widget.surfaceColor, Colors.black, 0.08)!;
+    final isDarkPaper =
+        ThemeData.estimateBrightnessForColor(widget.surfaceColor) ==
+        Brightness.dark;
+    final gutterWeak = isDarkPaper ? 0.08 : 0.045;
+    final gutterStrong = isDarkPaper ? 0.22 : 0.14;
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    final tiltRadians = _hovered ? 0.0 : (6.0 * math.pi / 180.0);
+    final perspectiveTransform =
+        Matrix4.identity()
+          ..setEntry(3, 2, 0.00042)
+          ..rotateX(tiltRadians);
 
     // 关键修复：始终保持 RepaintBoundary 挂载在同一节点位置，不因 key 为空或状态切换拆卸边界节点。
     Widget wrapBoundary(GlobalKey? key, Widget child) =>
         RepaintBoundary(key: key, child: child);
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // 左侧外挂纸叠（.spread .stack.l）
-        Positioned(
-          left: -leftStackW + 2,
-          top: 3,
-          bottom: 3,
-          width: leftStackW,
-          child: _PaperStack(
-            edgeColor: edgeColor,
-            paperColor: surfaceColor,
-            side: _SpreadSide.left,
-          ),
-        ),
-        // 右侧外挂纸叠（.spread .stack.r）
-        Positioned(
-          right: -rightStackW + 2,
-          top: 3,
-          bottom: 3,
-          width: rightStackW,
-          child: _PaperStack(
-            edgeColor: edgeColor,
-            paperColor: surfaceColor,
-            side: _SpreadSide.right,
-          ),
-        ),
-        // 书本主体（6px 圆角 + 双层桌面阴影）
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.55),
-                blurRadius: 44,
-                spreadRadius: -26,
-                offset: const Offset(0, 22),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 12,
-                spreadRadius: -6,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: wrapBoundary(
-                        leftBoundaryKey,
-                        _SpreadPage(
-                          color: surfaceColor,
-                          side: _SpreadSide.left,
-                          showPaperGrain: showPaperGrain,
-                          child: left,
-                        ),
-                      ),
+    return MouseRegion(
+      onEnter: (_) {
+        if (!_hovered) setState(() => _hovered = true);
+      },
+      onExit: (_) {
+        if (_hovered) setState(() => _hovered = false);
+      },
+      child: AnimatedContainer(
+        duration:
+            animationsDisabled
+                ? Duration.zero
+                : const Duration(milliseconds: 650),
+        curve: Curves.easeOutCubic,
+        transformAlignment: Alignment.center,
+        transform: perspectiveTransform,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // 硬壳封底底座（`.spread::before` 深棕硬壳衬板）
+            Positioned(
+              left: -leftStackW - 4,
+              right: -rightStackW - 4,
+              top: -4,
+              bottom: -6,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF33261E), Color(0xFF211812)],
                     ),
-                    Expanded(
-                      child: wrapBoundary(
-                        rightBoundaryKey,
-                        _SpreadPage(
-                          color: surfaceColor,
-                          side: _SpreadSide.right,
-                          showPaperGrain: showPaperGrain,
-                          child: right,
-                        ),
-                      ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.07),
                     ),
-                  ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        blurRadius: 56,
+                        spreadRadius: -14,
+                        offset: const Offset(0, 32),
+                      ),
+                    ],
+                  ),
                 ),
-                // 70px 中缝阴影悬浮叠在 50% 接缝之上（不占宽、不拦截选区）
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Container(
-                        width: _spreadGutterWidth,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.05),
-                              Colors.black.withValues(alpha: 0.15),
-                              Colors.black.withValues(alpha: 0.15),
-                              Colors.black.withValues(alpha: 0.05),
-                              Colors.transparent,
-                            ],
-                            stops: const [0.0, 0.30, 0.495, 0.505, 0.70, 1.0],
+              ),
+            ),
+            // 左侧外挂纸叠（.spread .stack.l）
+            Positioned(
+              left: -leftStackW + 2,
+              top: 3,
+              bottom: 3,
+              width: leftStackW,
+              child: _PaperStack(
+                edgeColor: edgeColor,
+                paperColor: widget.surfaceColor,
+                side: _SpreadSide.left,
+              ),
+            ),
+            // 右侧外挂纸叠（.spread .stack.r）
+            Positioned(
+              right: -rightStackW + 2,
+              top: 3,
+              bottom: 3,
+              width: rightStackW,
+              child: _PaperStack(
+                edgeColor: edgeColor,
+                paperColor: widget.surfaceColor,
+                side: _SpreadSide.right,
+              ),
+            ),
+            // 书本主体（6px 圆角 + 双层桌面阴影）
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    blurRadius: 44,
+                    spreadRadius: -26,
+                    offset: const Offset(0, 22),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    spreadRadius: -6,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: wrapBoundary(
+                            widget.leftBoundaryKey,
+                            _SpreadPage(
+                              color: widget.surfaceColor,
+                              side: _SpreadSide.left,
+                              showPaperGrain: widget.showPaperGrain,
+                              child: widget.left,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: wrapBoundary(
+                            widget.rightBoundaryKey,
+                            _SpreadPage(
+                              color: widget.surfaceColor,
+                              side: _SpreadSide.right,
+                              showPaperGrain: widget.showPaperGrain,
+                              child: widget.right,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    // 70px 中缝阴影悬浮叠在 50% 接缝之上（随主题明暗柔和过渡，不占宽、不拦截选区）
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Center(
+                          child: Container(
+                            width: _spreadGutterWidth,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: gutterWeak),
+                                  Colors.black.withValues(alpha: gutterStrong),
+                                  Colors.black.withValues(alpha: gutterStrong),
+                                  Colors.black.withValues(alpha: gutterWeak),
+                                  Colors.transparent,
+                                ],
+                                stops: const [
+                                  0.0,
+                                  0.30,
+                                  0.495,
+                                  0.505,
+                                  0.70,
+                                  1.0,
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                // 固定占位槽：静止态与翻页态保持 Stack 子节点结构完全一致，零槽位抖动。
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: curlOverlay ?? const SizedBox.shrink(),
-                  ),
-                ),
-                if (bookmarked)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: LayoutBuilder(
-                        builder:
-                            (context, c) => Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Positioned(
-                                  top: -2,
-                                  right: c.maxWidth * 0.08,
-                                  child: ClipPath(
-                                    clipper: const _SpreadRibbonClipper(),
-                                    child: Container(
-                                      width: 16,
-                                      height: 40,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                    // 固定占位槽：静止态与翻页态保持 Stack 子节点结构完全一致，零槽位抖动。
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: widget.curlOverlay ?? const SizedBox.shrink(),
                       ),
                     ),
-                  ),
-              ],
+                    if (widget.bookmarked)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: LayoutBuilder(
+                            builder:
+                                (context, c) => Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned(
+                                      top: -2,
+                                      right: c.maxWidth * 0.08,
+                                      child: ClipPath(
+                                        clipper: const _SpreadRibbonClipper(),
+                                        child: Container(
+                                          width: 16,
+                                          height: 40,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -211,7 +287,9 @@ class _SpreadPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spineTint = Color.lerp(color, Colors.black, 0.08)!;
+    final isDark =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark;
+    final spineTint = Color.lerp(color, Colors.black, isDark ? 0.14 : 0.07)!;
     final gradient =
         side == _SpreadSide.left
             ? LinearGradient(
@@ -274,13 +352,7 @@ class _SpreadPage extends StatelessWidget {
             right: side == _SpreadSide.right ? 0 : null,
             child: IgnorePointer(
               child: ColoredBox(
-                color: Colors.white.withValues(
-                  alpha:
-                      ThemeData.estimateBrightnessForColor(color) ==
-                              Brightness.dark
-                          ? 0.09
-                          : 0.40,
-                ),
+                color: Colors.white.withValues(alpha: isDark ? 0.09 : 0.40),
               ),
             ),
           ),

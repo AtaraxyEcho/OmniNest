@@ -155,13 +155,43 @@ extension FileBrowserSelectionActions on FileBrowserController {
     _emitState(current.copyWith(selectedFileIds: ids));
   }
 
-  void selectAll() {
+  void selectAll([Iterable<String>? ids]) {
     final current = _currentState;
     if (current == null) {
       return;
     }
-    final allIds = current.visibleNodes.map((node) => node.id).toSet();
+    final allIds =
+        ids != null
+            ? ids.toSet()
+            : current.visibleNodes.map((node) => node.id).toSet();
     _emitState(current.copyWith(selectedFileIds: allIds));
+  }
+
+  /// 区间连选：按展示顺序 [orderedIds] 选中 [anchorId] 到 [targetId]（含两端）。
+  void selectRange(List<String> orderedIds, String anchorId, String targetId) {
+    final current = _currentState;
+    if (current == null || orderedIds.isEmpty) {
+      return;
+    }
+    final start = orderedIds.indexOf(anchorId);
+    final end = orderedIds.indexOf(targetId);
+    if (start < 0 || end < 0) {
+      final fallback =
+          end >= 0
+              ? <String>{targetId}
+              : start >= 0
+              ? <String>{anchorId}
+              : const <String>{};
+      _emitState(current.copyWith(selectedFileIds: fallback));
+      return;
+    }
+    final low = math.min(start, end);
+    final high = math.max(start, end);
+    _emitState(
+      current.copyWith(
+        selectedFileIds: orderedIds.sublist(low, high + 1).toSet(),
+      ),
+    );
   }
 
   void clearSelection() {

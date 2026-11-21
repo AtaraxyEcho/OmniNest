@@ -89,328 +89,340 @@ class ComicReaderTopBar extends StatelessWidget {
       right: 0,
       child: IgnorePointer(
         ignoring: !visible,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
+        child: AnimatedContainer(
           duration:
               MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero
-                  : const Duration(milliseconds: 180),
-          alwaysIncludeSemantics: true,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient:
-                  bookMode
-                      ? null
-                      : LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          settings.surfaceColor.withValues(alpha: 0.96),
-                          settings.surfaceColor.withValues(alpha: 0),
-                        ],
-                        stops: const [0.7, 1],
+                  : const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, visible ? 0 : -8, 0),
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration:
+                MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            alwaysIncludeSemantics: true,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient:
+                    bookMode
+                        ? null
+                        : LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            settings.surfaceColor.withValues(alpha: 0.96),
+                            settings.surfaceColor.withValues(alpha: 0),
+                          ],
+                          stops: const [0.7, 1],
+                        ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = ReaderControlLayout.resolve(
+                      viewport: Size(
+                        constraints.maxWidth,
+                        MediaQuery.sizeOf(context).height,
                       ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final layout = ReaderControlLayout.resolve(
-                    viewport: Size(
-                      constraints.maxWidth,
-                      MediaQuery.sizeOf(context).height,
-                    ),
-                    fontSize: AppTypography.titleMedium,
-                  );
-                  final compact =
-                      layout.density == ReaderControlDensity.compact;
-                  final iconOnlyModes = constraints.maxWidth < 960;
+                      fontSize: AppTypography.titleMedium,
+                    );
+                    final compact =
+                        layout.density == ReaderControlDensity.compact;
+                    final iconOnlyModes = constraints.maxWidth < 960;
 
-                  return SizedBox(
-                    height: 64,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: compact ? 8 : 20,
-                      ),
-                      child: Row(
-                        children: [
-                          _ComicDesktopIconButton(
-                            icon: Icons.chevron_left_rounded,
-                            tooltip: l10n.coreBack,
-                            foreground: foreground,
-                            accent: settings.accentColor,
-                            bookMode: bookMode,
-                            large: true,
-                            onPressed: onBack,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DesktopWindowDragRegion(
-                              child: SizedBox(
-                                height: 64,
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: iconOnlyModes ? 200 : 320,
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          resolvedTitle,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: foreground,
-                                            fontFamily:
-                                                AppTypography.serifFamily,
-                                            fontFamilyFallback:
-                                                AppTypography
-                                                    .serifFamilyFallback,
-                                            fontSize:
-                                                17, // ignore: font_size_whitelist
-                                            fontWeight: FontWeight.w400,
-                                            height: 1.25,
-                                          ),
-                                        ),
-                                        if (pageSubtitle != null &&
-                                            pageSubtitle!.isNotEmpty)
+                    return SizedBox(
+                      height: 64,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 8 : 20,
+                        ),
+                        child: Row(
+                          children: [
+                            _ComicDesktopIconButton(
+                              icon: Icons.chevron_left_rounded,
+                              tooltip: l10n.coreBack,
+                              foreground: foreground,
+                              accent: settings.accentColor,
+                              bookMode: bookMode,
+                              large: true,
+                              onPressed: onBack,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DesktopWindowDragRegion(
+                                child: SizedBox(
+                                  height: 64,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: iconOnlyModes ? 200 : 320,
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
                                           Text(
-                                            pageSubtitle!,
+                                            resolvedTitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              color: muted,
+                                              color: foreground,
+                                              fontFamily:
+                                                  AppTypography.serifFamily,
+                                              fontFamilyFallback:
+                                                  AppTypography
+                                                      .serifFamilyFallback,
                                               fontSize:
-                                                  12, // ignore: font_size_whitelist
-                                              height: 1.3,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
+                                                  17, // ignore: font_size_whitelist
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.25,
                                             ),
                                           ),
-                                      ],
+                                          if (pageSubtitle != null &&
+                                              pageSubtitle!.isNotEmpty)
+                                            Text(
+                                              pageSubtitle!,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: muted,
+                                                fontSize:
+                                                    12, // ignore: font_size_whitelist
+                                                height: 1.3,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (!compact && onSelectReadingMode != null) ...[
-                            _ComicModeCapsule(
-                              mode: effectiveMode,
-                              foreground: foreground,
-                              bookMode: bookMode,
-                              iconOnly: iconOnlyModes,
-                              onSelected: onSelectReadingMode!,
-                            ),
-                            const SizedBox(width: 10),
-                          ] else if (onSwitchReadingMode != null) ...[
-                            _ComicDesktopIconButton(
-                              icon:
-                                  isPageMode
-                                      ? Icons.swap_vert_rounded
-                                      : Icons.swap_horiz_rounded,
-                              tooltip:
-                                  isPageMode
-                                      ? l10n.readerComicModeScroll
-                                      : l10n.readerComicModePage,
-                              foreground: foreground,
-                              accent: settings.accentColor,
-                              bookMode: bookMode,
-                              onPressed: onSwitchReadingMode,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          if (!compact) ...[
-                            _ComicDesktopIconButton(
-                              icon: Icons.toc_rounded,
-                              tooltip: '${l10n.readerTableOfContents} (T)',
-                              foreground: foreground,
-                              accent: settings.accentColor,
-                              bookMode: bookMode,
-                              selected: activePanel == ReaderPanelType.contents,
-                              onPressed: onShowContents,
-                            ),
-                            if (onToggleBookmark != null) ...[
-                              const SizedBox(width: 4),
+                            if (!compact && onSelectReadingMode != null) ...[
+                              _ComicModeCapsule(
+                                mode: effectiveMode,
+                                foreground: foreground,
+                                bookMode: bookMode,
+                                iconOnly: iconOnlyModes,
+                                onSelected: onSelectReadingMode!,
+                              ),
+                              const SizedBox(width: 10),
+                            ] else if (onSwitchReadingMode != null) ...[
                               _ComicDesktopIconButton(
                                 icon:
-                                    isBookmarked
-                                        ? Icons.bookmark_rounded
-                                        : Icons.bookmark_border_rounded,
+                                    isPageMode
+                                        ? Icons.swap_vert_rounded
+                                        : Icons.swap_horiz_rounded,
                                 tooltip:
-                                    isBookmarked
-                                        ? l10n.readerRemoveBookmark
-                                        : l10n.readerAddBookmark,
+                                    isPageMode
+                                        ? l10n.readerComicModeScroll
+                                        : l10n.readerComicModePage,
                                 foreground: foreground,
                                 accent: settings.accentColor,
                                 bookMode: bookMode,
-                                selected: isBookmarked,
-                                onPressed: onToggleBookmark,
+                                onPressed: onSwitchReadingMode,
                               ),
-                            ],
-                            if (onShowBookmarks != null) ...[
                               const SizedBox(width: 4),
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  _ComicDesktopIconButton(
-                                    icon: Icons.bookmarks_outlined,
-                                    tooltip: l10n.readerBookmarksTab(
-                                      bookmarkCount,
-                                    ),
-                                    foreground: foreground,
-                                    accent: settings.accentColor,
-                                    bookMode: bookMode,
-                                    selected:
-                                        activePanel ==
-                                        ReaderPanelType.annotations,
-                                    onPressed: onShowBookmarks,
-                                  ),
-                                  if (bookmarkCount > 0)
-                                    Positioned(
-                                      top: -2,
-                                      right: -2,
-                                      child: IgnorePointer(
-                                        child: Container(
-                                          constraints: const BoxConstraints(
-                                            minWidth: 16,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 1,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: settings.accentColor,
-                                            borderRadius: BorderRadius.circular(
-                                              99,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            bookmarkCount > 99
-                                                ? '99+'
-                                                : '$bookmarkCount',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              color:
-                                                  ReaderReadingPalette
-                                                      .onAccentInk,
-                                              fontSize:
-                                                  10, // ignore: font_size_whitelist
-                                              fontWeight: FontWeight.w700,
-                                              height: 1.15,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
                             ],
-                            const SizedBox(width: 4),
-                            _ComicDesktopIconButton(
-                              icon: Icons.tune_rounded,
-                              tooltip: l10n.readerSettingsTitle,
-                              foreground: foreground,
-                              accent: settings.accentColor,
-                              bookMode: bookMode,
-                              selected: activePanel == ReaderPanelType.settings,
-                              onPressed: onShowSettings,
-                            ),
-                            if (layout.density ==
-                                    ReaderControlDensity.expanded &&
-                                PlatformCapabilities.current()
-                                    .supportsPhysicalKeyboard) ...[
-                              const SizedBox(width: 4),
+                            if (!compact) ...[
                               _ComicDesktopIconButton(
-                                icon: Icons.keyboard_rounded,
-                                tooltip: l10n.readerShortcutsTitle,
+                                icon: Icons.toc_rounded,
+                                tooltip: '${l10n.readerTableOfContents} (T)',
                                 foreground: foreground,
                                 accent: settings.accentColor,
                                 bookMode: bookMode,
                                 selected:
-                                    activePanel == ReaderPanelType.shortcuts,
-                                onPressed: onShowShortcuts,
+                                    activePanel == ReaderPanelType.contents,
+                                onPressed: onShowContents,
                               ),
-                            ],
-                          ],
-                          if (compact)
-                            PopupMenuButton<_ComicTopAction>(
-                              tooltip:
-                                  MaterialLocalizations.of(
-                                    context,
-                                  ).moreButtonTooltip,
-                              color: settings.controlSurfaceColor,
-                              icon: Icon(
-                                Icons.more_vert_rounded,
-                                color: foreground,
-                              ),
-                              onSelected: (action) {
-                                switch (action) {
-                                  case _ComicTopAction.contents:
-                                    onShowContents();
-                                    return;
-                                  case _ComicTopAction.bookmark:
-                                    onToggleBookmark?.call();
-                                    return;
-                                  case _ComicTopAction.bookmarks:
-                                    onShowBookmarks?.call();
-                                    return;
-                                  case _ComicTopAction.settings:
-                                    onShowSettings();
-                                    return;
-                                  case _ComicTopAction.shortcuts:
-                                    onShowShortcuts();
-                                    return;
-                                }
-                              },
-                              itemBuilder:
-                                  (context) => [
-                                    _menuItem(
-                                      _ComicTopAction.contents,
-                                      Icons.toc_rounded,
-                                      l10n.readerTableOfContents,
-                                    ),
-                                    if (onToggleBookmark != null)
-                                      _menuItem(
-                                        _ComicTopAction.bookmark,
-                                        isBookmarked
-                                            ? Icons.bookmark_rounded
-                                            : Icons.bookmark_border_rounded,
-                                        isBookmarked
-                                            ? l10n.readerRemoveBookmark
-                                            : l10n.readerAddBookmark,
+                              if (onToggleBookmark != null) ...[
+                                const SizedBox(width: 4),
+                                _ComicDesktopIconButton(
+                                  icon:
+                                      isBookmarked
+                                          ? Icons.bookmark_rounded
+                                          : Icons.bookmark_border_rounded,
+                                  tooltip:
+                                      isBookmarked
+                                          ? l10n.readerRemoveBookmark
+                                          : l10n.readerAddBookmark,
+                                  foreground: foreground,
+                                  accent: settings.accentColor,
+                                  bookMode: bookMode,
+                                  selected: isBookmarked,
+                                  onPressed: onToggleBookmark,
+                                ),
+                              ],
+                              if (onShowBookmarks != null) ...[
+                                const SizedBox(width: 4),
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    _ComicDesktopIconButton(
+                                      icon: Icons.bookmarks_outlined,
+                                      tooltip: l10n.readerBookmarksTab(
+                                        bookmarkCount,
                                       ),
-                                    if (onShowBookmarks != null)
-                                      _menuItem(
-                                        _ComicTopAction.bookmarks,
-                                        Icons.bookmarks_outlined,
-                                        l10n.readerBookmarksTab(bookmarkCount),
-                                      ),
-                                    _menuItem(
-                                      _ComicTopAction.settings,
-                                      Icons.tune_rounded,
-                                      l10n.readerSettingsTitle,
+                                      foreground: foreground,
+                                      accent: settings.accentColor,
+                                      bookMode: bookMode,
+                                      selected:
+                                          activePanel ==
+                                          ReaderPanelType.annotations,
+                                      onPressed: onShowBookmarks,
                                     ),
-                                    if (PlatformCapabilities.current()
-                                        .supportsPhysicalKeyboard)
-                                      _menuItem(
-                                        _ComicTopAction.shortcuts,
-                                        Icons.keyboard_rounded,
-                                        l10n.readerShortcutsTitle,
+                                    if (bookmarkCount > 0)
+                                      Positioned(
+                                        top: -2,
+                                        right: -2,
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 16,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 1,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: settings.accentColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(99),
+                                            ),
+                                            child: Text(
+                                              bookmarkCount > 99
+                                                  ? '99+'
+                                                  : '$bookmarkCount',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                color:
+                                                    ReaderReadingPalette
+                                                        .onAccentInk,
+                                                fontSize:
+                                                    10, // ignore: font_size_whitelist
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.15,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                   ],
-                            ),
-                        ],
+                                ),
+                              ],
+                              const SizedBox(width: 4),
+                              _ComicDesktopIconButton(
+                                icon: Icons.tune_rounded,
+                                tooltip: l10n.readerSettingsTitle,
+                                foreground: foreground,
+                                accent: settings.accentColor,
+                                bookMode: bookMode,
+                                selected:
+                                    activePanel == ReaderPanelType.settings,
+                                onPressed: onShowSettings,
+                              ),
+                              if (layout.density ==
+                                      ReaderControlDensity.expanded &&
+                                  PlatformCapabilities.current()
+                                      .supportsPhysicalKeyboard) ...[
+                                const SizedBox(width: 4),
+                                _ComicDesktopIconButton(
+                                  icon: Icons.keyboard_rounded,
+                                  tooltip: l10n.readerShortcutsTitle,
+                                  foreground: foreground,
+                                  accent: settings.accentColor,
+                                  bookMode: bookMode,
+                                  selected:
+                                      activePanel == ReaderPanelType.shortcuts,
+                                  onPressed: onShowShortcuts,
+                                ),
+                              ],
+                            ],
+                            if (compact)
+                              PopupMenuButton<_ComicTopAction>(
+                                tooltip:
+                                    MaterialLocalizations.of(
+                                      context,
+                                    ).moreButtonTooltip,
+                                color: settings.controlSurfaceColor,
+                                icon: Icon(
+                                  Icons.more_vert_rounded,
+                                  color: foreground,
+                                ),
+                                onSelected: (action) {
+                                  switch (action) {
+                                    case _ComicTopAction.contents:
+                                      onShowContents();
+                                      return;
+                                    case _ComicTopAction.bookmark:
+                                      onToggleBookmark?.call();
+                                      return;
+                                    case _ComicTopAction.bookmarks:
+                                      onShowBookmarks?.call();
+                                      return;
+                                    case _ComicTopAction.settings:
+                                      onShowSettings();
+                                      return;
+                                    case _ComicTopAction.shortcuts:
+                                      onShowShortcuts();
+                                      return;
+                                  }
+                                },
+                                itemBuilder:
+                                    (context) => [
+                                      _menuItem(
+                                        _ComicTopAction.contents,
+                                        Icons.toc_rounded,
+                                        l10n.readerTableOfContents,
+                                      ),
+                                      if (onToggleBookmark != null)
+                                        _menuItem(
+                                          _ComicTopAction.bookmark,
+                                          isBookmarked
+                                              ? Icons.bookmark_rounded
+                                              : Icons.bookmark_border_rounded,
+                                          isBookmarked
+                                              ? l10n.readerRemoveBookmark
+                                              : l10n.readerAddBookmark,
+                                        ),
+                                      if (onShowBookmarks != null)
+                                        _menuItem(
+                                          _ComicTopAction.bookmarks,
+                                          Icons.bookmarks_outlined,
+                                          l10n.readerBookmarksTab(
+                                            bookmarkCount,
+                                          ),
+                                        ),
+                                      _menuItem(
+                                        _ComicTopAction.settings,
+                                        Icons.tune_rounded,
+                                        l10n.readerSettingsTitle,
+                                      ),
+                                      if (PlatformCapabilities.current()
+                                          .supportsPhysicalKeyboard)
+                                        _menuItem(
+                                          _ComicTopAction.shortcuts,
+                                          Icons.keyboard_rounded,
+                                          l10n.readerShortcutsTitle,
+                                        ),
+                                    ],
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),

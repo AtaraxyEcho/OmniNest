@@ -1,43 +1,5 @@
 part of 'desktop_photos_page.dart';
 
-class _JustifiedPhotos extends StatefulWidget {
-  const _JustifiedPhotos({
-    required this.photos,
-    required this.targetHeight,
-    required this.selection,
-    required this.onActivate,
-    required this.onToggleSelect,
-    this.onSecondaryTap,
-    this.selectionMode = false,
-    this.orderContext,
-    this.onOrderChanged,
-    this.showCaption = true,
-    this.showFavorite = true,
-    this.showSelectionControls = true,
-  });
-
-  final List<PhotoItem> photos;
-  final double targetHeight;
-  final Set<String> selection;
-  final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
-  final ValueChanged<PhotoItem> onToggleSelect;
-  final void Function(
-    PhotoItem photo,
-    List<PhotoItem> photos,
-    Offset globalPosition,
-  )?
-  onSecondaryTap;
-  final bool selectionMode;
-  final String? orderContext;
-  final _PhotoOrderChanged? onOrderChanged;
-  final bool showCaption;
-  final bool showFavorite;
-  final bool showSelectionControls;
-
-  @override
-  State<_JustifiedPhotos> createState() => _JustifiedPhotosState();
-}
-
 class _JustifiedPhotosState extends State<_JustifiedPhotos>
     with TickerProviderStateMixin {
   static const double _dragSlop = 8.0;
@@ -544,7 +506,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _pressPointer = null;
     _pressOrigin = null;
 
-    // Esc 取消也要屏蔽尾随 click：否则真实松手会被卡片当成一次点击直接打开照片。
+    // Esc 取消也要屏蔽尾随 click：否则真实松手会被当成一次点击打开照片。
     _startTrailingClickGuard();
 
     final collapsedOrder = _dragOrder ?? payload.baseOrderIds;
@@ -601,24 +563,35 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       _lastSwapPointer = null;
     });
 
-    // 阶段 2：等两帧确保展开后的真实目标槽位完成布局，测量最终 Rect 并 420ms 飞入。
+    // 阶段 2：单次 postFrameCallback 直接测量真实目标槽位并飞入，避免双层嵌套造成 ~1s 停顿。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_settling) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_settling) return;
-        _animateGhostSettle(payload: payload, accepted: accepted);
-      });
+      _animateGhostSettle(payload: payload, accepted: accepted);
     });
   }
 
   void _animateGhostSettle({
     required _PhotoDragPayload payload,
     required bool accepted,
+    bool retried = false,
   }) {
     final currentPose = _ghostPose.value;
     final targetGlobal = _rectFor(payload.draggedId);
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     final overlayBox = overlay?.context.findRenderObject();
+
+    if (targetGlobal == null && !retried) {
+      WidgetsBinding.instance.scheduleFrame();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_settling) return;
+        _animateGhostSettle(
+          payload: payload,
+          accepted: accepted,
+          retried: true,
+        );
+      });
+      return;
+    }
 
     if (currentPose == null ||
         targetGlobal == null ||
@@ -633,10 +606,18 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _settleTargetRect = targetLocalTopLeft & targetGlobal.size;
     _ghostPose.value = currentPose.copyWith(dropping: true);
 
-    final duration = DesktopMotion.of(
-      context,
-      DesktopMotion.photoReorderSettle,
-    );
+    final centerDistance =
+        (_settleStartRect!.center - _settleTargetRect!.center).distance;
+    final rawDuration =
+        centerDistance < 24.0
+            ? Duration(
+              milliseconds: (220 + (centerDistance / 24.0) * 100).round().clamp(
+                220,
+                320,
+              ),
+            )
+            : DesktopMotion.photoReorderSettle;
+    final duration = DesktopMotion.of(context, rawDuration);
     if (duration == Duration.zero) {
       _completeSettle(payload: payload, accepted: accepted);
       return;
@@ -813,11 +794,11 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
           children: [
             for (final row in rows)
               Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
                     for (var i = 0; i < row.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 6),
+                      if (i > 0) const SizedBox(width: 8),
                       Expanded(
                         flex: (row[i].ratio * 1000).round(),
                         child: LayoutBuilder(

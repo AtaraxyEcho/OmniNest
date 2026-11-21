@@ -1,16 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
+import 'package:omninest/features/reader/presentation/widgets/comic_reader_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
-/// 漫画阅读器的显示设置面板（对齐统一磨砂抽屉样式，支持三模式、RTL、单/双页与图片适应模式）。
-class ComicReaderSettingsPanel extends StatelessWidget {
+/// 漫画阅读器的显示设置面板（对齐统一磨砂抽屉样式，支持背景主题 4 色卡、亮度、护眼暖色、
+/// 自动夜间、漫画缩放、三模式、RTL、单/双页与图片适应模式）。
+class ComicReaderSettingsPanel extends ConsumerWidget {
   const ComicReaderSettingsPanel({
     required this.displaySettings,
     required this.themeSettings,
@@ -20,6 +26,10 @@ class ComicReaderSettingsPanel extends StatelessWidget {
     this.pageModeEnabled,
     this.mobile = false,
     this.effectiveRtl,
+    this.zoomScale,
+    this.onZoomIn,
+    this.onZoomOut,
+    this.onResetZoom,
     super.key,
   });
 
@@ -38,8 +48,27 @@ class ComicReaderSettingsPanel extends StatelessWidget {
   /// 当前生效的 RTL 状态（含清单默认推导）；为空时取 `displaySettings.rtlOverride ?? false`。
   final bool? effectiveRtl;
 
+  /// 可选缩放倍率与回调；未显式传入时自动联动宿主 `ComicReaderViewState`。
+  final double? zoomScale;
+  final VoidCallback? onZoomIn;
+  final VoidCallback? onZoomOut;
+  final VoidCallback? onResetZoom;
+
+  Future<void> _savePreferencePatch(
+    WidgetRef ref,
+    Map<String, dynamic> patch,
+  ) async {
+    final current =
+        ref.read(readerPreferencesProvider).asData?.value ??
+        await ref.read(readerPreferencesProvider.future);
+    await ref.read(readerPreferencesProvider.notifier).save({
+      ...?current,
+      ...patch,
+    });
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final inDarkGlass = ReaderPanelSurfaceScope.isDarkGlass(context);
@@ -55,16 +84,130 @@ class ComicReaderSettingsPanel extends StatelessWidget {
     final isRtl = effectiveRtl ?? displaySettings.rtlOverride ?? false;
     final isPaged = displaySettings.readingMode != 'scroll';
 
+    final prefsMap = ref.watch(readerPreferencesProvider).asData?.value;
+    final activeSettings =
+        prefsMap != null && prefsMap.isNotEmpty
+            ? ReaderViewSettings.fromJson(prefsMap)
+            : themeSettings;
+    final hostState = context.findAncestorStateOfType<ComicReaderViewState>();
+    final effectiveZoom = zoomScale ?? hostState?.currentZoomScale ?? 1.0;
+    final handleZoomOut = onZoomOut ?? hostState?.zoomOut;
+    final handleZoomIn = onZoomIn ?? hostState?.zoomIn;
+    final handleResetZoom = onResetZoom ?? hostState?.resetZoom;
+
+    final themeChoices = <(ReaderReadingPalette, String)>[
+      (ReaderReadingPalette.light, isZh ? '纸白' : 'Paper'),
+      (ReaderReadingPalette.eyeCare, isZh ? '暖黄' : 'Sepia'),
+      (ReaderReadingPalette.green, isZh ? '暮色' : 'Dusk'),
+      (ReaderReadingPalette.dark, isZh ? '夜间' : 'Night'),
+    ];
+
     return ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
+        // 1. 背景主题 4 色卡（Paper / Sepia / Dusk / Night）
+        _SectionLabel(label: l10n.readerTheme, color: muted),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 0; i < themeChoices.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _ThemeSwatchCard(
+                  palette: themeChoices[i].$1,
+                  label: themeChoices[i].$2,
+                  selected: activeSettings.paletteId == themeChoices[i].$1.id,
+                  accent: activeSettings.accentColor,
+                  foreground: fg,
+                  onTap: () {
+                    final palette = themeChoices[i].$1;
+                    unawaited(
+                      _savePreferencePatch(ref, {
+                        'paletteId': palette.id,
+                        'themeIndex': ReaderReadingPalette.legacyIndexFromId(
+                          palette.id,
+                        ),
+                      }),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // 2. 亮度（30–100%）
+        _SliderHeader(
+          label: l10n.readerBrightness,
+          valueLabel: '${activeSettings.brightness}%',
+          color: muted,
+          accent: activeSettings.accentColor,
+        ),
+        AppSlider(
+          value: activeSettings.brightness.clamp(30, 100).toDouble(),
+          min: 30,
+          max: 100,
+          divisions: 14,
+          onChanged:
+              (v) => unawaited(
+                _savePreferencePatch(ref, {'brightness': v.round()}),
+              ),
+        ),
+        const SizedBox(height: 10),
+
+        // 3. 护眼暖色（0–60%）
+        _SliderHeader(
+          label: l10n.readerWarmth,
+          valueLabel: '${activeSettings.warmth}%',
+          color: muted,
+          accent: activeSettings.accentColor,
+        ),
+        AppSlider(
+          value: activeSettings.warmth.clamp(0, 60).toDouble(),
+          min: 0,
+          max: 60,
+          divisions: 12,
+          onChanged:
+              (v) =>
+                  unawaited(_savePreferencePatch(ref, {'warmth': v.round()})),
+        ),
+        const SizedBox(height: 12),
+
+        // 4. 自动夜间开关
+        _ToggleRow(
+          title: l10n.readerAutoNight,
+          subtitle: l10n.readerAutoNightHint,
+          value: activeSettings.autoNight,
+          foreground: fg,
+          muted: muted,
+          settings: activeSettings,
+          mobile: mobile,
+          onChanged:
+              (v) => unawaited(_savePreferencePatch(ref, {'autoNight': v})),
+        ),
+        const SizedBox(height: 18),
+
+        // 5. 漫画 Zoom（- / 100% / +）
+        _SectionLabel(label: isZh ? '画面缩放' : 'Zoom', color: muted),
+        const SizedBox(height: 10),
+        _ZoomControlRow(
+          zoomScale: effectiveZoom,
+          foreground: fg,
+          accent: activeSettings.accentColor,
+          onZoomOut: handleZoomOut,
+          onResetZoom: handleResetZoom,
+          onZoomIn: handleZoomIn,
+        ),
+        const SizedBox(height: 20),
+
         if (showPageMode) ...[
           _SectionLabel(label: l10n.readerReadingMode, color: muted),
           const SizedBox(height: 10),
           _SegmentedPill<String>(
             value: displaySettings.readingMode,
-            accent: themeSettings.accentColor,
+            accent: activeSettings.accentColor,
             foreground: fg,
             options: [
               ('book', l10n.readerModeBook, Icons.auto_stories_outlined),
@@ -87,7 +230,7 @@ class ComicReaderSettingsPanel extends StatelessWidget {
           value: isRtl,
           foreground: fg,
           muted: muted,
-          settings: themeSettings,
+          settings: activeSettings,
           mobile: mobile,
           onChanged:
               (value) =>
@@ -105,7 +248,7 @@ class ComicReaderSettingsPanel extends StatelessWidget {
             value: displaySettings.dualPage,
             foreground: fg,
             muted: muted,
-            settings: themeSettings,
+            settings: activeSettings,
             mobile: mobile,
             onChanged:
                 (value) => onChanged(displaySettings.copyWith(dualPage: value)),
@@ -116,7 +259,7 @@ class ComicReaderSettingsPanel extends StatelessWidget {
           const SizedBox(height: 10),
           _SegmentedPill<String>(
             value: displaySettings.imageFit,
-            accent: themeSettings.accentColor,
+            accent: activeSettings.accentColor,
             foreground: fg,
             options: [
               (
@@ -147,7 +290,7 @@ class ComicReaderSettingsPanel extends StatelessWidget {
             value: displaySettings.fullWidth,
             foreground: fg,
             muted: muted,
-            settings: themeSettings,
+            settings: activeSettings,
             mobile: mobile,
             onChanged:
                 (value) =>
@@ -193,12 +336,217 @@ class ComicReaderSettingsPanel extends StatelessWidget {
             value: volumeKeyPaging,
             foreground: fg,
             muted: muted,
-            settings: themeSettings,
+            settings: activeSettings,
             mobile: mobile,
             onChanged: onVolumeKeyPagingChanged,
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ThemeSwatchCard extends StatelessWidget {
+  const _ThemeSwatchCard({
+    required this.palette,
+    required this.label,
+    required this.selected,
+    required this.accent,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  final ReaderReadingPalette palette;
+  final String label;
+  final bool selected;
+  final Color accent;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: MotionToken.reduced(context, MotionToken.fast),
+            height: 36,
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? accent : foreground.withValues(alpha: 0.16),
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                'Aa',
+                style: TextStyle(
+                  color: palette.onSurface,
+                  fontSize: AppTypography.bodySmall,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? accent : foreground.withValues(alpha: 0.72),
+              fontSize: AppTypography.labelMicro,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliderHeader extends StatelessWidget {
+  const _SliderHeader({
+    required this.label,
+    required this.valueLabel,
+    required this.color,
+    required this.accent,
+  });
+
+  final String label;
+  final String valueLabel;
+  final Color color;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _SectionLabel(label: label, color: color)),
+        Text(
+          valueLabel,
+          style: TextStyle(
+            color: accent,
+            fontSize: AppTypography.bodySmall,
+            fontWeight: FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ZoomControlRow extends StatelessWidget {
+  const _ZoomControlRow({
+    required this.zoomScale,
+    required this.foreground,
+    required this.accent,
+    required this.onZoomOut,
+    required this.onResetZoom,
+    required this.onZoomIn,
+  });
+
+  final double zoomScale;
+  final Color foreground;
+  final Color accent;
+  final VoidCallback? onZoomOut;
+  final VoidCallback? onResetZoom;
+  final VoidCallback? onZoomIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (zoomScale * 100).round();
+    final enabled = onZoomIn != null && onZoomOut != null;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: foreground.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: foreground.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ZoomActionButton(
+              icon: Icons.remove_rounded,
+              foreground: foreground,
+              onTap: enabled && zoomScale > 1.01 ? onZoomOut : null,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: enabled ? onResetZoom : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      zoomScale > 1.02
+                          ? accent.withValues(alpha: 0.22)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$percent%',
+                  style: TextStyle(
+                    color: zoomScale > 1.02 ? accent : foreground,
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _ZoomActionButton(
+              icon: Icons.add_rounded,
+              foreground: foreground,
+              onTap: enabled && zoomScale < 3.95 ? onZoomIn : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZoomActionButton extends StatelessWidget {
+  const _ZoomActionButton({
+    required this.icon,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color foreground;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        alignment: Alignment.center,
+        child: Icon(
+          icon,
+          size: 16,
+          color:
+              onTap == null
+                  ? foreground.withValues(alpha: 0.30)
+                  : foreground.withValues(alpha: 0.88),
+        ),
+      ),
     );
   }
 }

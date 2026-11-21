@@ -7,17 +7,45 @@ import 'desktop_test_harness.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('页数放得下就全列，放不下才折叠成省略号', () {
-    // 7 页及以内直出，`…` 反而更难读。
-    expect(DesktopPager.pageSlots(0, 1), [0]);
-    expect(DesktopPager.pageSlots(2, 5), [0, 1, 2, 3, 4]);
-    expect(DesktopPager.pageSlots(3, 7), [0, 1, 2, 3, 4, 5, 6]);
+  testWidgets('7 页以内全列，超过才折叠成省略号', (tester) async {
+    Future<void> pumpPager({required int totalItems, required int page}) {
+      return tester.pumpWidget(
+        wrapDesktop(
+          Center(
+            child: SizedBox(
+              width: 800,
+              child: DesktopPager(
+                page: page,
+                pageSize: 10,
+                totalItems: totalItems,
+                onPageChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
-    // 首末页与当前页 ±1 必显，中间用 null 表示 `…`。
-    expect(DesktopPager.pageSlots(0, 12), [0, 1, null, 11]);
-    expect(DesktopPager.pageSlots(5, 12), [0, null, 4, 5, 6, null, 11]);
-    expect(DesktopPager.pageSlots(11, 12), [0, null, 10, 11]);
-    expect(DesktopPager.pageSlots(1, 12), [0, 1, 2, null, 11]);
+    // 7 页及以内直出，`…` 反而更难读。
+    await pumpPager(totalItems: 70, page: 0);
+    await tester.pump();
+    expect(find.text('…'), findsNothing);
+    for (final label in ['1', '2', '3', '4', '5', '6', '7']) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    // 首末页与当前页 ±1 必显，中间用 `…`。
+    await pumpPager(totalItems: 120, page: 0);
+    await tester.pump();
+    expect(find.text('…'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
+
+    await pumpPager(totalItems: 120, page: 5);
+    await tester.pump();
+    expect(find.text('…'), findsNWidgets(2));
+    for (final label in ['1', '6', '12']) {
+      expect(find.text(label), findsOneWidget);
+    }
   });
 
   testWidgets('首末页在两端禁用，点页码回到对应页', (tester) async {
@@ -31,8 +59,8 @@ void main() {
                   width: 800,
                   child: DesktopPager(
                     page: page,
-                    totalPages: 12,
-                    summary: '120 files',
+                    pageSize: 10,
+                    totalItems: 120,
                     onPageChanged: (next) => setState(() => page = next),
                   ),
                 ),
@@ -42,7 +70,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('120 files'), findsOneWidget);
+    expect(find.textContaining('of 120'), findsOneWidget);
     // 12 页：1 … 4 5 6 … 12，其中 5 当前选中。
     for (final label in ['1', '4', '5', '6', '12']) {
       expect(find.text(label), findsOneWidget);
@@ -71,7 +99,8 @@ void main() {
             width: 800,
             child: DesktopPager(
               page: 2,
-              totalPages: 3,
+              pageSize: 10,
+              totalItems: 30,
               onPageChanged: changes.add,
             ),
           ),
@@ -99,8 +128,8 @@ void main() {
                   width: 800,
                   child: DesktopPager(
                     page: 0,
-                    totalPages: 3,
                     pageSize: size,
+                    totalItems: 30,
                     onPageSizeChanged: (next) => setState(() => size = next),
                     onPageChanged: (_) {},
                   ),

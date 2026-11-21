@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
@@ -13,6 +14,7 @@ class MoviePlayerVolume extends StatelessWidget {
     required this.onMouseActivity,
     required this.setPlayerVolume,
     this.showSlider = true,
+    this.buttonSize = 32,
     super.key,
   });
 
@@ -23,10 +25,12 @@ class MoviePlayerVolume extends StatelessWidget {
   final VoidCallback onMouseActivity;
   final void Function(double) setPlayerVolume;
   final bool showSlider;
+  final double buttonSize;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.videoColors;
+    final effectiveVolume = isMuted ? 0 : volume.clamp(0, 100).round();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -42,10 +46,10 @@ class MoviePlayerVolume extends StatelessWidget {
                   ? AppLocalizations.of(context).videoUnmute
                   : AppLocalizations.of(context).videoMute,
           onPressed: onToggleMute,
-          size: 44,
-          iconSize: 22,
+          size: buttonSize,
+          iconSize: buttonSize <= 34 ? 19 : 22,
         ),
-        if (showSlider)
+        if (showSlider) ...[
           SizedBox(
             width: 80,
             child: SliderTheme(
@@ -61,7 +65,7 @@ class MoviePlayerVolume extends StatelessWidget {
                 ),
               ),
               child: AppSlider(
-                value: volume.clamp(0, 100),
+                value: isMuted ? 0 : volume.clamp(0, 100),
                 min: 0,
                 max: 100,
                 onChanged: (v) {
@@ -72,6 +76,22 @@ class MoviePlayerVolume extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 34,
+            child: Text(
+              '$effectiveVolume%',
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              style: TextStyle(
+                color: colors.playerControlMuted,
+                fontSize: AppTypography.labelSmall,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

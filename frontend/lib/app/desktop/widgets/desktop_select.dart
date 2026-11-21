@@ -189,7 +189,8 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                     color: switch (widget.variant) {
                       DesktopSelectVariant.field => skin.bg,
                       DesktopSelectVariant.small => skin.raise,
-                      DesktopSelectVariant.pill => skin.raise,
+                      DesktopSelectVariant.pill =>
+                        hovered ? skin.raise2 : skin.raise,
                     },
                     borderRadius: BorderRadius.circular(radius),
                     boxShadow:
@@ -210,7 +211,8 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                               ? DesktopPalette.bad
                               : _open
                               ? skin.accent
-                              : hovered
+                              : hovered &&
+                                  widget.variant != DesktopSelectVariant.pill
                               ? Color.lerp(skin.line2, skin.accent, 0.4)!
                               : skin.line2,
                     ),
@@ -305,7 +307,7 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                   (context, t, child) => Opacity(
                     opacity: t,
                     child: Transform.translate(
-                      offset: Offset(0, (1 - t) * 4),
+                      offset: Offset(0, (1 - t) * -4),
                       child: Transform.scale(
                         scale: 0.98 + 0.02 * t,
                         alignment:
@@ -449,10 +451,10 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
               child:
                   items.isEmpty
                       ? Padding(
-                        // 样例 `select.css:35`：无匹配区 24/10。
+                        // 样例 `select.css:35`：无匹配区 24/10（垂直 24，水平 10）。
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 10,
+                          horizontal: 10,
+                          vertical: 24,
                         ),
                         child: Text(
                           AppLocalizations.of(context).adminNoMatch,

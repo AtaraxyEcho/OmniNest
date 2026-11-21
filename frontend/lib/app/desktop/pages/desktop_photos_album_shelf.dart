@@ -34,10 +34,7 @@ class _AlbumShelf extends StatelessWidget {
                     children: [
                       AspectRatio(
                         aspectRatio: 4 / 3,
-                        child: DesktopSkeletonBox(
-                          radius: DesktopMetrics.radius,
-                          index: i * 3,
-                        ),
+                        child: DesktopSkeletonBox(radius: 14, index: i * 3),
                       ),
                       const SizedBox(height: 10),
                       FractionallySizedBox(
@@ -80,49 +77,132 @@ class _AlbumCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DesktopHoverLift(
-          onTap: () => onOpen(album),
-          child: AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                DesktopCover(
-                  url: album.coverUrl,
-                  kind: DesktopCoverKind.network,
-                  fallbackIcon: DesktopIcons.image,
-                  cacheKey: 'desktop-album-${album.id}',
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Color(0x4D000000)],
-                      stops: [0.70, 1.0],
+    final duration = DesktopMotion.of(
+      context,
+      const Duration(milliseconds: 500),
+    );
+    const back1Angle = -3.0 * math.pi / 180.0;
+    const back2Angle = 2.0 * math.pi / 180.0;
+
+    return DesktopHover(
+      builder: (context, hovered) {
+        final back1Transform =
+            Matrix4.identity()
+              ..translateByDouble(0.0, hovered ? -16.0 : -8.0, 0.0, 1.0)
+              ..rotateZ(hovered ? back1Angle : 0.0)
+              ..scaleByDouble(0.92, 0.92, 1.0, 1.0);
+        final back2Transform =
+            Matrix4.identity()
+              ..translateByDouble(0.0, hovered ? -9.0 : -4.0, 0.0, 1.0)
+              ..rotateZ(hovered ? back2Angle : 0.0)
+              ..scaleByDouble(0.96, 0.96, 1.0, 1.0);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: () => onOpen(album),
+              behavior: HitTestBehavior.opaque,
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 背卡 1：静息 -8px / scale .92 / op .5，hover 扇开 -16px / -3deg
+                    Positioned.fill(
+                      child: AnimatedContainer(
+                        duration: duration,
+                        curve: DesktopMotion.spring,
+                        transformAlignment: Alignment.center,
+                        transform: back1Transform,
+                        decoration: BoxDecoration(
+                          color: skin.raise3.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: skin.line2.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    // 背卡 2：静息 -4px / scale .96 / op .75，hover 扇开 -9px / +2deg
+                    Positioned.fill(
+                      child: AnimatedContainer(
+                        duration: duration,
+                        curve: DesktopMotion.spring,
+                        transformAlignment: Alignment.center,
+                        transform: back2Transform,
+                        decoration: BoxDecoration(
+                          color: skin.raise3.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: skin.line2.withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 主封面卡（14px 圆角 + 阴影）
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              offset: const Offset(0, 14),
+                              blurRadius: 30,
+                              spreadRadius: -12,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              DesktopCover(
+                                url: album.coverUrl,
+                                kind: DesktopCoverKind.network,
+                                fallbackIcon: DesktopIcons.image,
+                                cacheKey: 'desktop-album-${album.id}',
+                              ),
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Color(0x4D000000),
+                                    ],
+                                    stops: [0.70, 1.0],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          album.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DesktopType.bodyStrong(skin.text),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          l10n.desktopItemCount(album.photoCount),
-          style: DesktopType.caption(skin.text3),
-        ),
-      ],
+            const SizedBox(height: 12),
+            Text(
+              album.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: DesktopType.bodyStrong(skin.text),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              l10n.desktopItemCount(album.photoCount),
+              style: DesktopType.caption(skin.text3),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -198,7 +278,7 @@ class _CreateAlbumBorder extends CustomPainter {
               size.width - inset * 2,
               size.height - inset * 2,
             ),
-            const Radius.circular(DesktopMetrics.radiusSmall),
+            const Radius.circular(14),
           ),
         );
     final paint =

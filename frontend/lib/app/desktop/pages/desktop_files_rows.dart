@@ -8,11 +8,14 @@ class _FileRow extends StatelessWidget {
     required this.onTap,
     required this.onOpen,
     required this.onMenu,
+    this.onToggleSelect,
     this.onFavorite,
     this.onShare,
     this.dragIds = const <String>[],
     this.onDropFiles,
     this.hoveredAsDropTarget = false,
+    this.selectedPrev = false,
+    this.selectedNext = false,
     super.key,
   });
 
@@ -20,6 +23,7 @@ class _FileRow extends StatelessWidget {
   final bool selected;
   final bool recycle;
   final VoidCallback onTap;
+  final VoidCallback? onToggleSelect;
   final VoidCallback onOpen;
   final ValueChanged<Offset> onMenu;
 
@@ -37,10 +41,25 @@ class _FileRow extends StatelessWidget {
   /// 外部（系统文件）拖入时指针停在本行上；内部拖拽由 `DragTarget` 自己给。
   final bool hoveredAsDropTarget;
 
+  /// 相邻选中行融合圆角（`.sel-p / .sel-n`）。
+  final bool selectedPrev;
+  final bool selectedNext;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final secondaryTextColor = skin.isDark ? skin.text3 : skin.text2;
+    const corner = Radius.circular(DesktopMetrics.radius);
+    final rowRadius =
+        selected
+            ? BorderRadius.only(
+              topLeft: selectedPrev ? Radius.zero : corner,
+              topRight: selectedPrev ? Radius.zero : corner,
+              bottomLeft: selectedNext ? Radius.zero : corner,
+              bottomRight: selectedNext ? Radius.zero : corner,
+            )
+            : BorderRadius.circular(DesktopMetrics.radius);
 
     /// [highlighted] 来自外层 `DragTarget`：拖拽悬停在本行时按 `.f-row.drop`
     /// 换成 accent 24% 底 + 2px 实描边。描边走 `foregroundDecoration`，
@@ -70,19 +89,9 @@ class _FileRow extends StatelessWidget {
                           ),
                           border: Border.all(color: skin.accent, width: 2),
                         )
-                        : selected
-                        ? BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            DesktopMetrics.radius,
-                          ),
-                          border: Border.all(color: skin.accentWash(0.35)),
-                        )
                         : null,
                 decoration: BoxDecoration(
-                  // 样例 `.f-row.sel`：accent 14% 底 + 1px accent 35% 描边；
-                  // `.f-row.drop` 是 24% 底 + 2px 实描边（走 foregroundDecoration）。
-                  // 样例 `extra.css:74`（终值，压过 desktop.css 的 14%）：
-                  // 选中 13% 底 + 1px accent 35% 描边。
+                  // 选中态单层 accent 42% 描边 + 相邻融合圆角；浅色默认态透明底 + 发丝底边线（polish.css:516-519）。
                   color:
                       highlighted
                           ? skin.accentWash(0.24)
@@ -91,22 +100,41 @@ class _FileRow extends StatelessWidget {
                           : hovered
                           ? skin.raise
                           : Colors.transparent,
-                  // 样例 `desktop.css:458`：文件行圆角 12。
-                  borderRadius: BorderRadius.circular(DesktopMetrics.radius),
-                  border: Border.all(
-                    color:
-                        selected
-                            ? skin.accentWash(0.35)
-                            : hovered
-                            ? skin.line
-                            : Colors.transparent,
-                  ),
+                  borderRadius:
+                      !selected && !hovered && !highlighted && !skin.isDark
+                          ? BorderRadius.zero
+                          : rowRadius,
+                  border:
+                      selected
+                          ? Border(
+                            top:
+                                selectedPrev
+                                    ? BorderSide.none
+                                    : BorderSide(color: skin.accentWash(0.42)),
+                            bottom:
+                                selectedNext
+                                    ? BorderSide.none
+                                    : BorderSide(color: skin.accentWash(0.42)),
+                            left: BorderSide(color: skin.accentWash(0.42)),
+                            right: BorderSide(color: skin.accentWash(0.42)),
+                          )
+                          : hovered
+                          ? Border.all(color: skin.line)
+                          : !skin.isDark
+                          ? Border(bottom: BorderSide(color: skin.line))
+                          : Border.all(color: Colors.transparent),
                 ),
                 child: Row(
                   children: [
                     SizedBox(
                       width: _FileColumns.tick,
-                      child: Center(child: _SelectionTick(selected: selected)),
+                      child: GestureDetector(
+                        onTap: onToggleSelect ?? onTap,
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: _SelectionTick(selected: selected),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: _FileColumns.gap),
                     SizedBox(
@@ -147,7 +175,7 @@ class _FileRow extends StatelessWidget {
                             _fileSubtitle(l10n, node),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: DesktopType.caption(skin.text3),
+                            style: DesktopType.caption(secondaryTextColor),
                           ),
                         ],
                       ),
@@ -159,7 +187,7 @@ class _FileRow extends StatelessWidget {
                         _formatModified(context, node.updatedAt),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: DesktopType.numeric(skin.text3),
+                        style: DesktopType.numeric(secondaryTextColor),
                       ),
                     ),
                     const SizedBox(width: _FileColumns.gap),
@@ -168,7 +196,7 @@ class _FileRow extends StatelessWidget {
                       child: Text(
                         node.isFolder ? '—' : formatFileSize(node.sizeBytes),
                         textAlign: TextAlign.right,
-                        style: DesktopType.numeric(skin.text3),
+                        style: DesktopType.numeric(secondaryTextColor),
                       ),
                     ),
                     const SizedBox(width: _FileColumns.gap),

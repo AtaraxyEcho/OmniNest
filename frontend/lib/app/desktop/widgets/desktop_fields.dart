@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show LengthLimitingTextInputFormatter, TextInputFormatter;
 
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 
@@ -44,6 +46,7 @@ class DesktopTextField extends StatefulWidget {
     this.obscure = false,
     this.focusNode,
     this.keyName,
+    this.focusRing = true,
     super.key,
   });
 
@@ -108,6 +111,9 @@ class DesktopTextField extends StatefulWidget {
 
   /// 供测试定位（`find.byKey(ValueKey('...'))`）。
   final String? keyName;
+
+  /// 是否在聚焦时于边框外侧绘制镂空聚焦光环；工具栏紧凑筛选框可传 false。
+  final bool focusRing;
 
   @override
   State<DesktopTextField> createState() => _DesktopTextFieldState();
@@ -174,22 +180,34 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
     final fillFocused = page ? skin.bg2 : skin.raise2;
     final bad = widget.error != null;
     final lineColor = bad ? DesktopPalette.bad : skin.line2;
-    // 样例 `.field:focus`：accent 描边之外还有 4px / 18% 的外环与 raise2
-    // 底色。外环只能画在容器层，InputDecoration 没有 boxShadow。
-    final field = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow:
-            focused
-                ? [
+    // 仅在边框外侧绘制镂空聚焦光环（0% 内部渗色、0px 布局抖动），
+    // focusRing == false 时只保留 1px 强调色边框。
+    final field = TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: (widget.focusRing && focused) ? 1.0 : 0.0),
+      duration: MotionToken.reduced(context, const Duration(milliseconds: 200)),
+      curve: Curves.easeOut,
+      builder: (context, t, child) {
+        final shadows =
+            t <= 0.001
+                ? const <BoxShadow>[]
+                : [
                   BoxShadow(
-                    color: skin.accent.withValues(alpha: 0.18),
+                    color:
+                        bad
+                            ? const Color(
+                              0xFFE0655F,
+                            ).withValues(alpha: 0.18 * t)
+                            : skin.accent.withValues(alpha: 0.16 * t),
                     blurRadius: 0,
-                    spreadRadius: 4,
+                    spreadRadius: 3,
                   ),
-                ]
-                : const <BoxShadow>[],
-      ),
+                ];
+        return DesktopOutsetShadow(
+          borderRadius: radius,
+          shadows: shadows,
+          child: child!,
+        );
+      },
       child: SizedBox(
         height: widget.height,
         child: TextField(

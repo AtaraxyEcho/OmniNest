@@ -44,6 +44,24 @@ abstract final class DesktopMotion {
   static const Duration fast = Duration(milliseconds: 200);
 
   /// Photos 样例长按 300ms 后进入照片排序拖动。
+  /// 海报卡滑出播放钮的入场时长（样例 `Movies.tsx` 的 hover 提示）。
+  static const Duration cardSlide = Duration(milliseconds: 340);
+
+  /// 唱臂播放态微摆周期（3.4s，±0.35°）。
+  static const Duration tonearmSway = Duration(milliseconds: 3400);
+
+  /// 封面氛围光晕呼吸周期（4.2s）。
+  static const Duration deckAura = Duration(milliseconds: 4200);
+
+  /// 队列三柱均衡器的循环周期。
+  static const Duration equalizerPulse = Duration(milliseconds: 900);
+
+  /// 地点地球仪自转一圈的周期。
+  static const Duration globeTurn = Duration(milliseconds: 900);
+
+  /// 灯箱信息栏展开时舞台让位的时长。
+  static const Duration viewerStage = Duration(milliseconds: 450);
+
   static const Duration photoReorderHold = Duration(milliseconds: 300);
 
   /// Photos 样例在长按预备 90ms 后压入所选缩略图。

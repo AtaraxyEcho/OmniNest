@@ -858,18 +858,58 @@ extension _ComicReaderViewSections on ComicReaderViewState {
                 : _anchor.pageIndex;
         final imageFit = _resolveImageBoxFit();
 
+        final isDarkPage =
+            ThemeData.estimateBrightnessForColor(pageSurfaceBg) ==
+            Brightness.dark;
+        final spineAlpha = isDarkPage ? 0.16 : 0.08;
+
         Widget? buildBookLeaf(int pageIndex) {
           if (pageIndex < 0 || pageIndex >= _totalPages) return null;
-          return Padding(
-            padding: const EdgeInsets.all(6),
-            child: ComicPageImage(
-              key: ValueKey('comic-book-page-${_pages[pageIndex].id}'),
-              page: _pages[pageIndex],
-              itemId: widget.itemId,
-              surfaceColor: pageSurfaceBg,
-              layout: ComicPageImageLayout.paged,
-              fit: imageFit,
-            ),
+          final image = ComicPageImage(
+            key: ValueKey('comic-book-page-${_pages[pageIndex].id}'),
+            page: _pages[pageIndex],
+            itemId: widget.itemId,
+            surfaceColor: pageSurfaceBg,
+            layout: ComicPageImageLayout.paged,
+            fit: imageFit,
+          );
+          if (!useSpread) {
+            return image;
+          }
+          final isEvenPage = pageIndex.isEven;
+          final isLeftSide = _isRtl ? !isEvenPage : isEvenPage;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              image,
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: isLeftSide ? null : 0,
+                right: isLeftSide ? 0 : null,
+                width: 24,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin:
+                            isLeftSide
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                        end:
+                            isLeftSide
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: spineAlpha),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           );
         }
 
@@ -888,7 +928,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
               spread: useSpread,
               showPaperGrain: false,
               surfaceColor: pageSurfaceBg,
-              paperEdgeColor: ComicReaderViewState._comicPaperEdgeColor,
+              paperEdgeColor: _controlSettings.paperEdgeColor,
               bookmarked: isBookmarked,
               controller: _pageTurnController,
               prepareSnapshotPage: _prepareComicSnapshotPage,

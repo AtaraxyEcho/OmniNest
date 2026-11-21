@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/widgets/desktop_places_globe.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 
 /// Places 地图 `.pin b` 的 `ping 2.4s ease-out infinite`（`desktop.css:351`）。
 ///
@@ -35,6 +36,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           // MediaQuery 必须放在 MaterialApp 内层：WidgetsApp 会用
           // MediaQuery.fromView 覆盖外层显式构造的 data。
@@ -75,6 +78,9 @@ void main() {
         ),
         findsNothing,
       );
+      // v11 给地球加了一次性入场自转（900ms）；跑完后再确认没有常驻 ticker。
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.pump();
       expect(tester.binding.transientCallbackCount, 0);
     } finally {
       debugDefaultTargetPlatformOverride = null;

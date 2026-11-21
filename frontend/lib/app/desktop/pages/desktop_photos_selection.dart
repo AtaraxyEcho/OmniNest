@@ -79,7 +79,7 @@ class _PhotoTile extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 selected
-                    ? skin.raise2
+                    ? skin.accentWash(0.18)
                     : dragging
                     ? Color.lerp(skin.raise2, skin.accent, 0.16)
                     : skin.raise2,
@@ -151,7 +151,7 @@ class _PhotoTile extends StatelessWidget {
                                   : dragging
                                   ? 1
                                   : selected
-                                  ? 1
+                                  ? (hovered ? 0.92 : 0.90)
                                   : reordering
                                   ? 0.97
                                   : hovered
@@ -169,7 +169,7 @@ class _PhotoTile extends StatelessWidget {
                                   : DesktopMotion.ease,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
-                              selected ? 12 : 10,
+                              selected ? 9 : 10,
                             ),
                             child: ColorFiltered(
                               colorFilter: ColorFilter.matrix(
@@ -260,6 +260,9 @@ class _PhotoTile extends StatelessWidget {
                             DesktopIcons.heart,
                             size: 15,
                             color: Colors.white,
+                            shadows: const [
+                              Shadow(blurRadius: 4, color: Colors.black54),
+                            ],
                           ),
                         ),
                       if (selected && !dragging)

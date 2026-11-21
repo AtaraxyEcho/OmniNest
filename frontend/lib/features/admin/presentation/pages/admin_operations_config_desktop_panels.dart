@@ -64,8 +64,11 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                       Text(
                         change.display(change.from),
                         style: DesktopType.dense(
-                          skin.text3,
-                        ).copyWith(decoration: TextDecoration.lineThrough),
+                          const Color(0xFFE57A74),
+                        ).copyWith(
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: const Color(0xFFE57A74),
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -81,7 +84,9 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                           change.display(change.to),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: DesktopType.dense(skin.text),
+                          style: DesktopType.dense(
+                            const Color(0xFF7FCF9F),
+                          ).copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -174,8 +179,11 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                           Text(
                             _display(entry, entry.value),
                             style: DesktopType.dense(
-                              skin.text3,
-                            ).copyWith(decoration: TextDecoration.lineThrough),
+                              const Color(0xFFE57A74),
+                            ).copyWith(
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: const Color(0xFFE57A74),
+                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -191,7 +199,9 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                               _display(entry, _draft[entry.key] ?? ''),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: DesktopType.dense(skin.text),
+                              style: DesktopType.dense(
+                                const Color(0xFF7FCF9F),
+                              ).copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],

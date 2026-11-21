@@ -35,6 +35,7 @@ import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_now_playing_deck.dart';
+part 'desktop_now_playing_deck_parts.dart';
 part 'desktop_now_playing_panels.dart';
 part 'desktop_now_playing_transport.dart';
 
@@ -58,9 +59,12 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   static const Duration _seekStep = Duration(seconds: 5);
   static const double _volumeStep = 5;
 
+  /// 真实 33⅓ RPM（60 / 33.333 ≈ 1.8s 一圈，对齐 desktop.css:387）。
+  static const Duration _vinylRpmDuration = Duration(milliseconds: 1800);
+
   late final AnimationController _spin = AnimationController(
     vsync: this,
-    duration: DesktopMotion.vinylSpin,
+    duration: _vinylRpmDuration,
   );
   int _tab = 0;
   bool _dragging = false;
@@ -188,8 +192,8 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
       unawaited(timeline.seek(Duration(milliseconds: targetMs)));
     }
 
-    // 显式构造扩展列表：字面量里混入 `DesktopSkin` 时，前端编译器会把元素类型
-    // 推成 `ThemeExtension<ThemeExtension<dynamic>>`（analyze 不报，kernel 报）。
+    // 字面量里混 DesktopSkin 时 kernel 会把元素推成
+    // ThemeExtension<ThemeExtension<dynamic>>（analyze 不报），显式构造列表。
     final mergedExtensions = outerTheme.extensions.values
       .where((ext) => ext is! DesktopSkin)
       .toList(growable: true)..add(darkSkin);

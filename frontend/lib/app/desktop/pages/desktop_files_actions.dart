@@ -58,30 +58,40 @@ extension _FilesPageActions on _DesktopFilesPageState {
       if (state.selectedFileIds.contains(node.id)) node,
   ];
 
-  bool _hasMore(
-    FileBrowserState state,
-    FileManagerSection section,
-  ) => switch (section) {
-    FileManagerSection.recent => state.recentMeta.hasMore,
-    FileManagerSection.favorites => state.favoritesMeta.hasMore,
-    FileManagerSection.recycleBin => state.recycleMeta.hasMore,
-    FileManagerSection.sharedWithMe => state.sharedWithMeMeta.hasMore,
-    FileManagerSection.allFiles => state.filePage + 1 < state.fileTotalPages,
+  bool _isPagedSection(FileManagerSection section) => switch (section) {
+    FileManagerSection.allFiles ||
+    FileManagerSection.sharedSpace ||
+    FileManagerSection.recent ||
+    FileManagerSection.favorites ||
+    FileManagerSection.recycleBin ||
+    FileManagerSection.sharedWithMe => true,
     _ => false,
   };
 
-  int _loadedCount(FileBrowserState state, FileManagerSection section) =>
+  int _currentPage(FileBrowserState state, FileManagerSection section) =>
       switch (section) {
-        FileManagerSection.allFiles => state.files.length,
-        FileManagerSection.recent => state.recentFiles.length,
-        FileManagerSection.favorites => state.favoriteFiles.length,
-        FileManagerSection.recycleBin => state.recycleBin.length,
-        _ => state.sharedWithMe.length,
+        FileManagerSection.allFiles ||
+        FileManagerSection.sharedSpace => state.filePage,
+        FileManagerSection.recent => state.recentMeta.page,
+        FileManagerSection.favorites => state.favoritesMeta.page,
+        FileManagerSection.recycleBin => state.recycleMeta.page,
+        _ => state.sharedWithMeMeta.page,
+      };
+
+  int _pageSize(FileBrowserState state, FileManagerSection section) =>
+      switch (section) {
+        FileManagerSection.allFiles ||
+        FileManagerSection.sharedSpace => state.filePageSize,
+        FileManagerSection.recent => state.recentMeta.size,
+        FileManagerSection.favorites => state.favoritesMeta.size,
+        FileManagerSection.recycleBin => state.recycleMeta.size,
+        _ => state.sharedWithMeMeta.size,
       };
 
   int _totalCount(FileBrowserState state, FileManagerSection section) =>
       switch (section) {
-        FileManagerSection.allFiles => state.fileTotalElements,
+        FileManagerSection.allFiles ||
+        FileManagerSection.sharedSpace => state.fileTotalElements,
         FileManagerSection.recent => state.recentMeta.totalElements,
         FileManagerSection.favorites => state.favoritesMeta.totalElements,
         FileManagerSection.recycleBin => state.recycleMeta.totalElements,
@@ -155,9 +165,54 @@ extension _FilesPageActions on _DesktopFilesPageState {
     );
   }
 
-  void _select(FileBrowserController controller, FileNode node) {
+  void _select(
+    FileBrowserController controller,
+    FileNode node, {
+    List<FileNode>? orderedItems,
+  }) {
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isShiftPressed &&
+        _selectionAnchorId != null &&
+        orderedItems != null &&
+        orderedItems.isNotEmpty) {
+      controller.selectRange(
+        orderedItems.map((item) => item.id).toList(growable: false),
+        _selectionAnchorId!,
+        node.id,
+      );
+      return;
+    }
+    if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+      controller.toggleSelection(node.id);
+      _selectionAnchorId = node.id;
+      return;
+    }
     controller.clearSelection();
     controller.toggleSelection(node.id);
+    _selectionAnchorId = node.id;
+  }
+
+  void _toggleSelect(FileBrowserController controller, FileNode node) {
+    controller.toggleSelection(node.id);
+    _selectionAnchorId = node.id;
+  }
+
+  void _toggleSelectAll(
+    FileBrowserController controller,
+    List<FileNode> items,
+    Set<String> selected,
+  ) {
+    if (items.isEmpty) {
+      return;
+    }
+    final allSelected = items.every((node) => selected.contains(node.id));
+    if (allSelected) {
+      controller.clearSelection();
+      _selectionAnchorId = null;
+      return;
+    }
+    controller.selectAll(items.map((node) => node.id));
+    _selectionAnchorId = items.first.id;
   }
 
   void _activate(
@@ -186,20 +241,6 @@ extension _FilesPageActions on _DesktopFilesPageState {
       return;
     }
     controller.setSortBy(value);
-  }
-
-  Future<void> _loadMore(
-    FileBrowserController controller,
-    FileBrowserState state,
-    FileManagerSection section,
-  ) async {
-    await switch (section) {
-      FileManagerSection.allFiles => controller.loadMoreFiles(),
-      FileManagerSection.recent => controller.loadMoreRecentFiles(),
-      FileManagerSection.favorites => controller.loadMoreFavoriteFiles(),
-      FileManagerSection.recycleBin => controller.loadMoreRecycleBin(),
-      _ => controller.loadMoreSharedWithMe(),
-    };
   }
 
   Future<void> _pickAndUpload(
@@ -681,7 +722,15 @@ extension _FilesPageActions on _DesktopFilesPageState {
         return;
       }
       rows.add(_RowGroupLabel(label: label, count: group.length));
-      for (final node in group) {
+      for (var i = 0; i < group.length; i++) {
+        final node = group[i];
+        final isSelected = selected.contains(node.id);
+        final selectedPrev =
+            isSelected && i > 0 && selected.contains(group[i - 1].id);
+        final selectedNext =
+            isSelected &&
+            i + 1 < group.length &&
+            selected.contains(group[i + 1].id);
         rows.add(
           DesktopStagger(
             index: index++,
@@ -689,10 +738,13 @@ extension _FilesPageActions on _DesktopFilesPageState {
               // 文件夹行要能被外部拖拽命中，锚点供 `_folderAt` 反查。
               key: node.isFolder ? _folderKey(node.id) : null,
               node: node,
-              selected: selected.contains(node.id),
+              selected: isSelected,
+              selectedPrev: selectedPrev,
+              selectedNext: selectedNext,
               recycle: state.section == FileManagerSection.recycleBin,
               hoveredAsDropTarget: _externalHoverId == node.id,
-              onTap: () => _select(controller, node),
+              onTap: () => _select(controller, node, orderedItems: items),
+              onToggleSelect: () => _toggleSelect(controller, node),
               onOpen:
                   () => _activate(
                     controller,

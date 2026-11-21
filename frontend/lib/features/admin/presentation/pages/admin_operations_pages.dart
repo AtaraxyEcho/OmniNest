@@ -4,6 +4,15 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:omninest/app/desktop/desktop_routes.dart';
+import 'package:omninest/app/providers.dart' show apiClientProvider;
+import 'package:omninest/features/music/music_portal.dart'
+    show musicCenterControllerProvider;
+import 'package:omninest/features/photos/photo_dashboard.dart'
+    show photoDashboardProvider;
+import 'package:omninest/features/reader/application/reader_controller.dart'
+    show readerCenterControllerProvider;
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/environment_providers.dart';
@@ -75,6 +84,8 @@ part 'admin_operations_sessions.dart';
 part 'admin_operations_dlq.dart';
 part 'admin_maintenance_page.dart';
 part 'admin_shared_space_matrix.dart';
+part 'admin_operations_library_cards.dart';
+part 'admin_operations_other_libraries.dart';
 
 /// 样例 Admin 第六分区 Media library（`LibraryManager.tsx`）：
 /// 库源发现、最近一次扫描摘要与媒体库整理入口。

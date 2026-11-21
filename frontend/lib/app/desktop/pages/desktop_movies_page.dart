@@ -22,6 +22,7 @@ import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_tilt.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -137,6 +138,25 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
         copy.sort(
           (a, b) =>
               (b.releaseDate?.year ?? 0).compareTo(a.releaseDate?.year ?? 0),
+        );
+    }
+    return copy;
+  }
+
+  List<MovieSeries> _sortedSeries(List<MovieSeries> items) {
+    final copy = [...items];
+    switch (_sort) {
+      case _MoviesSort.recent:
+        copy.sort(
+          (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+        );
+      case _MoviesSort.rating:
+        copy.sort((a, b) => (b.rating ?? 0).compareTo(a.rating ?? 0));
+      case _MoviesSort.year:
+        copy.sort(
+          (a, b) =>
+              (b.firstAirDate?.year ?? 0).compareTo(a.firstAirDate?.year ?? 0),
         );
     }
     return copy;
@@ -486,7 +506,9 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
                     title: l10n.videoSectionSeries,
                     actionLabel: l10n.desktopSeeAllCount(series.length),
                     onAction: () => _openTab(DesktopMoviesTab.series),
-                    child: _SeriesRail(items: series.take(10).toList()),
+                    child: _SeriesRail(
+                      items: _sortedSeries(series).take(10).toList(),
+                    ),
                   ),
                 if (anime.isNotEmpty)
                   DesktopSection(
@@ -494,7 +516,9 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
                     title: l10n.videoSectionAnime,
                     actionLabel: l10n.desktopSeeAllCount(anime.length),
                     onAction: () => _openTab(DesktopMoviesTab.anime),
-                    child: _SeriesRail(items: anime.take(10).toList()),
+                    child: _SeriesRail(
+                      items: _sortedSeries(anime).take(10).toList(),
+                    ),
                   ),
               ] else ...[
                 if (_tab == DesktopMoviesTab.movies ||
@@ -528,7 +552,9 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
                     DesktopMoviesTab.watchlist => _PosterGrid(
                       items: _sorted(watchlistItems),
                     ),
-                    DesktopMoviesTab.anime => _SeriesGrid(items: anime),
+                    DesktopMoviesTab.anime => _SeriesGrid(
+                      items: _sortedSeries(anime),
+                    ),
                     DesktopMoviesTab.history => _HistoryGrid(
                       entries: history,
                       onClear: () async {
@@ -560,7 +586,9 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
                         }
                       },
                     ),
-                    DesktopMoviesTab.series => _SeriesGrid(items: series),
+                    DesktopMoviesTab.series => _SeriesGrid(
+                      items: _sortedSeries(series),
+                    ),
                     DesktopMoviesTab.forYou => const SizedBox.shrink(),
                   },
                 ),

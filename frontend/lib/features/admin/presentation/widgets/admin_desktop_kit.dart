@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_pager.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -35,49 +36,55 @@ class AdminCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return Container(
-      // 样例 `.card { padding: 22px 24px }`。
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-      decoration: BoxDecoration(
-        // 原型 `.card` 使用半透明 panel；`raise` 会让管理页在背景库
-        // 开启时退化成几乎不见的深色块，浅色主题也失去层次。
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        border: Border.all(color: skin.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    text: title,
-                    style: DesktopType.cardTitle(skin.text),
-                    children: [
-                      if (count != null)
-                        TextSpan(
-                          text: ' · $count',
-                          style: DesktopType.caption(skin.text3),
-                        ),
-                    ],
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      blur: 24,
+      saturation: 1.3,
+      child: Container(
+        // 样例 `.card { padding: 22px 24px }`。
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+        decoration: BoxDecoration(
+          // 原型 `.card` 使用半透明 panel；`raise` 会让管理页在背景库
+          // 开启时退化成几乎不见的深色块，浅色主题也失去层次。
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      text: title,
+                      style: DesktopType.cardTitle(skin.text),
+                      children: [
+                        if (count != null)
+                          TextSpan(
+                            text: ' · $count',
+                            style: DesktopType.caption(skin.text3),
+                          ),
+                      ],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              if (action != null) ...[const SizedBox(width: 12), action!],
+                if (action != null) ...[const SizedBox(width: 12), action!],
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(subtitle!, style: DesktopType.caption(skin.text3)),
             ],
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 6),
-            Text(subtitle!, style: DesktopType.caption(skin.text3)),
+            SizedBox(height: childGap),
+            child,
           ],
-          SizedBox(height: childGap),
-          child,
-        ],
+        ),
       ),
     );
   }
@@ -99,27 +106,33 @@ class AdminStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      decoration: BoxDecoration(
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        border: Border.all(color: skin.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label.toUpperCase(), style: DesktopType.eyebrow(skin.text3)),
-          const SizedBox(height: 8),
-          Text(value, style: DesktopType.adminStatValue(skin.text)),
-          const SizedBox(height: 2),
-          Text(
-            hint,
-            style: DesktopType.caption(skin.text3),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      blur: 24,
+      saturation: 1.3,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label.toUpperCase(), style: DesktopType.eyebrow(skin.text3)),
+            const SizedBox(height: 8),
+            Text(value, style: DesktopType.adminStatValue(skin.text)),
+            const SizedBox(height: 2),
+            Text(
+              hint,
+              style: DesktopType.caption(skin.text3),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -147,8 +160,8 @@ class AdminPager extends StatelessWidget {
     // 顶部发丝线、上边距与换行都在 DesktopPager 里（样例 `.pager`）。
     return DesktopPager(
       page: page,
-      totalPages: totalPages,
-      summary: summary,
+      pageSize: 1,
+      totalItems: totalPages < 1 ? 1 : totalPages,
       onPageChanged: onPageChanged,
     );
   }

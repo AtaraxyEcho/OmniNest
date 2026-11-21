@@ -9,11 +9,11 @@ import 'package:flutter/material.dart';
 abstract final class DesktopPalette {
   // ── 强调色档（样例 Settings.tsx accents，四档）──────────────────────
   static const Color sageDark = Color(0xFF8CC5B2);
-  static const Color sageLight = Color(0xFF2F7A68);
+  static const Color sageLight = Color(0xFF266B5A);
   static const Color mistDark = Color(0xFF8FB2D6);
   static const Color mistLight = Color(0xFF3A6EA0);
   static const Color copperDark = Color(0xFFD6A67A);
-  static const Color copperLight = Color(0xFFA2662F);
+  static const Color copperLight = Color(0xFF8F5624);
   static const Color irisDark = Color(0xFFA99BD8);
   static const Color irisLight = Color(0xFF6A58B0);
 
@@ -28,9 +28,9 @@ abstract final class DesktopPalette {
   /// `.drawer` 通用左侧阴影。
   static const Color drawerShadow = Color(0x99000000);
   static const Color popBaseDark = Color(0xFF1A2026);
-  static const Color textDark = Color(0xFFE8ECEA);
-  static const Color text2Dark = Color(0xFFA3ADAA);
-  static const Color text3Dark = Color(0xFF68726F);
+  static const Color textDark = Color(0xFFEEF2F0);
+  static const Color text2Dark = Color(0xFFB1BBB8);
+  static const Color text3Dark = Color(0xFF86918D);
   static const Color accentInkDark = Color(0xFF0A1411);
   static const Color warmDark = Color(0xFFD9B48A);
   static const Color veilDark = Color(0xFF080B0E);
@@ -45,11 +45,11 @@ abstract final class DesktopPalette {
   // `--panel` 的浅色基色是纯白，与 `--panel-solid` 的 #FBFCFA 不是同一档。
   static const Color panelBaseLight = Color(0xFFFFFFFF);
   static const Color popBaseLight = Color(0xFFFCFDFB);
-  static const Color textLight = Color(0xFF19211E);
-  static const Color text2Light = Color(0xFF526059);
-  static const Color text3Light = Color(0xFF8A9690);
+  static const Color textLight = Color(0xFF151C19);
+  static const Color text2Light = Color(0xFF435048);
+  static const Color text3Light = Color(0xFF647068);
   static const Color accentInkLight = Color(0xFFFFFFFF);
-  static const Color warmLight = Color(0xFF9A6A3A);
+  static const Color warmLight = Color(0xFF85582C);
   static const Color veilLight = Color(0xFFEEF0EC);
   static const Color raiseBaseLight = Color(0xFF18241E);
   static const Color shadowLight = Color(0x59283730);

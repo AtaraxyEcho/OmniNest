@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+part 'desktop_image_loading.dart';
 
 /// 样例 `.eyebrow`：大写小字眉标。
 class DesktopEyebrow extends StatelessWidget {
@@ -100,7 +101,7 @@ class DesktopPage extends StatelessWidget {
 
 /// 通用吸顶页面骨架：基于 [CustomScrollView]，保持与 [DesktopPage] 一致的最大
 /// 内容宽度与水平内边距，同时让 [DesktopStickySliver] 在吸顶态实现全出血磨砂背板。
-class DesktopSliverPage extends StatelessWidget {
+class DesktopSliverPage extends StatefulWidget {
   const DesktopSliverPage({
     this.controller,
     this.topPadding = DesktopMetrics.pageTopPadding,
@@ -115,7 +116,41 @@ class DesktopSliverPage extends StatelessWidget {
   final List<Widget> slivers;
 
   @override
+  State<DesktopSliverPage> createState() => _DesktopSliverPageState();
+}
+
+class _DesktopSliverPageState extends State<DesktopSliverPage> {
+  ScrollController? _fallbackController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.controller == null) {
+      _fallbackController = ScrollController();
+    }
+  }
+
+  @override
+  void didUpdateWidget(DesktopSliverPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == null && widget.controller != null) {
+      _fallbackController?.dispose();
+      _fallbackController = null;
+    } else if (oldWidget.controller != null && widget.controller == null) {
+      _fallbackController ??= ScrollController();
+    }
+  }
+
+  @override
+  void dispose() {
+    _fallbackController?.dispose();
+    _fallbackController = null;
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final effectiveController = widget.controller ?? _fallbackController!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth =
@@ -124,21 +159,24 @@ class DesktopSliverPage extends StatelessWidget {
                 : MediaQuery.sizeOf(context).width;
         final sideInset = _desktopContentSideInset(viewportWidth);
         return Scrollbar(
-          controller: controller,
+          controller: effectiveController,
           child: CustomScrollView(
-            controller: controller,
+            controller: effectiveController,
+            primary: false,
             slivers: [
-              if (topPadding > 0)
-                SliverToBoxAdapter(child: SizedBox(height: topPadding)),
-              for (final sliver in slivers)
+              if (widget.topPadding > 0)
+                SliverToBoxAdapter(child: SizedBox(height: widget.topPadding)),
+              for (final sliver in widget.slivers)
                 sliver is DesktopStickySliver
                     ? sliver
                     : SliverPadding(
                       padding: EdgeInsets.symmetric(horizontal: sideInset),
                       sliver: sliver,
                     ),
-              if (bottomPadding > 0)
-                SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+              if (widget.bottomPadding > 0)
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.bottomPadding),
+                ),
             ],
           ),
         );
@@ -896,97 +934,6 @@ class DesktopImage extends StatelessWidget {
 }
 
 /// 图片加载期的微光底（样例 `.img:not(.ok){animation:shimmer 1.8s}`）。
-class _ImageShimmer extends StatefulWidget {
-  const _ImageShimmer({required this.borderRadius});
-
-  final BorderRadius? borderRadius;
-
-  @override
-  State<_ImageShimmer> createState() => _ImageShimmerState();
-}
-
-class _ImageShimmerState extends State<_ImageShimmer>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: DesktopMotion.imageShimmer,
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      _controller.stop();
-      _controller.value = 0;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    final base = skin.raise2;
-    final highlight = Color.lerp(base, skin.text, 0.06)!;
-    final radius = widget.borderRadius ?? BorderRadius.zero;
-    return AnimatedBuilder(
-      animation: _controller,
-      builder:
-          (context, _) => DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              gradient: LinearGradient(
-                begin: Alignment(-1.6 + _controller.value * 3.2, 0),
-                end: Alignment(-0.6 + _controller.value * 3.2, 0),
-                colors: [base, highlight, base],
-              ),
-            ),
-          ),
-    );
-  }
-}
-
-/// 解码完成后的 600ms 淡入；首帧渲染时才把透明度推到 1。
-class _ImageFadeIn extends StatefulWidget {
-  const _ImageFadeIn({required this.child});
-
-  final Widget child;
-
-  @override
-  State<_ImageFadeIn> createState() => _ImageFadeInState();
-}
-
-class _ImageFadeInState extends State<_ImageFadeIn> {
-  bool _shown = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() => _shown = true);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: _shown ? 1 : 0,
-      duration: DesktopMotion.of(context, DesktopMotion.imageFade),
-      curve: DesktopMotion.ease,
-      child: widget.child,
-    );
-  }
-}
-
-/// 卡片 hover 抬升 + 轻微放大，对应样例 `.tilt` / `.album:hover`。
 class DesktopHoverLift extends StatelessWidget {
   const DesktopHoverLift({
     required this.child,

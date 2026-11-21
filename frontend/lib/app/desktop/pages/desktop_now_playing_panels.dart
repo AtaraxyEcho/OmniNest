@@ -245,96 +245,12 @@ class _SidePanel extends ConsumerWidget {
                           ),
                         ),
                       )
-                      : ListView.builder(
-                        itemCount: queue.length,
-                        itemBuilder: (context, index) {
-                          final item = queue[index];
-                          final active = item.playableKey == currentKey;
-                          return GestureDetector(
-                            onTap: () => onPickQueue(index),
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    active
-                                        ? Colors.white.withValues(alpha: 0.1)
-                                        : Colors.transparent,
-                                borderRadius: BorderRadius.circular(
-                                  DesktopMetrics.radiusSmall,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    active
-                                        ? DesktopIcons.play
-                                        : DesktopIcons.music,
-                                    size: 13,
-                                    color:
-                                        active
-                                            ? skin.accent
-                                            : Colors.white.withValues(
-                                              alpha: 0.45,
-                                            ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(7),
-                                    child: SizedBox(
-                                      width: 44,
-                                      height: 44,
-                                      child: DesktopImage(
-                                        url: item.track.coverUrl,
-                                        borderRadius: BorderRadius.circular(7),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item.track.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: DesktopType.dense(
-                                            active
-                                                ? Colors.white
-                                                : Colors.white.withValues(
-                                                  alpha: 0.82,
-                                                ),
-                                          ),
-                                        ),
-                                        Text(
-                                          item.track.artistName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: DesktopType.nano(
-                                            Colors.white.withValues(alpha: 0.5),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    _queueDuration(item.track.durationSeconds),
-                                    style: DesktopType.numeric(
-                                      Colors.white.withValues(alpha: 0.45),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                      : _NowPlayingQueueList(
+                        queue: queue,
+                        currentKey: currentKey,
+                        playing: playing,
+                        accentColor: skin.accent,
+                        onPickQueue: onPickQueue,
                       ))
                   : _NowPlayingAbout(
                     playing: playing,
@@ -350,6 +266,265 @@ class _SidePanel extends ConsumerWidget {
                   ),
         ),
       ],
+    );
+  }
+}
+
+/// 正在播放队列列表：切入时自动滚中当前曲目，左侧展示 1-based 序号与三柱动态均衡器。
+class _NowPlayingQueueList extends StatefulWidget {
+  const _NowPlayingQueueList({
+    required this.queue,
+    required this.currentKey,
+    required this.playing,
+    required this.accentColor,
+    required this.onPickQueue,
+  });
+
+  final List<MusicPlayableItem> queue;
+  final String? currentKey;
+  final bool playing;
+  final Color accentColor;
+  final ValueChanged<int> onPickQueue;
+
+  @override
+  State<_NowPlayingQueueList> createState() => _NowPlayingQueueListState();
+}
+
+class _NowPlayingQueueListState extends State<_NowPlayingQueueList> {
+  static const double _itemExtent = 66.0;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrent(animate: false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(_NowPlayingQueueList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentKey != widget.currentKey ||
+        oldWidget.queue.length != widget.queue.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrent(animate: true);
+      });
+    }
+  }
+
+  void _scrollToCurrent({required bool animate}) {
+    if (!mounted ||
+        !_scrollController.hasClients ||
+        widget.currentKey == null) {
+      return;
+    }
+    final activeIndex = widget.queue.indexWhere(
+      (entry) => entry.playableKey == widget.currentKey,
+    );
+    if (activeIndex < 0) return;
+    final position = _scrollController.position;
+    final viewport = position.viewportDimension;
+    final rawTarget =
+        activeIndex * _itemExtent - (viewport / 2) + (_itemExtent / 2);
+    final target = rawTarget.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (!animate || reduceMotion) {
+      _scrollController.jumpTo(target);
+    } else {
+      unawaited(
+        _scrollController.animateTo(
+          target,
+          duration: MotionToken.reduced(context, DesktopMotion.fast),
+          curve: DesktopMotion.ease,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: _scrollController,
+      itemExtent: _itemExtent,
+      itemCount: widget.queue.length,
+      itemBuilder: (context, index) {
+        final item = widget.queue[index];
+        final active = item.playableKey == widget.currentKey;
+        return GestureDetector(
+          onTap: () => widget.onPickQueue(index),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color:
+                  active
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusSmall),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: Center(
+                    child:
+                        active
+                            ? _QueueEqualizer(
+                              color: widget.accentColor,
+                              playing: widget.playing,
+                            )
+                            : Text(
+                              '${index + 1}',
+                              style: DesktopType.numeric(
+                                Colors.white.withValues(alpha: 0.45),
+                              ),
+                            ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: DesktopImage(
+                      url: item.track.coverUrl,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.dense(
+                          active
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.82),
+                        ),
+                      ),
+                      Text(
+                        item.track.artistName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.nano(
+                          Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  _queueDuration(item.track.durationSeconds),
+                  style: DesktopType.numeric(
+                    Colors.white.withValues(alpha: 0.45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 队列当前曲目的三柱动态均衡器。
+class _QueueEqualizer extends StatefulWidget {
+  const _QueueEqualizer({required this.color, required this.playing});
+
+  final Color color;
+  final bool playing;
+
+  @override
+  State<_QueueEqualizer> createState() => _QueueEqualizerState();
+}
+
+class _QueueEqualizerState extends State<_QueueEqualizer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(DesktopMotion.equalizerPulse),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_QueueEqualizer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.playing && !reduceMotion) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    } else if (_controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 14,
+      height: 14,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final phase = _controller.value * 2 * math.pi;
+          const offsets = [0.0, 2.1, 4.2];
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < 3; i++)
+                Container(
+                  width: 3,
+                  height:
+                      widget.playing
+                          ? 4.0 +
+                              10.0 * (0.5 + 0.5 * math.sin(phase + offsets[i]))
+                          : 4.0 + i * 2.0,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    borderRadius: BorderRadius.circular(1.5),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

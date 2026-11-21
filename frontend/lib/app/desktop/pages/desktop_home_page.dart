@@ -507,106 +507,130 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
+    final cardRadius = BorderRadius.circular(DesktopMetrics.radiusCard);
     if (loading) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-        decoration: BoxDecoration(
-          color: skin.panel,
-          borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-          border: Border.all(color: skin.line),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const DesktopSkeletonBox(width: 30, height: 30, radius: 9),
-            const SizedBox(height: 14),
-            const DesktopSkeletonBox(width: 76, height: 11, radius: 5),
-            const SizedBox(height: 5),
-            const DesktopSkeletonBox(width: 104, height: 30, radius: 6),
-            const SizedBox(height: 4),
-            const DesktopSkeletonBox(width: 116, height: 11, radius: 5),
-          ],
+      return DesktopGlassSurface(
+        borderRadius: cardRadius,
+        blur: 24,
+        saturation: 1.3,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          decoration: BoxDecoration(
+            color: skin.panel,
+            borderRadius: cardRadius,
+            border: Border.all(color: skin.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const DesktopSkeletonBox(width: 30, height: 30, radius: 9),
+              const SizedBox(height: 14),
+              const DesktopSkeletonBox(width: 76, height: 11, radius: 5),
+              const SizedBox(height: 5),
+              const DesktopSkeletonBox(width: 104, height: 30, radius: 6),
+              const SizedBox(height: 4),
+              const DesktopSkeletonBox(width: 116, height: 11, radius: 5),
+            ],
+          ),
         ),
       );
     }
     return DesktopHover(
-      enabled: false,
+      enabled: true,
+      cursor: SystemMouseCursors.basic,
       builder:
-          (context, _) => Container(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-            decoration: BoxDecoration(
-              color: skin.panel,
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-              border: Border.all(color: skin.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: skin.accentWash(0.14),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(icon, size: 16, color: skin.accent),
+          (context, hovered) => AnimatedContainer(
+            duration: DesktopMotion.of(context, DesktopMotion.fast),
+            curve: DesktopMotion.ease,
+            transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
+            child: DesktopGlassSurface(
+              borderRadius: cardRadius,
+              blur: 24,
+              saturation: 1.3,
+              child: AnimatedContainer(
+                duration: DesktopMotion.of(context, DesktopMotion.fast),
+                curve: DesktopMotion.ease,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                decoration: BoxDecoration(
+                  color: skin.panel,
+                  borderRadius: cardRadius,
+                  border: Border.all(color: hovered ? skin.line2 : skin.line),
                 ),
-                const SizedBox(height: 14),
-                Text(label, style: DesktopType.caption(skin.text3)),
-                const SizedBox(height: 2),
-                if (failed)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text('—', style: DesktopType.statValue(skin.text)),
-                      const Spacer(),
-                      DesktopLink(label: l10n.commonRetry, onPressed: onRetry),
-                    ],
-                  )
-                else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Flexible(
-                        child:
-                            numericValue == null
-                                ? Text(
-                                  value,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.statValue(skin.text),
-                                )
-                                : TweenAnimationBuilder<double>(
-                                  tween: Tween(begin: 0, end: numericValue),
-                                  duration: DesktopMotion.progress,
-                                  curve: Curves.easeOutCubic,
-                                  builder:
-                                      (context, animated, _) => Text(
-                                        animated.toStringAsFixed(decimals),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: DesktopType.statValue(skin.text),
-                                      ),
-                                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: skin.accentWash(0.14),
+                        borderRadius: BorderRadius.circular(9),
                       ),
-                      if (unit != null) ...[
-                        const SizedBox(width: 4),
-                        Text(unit!, style: DesktopType.caption(skin.text3)),
-                      ],
-                    ],
-                  ),
-                const SizedBox(height: 2),
-                Text(
-                  failed ? l10n.photosOperationFailed : caption,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DesktopType.caption(skin.text3),
+                      child: Icon(icon, size: 16, color: skin.accent),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(label, style: DesktopType.caption(skin.text3)),
+                    const SizedBox(height: 2),
+                    if (failed)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text('—', style: DesktopType.statValue(skin.text)),
+                          const Spacer(),
+                          DesktopLink(
+                            label: l10n.commonRetry,
+                            onPressed: onRetry,
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Flexible(
+                            child:
+                                numericValue == null
+                                    ? Text(
+                                      value,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.statValue(skin.text),
+                                    )
+                                    : TweenAnimationBuilder<double>(
+                                      tween: Tween(begin: 0, end: numericValue),
+                                      duration: DesktopMotion.progress,
+                                      curve: Curves.easeOutCubic,
+                                      builder:
+                                          (context, animated, _) => Text(
+                                            animated.toStringAsFixed(decimals),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: DesktopType.statValue(
+                                              skin.text,
+                                            ),
+                                          ),
+                                    ),
+                          ),
+                          if (unit != null) ...[
+                            const SizedBox(width: 4),
+                            Text(unit!, style: DesktopType.caption(skin.text3)),
+                          ],
+                        ],
+                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      failed ? l10n.photosOperationFailed : caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.caption(skin.text3),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
     );

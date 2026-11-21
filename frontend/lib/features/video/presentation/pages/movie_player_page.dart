@@ -45,9 +45,7 @@ part 'movie_player_page_autoplay.dart';
 part 'movie_player_page_progress.dart';
 part 'movie_player_page_tracks.dart';
 part 'movie_player_page_subtitles.dart';
-
-/// 开流失败覆盖层正文的字号（比正文大一号，便于在视频帧上读清）。
-const _errorOverlayTextSize = 15.0;
+part 'movie_player_page_chrome.dart';
 
 class MoviePlayerPage extends ConsumerStatefulWidget {
   const MoviePlayerPage({
@@ -88,6 +86,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   _FlashCue? _flash;
   Timer? _flashTimer;
   double _playbackSpeed = 1.0;
+  double _subtitleScale = 1.0;
   int? _activeSubtitleId;
   List<AudioTrack> _availableAudioTracks = const [];
   List<SubtitleTrack> _availableEmbeddedSubtitles = const [];
@@ -431,29 +430,49 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
             // 视频 — 默认 BoxFit.contain 填满可用空间并保持原始比例
             // 铺满模式用 BoxFit.cover，用户手动选择比例时用 AspectRatio 包裹
             Positioned.fill(
-              child:
-                  _isFill
-                      ? Video(
-                        controller: _controller,
-                        controls: NoVideoControls,
-                        fit: BoxFit.cover,
-                      )
-                      : _aspectRatio != null
-                      ? Center(
-                        child: AspectRatio(
-                          aspectRatio: _aspectRatio!,
-                          child: Video(
-                            controller: _controller,
-                            controls: NoVideoControls,
-                            fit: BoxFit.contain,
-                          ),
+              child: Builder(
+                builder: (context) {
+                  final subtitleConfig = SubtitleViewConfiguration(
+                    style: TextStyle(
+                      height: 1.4,
+                      fontSize:
+                          (isMobilePlatform ? 28.0 : 32.0) * _subtitleScale,
+                      letterSpacing: 0.0,
+                      wordSpacing: 0.0,
+                      color: const Color(0xFFFFFFFF),
+                      fontWeight: FontWeight.normal,
+                      backgroundColor: const Color(0xAA000000),
+                    ),
+                  );
+                  if (_isFill) {
+                    return Video(
+                      controller: _controller,
+                      controls: NoVideoControls,
+                      fit: BoxFit.cover,
+                      subtitleViewConfiguration: subtitleConfig,
+                    );
+                  }
+                  if (_aspectRatio != null) {
+                    return Center(
+                      child: AspectRatio(
+                        aspectRatio: _aspectRatio!,
+                        child: Video(
+                          controller: _controller,
+                          controls: NoVideoControls,
+                          fit: BoxFit.contain,
+                          subtitleViewConfiguration: subtitleConfig,
                         ),
-                      )
-                      : Video(
-                        controller: _controller,
-                        controls: NoVideoControls,
-                        fit: BoxFit.contain,
                       ),
+                    );
+                  }
+                  return Video(
+                    controller: _controller,
+                    controls: NoVideoControls,
+                    fit: BoxFit.contain,
+                    subtitleViewConfiguration: subtitleConfig,
+                  );
+                },
+              ),
             ),
             Positioned.fill(
               child: GestureDetector(
@@ -473,6 +492,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                 activeCueIndex: _activeCueIndex,
                 controlsVisible: _showControls && !_isInPipMode,
                 isMobile: isMobilePlatform,
+                fontScale: _subtitleScale,
               ),
             // Web 端转码模式提示
             if (isWebPlatform && plan.streamUrl != null && _showStreamNotice)
@@ -673,7 +693,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: _errorOverlayTextSize,
+                                fontSize: 15, // ignore: font_size_whitelist
                                 height: 1.5,
                               ),
                             ),
@@ -798,46 +818,5 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     } else {
       setState(() => _isSeeking = false);
     }
-  }
-
-  void _toggleMute() {
-    setState(() {
-      if (_isMuted) {
-        _volume = _volumeBeforeMute > 0 ? _volumeBeforeMute : 80;
-        _isMuted = false;
-      } else {
-        _volumeBeforeMute = _volume;
-        _volume = 0;
-        _isMuted = true;
-      }
-    });
-    unawaited(_player.setVolume(_volume));
-  }
-
-  void _toggleFullscreen() {
-    if (isDesktopPlatform) {
-      // 桌面全屏走手动全屏统一入口；本页租约仅移动端表达沉浸态。
-      unawaited(_windowChromeController.toggleFullscreen());
-      return;
-    }
-    fs.toggleFullscreen();
-    // 全屏状态变化后需要重建 UI 以更新图标
-    if (mounted) setState(() {});
-  }
-
-  void _cycleAspectRatio() {
-    final currentIndex = AspectRatioOption.options(context).indexWhere((o) {
-      if (o.isFill) return _isFill;
-      if (_isFill) return false;
-      if (o.ratio == null) return _aspectRatio == null;
-      return _aspectRatio == o.ratio;
-    });
-    final nextIndex =
-        (currentIndex + 1) % AspectRatioOption.options(context).length;
-    final next = AspectRatioOption.options(context)[nextIndex];
-    setState(() {
-      _aspectRatio = next.ratio;
-      _isFill = next.isFill;
-    });
   }
 }

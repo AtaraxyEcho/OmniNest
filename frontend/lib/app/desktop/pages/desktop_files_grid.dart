@@ -9,9 +9,14 @@ class _FileGrid extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onSelect,
+    this.onToggleSelect,
     required this.onMenu,
     this.onFavorite,
     this.onShare,
+    this.draggable = false,
+    this.externalHoverId,
+    this.folderKeyBuilder,
+    this.onDropFiles,
   });
 
   final List<FileNode> items;
@@ -21,12 +26,23 @@ class _FileGrid extends StatelessWidget {
   final Set<String> selected;
   final ValueChanged<FileNode> onTap;
   final ValueChanged<FileNode> onSelect;
+  final ValueChanged<FileNode>? onToggleSelect;
   final void Function(FileNode node, Offset position) onMenu;
   final ValueChanged<FileNode>? onFavorite;
   final ValueChanged<FileNode>? onShare;
+  final bool draggable;
+  final String? externalHoverId;
+  final GlobalKey Function(String id)? folderKeyBuilder;
+  final void Function(List<String> ids, String targetFolderId)? onDropFiles;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final folders = items
+        .where((node) => node.isFolder)
+        .toList(growable: false);
+    final files = items.where((node) => !node.isFolder).toList(growable: false);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // `extra.css:88` 终值：repeat(auto-fill,minmax(168px,1fr))，gap 12px。
@@ -34,37 +50,87 @@ class _FileGrid extends StatelessWidget {
             .floor()
             .clamp(2, 8);
         final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        var staggerIndex = 0;
+
+        Widget buildTile(FileNode node) {
+          final isSelected = selected.contains(node.id);
+          final dragIds =
+              draggable
+                  ? (isSelected
+                      ? selected.toList(growable: false)
+                      : <String>[node.id])
+                  : const <String>[];
+          return SizedBox(
+            width: width,
+            child: DesktopStagger(
+              index: staggerIndex++,
+              child: _FileTile(
+                key:
+                    node.isFolder && folderKeyBuilder != null
+                        ? folderKeyBuilder!(node.id)
+                        : null,
+                node: node,
+                selected: isSelected,
+                hoveredAsDropTarget: externalHoverId == node.id,
+                onTap: () => onSelect(node),
+                onOpen: () => onTap(node),
+                onMenu: (position) => onMenu(node, position),
+                onToggleSelect: () => (onToggleSelect ?? onSelect)(node),
+                onFavorite: onFavorite == null ? null : () => onFavorite!(node),
+                onShare: onShare == null ? null : () => onShare!(node),
+                dragIds: dragIds,
+                onDropFiles:
+                    draggable && node.isFolder && onDropFiles != null
+                        ? (ids) => onDropFiles!(ids, node.id)
+                        : null,
+              ),
+            ),
+          );
+        }
+
+        final showFoldersGroup = folders.isNotEmpty || draftFolderName != null;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (draftFolderName != null)
-              SizedBox(
-                width: width,
-                child: _DesktopDraftFolderTile(
-                  defaultName: draftFolderName!,
-                  onSubmit: onDraftSubmit!,
-                  onCancel: onDraftCancel!,
-                ),
+            if (showFoldersGroup) ...[
+              _RowGroupLabel(
+                label: l10n.desktopFilesFilterFolders,
+                count: folders.length,
               ),
-            for (var i = 0; i < items.length; i++)
-              SizedBox(
-                width: width,
-                child: DesktopStagger(
-                  index: i,
-                  child: _FileTile(
-                    node: items[i],
-                    selected: selected.contains(items[i].id),
-                    onTap: () => onSelect(items[i]),
-                    onOpen: () => onTap(items[i]),
-                    onMenu: (position) => onMenu(items[i], position),
-                    onToggleSelect: () => onSelect(items[i]),
-                    onFavorite:
-                        onFavorite == null ? null : () => onFavorite!(items[i]),
-                    onShare: onShare == null ? null : () => onShare!(items[i]),
-                  ),
-                ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (draftFolderName != null)
+                    SizedBox(
+                      width: width,
+                      child: _DesktopDraftFolderTile(
+                        defaultName: draftFolderName!,
+                        onSubmit: onDraftSubmit!,
+                        onCancel: onDraftCancel!,
+                      ),
+                    ),
+                  for (final node in folders) buildTile(node),
+                ],
               ),
+            ],
+            if (files.isNotEmpty) ...[
+              _RowGroupLabel(
+                label:
+                    folders.isEmpty
+                        ? l10n.desktopFilesItemsGroup
+                        : l10n.desktopFilesFilesGroup,
+                count: files.length,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [for (final node in files) buildTile(node)],
+              ),
+            ],
           ],
         );
       },
@@ -132,6 +198,10 @@ class _FileTile extends StatelessWidget {
     this.onToggleSelect,
     this.onFavorite,
     this.onShare,
+    this.dragIds = const <String>[],
+    this.onDropFiles,
+    this.hoveredAsDropTarget = false,
+    super.key,
   });
 
   final FileNode node;
@@ -142,188 +212,235 @@ class _FileTile extends StatelessWidget {
   final VoidCallback? onToggleSelect;
   final VoidCallback? onFavorite;
   final VoidCallback? onShare;
+  final List<String> dragIds;
+  final ValueChanged<List<String>>? onDropFiles;
+  final bool hoveredAsDropTarget;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    return DesktopHover(
-      builder:
-          (context, hovered) => GestureDetector(
-            onTap: onTap,
-            onDoubleTap: onOpen,
-            onSecondaryTapDown: (details) => onMenu(details.globalPosition),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: DesktopMotion.of(context, DesktopMotion.fast),
-              curve: DesktopMotion.ease,
-              transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
-              constraints: const BoxConstraints(minHeight: 176),
-              padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
-              decoration: BoxDecoration(
-                // 样例 `.f-body.grid .f-row`：raise 底、悬停 raise2 并上浮。
-                color:
-                    selected
-                        ? skin.accentWash(0.13)
-                        : hovered
-                        ? skin.raise2
-                        : skin.raise,
-                borderRadius: BorderRadius.circular(DesktopMetrics.radius),
-                border: Border.all(
-                  color: selected ? skin.accentWash(0.35) : skin.line,
+
+    Widget buildTile({required bool highlighted}) => AnimatedScale(
+      scale: highlighted ? 1.02 : 1,
+      duration: DesktopMotion.of(context, DesktopMotion.fast),
+      curve: DesktopMotion.ease,
+      child: DesktopHover(
+        builder:
+            (context, hovered) => GestureDetector(
+              onTap: onTap,
+              onDoubleTap: onOpen,
+              onSecondaryTapDown: (details) => onMenu(details.globalPosition),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: DesktopMotion.of(context, DesktopMotion.fast),
+                curve: DesktopMotion.ease,
+                transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
+                constraints: const BoxConstraints(minHeight: 176),
+                padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+                foregroundDecoration:
+                    highlighted
+                        ? BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            DesktopMetrics.radius,
+                          ),
+                          border: Border.all(color: skin.accent, width: 2),
+                        )
+                        : null,
+                decoration: BoxDecoration(
+                  // 样例 `.f-body.grid .f-row`：raise 底、悬停 raise2 并上浮。
+                  color:
+                      highlighted
+                          ? skin.accentWash(0.24)
+                          : selected
+                          ? skin.accentWash(0.13)
+                          : hovered
+                          ? skin.raise2
+                          : skin.raise,
+                  borderRadius: BorderRadius.circular(DesktopMetrics.radius),
+                  border: Border.all(
+                    color: selected ? skin.accentWash(0.42) : skin.line,
+                  ),
                 ),
-              ),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          color:
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 84,
+                          height: 84,
+                          decoration: BoxDecoration(
+                            color:
+                                _hasFileThumbnail(node)
+                                    ? Colors.transparent
+                                    : _fileTone(
+                                      node,
+                                      skin,
+                                    ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.antiAlias,
+                          child:
                               _hasFileThumbnail(node)
-                                  ? Colors.transparent
-                                  : _fileTone(
-                                    node,
-                                    skin,
-                                  ).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(18),
+                                  ? FileThumbnail(
+                                    file: node,
+                                    size: 84,
+                                    borderRadius: BorderRadius.circular(18),
+                                    zoomOnHover: true,
+                                  )
+                                  : Icon(
+                                    _fileIcon(node),
+                                    size: 36,
+                                    color: _fileTone(node, skin),
+                                  ),
                         ),
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.antiAlias,
-                        child:
-                            _hasFileThumbnail(node)
-                                ? FileThumbnail(
-                                  file: node,
-                                  size: 84,
-                                  borderRadius: BorderRadius.circular(18),
-                                  zoomOnHover: true,
-                                )
-                                : Icon(
-                                  _fileIcon(node),
-                                  size: 36,
-                                  color: _fileTone(node, skin),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                node.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: DesktopType.rowTitle(
+                                  selected ? skin.accent : skin.text,
                                 ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              node.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: DesktopType.rowTitle(
-                                selected ? skin.accent : skin.text,
                               ),
                             ),
-                          ),
-                          if (node.favorited) ...[
-                            const SizedBox(width: 5),
-                            Icon(
-                              DesktopIcons.starFilled,
-                              size: 11,
-                              color: skin.warm,
-                            ),
+                            if (node.favorited) ...[
+                              const SizedBox(width: 5),
+                              Icon(
+                                DesktopIcons.starFilled,
+                                size: 11,
+                                color: skin.warm,
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _fileSubtitle(l10n, node),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: DesktopType.caption(skin.text3),
+                        ),
+                      ],
+                    ),
+                    if (onToggleSelect != null)
+                      Positioned(
+                        key: const ValueKey<String>('files-grid-tick'),
+                        left: -6,
+                        top: -8,
+                        child: AnimatedOpacity(
+                          duration: DesktopMotion.of(
+                            context,
+                            DesktopMotion.fast,
+                          ),
+                          opacity: hovered || selected ? 1 : 0,
+                          child: GestureDetector(
+                            onTap: onToggleSelect,
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: _SelectionTick(selected: selected),
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _fileSubtitle(l10n, node),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: DesktopType.caption(skin.text3),
-                      ),
-                    ],
-                  ),
-                  if (onToggleSelect != null)
                     Positioned(
-                      key: const ValueKey<String>('files-grid-tick'),
-                      left: -6,
+                      key: const ValueKey<String>('files-grid-actions'),
+                      right: -6,
                       top: -8,
                       child: AnimatedOpacity(
                         duration: DesktopMotion.of(context, DesktopMotion.fast),
                         opacity: hovered || selected ? 1 : 0,
-                        child: GestureDetector(
-                          onTap: onToggleSelect,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: _SelectionTick(selected: selected),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (onFavorite != null)
+                              DesktopIconButton(
+                                icon:
+                                    node.favorited
+                                        ? DesktopIcons.starFilled
+                                        : DesktopIcons.star,
+                                size: 24,
+                                iconSize: 14,
+                                color: node.favorited ? skin.warm : skin.text2,
+                                tooltip:
+                                    node.favorited
+                                        ? l10n.filesRemoveFavorite
+                                        : l10n.filesAddFavorite,
+                                onPressed: onFavorite,
+                              ),
+                            if (onShare != null)
+                              DesktopIconButton(
+                                icon: DesktopIcons.share,
+                                size: 24,
+                                iconSize: 14,
+                                tooltip: l10n.filesShare,
+                                onPressed: onShare,
+                              ),
+                            Builder(
+                              builder:
+                                  (buttonContext) => DesktopIconButton(
+                                    icon: DesktopIcons.more,
+                                    size: 24,
+                                    iconSize: 14,
+                                    tooltip: l10n.filesOpenFileMenu,
+                                    onPressed: () {
+                                      final box =
+                                          buttonContext.findRenderObject()
+                                              as RenderBox?;
+                                      final origin =
+                                          box == null
+                                              ? Offset.zero
+                                              : box.localToGlobal(
+                                                Offset(0, box.size.height),
+                                              );
+                                      onMenu(origin);
+                                    },
+                                  ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  Positioned(
-                    key: const ValueKey<String>('files-grid-actions'),
-                    right: -6,
-                    top: -8,
-                    child: AnimatedOpacity(
-                      duration: DesktopMotion.of(context, DesktopMotion.fast),
-                      opacity: hovered || selected ? 1 : 0,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (onFavorite != null)
-                            DesktopIconButton(
-                              icon:
-                                  node.favorited
-                                      ? DesktopIcons.starFilled
-                                      : DesktopIcons.star,
-                              size: 24,
-                              iconSize: 14,
-                              color: node.favorited ? skin.warm : skin.text2,
-                              tooltip:
-                                  node.favorited
-                                      ? l10n.filesRemoveFavorite
-                                      : l10n.filesAddFavorite,
-                              onPressed: onFavorite,
-                            ),
-                          if (onShare != null)
-                            DesktopIconButton(
-                              icon: DesktopIcons.share,
-                              size: 24,
-                              iconSize: 14,
-                              tooltip: l10n.filesShare,
-                              onPressed: onShare,
-                            ),
-                          Builder(
-                            builder:
-                                (buttonContext) => DesktopIconButton(
-                                  icon: DesktopIcons.more,
-                                  size: 24,
-                                  iconSize: 14,
-                                  tooltip: l10n.filesOpenFileMenu,
-                                  onPressed: () {
-                                    final box =
-                                        buttonContext.findRenderObject()
-                                            as RenderBox?;
-                                    final origin =
-                                        box == null
-                                            ? Offset.zero
-                                            : box.localToGlobal(
-                                              Offset(0, box.size.height),
-                                            );
-                                    onMenu(origin);
-                                  },
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+      ),
+    );
+
+    final tile =
+        onDropFiles == null
+            ? buildTile(highlighted: hoveredAsDropTarget)
+            : DragTarget<List<String>>(
+              onWillAcceptWithDetails:
+                  (details) =>
+                      details.data.isNotEmpty &&
+                      !details.data.contains(node.id),
+              onAcceptWithDetails: (details) => onDropFiles!(details.data),
+              builder:
+                  (context, candidate, rejected) => buildTile(
+                    highlighted: candidate.isNotEmpty || hoveredAsDropTarget,
+                  ),
+            );
+    if (dragIds.isEmpty) {
+      return tile;
+    }
+    return _AdaptiveFileDraggable(
+      data: dragIds,
+      feedback: _RowDragGhost(node: node, count: dragIds.length),
+      childWhenDragging: Opacity(opacity: 0.45, child: tile),
+      child: tile,
     );
   }
 }

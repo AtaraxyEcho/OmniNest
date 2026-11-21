@@ -77,7 +77,11 @@ abstract final class DesktopTheme {
       // 悬停染强调色。浏览器默认滚动条会立刻把界面拉回「网页控件」观感。
       scrollbarTheme: ScrollbarThemeData(
         thickness: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.dragged) ? 8.0 : 6.0,
+          (states) =>
+              states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.dragged)
+                  ? 6.0
+                  : 4.5,
         ),
         radius: const Radius.circular(DesktopMetrics.radiusPill),
         thumbColor: WidgetStateProperty.resolveWith((states) {
@@ -85,7 +89,11 @@ abstract final class DesktopTheme {
             return skin.accent;
           }
           if (states.contains(WidgetState.hovered)) {
-            return Color.lerp(skin.accent, skin.text, 0.30)!;
+            return Color.lerp(
+              skin.accent,
+              skin.text,
+              0.30,
+            )!.withValues(alpha: 0.8);
           }
           return skin.text.withValues(alpha: 0.16);
         }),

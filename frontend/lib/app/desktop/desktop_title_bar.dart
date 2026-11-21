@@ -312,14 +312,14 @@ class _ThemeGlyph extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final duration = DesktopMotion.of(context, DesktopMotion.soft);
-    Widget layer(IconData icon, bool visible) {
+    Widget layer(IconData icon, bool visible, double hiddenTurns) {
       return AnimatedOpacity(
         duration: duration,
         opacity: visible ? 1 : 0,
         child: AnimatedRotation(
           duration: duration,
           curve: DesktopMotion.spring,
-          turns: visible ? 0 : 0.25,
+          turns: visible ? 0 : hiddenTurns,
           child: AnimatedScale(
             duration: duration,
             curve: DesktopMotion.spring,
@@ -340,8 +340,8 @@ class _ThemeGlyph extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          layer(DesktopIcons.moon, isDark),
-          layer(DesktopIcons.sun, !isDark),
+          layer(DesktopIcons.moon, isDark, 0.25),
+          layer(DesktopIcons.sun, !isDark, -0.25),
         ],
       ),
     );
@@ -362,41 +362,54 @@ class _SearchPill extends StatelessWidget {
           (context, hovered) => GestureDetector(
             onTap: onTap,
             behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MotionToken.reduced(context, MotionToken.fast),
-              curve: MotionToken.curve,
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: hovered ? skin.raise2 : skin.raise,
-                borderRadius: BorderRadius.circular(
-                  DesktopMetrics.radiusButton,
-                ),
-                border: Border.all(color: hovered ? skin.line2 : skin.line),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    DesktopIcons.search,
-                    size: DesktopMetrics.iconSmall,
-                    color: hovered ? skin.text2 : skin.text3,
+            child: DesktopOutsetShadow(
+              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
+              shadows:
+                  hovered
+                      ? [
+                        BoxShadow(
+                          color: skin.accent.withValues(alpha: 0.14),
+                          blurRadius: 0,
+                          spreadRadius: 3,
+                        ),
+                      ]
+                      : const <BoxShadow>[],
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, MotionToken.fast),
+                curve: MotionToken.curve,
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: hovered ? skin.raise2 : skin.raise,
+                  borderRadius: BorderRadius.circular(
+                    DesktopMetrics.radiusButton,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.dense(
-                        hovered ? skin.text2 : skin.text3,
+                  border: Border.all(color: hovered ? skin.line2 : skin.line),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      DesktopIcons.search,
+                      size: DesktopMetrics.iconSmall,
+                      color: hovered ? skin.text2 : skin.text3,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.dense(
+                          hovered ? skin.text2 : skin.text3,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _Kbd(label: 'Ctrl'),
-                  const SizedBox(width: 3),
-                  _Kbd(label: 'K'),
-                ],
+                    const SizedBox(width: 8),
+                    _Kbd(label: 'Ctrl'),
+                    const SizedBox(width: 3),
+                    _Kbd(label: 'K'),
+                  ],
+                ),
               ),
             ),
           ),

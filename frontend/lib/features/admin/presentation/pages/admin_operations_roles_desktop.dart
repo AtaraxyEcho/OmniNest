@@ -3,13 +3,21 @@ part of 'admin_operations_pages.dart';
 /// 角色分区的桌面排版（样例 `AdminIdentity.tsx` 的 Roles / Permissions 两张卡）：
 /// 角色卡网格（图标 + 描述 + 权限比 + 模块标签）+ 业务模块权限矩阵。
 /// 权限编辑、新建与删除仍走既有对话框，不复制业务逻辑。
-class _DesktopRolesPanel extends ConsumerWidget {
+class _DesktopRolesPanel extends ConsumerStatefulWidget {
   const _DesktopRolesPanel({required this.view});
 
   final AdminRoleManagementView view;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DesktopRolesPanel> createState() => _DesktopRolesPanelState();
+}
+
+class _DesktopRolesPanelState extends ConsumerState<_DesktopRolesPanel> {
+  String? _selectedRoleCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final view = widget.view;
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final permissions =
@@ -29,6 +37,12 @@ class _DesktopRolesPanel extends ConsumerWidget {
                 )
                 .toList();
     final total = view.permissions.length;
+    final selectedRole =
+        _selectedRoleCode == null
+            ? null
+            : view.roles
+                .where((role) => role.code == _selectedRoleCode)
+                .firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -82,6 +96,14 @@ class _DesktopRolesPanel extends ConsumerWidget {
                                   role: roles[i],
                                   permissions: view.permissions,
                                   total: total,
+                                  selected: selectedRole?.code == roles[i].code,
+                                  onSelect:
+                                      () => setState(() {
+                                        _selectedRoleCode =
+                                            _selectedRoleCode == roles[i].code
+                                                ? null
+                                                : roles[i].code;
+                                      }),
                                 ),
                               ),
                             ),
@@ -92,11 +114,22 @@ class _DesktopRolesPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         AdminCard(
-          title: l10n.adminPermissionMatrixTitle,
+          title:
+              selectedRole == null
+                  ? l10n.adminPermissionMatrixTitle
+                  : '${l10n.adminPermissionMatrixTitle} · ${selectedRole.name}',
           subtitle: l10n.adminPermissionMatrixSubtitle,
+          action:
+              selectedRole == null
+                  ? null
+                  : DesktopLink(
+                    label: l10n.desktopFilesClear,
+                    onPressed: () => setState(() => _selectedRoleCode = null),
+                  ),
           child: _DesktopPermissionMatrix(
             permissions: view.permissions,
             roleCount: view.roles.length,
+            selectedRole: selectedRole,
           ),
         ),
         if (canManageSharedSpace) ...[
@@ -113,11 +146,15 @@ class _DesktopRoleCard extends ConsumerWidget {
     required this.role,
     required this.permissions,
     required this.total,
+    this.selected = false,
+    this.onSelect,
   });
 
   final AdminRoleDetail role;
   final List<AdminPermissionDetail> permissions;
   final int total;
+  final bool selected;
+  final VoidCallback? onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -133,27 +170,29 @@ class _DesktopRoleCard extends ConsumerWidget {
     return DesktopHover(
       builder:
           (context, hovered) => GestureDetector(
-            onTap:
-                locked
-                    ? null
-                    : () => showDesktopDrawer<void>(
-                      context,
-                      width: 620,
-                      builder:
-                          (_) => _RolePermissionDialog(
-                            role: role,
-                            permissions: permissions,
-                            drawerMode: true,
-                          ),
-                    ),
+            onTap: onSelect,
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: MotionToken.reduced(context, MotionToken.fast),
+              curve: DesktopMotion.ease,
+              transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               decoration: BoxDecoration(
-                color: hovered ? skin.raise2 : skin.raise,
+                color:
+                    selected
+                        ? skin.accentWash(0.10)
+                        : hovered
+                        ? skin.raise2
+                        : skin.raise,
                 borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-                border: Border.all(color: hovered ? skin.line2 : skin.line),
+                border: Border.all(
+                  color:
+                      selected
+                          ? skin.accent
+                          : hovered
+                          ? skin.line2
+                          : skin.line,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,15 +384,18 @@ class _DesktopPermissionMatrix extends StatelessWidget {
   const _DesktopPermissionMatrix({
     required this.permissions,
     required this.roleCount,
+    this.selectedRole,
   });
 
   final List<AdminPermissionDetail> permissions;
   final int roleCount;
+  final AdminRoleDetail? selectedRole;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final grantedSet = selectedRole?.permissions.toSet();
     final modules = <String, List<AdminPermissionDetail>>{};
     for (final item in permissions) {
       modules.putIfAbsent(item.module, () => []).add(item);
@@ -375,56 +417,107 @@ class _DesktopPermissionMatrix extends StatelessWidget {
           runSpacing: 14,
           children: [
             for (final entry in modules.entries)
-              SizedBox(
-                width: width,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  decoration: BoxDecoration(
-                    color: skin.raise2,
-                    borderRadius: BorderRadius.circular(DesktopMetrics.radius),
-                    border: Border.all(color: skin.line),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+              Builder(
+                builder: (context) {
+                  final grantedInModule =
+                      grantedSet == null
+                          ? entry.value.length
+                          : entry.value
+                              .where((p) => grantedSet.contains(p.code))
+                              .length;
+                  final hasGranted = grantedSet != null && grantedInModule > 0;
+                  return SizedBox(
+                    width: width,
+                    child: AnimatedContainer(
+                      duration: DesktopMotion.of(context, DesktopMotion.fast),
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      decoration: BoxDecoration(
+                        color: hasGranted ? skin.accentWash(0.08) : skin.raise2,
+                        borderRadius: BorderRadius.circular(
+                          DesktopMetrics.radius,
+                        ),
+                        border: Border.all(
+                          color: hasGranted ? skin.accentWash(0.35) : skin.line,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              adminPermissionModuleLabel(
-                                l10n,
-                                entry.key,
-                              ).toUpperCase(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.eyebrow(skin.text3),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  adminPermissionModuleLabel(
+                                    l10n,
+                                    entry.key,
+                                  ).toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.eyebrow(
+                                    hasGranted ? skin.accent : skin.text3,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                grantedSet == null
+                                    ? '${entry.value.length} / ${permissions.length}'
+                                    : '$grantedInModule / ${entry.value.length}',
+                                style: DesktopType.numeric(
+                                  hasGranted ? skin.accent : skin.text3,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          for (final permission in entry.value.take(3))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 3),
+                              child: Row(
+                                children: [
+                                  if (grantedSet != null) ...[
+                                    Icon(
+                                      grantedSet.contains(permission.code)
+                                          ? DesktopIcons.check
+                                          : DesktopIcons.close,
+                                      size: 11,
+                                      color:
+                                          grantedSet.contains(permission.code)
+                                              ? skin.accent
+                                              : skin.text3.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      permission.code,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.mono(
+                                        grantedSet == null
+                                            ? skin.text2
+                                            : grantedSet.contains(
+                                              permission.code,
+                                            )
+                                            ? skin.accent
+                                            : skin.text3,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Text(
-                            '${entry.value.length} / ${permissions.length}',
-                            style: DesktopType.numeric(skin.text3),
-                          ),
+                          if (entry.value.length > 3)
+                            Text(
+                              '+${entry.value.length - 3}',
+                              style: DesktopType.micro(skin.text3),
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      for (final permission in entry.value.take(3))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 3),
-                          child: Text(
-                            permission.code,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.mono(skin.text2),
-                          ),
-                        ),
-                      if (entry.value.length > 3)
-                        Text(
-                          '+${entry.value.length - 3}',
-                          style: DesktopType.micro(skin.text3),
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
           ],
         );

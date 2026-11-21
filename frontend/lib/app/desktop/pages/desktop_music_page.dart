@@ -50,6 +50,8 @@ import 'package:omninest/features/video/application/media_import_task_waiter.dar
 
 // 页面骨架、主视觉和曲目行分开放置，以职责拆分满足单文件长度守卫。
 part 'desktop_music_widgets.dart';
+part 'desktop_music_widgets_lists.dart';
+part 'desktop_music_widgets_albums.dart';
 part 'desktop_music_rows.dart';
 part 'desktop_music_loading.dart';
 part 'desktop_music_album_detail.dart';

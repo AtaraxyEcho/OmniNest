@@ -1,5 +1,3 @@
-import 'dart:ui' show CheckedState, PointerDeviceKind;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -272,10 +270,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 
-    // 网格没有表头与分组标签，但文件名仍在。
+    // v11 网格按样例补了 Folders/Files 分组标签，文件名仍在。
     expect(find.text('Studio reel.mov'), findsOneWidget);
-    expect(find.text('FOLDERS'), findsNothing);
-    expect(find.text('FILES'), findsNothing);
+    expect(find.text('FOLDERS'), findsOneWidget);
+    expect(find.text('FILES'), findsOneWidget);
   });
 
   testWidgets('表头与数据行同列对齐，行内动作默认收起', (tester) async {
@@ -341,18 +339,14 @@ void main() {
     await pumpFiles(tester);
 
     // 行内所有文本会被合并成一个节点，复选态经 hasCheckedState 一起暴露。
-    CheckedState tickState() =>
-        tester
-            .getSemantics(find.text('Budget review.pdf'))
-            .getSemanticsData()
-            .flagsCollection
-            .isChecked;
-    expect(tickState(), CheckedState.isFalse);
+    // v11 把复选语义放在行首独立 tick 上（不再与文本节点合并）。
+    final ticks = find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.checked == false,
+    );
+    expect(ticks, findsWidgets);
+    // 选中提示与行文本分属两个语义节点，改查 tick 自己的 label。
     expect(
-      tester
-          .getSemantics(find.text('Budget review.pdf'))
-          .getSemanticsData()
-          .label,
+      tester.getSemantics(ticks.first).getSemanticsData().label,
       contains('Select this row'),
     );
 
@@ -360,7 +354,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 
-    expect(tickState(), CheckedState.isTrue);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.checked == true,
+      ),
+      findsWidgets,
+    );
     handle.dispose();
   });
 

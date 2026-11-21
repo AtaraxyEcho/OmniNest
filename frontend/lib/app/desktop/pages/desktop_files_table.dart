@@ -58,35 +58,44 @@ class _FilesToolbar extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    Text(
-                      shared
-                          ? l10n.filesSharedSpace
-                          : _sectionTitle(l10n, section),
-                      style: DesktopType.crumbTitle(skin.text),
+                    _BreadcrumbSegment(
+                      label:
+                          shared
+                              ? l10n.filesSharedSpace
+                              : _sectionTitle(l10n, section),
+                      current: !showCrumbs || crumbs.isEmpty,
+                      onTap:
+                          showCrumbs && crumbs.isNotEmpty
+                              ? () => unawaited(
+                                shared
+                                    ? controller.goToSharedSpaceRoot()
+                                    : controller.goToRoot(),
+                              )
+                              : null,
                     ),
                     if (showCrumbs)
                       for (var i = 0; i < crumbs.length; i++) ...[
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: Icon(
                             DesktopIcons.chevron,
-                            size: 12,
+                            size: 14,
                             color: skin.text3,
                           ),
                         ),
-                        GestureDetector(
+                        _BreadcrumbSegment(
+                          label: crumbs[i].name,
+                          current: i == crumbs.length - 1,
                           onTap:
-                              () => unawaited(
-                                shared
-                                    ? controller.goToSharedSpaceBreadcrumb(i)
-                                    : controller.goToBreadcrumb(i),
-                              ),
-                          child: Text(
-                            crumbs[i].name,
-                            style: DesktopType.dense(
-                              i == crumbs.length - 1 ? skin.text : skin.text2,
-                            ),
-                          ),
+                              i == crumbs.length - 1
+                                  ? null
+                                  : () => unawaited(
+                                    shared
+                                        ? controller.goToSharedSpaceBreadcrumb(
+                                          i,
+                                        )
+                                        : controller.goToBreadcrumb(i),
+                                  ),
                         ),
                       ],
                   ],
@@ -151,6 +160,7 @@ class _FilesToolbar extends StatelessWidget {
                                 ),
                         width: 268,
                         height: 36,
+                        focusRing: false,
                         onChanged: onSearch,
                       ),
                 ),
@@ -601,17 +611,119 @@ abstract final class _FileColumns {
   static const double actions = 108;
 }
 
-/// 列表表头：Name / Modified / Size / Access，点击同列反向排序。
+/// 面包屑单段：全程使用 26px Newsreader 衬线，可点击段悬停带 `skin.raise2` 圆角底。
+class _BreadcrumbSegment extends StatelessWidget {
+  const _BreadcrumbSegment({
+    required this.label,
+    required this.current,
+    this.onTap,
+  });
+
+  final String label;
+  final bool current;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final clickable = onTap != null;
+    return DesktopHover(
+      enabled: clickable,
+      builder:
+          (context, hovered) => GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: DesktopMotion.of(context, DesktopMotion.fast),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: hovered && clickable ? skin.raise2 : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                label,
+                style: DesktopType.crumbTitle(
+                  current || hovered ? skin.text : skin.text2,
+                ),
+              ),
+            ),
+          ),
+    );
+  }
+}
+
+/// 三态全选复选框（未选 / 半选 / 全选）。
+class _TriStateSelectionTick extends StatelessWidget {
+  const _TriStateSelectionTick({
+    required this.allSelected,
+    required this.someSelected,
+    this.onTap,
+  });
+
+  final bool allSelected;
+  final bool someSelected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final active = allSelected || someSelected;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Semantics(
+        checked: allSelected,
+        mixed: someSelected && !allSelected,
+        label: AppLocalizations.of(context).desktopFilesSelectRow,
+        child: AnimatedContainer(
+          duration: DesktopMotion.of(context, DesktopMotion.fast),
+          width: 18,
+          height: 18,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? skin.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: active ? skin.accent : skin.line2,
+              width: 1.5,
+            ),
+          ),
+          child:
+              allSelected
+                  ? Icon(DesktopIcons.check, size: 11, color: skin.accentInk)
+                  : someSelected
+                  ? Container(
+                    width: 8,
+                    height: 1.8,
+                    decoration: BoxDecoration(
+                      color: skin.accentInk,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  )
+                  : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// 列表表头：全选复选框 + Name / Modified / Size / Access，点击同列反向排序。
 class _FileTableHead extends StatelessWidget {
   const _FileTableHead({
     required this.sort,
     required this.ascending,
     required this.onSort,
+    this.allSelected = false,
+    this.someSelected = false,
+    this.onToggleSelectAll,
   });
 
   final FileBrowserSortBy sort;
   final bool ascending;
   final ValueChanged<FileBrowserSortBy> onSort;
+  final bool allSelected;
+  final bool someSelected;
+  final VoidCallback? onToggleSelectAll;
 
   @override
   Widget build(BuildContext context) {
@@ -624,27 +736,37 @@ class _FileTableHead extends StatelessWidget {
       int flex = 0,
       TextAlign align = TextAlign.left,
     }) {
-      final content = Row(
+      final active = key != null && sort == key;
+      Widget buildContent(Color color) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: DesktopType.tableHead(skin.text3)),
-          if (key != null && sort == key) ...[
+          Text(label, style: DesktopType.tableHead(color)),
+          if (active) ...[
             const SizedBox(width: 4),
             Icon(
               ascending ? DesktopIcons.chevUp : DesktopIcons.chevDown,
               size: 12,
-              color: skin.text3,
+              color: color,
             ),
           ],
         ],
       );
       final child =
           key == null
-              ? content
-              : GestureDetector(
-                onTap: () => onSort(key),
-                behavior: HitTestBehavior.opaque,
-                child: content,
+              ? buildContent(skin.text3)
+              : DesktopHover(
+                builder:
+                    (context, hovered) => GestureDetector(
+                      onTap: () => onSort(key),
+                      behavior: HitTestBehavior.opaque,
+                      child: buildContent(
+                        active
+                            ? skin.accent
+                            : hovered
+                            ? skin.text
+                            : skin.text3,
+                      ),
+                    ),
               );
       final aligned = Align(
         alignment:
@@ -658,13 +780,8 @@ class _FileTableHead extends StatelessWidget {
           : SizedBox(width: width, child: aligned);
     }
 
-    // 样例 `extra.css:70`：`position: sticky` + `background: color-mix(bg 70%,
-    // transparent)` + `radius: 10` + `backdrop-filter: blur(14px)`。
-    //
     // 吸顶由 [_StickyFileTableHead] 提供：表头钉在列表视口顶部，行从它下方
     // 滑过，模糊层才有可见对象，也才需要这层 70% 底色把穿透的字压下去。
-    // σ 与 CSS blur px 1:1，`saturation: 1` 表示这里不额外调色（样例只给了
-    // 一条 blur，没有 saturate）。
     return ClipRRect(
       borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
       child: BackdropFilter.grouped(
@@ -672,7 +789,7 @@ class _FileTableHead extends StatelessWidget {
           desktopGlassFilter(blur: 14, saturation: 1),
         ),
         child: Container(
-          height: 32,
+          height: _StickyFileTableHead.headHeight,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: skin.bg.withValues(alpha: 0.7),
@@ -680,9 +797,16 @@ class _FileTableHead extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // 勾选与图标两列的占位，和行里的实际控件同宽，表头文字才落在
-              // 各自数据列的正上方。
-              const SizedBox(width: _FileColumns.tick),
+              SizedBox(
+                width: _FileColumns.tick,
+                child: Center(
+                  child: _TriStateSelectionTick(
+                    allSelected: allSelected,
+                    someSelected: someSelected,
+                    onTap: onToggleSelectAll,
+                  ),
+                ),
+              ),
               const SizedBox(width: _FileColumns.gap),
               const SizedBox(width: _FileColumns.icon),
               const SizedBox(width: _FileColumns.gap),
@@ -721,17 +845,23 @@ class _StickyFileTableHead extends SliverPersistentHeaderDelegate {
     required this.sort,
     required this.ascending,
     required this.onSort,
+    this.allSelected = false,
+    this.someSelected = false,
+    this.onToggleSelectAll,
   });
 
-  /// 表头本体高度（`extra.css:70` 的 `height:32px`）。
-  static const double headHeight = 32;
+  /// 表头本体高度：36px。
+  static const double headHeight = 36;
 
-  /// 表头下外边距。
-  static const double gap = 6;
+  /// 表头下外边距：8px。
+  static const double gap = 8;
 
   final FileBrowserSortBy sort;
   final bool ascending;
   final ValueChanged<FileBrowserSortBy> onSort;
+  final bool allSelected;
+  final bool someSelected;
+  final VoidCallback? onToggleSelectAll;
 
   @override
   double get minExtent => headHeight + gap;
@@ -747,7 +877,14 @@ class _StickyFileTableHead extends SliverPersistentHeaderDelegate {
   ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: gap),
-      child: _FileTableHead(sort: sort, ascending: ascending, onSort: onSort),
+      child: _FileTableHead(
+        sort: sort,
+        ascending: ascending,
+        onSort: onSort,
+        allSelected: allSelected,
+        someSelected: someSelected,
+        onToggleSelectAll: onToggleSelectAll,
+      ),
     );
   }
 
@@ -755,7 +892,10 @@ class _StickyFileTableHead extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_StickyFileTableHead oldDelegate) {
     return sort != oldDelegate.sort ||
         ascending != oldDelegate.ascending ||
-        onSort != oldDelegate.onSort;
+        onSort != oldDelegate.onSort ||
+        allSelected != oldDelegate.allSelected ||
+        someSelected != oldDelegate.someSelected ||
+        onToggleSelectAll != oldDelegate.onToggleSelectAll;
   }
 }
 

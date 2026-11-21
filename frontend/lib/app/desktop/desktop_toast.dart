@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
-import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 
@@ -29,11 +28,11 @@ class DesktopToastScope extends InheritedWidget {
 enum DesktopToastKind { success, info, warn, error }
 
 extension on DesktopToastKind {
-  Color color() => switch (this) {
-    DesktopToastKind.success => DesktopPalette.ok,
-    DesktopToastKind.info => DesktopPalette.info,
-    DesktopToastKind.warn => DesktopPalette.warn,
-    DesktopToastKind.error => DesktopPalette.bad,
+  Color color(DesktopSkin skin) => switch (this) {
+    DesktopToastKind.success => skin.ok,
+    DesktopToastKind.info => skin.info,
+    DesktopToastKind.warn => skin.warn,
+    DesktopToastKind.error => skin.bad,
   };
 
   IconData icon() => switch (this) {
@@ -301,7 +300,7 @@ class _ToastItemState extends State<_ToastItem> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final toast = widget.toast;
-    final tint = toast.kind.color();
+    final tint = toast.kind.color(skin);
     return MouseRegion(
       onEnter: (_) => _setHovered(true),
       onExit: (_) => _setHovered(false),

@@ -107,7 +107,7 @@ void main() {
     expect(find.text('Task List'), findsOneWidget);
     expect(find.text('Dead Letter Queue'), findsOneWidget);
     // 翻页条换成首/前/页码/后/末，单页时只有一颗页码按钮。
-    expect(find.byTooltip('Jump to'), findsOneWidget);
+    expect(find.byTooltip('First page'), findsOneWidget);
   });
 
   testWidgets('托管态日志分区画一张卡：页签 + 动作 chips + 审计行', (tester) async {

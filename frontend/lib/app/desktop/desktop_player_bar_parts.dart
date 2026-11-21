@@ -75,29 +75,33 @@ class _PlayButton extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               child: Tooltip(
                 message: label,
-                child: AnimatedScale(
-                  duration: MotionToken.reduced(context, MotionToken.fast),
-                  curve: MotionToken.curve,
-                  scale: hovered ? 1.1 : 1,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: skin.text,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: skin.accentWash(0.35),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
-                          spreadRadius: -6,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      playing ? DesktopIcons.pause : DesktopIcons.play,
-                      size: 18,
-                      color: skin.bg,
+                child: DesktopPressScale(
+                  enabled: true,
+                  scale: 0.92,
+                  child: AnimatedScale(
+                    duration: MotionToken.reduced(context, MotionToken.fast),
+                    curve: MotionToken.curve,
+                    scale: hovered ? 1.1 : 1,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: skin.text,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: skin.accentWash(0.35),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                            spreadRadius: -6,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        playing ? DesktopIcons.pause : DesktopIcons.play,
+                        size: 18,
+                        color: skin.bg,
+                      ),
                     ),
                   ),
                 ),

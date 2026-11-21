@@ -55,7 +55,12 @@ class _DesktopFocusOutlineState extends State<DesktopFocusOutline> {
       },
       child: CustomPaint(
         foregroundPainter:
-            _showRing ? _FocusRingPainter(skin.accent, widget.radius) : null,
+            _showRing
+                ? _FocusRingPainter(
+                  skin.accent.withValues(alpha: 0.70),
+                  widget.radius,
+                )
+                : null,
         child: widget.child,
       ),
     );
@@ -77,8 +82,8 @@ class _FocusRingPainter extends CustomPainter {
           ..strokeWidth = 2;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(-2, -2, size.width + 4, size.height + 4),
-        Radius.circular(radius + 2),
+        Rect.fromLTWH(-3, -3, size.width + 6, size.height + 6),
+        Radius.circular(radius + 3),
       ),
       paint,
     );

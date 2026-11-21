@@ -305,6 +305,42 @@ class _SecuritySectionState extends ConsumerState<_SecuritySection> {
 
   Future<void> _revoke(UserSession session) async {
     final l10n = AppLocalizations.of(context);
+    final platform = session.clientPlatform.trim();
+    final detail =
+        platform.isEmpty
+            ? session.effectiveDeviceName
+            : '${session.effectiveDeviceName} · $platform';
+    final confirmed = await showDesktopDialog<bool>(
+      context,
+      builder:
+          (dialogContext) => DesktopDialog(
+            width: 440,
+            eyebrow: l10n.profileActiveSessions,
+            title: l10n.desktopSignOut,
+            lead: Icon(
+              DesktopIcons.signOut,
+              size: 20,
+              color: DesktopPalette.bad,
+            ),
+            content: Text(
+              detail,
+              style: DesktopType.dense(DesktopSkin.of(context).text2),
+            ),
+            actions: [
+              DesktopButton(
+                label: l10n.filesCancel,
+                onPressed: () => closeDesktopModal(dialogContext, false),
+              ),
+              DesktopButton(
+                label: l10n.desktopSignOut,
+                icon: DesktopIcons.signOut,
+                variant: DesktopButtonVariant.danger,
+                onPressed: () => closeDesktopModal(dialogContext, true),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       await ref.read(profileCommandServiceProvider).revokeSession(session.id);
       if (!mounted) return;

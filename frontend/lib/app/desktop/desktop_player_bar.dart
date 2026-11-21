@@ -10,6 +10,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/widgets/desktop_press.dart';
 import 'package:omninest/app/desktop/widgets/desktop_visualizer.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -569,7 +570,6 @@ class _SpinningArtState extends State<_SpinningArt>
       }
     } else {
       _spin.stop();
-      _spin.value = 0;
     }
   }
 
@@ -614,8 +614,8 @@ class _SpinningArtState extends State<_SpinningArt>
           if (widget.playing)
             Center(
               child: Container(
-                width: 9,
-                height: 9,
+                width: 10,
+                height: 10,
                 decoration: BoxDecoration(
                   color: skin.bg,
                   shape: BoxShape.circle,

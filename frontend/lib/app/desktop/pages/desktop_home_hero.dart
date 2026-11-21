@@ -164,10 +164,59 @@ class _HeroSky extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Text(
-                            dateLabel.toUpperCase(),
-                            style: DesktopType.eyebrow(
-                              DesktopPalette.onStage.withValues(alpha: 0.7),
+                          DesktopGlassSurface(
+                            borderRadius: BorderRadius.circular(
+                              DesktopMetrics.radiusPill,
+                            ),
+                            blur: 16,
+                            saturation: 1.4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: DesktopPalette.onStage.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  DesktopMetrics.radiusPill,
+                                ),
+                                border: Border.all(
+                                  color: DesktopPalette.onStage.withValues(
+                                    alpha: 0.20,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF8FE0B0),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Color(0xCC8FE0B0),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    dateLabel.toUpperCase(),
+                                    style: DesktopType.eyebrow(
+                                      DesktopPalette.onStage.withValues(
+                                        alpha: 0.88,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -316,129 +365,155 @@ class _HeroActionTileState extends State<_HeroActionTile> {
         child: AnimatedContainer(
           duration: DesktopMotion.of(context, DesktopMotion.fast),
           curve: DesktopMotion.ease,
-          // 样例 `.hero-tile { overflow: hidden }`：底部进度条被圆角裁掉。
-          clipBehavior: Clip.antiAlias,
           transform: Matrix4.translationValues(0, _hovered ? -2 : 0, 0),
-          constraints: const BoxConstraints(minWidth: 214),
-          padding: const EdgeInsets.fromLTRB(7, 7, 18, 7),
-          decoration: BoxDecoration(
-            color: Color(0xFFFFFFFF).withValues(alpha: _hovered ? 0.2 : 0.13),
+          child: DesktopOutsetShadow(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Color(0xFFFFFFFF).withValues(alpha: _hovered ? 0.34 : 0.2),
-            ),
-            boxShadow: const [
+            shadows: const [
               BoxShadow(
                 color: Color(0x80000000),
                 blurRadius: 30,
                 spreadRadius: -14,
                 offset: Offset(0, 10),
               ),
-              BoxShadow(
-                color: Color(0x2EFFFFFF),
-                blurRadius: 0,
-                offset: Offset(0, 1),
-              ),
             ],
-          ),
-          child: Stack(
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: Stack(
-                        fit: StackFit.expand,
+            child: DesktopGlassSurface(
+              borderRadius: BorderRadius.circular(16),
+              blur: 22,
+              saturation: 1.5,
+              child: AnimatedContainer(
+                duration: DesktopMotion.of(context, DesktopMotion.fast),
+                curve: DesktopMotion.ease,
+                // 样例 `.hero-tile { overflow: hidden }`：底部进度条被圆角裁掉。
+                clipBehavior: Clip.antiAlias,
+                constraints: const BoxConstraints(minWidth: 214),
+                decoration: BoxDecoration(
+                  color: Color(
+                    0xFFFFFFFF,
+                  ).withValues(alpha: _hovered ? 0.2 : 0.13),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Color(
+                      0xFFFFFFFF,
+                    ).withValues(alpha: _hovered ? 0.34 : 0.2),
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(7, 7, 18, 7),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (art != null && art.isNotEmpty)
-                            DesktopImage(
-                              url: art,
-                              cacheWidth: 156,
-                              fallbackIcon: widget.icon,
-                            )
-                          else
-                            ColoredBox(
-                              color: const Color(0x33FFFFFF),
-                              child: Icon(
-                                widget.icon,
-                                size: 20,
-                                color: const Color(0xFFFFFFFF),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (art != null && art.isNotEmpty)
+                                    DesktopImage(
+                                      url: art,
+                                      cacheWidth: 156,
+                                      fallbackIcon: widget.icon,
+                                    )
+                                  else
+                                    ColoredBox(
+                                      color: const Color(0x33FFFFFF),
+                                      child: Icon(
+                                        widget.icon,
+                                        size: 20,
+                                        color: const Color(0xFFFFFFFF),
+                                      ),
+                                    ),
+                                  ColoredBox(
+                                    color: Color(
+                                      0x00000000,
+                                    ).withValues(alpha: _hovered ? 0.18 : 0.32),
+                                    child: Icon(
+                                      widget.icon,
+                                      size: 15,
+                                      color: const Color(0xFFFFFFFF),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ColoredBox(
-                            color: Color(
-                              0x00000000,
-                            ).withValues(alpha: _hovered ? 0.18 : 0.32),
-                            child: Icon(
-                              widget.icon,
-                              size: 15,
-                              color: const Color(0xFFFFFFFF),
+                          ),
+                          const SizedBox(width: 12),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 240),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.meta != null)
+                                  Text(
+                                    widget.meta!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: DesktopType.caption(
+                                      const Color(
+                                        0xFFFFFFFF,
+                                      ).withValues(alpha: 0.72),
+                                    ),
+                                  ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.medium(
+                                    const Color(0xFFFFFFFF),
+                                  ).copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (widget.meta != null)
-                          Text(
-                            widget.meta!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.caption(
-                              const Color(0xFFFFFFFF).withValues(alpha: 0.72),
-                            ),
-                          ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.medium(
-                            const Color(0xFFFFFFFF),
-                          ).copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
+                    const Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 1,
+                      child: IgnorePointer(
+                        child: ColoredBox(color: Color(0x2EFFFFFF)),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              if (widget.progress != null)
-                Positioned(
-                  left: -7,
-                  right: -18,
-                  bottom: -7,
-                  child: SizedBox(
-                    height: 3,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ColoredBox(
-                          color: Color(0xFFFFFFFF).withValues(alpha: 0.18),
-                        ),
-                        FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: ((widget.progress ?? 0) / 100).clamp(
-                            0.0,
-                            1.0,
+                    if (widget.progress != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: SizedBox(
+                          height: 3,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ColoredBox(
+                                color: Color(
+                                  0xFFFFFFFF,
+                                ).withValues(alpha: 0.18),
+                              ),
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: ((widget.progress ?? 0) / 100)
+                                    .clamp(0.0, 1.0),
+                                child: const ColoredBox(
+                                  color: Color(0xFFFFFFFF),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: const ColoredBox(color: Color(0xFFFFFFFF)),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -521,7 +596,14 @@ class _WeatherCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              Text('${data.temp}°', style: DesktopType.displaySm(onGlass)),
+              Text(
+                '${data.temp}°',
+                style: DesktopType.displaySm(onGlass).copyWith(
+                  fontSize: 34, // ignore: font_size_whitelist
+                  fontWeight: FontWeight.w200,
+                  height: 1.0,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -594,6 +676,14 @@ class _WeatherCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: live ? skin.ok : skin.warn,
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (live ? skin.ok : skin.warn).withValues(
+                          alpha: 0.8,
+                        ),
+                        blurRadius: 8,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 7),
@@ -618,23 +708,31 @@ class _WeatherCard extends ConsumerWidget {
       );
     }
 
-    return Container(
-      width: 270,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: onGlass.withValues(alpha: 0.12),
+    return DesktopOutsetShadow(
+      borderRadius: BorderRadius.circular(20),
+      shadows: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.35),
+          blurRadius: 50,
+          offset: const Offset(0, 20),
+          spreadRadius: -20,
+        ),
+      ],
+      child: DesktopGlassSurface(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: onGlass.withValues(alpha: 0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 50,
-            offset: const Offset(0, 20),
-            spreadRadius: -20,
+        blur: 24,
+        saturation: 1.4,
+        child: Container(
+          width: 270,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: onGlass.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: onGlass.withValues(alpha: 0.22)),
           ),
-        ],
+          child: body,
+        ),
       ),
-      child: body,
     );
   }
 }

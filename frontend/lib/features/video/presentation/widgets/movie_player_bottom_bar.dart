@@ -106,9 +106,8 @@ class MoviePlayerBottomBar extends StatelessWidget {
         final bottomInset =
             switch ((isFullscreen, isMobile)) {
               (true, true) => 12.0,
-              (true, false) => 8.0,
               (false, true) => 8.0,
-              (false, false) => 12.0,
+              (_, false) => 0.0,
             } +
             systemBottom;
         // 样例底栏上方有 70px 渐变（`.v-bar { padding-top: 70px }`），
@@ -237,7 +236,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
     return _buildInlineControls(
       context,
       key: const Key('moviePlayerControlsMedium'),
-      showVolumeSlider: false,
+      showVolumeSlider: true,
       showSpeed: true,
       compactTime: true,
     );
@@ -248,7 +247,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
       return _buildInlineControls(
         context,
         key: const Key('moviePlayerControlsCompact'),
-        showVolumeSlider: false,
+        showVolumeSlider: true,
         showSpeed: true,
         compactTime: true,
       );
@@ -356,7 +355,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
     required bool showSpeed,
     required bool compactTime,
   }) {
-    final targetSize = isMobile ? 48.0 : 44.0;
+    final targetSize = isMobile ? 48.0 : 32.0;
     return SizedBox(
       height: targetSize,
       child: Row(
@@ -377,6 +376,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
                     onMouseActivity: onMouseActivity,
                     setPlayerVolume: setPlayerVolume,
                     showSlider: showVolumeSlider,
+                    buttonSize: targetSize,
                   ),
                 const SizedBox(width: 8),
                 Flexible(child: _buildTimeLabel(context, compact: compactTime)),
@@ -399,6 +399,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
     required double targetSize,
   }) {
     final l10n = AppLocalizations.of(context);
+    final iconSize = isMobile ? 24.0 : 19.0;
     return Row(
       key: const Key('moviePlayerTransportControls'),
       mainAxisSize: MainAxisSize.min,
@@ -408,6 +409,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
           tooltip: l10n.videoPreviousEpisode,
           onPressed: onPreviousEpisode,
           size: targetSize,
+          iconSize: iconSize,
         ),
         if (!isMobile && onSeekBackward != null)
           MoviePlayerIconButton(
@@ -415,11 +417,13 @@ class MoviePlayerBottomBar extends StatelessWidget {
             tooltip: l10n.videoSeekBackwardSeconds(10),
             onPressed: onSeekBackward,
             size: targetSize,
+            iconSize: iconSize,
           ),
         _PlayPauseButton(
           playing: playing,
           onPressed: onPlayPause,
           size: targetSize,
+          iconSize: isMobile ? 28.0 : 22.0,
         ),
         if (!isMobile && onSeekForward != null)
           MoviePlayerIconButton(
@@ -427,12 +431,14 @@ class MoviePlayerBottomBar extends StatelessWidget {
             tooltip: l10n.videoSeekForwardSeconds(10),
             onPressed: onSeekForward,
             size: targetSize,
+            iconSize: iconSize,
           ),
         MoviePlayerIconButton(
           icon: Icons.skip_next_rounded,
           tooltip: l10n.videoNextEpisode,
           onPressed: onNextEpisode,
           size: targetSize,
+          iconSize: iconSize,
         ),
       ],
     );
@@ -444,6 +450,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
     required bool showSpeed,
   }) {
     final l10n = AppLocalizations.of(context);
+    final iconSize = isMobile ? 24.0 : 19.0;
     return Row(
       key: const Key('moviePlayerRightControls'),
       mainAxisSize: MainAxisSize.min,
@@ -454,6 +461,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
             tooltip: l10n.coreLanguage,
             onPressed: onAudioTap,
             size: targetSize,
+            iconSize: iconSize,
           ),
         MoviePlayerIconButton(
           icon:
@@ -464,6 +472,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
           selected: activeSubtitleId != null,
           onPressed: onSubtitleTap,
           size: targetSize,
+          iconSize: iconSize,
         ),
         if (showSpeed) SpeedButton(speed: playbackSpeed, onTap: onSpeedTap),
         MoviePlayerIconButton(
@@ -471,6 +480,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
           tooltip: l10n.videoPlaybackSettings,
           onPressed: onSettingsTap,
           size: targetSize,
+          iconSize: iconSize,
         ),
         MoviePlayerIconButton(
           icon:
@@ -483,6 +493,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
                   : l10n.videoEnterFullscreen,
           onPressed: onFullscreenTap,
           size: targetSize,
+          iconSize: iconSize,
         ),
       ],
     );
@@ -522,11 +533,13 @@ class _PlayPauseButton extends StatelessWidget {
     required this.playing,
     required this.onPressed,
     required this.size,
+    this.iconSize = 28,
   });
 
   final Stream<bool> playing;
   final VoidCallback onPressed;
   final double size;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -543,7 +556,7 @@ class _PlayPauseButton extends StatelessWidget {
                   : AppLocalizations.of(context).videoPlay,
           onPressed: onPressed,
           size: size,
-          iconSize: 28,
+          iconSize: iconSize,
         );
       },
     );

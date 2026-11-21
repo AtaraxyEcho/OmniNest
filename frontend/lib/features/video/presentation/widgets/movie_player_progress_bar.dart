@@ -139,57 +139,108 @@ class _TimelineTrack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.videoColors;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final animDuration =
+        reducedMotion ? Duration.zero : const Duration(milliseconds: 180);
+    final trackHeight = isActive ? 7.0 : 4.0;
+    final trackRadius = trackHeight / 2;
+    final clampedValue = displayValue.clamp(0.0, 1.0);
     return SizedBox(
       height: 24,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final thumbLeft = (maxWidth * clampedValue - 7.0).clamp(
+            0.0,
+            (maxWidth - 14.0).clamp(0.0, double.infinity),
+          );
           return Stack(
+            clipBehavior: Clip.none,
             alignment: Alignment.centerLeft,
             children: [
-              Container(
-                height: 4,
+              // 轨道底色：hover / drag 时 4px → 7px 平滑增高。
+              AnimatedContainer(
+                duration: animDuration,
+                curve: Curves.easeOutCubic,
+                height: trackHeight,
                 decoration: BoxDecoration(
                   color: colors.playerTimelineInactive,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(trackRadius),
                 ),
               ),
+              // 缓冲轨道：同步 4px → 7px 增高。
               ValueListenableBuilder<double>(
                 valueListenable: bufferProgress,
                 builder: (context, progress, _) {
-                  return Container(
-                    height: 4,
-                    width: constraints.maxWidth * progress.clamp(0.0, 1.0),
+                  return AnimatedContainer(
+                    duration: animDuration,
+                    curve: Curves.easeOutCubic,
+                    height: trackHeight,
+                    width: maxWidth * progress.clamp(0.0, 1.0),
                     decoration: BoxDecoration(
                       color: colors.playerTimelineBuffered,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(trackRadius),
                     ),
                   );
                 },
               ),
+              // 已播放轨道：同步 4px → 7px 增高。
+              AnimatedContainer(
+                duration: animDuration,
+                curve: Curves.easeOutCubic,
+                height: trackHeight,
+                width: maxWidth * clampedValue,
+                decoration: BoxDecoration(
+                  color: colors.playerTimelinePlayed,
+                  borderRadius: BorderRadius.circular(trackRadius),
+                ),
+              ),
+              // 交互与无障碍由 AppSlider 承接，视觉轨道与弹簧圆点由自定义层渲染。
               SliderTheme(
                 data: SliderThemeData(
-                  trackHeight: isActive ? 7 : 4,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 7,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
-                  ),
-                  activeTrackColor: colors.playerTimelinePlayed,
+                  trackHeight: trackHeight,
+                  thumbShape: SliderComponentShape.noThumb,
+                  overlayShape: SliderComponentShape.noOverlay,
+                  activeTrackColor: Colors.transparent,
                   inactiveTrackColor: Colors.transparent,
-                  thumbColor: colors.playerControlForeground,
-                  overlayColor: colors.playerControlForeground.withValues(
-                    alpha: 0.14,
-                  ),
                 ),
                 child: AppSlider(
-                  value: displayValue.clamp(0.0, 1.0),
+                  value: clampedValue,
                   onChangeStart: onSeekStart,
                   onChanged: (value) {
                     onSeeking(value);
                     onMouseActivity();
                   },
                   onChangeEnd: onSeekEnd,
+                ),
+              ),
+              // 14px 弹簧圆点滑块：默认 scale(0)，hover/drag 弹至 scale(1)。
+              Positioned(
+                left: thumbLeft,
+                child: IgnorePointer(
+                  child: AnimatedScale(
+                    scale: isActive ? 1.0 : 0.0,
+                    duration:
+                        reducedMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 220),
+                    curve: isActive ? Curves.easeOutBack : Curves.easeInCubic,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: colors.playerControlForeground,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

@@ -78,218 +78,230 @@ class ComicReaderBottomBar extends StatelessWidget {
       bottom: 0,
       child: IgnorePointer(
         ignoring: !visible,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
+        child: AnimatedContainer(
           duration:
               MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero
-                  : const Duration(milliseconds: 180),
-          alwaysIncludeSemantics: true,
-          child: DecoratedBox(
-            decoration:
-                bookMode
-                    ? const BoxDecoration()
-                    : BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          settings.surfaceColor.withValues(alpha: 0),
-                          settings.surfaceColor.withValues(alpha: 0.94),
-                        ],
-                        stops: const [0, 0.6],
-                      ),
-                    ),
-            child: SafeArea(
-              top: false,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final layout = ReaderControlLayout.resolve(
-                    viewport: Size(
-                      constraints.maxWidth,
-                      MediaQuery.sizeOf(context).height,
-                    ),
-                    fontSize: AppTypography.titleMedium,
-                  );
-                  final compact =
-                      layout.density == ReaderControlDensity.compact;
-
-                  if (!compact) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(40, 10, 40, 18),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 900),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 152,
-                                child: Text(
-                                  pageLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: AppTypography.bodySmall,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Directionality(
-                                  textDirection:
-                                      isRtl
-                                          ? TextDirection.rtl
-                                          : TextDirection.ltr,
-                                  child: _ComicPageSlider(
-                                    currentPageIndex: currentPageIndex,
-                                    totalPages: totalPages,
-                                    maxPage: maxPage,
-                                    settings: settings,
-                                    onSeek: onSeek,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              if (zoomScale > 1.02 && onResetZoom != null) ...[
-                                GestureDetector(
-                                  onTap: onResetZoom,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: settings.accentColor.withValues(
-                                        alpha: 0.16,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '${(zoomScale * 100).round()}%',
-                                      style: TextStyle(
-                                        color: settings.accentColor,
-                                        fontSize: AppTypography.bodySmall,
-                                        fontWeight: FontWeight.w600,
-                                        fontFeatures: const [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                              ],
-                              SizedBox(
-                                width: 78,
-                                child: Text(
-                                  isRtl
-                                      ? '${l10n.readerProgressPercent(percent)} · RTL'
-                                      : l10n.readerProgressPercent(percent),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: AppTypography.bodySmall,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                  : const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, visible ? 0 : 8, 0),
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration:
+                MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            alwaysIncludeSemantics: true,
+            child: DecoratedBox(
+              decoration:
+                  bookMode
+                      ? const BoxDecoration()
+                      : BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            settings.surfaceColor.withValues(alpha: 0),
+                            settings.surfaceColor.withValues(alpha: 0.94),
+                          ],
+                          stops: const [0, 0.6],
                         ),
                       ),
+              child: SafeArea(
+                top: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = ReaderControlLayout.resolve(
+                      viewport: Size(
+                        constraints.maxWidth,
+                        MediaQuery.sizeOf(context).height,
+                      ),
+                      fontSize: AppTypography.titleMedium,
                     );
-                  }
+                    final compact =
+                        layout.density == ReaderControlDensity.compact;
 
-                  return Material(
-                    color: settings.controlSurfaceColor.withValues(alpha: 0.94),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Directionality(
-                            textDirection:
-                                isRtl ? TextDirection.rtl : TextDirection.ltr,
-                            child: _ComicPageSlider(
-                              currentPageIndex: currentPageIndex,
-                              totalPages: totalPages,
-                              maxPage: maxPage,
-                              settings: settings,
-                              onSeek: onSeek,
-                            ),
-                          ),
-                          SizedBox(
-                            height: 48,
+                    if (!compact) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(40, 10, 40, 18),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 900),
                             child: Row(
                               children: [
-                                _ComicControlButton(
-                                  icon: Icons.chevron_left_rounded,
-                                  tooltip: l10n.readerPreviousPage,
-                                  settings: settings,
-                                  onPressed: isRtl ? onNext : onPrevious,
-                                ),
-                                Expanded(
+                                SizedBox(
+                                  width: 152,
                                   child: Text(
-                                    totalPages <= 0
-                                        ? '0 / 0'
-                                        : (isDualPage &&
-                                                endIndex > currentPageIndex
-                                            ? '${currentPageIndex + 1}–${endIndex + 1} / $totalPages'
-                                            : '${currentPageIndex + 1} / $totalPages'),
-                                    textAlign: TextAlign.center,
+                                    pageLabel,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: settings.onSurfaceColor,
-                                      fontSize: AppTypography.bodyMedium,
-                                      fontWeight: FontWeight.w700,
+                                      color: textColor,
+                                      fontSize: AppTypography.bodySmall,
                                       fontFeatures: const [
                                         FontFeature.tabularFigures(),
                                       ],
                                     ),
                                   ),
                                 ),
-                                _ComicControlButton(
-                                  icon: Icons.chevron_right_rounded,
-                                  tooltip: l10n.readerNextPage,
-                                  settings: settings,
-                                  onPressed: isRtl ? onPrevious : onNext,
-                                ),
-                                _ComicControlButton(
-                                  icon: Icons.toc_rounded,
-                                  tooltip: l10n.readerTableOfContents,
-                                  settings: settings,
-                                  onPressed: onShowContents,
-                                ),
-                                if (onSwitchReadingMode != null)
-                                  _ComicControlButton(
-                                    icon:
-                                        isPageMode
-                                            ? Icons.swap_vert_rounded
-                                            : Icons.swap_horiz_rounded,
-                                    tooltip:
-                                        isPageMode
-                                            ? l10n.readerComicModeScroll
-                                            : l10n.readerComicModePage,
-                                    settings: settings,
-                                    onPressed: onSwitchReadingMode!,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Directionality(
+                                    textDirection:
+                                        isRtl
+                                            ? TextDirection.rtl
+                                            : TextDirection.ltr,
+                                    child: _ComicPageSlider(
+                                      currentPageIndex: currentPageIndex,
+                                      totalPages: totalPages,
+                                      maxPage: maxPage,
+                                      settings: settings,
+                                      onSeek: onSeek,
+                                    ),
                                   ),
+                                ),
+                                const SizedBox(width: 14),
+                                if (zoomScale > 1.02 &&
+                                    onResetZoom != null) ...[
+                                  GestureDetector(
+                                    onTap: onResetZoom,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: settings.accentColor.withValues(
+                                          alpha: 0.16,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${(zoomScale * 100).round()}%',
+                                        style: TextStyle(
+                                          color: settings.accentColor,
+                                          fontSize: AppTypography.bodySmall,
+                                          fontWeight: FontWeight.w600,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                ],
+                                SizedBox(
+                                  width: 78,
+                                  child: Text(
+                                    isRtl
+                                        ? '${l10n.readerProgressPercent(percent)} · RTL'
+                                        : l10n.readerProgressPercent(percent),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: AppTypography.bodySmall,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        ],
+                        ),
+                      );
+                    }
+
+                    return Material(
+                      color: settings.controlSurfaceColor.withValues(
+                        alpha: 0.94,
                       ),
-                    ),
-                  );
-                },
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Directionality(
+                              textDirection:
+                                  isRtl ? TextDirection.rtl : TextDirection.ltr,
+                              child: _ComicPageSlider(
+                                currentPageIndex: currentPageIndex,
+                                totalPages: totalPages,
+                                maxPage: maxPage,
+                                settings: settings,
+                                onSeek: onSeek,
+                              ),
+                            ),
+                            SizedBox(
+                              height: 48,
+                              child: Row(
+                                children: [
+                                  _ComicControlButton(
+                                    icon: Icons.chevron_left_rounded,
+                                    tooltip: l10n.readerPreviousPage,
+                                    settings: settings,
+                                    onPressed: isRtl ? onNext : onPrevious,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      totalPages <= 0
+                                          ? '0 / 0'
+                                          : (isDualPage &&
+                                                  endIndex > currentPageIndex
+                                              ? '${currentPageIndex + 1}–${endIndex + 1} / $totalPages'
+                                              : '${currentPageIndex + 1} / $totalPages'),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: settings.onSurfaceColor,
+                                        fontSize: AppTypography.bodyMedium,
+                                        fontWeight: FontWeight.w700,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  _ComicControlButton(
+                                    icon: Icons.chevron_right_rounded,
+                                    tooltip: l10n.readerNextPage,
+                                    settings: settings,
+                                    onPressed: isRtl ? onPrevious : onNext,
+                                  ),
+                                  _ComicControlButton(
+                                    icon: Icons.toc_rounded,
+                                    tooltip: l10n.readerTableOfContents,
+                                    settings: settings,
+                                    onPressed: onShowContents,
+                                  ),
+                                  if (onSwitchReadingMode != null)
+                                    _ComicControlButton(
+                                      icon:
+                                          isPageMode
+                                              ? Icons.swap_vert_rounded
+                                              : Icons.swap_horiz_rounded,
+                                      tooltip:
+                                          isPageMode
+                                              ? l10n.readerComicModeScroll
+                                              : l10n.readerComicModePage,
+                                      settings: settings,
+                                      onPressed: onSwitchReadingMode!,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),

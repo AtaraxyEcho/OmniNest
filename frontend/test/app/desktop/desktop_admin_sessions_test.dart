@@ -76,7 +76,7 @@ void main() {
     expect(find.text('windows'), findsWidgets);
     expect(find.text('Force-signed out'), findsOneWidget);
     expect(find.text('active: 1 / 2'), findsOneWidget);
-    expect(find.byTooltip('Jump to'), findsOneWidget);
+    expect(find.byTooltip('First page'), findsOneWidget);
     // 保留期默认 30 天，chip 选中态来自 state。
     expect(find.text('Keep 30 days'), findsOneWidget);
   });

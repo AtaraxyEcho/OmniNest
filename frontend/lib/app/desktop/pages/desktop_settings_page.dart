@@ -56,6 +56,8 @@ part 'desktop_settings_backdrop_library.dart';
 part 'desktop_settings_more.dart';
 part 'desktop_settings_weather.dart';
 part 'desktop_settings_storage.dart';
+part 'desktop_settings_controls.dart';
+part 'desktop_settings_sections.dart';
 
 /// 桌面设置页（样例 `Settings.tsx`）。
 ///
@@ -83,7 +85,7 @@ class DesktopSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _DesktopSettingsPageState extends ConsumerState<DesktopSettingsPage> {
-  late DesktopSettingsSection _section = switch (widget.initialSection) {
+  static DesktopSettingsSection _parseSection(String? raw) => switch (raw) {
     'storage' || 'storageStats' => DesktopSettingsSection.storage,
     'profile' || 'account' => DesktopSettingsSection.profile,
     'backdrop' || 'wallpaper' => DesktopSettingsSection.backdrop,
@@ -94,6 +96,20 @@ class _DesktopSettingsPageState extends ConsumerState<DesktopSettingsPage> {
     'appearance' || 'theme' => DesktopSettingsSection.appearance,
     _ => DesktopSettingsSection.profile,
   };
+
+  late DesktopSettingsSection _section = _parseSection(widget.initialSection);
+
+  @override
+  void didUpdateWidget(covariant DesktopSettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSection != widget.initialSection &&
+        widget.initialSection != null) {
+      final next = _parseSection(widget.initialSection);
+      if (next != _section) {
+        setState(() => _section = next);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -610,6 +626,7 @@ class _ThemeCard extends StatelessWidget {
                             line: line,
                             accent: skin.accent,
                             dark: dark,
+                            system: mode == ThemeMode.system,
                           ),
                           const SizedBox(height: 10),
                           Padding(
@@ -656,30 +673,52 @@ class _ThemePreview extends StatelessWidget {
     required this.line,
     required this.accent,
     required this.dark,
+    this.system = false,
   });
 
   final Color background;
   final Color line;
   final Color accent;
   final bool dark;
+  final bool system;
+
+  Widget _block(Color color) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(6),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final muted = line.withValues(alpha: dark ? 0.25 : 0.35);
+    final muted =
+        system
+            ? const Color(0xFF7B8580).withValues(alpha: 0.28)
+            : line.withValues(alpha: dark ? 0.25 : 0.35);
     return SizedBox(
       height: 84,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Stack(
           children: [
-            ColoredBox(color: background),
+            if (system)
+              const Positioned.fill(
+                child: CustomPaint(
+                  painter: _SystemThemeSplitPainter(
+                    darkColor: Color(0xFF0D1114),
+                    lightColor: Color(0xFFECEEE9),
+                  ),
+                ),
+              )
+            else
+              Positioned.fill(child: ColoredBox(color: background)),
             Positioned.fill(
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 22, child: ColoredBox(color: muted)),
+                    SizedBox(width: 22, child: _block(muted)),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Column(
@@ -687,19 +726,17 @@ class _ThemePreview extends StatelessWidget {
                         children: [
                           SizedBox(
                             height: 20,
-                            child: ColoredBox(
-                              color: accent.withValues(
-                                alpha: dark ? 0.52 : 0.35,
-                              ),
+                            child: _block(
+                              accent.withValues(alpha: dark ? 0.52 : 0.35),
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Expanded(child: ColoredBox(color: muted)),
+                          Expanded(child: _block(muted)),
                         ],
                       ),
                     ),
                     const SizedBox(width: 6),
-                    SizedBox(width: 24, child: ColoredBox(color: muted)),
+                    SizedBox(width: 24, child: _block(muted)),
                   ],
                 ),
               ),
@@ -711,484 +748,31 @@ class _ThemePreview extends StatelessWidget {
   }
 }
 
-class _AccentSwatch extends StatelessWidget {
-  const _AccentSwatch({
-    required this.accent,
-    required this.label,
-    required this.selected,
-    required this.onTap,
+class _SystemThemeSplitPainter extends CustomPainter {
+  const _SystemThemeSplitPainter({
+    required this.darkColor,
+    required this.lightColor,
   });
 
-  final DesktopAccent accent;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  final Color darkColor;
+  final Color lightColor;
 
   @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: label,
-        child: DesktopFocusOutline(
-          radius: 14,
-          onActivate: onTap,
-          child: AnimatedContainer(
-            duration: DesktopMotion.of(context, DesktopMotion.fast),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? skin.raise2 : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? skin.line2 : Colors.transparent,
-                width: DesktopMetrics.hairlineStrong,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedContainer(
-                  duration: DesktopMotion.of(context, DesktopMotion.fast),
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: skin.isDark ? accent.dark : accent.light,
-                    shape: BoxShape.circle,
-                    boxShadow:
-                        selected
-                            ? [
-                              BoxShadow(
-                                color: skin.bg,
-                                blurRadius: 0,
-                                spreadRadius: 3,
-                              ),
-                              BoxShadow(
-                                color: skin.text2,
-                                blurRadius: 0,
-                                spreadRadius: 5,
-                              ),
-                            ]
-                            : null,
-                  ),
-                  alignment: Alignment.center,
-                  child:
-                      selected
-                          ? Icon(
-                            DesktopIcons.check,
-                            size: 13,
-                            color: skin.accentInk,
-                          )
-                          : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  style: DesktopType.caption(selected ? skin.text : skin.text2),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileSection extends ConsumerStatefulWidget {
-  const _ProfileSection({
-    required this.name,
-    required this.email,
-    required this.role,
-    required this.avatarUrl,
-    required this.skin,
-  });
-
-  final String name;
-  final String email;
-  final String role;
-  final String? avatarUrl;
-  final DesktopSkin skin;
-
-  @override
-  ConsumerState<_ProfileSection> createState() => _ProfileSectionState();
-}
-
-class _ProfileSectionState extends ConsumerState<_ProfileSection> {
-  late final TextEditingController _name = TextEditingController(
-    text: widget.name,
-  );
-  late final TextEditingController _email = TextEditingController(
-    text: widget.email,
-  );
-  late String _savedName = widget.name;
-  late String _savedEmail = widget.email;
-  bool _dirty = false;
-  bool _saving = false;
-  bool _avatarBusy = false;
-
-  @override
-  void didUpdateWidget(_ProfileSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_dirty &&
-        (oldWidget.name != widget.name || oldWidget.email != widget.email)) {
-      _savedName = widget.name;
-      _savedEmail = widget.email;
-      _name.text = widget.name;
-      _email.text = widget.email;
-    }
+  void paint(Canvas canvas, Size size) {
+    final darkPaint = Paint()..color = darkColor;
+    final lightPaint = Paint()..color = lightColor;
+    canvas.drawRect(Offset.zero & size, darkPaint);
+    final lightPath =
+        Path()
+          ..moveTo(size.width, 0)
+          ..lineTo(size.width, size.height)
+          ..lineTo(0, size.height)
+          ..close();
+    canvas.drawPath(lightPath, lightPaint);
   }
 
   @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = widget.skin;
-    final host =
-        Uri.tryParse(ref.read(appEnvironmentProvider)?.apiBaseUrl ?? '')?.host;
-    final name = _name.text.trim();
-    final email = _email.text.trim();
-    final invalidName = name.isEmpty || name.length > 40;
-    final invalidEmail = !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
-    return _Card(
-      title: l10n.desktopAccount,
-      subtitle: l10n.profileAccountSubtitle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: widget.skin.accent,
-                backgroundImage:
-                    widget.avatarUrl == null || widget.avatarUrl!.isEmpty
-                        ? null
-                        : NetworkImage(widget.avatarUrl!),
-                child:
-                    widget.avatarUrl == null || widget.avatarUrl!.isEmpty
-                        ? Text(
-                          name.isEmpty
-                              ? '·'
-                              : name.characters.first.toUpperCase(),
-                          style: DesktopType.panelTitle(widget.skin.accentInk),
-                        )
-                        : null,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: DesktopType.panelTitle(widget.skin.text)),
-                    const SizedBox(height: 2),
-                    Text(
-                      email.isEmpty ? '—' : email,
-                      style: DesktopType.dense(widget.skin.text3),
-                    ),
-                  ],
-                ),
-              ),
-              DesktopButton(
-                label: l10n.profileChangeAvatar,
-                icon: DesktopIcons.upload,
-                variant: DesktopButtonVariant.soft,
-                busy: _avatarBusy,
-                onPressed: _avatarBusy ? null : _pickAvatar,
-              ),
-              if (widget.avatarUrl?.isNotEmpty == true) ...[
-                const SizedBox(width: 8),
-                DesktopButton(
-                  label: l10n.profileRemoveAvatar,
-                  icon: DesktopIcons.trash,
-                  variant: DesktopButtonVariant.ghost,
-                  busy: _avatarBusy,
-                  onPressed: _avatarBusy ? null : _removeAvatar,
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 18),
-          Divider(height: 1, color: skin.line),
-          const SizedBox(height: 14),
-          DesktopTextField(
-            keyName: 'desktop-profile-display-name',
-            controller: _name,
-            label: l10n.profileDisplayNameField,
-            maxLength: 40,
-            error: invalidName ? l10n.desktopProfileDisplayNameInvalid : null,
-            onChanged: (_) => setState(() => _dirty = true),
-          ),
-          const SizedBox(height: 14),
-          DesktopTextField(
-            keyName: 'desktop-profile-email',
-            controller: _email,
-            label: l10n.profileEmailField,
-            error: invalidEmail ? l10n.profileEmailInvalid : null,
-            onChanged: (_) => setState(() => _dirty = true),
-          ),
-          const SizedBox(height: 8),
-          _KvRow(
-            label: l10n.desktopRole,
-            value: widget.role.isEmpty ? '—' : widget.role,
-          ),
-          _KvRow(
-            label: l10n.desktopServer,
-            value: (host == null || host.isEmpty) ? '—' : host,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              DesktopButton(
-                label: l10n.profileResetChanges,
-                onPressed: _dirty ? _reset : null,
-              ),
-              const SizedBox(width: 8),
-              DesktopButton(
-                label: l10n.profileSaveChanges,
-                icon: DesktopIcons.check,
-                variant: DesktopButtonVariant.primary,
-                busy: _saving,
-                onPressed:
-                    !_dirty || _saving || invalidName || invalidEmail
-                        ? null
-                        : _save,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _reset() {
-    setState(() {
-      _name.text = _savedName;
-      _email.text = _savedEmail;
-      _dirty = false;
-    });
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-    setState(() => _saving = true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref
-          .read(profileCommandServiceProvider)
-          .updateProfile(
-            displayName: _name.text.trim(),
-            email: _email.text.trim(),
-          );
-      if (!mounted) return;
-      await ref.read(authSessionProvider.notifier).reloadProfile();
-      if (!mounted) return;
-      setState(() {
-        _savedName = _name.text.trim();
-        _savedEmail = _email.text.trim();
-        _dirty = false;
-      });
-      showDesktopToast(
-        context,
-        l10n.profileUpdateSuccess,
-        icon: DesktopIcons.check,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.profileSaveChanges, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _pickAvatar() async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      final selected = await FilePick.pickImages(
-        dialogTitle: l10n.profileChangeAvatar,
-      );
-      if (!mounted || selected.isEmpty) return;
-      final file = selected.first;
-      final length = await file.length();
-      if (!mounted) return;
-      if (length != null &&
-          length > FileSizeThresholds.desktopAvatarUploadMaxBytes) {
-        showDesktopToast(
-          context,
-          l10n.desktopProfileAvatarSizeError,
-          kind: DesktopToastKind.error,
-        );
-        return;
-      }
-      final extension = file.extension;
-      if (extension == null ||
-          !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
-        showDesktopToast(
-          context,
-          l10n.profileAvatarFormatError,
-          kind: DesktopToastKind.error,
-        );
-        return;
-      }
-      setState(() => _avatarBusy = true);
-      final bytes = await file.readBytes();
-      if (!mounted) return;
-      if (bytes.isEmpty ||
-          bytes.length > FileSizeThresholds.desktopAvatarUploadMaxBytes) {
-        showDesktopToast(
-          context,
-          l10n.desktopProfileAvatarSizeError,
-          kind: DesktopToastKind.error,
-        );
-        return;
-      }
-      await ref
-          .read(profileCommandServiceProvider)
-          .uploadAvatar(bytes, file.name);
-      if (!mounted) return;
-      await ref.read(authSessionProvider.notifier).reloadProfile();
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.profileAvatarSuccess,
-        icon: DesktopIcons.check,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.profileAvatarFailed, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _avatarBusy = false);
-    }
-  }
-
-  Future<void> _removeAvatar() async {
-    if (_avatarBusy) return;
-    final l10n = AppLocalizations.of(context);
-    setState(() => _avatarBusy = true);
-    try {
-      await ref.read(profileCommandServiceProvider).removeAvatar();
-      if (!mounted) return;
-      await ref.read(authSessionProvider.notifier).reloadProfile();
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.profileAvatarRemoved,
-        icon: DesktopIcons.trash,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.profileRemoveAvatar, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _avatarBusy = false);
-    }
-  }
-}
-
-class _KvRow extends StatelessWidget {
-  const _KvRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 160,
-            child: Text(label, style: DesktopType.dense(skin.text3)),
-          ),
-          Expanded(
-            child: Text(value, style: DesktopType.denseStrong(skin.text)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  const _Card({required this.title, required this.child, this.subtitle});
-
-  final String title;
-  final String? subtitle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: DesktopGlassSurface(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        blur: 24,
-        saturation: 1.3,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
-          decoration: BoxDecoration(
-            color: skin.panel,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-            border: Border.all(color: skin.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: DesktopType.panelTitle(skin.text)),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            subtitle!,
-                            style: DesktopType.caption(skin.text3),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              child,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  bool shouldRepaint(_SystemThemeSplitPainter oldDelegate) =>
+      oldDelegate.darkColor != darkColor ||
+      oldDelegate.lightColor != lightColor;
 }

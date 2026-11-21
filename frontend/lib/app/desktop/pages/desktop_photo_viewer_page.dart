@@ -15,6 +15,7 @@ import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -49,6 +50,10 @@ class _DesktopPhotoViewerPageState
 
   final TransformationController _zoom = TransformationController();
   final FocusNode _focus = FocusNode(debugLabel: 'desktop-photo-viewer');
+  final GlobalKey _stageKey = GlobalKey(
+    debugLabel: 'desktop-photo-viewer-stage',
+  );
+  Offset? _lastDoubleTapLocal;
 
   late String _currentId = widget.photoId;
   double _rotation = 0;
@@ -145,10 +150,14 @@ class _DesktopPhotoViewerPageState
                 const Center(child: SizedBox(width: 32, height: 32))
               else ...[
                 _ViewerStage(
+                  stageKey: _stageKey,
                   photo: photo,
                   zoom: _zoom,
                   rotation: _rotation,
                   slideshow: _slideshow,
+                  infoOpen: _info,
+                  onDismissInfo: () => setState(() => _info = false),
+                  onDoubleTapDown: (pos) => _lastDoubleTapLocal = pos,
                   onDoubleTap: _toggleZoom,
                   onWheel: _onWheel,
                 ),
@@ -404,12 +413,36 @@ class _DesktopPhotoViewerPageState
       _zoom.value = Matrix4.identity();
       return;
     }
-    _setScale(2.4);
+    _setScale(2.4, focalPoint: _lastDoubleTapLocal);
   }
 
-  void _setScale(double value) {
-    final clamped = value.clamp(1.0, 5.0);
-    _zoom.value = Matrix4.diagonal3Values(clamped, clamped, 1);
+  void _setScale(double value, {Offset? focalPoint}) {
+    final nextScale = value.clamp(1.0, 5.0);
+    if (nextScale <= 1.001) {
+      _zoom.value = Matrix4.identity();
+      return;
+    }
+    final box = _stageKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || box.size.isEmpty) {
+      _zoom.value = Matrix4.diagonal3Values(nextScale, nextScale, 1);
+      return;
+    }
+    final size = box.size;
+    final current = _zoom.value;
+    final oldScale = current.getMaxScaleOnAxis().clamp(1.0, 5.0);
+    final oldTx = current.storage[12];
+    final oldTy = current.storage[13];
+    final focal = focalPoint ?? Offset(size.width / 2, size.height / 2);
+    final sceneX = (focal.dx - oldTx) / oldScale;
+    final sceneY = (focal.dy - oldTy) / oldScale;
+    final minTx = size.width * (1.0 - nextScale);
+    final minTy = size.height * (1.0 - nextScale);
+    final nextTx = (focal.dx - sceneX * nextScale).clamp(minTx, 0.0);
+    final nextTy = (focal.dy - sceneY * nextScale).clamp(minTy, 0.0);
+    _zoom.value =
+        Matrix4.identity()
+          ..translateByDouble(nextTx, nextTy, 0.0, 1.0)
+          ..scaleByDouble(nextScale, nextScale, 1.0, 1.0);
   }
 
   void _onWheel(PointerSignalEvent event) {
@@ -580,18 +613,26 @@ class _DesktopPhotoViewerPageState
 
 class _ViewerStage extends StatelessWidget {
   const _ViewerStage({
+    required this.stageKey,
     required this.photo,
     required this.zoom,
     required this.rotation,
     required this.slideshow,
+    required this.infoOpen,
+    required this.onDismissInfo,
+    required this.onDoubleTapDown,
     required this.onDoubleTap,
     required this.onWheel,
   });
 
+  final GlobalKey stageKey;
   final PhotoItem photo;
   final TransformationController zoom;
   final double rotation;
   final bool slideshow;
+  final bool infoOpen;
+  final VoidCallback onDismissInfo;
+  final ValueChanged<Offset> onDoubleTapDown;
   final VoidCallback onDoubleTap;
   final ValueChanged<PointerSignalEvent> onWheel;
 
@@ -602,16 +643,33 @@ class _ViewerStage extends StatelessWidget {
       DesktopMotion.viewerKenBurns,
     );
     final animateKenBurns = slideshow && kenBurnsDuration != Duration.zero;
-    final stagePadding =
-        MediaQuery.sizeOf(context).width <= 760
+    final compact = MediaQuery.sizeOf(context).width <= 760;
+    final basePadding =
+        compact
             ? const EdgeInsets.fromLTRB(12, 68, 12, 84)
             : const EdgeInsets.fromLTRB(92, 72, 92, 92);
+    final effectivePadding =
+        infoOpen && !compact
+            ? EdgeInsets.fromLTRB(
+              basePadding.left,
+              basePadding.top,
+              350,
+              basePadding.bottom,
+            )
+            : basePadding;
     return Positioned.fill(
-      child: Padding(
-        padding: stagePadding,
+      child: AnimatedPadding(
+        duration: MotionToken.reduced(context, DesktopMotion.viewerStage),
+        curve: DesktopMotion.ease,
+        padding: effectivePadding,
         child: Listener(
+          key: stageKey,
           onPointerSignal: onWheel,
           child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: infoOpen ? onDismissInfo : null,
+            onDoubleTapDown:
+                (details) => onDoubleTapDown(details.localPosition),
             onDoubleTap: onDoubleTap,
             child: InteractiveViewer(
               transformationController: zoom,

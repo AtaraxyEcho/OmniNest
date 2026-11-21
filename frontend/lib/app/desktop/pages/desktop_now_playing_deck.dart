@@ -4,8 +4,9 @@ part of 'desktop_now_playing_page.dart';
 const _flowCycle = Duration(seconds: 18);
 
 /// 唱机（样例 `.plinth`）：560 上限、1.05 比例的外壳，内部 80% 转盘、
-/// 右侧唱臂、底部 LED 与曲序号。播放时唱臂落下、唱片旋转、轴心浮现。
-class _Deck extends StatelessWidget {
+/// 右侧唱臂、底部 LED 与曲序号。播放时唱臂落下并微摆、唱片 33⅓ RPM 旋转、
+/// 封面氛围光晕缓慢呼吸。
+class _Deck extends StatefulWidget {
   const _Deck({
     required this.spin,
     required this.cover,
@@ -25,7 +26,61 @@ class _Deck extends StatelessWidget {
   final int total;
 
   @override
+  State<_Deck> createState() => _DeckState();
+}
+
+class _DeckState extends State<_Deck> with TickerProviderStateMixin {
+  /// 唱臂播放态微摆（3.4s 周期，±0.35°）。
+  late final AnimationController _sway = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(DesktopMotion.tonearmSway),
+  );
+
+  /// 封面氛围光晕 `.deck-aura` 呼吸周期（4.2s，透明度与 1.06 缩放）。
+  late final AnimationController _aura = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(DesktopMotion.deckAura),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAmbient();
+  }
+
+  @override
+  void didUpdateWidget(_Deck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAmbient();
+  }
+
+  void _syncAmbient() {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final run = widget.playing && !reduceMotion;
+    if (run) {
+      if (!_sway.isAnimating) {
+        _sway.repeat(reverse: true);
+      }
+      if (!_aura.isAnimating) {
+        _aura.repeat(reverse: true);
+      }
+    } else {
+      if (_sway.isAnimating) _sway.stop();
+      if (_aura.isAnimating) _aura.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _sway.dispose();
+    _aura.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final playing = widget.playing;
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxByHeight =
@@ -37,6 +92,7 @@ class _Deck extends StatelessWidget {
             .clamp(0.0, 560.0);
         final height = size / 1.05;
         final platter = size * 0.8;
+        final platterTop = size * 0.14;
         return Center(
           child: SizedBox(
             width: size,
@@ -44,6 +100,7 @@ class _Deck extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                // 封面氛围光晕 `.deck-aura`：播放态 4.2s 呼吸透明度与 1.06 缩放。
                 Positioned(
                   left: -size * 0.10,
                   right: -size * 0.10,
@@ -51,18 +108,29 @@ class _Deck extends StatelessWidget {
                   bottom: -size * 0.14,
                   child: IgnorePointer(
                     child: RepaintBoundary(
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                        child: AnimatedOpacity(
-                          opacity: playing ? 0.85 : 0.55,
-                          duration: DesktopMotion.colorFade,
-                          curve: DesktopMotion.ease,
+                      child: AnimatedBuilder(
+                        animation: _aura,
+                        builder: (context, child) {
+                          final wave =
+                              playing
+                                  ? Curves.easeInOutSine.transform(_aura.value)
+                                  : 0.0;
+                          final auraOpacity =
+                              playing ? (0.72 + 0.22 * wave) : 0.55;
+                          final auraScale = playing ? (1.0 + 0.06 * wave) : 1.0;
+                          return Transform.scale(
+                            scale: auraScale,
+                            child: Opacity(opacity: auraOpacity, child: child),
+                          );
+                        },
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: RadialGradient(
                                 radius: 0.72,
                                 colors: [
-                                  hueColor.withValues(alpha: 0.55),
+                                  widget.hueColor.withValues(alpha: 0.58),
                                   Colors.transparent,
                                 ],
                                 stops: const [0, 0.72],
@@ -74,6 +142,7 @@ class _Deck extends StatelessWidget {
                     ),
                   ),
                 ),
+                // 唱机底座 `.plinth`：金属拉丝纹 + 顶部 1px white 0.08 内高光 + 底部内暗影。
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -94,54 +163,74 @@ class _Deck extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                ),
-                Positioned(
-                  left: size * 0.04,
-                  top: size * 0.133,
-                  width: platter,
-                  height: platter,
-                  child: _Platter(
-                    spin: spin,
-                    cover: cover,
-                    playing: playing,
-                    size: platter,
-                  ),
-                ),
-                Positioned(
-                  left: size * 0.04,
-                  top: size * 0.133,
-                  width: platter,
-                  height: platter,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.07),
-                            Colors.transparent,
-                            Colors.white.withValues(alpha: 0.03),
-                          ],
-                          stops: const [0, 0.45, 1],
-                        ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(25),
+                      child: const CustomPaint(
+                        painter: _PlinthMetalPainter(),
+                        child: SizedBox.expand(),
                       ),
                     ),
                   ),
                 ),
+                // 黑胶转盘（对齐 top: size * 0.14）。
+                Positioned(
+                  left: size * 0.04,
+                  top: platterTop,
+                  width: platter,
+                  height: platter,
+                  child: _Platter(
+                    spin: widget.spin,
+                    cover: widget.cover,
+                    playing: playing,
+                    size: platter,
+                  ),
+                ),
+                // 静态反光 `.glare`：双瓣 SweepGradient（8%→12% 0.10、58%→62% 0.08）+ BlendMode.screen。
+                Positioned(
+                  left: size * 0.04,
+                  top: platterTop,
+                  width: platter,
+                  height: platter,
+                  child: const IgnorePointer(
+                    child: CustomPaint(
+                      painter: _PlatterGlarePainter(),
+                      child: SizedBox.expand(),
+                    ),
+                  ),
+                ),
+                // 唱臂 `.tonearm`：播放态落臂 37° 并叠加 3.4s (±0.35°) 微摆。
                 Positioned(
                   left: size * 0.9,
                   top: size * 0.11,
-                  child: AnimatedRotation(
-                    turns: (playing ? 37 : -8) / 360,
-                    duration: DesktopMotion.of(context, DesktopMotion.tonearm),
-                    curve: DesktopMotion.spring,
-                    alignment: Alignment.topLeft,
-                    child: _Tonearm(size: size),
+                  child: AnimatedBuilder(
+                    animation: _sway,
+                    builder: (context, child) {
+                      final swayDeg =
+                          playing
+                              ? (Curves.easeInOutSine.transform(_sway.value) *
+                                          2 -
+                                      1) *
+                                  0.35
+                              : 0.0;
+                      return Transform.rotate(
+                        angle: swayDeg * math.pi / 180,
+                        alignment: Alignment.topLeft,
+                        child: child,
+                      );
+                    },
+                    child: AnimatedRotation(
+                      turns: (playing ? 37 : -8) / 360,
+                      duration: DesktopMotion.of(
+                        context,
+                        DesktopMotion.tonearm,
+                      ),
+                      curve: DesktopMotion.spring,
+                      alignment: Alignment.topLeft,
+                      child: _Tonearm(size: size, accent: skin.accent),
+                    ),
                   ),
                 ),
+                // 底部状态 LED（亮态使用 skin.accent 及发光阴影）与转速标签。
                 Positioned(
                   left: size * 0.06,
                   bottom: size * 0.034,
@@ -153,17 +242,16 @@ class _Deck extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color:
-                              playing
-                                  ? Colors.white.withValues(alpha: 0.9)
-                                  : const Color(0xFF3A2A2A),
+                              playing ? skin.accent : const Color(0xFF3A2A2A),
                           boxShadow:
                               playing
                                   ? [
                                     BoxShadow(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.45,
+                                      color: skin.accent.withValues(
+                                        alpha: 0.72,
                                       ),
                                       blurRadius: 10,
+                                      spreadRadius: 1,
                                     ),
                                   ]
                                   : null,
@@ -183,8 +271,8 @@ class _Deck extends StatelessWidget {
                   right: size * 0.05,
                   bottom: size * 0.034,
                   child: Text(
-                    '${index.toString().padLeft(2, '0')} / '
-                    '${total.toString().padLeft(2, '0')}',
+                    '${widget.index.toString().padLeft(2, '0')} / '
+                    '${widget.total.toString().padLeft(2, '0')}',
                     style: DesktopType.numeric(
                       Colors.white.withValues(alpha: 0.4),
                     ),
@@ -199,187 +287,7 @@ class _Deck extends StatelessWidget {
   }
 }
 
-class _Platter extends StatelessWidget {
-  const _Platter({
-    required this.spin,
-    required this.cover,
-    required this.playing,
-    required this.size,
-  });
-
-  final Animation<double> spin;
-  final String? cover;
-  final bool playing;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelSize = size * 0.28;
-    return Container(
-      padding: EdgeInsets.all(size * 0.012),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          colors: [Color(0xFF2A3036), Color(0xFF14181C)],
-        ),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF0A0D0F), spreadRadius: size * 0.014),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.55),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: AnimatedBuilder(
-        animation: spin,
-        builder:
-            (context, child) =>
-                Transform.rotate(angle: spin.value * 2 * math.pi, child: child),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0xFF0B0B0C),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              for (final inset in const [0.08, 0.16, 0.24])
-                Container(
-                  width: size * (0.9 - inset * 2),
-                  height: size * (0.9 - inset * 2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.05),
-                    ),
-                  ),
-                ),
-              ClipOval(
-                child: SizedBox(
-                  width: labelSize,
-                  height: labelSize,
-                  child:
-                      cover == null
-                          ? const ColoredBox(color: Color(0xFF1A2026))
-                          : Image.network(
-                            cover!,
-                            fit: BoxFit.cover,
-                            errorBuilder:
-                                (_, _, _) =>
-                                    const ColoredBox(color: Color(0xFF1A2026)),
-                          ),
-                ),
-              ),
-              Container(
-                width: size * 0.024,
-                height: size * 0.024,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const RadialGradient(
-                    center: Alignment(-0.3, -0.4),
-                    colors: [Color(0xFFEEEEEE), Color(0xFF888888)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.8),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Tonearm extends StatelessWidget {
-  const _Tonearm({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 1,
-      height: 1,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: -size * 0.05,
-            top: -size * 0.05,
-            width: size * 0.10,
-            height: size * 0.10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const RadialGradient(
-                  center: Alignment(-0.3, -0.4),
-                  colors: [Color(0xFF4A535A), Color(0xFF1A1F23)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: -size * 0.0055,
-            top: 0,
-            width: size * 0.011,
-            height: size * 0.46,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(size * 0.01),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF8A949A),
-                    Color(0xFFD9DFE2),
-                    Color(0xFF7A848A),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    blurRadius: 6,
-                    offset: const Offset(3, 6),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: -size * 0.02,
-            top: size * 0.445,
-            width: size * 0.04,
-            height: size * 0.06,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(size * 0.007),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF2A3036), Color(0xFF0E1114)],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 波形进度条（样例 `.wave`）：52 高、白色播放头，按 `trackId` 生成专属波形，
-/// 拖动仅更新预览位置，松手或点击时通过 `onCommit` 触发一次 `seek`。
+/// 唱机底座金属拉丝纹理与上下边缘内高光/内暗影。
 class _WaveSeek extends StatefulWidget {
   const _WaveSeek({
     required this.trackId,

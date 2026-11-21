@@ -112,48 +112,53 @@ class _DesktopAdminNavItem extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: DesktopHover(
-        builder:
-            (context, hovered) => GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: DesktopMotion.of(context, DesktopMotion.fast),
-                height: DesktopMetrics.navItemHeightCompact + 3,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color:
-                      selected
-                          ? skin.accentWash(0.14)
-                          : hovered
-                          ? skin.raise
-                          : Colors.transparent,
-                  borderRadius: BorderRadius.circular(
-                    DesktopMetrics.radiusButton,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _iconFor(section),
-                      size: DesktopMetrics.iconSmall,
-                      color: selected ? skin.accent : skin.text2,
+      child: DesktopFocusOutline(
+        radius: DesktopMetrics.radiusButton,
+        onActivate: onTap,
+        child: DesktopHover(
+          builder:
+              (context, hovered) => GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: DesktopMotion.of(context, DesktopMotion.fast),
+                  height: DesktopMetrics.navItemHeightCompact + 3,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    // 对齐 `.set-nav`：选中态使用中性 skin.raise2 底，仅图标染 skin.accent。
+                    color:
+                        selected
+                            ? skin.raise2
+                            : hovered
+                            ? skin.raise
+                            : Colors.transparent,
+                    borderRadius: BorderRadius.circular(
+                      DesktopMetrics.radiusButton,
                     ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.navItem(
-                          selected ? skin.accent : skin.text2,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _iconFor(section),
+                        size: DesktopMetrics.iconSmall,
+                        color: selected ? skin.accent : skin.text2,
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.navItem(
+                            selected ? skin.text : skin.text2,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+        ),
       ),
     );
   }

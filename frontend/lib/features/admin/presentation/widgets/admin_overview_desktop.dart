@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -67,9 +68,16 @@ class DesktopAdminOverview extends ConsumerWidget {
       ),
       (
         l10n.adminStorageLabel,
-        accountStorage == null ? '—' : formatFileSize(accountStorage.usedBytes),
-        accountStorage == null
-            ? '—'
+        storage.usedBytes > 0 || storage.fileCount > 0
+            ? formatFileSize(storage.usedBytes)
+            : accountStorage == null
+            ? formatFileSize(storage.usedBytes)
+            : formatFileSize(accountStorage.usedBytes),
+        storage.usedBytes > 0 || storage.fileCount > 0
+            ? '${storage.fileCount} ${l10n.filesCount} · '
+                '${storage.folderCount} ${l10n.desktopFilesFilterFolders}'
+            : accountStorage == null
+            ? '${storage.fileCount} ${l10n.filesCount}'
             : accountStorage.isQuotaUnlimited
             ? l10n.desktopStorageUnlimited(
               formatFileSize(accountStorage.usedBytes),
@@ -290,38 +298,44 @@ class _RecalculateStorageCardState
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-      decoration: BoxDecoration(
-        color: skin.raise,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        border: Border.all(color: skin.line),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.adminRecalculateStorageTitle,
-                  style: DesktopType.cardTitle(skin.text),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.adminRecalculateStorageSubtitle,
-                  style: DesktopType.caption(skin.text3),
-                ),
-              ],
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      blur: 24,
+      saturation: 1.3,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.adminRecalculateStorageTitle,
+                    style: DesktopType.cardTitle(skin.text),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.adminRecalculateStorageSubtitle,
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          DesktopButton(
-            label: l10n.adminRecalculate,
-            busy: _busy,
-            onPressed: _busy ? null : _run,
-          ),
-        ],
+            const SizedBox(width: 16),
+            DesktopButton(
+              label: l10n.adminRecalculate,
+              busy: _busy,
+              onPressed: _busy ? null : _run,
+            ),
+          ],
+        ),
       ),
     );
   }

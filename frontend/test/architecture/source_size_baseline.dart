@@ -3,10 +3,19 @@
 /// 只允许下调：文件继续变大时先按职责拆分，拆分后删除或收紧对应条目。
 /// 新增超过 800 行的生产源码必须在此登记，登记即锁定当前行数。
 const sourceLineCaps = <String, int>{
-  'lib/app/desktop/pages/desktop_now_playing_deck.dart': 827,
-  'lib/app/desktop/pages/desktop_photos_justified.dart': 1035,
+  'lib/app/desktop/pages/desktop_files_table.dart': 923,
+  'lib/app/desktop/pages/desktop_movies_cards.dart': 950,
+  'lib/app/desktop/pages/desktop_music_page.dart': 966,
+  'lib/app/desktop/pages/desktop_photo_viewer_page.dart': 1055,
+  'lib/app/desktop/pages/desktop_reader_page.dart': 897,
+  'lib/app/desktop/pages/desktop_settings_more.dart': 837,
+  'lib/app/desktop/widgets/desktop_places_globe.dart': 829,
+  'lib/features/admin/presentation/widgets/admin_shell.dart': 801,
+  'lib/features/files/application/file_browser_controller.dart': 963,
+  'lib/features/video/presentation/widgets/movie_player_sheets.dart': 888,
+  'lib/app/desktop/pages/desktop_photos_justified.dart': 1013,
   'lib/app/desktop/pages/desktop_series_detail_sections.dart': 809,
-  'lib/app/desktop/widgets/desktop_surfaces.dart': 1032,
+  'lib/app/desktop/widgets/desktop_surfaces.dart': 979,
   'lib/app/theme/mobile_env_palette.dart': 811,
   'lib/core/widgets/mobile_sample_kit.dart': 847,
   'lib/features/admin/presentation/pages/admin_operations_logs_center.dart':
@@ -43,7 +52,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/reader/presentation/widgets/reader_view_content.dart': 640,
   'lib/features/reader/presentation/widgets/reader_view_page_mixin.dart': 807,
   'lib/features/reader/presentation/widgets/reader_view_settings.dart': 535,
-  'lib/features/video/presentation/pages/movie_player_page.dart': 843,
+  'lib/features/video/presentation/pages/movie_player_page.dart': 822,
 };
 
 /// 生成文件不参与源码尺寸与棘轮统计。

@@ -353,7 +353,13 @@ class _SidebarItem extends StatelessWidget {
     // 样例侧栏条目是 `<button class="nav-item">`：Tab 可达、Enter/Space 可激活。
     // 自绘的 GestureDetector 不会进 Tab 顺序，必须补焦点外壳与按钮语义，
     // 否则「管理台 / 设置」在键盘下只能绕道（命令面板按样例已不再收录它们）。
-    return Semantics(
+    final tooltipMessage =
+        shortcut != null
+            ? '$label ($shortcut)'
+            : count != null
+            ? '$label ($count)'
+            : label;
+    final item = Semantics(
       button: true,
       selected: active,
       // 折叠态下文字被 ExcludeSemantics 屏蔽，外显 label 是唯一来源；
@@ -407,7 +413,7 @@ class _SidebarItem extends StatelessWidget {
                                 padding: const EdgeInsets.only(left: 12),
                                 child: Row(
                                   children: [
-                                    Flexible(
+                                    Expanded(
                                       child: Text(
                                         label,
                                         maxLines: 1,
@@ -458,6 +464,14 @@ class _SidebarItem extends StatelessWidget {
         ),
       ),
     );
+    if (!expanded) {
+      return Tooltip(
+        message: tooltipMessage,
+        waitDuration: const Duration(milliseconds: 300),
+        child: item,
+      );
+    }
+    return item;
   }
 }
 
@@ -488,7 +502,7 @@ class _StorageCard extends StatelessWidget {
             ? l10n.desktopStorageUnlimited(used)
             : l10n.desktopStorageUsage(used, total!);
 
-    return DesktopHover(
+    final card = DesktopHover(
       builder:
           (context, hovered) => GestureDetector(
             onTap: () => desktopGo(context, DesktopRoutes.filesStorage),
@@ -513,10 +527,11 @@ class _StorageCard extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          '${(ratio * 100).round()}%',
-                          style: DesktopType.nano(
-                            skin.text,
-                          ).copyWith(fontWeight: FontWeight.w600),
+                          unlimited ? '∞' : '${(ratio * 100).round()}%',
+                          style: DesktopType.nano(skin.text).copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: unlimited ? 13 : null,
+                          ),
                         ),
                       ),
                     ),
@@ -559,6 +574,14 @@ class _StorageCard extends StatelessWidget {
             ),
           ),
     );
+    if (!expanded) {
+      return Tooltip(
+        message: 'OmniCloud · $caption',
+        waitDuration: const Duration(milliseconds: 300),
+        child: card,
+      );
+    }
+    return card;
   }
 }
 

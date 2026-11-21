@@ -8,6 +8,7 @@ class SubtitleOverlay extends StatelessWidget {
     required this.activeCueIndex,
     required this.controlsVisible,
     required this.isMobile,
+    this.fontScale = 1.0,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class SubtitleOverlay extends StatelessWidget {
   final ValueNotifier<int> activeCueIndex;
   final bool controlsVisible;
   final bool isMobile;
+  final double fontScale;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +57,7 @@ class SubtitleOverlay extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: context.videoColors.playerControlForeground,
-                      fontSize: isMobile ? 18 : 21,
+                      fontSize: (isMobile ? 18 : 21) * fontScale,
                       fontWeight: FontWeight.w500,
                       height: 1.35,
                       shadows: const [
