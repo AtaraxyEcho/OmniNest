@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 向子树暴露剔除应用字体档位后的系统 TextScaler（已按
 /// ComposedScaler.maxScale 封顶）。

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 全局搜索命令面板的遮罩与提示片填充。
 abstract final class SearchOverlayColors {

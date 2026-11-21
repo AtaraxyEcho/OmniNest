@@ -1,7 +1,7 @@
 // 外部（系统文件）拖入：经由 desktop_drop 的方法通道事件驱动，
 // 覆盖全屏遮罩、文件夹行高亮与「停 650ms 自动进入该目录」。
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show AnimatedContainer, BoxDecoration;
+import 'package:material_ui/material_ui.dart' show AnimatedContainer, BoxDecoration;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

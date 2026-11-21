@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
 /// 内置默认壁纸图像。

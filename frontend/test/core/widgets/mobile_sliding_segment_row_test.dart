@@ -3,7 +3,7 @@
 // 判三件事：选中胶囊是**滑过去**而不是就地换色（中途必须在两段之间）；
 // 连续档按页码插值（媒体库空间的 PageView 跟手）；段数超出可用宽度时
 // 横向滚动而不是整体缩放（照片页六档实测曾被压到 54×33）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';

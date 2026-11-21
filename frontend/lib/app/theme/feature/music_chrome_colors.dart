@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Music 模块 chrome 配色：播放控件、迷你播放器、曲库封面网格与平台账号窗。
 ///

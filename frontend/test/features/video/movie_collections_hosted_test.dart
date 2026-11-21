@@ -1,7 +1,7 @@
 // 合集托管形态回归：工具目录进来的合集分区必须落原型 `.feature-list` 行族，
 // 不再用工位重设计卡；新建与明细面板沿用同一套流程（托管态自动分流为
 // 玻璃贴底面板），这里只验外壳与行内容。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

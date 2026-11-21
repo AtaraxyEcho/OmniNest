@@ -1,7 +1,7 @@
 // 托管影视环境档一致性回归：样例把四个媒体空间都放在活体环境底上，
 // 影视托管态不得再自注册 work 覆盖路由级 ambient，也不得铺重设计实底；
 // 工位（桌面）态仍压住壁纸，规避 Impeller 对角亮缝的既有实证。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

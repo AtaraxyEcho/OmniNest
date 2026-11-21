@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 曲目色相 → 展示色（样例 `Music.tsx:132` 的 `--hue`）。
 ///

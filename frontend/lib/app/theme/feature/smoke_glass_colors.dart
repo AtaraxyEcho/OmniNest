@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 深色烟熏玻璃 chrome 配色：Portal 视觉面板与 Music 沉浸播放器共用的
 /// 「背后有亮壁纸」深色色板。

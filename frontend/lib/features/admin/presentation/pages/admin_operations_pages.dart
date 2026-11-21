@@ -2,7 +2,7 @@ import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';

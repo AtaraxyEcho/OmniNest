@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';

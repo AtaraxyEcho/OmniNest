@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/features/portal/domain/portal_focus_models.dart';
 
 /// Portal 焦点图标的 Material 映射。

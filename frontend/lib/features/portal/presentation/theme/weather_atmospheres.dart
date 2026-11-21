@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
 
 /// 天气详情弹窗的场景配色：按天气场景 × 时段给出渐变三段、粒子与面板底色。

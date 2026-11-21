@@ -11,6 +11,10 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  # Flutter 3.48+ 将 Material/Cupertino 组件库拆分为独立包，flutter/material.dart
+  # 与 flutter/cupertino.dart 已整库弃用（v3.47.0-0.0.pre 之后）。
+  material_ui: ^1.5.0
+  cupertino_ui: ^1.1.1
   cupertino_icons: ^2.0.0
   cached_network_image: ^4.0.4
   cached_network_image_platform_interface: ^5.0.3
@@ -54,12 +58,12 @@ dependencies:
   xml: ^7.1.0
   archive: ^4.2.0
   gbk_codec: ^0.4.0
-  data_table_2: ^2.8.0
+  data_table_2: ^3.0.0
   intl: ^0.20.2
   # 显式钉住已迁 Built-in Kotlin 的传递依赖，避免旧插件把它们拖回 KGP 版本。
   package_info_plus: ^10.2.1
   wakelock_plus: ^1.8.0
-  pro_image_editor: 13.3.1
+  pro_image_editor: ^14.29.0
   qr_flutter: ^4.1.0
   pdfrx: ^2.6.1
   share_plus: ^13.3.0

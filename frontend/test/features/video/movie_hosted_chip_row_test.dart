@@ -4,7 +4,7 @@
 //
 // 桩不外包页边距：样例 20px 页边距由所在分区页的 sliver 承担，
 // 见 movie_hosted_section_inset_test.dart。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';

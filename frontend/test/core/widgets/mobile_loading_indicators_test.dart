@@ -3,7 +3,7 @@
 // MobileSkeletonBlock 早期在盒内塞 24px 转圈，同屏放两块就是两个动画，
 // 放进 16px 高的槽位还会溢出；现在它是静态占位，动画只允许来自
 // AppLoading（整页首屏）或 MobileLoadingLine（区级唯一一条线）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 

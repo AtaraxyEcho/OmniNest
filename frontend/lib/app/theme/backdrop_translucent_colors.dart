@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 浅色主题叠加动态背景时使用的烟熏透明色。
 ///

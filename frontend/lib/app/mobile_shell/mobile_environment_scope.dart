@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 环境极性的唯一判定：外观设置（浅色/深色）就是极性源。

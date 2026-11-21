@@ -6,7 +6,7 @@
 // 天气条同理但更容易漏：胶囊本身就铺满舞台，盒子中心恒等于舞台中心，
 // 必须看条内图标组的左右留痕是否对称。
 // ≥980 双栏档反过来必须贴左（时间块占 1.1fr，右侧是同排的焦点卡）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

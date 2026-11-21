@@ -5,7 +5,7 @@
 // underneath is animating? Runs four scenarios against the same window size
 // so the per-panel cost and the "backdrop changed this frame" penalty can be
 // separated. Scratch verification artifact, not a product test.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 

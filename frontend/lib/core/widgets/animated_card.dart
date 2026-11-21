@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 播放一次淡入和上移动画的内容容器。

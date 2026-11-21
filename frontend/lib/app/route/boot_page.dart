@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 认证/安装检查在途时的停泊页：受保护路由在会话恢复完成前不构建，
 /// 避免未携带凭据的首批业务请求触发 401 风暴。

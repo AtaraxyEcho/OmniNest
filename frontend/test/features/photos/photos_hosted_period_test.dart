@@ -1,7 +1,7 @@
 // 整月下钻回归：托管时间线在月份只下发预览时给出跳转，落点的整月页
 // 必须落壳层玻璃皮肤（样例 photo-groups → .album-grid），而不是桌面 SliverAppBar；
 // 桌面宽窗保持原有工位形态。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

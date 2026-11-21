@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 为桌面滚动视口提供平台兼容行为。
 class OmniNestScrollBehavior extends MaterialScrollBehavior {

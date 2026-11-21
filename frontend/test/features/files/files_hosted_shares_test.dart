@@ -1,6 +1,6 @@
 // 托管态我的分享：发丝线行 + 状态丸，不出现工位表格与分页条。
 // 走真实「更多分区 → 我的分享」入口。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

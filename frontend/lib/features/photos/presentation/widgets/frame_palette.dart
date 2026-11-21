@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Frame 风格暖纸色调色板（依据 Figma "Photos Library Model UI"）。
 ///

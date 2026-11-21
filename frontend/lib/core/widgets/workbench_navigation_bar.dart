@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 工作台窄屏底部导航，使用 Material 导航语义和稳定目标尺寸。
 class WorkbenchNavigationBar extends StatelessWidget {

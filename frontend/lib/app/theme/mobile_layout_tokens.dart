@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 
 /// 移动端工作台使用的尺寸与动效令牌。

@@ -10,7 +10,7 @@
 // 本轮裁定（A1）：手机上六段必须全部可见，段宽改用等分档
 // (390 - 2×20 - 2×4 - 5×4) / 6 ≈ 53.7dp。这是对样例 min-width:66 的
 // 记账式偏离，理由与数值一并写在这里，不要当成漏抄。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

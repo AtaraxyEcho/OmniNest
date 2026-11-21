@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 播放计划加载或失败时显示的退出按钮。
 class MoviePlayerFallbackBackButton extends StatelessWidget {

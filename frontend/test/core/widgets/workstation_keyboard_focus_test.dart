@@ -3,7 +3,7 @@
 // 不包 FocusableActionDetector 就整条落在 Tab 链之外。
 import 'dart:ui' show PointerDeviceKind;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';

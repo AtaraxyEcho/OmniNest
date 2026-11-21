@@ -6,7 +6,7 @@
 //
 // 这里判两件事：遮蔽随动画进度的释放曲线（纯函数，逐点可核），以及真路由
 // 推入时的首帧全遮与落位全放。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 

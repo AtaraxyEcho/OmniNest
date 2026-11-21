@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 全局动画时长与曲线常量，所有动画引用此文件，不硬编码。
 /// 参考标准：Material Design 3、Apple HIG、Linear/Stripe/Vercel。

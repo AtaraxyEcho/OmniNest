@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/app_min_width_guard.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';

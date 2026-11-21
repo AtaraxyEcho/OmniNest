@@ -1,6 +1,6 @@
 // Files 模块托管态导航矩阵审查（PM 清单落地）：首页各入口 → 工作区形态、
 // 目录逐级进出、分段切换、返回逐级。所有用例走真实 FileBrowserPage 树。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

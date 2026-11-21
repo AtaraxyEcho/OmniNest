@@ -1,6 +1,6 @@
 // 移动环境色板两极性的真实渲染基线：四张图分别对应
 // 「极性配壁纸」与「极性逆壁纸」，后者就是 015 量到的塌方形态，用眼睛确认代价。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';

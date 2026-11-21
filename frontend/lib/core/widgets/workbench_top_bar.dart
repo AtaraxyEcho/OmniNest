@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 工作台顶部工具栏，使用不透明主题表面并处理系统安全区域。
 class WorkbenchTopBar extends StatelessWidget {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 动态背景可读性遮罩色阶：按 [AppBackdropReadabilityMode] 取三段渐变停点。
 ///

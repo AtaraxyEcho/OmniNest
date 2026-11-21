@@ -8,7 +8,7 @@
 // 要让线消失得把六个 provider 全部喂成数据，构造成本高于它所能证明的东西。
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

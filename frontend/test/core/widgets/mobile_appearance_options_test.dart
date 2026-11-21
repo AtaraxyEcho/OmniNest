@@ -1,6 +1,6 @@
 // 样例 `.appearance-options` 的几何与配色守卫：等分三列、末行留空、
 // 按钮 min-height 36，选中项走 actionFill 一族。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';

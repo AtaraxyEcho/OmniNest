@@ -20,7 +20,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';

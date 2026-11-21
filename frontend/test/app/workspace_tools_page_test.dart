@@ -4,7 +4,7 @@
 // 挂载形态与 router.dart 一致：MobileHostedRoute 直接包住页面，不额外套
 // Scaffold。多套一层 Scaffold 会把 MaterialApp 的兜底正文样式（monospace /
 // 黄色双下划线）挡在外面，双横线缺陷正是在测试里看不见、真机上满屏都是。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

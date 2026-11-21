@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/backdrop_translucent_colors.dart';
 
 /// Portal 移动端在动态背景和纯色背景之间共享的主题派生规则。

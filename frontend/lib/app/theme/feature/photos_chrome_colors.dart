@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 相册查看器 chrome 配色：信息面板、幻灯片遮罩、面板宿主与分享面板。
 abstract final class PhotosChromeColors {

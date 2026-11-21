@@ -5,7 +5,7 @@
 // 桩的容器用真实入口（MobileHostedRoute + MovieCenterPage + 托管态 sliver），
 // 不外包 Padding：被测缺陷正是「页面没有给这条行补左右内缩」，
 // 测试侧一旦补上 20 内衬就把它盖住了。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

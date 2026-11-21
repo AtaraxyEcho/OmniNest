@@ -1,7 +1,7 @@
 // 观看历史托管形态与分区深链解析回归：托管态必须落原型 `.feature-list`
 // 行族（环境眉标 + 发丝线行 + 38 行内动作），不再落工位重设计卡；
 // `/video?section=` 只认枚举名。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

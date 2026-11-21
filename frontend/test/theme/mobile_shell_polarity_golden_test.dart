@@ -1,7 +1,7 @@
 // 壳层极性的真实渲染基线：无壁纸的实底壳在暗/浅两种根主题下的整屏观感。
 // 这批图是"壳层注册极性"这一刀唯一的像素证据，缺了它就只能靠测试断言颜色值。
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 应用背景设置面板使用的颜色。

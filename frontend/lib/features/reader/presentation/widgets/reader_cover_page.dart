@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';

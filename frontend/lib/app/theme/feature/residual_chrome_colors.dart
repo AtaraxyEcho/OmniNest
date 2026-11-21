@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 阅读生成式封面配色（按标题哈希稳定取色）。
 class ReaderGeneratedCoverColors {

@@ -8,7 +8,7 @@
 // loadSection 换成目标分区态，页面因此离开首页态渲染分区子页。外部存储的翻页
 // 与目录进入落在 FileBrowserController 的 extension 成员上，子类无法替换，
 // 因此浏览态只把任务喂成已进入目录并断言形态。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

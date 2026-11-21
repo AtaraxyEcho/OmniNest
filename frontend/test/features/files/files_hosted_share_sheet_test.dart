@@ -1,6 +1,6 @@
 // 托管态分享面板：原型眉标 + 环境开关行 + 分段 + 酸绿主行动，
 // 创建失败必须在面板内给出本地化摘要而不是停在忙碌态。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -3,7 +3,7 @@
 // 页签行在选择模式下会被隐藏，但横滑曾照常生效，于是多选进行中一次误划就
 // 悄悄换掉视图（用户看不到页签，无从察觉换到了哪）。现在选择模式关闭分页
 // 横滑本身，退出选择模式后跟手换视图照常工作。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

@@ -1,7 +1,7 @@
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/session/session_epoch.dart';

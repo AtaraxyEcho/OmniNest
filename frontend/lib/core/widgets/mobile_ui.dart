@@ -3,7 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:omninest/core/widgets/app_switch.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';

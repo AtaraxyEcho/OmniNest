@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 
 /// Music 动态背景上的局部半透明面板。

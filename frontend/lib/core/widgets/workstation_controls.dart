@@ -5,7 +5,7 @@
 /// 热区外扩到 44px；全部 0px 直角、1px 细线、零阴影。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';

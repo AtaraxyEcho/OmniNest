@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 圆形图元（对应原型 SVG 的 circle 元素）。
 class OmniIconCircle {

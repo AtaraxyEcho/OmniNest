@@ -7,7 +7,7 @@
 //
 // 用与真实路由同拓扑的壳层（四空间 StatefulShellRoute.indexedStack +
 // 根级模块路由）量三种走法，避免只凭断言写作。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

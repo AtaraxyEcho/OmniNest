@@ -4,7 +4,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

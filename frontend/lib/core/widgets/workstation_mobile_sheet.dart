@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 标记当前子树渲染于移动端工位底部面板内。

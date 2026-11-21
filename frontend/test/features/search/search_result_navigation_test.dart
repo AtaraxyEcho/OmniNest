@@ -4,7 +4,7 @@
 // 根级路由：用 `go` 会换掉整条导航栈，之后 Android 侧滑没有可弹层，
 // `popRoute` 返回 false，引擎按「无路由可退」处理——真机表现就是退出到桌面。
 // 分支路由 `/files` 反过来必须 `go`（四空间是同级目的地，不留幽灵返回栈）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

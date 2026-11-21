@@ -2,7 +2,7 @@
 // 本身没有 `.titlebar`；但原生窗口是无边框的，缺了拖拽区与三键就无法移动、
 // 最大化或关闭。这里断言壳层只给这些路由补窗口 chrome，工作区不重复画。
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';

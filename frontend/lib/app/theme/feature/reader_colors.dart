@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 
 /// 参考设计标题衬线字体（中文回退系统字体，保持正体）。

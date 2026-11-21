@@ -1,6 +1,6 @@
 // 幻灯顶栏触控下限回归：关闭键是离开查看器的逃生控件，窄屏下命中区不得
 // 低于 48；桌面维持 36 紧凑密度，避免整条顶栏在宽屏被抬高。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';

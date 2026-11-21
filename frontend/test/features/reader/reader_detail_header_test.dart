@@ -6,7 +6,7 @@
 // 并且 `ReaderPageScaffold` 传的是 `headerPadding: EdgeInsets.zero`、
 // 托管 body 是不带 SafeArea 的裸 Column —— 页头坐在 y=0，被手机状态栏压住；
 // 右上角也没有「更多」。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 工作台内容面板，提供不透明表面、细边框和稳定内边距。
 class WorkbenchPanel extends StatelessWidget {

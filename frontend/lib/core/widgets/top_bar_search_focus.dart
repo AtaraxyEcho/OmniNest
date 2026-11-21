@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 顶栏搜索框的 Ctrl/Cmd+F 聚焦注册表。
 ///

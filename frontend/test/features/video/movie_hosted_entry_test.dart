@@ -1,6 +1,6 @@
 // 影视模块托管进入顺序回归：先切第一栏（For you）再刷新，
 // 防止 refresh 以旧分区回写造成落地「电影」/返回观感来回切换。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

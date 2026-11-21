@@ -1,5 +1,5 @@
 // 托管 Files 首页验证：目录原地展开（保留首页 chrome + 内联返回上级栏）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

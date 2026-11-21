@@ -1,7 +1,7 @@
 // 托管阅读管理页回归：`/reader/admin` 此前只有深链进得来——`ReaderPageScaffold`
 // 在托管态隐藏模块 chrome，页面顶端既没有模块头也没有返回位。
 // 现在按壳层同一条约定挂 MobileModuleHeader（90 带 + 48 圆返回钮 + 状态栏避让）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

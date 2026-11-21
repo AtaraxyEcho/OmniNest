@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 在不复制页面树的前提下为模块切换提供短距离进入动画。

@@ -5,7 +5,7 @@
 // 「最近使用」等四张分区卡后闪一下又弹回模块首页。控制器层锁机制，页面层锁时序。
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

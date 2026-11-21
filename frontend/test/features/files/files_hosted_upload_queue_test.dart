@@ -1,6 +1,6 @@
 // 托管态上传队列：原型传输页形态（计数眉标 + 三格摘要 + 进度行），
 // 不出现工位指标条、四列表格与分页条。走真实「更多分区 → 上传队列」入口。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

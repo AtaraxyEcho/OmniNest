@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// AnimatedSwitcher 布局回调：对退场中的旧子树排除语义。
 ///

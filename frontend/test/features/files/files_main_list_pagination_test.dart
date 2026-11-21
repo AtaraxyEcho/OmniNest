@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
 import 'package:omninest/core/widgets/hosted_touch_canvas.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';

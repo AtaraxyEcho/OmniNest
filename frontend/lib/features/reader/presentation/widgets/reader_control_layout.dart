@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
 import 'package:omninest/app/theme/app_theme_colors.dart';
 

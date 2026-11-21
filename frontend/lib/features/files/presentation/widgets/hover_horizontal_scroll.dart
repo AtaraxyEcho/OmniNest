@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 悬停横滚容器：鼠标悬停在区域内时，纵向滚轮直接驱动横向滚动。
 ///

@@ -5,7 +5,7 @@
 // 断言抛出后 chrome、目标分支与来源页三者都不在树上。目标是根级路由时必须 push：
 // go 会换掉整条栈，之后系统返回直接结束 Activity，落不回通知中心。
 // 这里用与真实路由同形的最小拓扑（StatefulShellRoute.indexedStack + 根级路由）量两种走法。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_action.dart';

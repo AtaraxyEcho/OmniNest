@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 状态指示灯：规范唯一允许的正圆元素。

@@ -2,7 +2,7 @@
 // 单档失败不吞掉其它档结果、结果行走来源自带的直达路由、
 // 页面带着未完成请求退出不得回写、返回一次即离开。
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

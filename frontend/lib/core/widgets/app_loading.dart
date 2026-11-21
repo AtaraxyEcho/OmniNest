@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 通用加载指示器：首屏/列表/详情统一使用居中 CircularProgressIndicator。
 ///

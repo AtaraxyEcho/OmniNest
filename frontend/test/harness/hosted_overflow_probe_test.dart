@@ -1,6 +1,6 @@
 // 溢出探针：hosted 模块页在 390 逻辑宽 + textScale 1.3 下整页布局，
 // 任何 RenderFlex 溢出都会以异常形式令测试失败。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

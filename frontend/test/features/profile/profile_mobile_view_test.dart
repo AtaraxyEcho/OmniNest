@@ -1,6 +1,6 @@
 // 个人中心托管移动形态验证：样例形态（模块横幅 + 分组行 + 退出登录）、
 // security 直达二级、视觉环境行打开移动端 EnvSettings 抽屉。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';

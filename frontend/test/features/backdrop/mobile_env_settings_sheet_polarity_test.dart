@@ -3,7 +3,7 @@
 // 极性注册（MobileEnvPalette.of 退回暗基准，切"浅色模式"成了空操作），
 // 要么是打开那一刻的旧主题（翻设置不跟随）。
 // 这里守住两件事：① 抽屉表面按外观设置取极性；② 抽屉保持打开时翻外观即刻跟随。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';

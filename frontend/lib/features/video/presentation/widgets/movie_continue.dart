@@ -3,7 +3,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_common_widgets.dart';

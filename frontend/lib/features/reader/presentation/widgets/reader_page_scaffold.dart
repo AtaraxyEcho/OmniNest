@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/desktop/widgets/desktop_section_bar.dart';
 import 'package:omninest/core/widgets/desktop_chrome_only.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 桌面形态的最小内容宽度护栏。

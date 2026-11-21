@@ -1,6 +1,6 @@
 // 托管态存储统计：修复「点存储统计看到的是文件列表」。
 // 断言统计页渲染摘要与类型分布，且不再落到文件列表工作区。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

@@ -1,6 +1,6 @@
 // 桌面影视搜索框限长回归：框里的文本必须等于真正打给服务端的关键词。
 // 服务端影视库关键词限 200 字，超长输入会变成一次被拒的请求，而不是"搜不到"。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

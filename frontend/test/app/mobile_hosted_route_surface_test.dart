@@ -1,7 +1,7 @@
 // 根级推入页的宿主重绑回归：MobileHostedRoute 除了补 hosted scope，还必须把
 // 极性与主题一起跟着外观设置解析——此前非实底（媒体）路由无条件钉暗，
 // 浅色外观下打开相册就是一整页暗栈；样例的浅态把这些面一律铺成纸面玻璃。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';

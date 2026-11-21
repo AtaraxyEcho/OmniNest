@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/features/video/presentation/widgets/subtitle_parser.dart';
 

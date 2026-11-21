@@ -3,3 +3,8 @@ template-arb-file: app_en.arb
 output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 nullable-getter: false
+# gen-l10n 模板仍硬编码从 flutter_localizations 引入 GlobalMaterial/GlobalCupertino
+# 委托（SDK 3.50 未适配新包拆分），对生成文件整体压制这两条弃用诊断，
+# 避免 pub get 自动重新生成后再次报警。
+header: |
+  // ignore_for_file: deprecated_member_use

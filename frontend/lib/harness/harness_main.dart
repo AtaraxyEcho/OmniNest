@@ -1,7 +1,7 @@
 // 双实况对照 harness：独立入口，渲染三模块页 hosted 形态 + 通知中心，
 // 与样例 5200 同视口截图对照。不进正式构建（路径 lib/harness/ 下，
 // build web 时以 -t 指定）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';

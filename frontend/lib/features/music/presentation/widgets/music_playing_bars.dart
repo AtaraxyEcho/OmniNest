@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 曲目行「正在播放」动态指示：三根竖条错峰跳动。
 ///

@@ -1,7 +1,7 @@
 import 'dart:ui' show BlurStyle, ImageFilter, MaskFilter;
 
 import 'package:flutter/foundation.dart' show listEquals;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// CSS `backdrop-filter: blur(Npx) saturate(s) brightness(b)` 的等价组合。
 ///

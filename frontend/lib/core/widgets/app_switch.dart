@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 统一开关几何：36×20 胶囊轨道 + 14px 圆点。

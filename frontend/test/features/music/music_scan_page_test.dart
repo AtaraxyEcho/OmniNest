@@ -1,6 +1,6 @@
 // 本地音乐库扫描页回归：托管工具页只给真实可得的数（状态/进度/已扫描），
 // 不摆稿子里算不出来的 REMAINING / ESTIMATED 摘要格；扫描与重刮都要二次确认。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

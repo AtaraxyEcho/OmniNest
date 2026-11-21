@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 
 /// 新版设计的相对时间文案：分钟/小时/天前，超过一周回退日期。

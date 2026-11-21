@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

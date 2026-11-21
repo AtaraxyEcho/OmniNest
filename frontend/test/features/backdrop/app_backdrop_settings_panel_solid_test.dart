@@ -2,7 +2,7 @@
 // surfaceContainerHigh 换成 52% 暗烟熏值，面板照它铺底会让底下的页面透成灰板
 //（实机反馈"展开设置页面透明"）。样例浅态的 sheet 族是 82% 白玻璃，
 // 所以守卫的量法是"亮面 + 等于 sheetSolid"，不是"必须不透明"。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';

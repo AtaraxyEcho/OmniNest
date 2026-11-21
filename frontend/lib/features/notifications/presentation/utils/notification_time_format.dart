@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 
 /// 通知时间的相对格式（刚刚 / n 分钟 / n 小时 / n 天 / 日期），供

@@ -5,7 +5,7 @@
 // 线性放开，落位后完全撤除，终态像素与原实现一致，壁纸照常透上来。
 // 全程按比例衰减的旧口径挡不住重合段：动画过半时遮蔽已薄到能透出上一页，
 // 抽屉点设置的"页面重叠"就是这么来的。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/route/app_route_surface.dart';

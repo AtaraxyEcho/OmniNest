@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_logged_in_card.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_qr_panel.dart';

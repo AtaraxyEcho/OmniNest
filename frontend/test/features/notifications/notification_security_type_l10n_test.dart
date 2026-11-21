@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('安全类通知类型映射为本地化文案而非原始码', (tester) async {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 
 /// 个人中心工位分区卡：0px 直角、1px 细线、可选标题行 + 内容区。

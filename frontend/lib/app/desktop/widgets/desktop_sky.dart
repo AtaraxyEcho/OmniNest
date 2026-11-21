@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/core/theme/motion_token.dart';

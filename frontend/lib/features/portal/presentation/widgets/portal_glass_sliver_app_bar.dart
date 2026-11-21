@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Portal 动态背景上使用的半透明固定 Sliver 顶栏。
 class PortalGlassSliverAppBar extends StatelessWidget {

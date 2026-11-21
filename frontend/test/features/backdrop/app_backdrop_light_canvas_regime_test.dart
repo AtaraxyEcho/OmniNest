@@ -2,7 +2,7 @@
 // 与叠上去的那一层洗色（暗态压暗、浅态洗白）。
 // 极性源是外观设置（根主题明暗），壁纸不参与判定。
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/theme/app_theme.dart';

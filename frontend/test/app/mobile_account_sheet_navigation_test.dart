@@ -4,7 +4,7 @@
 // 动画并发（整屏玻璃模糊与两层内容同帧重绘），并且下滑中的面板与遮罩会从
 // 新页面底下透出来。这里判三件事：跳转确实被推迟到面板退场之后、减弱动效下
 // 跳转照常发生、以及不会重复入栈。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

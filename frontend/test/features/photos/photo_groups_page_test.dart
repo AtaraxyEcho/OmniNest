@@ -1,7 +1,7 @@
 // 年·月分组页回归（原型 photo-groups 工具页 .year-jump）：年份衬线大字 +
 // 全年张数 + 4 列月份砖（月名/张数），点砖进该月整月浏览；
 // 时间线未就绪给骨架，确实无照片才给空态。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
