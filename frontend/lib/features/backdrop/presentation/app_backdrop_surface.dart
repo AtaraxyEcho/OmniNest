@@ -16,7 +16,7 @@ import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 ///
 /// 服务端图片素材走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
 /// 内置默认壁纸与各端登录页使用同一张打包静态图片。
-class AppBackdropSurface extends ConsumerWidget {
+class AppBackdropSurface extends ConsumerStatefulWidget {
   const AppBackdropSurface({
     required this.asset,
     required this.settings,
@@ -39,7 +39,26 @@ class AppBackdropSurface extends ConsumerWidget {
   final bool active;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppBackdropSurface> createState() => _AppBackdropSurfaceState();
+}
+
+class _AppBackdropSurfaceState extends ConsumerState<AppBackdropSurface> {
+  int _assetSwapSeq = 0;
+
+  @override
+  void didUpdateWidget(covariant AppBackdropSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.asset?.id ?? 'none') != (widget.asset?.id ?? 'none')) {
+      _assetSwapSeq += 1;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = widget.asset;
+    final settings = widget.settings;
+    final policy = widget.policy;
+    final environmentBlurSigma = widget.environmentBlurSigma;
     final BoxFit fit = switch (settings.fit) {
       AppBackdropFit.cover => BoxFit.cover,
       AppBackdropFit.contain => BoxFit.contain,
@@ -90,7 +109,10 @@ class AppBackdropSurface extends ConsumerWidget {
               switchInCurve: MotionToken.curve,
               switchOutCurve: MotionToken.curveIn,
               child: KeyedSubtree(
-                key: ValueKey<String>(asset?.id ?? 'none'),
+                key: ValueKey<(int, String)>((
+                  _assetSwapSeq,
+                  asset?.id ?? 'none',
+                )),
                 // AnimatedSwitcher 默认 layoutBuilder 是 StackFit.loose 的
                 // Stack：松约束下 Image 按固有像素排版，BoxFit 不参与，
                 // 宽视口里 cover/fill 都会退化成 letterbox（左右露出舞台
@@ -178,8 +200,8 @@ class AppBackdropSurface extends ConsumerWidget {
           AppBackdropVideoView(
             source: source,
             fit: fit,
-            playing: active && motionAllowed,
-            muted: settings.videoMuted,
+            playing: widget.active && motionAllowed,
+            muted: widget.settings.videoMuted,
             onSourceStale: onSourceStale,
             codecUnsupported: asset.isWebPlaybackUnsupported,
           ),
@@ -196,8 +218,8 @@ class AppBackdropSurface extends ConsumerWidget {
         AppBackdropVideoView(
           source: source,
           fit: fit,
-          playing: active && motionAllowed,
-          muted: settings.videoMuted,
+          playing: widget.active && motionAllowed,
+          muted: widget.settings.videoMuted,
           onSourceStale: onSourceStale,
         ),
       ],
@@ -213,7 +235,8 @@ class AppBackdropSurface extends ConsumerWidget {
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
       final blurActive =
-          settings.blurAmount > 0.05 || environmentBlurSigma > 0.05;
+          widget.settings.blurAmount > 0.05 ||
+          widget.environmentBlurSigma > 0.05;
       final thumbnail =
           asset.thumbnailPath?.isNotEmpty == true ? asset.thumbnailPath : null;
       return AppBackdropImage(

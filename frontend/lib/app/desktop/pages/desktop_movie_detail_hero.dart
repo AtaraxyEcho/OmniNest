@@ -190,7 +190,9 @@ class _HeroState extends State<_Hero> {
                                 overflow: TextOverflow.ellipsis,
                                 style: DesktopType.quote(
                                   Colors.white.withValues(alpha: 0.82),
-                                ).copyWith(fontSize: 17),
+                                ).copyWith(
+                                  fontSize: DesktopType.sizePanelTitle,
+                                ),
                               ),
                             ],
                             const SizedBox(height: 6),

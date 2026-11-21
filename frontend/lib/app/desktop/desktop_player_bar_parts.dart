@@ -162,6 +162,8 @@ class _PlayerSeekBar extends StatelessWidget {
                   height: DesktopMetrics.playerBarSeekHeight,
                   value: positionSeconds,
                   max: durationSeconds <= 0 ? 1 : durationSeconds.toDouble(),
+                  trackColor: skin.raise3,
+                  fillColor: skin.accent,
                   onChanged: durationSeconds <= 0 ? (_) {} : onScrub,
                   onCommit: durationSeconds <= 0 ? null : onCommit,
                 ),

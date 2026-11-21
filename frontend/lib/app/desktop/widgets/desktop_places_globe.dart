@@ -1,6 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show FontFeature, ImageFilter;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
@@ -29,9 +30,10 @@ class DesktopGlobePlace {
   final PhotoItem? coverPhoto;
 }
 
-/// 可拖动点阵地球（对齐 `Globe.tsx:95-136` & `desktop.css:350-352`）：
-/// 通透大气球体 + 30° 完整经纬网 + 主题自适应大陆点阵 + 全可见 Pin 脉冲环 +
-/// 悬停/选中毛玻璃 `.pin-card` 缩略图卡片 + 底部拖拽提示胶囊。
+/// 可拖动与平滑缩放点阵地球（对齐 `Globe.tsx:95-136` & `desktop.css:350-352`）：
+/// 通透大气球体 + 30° 经纬网（高倍率淡入 15° 辅助网）+ 主题自适应大陆点阵 +
+/// 全可见 Pin 脉冲环 + 悬停/选中毛玻璃 `.pin-card` 缩略图卡片 +
+/// 右下角毛玻璃缩放胶囊 + 底部拖拽/滚轮提示胶囊。
 class DesktopPlacesGlobe extends StatefulWidget {
   const DesktopPlacesGlobe({
     required this.places,
@@ -50,9 +52,18 @@ class DesktopPlacesGlobe extends StatefulWidget {
 
 class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     with TickerProviderStateMixin {
+  static const double _minZoom = 0.85;
+  static const double _maxZoom = 2.4;
+  static const double _selectFocusZoom = 1.25;
+  static const double _zoomStep = 0.25;
+
   late final AnimationController _turn = AnimationController(
     vsync: this,
     duration: MotionToken.resolveForPlatform(DesktopMotion.globeTurn),
+  );
+  late final AnimationController _zoomCtrl = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(const Duration(milliseconds: 200)),
   );
   late final AnimationController _ping = AnimationController(
     vsync: this,
@@ -63,6 +74,10 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
   Offset _to = Offset.zero;
   double _lon = 12;
   double _lat = 18;
+  double _zoom = 1.0;
+  double _zoomFrom = 1.0;
+  double _zoomTo = 1.0;
+  double _scaleStartZoom = 1.0;
   bool _dragging = false;
   String? _hoveredPlace;
 
@@ -76,7 +91,13 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
         _lat = _from.dy + (_to.dy - _from.dy) * t;
       });
     });
-    _faceSelected(animate: false);
+    _zoomCtrl.addListener(() {
+      final t = Curves.easeOutCubic.transform(_zoomCtrl.value);
+      setState(() {
+        _zoom = _zoomFrom + (_zoomTo - _zoomFrom) * t;
+      });
+    });
+    _faceSelected(animate: false, autoZoom: false);
   }
 
   @override
@@ -89,9 +110,9 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
   void didUpdateWidget(DesktopPlacesGlobe oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selected != widget.selected) {
-      _faceSelected(animate: true);
+      _faceSelected(animate: true, autoZoom: true);
     } else if (oldWidget.places.isEmpty && widget.places.isNotEmpty) {
-      _faceSelected(animate: false);
+      _faceSelected(animate: false, autoZoom: false);
     }
     _syncPing();
   }
@@ -112,11 +133,68 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
   @override
   void dispose() {
     _ping.dispose();
+    _zoomCtrl.dispose();
     _turn.dispose();
     super.dispose();
   }
 
-  void _faceSelected({required bool animate}) {
+  void _animateZoomTo(double target) {
+    final clamped = target.clamp(_minZoom, _maxZoom);
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _zoomTo = clamped;
+    if (reduce) {
+      _zoomCtrl.stop();
+      setState(() {
+        _zoom = clamped;
+        _zoomFrom = clamped;
+      });
+      return;
+    }
+    _zoomFrom = _zoom;
+    if ((_zoomTo - _zoomFrom).abs() < 0.001) {
+      return;
+    }
+    _zoomCtrl.forward(from: 0);
+  }
+
+  void _setZoomImmediate(double target) {
+    final clamped = target.clamp(_minZoom, _maxZoom);
+    _zoomCtrl.stop();
+    _zoomFrom = clamped;
+    _zoomTo = clamped;
+    setState(() {
+      _zoom = clamped;
+    });
+  }
+
+  void _resetZoomAndCenter() {
+    _animateZoomTo(1.0);
+    _faceSelected(animate: true, autoZoom: false);
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
+        final scroll = resolved as PointerScrollEvent;
+        final dy = scroll.scrollDelta.dy;
+        if (dy == 0) {
+          return;
+        }
+        final factor = math.exp(-dy * 0.0018);
+        _animateZoomTo(_zoomTo * factor);
+      });
+    } else if (event is PointerScaleEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
+        final scaleEvent = resolved as PointerScaleEvent;
+        if (scaleEvent.scale <= 0) {
+          return;
+        }
+        _animateZoomTo(_zoomTo * scaleEvent.scale);
+      });
+    }
+  }
+
+  void _faceSelected({required bool animate, required bool autoZoom}) {
     final place =
         widget.places
             .where((entry) => entry.name == widget.selected)
@@ -135,6 +213,9 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     final dLon = (place.longitude - _lon + 540) % 360 - 180;
     _to = Offset(_lon + dLon, targetLat);
     _turn.forward(from: 0);
+    if (autoZoom && _zoom < _selectFocusZoom) {
+      _animateZoomTo(_selectFocusZoom);
+    }
   }
 
   @override
@@ -146,11 +227,14 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxW =
-            constraints.maxWidth.isFinite ? constraints.maxWidth : 420.0;
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 520.0;
         final maxH =
-            constraints.maxHeight.isFinite ? constraints.maxHeight - 36 : 420.0;
-        final size = math.min(maxW, maxH).clamp(240.0, 420.0);
-        final radius = size / 2 - 6;
+            constraints.maxHeight.isFinite ? constraints.maxHeight - 36 : 520.0;
+        final baseSize = math.min(maxW, maxH).clamp(260.0, 520.0);
+        final stageW = math.max(baseSize, maxW);
+        final stageH = math.max(baseSize, maxH);
+        final baseRadius = baseSize / 2 - 6;
+        final radius = baseRadius * _zoom;
 
         final projectedPins = <({DesktopGlobePlace place, _Projected q})>[];
         for (final place in widget.places) {
@@ -176,90 +260,126 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            MouseRegion(
-              cursor:
-                  _dragging
-                      ? SystemMouseCursors.grabbing
-                      : SystemMouseCursors.grab,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (_) {
-                  _turn.stop();
-                  if (!_dragging) {
-                    setState(() => _dragging = true);
-                  }
-                },
-                onPanUpdate: (details) {
-                  _turn.stop();
-                  final degPerPx = (110.0 / size) * 1.6;
-                  setState(() {
-                    _lon -= details.delta.dx * degPerPx;
-                    _lat = (_lat + details.delta.dy * degPerPx).clamp(
-                      -70.0,
-                      70.0,
-                    );
-                  });
-                },
-                onPanEnd: (_) {
-                  if (_dragging) {
-                    setState(() => _dragging = false);
-                  }
-                },
-                onPanCancel: () {
-                  if (_dragging) {
-                    setState(() => _dragging = false);
-                  }
-                },
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Listener(
+                onPointerSignal: _handlePointerSignal,
                 child: SizedBox(
-                  width: size,
-                  height: size,
+                  width: stageW,
+                  height: stageH,
                   child: Stack(
-                    clipBehavior: Clip.none,
+                    fit: StackFit.expand,
                     children: [
-                      Positioned.fill(
-                        child: RepaintBoundary(
-                          key: const ValueKey('places-globe-canvas'),
-                          child: CustomPaint(
-                            painter: _GlobePainter(
-                              lon: _lon,
-                              lat: _lat,
-                              ink: skin.text,
-                            ),
+                      MouseRegion(
+                        cursor:
+                            _dragging
+                                ? SystemMouseCursors.grabbing
+                                : SystemMouseCursors.grab,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onScaleStart: (_) {
+                            _turn.stop();
+                            _zoomCtrl.stop();
+                            _scaleStartZoom = _zoom;
+                            if (!_dragging) {
+                              setState(() => _dragging = true);
+                            }
+                          },
+                          onScaleUpdate: (details) {
+                            _turn.stop();
+                            if ((details.scale - 1.0).abs() > 0.002) {
+                              _setZoomImmediate(
+                                _scaleStartZoom * details.scale,
+                              );
+                            }
+                            final delta = details.focalPointDelta;
+                            if (delta != Offset.zero) {
+                              final degPerPx =
+                                  (110.0 / (baseSize * _zoom)) * 1.6;
+                              setState(() {
+                                _lon -= delta.dx * degPerPx;
+                                _lat = (_lat + delta.dy * degPerPx).clamp(
+                                  -70.0,
+                                  70.0,
+                                );
+                              });
+                            }
+                          },
+                          onScaleEnd: (_) {
+                            if (_dragging) {
+                              setState(() => _dragging = false);
+                            }
+                          },
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: RepaintBoundary(
+                                  key: const ValueKey('places-globe-canvas'),
+                                  child: CustomPaint(
+                                    painter: _GlobePainter(
+                                      lon: _lon,
+                                      lat: _lat,
+                                      radius: radius,
+                                      zoom: _zoom,
+                                      ink: skin.text,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              for (final item in projectedPins)
+                                _GlobePin(
+                                  key: ValueKey('globe-pin-${item.place.name}'),
+                                  place: item.place,
+                                  position: Offset(
+                                    stageW / 2 + radius * item.q.x,
+                                    stageH / 2 + radius * item.q.y,
+                                  ),
+                                  pinOpacity: (item.q.z * 3.0).clamp(0.0, 1.0),
+                                  selected: item.place.name == widget.selected,
+                                  hovered: item.place.name == _hoveredPlace,
+                                  ping: _ping,
+                                  accent: skin.accent,
+                                  popColor: skin.pop,
+                                  line2Color: skin.line2,
+                                  textColor: skin.text,
+                                  text3Color: skin.text3,
+                                  shadow: skin.shadow,
+                                  countLabel: l10n.desktopPhotosPlaceCount(
+                                    item.place.count,
+                                  ),
+                                  onHoverChanged: (hovering) {
+                                    setState(() {
+                                      if (hovering) {
+                                        _hoveredPlace = item.place.name;
+                                      } else if (_hoveredPlace ==
+                                          item.place.name) {
+                                        _hoveredPlace = null;
+                                      }
+                                    });
+                                  },
+                                  onTap: () => widget.onSelect(item.place.name),
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                      for (final item in projectedPins)
-                        _GlobePin(
-                          key: ValueKey('globe-pin-${item.place.name}'),
-                          place: item.place,
-                          position: Offset(
-                            size / 2 + radius * item.q.x,
-                            size / 2 + radius * item.q.y,
-                          ),
-                          pinOpacity: (item.q.z * 3.0).clamp(0.0, 1.0),
-                          selected: item.place.name == widget.selected,
-                          hovered: item.place.name == _hoveredPlace,
-                          ping: _ping,
-                          accent: skin.accent,
-                          popColor: skin.pop,
-                          line2Color: skin.line2,
-                          textColor: skin.text,
-                          text3Color: skin.text3,
-                          shadow: skin.shadow,
-                          countLabel: l10n.desktopPhotosPlaceCount(
-                            item.place.count,
-                          ),
-                          onHoverChanged: (hovering) {
-                            setState(() {
-                              if (hovering) {
-                                _hoveredPlace = item.place.name;
-                              } else if (_hoveredPlace == item.place.name) {
-                                _hoveredPlace = null;
-                              }
-                            });
-                          },
-                          onTap: () => widget.onSelect(item.place.name),
+                      Positioned(
+                        right: 14,
+                        bottom: 14,
+                        child: _GlobeZoomCapsule(
+                          zoom: _zoom,
+                          canZoomOut: _zoom > _minZoom + 0.01,
+                          canZoomIn: _zoom < _maxZoom - 0.01,
+                          onZoomOut: () => _animateZoomTo(_zoomTo - _zoomStep),
+                          onReset: _resetZoomAndCenter,
+                          onZoomIn: () => _animateZoomTo(_zoomTo + _zoomStep),
+                          resetTooltip:
+                              isZh
+                                  ? '重置为 1.0× 并居中'
+                                  : 'Reset to 1.0× and center',
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -274,13 +394,118 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
                 border: Border.all(color: skin.line),
               ),
               child: Text(
-                isZh ? '拖拽旋转' : 'Drag to rotate',
+                isZh ? '拖拽旋转 · 滚轮缩放' : 'Drag to rotate · Scroll to zoom',
                 style: DesktopType.caption(skin.text3),
               ),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _GlobeZoomCapsule extends StatelessWidget {
+  const _GlobeZoomCapsule({
+    required this.zoom,
+    required this.canZoomOut,
+    required this.canZoomIn,
+    required this.onZoomOut,
+    required this.onReset,
+    required this.onZoomIn,
+    required this.resetTooltip,
+  });
+
+  final double zoom;
+  final bool canZoomOut;
+  final bool canZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onReset;
+  final VoidCallback onZoomIn;
+  final String resetTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: skin.pop.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: skin.line2),
+            boxShadow: skin.shadow,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ZoomCapsuleButton(
+                enabled: canZoomOut,
+                onTap: onZoomOut,
+                child: Icon(DesktopIcons.minimize, size: 14, color: skin.text),
+              ),
+              Tooltip(
+                message: resetTooltip,
+                child: _ZoomCapsuleButton(
+                  enabled: true,
+                  horizontalPadding: 8,
+                  onTap: onReset,
+                  child: Text(
+                    '${zoom.toStringAsFixed(1)}×',
+                    style: DesktopType.caption(skin.text).copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+              _ZoomCapsuleButton(
+                enabled: canZoomIn,
+                onTap: onZoomIn,
+                child: Icon(DesktopIcons.plus, size: 14, color: skin.text),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ZoomCapsuleButton extends StatelessWidget {
+  const _ZoomCapsuleButton({
+    required this.enabled,
+    required this.onTap,
+    required this.child,
+    this.horizontalPadding = 6,
+  });
+
+  final bool enabled;
+  final VoidCallback onTap;
+  final Widget child;
+  final double horizontalPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: enabled ? 1.0 : 0.35,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: 4,
+            ),
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -423,8 +648,8 @@ class _GlobePin extends StatelessWidget {
                                       style: DesktopType.rowTitle(
                                         textColor,
                                       ).copyWith(
-                                        fontSize: 13,
-                                      ), // ignore: font_size_whitelist
+                                        fontSize: DesktopType.sizeBody,
+                                      ),
                                     ),
                                     Text(
                                       countLabel,
@@ -732,17 +957,20 @@ class _GlobePainter extends CustomPainter {
   const _GlobePainter({
     required this.lon,
     required this.lat,
+    required this.radius,
+    required this.zoom,
     required this.ink,
   });
 
   final double lon;
   final double lat;
+  final double radius;
+  final double zoom;
   final Color ink;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 6;
     if (radius <= 0) {
       return;
     }
@@ -770,14 +998,8 @@ class _GlobePainter extends CustomPainter {
         ..strokeWidth = 1.0,
     );
 
-    // 2. 完整 30° 经纬网（对齐 Globe.tsx:102-105）
-    final grid =
-        Paint()
-          ..color = const Color.fromRGBO(128, 150, 160, 0.16)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.7;
-
-    void drawCurve(List<(double, double)> pts) {
+    // 2. 完整 30° 经纬网（对齐 Globe.tsx:102-105）+ 高倍率 15° 辅助经纬网
+    void drawCurve(List<(double, double)> pts, Paint paint) {
       final path = Path();
       var pen = false;
       for (final (lo, la) in pts) {
@@ -795,17 +1017,47 @@ class _GlobePainter extends CustomPainter {
           pen = true;
         }
       }
-      canvas.drawPath(path, grid);
+      canvas.drawPath(path, paint);
     }
+
+    final grid =
+        Paint()
+          ..color = const Color.fromRGBO(128, 150, 160, 0.16)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.7;
 
     for (var ringLat = -60.0; ringLat <= 60.0; ringLat += 30.0) {
-      drawCurve([for (var i = 0; i <= 72; i++) (-180.0 + i * 5.0, ringLat)]);
+      drawCurve([
+        for (var i = 0; i <= 72; i++) (-180.0 + i * 5.0, ringLat),
+      ], grid);
     }
     for (var ringLon = -180.0; ringLon < 180.0; ringLon += 30.0) {
-      drawCurve([for (var i = 0; i <= 36; i++) (ringLon, -90.0 + i * 5.0)]);
+      drawCurve([
+        for (var i = 0; i <= 36; i++) (ringLon, -90.0 + i * 5.0),
+      ], grid);
     }
 
-    // 3. 主题自适应大陆点阵（对齐 Globe.tsx:107-111）
+    if (zoom >= 1.5) {
+      final subAlpha = ((zoom - 1.5) / 0.4).clamp(0.0, 1.0) * 0.10;
+      final subGrid =
+          Paint()
+            ..color = Color.fromRGBO(128, 150, 160, subAlpha)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.55;
+      for (var ringLat = -75.0; ringLat <= 75.0; ringLat += 30.0) {
+        drawCurve([
+          for (var i = 0; i <= 72; i++) (-180.0 + i * 5.0, ringLat),
+        ], subGrid);
+      }
+      for (var ringLon = -165.0; ringLon < 180.0; ringLon += 30.0) {
+        drawCurve([
+          for (var i = 0; i <= 36; i++) (ringLon, -90.0 + i * 5.0),
+        ], subGrid);
+      }
+    }
+
+    // 3. 主题自适应大陆点阵（点径按 sqrt(zoom) 补偿，保持视觉密度均衡）
+    final dotScale = math.sqrt(zoom);
     final dot = Paint()..style = PaintingStyle.fill;
     for (final land in _landDots()) {
       final q = _project(land.x, land.y, lon, lat);
@@ -815,7 +1067,7 @@ class _GlobePainter extends CustomPainter {
       dot.color = ink.withValues(alpha: (0.18 + 0.5 * q.z).clamp(0.0, 1.0));
       canvas.drawCircle(
         Offset(center.dx + q.x * radius, center.dy + q.y * radius),
-        0.55 + 0.6 * q.z,
+        (0.55 + 0.6 * q.z) * dotScale,
         dot,
       );
     }
@@ -825,5 +1077,7 @@ class _GlobePainter extends CustomPainter {
   bool shouldRepaint(_GlobePainter oldDelegate) =>
       oldDelegate.lon != lon ||
       oldDelegate.lat != lat ||
+      oldDelegate.radius != radius ||
+      oldDelegate.zoom != zoom ||
       oldDelegate.ink != ink;
 }

@@ -80,7 +80,7 @@ class _InsightRow extends StatelessWidget {
 }
 
 /// 样例 `.bars` / `.bar-axis`：14 根柱从底部长起，逐柱交错入场，
-/// 下方日期轴只标首尾两天，避免 14 个标签互相挤。
+/// 悬停展示深色数据气泡并将非悬停柱压暗至 0.4，下方日期轴只标首尾两天。
 class _ReadingBars extends StatelessWidget {
   const _ReadingBars({required this.days});
 
@@ -90,6 +90,7 @@ class _ReadingBars extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     // 后端按契约返回最近 14 天；截取尾部仍可兼容旧服务端返回更长序列。
     // 旧服务端暂时没有数据时仍保留 14 根基线柱，避免右卡片结构塌缩。
     final visibleDays =
@@ -106,59 +107,41 @@ class _ReadingBars extends StatelessWidget {
       (max, day) => math.max(max, day.minutes),
     );
     final scale = peak <= 0 ? 1 : peak;
+    final items = <DesktopChartBarItem>[
+      for (final day in chartDays)
+        DesktopChartBarItem(
+          // 原型 `Math.max(4, d * 10)%` 保证无阅读日仍有可见的 4% 基线柱。
+          fraction: day == null ? 0.04 : math.max(0.04, day.minutes / scale),
+          color: skin.accent,
+          secondaryColor: skin.accent.withValues(alpha: 0.35),
+          tipTitle: day == null ? null : _shortDate(day.date),
+          tipValue:
+              day == null
+                  ? null
+                  : (day.minutes <= 0
+                      ? (isZh ? '无阅读' : 'No reading')
+                      : '${day.minutes} min'),
+        ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(l10n.readerStatsLast14, style: DesktopType.eyebrow(skin.text3)),
         const SizedBox(height: 8),
-        SizedBox(
+        DesktopInteractiveBarChart(
+          items: items,
           height: 90,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < chartDays.length; i++)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      right: i == chartDays.length - 1 ? 0 : 6,
-                    ),
-                    child: DesktopStagger(
-                      index: i,
-                      child: _ReadingBar(
-                        // 原型 `Math.max(4, d * 10)%` 保证无阅读日仍有
-                        // 可见的 4% 基线柱，而不是让整块图表像缺失。
-                        fraction:
-                            chartDays[i] == null
-                                ? 0.04
-                                : math.max(0.04, chartDays[i]!.minutes / scale),
-                        color: skin.accent,
-                        tooltip:
-                            chartDays[i] == null
-                                ? null
-                                : '${_shortDate(chartDays[i]!.date)} · ${chartDays[i]!.minutes} min',
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          barSpacing: 6,
+          minFraction: 0.04,
+          stagger: true,
+          axisStartLabel:
+              visibleDays.isNotEmpty
+                  ? _shortDate(visibleDays.first.date)
+                  : null,
+          axisEndLabel:
+              visibleDays.isNotEmpty ? _shortDate(visibleDays.last.date) : null,
+          axisLabelStyle: DesktopType.micro(skin.text3),
         ),
-        if (visibleDays.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _shortDate(visibleDays.first.date),
-                style: DesktopType.micro(skin.text3),
-              ),
-              Text(
-                _shortDate(visibleDays.last.date),
-                style: DesktopType.micro(skin.text3),
-              ),
-            ],
-          ),
-        ],
       ],
     );
   }
@@ -169,51 +152,6 @@ class _ReadingBars extends StatelessWidget {
     final month = int.tryParse(parts[1]) ?? 0;
     final day = int.tryParse(parts[2]) ?? 0;
     return '$month/$day';
-  }
-}
-
-class _ReadingBar extends StatelessWidget {
-  const _ReadingBar({
-    required this.fraction,
-    required this.color,
-    this.tooltip,
-  });
-
-  final double fraction;
-  final Color color;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final bar = TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: fraction.clamp(0.04, 1.0)),
-      duration: MotionToken.resolve(context, MotionToken.chart),
-      curve: DesktopMotion.spring,
-      builder:
-          (context, value, _) => Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              widthFactor: 1.0,
-              heightFactor: value,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(6),
-                    bottom: Radius.circular(3),
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [color, color.withValues(alpha: 0.35)],
-                  ),
-                ),
-                child: const SizedBox.expand(),
-              ),
-            ),
-          ),
-    );
-    if (tooltip == null || tooltip!.isEmpty) return bar;
-    return Tooltip(message: tooltip!, child: bar);
   }
 }
 

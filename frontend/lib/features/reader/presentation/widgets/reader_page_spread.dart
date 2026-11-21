@@ -4,8 +4,8 @@ part of 'reader_page_view.dart';
 const double _spreadGutterWidth = 70.0;
 
 /// 双页跨页单元（样例 `.bookview .spread`）：
-/// 硬壳封底底座（`.spread::before` 深棕硬壳衬板）+ 静息 `rotateX(6deg)` / hover 展平透视 +
-/// 左右严格 50% / 50% 贴合，70px 中缝阴影悬浮叠在接缝之上，
+/// 硬壳封底底座（由桌面色动态派生）+ 可选悬停展平透视（默认关闭，保持平稳阅读）+
+/// 左右严格 50% / 50% 贴合，单层柔和暖暗 70px 中缝阴影悬浮叠在接缝之上，
 /// 左右动态厚度纸叠外挂于书框外缘，静动纸面共用同一份预烘焙噪点 Shader。
 class ReaderPageSpread extends StatefulWidget {
   const ReaderPageSpread({
@@ -13,12 +13,15 @@ class ReaderPageSpread extends StatefulWidget {
     required this.right,
     required this.surfaceColor,
     this.paperEdgeColor,
+    this.deskColor,
     this.leftBoundaryKey,
     this.rightBoundaryKey,
     this.progress = 0,
     this.curlOverlay,
     this.bookmarked = false,
     this.showPaperGrain = true,
+    this.enableHoverTilt = false,
+    this.seamlessSpine = false,
     super.key,
   });
 
@@ -26,6 +29,9 @@ class ReaderPageSpread extends StatefulWidget {
   final Widget? right;
   final Color surfaceColor;
   final Color? paperEdgeColor;
+
+  /// 书桌底色；用于动态派生硬壳封底色，缺省由 `surfaceColor` 压暗派生。
+  final Color? deskColor;
 
   /// 静止态与翻页态保持同一 RepaintBoundary 挂载槽，杜绝进入翻页第 1 帧整棵书页子树销毁重建。
   final GlobalKey? leftBoundaryKey;
@@ -40,6 +46,12 @@ class ReaderPageSpread extends StatefulWidget {
 
   /// 是否叠加纸纹噪点；漫画深色页可关闭避免 `multiply` 混合使画面发灰。
   final bool showPaperGrain;
+
+  /// 是否开启静息 `rotateX(6deg)` / hover 展平透视；默认关闭防止鼠标移入移出梯形翻转异动。
+  final bool enableHoverTilt;
+
+  /// 无缝跨页模式：书脊内侧圆角归零且仅保留外侧三边纸缘，适配漫画 0px 无缝拼合。
+  final bool seamlessSpine;
 
   @override
   State<ReaderPageSpread> createState() => _ReaderPageSpreadState();
@@ -59,29 +71,49 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
     final isDarkPaper =
         ThemeData.estimateBrightnessForColor(widget.surfaceColor) ==
         Brightness.dark;
-    final gutterWeak = isDarkPaper ? 0.08 : 0.045;
-    final gutterStrong = isDarkPaper ? 0.22 : 0.14;
+    // 单层柔和暖暗中缝阴影（强端 0.10–0.13）
+    final gutterWeak = isDarkPaper ? 0.045 : 0.03;
+    final gutterStrong = isDarkPaper ? 0.13 : 0.10;
+    const warmSpineShadow = ReaderReadingPalette.bookSpineShadow;
+    final effectiveDesk =
+        widget.deskColor ??
+        Color.lerp(widget.surfaceColor, Colors.black, 0.72)!;
+    final coverTop =
+        Color.lerp(effectiveDesk, ReaderReadingPalette.bookShellLeather, 0.45)!;
+    final coverBottom =
+        Color.lerp(effectiveDesk, ReaderReadingPalette.bookShellLeather, 0.38)!;
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-    final tiltRadians = _hovered ? 0.0 : (6.0 * math.pi / 180.0);
-    final perspectiveTransform =
-        Matrix4.identity()
-          ..setEntry(3, 2, 0.00042)
-          ..rotateX(tiltRadians);
+    final Matrix4 perspectiveTransform;
+    if (widget.enableHoverTilt) {
+      final tiltRadians = _hovered ? 0.0 : (6.0 * math.pi / 180.0);
+      perspectiveTransform =
+          Matrix4.identity()
+            ..setEntry(3, 2, 0.00042)
+            ..rotateX(tiltRadians);
+    } else {
+      perspectiveTransform = Matrix4.identity();
+    }
 
     // 关键修复：始终保持 RepaintBoundary 挂载在同一节点位置，不因 key 为空或状态切换拆卸边界节点。
     Widget wrapBoundary(GlobalKey? key, Widget child) =>
         RepaintBoundary(key: key, child: child);
 
     return MouseRegion(
-      onEnter: (_) {
-        if (!_hovered) setState(() => _hovered = true);
-      },
-      onExit: (_) {
-        if (_hovered) setState(() => _hovered = false);
-      },
+      onEnter:
+          widget.enableHoverTilt
+              ? (_) {
+                if (!_hovered) setState(() => _hovered = true);
+              }
+              : null,
+      onExit:
+          widget.enableHoverTilt
+              ? (_) {
+                if (_hovered) setState(() => _hovered = false);
+              }
+              : null,
       child: AnimatedContainer(
         duration:
-            animationsDisabled
+            animationsDisabled || !widget.enableHoverTilt
                 ? Duration.zero
                 : const Duration(milliseconds: 650),
         curve: Curves.easeOutCubic,
@@ -90,7 +122,7 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // 硬壳封底底座（`.spread::before` 深棕硬壳衬板）
+            // 硬壳封底底座（由 deskColor 动态派生）
             Positioned(
               left: -leftStackW - 4,
               right: -rightStackW - 4,
@@ -100,10 +132,10 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFF33261E), Color(0xFF211812)],
+                      colors: [coverTop, coverBottom],
                     ),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.07),
@@ -178,6 +210,7 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
                               color: widget.surfaceColor,
                               side: _SpreadSide.left,
                               showPaperGrain: widget.showPaperGrain,
+                              seamlessSpine: widget.seamlessSpine,
                               child: widget.left,
                             ),
                           ),
@@ -189,13 +222,14 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
                               color: widget.surfaceColor,
                               side: _SpreadSide.right,
                               showPaperGrain: widget.showPaperGrain,
+                              seamlessSpine: widget.seamlessSpine,
                               child: widget.right,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    // 70px 中缝阴影悬浮叠在 50% 接缝之上（随主题明暗柔和过渡，不占宽、不拦截选区）
+                    // 70px 单层柔和暖暗中缝阴影悬浮叠在 50% 接缝之上（不占宽、不拦截选区）
                     Positioned.fill(
                       child: IgnorePointer(
                         child: Center(
@@ -205,10 +239,14 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.transparent,
-                                  Colors.black.withValues(alpha: gutterWeak),
-                                  Colors.black.withValues(alpha: gutterStrong),
-                                  Colors.black.withValues(alpha: gutterStrong),
-                                  Colors.black.withValues(alpha: gutterWeak),
+                                  warmSpineShadow.withValues(alpha: gutterWeak),
+                                  warmSpineShadow.withValues(
+                                    alpha: gutterStrong,
+                                  ),
+                                  warmSpineShadow.withValues(
+                                    alpha: gutterStrong,
+                                  ),
+                                  warmSpineShadow.withValues(alpha: gutterWeak),
                                   Colors.transparent,
                                 ],
                                 stops: const [
@@ -278,50 +316,45 @@ class _SpreadPage extends StatelessWidget {
     required this.side,
     required this.child,
     this.showPaperGrain = true,
+    this.seamlessSpine = false,
   });
 
   final Color color;
   final _SpreadSide side;
   final Widget? child;
   final bool showPaperGrain;
+  final bool seamlessSpine;
 
   @override
   Widget build(BuildContext context) {
     final isDark =
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark;
-    final spineTint = Color.lerp(color, Colors.black, isDark ? 0.14 : 0.07)!;
-    final gradient =
-        side == _SpreadSide.left
-            ? LinearGradient(
-              colors: [color, color, spineTint],
-              stops: const [0.0, 0.90, 1.0],
-            )
-            : LinearGradient(
-              colors: [spineTint, color, color],
-              stops: const [0.0, 0.10, 1.0],
-            );
-    // 对齐样例 polish.css:38-39：外缘 9px 圆角、书脊内侧 2px 圆角与纸缘亮边
+    // 无缝跨页时内侧书脊圆角归零；常规书页保持外缘 9px / 内侧 2px 圆角。
+    final innerRadius = seamlessSpine ? Radius.zero : const Radius.circular(2);
     final leafRadius =
         side == _SpreadSide.left
-            ? const BorderRadius.only(
-              topLeft: Radius.circular(9),
-              bottomLeft: Radius.circular(9),
-              topRight: Radius.circular(2),
-              bottomRight: Radius.circular(2),
+            ? BorderRadius.only(
+              topLeft: const Radius.circular(9),
+              bottomLeft: const Radius.circular(9),
+              topRight: innerRadius,
+              bottomRight: innerRadius,
             )
-            : const BorderRadius.only(
-              topRight: Radius.circular(9),
-              bottomRight: Radius.circular(9),
-              topLeft: Radius.circular(2),
-              bottomLeft: Radius.circular(2),
+            : BorderRadius.only(
+              topRight: const Radius.circular(9),
+              bottomRight: const Radius.circular(9),
+              topLeft: innerRadius,
+              bottomLeft: innerRadius,
             );
+    final edgeBorderSide = BorderSide(
+      color: Colors.black.withValues(alpha: 0.12),
+    );
     return ClipRRect(
       borderRadius: leafRadius,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(gradient: gradient),
+          ColoredBox(
+            color: color,
             child: child ?? SizedBox.expand(child: ColoredBox(color: color)),
           ),
           if (showPaperGrain)
@@ -332,15 +365,29 @@ class _SpreadPage extends StatelessWidget {
             ),
           Positioned.fill(
             child: IgnorePointer(
-              // Flutter 不允许「圆角 + 非均匀边框色」，黑色纸缘走均一细边，
-              // 外侧 2px 亮边单独贴边绘制，由父级 ClipRRect 收进圆角。
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: leafRadius,
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.12),
-                  ),
-                ),
+                decoration:
+                    seamlessSpine
+                        // 无缝跨页仅保留外侧三边纸缘，避免中缝叠加黑线。
+                        ? BoxDecoration(
+                          border: Border(
+                            top: edgeBorderSide,
+                            bottom: edgeBorderSide,
+                            left:
+                                side == _SpreadSide.left
+                                    ? edgeBorderSide
+                                    : BorderSide.none,
+                            right:
+                                side == _SpreadSide.right
+                                    ? edgeBorderSide
+                                    : BorderSide.none,
+                          ),
+                        )
+                        // Flutter 不允许「圆角 + 非均匀边框色」，常规页走均一细边。
+                        : BoxDecoration(
+                          borderRadius: leafRadius,
+                          border: Border.fromBorderSide(edgeBorderSide),
+                        ),
               ),
             ),
           ),

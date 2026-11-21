@@ -54,14 +54,16 @@ class MoviePlayerVolume extends StatelessWidget {
             width: 80,
             child: SliderTheme(
               data: SliderThemeData(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                 activeTrackColor: colors.playerTimelinePlayed,
-                inactiveTrackColor: colors.playerTimelineInactive,
+                inactiveTrackColor: colors.playerControlForeground.withValues(
+                  alpha: 0.26,
+                ),
                 thumbColor: colors.playerControlForeground,
                 overlayColor: colors.playerControlForeground.withValues(
-                  alpha: 0.14,
+                  alpha: 0.16,
                 ),
               ),
               child: AppSlider(

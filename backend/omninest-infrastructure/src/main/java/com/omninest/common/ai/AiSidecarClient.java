@@ -169,11 +169,11 @@ public class AiSidecarClient implements ImageAnalysisGateway {
             String responseBody = sendRequest(request);
             JsonNode probe = JsonSupport.readTree(responseBody);
             String protocol = probe.path("signatureProtocol").asString(null);
-            if (protocol != null && !EXPECTED_SIGNATURE_PROTOCOL.equals(protocol.trim())) {
-                // 签名协议是两侧共同契约：这里只告警不拒绝，混跑时服务仍可用、
-                // 日志直接指出该升级哪一侧，比启动即失败更适合自托管。
-                log.error("图像分析侧车签名协议不匹配: sidecar={}, backend={}",
-                        protocol, EXPECTED_SIGNATURE_PROTOCOL);
+            if (protocol == null || !EXPECTED_SIGNATURE_PROTOCOL.equals(protocol.trim())) {
+                // 签名协议是两侧共同契约：旧版侧车 /ready 缺失 signatureProtocol 也会命中这里；
+                // 这里只告警不拒绝，混跑时服务仍可用、日志直接指出需重建并升级侧车镜像，比启动即失败更适合自托管。
+                log.error("图像分析侧车签名协议不匹配或缺失（请重建并升级 vision-sidecar 镜像）: sidecar={}, backend={}",
+                        protocol == null ? "<missing>" : protocol, EXPECTED_SIGNATURE_PROTOCOL);
             }
             String version = probe.path("pipelineVersion").asString(null);
             return version == null || version.isBlank() ? null : version.trim();

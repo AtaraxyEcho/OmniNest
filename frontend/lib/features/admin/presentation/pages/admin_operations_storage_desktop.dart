@@ -161,16 +161,23 @@ class _DesktopStorageUsageSkeleton extends StatelessWidget {
   }
 }
 
-class _DesktopStorageUsage extends StatelessWidget {
+class _DesktopStorageUsage extends StatefulWidget {
   const _DesktopStorageUsage(this.stats);
 
   final AdminStorageStats? stats;
 
   @override
+  State<_DesktopStorageUsage> createState() => _DesktopStorageUsageState();
+}
+
+class _DesktopStorageUsageState extends State<_DesktopStorageUsage> {
+  int? _hoveredIndex;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final value = stats;
+    final value = widget.stats;
     final breakdown =
         value?.categoryBreakdown
             .where((item) => item.usedBytes > 0)
@@ -180,6 +187,22 @@ class _DesktopStorageUsage extends StatelessWidget {
       0,
       (total, item) => total + item.usedBytes,
     );
+    final scale = breakdownBytes <= 0 ? 1 : breakdownBytes;
+    final segments = <DesktopChartSegment>[
+      for (final item in breakdown)
+        DesktopChartSegment(
+          flex:
+              ((item.usedBytes / scale) * 10000)
+                  .round()
+                  .clamp(1, 10000)
+                  .toInt(),
+          color: _categoryColor(item.category),
+          label: _categoryLabel(l10n, item.category),
+          valueLabel: formatFileSize(item.usedBytes),
+          percentLabel: '${(item.usedBytes / scale * 100).toStringAsFixed(1)}%',
+        ),
+    ];
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final usedParts = formatFileSize(value?.usedBytes ?? 0).split(' ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,26 +227,17 @@ class _DesktopStorageUsage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            height: 14,
-            child: Row(
-              children: [
-                for (final item in breakdown)
-                  Expanded(
-                    flex:
-                        ((item.usedBytes / breakdownBytes) * 10000)
-                            .round()
-                            .clamp(1, 10000)
-                            .toInt(),
-                    child: ColoredBox(color: _categoryColor(item.category)),
-                  ),
-                if (breakdown.isEmpty)
-                  Expanded(child: ColoredBox(color: skin.raise3)),
-              ],
-            ),
-          ),
+        DesktopInteractiveSegmentedBar(
+          segments: segments,
+          trackColor: skin.raise3,
+          height: 14,
+          borderRadius: 8,
+          hoveredIndex: _hoveredIndex,
+          onHoverChanged: (index) {
+            if (_hoveredIndex != index) {
+              setState(() => _hoveredIndex = index);
+            }
+          },
         ),
         if (breakdown.isEmpty) ...[
           const SizedBox(height: 10),
@@ -240,13 +254,36 @@ class _DesktopStorageUsage extends StatelessWidget {
                 spacing: 24,
                 runSpacing: 8,
                 children: [
-                  for (final item in breakdown)
+                  for (var i = 0; i < breakdown.length; i++)
                     SizedBox(
                       width: cellWidth,
-                      child: _StorageUsageCount(
-                        label: _categoryLabel(l10n, item.category),
-                        amount: formatFileSize(item.usedBytes),
-                        color: _categoryColor(item.category),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.basic,
+                        onEnter: (_) {
+                          if (_hoveredIndex != i) {
+                            setState(() => _hoveredIndex = i);
+                          }
+                        },
+                        onExit: (_) {
+                          if (_hoveredIndex == i) {
+                            setState(() => _hoveredIndex = null);
+                          }
+                        },
+                        child: AnimatedOpacity(
+                          opacity:
+                              _hoveredIndex == null || _hoveredIndex == i
+                                  ? 1.0
+                                  : 0.4,
+                          duration:
+                              animationsDisabled
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 140),
+                          child: _StorageUsageCount(
+                            label: _categoryLabel(l10n, breakdown[i].category),
+                            amount: formatFileSize(breakdown[i].usedBytes),
+                            color: _categoryColor(breakdown[i].category),
+                          ),
+                        ),
                       ),
                     ),
                 ],

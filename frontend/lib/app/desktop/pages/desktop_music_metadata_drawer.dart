@@ -118,18 +118,23 @@ class _DesktopMusicMetadataDrawerState
 
   Future<void> _loadLyrics() async {
     try {
-      await ref
+      final detail = await ref
           .read(musicCenterControllerProvider.notifier)
           .ensureTrackDetail(widget.track.id);
       if (!mounted) return;
+      final state = ref.read(musicCenterControllerProvider).asData?.value;
       final latest =
-          ref
-              .read(musicCenterControllerProvider)
-              .asData
-              ?.value
-              .tracks
+          detail ??
+          state?.tracks
               .where((track) => track.id == widget.track.id)
-              .firstOrNull;
+              .firstOrNull ??
+          state?.playbackItems
+              .where((item) => item.track.id == widget.track.id)
+              .map((item) => item.track)
+              .firstOrNull ??
+          (state?.currentItem?.track.id == widget.track.id
+              ? state?.currentItem?.track
+              : null);
       if (!_lyricsChanged && latest?.lyricsRaw != null) {
         _lyrics.text = latest!.lyricsRaw!;
       }

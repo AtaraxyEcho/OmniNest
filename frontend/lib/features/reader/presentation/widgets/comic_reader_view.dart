@@ -96,7 +96,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   late ScrollController _scrollController;
   late ComicLayoutIndex _layoutIndex;
 
-  /// 每页/每对页独立缩放控制器：离屏自动复位 1.0x，彻底消除缩放串页。
+  /// 每页/每对页独立缩放控制器：离屏自动复位 1.0x，超距（> 4）自动释放杜绝内存堆积。
   final Map<int, TransformationController> _slotTransformControllers = {};
   Offset? _lastDoubleTapLocalPosition;
   double _currentZoomScale = 1.0;
@@ -163,8 +163,19 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
     _lastResumedAt = DateTime.now();
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     final defaultMode = kIsWeb ? 'scroll' : 'page';
-    _displaySettings = ComicReaderDisplaySettings(readingMode: defaultMode);
-    _readingMode = _modeFromName(defaultMode);
+    // 同步读取已缓存偏好消除首帧主题/模式闪跳。
+    final cachedPrefs = ref.read(readerPreferencesProvider).asData?.value;
+    if (cachedPrefs != null && cachedPrefs.isNotEmpty) {
+      _settings = ReaderViewSettings.fromJson(cachedPrefs);
+      _displaySettings = ComicReaderDisplaySettings.fromPreferences(
+        cachedPrefs,
+        defaultReadingMode: defaultMode,
+        itemId: widget.itemId,
+      );
+    } else {
+      _displaySettings = ComicReaderDisplaySettings(readingMode: defaultMode);
+    }
+    _readingMode = _modeFromName(_displaySettings.readingMode);
     _layoutIndex = ComicLayoutIndex(_pages, contentWidth: 800.0);
     final initialPage =
         _totalPages <= 0
@@ -597,6 +608,10 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
         manifestVersion: _manifest.manifestVersion,
       );
     });
+    if (_slotTransformControllers.isNotEmpty && mounted) {
+      final slots = _buildSpreadSlots(MediaQuery.sizeOf(context).width);
+      _pruneOffscreenSlotTransforms(_slotIndexForPage(slots, index));
+    }
     _preloadAdjacent();
     _scheduleProgressSave();
   }
@@ -719,7 +734,8 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       textScale: MediaQuery.textScalerOf(context).scale(1),
     );
     final isBookMode = _readingMode == ComicReadingMode.book;
-    final isBookSpread = isBookMode && viewport.width >= 720;
+    final useSpread =
+        isBookMode && _displaySettings.dualPage && viewport.width >= 720;
     final slots = _buildSpreadSlots(viewport.width);
     final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
     final activeSlot =
@@ -730,17 +746,11 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
     final int visibleStartPageIndex;
     final int visibleEndPageIndex;
     final bool isDualSpreadActive;
-    if (isBookSpread && _totalPages > 0) {
-      visibleStartPageIndex = _anchor.pageIndex - (_anchor.pageIndex % 2);
-      visibleEndPageIndex = math.min(
-        _totalPages - 1,
-        visibleStartPageIndex + 1,
-      );
-      isDualSpreadActive = visibleEndPageIndex > visibleStartPageIndex;
-    } else if (_isPagedMode && activeSlot != null) {
+    if (_isPagedMode && activeSlot != null) {
       visibleStartPageIndex = activeSlot.startPageIndex;
       visibleEndPageIndex = activeSlot.endPageIndex;
-      isDualSpreadActive = activeSlot.pageIndices.length > 1;
+      isDualSpreadActive =
+          activeSlot.pageIndices.length > 1 && (!isBookMode || useSpread);
     } else {
       visibleStartPageIndex = _anchor.pageIndex;
       visibleEndPageIndex = _anchor.pageIndex;

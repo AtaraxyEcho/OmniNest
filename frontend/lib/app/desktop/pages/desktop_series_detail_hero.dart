@@ -168,7 +168,9 @@ class _SeriesHeroState extends State<_SeriesHero> {
                                 overflow: TextOverflow.ellipsis,
                                 style: DesktopType.quote(
                                   Colors.white.withValues(alpha: 0.82),
-                                ).copyWith(fontSize: 17),
+                                ).copyWith(
+                                  fontSize: DesktopType.sizePanelTitle,
+                                ),
                               ),
                             ],
                             const SizedBox(height: 6),

@@ -272,6 +272,16 @@ class _TrashPhotoTile extends StatelessWidget {
 
 /// 地点分区（样例 `Photos.tsx` 的 `seg === "Places"`）：左侧点阵地球
 /// （可拖动、选中转向）+ 右侧地点列表，下方是选中地点的完整分页 Justified 照片墙。
+double _placesGlobeStageHeight(double maxWidth) {
+  if (maxWidth >= 1280) {
+    return 560;
+  }
+  if (maxWidth >= 900) {
+    return 520;
+  }
+  return 440;
+}
+
 class _PlacesLoadingSkeleton extends StatelessWidget {
   const _PlacesLoadingSkeleton();
 
@@ -279,8 +289,9 @@ class _PlacesLoadingSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const globe = DesktopSkeletonBox(
-          height: 460,
+        final globeHeight = _placesGlobeStageHeight(constraints.maxWidth);
+        final globe = DesktopSkeletonBox(
+          height: globeHeight,
           radius: DesktopMetrics.radiusHero,
         );
         final locations = Column(
@@ -334,7 +345,7 @@ class _PlacesLoadingSkeleton extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(child: globe),
+                  Expanded(child: globe),
                   const SizedBox(width: 28),
                   SizedBox(width: 320, child: locations),
                 ],
@@ -562,8 +573,9 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
+        final globeHeight = _placesGlobeStageHeight(constraints.maxWidth);
         final globe = SizedBox(
-          height: 460,
+          height: globeHeight,
           child: Center(
             child: DesktopPlacesGlobe(
               places: places,

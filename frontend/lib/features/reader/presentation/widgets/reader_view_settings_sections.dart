@@ -532,11 +532,11 @@ class _DesktopSliderControl extends StatelessWidget {
           Expanded(
             child: SliderTheme(
               data: SliderThemeData(
-                trackHeight: 3.5,
+                trackHeight: 4,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
                 activeTrackColor: colors.accent,
-                inactiveTrackColor: Colors.white.withValues(alpha: 0.16),
+                inactiveTrackColor: colors.onSurface.withValues(alpha: 0.16),
                 thumbColor: colors.accent,
                 overlayColor: colors.accent.withValues(alpha: 0.20),
                 activeTickMarkColor: Colors.transparent,

@@ -11,6 +11,8 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
+export 'package:omninest/app/desktop/widgets/desktop_chart_tooltip.dart';
+
 // 滑块自带键盘与 ARIA，体量够单开一份；public API 仍从本文件导出。
 part 'desktop_controls_slider.dart';
 

@@ -312,6 +312,7 @@ class _DesktopNpStylePanelState extends ConsumerState<DesktopNpStylePanel> {
     required double max,
     required ValueChanged<double> onChanged,
   }) {
+    final skin = DesktopSkin.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -336,8 +337,10 @@ class _DesktopNpStylePanelState extends ConsumerState<DesktopNpStylePanel> {
           value: value.clamp(min, max),
           min: min,
           max: max,
-          trackColor: Colors.white.withValues(alpha: 0.20),
-          fillColor: Colors.white,
+          trackColor: Colors.white.withValues(alpha: 0.22),
+          fillColor: skin.accent,
+          thumbColor: Colors.white,
+          thumbAlwaysVisible: true,
           onChanged: onChanged,
         ),
       ],

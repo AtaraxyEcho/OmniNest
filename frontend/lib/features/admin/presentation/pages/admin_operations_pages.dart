@@ -40,6 +40,7 @@ import 'package:omninest/features/admin/presentation/widgets/admin_redesign_comp
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';

@@ -537,7 +537,7 @@ class _RelatedRail extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: DesktopType.bodyStrong(
                           DesktopSkin.of(context).text,
-                        ).copyWith(fontSize: 13.5),
+                        ).copyWith(fontSize: DesktopType.sizeBodyPlus),
                       ),
                       const SizedBox(height: 2),
                       Text(

@@ -1,11 +1,15 @@
 part of 'reader_page_view.dart';
 
-/// 翻页命令、输入闸门与待执行翻页意图（v8：平滑连点加速收尾排队 + 清零 _pendingTurnAttachRetry）。
+/// 翻页命令、输入闸门与待执行翻页意图（v12：滚轮拦截 Ctrl/Meta 缩放避免误翻页）。
 extension _ReaderPageViewTurn on _ReaderPageViewState {
   /// 桌面滚轮翻页（样例 `onWheel`）：位移超过 24px、距上次 320ms 才认，
-  /// 触控板一次轻扫不会连翻好几页。
+  /// 触控板一次轻扫不会连翻好几页；按住 Ctrl/Meta 时放行缩放不触发翻页。
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
+      return;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
       return;
     }
     if (!widget.dragEnabled) {

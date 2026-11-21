@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 
 /// 骨架占位文案字号（对齐样例 13px 的 `sk-line` 标签）。
 const _skeletonLabelSize = 13.0;
@@ -168,37 +169,41 @@ class _DesktopSkeletonBoxState extends State<DesktopSkeletonBox> {
         childIndex % 3 == 0 ? 0.225 : (childIndex % 2 == 0 ? 0.1125 : 0.0);
     final animation = _scope?.animation;
     if (animation == null) {
-      return Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(widget.radius),
-          color: base,
-        ),
-      );
-    }
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final sweep = DesktopMotion.skeletonCurve.transform(
-          (animation.value - phase + 1) % 1,
-        );
-        final dx = -1.6 + sweep * 3.2;
-        return Container(
+      return ExcludeSemantics(
+        child: Container(
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.radius),
-            gradient: LinearGradient(
-              // 105deg 微斜向扫光（与水平方向夹角 15°，tan 15° ≈ 0.268）。
-              begin: Alignment(dx, -0.268),
-              end: Alignment(dx + 1.0, 0.268),
-              colors: [base, highlight, base],
-              stops: const [0.0, 0.5, 1.0],
-            ),
+            color: base,
           ),
-        );
-      },
+        ),
+      );
+    }
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: animation,
+        builder: (context, _) {
+          final sweep = DesktopMotion.skeletonCurve.transform(
+            (animation.value - phase + 1) % 1,
+          );
+          final dx = -1.6 + sweep * 3.2;
+          return Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.radius),
+              gradient: LinearGradient(
+                // 105deg 微斜向扫光（与水平方向夹角 15°，tan 15° ≈ 0.268）。
+                begin: Alignment(dx, -0.268),
+                end: Alignment(dx + 1.0, 0.268),
+                colors: [base, highlight, base],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -234,6 +239,16 @@ class DesktopSkeletonSwitcher extends StatefulWidget {
 }
 
 class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
+  int _swapSeq = 0;
+  late bool _lastShowSkeleton;
+
+  bool _computeShowSkeleton() {
+    final seen =
+        widget.regionId != null &&
+        DesktopSkeletonSwitcher._seenRegions.contains(widget.regionId);
+    return widget.loading && !(seen && widget.hasData);
+  }
+
   void _markSeenIfReady() {
     final id = widget.regionId;
     if (!widget.loading && id != null && id.isNotEmpty) {
@@ -245,41 +260,51 @@ class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
   void initState() {
     super.initState();
     _markSeenIfReady();
+    _lastShowSkeleton = _computeShowSkeleton();
   }
 
   @override
   void didUpdateWidget(covariant DesktopSkeletonSwitcher oldWidget) {
     super.didUpdateWidget(oldWidget);
     _markSeenIfReady();
+    final nextShowSkeleton = _computeShowSkeleton();
+    if (nextShowSkeleton != _lastShowSkeleton) {
+      _lastShowSkeleton = nextShowSkeleton;
+      _swapSeq += 1;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final seen =
-        widget.regionId != null &&
-        DesktopSkeletonSwitcher._seenRegions.contains(widget.regionId);
-    final showSkeleton = widget.loading && !(seen && widget.hasData);
+    final showSkeleton = _computeShowSkeleton();
+    if (showSkeleton != _lastShowSkeleton) {
+      _lastShowSkeleton = showSkeleton;
+      _swapSeq += 1;
+    }
     return AnimatedSwitcher(
       duration: DesktopMotion.of(context, DesktopMotion.skeletonReveal),
       switchInCurve: DesktopMotion.ease,
       switchOutCurve: DesktopMotion.exitCurve,
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.topLeft,
-          children: [
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
-        );
-      },
+      layoutBuilder:
+          (currentChild, previousChildren) => excludeExitingSemanticsStack(
+            currentChild,
+            previousChildren,
+            alignment: Alignment.topLeft,
+          ),
       child:
           showSkeleton
               ? KeyedSubtree(
-                key: const ValueKey<String>('desktop-skeleton-loading'),
-                child: widget.skeleton,
+                key: ValueKey<(int, String)>((
+                  _swapSeq,
+                  'desktop-skeleton-loading',
+                )),
+                child: ExcludeSemantics(child: widget.skeleton),
               )
               : KeyedSubtree(
-                key: const ValueKey<String>('desktop-skeleton-content'),
+                key: ValueKey<(int, String)>((
+                  _swapSeq,
+                  'desktop-skeleton-content',
+                )),
                 child: widget.child,
               ),
     );

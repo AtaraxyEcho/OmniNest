@@ -63,11 +63,9 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                       const SizedBox(width: 12),
                       Text(
                         change.display(change.from),
-                        style: DesktopType.dense(
-                          const Color(0xFFE57A74),
-                        ).copyWith(
+                        style: DesktopType.dense(skin.bad).copyWith(
                           decoration: TextDecoration.lineThrough,
-                          decorationColor: const Color(0xFFE57A74),
+                          decorationColor: skin.bad,
                         ),
                       ),
                       Padding(
@@ -85,7 +83,7 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: DesktopType.dense(
-                            const Color(0xFF7FCF9F),
+                            skin.ok,
                           ).copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -178,11 +176,9 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                           const SizedBox(width: 12),
                           Text(
                             _display(entry, entry.value),
-                            style: DesktopType.dense(
-                              const Color(0xFFE57A74),
-                            ).copyWith(
+                            style: DesktopType.dense(skin.bad).copyWith(
                               decoration: TextDecoration.lineThrough,
-                              decorationColor: const Color(0xFFE57A74),
+                              decorationColor: skin.bad,
                             ),
                           ),
                           Padding(
@@ -200,7 +196,7 @@ extension _DesktopConfigPanels on _DesktopConfigPanelState {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: DesktopType.dense(
-                                const Color(0xFF7FCF9F),
+                                skin.ok,
                               ).copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),

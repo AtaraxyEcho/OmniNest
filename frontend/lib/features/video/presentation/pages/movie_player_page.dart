@@ -439,9 +439,9 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                           (isMobilePlatform ? 28.0 : 32.0) * _subtitleScale,
                       letterSpacing: 0.0,
                       wordSpacing: 0.0,
-                      color: const Color(0xFFFFFFFF),
+                      color: Colors.white,
                       fontWeight: FontWeight.normal,
-                      backgroundColor: const Color(0xAA000000),
+                      backgroundColor: Colors.black.withValues(alpha: 0.667),
                     ),
                   );
                   if (_isFill) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/desktop/widgets/desktop_chart_tooltip.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
@@ -284,7 +285,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// 14 天活动柱状图：今日强调色，其余淡墨，悬停/长按显示分钟。
+/// 14 天活动柱状图：今日强调色，其余淡墨，桌面悬停弹出深色数据气泡并压暗非悬停柱。
 class _ActivityChart extends StatelessWidget {
   const _ActivityChart({required this.overview});
 
@@ -294,10 +295,44 @@ class _ActivityChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final days = overview.dailyMinutes;
     final maxMinutes = days.fold(
       1,
       (max, d) => d.minutes > max ? d.minutes : max,
+    );
+    final items = <DesktopChartBarItem>[
+      for (var i = 0; i < days.length; i++) ...[
+        () {
+          final day = days[i];
+          final isToday = i == days.length - 1;
+          final barColor =
+              day.minutes <= 0
+                  ? rc.outlineVariant
+                  : isToday
+                  ? rc.reading
+                  : rc.onSurface.withValues(alpha: 0.35);
+          return DesktopChartBarItem(
+            fraction:
+                day.minutes <= 0
+                    ? 0.025
+                    : (day.minutes / maxMinutes).clamp(0.04, 1.0),
+            color: barColor,
+            secondaryColor: barColor,
+            tipTitle: _formatDay(day.date),
+            tipValue:
+                day.minutes <= 0
+                    ? (isZh ? '无阅读' : 'No reading')
+                    : '${day.minutes} min',
+          );
+        }(),
+      ],
+    ];
+    final axisStyle = TextStyle(
+      color: rc.onSurfaceVariant,
+      // ignore: font_size_whitelist
+      fontSize: 9,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,45 +355,17 @@ class _ActivityChart extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (var i = 0; i < days.length; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              Expanded(
-                child: _DailyBar(
-                  day: days[i],
-                  heightPct: days[i].minutes / maxMinutes,
-                  isToday: i == days.length - 1,
-                ),
-              ),
-            ],
-          ],
+        DesktopInteractiveBarChart(
+          items: items,
+          height: 96,
+          barSpacing: 6,
+          minFraction: 0.025,
+          barBorderRadius: BorderRadius.zero,
+          animateHeight: false,
+          axisStartLabel: days.isNotEmpty ? _formatDay(days.first.date) : null,
+          axisEndLabel: days.isNotEmpty ? _formatDay(days.last.date) : null,
+          axisLabelStyle: axisStyle,
         ),
-        if (days.isNotEmpty)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDay(days.first.date),
-                style: TextStyle(
-                  color: rc.onSurfaceVariant,
-                  // ignore: font_size_whitelist
-                  fontSize: 9,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              Text(
-                _formatDay(days.last.date),
-                style: TextStyle(
-                  color: rc.onSurfaceVariant,
-                  // ignore: font_size_whitelist
-                  fontSize: 9,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
       ],
     );
   }
@@ -367,45 +374,6 @@ class _ActivityChart extends StatelessWidget {
     final mm = date.month.toString().padLeft(2, '0');
     final dd = date.day.toString().padLeft(2, '0');
     return '$mm-$dd';
-  }
-}
-
-class _DailyBar extends StatelessWidget {
-  const _DailyBar({
-    required this.day,
-    required this.heightPct,
-    required this.isToday,
-  });
-
-  final ReaderDailyMinutes day;
-  final double heightPct;
-  final bool isToday;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    final tooltip = day.minutes <= 0 ? null : '${day.minutes} min';
-    return Tooltip(
-      message: tooltip ?? '',
-      triggerMode: TooltipTriggerMode.tap,
-      child: SizedBox(
-        height: 96,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Container(
-              height: day.minutes <= 0 ? 2 : (96 * heightPct).clamp(4.0, 96.0),
-              color:
-                  day.minutes <= 0
-                      ? rc.outlineVariant
-                      : isToday
-                      ? rc.reading
-                      : rc.onSurface.withValues(alpha: 0.35),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

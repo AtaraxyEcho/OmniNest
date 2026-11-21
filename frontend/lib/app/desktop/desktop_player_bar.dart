@@ -419,6 +419,9 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                           width: 92,
                                           value: volume,
                                           max: 100,
+                                          trackColor: skin.raise3,
+                                          fillColor: skin.accent,
+                                          thumbAlwaysVisible: true,
                                           onChanged:
                                               (value) =>
                                                   engine?.setVolume(value),

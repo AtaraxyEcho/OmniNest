@@ -61,6 +61,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
   Size? _lastSize;
   Timer? _resizeSettle;
   bool _resizing = false;
+  int _coverSwapSeq = 0;
 
   @override
   void didChangeDependencies() {
@@ -90,6 +91,9 @@ class _DesktopAmbientState extends State<DesktopAmbient>
   @override
   void didUpdateWidget(DesktopAmbient oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _coverSwapSeq += 1;
+    }
     _syncMotion();
   }
 
@@ -146,27 +150,30 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final hasCover = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
     final viewport = MediaQuery.sizeOf(context);
     final unit = math.max(viewport.width, viewport.height);
-    final drift = Curves.easeInOut.transform(_drift.value.clamp(0.0, 1.0));
-    return IgnorePointer(
-      // 样例 `.ambient { transition: opacity .6s }`：拖强度滑杆时整层淡变，
-      // 不是每跳一格硬切。
-      child: AnimatedOpacity(
-        opacity: opacity.clamp(0.0, 1.0),
-        duration: DesktopMotion.ambientLayer,
-        curve: Curves.ease,
-        // 合成顺序必须与样例 `.ambient` 一致：饱和封面 → 漂移色场 →
-        // 径向暗纱 → 暗纱实色 → 噪点。拆成三个边界只改「何时重录」，
-        // 不改画什么、按什么顺序画、什么透明度。
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // 静态层：只有换封面、改尺寸时重绘。drift 变换挂在边界之上，
-            // 边界内画面保留，漂移不触发重录（样例走 CSS transform 同理）。
-            if (hasCover)
-              AnimatedBuilder(
-                animation: _drift,
-                builder:
-                    (context, child) => Transform(
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        // 样例 `.ambient { transition: opacity .6s }`：拖强度滑杆时整层淡变，
+        // 不是每跳一格硬切。
+        child: AnimatedOpacity(
+          opacity: opacity.clamp(0.0, 1.0),
+          duration: DesktopMotion.ambientLayer,
+          curve: Curves.ease,
+          // 合成顺序必须与样例 `.ambient` 一致：饱和封面 → 漂移色场 →
+          // 径向暗纱 → 暗纱实色 → 噪点。拆成三个边界只改「何时重录」，
+          // 不改画什么、按什么顺序画、什么透明度。
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 静态层：只有换封面、改尺寸时重绘。drift 变换挂在边界之上，
+              // 边界内画面保留，漂移不触发重录（样例走 CSS transform 同理）。
+              if (hasCover)
+                AnimatedBuilder(
+                  animation: _drift,
+                  builder: (context, child) {
+                    final drift = Curves.easeInOut.transform(
+                      _drift.value.clamp(0.0, 1.0),
+                    );
+                    return Transform(
                       transform:
                           Matrix4.identity()
                             ..translateByDouble(
@@ -183,77 +190,85 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                             ),
                       alignment: Alignment.center,
                       child: child,
-                    ),
-                child: RepaintBoundary(
-                  key: const ValueKey('ambient-cover'),
-                  child: _coverStack(skin),
+                    );
+                  },
+                  child: RepaintBoundary(
+                    key: const ValueKey('ambient-cover'),
+                    child: _coverStack(skin),
+                  ),
                 ),
-              ),
-            // 样例 `.blob` 是「光栅一次的径向渐变纹理 + 合成器 transform」。
-            // 这里同构：每团预录静态纹理成保留边界，相位只驱动其上的
-            // Transform（平移 + 绕自身中心缩放），整层不再每帧重录/重光栅，
-            // 外层 group opacity 的 saveLayer 也随之进入保留态。
-            RepaintBoundary(
-              key: const ValueKey('ambient-blobs'),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _blobLayer(
-                    controller: _blobA,
-                    base: Offset(viewport.width * 0.06, -unit * 0.12),
-                    radius: unit * 0.52,
-                    color: skin.accent,
-                    alpha: 0.25,
-                    size: viewport,
-                    unit: unit,
-                  ),
-                  _blobLayer(
-                    controller: _blobB,
-                    base: Offset(viewport.width * 0.96, viewport.height * 1.04),
-                    radius: unit * 0.50,
-                    color: skin.warm,
-                    alpha: 0.14,
-                    size: viewport,
-                    unit: unit,
-                  ),
-                  _blobLayer(
-                    controller: _blobC,
-                    base: Offset(viewport.width * 0.52, viewport.height * 0.55),
-                    radius: unit * 0.34,
-                    color: DesktopPalette.ambientCool,
-                    alpha: 0.12,
-                    size: viewport,
-                    unit: unit,
-                  ),
-                ],
-              ),
-            ),
-            // 静态层：暗纱与噪点只录一次；≤4200 个 1×1 rect 不再每帧重录。
-            Opacity(
-              opacity: skin.isDark ? 0.86 : 0.70,
-              child: RepaintBoundary(
-                key: const ValueKey('ambient-veil'),
+              // 样例 `.blob` 是「光栅一次的径向渐变纹理 + 合成器 transform」。
+              // 这里同构：每团预录静态纹理成保留边界，相位只驱动其上的
+              // Transform（平移 + 绕自身中心缩放），整层不再每帧重录/重光栅，
+              // 外层 group opacity 的 saveLayer 也随之进入保留态。
+              RepaintBoundary(
+                key: const ValueKey('ambient-blobs'),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // CSS 先铺线性实色，再叠径向透明到 veil 的渐变。
-                    ColoredBox(color: skin.veil),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: Alignment.topCenter,
-                          radius: 1.25,
-                          colors: [Colors.transparent, skin.veil],
-                          stops: const [0.0, 0.85],
-                        ),
-                      ),
+                    _blobLayer(
+                      controller: _blobA,
+                      base: Offset(viewport.width * 0.06, -unit * 0.12),
+                      radius: unit * 0.52,
+                      color: skin.accent,
+                      alpha: 0.25,
+                      size: viewport,
+                      unit: unit,
                     ),
-                    const CustomPaint(painter: _GrainPainter()),
+                    _blobLayer(
+                      controller: _blobB,
+                      base: Offset(
+                        viewport.width * 0.96,
+                        viewport.height * 1.04,
+                      ),
+                      radius: unit * 0.50,
+                      color: skin.warm,
+                      alpha: 0.14,
+                      size: viewport,
+                      unit: unit,
+                    ),
+                    _blobLayer(
+                      controller: _blobC,
+                      base: Offset(
+                        viewport.width * 0.52,
+                        viewport.height * 0.55,
+                      ),
+                      radius: unit * 0.34,
+                      color: DesktopPalette.ambientCool,
+                      alpha: 0.12,
+                      size: viewport,
+                      unit: unit,
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
+              // 静态层：暗纱与噪点只录一次；≤4200 个 1×1 rect 不再每帧重录。
+              Opacity(
+                opacity: skin.isDark ? 0.86 : 0.70,
+                child: RepaintBoundary(
+                  key: const ValueKey('ambient-veil'),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // CSS 先铺线性实色，再叠径向透明到 veil 的渐变。
+                      ColoredBox(color: skin.veil),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: Alignment.topCenter,
+                            radius: 1.25,
+                            colors: [Colors.transparent, skin.veil],
+                            stops: const [0.0, 0.85],
+                          ),
+                        ),
+                      ),
+                      const CustomPaint(painter: _GrainPainter()),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -279,7 +294,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             children: [...previous, if (current != null) current],
           ),
       child: KeyedSubtree(
-        key: ValueKey<String>(source),
+        key: ValueKey<(int, String)>((_coverSwapSeq, source)),
         child: _cover(skin, source),
       ),
     );

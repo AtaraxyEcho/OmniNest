@@ -4751,7 +4751,6 @@
   "readerTypeTechnical": "技术",
   "readerTypePoetry": "诗歌",
   "readerTypeEssay": "散文",
-  "readerTypeComic": "漫画",
   "readerNotStarted": "未开始",
   "readerUnknownTime": "未知时间",
   "readerChapterNumber": "第 {number} 章",

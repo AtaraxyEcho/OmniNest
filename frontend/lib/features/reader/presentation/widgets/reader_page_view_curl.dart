@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 双向卷页双槽空闲预抓图与装配（v6：离屏抓图前 await 资源就绪 + RTL 双页对称映射）。
+/// 双向卷页双槽空闲预抓图与装配（v12：背面离屏抓图优先等待首帧就绪，400ms 超时兜底）。
 extension _ReaderPageViewCurl on _ReaderPageViewState {
   void _scheduleIdleNextCurlWarmup() {
     _curlWarmupTimer?.cancel();
@@ -86,6 +86,8 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       // 背面落位侧：向右翻（右页翻到左侧）背面为左页；向左翻（左页翻到右侧）背面为右页。
       final backSide =
           dir == CurlDirection.next ? _SpreadSide.left : _SpreadSide.right;
+      final frameReady = Completer<void>();
+      _backFrameReadyCompleter = frameReady;
       _updateState(() {
         _pendingBackCaptureSide = backSide;
         _pendingBackCaptureWidget = backWidget;
@@ -96,7 +98,18 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
         return false;
       }
       if (prepare != null) {
-        // 图片页额外等一帧确保 Image.memory 同步缓存首帧解码落盘。
+        // 优先等待背面子页首帧绘制就绪（由 ComicPageImage.onFirstFramePainted 派发），
+        // 配合统一 ResizeImage 缓存键预热，400ms 超时兜底防止异常图阻塞。
+        if (!frameReady.isCompleted) {
+          await frameReady.future.timeout(
+            const Duration(milliseconds: 400),
+            onTimeout: () {},
+          );
+          if (!mounted || token != _curlToken) {
+            frontImg.dispose();
+            return false;
+          }
+        }
         await SchedulerBinding.instance.endOfFrame;
         if (!mounted || token != _curlToken) {
           frontImg.dispose();
@@ -144,6 +157,11 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       return true;
     } finally {
       _capturingDirs.remove(dir);
+      final readyCompleter = _backFrameReadyCompleter;
+      _backFrameReadyCompleter = null;
+      if (readyCompleter != null && !readyCompleter.isCompleted) {
+        readyCompleter.complete();
+      }
       if (mounted && _pendingBackCaptureWidget != null) {
         _updateState(() => _pendingBackCaptureWidget = null);
       }
@@ -191,6 +209,11 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     _curlToken++;
     _capturingDirs.clear();
     _pendingBackCaptureWidget = null;
+    final readyCompleter = _backFrameReadyCompleter;
+    _backFrameReadyCompleter = null;
+    if (readyCompleter != null && !readyCompleter.isCompleted) {
+      readyCompleter.complete();
+    }
     if (_curlPairs.isEmpty) return;
     final oldPairs = _curlPairs.values.toList(growable: false);
     _curlPairs.clear();
@@ -207,6 +230,11 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
     _curlToken++;
     _capturingDirs.clear();
     _pendingBackCaptureWidget = null;
+    final readyCompleter = _backFrameReadyCompleter;
+    _backFrameReadyCompleter = null;
+    if (readyCompleter != null && !readyCompleter.isCompleted) {
+      readyCompleter.complete();
+    }
     for (final p in _curlPairs.values) {
       p.front.dispose();
       p.back.dispose();
@@ -310,9 +338,18 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       height: height,
       child: ExcludeFocus(
         child: IgnorePointer(
-          child: RepaintBoundary(
-            key: _singleBackCaptureKey,
-            child: styledChild,
+          child: NotificationListener<ReaderSnapshotFrameReadyNotification>(
+            onNotification: (_) {
+              final completer = _backFrameReadyCompleter;
+              if (completer != null && !completer.isCompleted) {
+                completer.complete();
+              }
+              return true;
+            },
+            child: RepaintBoundary(
+              key: _singleBackCaptureKey,
+              child: styledChild,
+            ),
           ),
         ),
       ),

@@ -387,6 +387,7 @@ class _DesktopRiseState extends State<DesktopRise>
         final t = DesktopMotion.ease.transform(_progress).clamp(0.0, 1.0);
         return Opacity(
           opacity: t,
+          alwaysIncludeSemantics: true,
           child: Transform.translate(
             offset: Offset((1 - t) * widget.offsetX, (1 - t) * widget.offset),
             child: child,

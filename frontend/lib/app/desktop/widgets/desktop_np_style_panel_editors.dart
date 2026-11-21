@@ -10,6 +10,7 @@ class _PaintEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
     final isZh = Localizations.localeOf(
       context,
     ).languageCode.toLowerCase().startsWith('zh');
@@ -101,8 +102,10 @@ class _PaintEditor extends StatelessWidget {
             value: paint.splitPos.toDouble(),
             min: 10,
             max: 90,
-            trackColor: Colors.white.withValues(alpha: 0.20),
-            fillColor: Colors.white,
+            trackColor: Colors.white.withValues(alpha: 0.22),
+            fillColor: skin.accent,
+            thumbColor: Colors.white,
+            thumbAlwaysVisible: true,
             onChanged:
                 (v) => onChanged(
                   paint.copyWith(splitPos: v.round().clamp(10, 90)),

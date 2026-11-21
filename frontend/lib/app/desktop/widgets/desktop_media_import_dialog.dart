@@ -13,6 +13,7 @@ import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -104,6 +105,7 @@ class _DesktopMediaImportDialogState
   bool _matchMetadata = true;
   bool _dragOver = false;
   bool _scanningDrop = false;
+  bool _showUnsupported = false;
   DesktopImportSpace _space = DesktopImportSpace.personal;
   int _page = 0;
   int _loadGeneration = 0;
@@ -195,19 +197,43 @@ class _DesktopMediaImportDialogState
     DesktopMediaImportKind.books => DesktopIcons.book,
   };
 
-  List<FileNode> get _visibleFiles => _entries
-      .where(
-        (node) =>
-            (node.isFolder || _isSupported(node.name, node.mimeType)) &&
-            _matchesFilter(node.name),
-      )
+  /// 当前目录中可导入的媒体文件（排除文件夹、空文件与不支持格式）。
+  bool _isImportableFile(FileNode node) =>
+      !node.isFolder &&
+      node.sizeBytes != 0 &&
+      _isSupported(node.name, node.mimeType);
+
+  /// 自动翻页扫描统计：当前目录已加载的匹配媒体文件总数（不含文件夹）。
+  int get _matchedMediaCount => _entries.where(_isImportableFile).length;
+
+  /// 当前目录经过关键词过滤后、可被全选/勾选的媒体文件列表。
+  List<FileNode> get _importableFiles => _entries
+      .where((node) => _isImportableFile(node) && _matchesFilter(node.name))
       .toList(growable: false);
+
+  /// 列表实际展示条目：文件夹与可导入文件在前；展开全部时，不支持或空文件排在末尾。
+  List<FileNode> get _visibleFiles {
+    final supported = <FileNode>[];
+    final unsupported = <FileNode>[];
+    for (final node in _entries) {
+      if (!_matchesFilter(node.name)) {
+        continue;
+      }
+      if (node.isFolder || _isImportableFile(node)) {
+        supported.add(node);
+      } else if (_showUnsupported) {
+        unsupported.add(node);
+      }
+    }
+    if (unsupported.isEmpty) {
+      return supported;
+    }
+    return <FileNode>[...supported, ...unsupported];
+  }
 
   int get _hiddenFilesCount =>
       _entries
-          .where(
-            (node) => !node.isFolder && !_isSupported(node.name, node.mimeType),
-          )
+          .where((node) => !node.isFolder && !_isImportableFile(node))
           .length;
 
   List<XFile> get _visibleDeviceFiles => _deviceFiles
@@ -218,15 +244,20 @@ class _DesktopMediaImportDialogState
       _filter.trim().isEmpty ||
       name.toLowerCase().contains(_filter.trim().toLowerCase());
 
+  int get _selectableCount =>
+      _source == _ImportSource.files
+          ? _importableFiles.length
+          : _visibleDeviceFiles.length;
+
   int get _sourceCount =>
       _source == _ImportSource.files
           ? _visibleFiles.length
           : _visibleDeviceFiles.length;
 
   bool get _allSelected =>
-      _sourceCount > 0 &&
+      _selectableCount > 0 &&
       (_source == _ImportSource.files
-          ? _visibleFiles.every((node) => _selectedFileIds.contains(node.id))
+          ? _importableFiles.every((node) => _selectedFileIds.contains(node.id))
           : _visibleDeviceFiles.every(
             (file) => _selectedDeviceKeys.contains(_deviceKey(file)),
           ));
@@ -235,7 +266,7 @@ class _DesktopMediaImportDialogState
     final clear = _allSelected;
     setState(() {
       if (_source == _ImportSource.files) {
-        for (final node in _visibleFiles) {
+        for (final node in _importableFiles) {
           if (clear) {
             _selectedFileIds.remove(node.id);
           } else {
@@ -304,7 +335,7 @@ class _DesktopMediaImportDialogState
         _loading = false;
         _loadingMore = false;
       });
-      if (_hasMore && _visibleFiles.length < 6 && _autoScannedPages < 5) {
+      if (_hasMore && _matchedMediaCount < 6 && _autoScannedPages < 10) {
         _autoScannedPages++;
         unawaited(_loadFiles());
       }
@@ -486,11 +517,19 @@ class _DesktopMediaImportDialogState
 
   Widget _hiddenFilesNotice(DesktopSkin skin) {
     final hidden = _hiddenFilesCount;
-    if (hidden <= 0) return const SizedBox.shrink();
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final summaryText =
+        hidden > 0
+            ? (isZh
+                ? '仅支持 $_supportedTypesSummary · 已隐藏 $hidden 个不支持或空文件'
+                : 'Supports $_supportedTypesSummary · $hidden unsupported or empty hidden')
+            : (isZh
+                ? '支持格式：$_supportedTypesSummary'
+                : 'Supported formats: $_supportedTypesSummary');
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: skin.raise,
           borderRadius: BorderRadius.circular(10),
@@ -502,10 +541,24 @@ class _DesktopMediaImportDialogState
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '当前目录已自动隐藏 $hidden 个此媒体库不支持的文件',
+                summaryText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: DesktopType.caption(skin.text3),
               ),
             ),
+            if (hidden > 0) ...[
+              const SizedBox(width: 10),
+              DesktopLink(
+                label:
+                    _showUnsupported
+                        ? (isZh ? '仅看可导入' : 'Importable only')
+                        : (isZh ? '显示全部' : 'Show all'),
+                trailing: false,
+                onPressed:
+                    () => setState(() => _showUnsupported = !_showUnsupported),
+              ),
+            ],
           ],
         ),
       ),
@@ -716,7 +769,8 @@ class _DesktopMediaImportDialogState
             ],
           ],
           const SizedBox(height: 8),
-          if (_sourceCount > 5 || _filter.isNotEmpty) _listTools(l10n, skin),
+          if (_sourceCount > 5 || _selectableCount > 0 || _filter.isNotEmpty)
+            _listTools(l10n, skin),
           _fileList(l10n, skin),
           if (widget.kind == DesktopMediaImportKind.movies) ...[
             const SizedBox(height: 8),

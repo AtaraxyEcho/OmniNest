@@ -655,14 +655,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
             );
           },
           layoutBuilder:
-              (currentChild, previousChildren) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  for (final child in previousChildren)
-                    IgnorePointer(child: child),
-                  if (currentChild != null) currentChild,
-                ],
-              ),
+              (currentChild, previousChildren) =>
+                  excludeExitingSemanticsStack(currentChild, [
+                    for (final child in previousChildren)
+                      IgnorePointer(child: child),
+                  ], fit: StackFit.expand),
           child: overlay,
         ),
       ),

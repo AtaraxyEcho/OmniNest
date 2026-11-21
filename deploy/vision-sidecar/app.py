@@ -425,6 +425,10 @@ def _sidecar_signature(timestamp: int, method: str, path: str, query: str, nonce
 def _consume_nonce(nonce: str) -> None:
     """登记一次性 nonce；重放或非法格式一律拒绝。"""
     if not nonce or not _NONCE_PATTERN.fullmatch(nonce):
+        logger.warning(
+            "侧车鉴权拒绝: nonce 格式异常 (length=%d)",
+            len(nonce) if nonce else 0,
+        )
         raise HTTPException(status_code=401, detail="Unauthorized")
     now = time.time()
     with _nonce_lock:
@@ -435,6 +439,7 @@ def _consume_nonce(nonce: str) -> None:
                 break
             del _seen_nonces[oldest_nonce]
         if _seen_nonces.get(nonce, 0) > now:
+            logger.warning("侧车鉴权拒绝: 检测到重放 nonce")
             raise HTTPException(status_code=401, detail="Unauthorized (replayed nonce)")
         if len(_seen_nonces) >= MAX_TRACKED_NONCES:
             # 只接受已通过签名校验的请求，容量耗尽按 fail-closed 处理。
@@ -460,17 +465,50 @@ def _require_sidecar_auth(
     if not SIDECAR_SECRET:
         raise HTTPException(status_code=503, detail="AI sidecar authentication is not configured")
     if timestamp is None or signature is None or nonce is None:
+        missing_headers = [
+            name
+            for name, value in (
+                (SIDECAR_TIMESTAMP_HEADER, timestamp),
+                (SIDECAR_SIGNATURE_HEADER, signature),
+                (SIDECAR_NONCE_HEADER, nonce),
+            )
+            if value is None
+        ]
+        logger.warning(
+            "侧车鉴权拒绝: 缺少认证头 path=%s missing=%s",
+            request.url.path,
+            ",".join(missing_headers),
+        )
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         timestamp_value = int(timestamp)
     except ValueError as exception:
+        logger.warning(
+            "侧车鉴权拒绝: 时间戳非整数 path=%s timestamp=%r",
+            request.url.path,
+            timestamp[:32],
+        )
         raise HTTPException(status_code=401, detail="Unauthorized") from exception
-    if abs(time.time() - timestamp_value) > SIDECAR_CLOCK_SKEW_SECONDS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    skew_seconds = abs(time.time() - timestamp_value)
+    if skew_seconds > SIDECAR_CLOCK_SKEW_SECONDS:
+        logger.warning(
+            "侧车鉴权拒绝: 时钟偏差超限 path=%s skew=%.1fs limit=%ds",
+            request.url.path,
+            skew_seconds,
+            SIDECAR_CLOCK_SKEW_SECONDS,
+        )
+        raise HTTPException(status_code=401, detail="Unauthorized (clock skew exceeded)")
     expected = _sidecar_signature(
         timestamp_value, request.method, request.url.path, request.url.query, nonce
     )
     if not hmac.compare_digest(signature, expected):
+        logger.warning(
+            "侧车鉴权拒绝: 签名不匹配 method=%s path=%s hasQuery=%s protocol=%s",
+            request.method,
+            request.url.path,
+            bool(request.url.query),
+            SIGNATURE_PROTOCOL,
+        )
         # 带上协议版本：两侧混跑时后端日志能直接定位到"签名格式不一致"，
         # 而不是只看到一片 401。
         raise HTTPException(

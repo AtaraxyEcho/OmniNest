@@ -45,7 +45,7 @@ class AdminChartPoint {
 /// 直角吞吐柱状图：1px 细线网格、矩形堆叠柱（完成=前景、失败=绯红），
 /// 零渐变零圆角；X 轴等宽日期刻度（短序列逐日，长序列每 5 日 + 末点）。
 ///
-/// 鼠标悬停时追踪指针 x 命中柱索引：命中柱加 1px 描边高亮、光标精确，
+/// 鼠标悬停时追踪指针 x 命中柱索引：命中柱加 1px 描边高亮、非悬停柱压暗至 0.4、光标精确，
 /// 并在指针旁弹出直角等宽小浮牌（日期 / 完成 / 失败 / 运行），移出清除；
 /// Semantics 标签随悬停同步当前柱数值。
 ///
@@ -279,7 +279,7 @@ class AdminThroughputBarPainter extends CustomPainter {
   /// Y 轴数值标注样式；留边宽度大于 0 且提供样式时按网格线绘制刻度值。
   final TextStyle? labelStyle;
 
-  /// 当前悬停柱索引；命中柱追加 1px 描边高亮。
+  /// 当前悬停柱索引；命中柱追加 1px 描边高亮，其余非悬停柱压暗至 0.4。
   final int? hoverIndex;
 
   /// 悬停描边色；null 时不描边。
@@ -328,6 +328,13 @@ class AdminThroughputBarPainter extends CustomPainter {
       if (total <= 0) {
         continue;
       }
+      final dimmed = hoverIndex != null && i != hoverIndex;
+      final effectiveFailedColor =
+          dimmed
+              ? failedColor.withValues(alpha: failedColor.a * 0.4)
+              : failedColor;
+      final effectiveBarColor =
+          dimmed ? barColor.withValues(alpha: barColor.a * 0.4) : barColor;
       final centerX = labelAxisWidth + slot * i + slot / 2;
       final totalHeight = total / maxTotal * (size.height - 4);
       final barTop = size.height - totalHeight;
@@ -336,7 +343,7 @@ class AdminThroughputBarPainter extends CustomPainter {
         final failedHeight = item.failed / total * totalHeight;
         canvas.drawRect(
           Rect.fromLTWH(centerX - barWidth / 2, top, barWidth, failedHeight),
-          Paint()..color = failedColor,
+          Paint()..color = effectiveFailedColor,
         );
         top += failedHeight;
       }
@@ -348,7 +355,7 @@ class AdminThroughputBarPainter extends CustomPainter {
             barWidth,
             (item.completed + item.running) / total * totalHeight,
           ),
-          Paint()..color = barColor,
+          Paint()..color = effectiveBarColor,
         );
       }
       final border = hoverBorderColor;

@@ -219,9 +219,10 @@ class _Transport extends StatelessWidget {
               width: 120,
               value: vol,
               max: 100,
-              trackColor: Colors.white.withValues(alpha: 0.2),
-              fillColor: Colors.white.withValues(alpha: 0.92),
+              trackColor: Colors.white.withValues(alpha: 0.22),
+              fillColor: skin.accent,
               thumbColor: Colors.white,
+              thumbAlwaysVisible: true,
               onChanged: onVolumeChanged,
             ),
             const SizedBox(width: 8),
@@ -280,6 +281,7 @@ class _Transport extends StatelessWidget {
                         trackId: trackId,
                         position: shownDuration,
                         duration: duration,
+                        playing: playing,
                         onDragStart: onDragStart,
                         onDragUpdate:
                             (value) =>

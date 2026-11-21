@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 
 /// 桌面端右侧毛玻璃悬浮抽屉（v5：让出顶栏 64px 热区支持一步无缝切换 + 常驻外壳平滑过渡）。
@@ -109,13 +110,12 @@ class DesktopReaderPopover extends StatelessWidget {
                                       const Duration(milliseconds: 140),
                                     ),
                                     layoutBuilder:
-                                        (current, previous) => Stack(
-                                          alignment: Alignment.centerLeft,
-                                          children: [
-                                            ...previous,
-                                            if (current != null) current,
-                                          ],
-                                        ),
+                                        (current, previous) =>
+                                            excludeExitingSemanticsStack(
+                                              current,
+                                              previous,
+                                              alignment: Alignment.centerLeft,
+                                            ),
                                     child: Text(
                                       eyebrow,
                                       key: ValueKey(eyebrow),
@@ -158,6 +158,7 @@ class DesktopReaderPopover extends StatelessWidget {
                               ),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder: excludeExitingSemanticsStack,
                               child: child,
                             ),
                           ),

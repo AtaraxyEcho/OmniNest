@@ -84,8 +84,10 @@ class _DesktopSliderState extends State<DesktopSlider> {
               0.0,
               1.0,
             );
+    final fillColor = widget.fillColor ?? skin.accent;
     final thumbColor = widget.thumbColor ?? skin.onStage;
     final thumbSize = widget.thumbRadius * 2;
+    final thumbScale = active ? 1.0 : (widget.thumbAlwaysVisible ? 0.85 : 0.0);
     return Focus(
       canRequestFocus: true,
       onFocusChange: (value) => setState(() => _focused = value),
@@ -173,8 +175,9 @@ class _DesktopSliderState extends State<DesktopSlider> {
                               widget.trackFill
                                   ? FractionallySizedBox(
                                     widthFactor: fraction,
-                                    child: ColoredBox(
-                                      color: widget.fillColor ?? skin.accent,
+                                    heightFactor: 1.0,
+                                    child: SizedBox.expand(
+                                      child: ColoredBox(color: fillColor),
                                     ),
                                   )
                                   : const SizedBox.shrink(),
@@ -191,7 +194,7 @@ class _DesktopSliderState extends State<DesktopSlider> {
                             DesktopMotion.fast,
                           ),
                           curve: MotionToken.curve,
-                          scale: active || widget.thumbAlwaysVisible ? 1 : 0,
+                          scale: thumbScale,
                           child: Container(
                             width: thumbSize,
                             height: thumbSize,
@@ -203,6 +206,12 @@ class _DesktopSliderState extends State<DesktopSlider> {
                                   BoxShadow(
                                     color: thumbColor.withValues(alpha: 0.22),
                                     spreadRadius: active ? 7 : 4,
+                                  )
+                                else if (active && widget.thumbAlwaysVisible)
+                                  BoxShadow(
+                                    color: fillColor.withValues(alpha: 0.30),
+                                    blurRadius: 8,
+                                    spreadRadius: 2.5,
                                   ),
                                 BoxShadow(
                                   color: skin.shadow.last.color,

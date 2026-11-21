@@ -46,6 +46,7 @@ class _StorageDistribution extends ConsumerStatefulWidget {
 
 class _StorageDistributionState extends ConsumerState<_StorageDistribution> {
   bool _scanningDuplicates = false;
+  int? _hoveredSegmentIndex;
 
   static Color _color(String category) {
     return switch (category.toUpperCase()) {
@@ -126,6 +127,20 @@ class _StorageDistributionState extends ConsumerState<_StorageDistribution> {
       (total, segment) => total + segment.flex,
     );
     final remainingFlex = math.max(0, 10000 - segmentFlex).toInt();
+    final chartSegments = <DesktopChartSegment>[
+      for (final segment in segments)
+        DesktopChartSegment(
+          flex: segment.flex,
+          color: _color(segment.item.category),
+          label: _label(l10n, segment.item.category),
+          valueLabel: formatFileSize(segment.item.sizeBytes),
+          percentLabel:
+              segment.item.sizeBytes <= 0
+                  ? null
+                  : '${(segment.item.sizeBytes / scale * 100).toStringAsFixed(1)}%',
+        ),
+    ];
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,26 +162,18 @@ class _StorageDistributionState extends ConsumerState<_StorageDistribution> {
           ],
         ),
         const SizedBox(height: 16),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            height: 14,
-            child: Row(
-              children: [
-                for (final segment in segments)
-                  if (segment.flex > 0)
-                    Expanded(
-                      flex: segment.flex,
-                      child: ColoredBox(color: _color(segment.item.category)),
-                    ),
-                if (remainingFlex > 0 || segments.isEmpty)
-                  Expanded(
-                    flex: segments.isEmpty ? 10000 : remainingFlex,
-                    child: ColoredBox(color: skin.raise3),
-                  ),
-              ],
-            ),
-          ),
+        DesktopInteractiveSegmentedBar(
+          segments: chartSegments,
+          remainingFlex: remainingFlex,
+          trackColor: skin.raise3,
+          height: 14,
+          borderRadius: 8,
+          hoveredIndex: _hoveredSegmentIndex,
+          onHoverChanged: (index) {
+            if (_hoveredSegmentIndex != index) {
+              setState(() => _hoveredSegmentIndex = index);
+            }
+          },
         ),
         if (stats.typeDistribution.isEmpty)
           Padding(
@@ -185,34 +192,59 @@ class _StorageDistributionState extends ConsumerState<_StorageDistribution> {
                 spacing: 30,
                 runSpacing: 8,
                 children: [
-                  for (final segment in segments)
+                  for (var i = 0; i < segments.length; i++)
                     SizedBox(
                       width: cellWidth,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: _color(segment.item.category),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.basic,
+                        onEnter: (_) {
+                          if (segments[i].flex > 0 &&
+                              _hoveredSegmentIndex != i) {
+                            setState(() => _hoveredSegmentIndex = i);
+                          }
+                        },
+                        onExit: (_) {
+                          if (_hoveredSegmentIndex == i) {
+                            setState(() => _hoveredSegmentIndex = null);
+                          }
+                        },
+                        child: AnimatedOpacity(
+                          opacity:
+                              _hoveredSegmentIndex == null ||
+                                      _hoveredSegmentIndex == i
+                                  ? 1.0
+                                  : 0.4,
+                          duration:
+                              animationsDisabled
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 140),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _color(segments[i].item.category),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _label(l10n, segments[i].item.category),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.caption(skin.text2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                formatFileSize(segments[i].item.sizeBytes),
+                                style: DesktopType.numeric(skin.text3),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _label(l10n, segment.item.category),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(skin.text2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            formatFileSize(segment.item.sizeBytes),
-                            style: DesktopType.numeric(skin.text3),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                 ],

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +15,6 @@ import 'package:omninest/app/desktop/desktop_player_bar.dart'
     show formatDesktopClock;
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
-import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
 import 'package:omninest/app/desktop/pages/desktop_now_playing_lyrics.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
@@ -368,9 +368,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                                           ),
                                       onBrowseMusic: _browseMusic,
                                       onEdit:
-                                          () => unawaited(
-                                            _editMetadata(track.id),
-                                          ),
+                                          () => unawaited(_editMetadata(track)),
                                     ),
                                   ),
                                 ],
@@ -510,27 +508,29 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     exitDetailRoute(context, fallbackRoute: DesktopRoutes.music);
   }
 
-  Future<void> _editMetadata(String trackId) async {
-    final track =
-        ref
-            .read(musicCenterControllerProvider)
-            .asData
-            ?.value
-            .tracks
+  Future<void> _editMetadata(MusicTrack currentTrack) async {
+    final state = ref.read(musicCenterControllerProvider).asData?.value;
+    final trackId = currentTrack.id;
+    final MusicTrack track =
+        state?.tracks.where((item) => item.id == trackId).firstOrNull ??
+        state?.playbackItems
+            .where((item) => item.track.id == trackId)
+            .map((item) => item.track)
+            .firstOrNull ??
+        state?.selectedPlaylistTracks
             .where((item) => item.id == trackId)
-            .firstOrNull;
-    if (track == null) return;
-    final saved = await showDesktopMusicMetadataDrawer(
-      context: context,
-      track: track,
-    );
-    if (!mounted || saved != true) return;
-    showDesktopToast(
-      context,
-      AppLocalizations.of(context).musicMetadataSaved,
-      kind: DesktopToastKind.success,
-      icon: DesktopIcons.check,
-    );
+            .firstOrNull ??
+        state?.selectedAlbumTracks
+            .where((item) => item.id == trackId)
+            .firstOrNull ??
+        state?.selectedArtistTracks
+            .where((item) => item.id == trackId)
+            .firstOrNull ??
+        (state?.currentItem?.track.id == trackId
+            ? state?.currentItem?.track
+            : null) ??
+        currentTrack;
+    await showDesktopMusicMetadataDrawer(context: context, track: track);
   }
 }
 

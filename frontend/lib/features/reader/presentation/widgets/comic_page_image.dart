@@ -19,9 +19,17 @@ class ComicPageImage extends ConsumerStatefulWidget {
     required this.surfaceColor,
     required this.layout,
     this.fit,
+    this.alignment = Alignment.center,
     this.onLayout,
+    this.onFirstFramePainted,
     super.key,
   });
+
+  /// 返回与 [ComicPageImage] 渲染完全一致的 [ImageProvider] 缓存键，
+  /// 供离屏预热（`precacheImage`）与渲染命中同一份解码缓存。
+  static ImageProvider resolveProvider(Uint8List bytes, int? cacheWidth) {
+    return ResizeImage.resizeIfNeeded(cacheWidth, null, MemoryImage(bytes));
+  }
 
   final ComicPage page;
   final String itemId;
@@ -31,8 +39,14 @@ class ComicPageImage extends ConsumerStatefulWidget {
   /// 图片填充模式（翻页模式透传 `contain` / `fitWidth` / `fitHeight`）。
   final BoxFit? fit;
 
+  /// 图片在容器内的对齐方式（双页无缝拼合时左页靠右、右页靠左）。
+  final AlignmentGeometry alignment;
+
   /// 页面布局完成回调，参数依次为页码索引和渲染高度。
   final void Function(int index, double height)? onLayout;
+
+  /// 首帧图片绘制就绪回调（每页仅触发一次），供翻页离屏抓图精准等待首帧落盘。
+  final VoidCallback? onFirstFramePainted;
 
   @override
   ConsumerState<ComicPageImage> createState() => _ComicPageImageState();
@@ -43,6 +57,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
   bool _loading = false;
   String? _error;
   int _loadGeneration = 0;
+  bool _firstFrameNotified = false;
 
   @override
   void initState() {
@@ -64,6 +79,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     if (oldWidget.page.id != widget.page.id ||
         oldWidget.page.sourcePath != widget.page.sourcePath ||
         oldWidget.itemId != widget.itemId) {
+      _firstFrameNotified = false;
       final cached = _readCachedSync();
       if (cached != null) {
         _loadGeneration++;
@@ -89,6 +105,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
 
   Future<void> _loadImage() async {
     final generation = ++_loadGeneration;
+    _firstFrameNotified = false;
     setState(() {
       _loading = true;
       _error = null;
@@ -127,6 +144,17 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
       if (size != null && size.height > 0) {
         widget.onLayout!(widget.page.pageIndex, size.height);
       }
+    });
+  }
+
+  void _notifyFirstFramePainted() {
+    if (_firstFrameNotified) return;
+    _firstFrameNotified = true;
+    final cb = widget.onFirstFramePainted;
+    if (cb == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      cb();
     });
   }
 
@@ -197,6 +225,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     final image = Image.memory(
       _imageBytes!,
       fit: effectiveFit,
+      alignment: widget.alignment,
       width: double.infinity,
       height: isContinuousDynamic ? null : double.infinity,
       cacheWidth: cacheWidth,
@@ -206,6 +235,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
         // 盒子还是占位比例，这一份补报会把高度索引改成实际渲染值。
         if (frame != null || wasSynchronouslyLoaded) {
           _reportLayout();
+          _notifyFirstFramePainted();
         }
         return child;
       },

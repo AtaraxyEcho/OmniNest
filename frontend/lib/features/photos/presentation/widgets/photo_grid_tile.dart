@@ -90,15 +90,15 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
           ),
 
           if (photo.isVideo)
-            const Positioned.fill(
+            Positioned.fill(
               child: IgnorePointer(
                 child: Center(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Color(0x66000000),
+                      color: Colors.black.withValues(alpha: 0.4),
                       shape: BoxShape.circle,
                       border: Border.fromBorderSide(
-                        BorderSide(color: Color(0x66FFFFFF)),
+                        BorderSide(color: Colors.white.withValues(alpha: 0.4)),
                       ),
                     ),
                     child: SizedBox.square(

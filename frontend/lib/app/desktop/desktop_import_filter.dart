@@ -125,6 +125,15 @@ const Map<DesktopImportModule, List<String>> desktopImportExtensions =
       DesktopImportModule.book: <String>['epub', 'txt', 'cbz', 'zip', 'pdf'],
     };
 
+/// 仅在文件无扩展名时使用的电子书精确 MIME 兜底集合。
+const Set<String> _bookFallbackMimeTypes = <String>{
+  'text/plain',
+  'application/epub+zip',
+  'application/pdf',
+  'application/zip',
+  'application/x-cbz',
+};
+
 /// 返回指定模块允许的扩展名列表。
 List<String> importExtensionsFor(DesktopImportModule module) =>
     desktopImportExtensions[module] ?? const <String>[];
@@ -153,16 +162,20 @@ bool isJunkFile(String name) {
 }
 
 /// 判断文件扩展名或 MIME 类型是否属于指定模块白名单。
+///
+/// 当文件名包含扩展名（`ext.isNotEmpty`）时严格以模块扩展名白名单为准，
+/// 防止 `.srt/.log/.csv/.docx` 等经由宽松 MIME 兜底泄漏；
+/// 仅当 `ext.isEmpty` 时才执行精确 MIME 兜底判断。
 bool acceptsImportFile(
   DesktopImportModule module,
   String name, {
   String? mimeType,
 }) {
   final ext = importExtensionOf(name);
-  if (ext.isNotEmpty && importExtensionsFor(module).contains(ext)) {
-    return true;
+  if (ext.isNotEmpty) {
+    return importExtensionsFor(module).contains(ext);
   }
-  final mime = mimeType?.toLowerCase() ?? '';
+  final mime = (mimeType ?? '').split(';').first.trim().toLowerCase();
   if (mime.isEmpty) {
     return false;
   }
@@ -171,11 +184,7 @@ bool acceptsImportFile(
     DesktopImportModule.photo =>
       mime.startsWith('image/') || mime.startsWith('video/'),
     DesktopImportModule.music => mime.startsWith('audio/'),
-    DesktopImportModule.book =>
-      mime.startsWith('text/') ||
-          mime.contains('epub') ||
-          mime.contains('pdf') ||
-          mime.contains('zip'),
+    DesktopImportModule.book => _bookFallbackMimeTypes.contains(mime),
   };
 }
 

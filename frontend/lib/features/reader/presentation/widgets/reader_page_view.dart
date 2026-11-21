@@ -14,8 +14,10 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_interaction_gate.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 part 'reader_page_view_turn.dart';
@@ -25,6 +27,12 @@ part 'reader_page_view_render.dart';
 part 'reader_page_spread.dart';
 part 'reader_page_curl.dart';
 part 'reader_page_view_curl.dart';
+
+/// 离屏抓图页首帧绘制就绪通知：漫画等异步解码页面首帧落盘后派发，
+/// 供 `ReaderPageView` 背面离屏抓图立即放行，避免截到空白或加载占位。
+class ReaderSnapshotFrameReadyNotification extends Notification {
+  const ReaderSnapshotFrameReadyNotification();
+}
 
 /// 翻页动画模式。
 enum PageTurnMode {
@@ -119,6 +127,7 @@ class ReaderPageView extends StatefulWidget {
     this.bookmarked = false,
     this.reverse = false,
     this.dragEnabled = true,
+    this.allowMouseDrag = false,
     super.key,
   });
 
@@ -164,6 +173,9 @@ class ReaderPageView extends StatefulWidget {
 
   /// 是否允许手势拖拽翻页；漫画放大态（scale > 1.02）置为 false 防止与平移冲突。
   final bool dragEnabled;
+
+  /// Slide 模式下是否允许鼠标拖拽翻页（默认关闭，把正文区鼠标拖动留给选字；漫画可开启）。
+  final bool allowMouseDrag;
 
   @override
   State<ReaderPageView> createState() => _ReaderPageViewState();
@@ -229,6 +241,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   int _curlToken = 0;
   Timer? _curlWarmupTimer;
   Completer<void>? _backCaptureLock;
+  Completer<void>? _backFrameReadyCompleter;
   Timer? _commitResetFallbackTimer;
   Widget? _pendingBackCaptureWidget;
   _SpreadSide _pendingBackCaptureSide = _SpreadSide.left;

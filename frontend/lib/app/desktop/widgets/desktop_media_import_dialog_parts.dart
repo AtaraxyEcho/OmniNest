@@ -129,6 +129,7 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
             : l10n.desktopMediaImportNoCompatibleFiles,
       );
     }
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 340),
       child: Scrollbar(
@@ -171,22 +172,37 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
             if (node.isFolder) {
               return _candidateRow(
                 name: node.name,
-                detail: '${l10n.filesFolder} · ${_sizeText(node.sizeBytes)}',
-                selected: _selectedFileIds.contains(node.id),
+                detail:
+                    isZh
+                        ? '${l10n.filesFolder} · 单击进入'
+                        : '${l10n.filesFolder} · Click to open',
+                selected: false,
+                isFolder: true,
                 icon: DesktopIcons.folder,
-                onPressed:
-                    () => applyState(() {
-                      if (!_selectedFileIds.add(node.id)) {
-                        _selectedFileIds.remove(node.id);
-                      }
-                    }),
-                onDoubleTap: () => _enterFolder(node),
+                onPressed: () => _enterFolder(node),
+              );
+            }
+            final importable = _isImportableFile(node);
+            final ext = _extension(node.name).toUpperCase();
+            final extLabel = ext.isEmpty ? 'FILE' : ext;
+            if (!importable) {
+              final reasonText =
+                  node.sizeBytes == 0
+                      ? (isZh ? '空文件 (0 B)' : 'Empty file (0 B)')
+                      : (isZh ? '不支持的格式' : 'Unsupported');
+              return _candidateRow(
+                name: node.name,
+                detail:
+                    '$extLabel · ${_sizeText(node.sizeBytes)} · $reasonText',
+                selected: false,
+                enabled: false,
+                icon: DesktopIcons.file,
+                onPressed: null,
               );
             }
             return _candidateRow(
               name: node.name,
-              detail:
-                  '${_extension(node.name).toUpperCase()} · ${_sizeText(node.sizeBytes)}',
+              detail: '$extLabel · ${_sizeText(node.sizeBytes)}',
               selected: _selectedFileIds.contains(node.id),
               icon: _mediaIcon,
               onPressed:
@@ -207,15 +223,18 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
     required String detail,
     required bool selected,
     required IconData icon,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     VoidCallback? onDoubleTap,
+    bool isFolder = false,
+    bool enabled = true,
   }) {
     final skin = DesktopSkin.of(context);
-    return DesktopHover(
+    final row = DesktopHover(
+      enabled: enabled && onPressed != null,
       builder:
           (context, hovered) => GestureDetector(
-            onTap: onPressed,
-            onDoubleTap: onDoubleTap,
+            onTap: enabled ? onPressed : null,
+            onDoubleTap: enabled ? onDoubleTap : null,
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: MotionToken.reduced(context, MotionToken.fast),
@@ -236,26 +255,31 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: selected ? skin.accent : Colors.transparent,
-                      border: Border.all(
-                        color: selected ? skin.accent : skin.line2,
+                  if (!isFolder) ...[
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color:
+                            selected && enabled
+                                ? skin.accent
+                                : Colors.transparent,
+                        border: Border.all(
+                          color: selected && enabled ? skin.accent : skin.line2,
+                        ),
+                        borderRadius: BorderRadius.circular(5),
                       ),
-                      borderRadius: BorderRadius.circular(5),
+                      child:
+                          selected && enabled
+                              ? Icon(
+                                DesktopIcons.check,
+                                size: 12,
+                                color: skin.accentInk,
+                              )
+                              : null,
                     ),
-                    child:
-                        selected
-                            ? Icon(
-                              DesktopIcons.check,
-                              size: 12,
-                              color: skin.accentInk,
-                            )
-                            : null,
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Icon(icon, size: 16, color: skin.text2),
                   const SizedBox(width: 12),
                   Expanded(
@@ -272,11 +296,17 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
                       ],
                     ),
                   ),
+                  if (isFolder)
+                    Icon(DesktopIcons.chevron, size: 16, color: skin.text3),
                 ],
               ),
             ),
           ),
     );
+    if (!enabled) {
+      return Opacity(opacity: 0.48, child: row);
+    }
+    return row;
   }
 
   Widget _listMessage(
@@ -436,7 +466,7 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          if (_sourceCount > 5)
+          if (_sourceCount > 5 || _filter.isNotEmpty)
             SizedBox(
               width: 240,
               child: DesktopTextField(
@@ -447,19 +477,21 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
               ),
             ),
           const Spacer(),
-          DesktopButton(
-            label:
-                _allSelected
-                    ? l10n.desktopMediaImportClearSelection
-                    : l10n.desktopMediaImportSelectAll,
-            variant: DesktopButtonVariant.ghost,
-            onPressed: _toggleAll,
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '${_selectedCountText()} / $_sourceCount',
-            style: DesktopType.caption(skin.text3),
-          ),
+          if (_selectableCount > 0) ...[
+            DesktopButton(
+              label:
+                  _allSelected
+                      ? l10n.desktopMediaImportClearSelection
+                      : l10n.desktopMediaImportSelectAll,
+              variant: DesktopButtonVariant.ghost,
+              onPressed: _toggleAll,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${_selectedCountText()} / $_selectableCount',
+              style: DesktopType.caption(skin.text3),
+            ),
+          ],
         ],
       ),
     );
@@ -473,6 +505,7 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
 
   String _sizeText(int? bytes) {
     if (bytes == null) return '—';
+    if (bytes == 0) return '0 B';
     if (bytes >= 1000000000) {
       return '${(bytes / 1000000000).toStringAsFixed(1)} GB';
     }

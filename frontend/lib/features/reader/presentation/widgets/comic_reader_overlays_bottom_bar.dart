@@ -1,7 +1,8 @@
 part of 'comic_reader_overlays.dart';
 
-/// 漫画阅读器的统一底部控制栏（对齐 `.bk-foot` 单行居中样式，RTL 自动反转进度条，双页显示 `Pages X–Y of TOTAL`）。
-class ComicReaderBottomBar extends StatelessWidget {
+/// 漫画阅读器的统一底部控制栏（对齐 `.bk-foot` 单行居中样式，RTL 自动反转进度条，
+/// 支持拖动进度条实时预览页码与百分比，双页显示 `Pages X–Y of TOTAL`）。
+class ComicReaderBottomBar extends StatefulWidget {
   const ComicReaderBottomBar({
     required this.currentPageIndex,
     required this.totalPages,
@@ -48,25 +49,56 @@ class ComicReaderBottomBar extends StatelessWidget {
   final VoidCallback? onResetZoom;
 
   @override
+  State<ComicReaderBottomBar> createState() => _ComicReaderBottomBarState();
+}
+
+class _ComicReaderBottomBarState extends State<ComicReaderBottomBar> {
+  int? _previewPageIndex;
+
+  @override
+  void didUpdateWidget(ComicReaderBottomBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.totalPages != widget.totalPages) {
+      _previewPageIndex = null;
+    }
+  }
+
+  void _handlePreviewChanged(int? pageIndex) {
+    if (_previewPageIndex != pageIndex) {
+      setState(() => _previewPageIndex = pageIndex);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final totalPages = widget.totalPages;
     final maxPage = totalPages <= 1 ? 1.0 : (totalPages - 1).toDouble();
+    final settings = widget.settings;
     final bookMode = settings.usesBookDesk;
     final textColor =
         bookMode
             ? settings.bookDeskTextColor.withValues(alpha: 0.72)
             : settings.onSurfaceVariantColor;
-    final endIndex = visibleEndPageIndex ?? currentPageIndex;
+    final isPreviewing = _previewPageIndex != null;
+    final displayPageIndex =
+        (_previewPageIndex ?? widget.currentPageIndex)
+            .clamp(0, math.max(0, totalPages - 1))
+            .toInt();
+    final endIndex =
+        isPreviewing
+            ? displayPageIndex
+            : (widget.visibleEndPageIndex ?? displayPageIndex);
     final pageLabel =
         totalPages <= 0
             ? '0 / 0'
-            : (isDualPage && endIndex > currentPageIndex
+            : (!isPreviewing && widget.isDualPage && endIndex > displayPageIndex
                 ? l10n.readerPageRange(
-                  currentPageIndex + 1,
+                  displayPageIndex + 1,
                   math.min(totalPages, endIndex + 1),
                   totalPages,
                 )
-                : l10n.readerPageOf(currentPageIndex + 1, totalPages));
+                : l10n.readerPageOf(displayPageIndex + 1, totalPages));
     final percent =
         totalPages <= 0
             ? 0
@@ -77,16 +109,16 @@ class ComicReaderBottomBar extends StatelessWidget {
       right: 0,
       bottom: 0,
       child: IgnorePointer(
-        ignoring: !visible,
+        ignoring: !widget.visible,
         child: AnimatedContainer(
           duration:
               MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero
                   : const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic,
-          transform: Matrix4.translationValues(0, visible ? 0 : 8, 0),
+          transform: Matrix4.translationValues(0, widget.visible ? 0 : 8, 0),
           child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
+            opacity: widget.visible ? 1 : 0,
             duration:
                 MediaQuery.disableAnimationsOf(context)
                     ? Duration.zero
@@ -149,23 +181,24 @@ class ComicReaderBottomBar extends StatelessWidget {
                                 Expanded(
                                   child: Directionality(
                                     textDirection:
-                                        isRtl
+                                        widget.isRtl
                                             ? TextDirection.rtl
                                             : TextDirection.ltr,
                                     child: _ComicPageSlider(
-                                      currentPageIndex: currentPageIndex,
+                                      currentPageIndex: widget.currentPageIndex,
                                       totalPages: totalPages,
                                       maxPage: maxPage,
                                       settings: settings,
-                                      onSeek: onSeek,
+                                      onPreviewChanged: _handlePreviewChanged,
+                                      onSeek: widget.onSeek,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 14),
-                                if (zoomScale > 1.02 &&
-                                    onResetZoom != null) ...[
+                                if (widget.zoomScale > 1.02 &&
+                                    widget.onResetZoom != null) ...[
                                   GestureDetector(
-                                    onTap: onResetZoom,
+                                    onTap: widget.onResetZoom,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 8,
@@ -178,7 +211,7 @@ class ComicReaderBottomBar extends StatelessWidget {
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
-                                        '${(zoomScale * 100).round()}%',
+                                        '${(widget.zoomScale * 100).round()}%',
                                         style: TextStyle(
                                           color: settings.accentColor,
                                           fontSize: AppTypography.bodySmall,
@@ -195,7 +228,7 @@ class ComicReaderBottomBar extends StatelessWidget {
                                 SizedBox(
                                   width: 78,
                                   child: Text(
-                                    isRtl
+                                    widget.isRtl
                                         ? '${l10n.readerProgressPercent(percent)} · RTL'
                                         : l10n.readerProgressPercent(percent),
                                     maxLines: 1,
@@ -228,13 +261,16 @@ class ComicReaderBottomBar extends StatelessWidget {
                           children: [
                             Directionality(
                               textDirection:
-                                  isRtl ? TextDirection.rtl : TextDirection.ltr,
+                                  widget.isRtl
+                                      ? TextDirection.rtl
+                                      : TextDirection.ltr,
                               child: _ComicPageSlider(
-                                currentPageIndex: currentPageIndex,
+                                currentPageIndex: widget.currentPageIndex,
                                 totalPages: totalPages,
                                 maxPage: maxPage,
                                 settings: settings,
-                                onSeek: onSeek,
+                                onPreviewChanged: _handlePreviewChanged,
+                                onSeek: widget.onSeek,
                               ),
                             ),
                             SizedBox(
@@ -243,18 +279,25 @@ class ComicReaderBottomBar extends StatelessWidget {
                                 children: [
                                   _ComicControlButton(
                                     icon: Icons.chevron_left_rounded,
-                                    tooltip: l10n.readerPreviousPage,
+                                    tooltip:
+                                        widget.isRtl
+                                            ? l10n.readerNextPage
+                                            : l10n.readerPreviousPage,
                                     settings: settings,
-                                    onPressed: isRtl ? onNext : onPrevious,
+                                    onPressed:
+                                        widget.isRtl
+                                            ? widget.onNext
+                                            : widget.onPrevious,
                                   ),
                                   Expanded(
                                     child: Text(
                                       totalPages <= 0
                                           ? '0 / 0'
-                                          : (isDualPage &&
-                                                  endIndex > currentPageIndex
-                                              ? '${currentPageIndex + 1}–${endIndex + 1} / $totalPages'
-                                              : '${currentPageIndex + 1} / $totalPages'),
+                                          : (!isPreviewing &&
+                                                  widget.isDualPage &&
+                                                  endIndex > displayPageIndex
+                                              ? '${displayPageIndex + 1}–${endIndex + 1} / $totalPages'
+                                              : '${displayPageIndex + 1} / $totalPages'),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -270,28 +313,34 @@ class ComicReaderBottomBar extends StatelessWidget {
                                   ),
                                   _ComicControlButton(
                                     icon: Icons.chevron_right_rounded,
-                                    tooltip: l10n.readerNextPage,
+                                    tooltip:
+                                        widget.isRtl
+                                            ? l10n.readerPreviousPage
+                                            : l10n.readerNextPage,
                                     settings: settings,
-                                    onPressed: isRtl ? onPrevious : onNext,
+                                    onPressed:
+                                        widget.isRtl
+                                            ? widget.onPrevious
+                                            : widget.onNext,
                                   ),
                                   _ComicControlButton(
                                     icon: Icons.toc_rounded,
                                     tooltip: l10n.readerTableOfContents,
                                     settings: settings,
-                                    onPressed: onShowContents,
+                                    onPressed: widget.onShowContents,
                                   ),
-                                  if (onSwitchReadingMode != null)
+                                  if (widget.onSwitchReadingMode != null)
                                     _ComicControlButton(
                                       icon:
-                                          isPageMode
+                                          widget.isPageMode
                                               ? Icons.swap_vert_rounded
                                               : Icons.swap_horiz_rounded,
                                       tooltip:
-                                          isPageMode
+                                          widget.isPageMode
                                               ? l10n.readerComicModeScroll
                                               : l10n.readerComicModePage,
                                       settings: settings,
-                                      onPressed: onSwitchReadingMode!,
+                                      onPressed: widget.onSwitchReadingMode!,
                                     ),
                                 ],
                               ),
@@ -318,6 +367,7 @@ class _ComicPageSlider extends StatefulWidget {
     required this.maxPage,
     required this.settings,
     required this.onSeek,
+    this.onPreviewChanged,
   });
 
   final int currentPageIndex;
@@ -325,6 +375,7 @@ class _ComicPageSlider extends StatefulWidget {
   final double maxPage;
   final ReaderViewSettings settings;
   final ValueChanged<int> onSeek;
+  final ValueChanged<int?>? onPreviewChanged;
 
   @override
   State<_ComicPageSlider> createState() => _ComicPageSliderState();
@@ -363,12 +414,16 @@ class _ComicPageSliderState extends State<_ComicPageSlider> {
           divisions: widget.totalPages > 1 ? widget.totalPages - 1 : null,
           onChanged:
               widget.totalPages > 1
-                  ? (value) => setState(() => _dragValue = value)
+                  ? (value) {
+                    setState(() => _dragValue = value);
+                    widget.onPreviewChanged?.call(value.round());
+                  }
                   : null,
           onChangeEnd:
               widget.totalPages > 1
                   ? (value) {
                     setState(() => _dragValue = null);
+                    widget.onPreviewChanged?.call(null);
                     widget.onSeek(value.round());
                   }
                   : null,

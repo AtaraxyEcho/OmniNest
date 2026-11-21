@@ -73,9 +73,11 @@ class _SidePanel extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(
+            Flexible(
+              fit: FlexFit.loose,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -112,24 +114,21 @@ class _SidePanel extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Padding(
-              padding: const EdgeInsets.only(top: 18),
-              child: DesktopIconButton(
-                key: const ValueKey('desktop-np-favorite'),
-                icon:
-                    track.favorite
-                        ? DesktopIcons.heartFilled
-                        : DesktopIcons.heart,
-                size: 40,
-                iconSize: 22,
-                color:
-                    track.favorite
-                        ? skin.liked
-                        : Colors.white.withValues(alpha: 0.78),
-                tooltip: l10n.desktopFavorite,
-                onPressed: onToggleFavorite,
-              ),
+            const SizedBox(width: 14),
+            DesktopIconButton(
+              key: const ValueKey('desktop-np-favorite'),
+              icon:
+                  track.favorite
+                      ? DesktopIcons.heartFilled
+                      : DesktopIcons.heart,
+              size: 40,
+              iconSize: 22,
+              color:
+                  track.favorite
+                      ? skin.liked
+                      : Colors.white.withValues(alpha: 0.78),
+              tooltip: l10n.desktopFavorite,
+              onPressed: onToggleFavorite,
             ),
           ],
         ),

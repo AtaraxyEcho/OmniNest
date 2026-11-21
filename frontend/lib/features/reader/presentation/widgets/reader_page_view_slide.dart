@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// Slide 模式 PageView、点击热区与探测页（支持 RTL 与缩放态拖拽锁）。
+/// Slide 模式 PageView、点击热区与探测页（支持 RTL、鼠标拖拽开关与缩放态拖拽锁）。
 extension _ReaderPageViewSlide on _ReaderPageViewState {
   // ══════════════════════════════════════════
   // Slide 模式：PageView + 交互层
@@ -18,6 +18,19 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
                 Brightness.dark
             ? Colors.white.withValues(alpha: 0.40)
             : Colors.black.withValues(alpha: 0.40);
+    final dragDevices =
+        widget.allowMouseDrag
+            ? const {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+              PointerDeviceKind.mouse,
+            }
+            : const {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            };
     return MouseRegion(
       onEnter: (_) => _updateState(() => _slideStageHovered = true),
       onExit: (_) => _updateState(() => _slideStageHovered = false),
@@ -26,15 +39,10 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
           NotificationListener<ScrollNotification>(
             onNotification: _onSlideScrollNotification,
             child: ScrollConfiguration(
-              // 桌面端排除 mouse 拖拽翻页，把正文区鼠标拖动 100% 留给丝滑选字；
-              // 触摸屏/触控板仍保持原生跟手滑动。
-              behavior: ScrollConfiguration.of(context).copyWith(
-                dragDevices: const {
-                  PointerDeviceKind.touch,
-                  PointerDeviceKind.trackpad,
-                  PointerDeviceKind.stylus,
-                },
-              ),
+              // 文本正文默认排除 mouse 拖拽翻页把拖动留给选字；漫画等可经由 allowMouseDrag 开启。
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(dragDevices: dragDevices),
               child: PageView.builder(
                 controller: _pageController,
                 reverse: widget.reverse,

@@ -38,7 +38,7 @@ class _PlinthMetalPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// 静态反光 `.glare`：双瓣 SweepGradient + BlendMode.screen。
+/// 静态反光 `.glare`：双瓣 SweepGradient + BlendMode.screen（12 点钟起点）。
 class _PlatterGlarePainter extends CustomPainter {
   const _PlatterGlarePainter();
 
@@ -49,6 +49,7 @@ class _PlatterGlarePainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(path);
     final shader = SweepGradient(
+      transform: const GradientRotation(-math.pi / 2),
       colors: [
         Colors.transparent,
         Colors.transparent,
@@ -114,16 +115,6 @@ class _VinylDiscPainter extends CustomPainter {
       }
     }
 
-    // 盘面外沿与标签外侧细微倒角环。
-    canvas.drawCircle(
-      center,
-      radius * 0.985,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = Colors.white.withValues(alpha: 0.08),
-    );
-
     // 3. 旋转锥形高光层 1（0.07）。
     final sweep1 = SweepGradient(
       colors: [
@@ -173,11 +164,11 @@ class _Platter extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelSize = size * 0.28;
     return Container(
-      padding: EdgeInsets.all(size * 0.012),
+      padding: EdgeInsets.all(size * 0.008),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: const RadialGradient(
-          colors: [Color(0xFF2A3036), Color(0xFF14181C)],
+          colors: [Color(0xFF1A1F24), Color(0xFF0C0F12)],
         ),
         boxShadow: [
           BoxShadow(color: const Color(0xFF0A0D0F), spreadRadius: size * 0.014),

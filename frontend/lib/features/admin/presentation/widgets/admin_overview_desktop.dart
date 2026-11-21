@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:omninest/app/desktop/widgets/desktop_chart_tooltip.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
@@ -168,6 +169,14 @@ class _UploadsCard extends StatelessWidget {
   final String? error;
   final VoidCallback? onRetry;
 
+  static String _shortDate(String iso) {
+    final parts = iso.split('-');
+    if (parts.length < 3) return iso;
+    final month = int.tryParse(parts[1]) ?? 0;
+    final day = int.tryParse(parts[2]) ?? 0;
+    return '$month/$day';
+  }
+
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
@@ -184,54 +193,14 @@ class _UploadsCard extends StatelessWidget {
         child: Text(error!, style: DesktopType.caption(skin.bad)),
       );
     }
-    return AdminCard(
-      title: l10n.adminUploads14Days,
-      child: SizedBox(
-        height: 112,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var index = 0; index < metrics.length; index++)
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: index == 0 ? 0 : 3,
-                    right: index == metrics.length - 1 ? 0 : 3,
-                  ),
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Tooltip(
-                      message:
-                          '${metrics[index].date} · ${metrics[index].value}',
-                      child: Container(
-                        width: double.infinity,
-                        height:
-                            maxCount == 0
-                                ? 2
-                                : (metrics[index].value / maxCount * 112).clamp(
-                                  2.0,
-                                  112.0,
-                                ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              skin.accent,
-                              skin.accent.withValues(alpha: 0.36),
-                            ],
-                          ),
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(6),
-                            bottom: Radius.circular(2),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (metrics.isEmpty)
+    if (metrics.isEmpty) {
+      return AdminCard(
+        title: l10n.adminUploads14Days,
+        child: SizedBox(
+          height: 112,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               for (var index = 0; index < 14; index++)
                 Expanded(
                   child: Padding(
@@ -249,8 +218,36 @@ class _UploadsCard extends StatelessWidget {
                     ),
                   ),
                 ),
-          ],
+            ],
+          ),
         ),
+      );
+    }
+    final items = <DesktopChartBarItem>[
+      for (final metric in metrics)
+        DesktopChartBarItem(
+          fraction:
+              maxCount == 0 ? 0.02 : (metric.value / maxCount).clamp(0.02, 1.0),
+          color: skin.accent,
+          secondaryColor: skin.accent.withValues(alpha: 0.36),
+          tipTitle: metric.date,
+          tipValue: '${metric.value}',
+        ),
+    ];
+    return AdminCard(
+      title: l10n.adminUploads14Days,
+      child: DesktopInteractiveBarChart(
+        items: items,
+        height: 112,
+        barSpacing: 6,
+        minFraction: 0.02,
+        barBorderRadius: const BorderRadius.vertical(
+          top: Radius.circular(6),
+          bottom: Radius.circular(2),
+        ),
+        axisStartLabel: _shortDate(metrics.first.date),
+        axisEndLabel: _shortDate(metrics.last.date),
+        axisLabelStyle: DesktopType.micro(skin.text3),
       ),
     );
   }

@@ -108,6 +108,7 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
                           ),
                           switchInCurve: MotionToken.curve,
                           switchOutCurve: MotionToken.curveIn,
+                          layoutBuilder: excludeExitingSemanticsStack,
                           transitionBuilder:
                               (child, animation) => FadeTransition(
                                 opacity: animation,

@@ -83,6 +83,9 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
     final showPageMode = pageModeEnabled ?? supportsPageMode;
     final isRtl = effectiveRtl ?? displaySettings.rtlOverride ?? false;
     final isPaged = displaySettings.readingMode != 'scroll';
+    final isSwipeMode =
+        displaySettings.readingMode == 'page' ||
+        displaySettings.readingMode == 'swipe';
 
     final prefsMap = ref.watch(readerPreferencesProvider).asData?.value;
     final activeSettings =
@@ -90,15 +93,28 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             ? ReaderViewSettings.fromJson(prefsMap)
             : themeSettings;
     final hostState = context.findAncestorStateOfType<ComicReaderViewState>();
-    final effectiveZoom = zoomScale ?? hostState?.currentZoomScale ?? 1.0;
-    final handleZoomOut = onZoomOut ?? hostState?.zoomOut;
-    final handleZoomIn = onZoomIn ?? hostState?.zoomIn;
-    final handleResetZoom = onResetZoom ?? hostState?.resetZoom;
+    final effectiveZoom =
+        isSwipeMode ? (zoomScale ?? hostState?.currentZoomScale ?? 1.0) : 1.0;
+    final handleZoomOut =
+        isSwipeMode ? (onZoomOut ?? hostState?.zoomOut) : null;
+    final handleZoomIn = isSwipeMode ? (onZoomIn ?? hostState?.zoomIn) : null;
+    final handleResetZoom =
+        isSwipeMode ? (onResetZoom ?? hostState?.resetZoom) : null;
+
+    final sliderTheme = SliderThemeData(
+      trackHeight: 4,
+      activeTrackColor: activeSettings.accentColor,
+      inactiveTrackColor: fg.withValues(alpha: 0.18),
+      thumbColor: activeSettings.accentColor,
+      overlayColor: activeSettings.accentColor.withValues(alpha: 0.18),
+      activeTickMarkColor: Colors.transparent,
+      inactiveTickMarkColor: Colors.transparent,
+    );
 
     final themeChoices = <(ReaderReadingPalette, String)>[
       (ReaderReadingPalette.light, isZh ? '纸白' : 'Paper'),
       (ReaderReadingPalette.eyeCare, isZh ? '暖黄' : 'Sepia'),
-      (ReaderReadingPalette.green, isZh ? '暮色' : 'Dusk'),
+      (ReaderReadingPalette.dusk, isZh ? '暮色' : 'Dusk'),
       (ReaderReadingPalette.dark, isZh ? '夜间' : 'Night'),
     ];
 
@@ -145,15 +161,18 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
           color: muted,
           accent: activeSettings.accentColor,
         ),
-        AppSlider(
-          value: activeSettings.brightness.clamp(30, 100).toDouble(),
-          min: 30,
-          max: 100,
-          divisions: 14,
-          onChanged:
-              (v) => unawaited(
-                _savePreferencePatch(ref, {'brightness': v.round()}),
-              ),
+        SliderTheme(
+          data: sliderTheme,
+          child: AppSlider(
+            value: activeSettings.brightness.clamp(30, 100).toDouble(),
+            min: 30,
+            max: 100,
+            divisions: 14,
+            onChanged:
+                (v) => unawaited(
+                  _savePreferencePatch(ref, {'brightness': v.round()}),
+                ),
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -164,14 +183,17 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
           color: muted,
           accent: activeSettings.accentColor,
         ),
-        AppSlider(
-          value: activeSettings.warmth.clamp(0, 60).toDouble(),
-          min: 0,
-          max: 60,
-          divisions: 12,
-          onChanged:
-              (v) =>
-                  unawaited(_savePreferencePatch(ref, {'warmth': v.round()})),
+        SliderTheme(
+          data: sliderTheme,
+          child: AppSlider(
+            value: activeSettings.warmth.clamp(0, 60).toDouble(),
+            min: 0,
+            max: 60,
+            divisions: 12,
+            onChanged:
+                (v) =>
+                    unawaited(_savePreferencePatch(ref, {'warmth': v.round()})),
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -189,16 +211,36 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 18),
 
-        // 5. 漫画 Zoom（- / 100% / +）
-        _SectionLabel(label: isZh ? '画面缩放' : 'Zoom', color: muted),
+        // 5. 漫画 Zoom（- / 100% / +；非 Swipe 模式置灰并标注提示）
+        Row(
+          children: [
+            Expanded(
+              child: _SectionLabel(label: isZh ? '画面缩放' : 'Zoom', color: muted),
+            ),
+            if (!isSwipeMode)
+              Text(
+                isZh ? '仅滑动模式可用' : 'Swipe mode only',
+                style: TextStyle(
+                  color: muted.withValues(alpha: 0.78),
+                  fontSize: AppTypography.labelMicro,
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 10),
-        _ZoomControlRow(
-          zoomScale: effectiveZoom,
-          foreground: fg,
-          accent: activeSettings.accentColor,
-          onZoomOut: handleZoomOut,
-          onResetZoom: handleResetZoom,
-          onZoomIn: handleZoomIn,
+        Opacity(
+          opacity: isSwipeMode ? 1.0 : 0.45,
+          child: IgnorePointer(
+            ignoring: !isSwipeMode,
+            child: _ZoomControlRow(
+              zoomScale: effectiveZoom,
+              foreground: fg,
+              accent: activeSettings.accentColor,
+              onZoomOut: handleZoomOut,
+              onResetZoom: handleResetZoom,
+              onZoomIn: handleZoomIn,
+            ),
+          ),
         ),
         const SizedBox(height: 20),
 
@@ -304,14 +346,18 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
               ),
               color: muted,
             ),
-            AppSlider(
-              value: displaySettings.contentWidth,
-              min: 480,
-              max: 1440,
-              divisions: 12,
-              onChanged:
-                  (value) =>
-                      onChanged(displaySettings.copyWith(contentWidth: value)),
+            SliderTheme(
+              data: sliderTheme,
+              child: AppSlider(
+                value: displaySettings.contentWidth,
+                min: 480,
+                max: 1440,
+                divisions: 12,
+                onChanged:
+                    (value) => onChanged(
+                      displaySettings.copyWith(contentWidth: value),
+                    ),
+              ),
             ),
           ],
           const SizedBox(height: 16),
@@ -319,13 +365,17 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             label: l10n.readerComicPageGap(displaySettings.pageGap.round()),
             color: muted,
           ),
-          AppSlider(
-            value: displaySettings.pageGap,
-            min: 0,
-            max: 24,
-            divisions: 12,
-            onChanged:
-                (value) => onChanged(displaySettings.copyWith(pageGap: value)),
+          SliderTheme(
+            data: sliderTheme,
+            child: AppSlider(
+              value: displaySettings.pageGap,
+              min: 0,
+              max: 24,
+              divisions: 12,
+              onChanged:
+                  (value) =>
+                      onChanged(displaySettings.copyWith(pageGap: value)),
+            ),
           ),
         ],
         // 音量键翻页依赖原生按键拦截，仅具备该能力的平台提供设置项。

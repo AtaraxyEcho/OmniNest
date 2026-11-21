@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 /// 角色与值取自移动端阅读器稿 `src/index.css`：`.reader` 基线（= 米黄档，稿子
 /// 没有 `.theme-sepia` 类，米黄就是基线）与 `.theme-paper` / `.theme-sage` /
 /// `.theme-night` 三段类切换。四档对应 light=paper、eyeCare=sepia（稿子默认档）、
-/// green=sage、dark=night。`selection`/`annotation` 稿子里没有（它不做选区与
-/// 高亮），沿用应用既有值。
+/// dusk=暖暮灰纸、dark=night（柔暖炭灰纸），并保留 `green`（sage）常量以向后兼容。
+/// `selection`/`annotation` 稿子里没有（它不做选区与高亮），沿用应用既有值。
 @immutable
 class ReaderReadingPalette {
   const ReaderReadingPalette({
@@ -117,29 +117,51 @@ class ReaderReadingPalette {
     annotation: Color(0xFFEBCB62),
   );
 
-  /// 稿子 `.theme-night`（index.css:101）。
+  /// 暮色主题：柔和暖暮灰纸与高可读暖白正文。
+  static const dusk = ReaderReadingPalette(
+    id: 'dusk',
+    surface: Color(0xFF3B3631),
+    elevated: Color(0xFF453F39),
+    onSurface: Color(0xFFECE6DC),
+    onSurfaceVariant: Color(0xFFB7ADA1),
+    faint: Color(0xFF8A8075),
+    line: Color(0x1FF5EFE6),
+    accent: Color(0xFFD6A86E),
+    accentSoft: Color(0x24D6A86E),
+    controlSurface: Color(0xFF433D37),
+    bookDesk: Color(0xFF1E1C19),
+    bookDeskText: Color(0xFFEBE6DF),
+    paperEdge: Color(0xFF4A443D),
+    glass: Color(0xDB322D28),
+    glassSolid: Color(0xFF38332E),
+    shadow: Color(0x47000000),
+    selection: Color(0x667CA9C8),
+    annotation: Color(0xFFE3C05A),
+  );
+
+  /// 夜间主题（柔暖炭灰纸，非死黑，纸叠边缘清晰可见）。
   static const dark = ReaderReadingPalette(
     id: 'dark',
-    surface: Color(0xFF1C2024),
-    elevated: Color(0xFF23282D),
-    onSurface: Color(0xFFC9CDC8),
-    onSurfaceVariant: Color(0xFF8F9691),
-    faint: Color(0xFF606763),
-    line: Color(0x1AEBF0E8),
+    surface: Color(0xFF2A2826),
+    elevated: Color(0xFF32302D),
+    onSurface: Color(0xFFD8D4CE),
+    onSurfaceVariant: Color(0xFFA09C96),
+    faint: Color(0xFF706C67),
+    line: Color(0x1AEFECE6),
     accent: Color(0xFF8CC5B2),
     accentSoft: Color(0x1F8CC5B2),
-    controlSurface: Color(0xFF22272B),
-    bookDesk: Color(0xFF0B0D0F),
+    controlSurface: Color(0xFF302E2B),
+    bookDesk: Color(0xFF15171A),
     bookDeskText: Color(0xFFE8ECEA),
-    paperEdge: Color(0xFF14171A),
-    glass: Color(0xDB191E1C),
-    glassSolid: Color(0xFF1D2220),
+    paperEdge: Color(0xFF3A3632),
+    glass: Color(0xDB242220),
+    glassSolid: Color(0xFF282624),
     shadow: Color(0x52000000),
     selection: Color(0x665F9FCE),
     annotation: Color(0xFFD8B94F),
   );
 
-  /// 稿子 `.theme-sage`（index.css:87）。
+  /// 稿子 `.theme-sage`（index.css:87），保留以向后兼容已保存 `'green'` 偏好的读者。
   static const green = ReaderReadingPalette(
     id: 'green',
     surface: Color(0xFFE9EEE5),
@@ -185,9 +207,14 @@ class ReaderReadingPalette {
   /// 护眼暖色滤镜的暖色基色；强度由 `warmth` 调制。
   static const comfortWarmTint = Color(0xFFFF9628);
 
-  static const values = [light, eyeCare, dark, green];
+  /// 仿真硬壳书封的皮革基色与书脊阴影：与纸张主题无关，由书桌色派生。
+  static const bookShellLeather = Color(0xFF5B4636);
+  static const bookSpineShadow = Color(0xFF1C1612);
+
+  static const values = [light, eyeCare, dusk, dark];
 
   static ReaderReadingPalette fromId(String id) {
+    if (id == green.id) return green;
     return values.firstWhere((palette) => palette.id == id, orElse: () => dark);
   }
 
@@ -197,7 +224,7 @@ class ReaderReadingPalette {
 
   static int legacyIndexFromId(String id) {
     final index = values.indexWhere((palette) => palette.id == id);
-    return index < 0 ? 2 : index;
+    return index < 0 ? values.indexOf(dark) : index;
   }
 }
 

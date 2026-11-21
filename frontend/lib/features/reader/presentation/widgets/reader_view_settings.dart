@@ -34,7 +34,10 @@ class ReaderViewSettings {
     this.warmth = 0,
     this.autoNight = false,
   }) : paletteId =
-           paletteId ?? ReaderReadingPalette.idFromLegacyIndex(themeIndex ?? 2);
+           paletteId ??
+           (themeIndex != null
+               ? ReaderReadingPalette.idFromLegacyIndex(themeIndex)
+               : ReaderReadingPalette.dark.id);
 
   final String fontFamily;
   final double fontSize;
@@ -119,7 +122,9 @@ class ReaderViewSettings {
   Color get glassSolidColor => palette.glassSolid;
   Color get shadowColor => palette.shadow;
   Color get selectionColor => palette.selection;
-  bool get isDark => palette.id == ReaderReadingPalette.dark.id;
+  bool get isDark =>
+      palette.id == ReaderReadingPalette.dark.id ||
+      palette.id == ReaderReadingPalette.dusk.id;
 
   String? get resolvedFontFamily =>
       fontFamily == 'serif' ? 'NotoSerifSC' : null;
